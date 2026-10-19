@@ -61,26 +61,28 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b,
-  P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g,
-  P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r,
-  P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z,
-  P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
-  P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
-  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
-  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
-  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
-  P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35r, P1.35l, P1.35t, P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36d, P1.36e, P1.36b,
-  P1.36c, P1.36g, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
-  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
-  P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
-  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
-  Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
-  edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
-  and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
-  exempt. Built PRs still get verified and may merge, and a lane may finish a fix it already started on an open PR.
+  P1.20–P1.25, P1.25c, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v,
+  P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q,
+  P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r,
+  P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g,
+  P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w,
+  P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z,
+  P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i,
+  P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p,
+  P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a,
+  P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f,
+  P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y,
+  P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t, P1.33z,
+  P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g, P1.36i,
+  P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y,
+  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s,
+  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids,
+  never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12,
+  P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'):
+  the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening
+  steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario passes
+  locally. Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may finish
+  a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -419,6 +421,19 @@ flowchart LR
   P1_25e --> P1_25u
   P1_25p --> P1_25
   P1_25 --> P1_26
+  P1_25c["P1.25c test routes, prod refusal, 503"]
+  P1_25 --> P1_25c
+  P1_25f["P1.25f favicons, feed mode, footer prefs"]
+  P1_25 --> P1_25f
+  P1_25g["P1.25g disabled select focus, kit tests"]
+  P1_25 --> P1_25g
+  P1_25m["P1.25m DID account route privacy"]
+  P1_25 --> P1_25m
+  P1_25n["P1.25n DID route privacy tests hardened"]
+  P1_25m --> P1_25n
+  P1_25y["P1.25y disabled Select styled, tests tightened"]
+  P1_25g --> P1_25y
+  P1_25t["P1.25t encoded DIDs redacted in log scrub"]
   P1_04 --> P1_27
   P0_07 --> P1_27
   P1_27 --> P1_27d
@@ -626,6 +641,8 @@ flowchart LR
   P1_35g --> P1_35l
   P1_35t["P1.35t local stack CI job"]
   P1_34d --> P1_35t
+  P1_36h["P1.36h migrate lint mode and PDS data dir"]
+  P1_36h --> P1_35t
   P1_35t --> P1_33z
   P1_35w["P1.35w plc_pds exemption retired"]
   P1_36f["P1.36f ADR 0025 staging TLS and DNS"]
@@ -634,16 +651,38 @@ flowchart LR
   P1_35z["P1.35z ADR 0026 accepted"]
   P1_35x["P1.35x dev hosts pinned to staging names"]
   P1_35y --> P1_35x
+  P1_36m["P1.36m ADR 0028 edge DNS module drafted"]
+  P1_36n["P1.36n ADR 0028 accepted"]
+  P1_36m --> P1_36n
   P1_36d["P1.36d edge image with one DNS module"]
-  P1_36e["P1.36e DNS-01 for dev in C18"]
+  P1_36n --> P1_36d
+  P1_36e["P1.36e edge dev mode with one DNS-01 issuer"]
   P1_36d --> P1_36e
+  P1_36o["P1.36o edge dev snippet mounted, C18 mapped"]
+  P1_36e --> P1_36o
   P1_36b["P1.36b app site on the dev edge"]
   P1_36e --> P1_36b
+  P1_36o --> P1_36b
   P1_35x --> P1_36b
   P1_35y --> P1_36b
   P1_36c["P1.36c dev edge DNS token and app site wired"]
   P1_36b --> P1_36c
   P1_36g["P1.36g dev mail and first-invite runbook"]
+  P1_36i["P1.36i dev edge aliases and public paths"]
+  P1_36b --> P1_36i
+  P1_36j["P1.36j dev edge trusts only Newt"]
+  P1_36b --> P1_36j
+  P1_36k["P1.36k dev-only runtime keys refused outside local"]
+  P1_36l["P1.36l zero commit refused under dev"]
+  P1_36p["P1.36p PDS temp blob tmpfs capped"]
+  P1_36h --> P1_36p
+  P1_36q["P1.36q exact key set in pds.env"]
+  P1_36g --> P1_36q
+  P1_36r["P1.36r checkout-built migrate refused under dev"]
+  P1_35u["P1.35u islands owner lines narrowed CHECK"]
+  P1_35v["P1.35v secret key words split"]
+  P1_36t["P1.36t secret key split widened to every env"]
+  P1_35v --> P1_36t
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -4315,6 +4354,8 @@ LESSON: review 02 MINOR-3's codemod idea does not apply, since screens are rewri
 `/home/claude/0x40/app/src/lib/request-locale.ts:7-9` (cookie only) → LESSON. An i18n library (i18next, FormatJS) →
 REJECT for now (`Intl.PluralRules` and a 100-line runtime cover two languages; reviewer may overturn). Provisional — for
 reuse review.
+Legal texts: this step's PR adds `apps/web/legal/{terms,privacy,domains}.fr.md` beside P2.15's `.en.md` files,
+approved by Alex like all legal text (book edit 2026-10-19-five-step-audit).
 Not in this step: the locale cookie, its POST switch and language negotiation on pages (P1.22b); the React `msg()` helper and `<html lang>` in the shell
 (P1.24/P1.25); email templates (PDS-owned).
 Diagram: none.
@@ -6264,8 +6305,9 @@ file is ever unowned.
    up to the next hundred, at least 300.
 
 A loosening (coordinator's ruling, 14:11Z): the new trusted-section directory widens what a trusted PR may carry until
-P1.25u narrows it, and the new edges widen what may import what. Phase 2 opens it only after Alex's typed line (for
-example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: received 2026-10-15 11:52:12Z (As built).
+P1.35u narrows it (P1.25u merged without the narrowing), and the new edges widen what may import what. Phase 2 opens it
+only after Alex's typed line (for example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: received
+2026-10-15 11:52:12Z (As built).
 
 ---
 
@@ -6460,7 +6502,188 @@ under a "Riders from P1.24c" heading):
 - `app/src/app/not-found.tsx`, `app/src/app/error.tsx` → LESSON: copy tone; Next.js mechanisms rejected.
 - Prototype privacy and terms pages → REJECT: written for 0x40 and its PDS; legal texts are rewritten.
 
+**As built** (#963, #965, #975; book edit 2026-10-19-five-step-audit, architecture 02:25Z): part one only. The
+remainder is P1.25c (test routes and the 503), P1.25f (favicons, feed mode, footer prefs, D-2's tests), P1.25g
+(riders 1 and 2) and P1.25m (D-5's privacy tests); #963's "P1.25j" is that remainder, not the booked P1.25j. #975's
+departures: D-1 accepted (`GET /` is an empty home with a visually hidden heading; the catalog placeholder is dropped,
+and the first step that gives the home real content owns the visible heading); D-3 accepted (one
+`apps/web/src/errors/ErrorPage.tsx` with variants replaces NotFound, ServerError and Unavailable; each status keeps its
+own code and test, and no variant renders exception detail); D-4 accepted (`/legal/{terms,privacy,domains}`, as
+phase-2.md:57). D-2 (the Navigation popover on `/`) is accepted with two tested conditions, carried by P1.25f; whether
+Alex approved the core-shell design itself is still to be cited. D-5 (the account page at `/<DID>`) is P2.13's.
+
 **Not in this step:** landing page content; legal texts; sign-in (Phase 2).
+
+---
+
+### P1.25c — Add test routes, prod refusal and the 503 page
+Tags: [SEC]            Depends on: P1.25
+Slice 1, issue #989, product, lane Phase 2. **It comes first for staging**, because nothing yet refuses test routes
+in prod. Book edit 2026-10-19-five-step-audit.
+**What:**
+1. Add `TEST_ROUTES` and `interfaces/http/routes/test-routes.ts`, with `/__test/throw`, `/__test/showcase`,
+   `/__test/unavailable` and `/__test/app`.
+2. A prod config with test routes turned on exits at start (`config.test_routes_in_prod`).
+3. Add `Unavailable.tsx`, a 503 page with `Retry-After: 30`.
+4. The 500-page tests use `/__test/throw` instead of their in-test `/boom` route.
+
+Done when these tests pass, red first, and check is green: `test_routes_refused_in_prod`, `unavailable_retry_after`,
+and `server_error_request_id` and `server_error_fallback_static` on `/__test/throw`.
+
+As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once it merges; book edit
+2026-10-19-p125c-as-built, architecture 03:00Z, 03:45Z and 05:10Z): four departures, accepted.
+  1. The paths are `/test-routes/{throw,unavailable,app}`: the kit's trusted `SEGMENT` template refuses a leading
+     underscore (shared/http/routes.ts:65-66), and widening it would loosen a check. The `/test-routes/` prefix is
+     reserved: no product route may use it, and with `TEST_ROUTES` off each path answers byte for byte like an unknown
+     path (`test_routes_absent_by_default`).
+  2. The refusal is the config rule, not a second exit: `config.invalid`, key `TEST_ROUTES`, exit 78, like every other
+     refused key (shared/config/load.ts:153-173). The book's `NODE_ENV=production` reads `UNSET_ENV`.
+  3. No showcase route: test-only code stays out of the production server bundle; `/fixture/showcase` keeps P1.26
+     covered.
+  4. No `Unavailable.tsx`: the 503 is the one `ErrorPage`'s `service.unavailable` variant (D-3), and the route sets
+     `Retry-After: 30` and `Cache-Control: no-store` itself.
+  `TEST_ROUTES` is a positive allowlist: it boots only when `UNSET_ENV` is `test`. Dev (staging) and prod refuse it.
+  Runtime `UNSET_ENV` has no `local` value (shared/config/schema.ts:170) and compose.local.yaml runs `dev`, so the
+  ruled "local and test" reduces to `test` alone, which is stricter and accepted. Runtime code never treats `dev` as
+  local; a local-only runtime behaviour needs a local-only key that preflight refuses under `--env dev` and `prod`.
+  compose.ts imports the test routes only after the `UNSET_ENV === "test"` and `TEST_ROUTES` check passes, with no
+  static import left. Red (05:10Z S2): under prod and under dev, with `TEST_ROUTES` set, startup still exits 78 and the
+  test-routes module is never loaded. The file may still sit in the image's source tree, never loaded outside test.
+  Open note for the server kit's next step: the kit's `AppError` path sends no `Retry-After`, so every 503 it renders
+  gains `Retry-After` and `no-store` there.
+
+---
+
+### P1.25f — Add favicons, feed mode and footer prefs
+Tags: (none)            Depends on: P1.25
+Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit.
+**What:**
+1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
+   asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
+3. **PrefsForms** (Alex tapped "Settings + footer" at 2026-10-19 02:59:37Z on "Where should the theme and language
+   settings live in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
+   - The canonical place is a "Language and theme" section in Settings. That section, its test
+     `settings_prefs_section` and its design-sheet entry are P2.13c's (issue #992, booked in the next batch), because
+     P2.13c builds the SettingsShell after this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes
+     from Codex on #1037").
+   - The footer form stays on default-shell pages (sign-in, verify-email, legal), where signed-out visitors need it.
+   - Nothing goes in the Navigation panel.
+   - Both are zero-JS form POSTs that set the prefs cookie, same-origin, behind the CSRF and Origin gates, and they
+     work in both shells.
+   - The PR body quotes his 02:59:37Z tap.
+   - LanguageLinks stays with P1.22b.
+   - Tests: `default_shell_footer_prefs`, and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c
+     lands first.
+   Item 1 still waits for Alex's favicon files; nothing is drawn by hand.
+4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
+   Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
+   Each has a test.
+
+Done when the tests pass and check is green.
+
+---
+
+### P1.25g — Fix disabled select focus and add two kit tests
+Tags: (none)            Depends on: P1.25
+Slice 1, issue #991, product (`shared/ui/`), lane Phase 2. These are riders 1 and 2 of P1.25's text. Book edit
+2026-10-19-five-step-audit.
+**What:**
+1. When the native control is disabled, a click on the label must not focus the combobox (SelectListbox.tsx:57-60).
+   The test is `select_label_click_disabled_no_focus`.
+2. Add `toast_close_without_main_leaves_focus` and `font_metrics_check_fails_when_stale`.
+
+Done when the tests pass, red first for item 1, and check is green.
+
+---
+
+### P1.25y — Style disabled Select and tighten its tests
+Tags: (none)            Depends on: P1.25g
+Slice 1, product (`shared/ui/components/Select/`) plus `scripts/ui/font-metrics-check.test.ts`, which is neither a
+check nor a product path, so it may ride (SE-6). Lane Phase 2. Book edit 2026-10-19-five-step-audit,
+"verify-1024-532b6a1 follow-ups". Issue: the board opens it.
+**What:**
+1. **M1.** Once its script loads, a disabled Select shows the same disabled fill and text as a native disabled select
+   (base.css:304-309), with tokens only and no new hex. Select.module.css:40-41 and :57-59 change. Verified in both
+   themes and added to the axe matrix. Today no page uses it.
+2. **N1.** The disabled test also asserts `aria-disabled="true"`, `tabIndex -1` and `aria-labelledby`
+   (SelectListbox.test.tsx:161-167).
+3. **N2.** The font-metrics `--check` test asserts the stale file is unchanged, byte for byte, not only that it
+   differs from the fresh one, so a `--check` that empties it fails.
+4. **N5.** Disabled means `element.matches(":disabled")`, which also covers a select inside a disabled fieldset. This
+   widens P1.25g's `element.disabled` wording, as a correctness tightening. The red is a select inside
+   `<fieldset disabled>`. If the lane finds a reason to keep `element.disabled`, it stops and tells the step book.
+5. **N6.** The font-metrics test gets no timeout bump. If it is slow, the lane finds the root cause.
+Done when the tests pass, red first for items 1, 2 and 4, and check is green.
+
+---
+
+### P1.25m — Pin the DID account route's privacy
+Tags: [SEC]            Depends on: P1.25
+Slice 1, issue #1004, product (`interfaces/http/`, tests), lane Phase 2. Book edit 2026-10-19-five-step-audit, D-5.
+
+**What:** these are D-5's conditions 1 to 3, each a test, red first where main fails:
+1. A request to `/<DID>`, and the redirects from `/me` and `/did`, write no DID to any app log line. The edge's access
+   log already never carries the path (deployment/edge/snippets/log.caddy:4). This step only asserts that with an
+   existing edge test, if one exists. If the edge needs a change, the step stops and reports, because that would be a
+   trusted step.
+2. The account page sends the same-origin referrer policy (shared/http/csp/headers.ts:37), and a test pins it.
+3. The one-segment DID route is registered after every explicit route:
+   - a test lists the explicit one-segment routes and proves each still wins;
+   - DID validation stays strict, as in the me.test.ts:137-149 cases (no double percent-decoding, and a did:web with
+     a path is refused);
+   - a foreign DID and a signed-out request can't tell "exists" apart from "doesn't".
+
+Condition 4 needs no code. `/<DID>` serves only its owner, and showing it to anyone else needs a new ruling and
+Alex's word.
+As built: #1017 (merged as e284029); its two Codex hardenings are P1.25n.
+
+---
+
+### P1.25n — Harden the DID route privacy tests
+Tags: [SEC]            Depends on: P1.25m
+Slice 1, product tests only, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode. P1.25m merged in #1017
+(e284029) without Phase 2's two Codex hardenings (local commit 6261eb4, tests only). Issue #1026.
+
+**What** (verify-1017-3271762 folded in; book edit 2026-10-19-alex-cards-and-edge-dev-mode, P1.25n section, and
+2026-10-19-verify-1017-scrub-and-gate):
+1. **M1.** The log-privacy test sends a percent-encoded DID, and the `did%3A` check is case-insensitive
+   (me.privacy.test.ts:85, :95).
+2. **M3.** The signed-out test compares header values and the body, not only the status, the header names and the
+   location (:124-134).
+3. **M5.** The page has no meta referrer override (head.tsx:22).
+4. **M6.** The handle and IP addresses stay out of the logs (:92-97).
+5. **N1.** The did:web-with-path case at :37 is dropped; it can't fail there and me.test.ts:134-145 covers it.
+6. **N3.** The test ids join the ASVS 5.0 V8.2.2 row (docs/human/compliance/asvs-5-l2.md:211).
+7. **M4.** The signed-out and log cases run on `compose(CONFIG, web)` with its log captured, not the stand-in `open`
+   at :56-59. The verifier's plant G1 must be red: if the real gate's signed-out branch answers differently when the
+   DID has an account (app-gate.ts:66), for example in `set-cookie`, the test fails. The whole shape is compared:
+   status, every header name and value, and the body (this folds into item 2). Two DID paths redirect to different
+   `next` values, so `Location` is compared after normalizing the requested path, and each path's own redirect is
+   asserted separately (Codex on #1037).
+If 6261eb4 applies cleanly to main, the lane cherry-picks it onto a new branch from main. If item 1 needs the scrub to
+pass, P1.25t merges first. The step never merges red, and never skips or weakens the assertion.
+
+Done when the tests are red against a deliberately broken copy (shown in the PR) and green on main, and check is
+green.
+
+---
+
+### P1.25t — Redact percent-encoded DIDs in the log scrub
+Tags: [SEC]            Depends on: —
+Slice 1, product (`shared/log/` and its tests, about 30 lines), lane Phase 2, a PR separate from P1.25n. Book edit
+2026-10-19-verify-1017-scrub-and-gate (M2). A tightening, so no card or typed line. Issue: the board opens it.
+**What:** shared/log/scrub.ts:14 matches only a literal `did:<method>:`, so `did%3Aplc%3A…` passes.
+- The DID pattern accepts, as each of its two separators, `:`, `%3A` or `%253A` (double-encoded), and matches
+  case-insensitively throughout (`DID`, `%3a`). It keeps its place before IPv6.
+- Reds in shared/log's logger tests, each coming out `[redacted]`: `did%3Aplc%3A` + 24 `a`; `did%3aplc%3a…`;
+  `DID:PLC:…`; `did%253Aplc%253A…`; and a DID inside a path, `/did%3Aplc%3A…/x`.
+- Greens: `didn't`, and a `did:` with no method, stay unredacted.
+- Out of scope: decoding the whole value before scrubbing, and other encodings.
+Threats: an encoded DID slipping past the last log layer (SE-7). Answered by matching `:`, `%3A` and `%253A`
+case-insensitively.
+Done when the reds fail on main first, the mutants that drop each separator form or the case flag are killed, and
+check is green.
 
 ---
 
@@ -6475,6 +6698,10 @@ browser checks the #423 body left unverified (the APG combobox pattern, a hidden
 booked. The tabs keyboard and axe tests check the
 default mode against its built form (links in natural tab order with aria-current, no tab roles) and eager mode
 against the ARIA tabs pattern.
+
+Any harness that turns `TEST_ROUTES` on runs its server as `UNSET_ENV=test`, or startup exits 78 by design. No harness
+relaxes the gate. tests/e2e/fixtures/servers.ts:54 runs as dev today, so the P1.26 harness that needs test routes
+changes that server to test (book edit 2026-10-19-p125c-as-built, "Step-book mapping of 05:10Z").
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;
@@ -6604,8 +6831,8 @@ reduced default below and the push, sign and attest work is **P1.27s**:
   `images_skip_only_without_dockerfile`, `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`);
   `trivyignore_expiry_enforced` (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts`
   gains `images` unless that also waits for P1.27r. `tlog_upload_never_disabled` (it replaces
-  `no_tlog_upload_flag_present`; superseded by ADR 0023, keyless) and the sign job's `workflow_permissions_minimal`
-  move to P1.27s.
+  `no_tlog_upload_flag_present`; superseded by the keyless signing ADR (written by P1.27s; numbered when it opens)) and
+  the sign job's `workflow_permissions_minimal` move to P1.27s.
 - Until P1.27s lands nothing is published to GHCR, so no unsigned image exists anywhere a deploy could pull it (fail
   closed). P1.30's preflight and P2.26a deploy only images `verify-images` accepts.
 - If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
@@ -6709,8 +6936,8 @@ managers for the lock files. The repeatable procedure:
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
-`deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub` (superseded by ADR 0023,
-keyless: no `cosign.pub` exists); `.trivyignore.yaml`; `.hadolint.yaml`;
+`deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub` (superseded by the keyless signing
+ADR, written by P1.27s and numbered when it opens: no `cosign.pub` exists); `.trivyignore.yaml`; `.hadolint.yaml`;
 `scripts/ci/verify-images.ts` (lands in P1.27q); `docs/human/decisions/NNNN-image-signing-private-repo.md`; `.github/required-checks.json` (appends the
 image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the repository's first job with a secret
 (the `signing` environment below), so it follows P0.07's environment rule; Alex creates the environment.
@@ -6721,11 +6948,11 @@ image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the 
 was scanned, carries an SBOM and SLSA provenance, and is signed with our key without publishing anything about
 the private repository.
 
-**Superseded by ADR 0023 (keyless signing; written by P1.27s, accepted when Alex merges it).** Alex tapped "Keyless" at
-2026-10-14T21:16:36Z on the card "Sign our images with GitHub's identity (keyless), or with a key you keep?" (book edit
-2026-10-13-verify-819-fixes). The key-pair text below (the signing design, `cosign.pub`, the key custody,
-`--tlog-upload=false`, `--insecure-ignore-tlog`, Alex's key checklist and the `no_tlog_upload` tests) is history;
-P1.27s, P2.26e and P2.26b carry the keyless design.
+**Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it).**
+Alex tapped "Keyless" at 2026-10-14T21:16:36Z on the card "Sign our images with GitHub's identity (keyless), or with a
+key you keep?" (book edit 2026-10-13-verify-819-fixes). The key-pair text below (the signing design, `cosign.pub`, the
+key custody, `--tlog-upload=false`, `--insecure-ignore-tlog`, Alex's key checklist and the `no_tlog_upload` tests) is
+history; P1.27s, P2.26e and P2.26b carry the keyless design.
 
 **Signing design (provisional — Alex question P1b-A3; recommendation (a)):** while the repo is private, sign with
 **cosign using a key pair and no transparency log**. Why not the alternatives:
@@ -8277,11 +8504,11 @@ classifications still hold, and check is green.
 ---
 
 ### P1.35t — Run the local stack in a CI job
-Tags: [SEC] check [ALEX] (typed line)            Depends on: P1.34d
+Tags: [SEC] check [ALEX] (typed line)            Depends on: P1.34d, P1.36h
 Slice 1, issue #983, check paths (`.github/workflows/`, `scripts/ci/`), SE-6 alone (no product, no trusted base),
 kind/ci, lane the third thread. P1.33z depends on it. Book edit 2026-10-19-p135t-local-stack-ci-job, with
-architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Needs Alex's typed
-line: "yes P1.35t .github/workflows/local-stack.yml scripts/ci".
+architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Alex's go is his
+"ok for 1.35t then" (2026-10-19 02:13:45Z; book edit 2026-10-19-p135t-local-stack-ci-job, last section).
 
 Threats (SE-1; the PR expands this to one screen and updates the ASVS 5.0 rows): a CI job that holds generated secrets
 and runs containers on pull-request code. Answered by: no repository secret, read-only token, generated values never
@@ -8294,12 +8521,16 @@ logged or uploaded, and the job never runs with a privileged trigger.
    the whole job, and `concurrency` cancelling superseded runs. Checkout uses `persist-credentials: false`; the runner
    label is the same pinned one ci.yml uses; no step saves a Docker layer or image cache. A later `push` trigger is its
    own check step with its own typed line.
-2. A script under `scripts/ci/` creates the two sibling folders (`../unset-dev-env`, `../unset-dev-secrets`) with
-   values from `node:crypto` `randomBytes`, in the shapes and file modes `docs/human/runbooks/dev-stack-secrets.md`
-   gives. Each value is masked (`::add-mask::`, raw, base64 and URL-encoded forms) before it is written anywhere; the
-   folders are never uploaded as an artifact and are deleted in an `always()` step. No value is written into the
-   workspace. The job never runs `docker compose config`, `docker inspect`, `env` or `printenv`; on failure it shows
-   only `docker compose ps` and `docker compose logs --no-color --tail=200` per service.
+2. A script under `scripts/ci/` creates the four sibling folders local preflight reads (`../unset-dev-env`,
+   `../unset-dev-secrets`, `../unset-dev-ca` and `../unset-dev-trust`, including `root.pem`; build.ts:189, :265,
+   :281; compose.local.yaml:84, :159), and makes the leaf by the runbook's commands (book edit
+   2026-10-19-verify-1013-followups, M3). Values come from `node:crypto` `randomBytes`, in the shapes and file modes
+   `docs/human/runbooks/dev-stack-secrets.md` gives. Each value is masked (`::add-mask::`, raw, base64 and URL-encoded
+   forms) before it is written anywhere; the folders are never uploaded as an artifact and are deleted in an `always()`
+   step. The run's CA private key falls under the same rules: masked before any write, never logged or uploaded, deleted
+   in `always()`, and it never leaves the runner. No value is written into the workspace. The job never runs `docker
+   compose config`, `docker inspect`, `env` or `printenv`; on failure it shows only `docker compose ps` and `docker
+   compose logs --no-color --tail=200` per service.
 3. The client_id probe, a `scripts/ci/` check script with no product imports: it fetches
    `https://<APP_HOST>/oauth-client-metadata.json` from inside the PDS container (`docker compose exec`) with the dev
    root as the only extra trust anchor, verifies the chain, and checks only that `client_id` equals the fetched URL and
@@ -8343,7 +8574,12 @@ block (preflight.test.ts:2762). Keep or add the red: a service named plc on a ne
 preflight.test.ts:2765 and :3235) cite ADR 0022. Drop the plc localOnly reading if nothing else uses it. If a local PLC
 ever returns, the exemption comes back only under a fresh architecture ruling.
 
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a dead exemption in a
+security check that a future lock entry would switch back on without review. Answered by removing it, with a red (book
+edit 2026-10-19-verify-1013-followups, M4).
+
 Done when the red passes on the new code (and would have passed the old exemption, shown in the PR), and check is green.
+As built: #1023 (merged as efb3c53).
 
 ---
 
@@ -8358,6 +8594,10 @@ this PR with `deployment/preflight/`.
 tests: the precheck (`scripts/dev-precheck.ts:15`, `:57`) and C15 (`deployment/preflight/checks/settings.ts:60`). The
 prod pins don't change. Each name stays one exact value, never a suffix or a pattern. If ADR 0025 is amended, the names
 follow the amendment.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): dev pins that name the wrong
+hosts, so preflight passes against a host that isn't staging. Answered by exact names from the accepted ADR (book edit
+2026-10-19-verify-1013-followups, M4).
 
 Done when, red first, the old `0x40.space` names fail under dev, the new names pass, prod is unchanged, and check is
 green.
@@ -8381,34 +8621,53 @@ plan thread; book edit 2026-10-19-staging-path-steps. It follows the same rule a
 ---
 
 ### P1.36d — Build the edge image with one DNS module
-Tags: [SEC] trusted            Depends on: —
+Tags: [SEC] trusted            Depends on: P1.36n
 Slice 1, issue #1001, trusted base (`deployment/edge/Dockerfile` and its image tests), lane the third thread; book
 edit 2026-10-19-staging-path-steps, "Item 7", from architecture's ruling (b): staging TLS is Let's Encrypt DNS-01
 through a delegated validation zone, never the dev root (book edit 2026-10-19-staging-tailnet-rulings).
 
 **What:** the edge image gains exactly one DNS provider module, built from a pinned source by commit or digest in our
 image pipeline, and signed and digest-pinned like the other images (the P1.27s chain). There is no second module and no
-plugin loaded at run time. The image tests list the modules and fail on any extra one.
+plugin loaded at run time. The image tests list the modules and fail on any extra one: `edge_image_plugins_exact`
+pins exactly the two modules (ADR 0018's one, plus this one under ADR 0028, P1.36n; book edit
+2026-10-19-alex-cards-and-edge-dev-mode, M1). The module is the chosen provider's, from the caddy-dns organization
+(ADR 0028; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z").
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a supply-chain module in the
+TLS edge. Answered by one pinned source, a signed digest, and an image test that lists the modules (book edit
+2026-10-19-verify-1013-followups, M4).
 
 ---
 
-### P1.36e — Allow DNS-01 for dev in C18
+### P1.36e — Add the edge dev mode with one DNS-01 issuer
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36d
-Slice 1, issue #1002, trusted base (`deployment/edge/caddyfile.ts`, `deployment/edge/snippets/tls.caddy`, their
-tests), lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 7". The edge reader's grammar is trusted
+Slice 1, issue #1002, trusted base (`deployment/edge/caddyfile.ts`, `deployment/edge/dev/tls.caddy`, their tests),
+lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 7", restated by book edit
+2026-10-19-alex-cards-and-edge-dev-mode, M2 (architecture 04:10Z and 04:35Z). The edge reader's grammar is trusted
 base and C18 imports it (deployment/preflight/checks/edge.ts:1-4), so the widening is a trusted step. **A widening, so
-it needs Alex's typed line:** "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/snippets/tls.caddy C18 DNS-01
-dev only".
+it needs Alex's typed line:** "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/dev/tls.caddy edge dev mode
+DNS-01 dev only" (it replaces the earlier line, which named snippets/tls.caddy).
 
-**What:** Let's Encrypt stays the only issuer. Under dev, the reader accepts exactly one `dns <module>` challenge, whose
-token comes from a file secret. Under prod, it refuses DNS-01, so the current challenges stay. Local is unchanged.
-Reds: DNS-01 under prod; a second issuer; another CA directory; a token given as a literal or an env value instead of
-the file.
+**What:**
+- The reader (caddyfile.ts:429, :466) gains a third `EdgeMode`, `dev`, beside `shipped` and `local`. It reads
+  `edgeDir/dev/` under the same containment as `local/`.
+- New file `deployment/edge/dev/tls.caddy` holds the one DNS-01 issuer: Let's Encrypt only, its token from a file. It
+  carries Caddy's DNS-challenge override option, which points each `_acme-challenge` CNAME into the validation zone;
+  the lane confirms the exact directive against the pinned Caddy (ADR 0028; architecture 04:50Z and 06:00Z (b)).
+- `snippets/tls.caddy` (prod) is not changed, so prod refuses DNS-01 in this step's scope (dev first; a prod wildcard
+  is a later ruling, each with its own typed line). The grammar refuses a `dns` issuer in any file outside `dev/`.
+- Local is unchanged. C18's mapping and the dev mount are P1.36o, right after this step.
+- Reds: the dev snippet under prod; the dev snippet under local; dns-01 in the prod snippet; a second issuer; another
+  CA directory; a literal or env-value token.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a wider issuer grammar that
+lets prod use DNS-01, or a token given as a literal. Answered by dev-only acceptance, a file-only token, and reds (book
+edit 2026-10-19-verify-1013-followups, M4).
 
 ---
 
 ### P1.36b — Serve the app site on the dev edge
-Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36e, P1.35x, P1.35y
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36e, P1.36o, P1.35x, P1.35y
 Slice 1, issue #999, trusted base (`deployment/edge/`), lane the third thread; book edit
 2026-10-19-staging-path-steps, "Item 7" and "P1.36b ruled", from architecture's 02:50Z ruling (book edit
 2026-10-19-staging-tailnet-rulings, last section). **A loosening, so it needs Alex's typed line:** "yes P1.36b
@@ -8421,7 +8680,13 @@ accepts `APP_HOST` only as ADR 0025's accepted app name, one exact string (not a
 (P1.34z's); if that allowlist lives in `deployment/preflight/`, P1.36c adds the two entries there. Prod stays refused
 until a ruling of its own. Local is unchanged. The PDS-site rules apply to the app site, its TLS is P1.36e's, and the
 edge-only PDS neighbour rule (P1.34d option C) applies under dev unchanged. Reds: any other host under dev, any other
-upstream under dev, and either one under prod.
+upstream under dev, and either one under prod. Alex's Pangolin reaches the edge through Newt with SNI
+`staging.unset.sh`: Newt connects to the edge's existing loopback bind, and no new port is published (book edit
+2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling").
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an app site served under dev
+with a host or upstream that isn't the ruled one. Answered by exact values and prod refused (book edit
+2026-10-19-verify-1013-followups, M4).
 
 ---
 
@@ -8432,8 +8697,15 @@ edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What:** the DNS token is a C9 file secret, mounted only into the edge, under the C9 owner and mode rules; a test
 asserts that no other service mounts it. The compose wiring adds the app site's mounts as P1.36b reads them, and the two
-dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. Alex's tasks (runbook):
-create the validation zone, the `_acme-challenge` CNAMEs and the zone-scoped token.
+dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. The token is wired into the
+same `deployment/edge/dev/` mount (P1.36o). Alex's tasks (runbook): create the validation zone, the `_acme-challenge`
+CNAMEs, the zone-scoped token and the per-name CAA records (book edit 2026-10-19-verify-1013-followups, M5). They
+also delegate the validation zone by NS from Namecheap and create the scoped token at the provider Alex picks (book
+edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z").
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a DNS token readable by
+services other than the edge. Answered by a C9 file secret mounted only into the edge, with a test (book edit
+2026-10-19-verify-1013-followups, M4).
 
 ---
 
@@ -8442,10 +8714,13 @@ Tags: —            Depends on: —
 Slice 1, issue #1003, docs only (`docs/human/decisions/0025-public-domains.md`, still Proposed, so it can change), lane
 the plan thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping". It comes before P1.35y.
 
-**What:** the ADR gains three lines from ruling (b): staging TLS is Let's Encrypt DNS-01 through a delegated validation
-zone; the tailnet's split DNS serves the staging names; public DNS holds only the challenge CNAMEs, plus the metadata
-host's record if Alex agrees to ruling (a). Alex reads the amended ADR when he gives his yes for P1.35y. No typed line
-is needed: the ADR is unaccepted, and his acceptance is the approval.
+**What:** the ADR gains, from ruling (b) and the rulings after #1013 (book edit 2026-10-19-verify-1013-followups, M5,
+and book edit 2026-10-19-alex-cards-and-edge-dev-mode, M6): staging TLS is Let's Encrypt DNS-01 through a delegated
+validation zone; the staging names need no split DNS (public DNS serves `.sh` and `.ac`, and Docker aliases on the edge
+resolve the names inside the stack); for `staging.unset.sh`, public DNS holds an A/AAAA record pointing at Pangolin, the
+challenge CNAME and the three CAA records (the split-horizon host is retired); every staging name carries its own CAA
+records; and external-account sign-in is out of scope on staging until P1.33p. Alex reads the amended ADR when he gives
+his yes for P1.35y. No typed line is needed: the ADR is unaccepted, and his acceptance is the approval.
 
 ---
 
@@ -8463,8 +8738,9 @@ so nothing is needed from Alex for the step itself.
    (smtps or requireTLS). The SMTP password follows the 12:40Z predicate: exactly one `${NAME:?message}`, or the whole
    URL comes from a `/run/secrets/` file. If nothing uses Mailpit under dev, C11's Mailpit acceptance narrows to local
    only. ADR 0026's exception stays local-only.
-2. **The pds.env template and runbook** list the SMTP keys, the recovery key and its did:key, and the first account,
-   with no values and nothing that looks like a real key.
+2. **The pds.env template and runbook** list the SMTP URL key, the recovery key and its did:key, and the first
+   account, with no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret
+   SMTP settings, such as the from address, go in compose.dev.yaml's environment (architecture 06:15Z).
 3. **The first invite** is a runbook one-off that Alex runs and Claude never does, under the ruling's four conditions:
    it runs with `docker compose exec` inside the PDS container, against its own loopback port, with no port published
    and the edge still answering 404 for createInviteCode; the password is read from the file inside the container,
@@ -8474,6 +8750,273 @@ so nothing is needed from Alex for the step itself.
 
 Done when, red first: dev with no mail URL fails, a literal SMTP password fails, and (if narrowed) Mailpit under dev
 fails. Check is green.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): staging mail in plaintext or
+with a literal password, and invite codes leaking through logs or shell history. Answered by C11's TLS rule, the secret
+predicate, and the runbook's four conditions (book edit 2026-10-19-verify-1013-followups, M4).
+
+---
+
+### P1.36i — Pin the dev edge aliases and public paths
+Tags: [SEC]            Depends on: P1.36b
+Slice 1, issue #1018, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, the app's route tests), lane the
+third thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling" and the
+03:58Z `.ac` mapping. A tightening, so nothing is needed from Alex.
+
+**What:**
+1. Under dev, the edge's network aliases are exactly the PDS host alias. `APP_HOST` is dropped, so the PDS resolves
+   the app name through public DNS (to Alex's Pangolin). Local keeps both aliases. The app still reaches the PDS
+   inside the network, and `NETGUARD_INTERNAL_HOSTS` stays exactly the PDS host (compose.dev.yaml:196).
+2. The P1.34d option C preflight check gains a dev branch: the edge carries exactly the PDS host alias. Under dev,
+   one more alias, or a missing one, fails. Local is unchanged.
+3. A repo test pins that the app serves `/oauth-client-metadata.json` and the client's `jwks_uri` path exactly as
+   oauth-client.ts:133-148 builds them. Those are the two paths Alex's Pangolin rules let past the password (Alex
+   tapped "Allow both" at 2026-10-19 02:44:55Z on "Let two public sign-in files on staging.unset.sh skip the Pangolin
+   password?"). The test also checks that nothing else under them answers without a session. The Pangolin rules
+   themselves are Alex's runbook, not repo code.
+
+Done when the reds pass (an extra dev alias, a missing dev alias, a third public path) and check is green.
+
+---
+
+### P1.36j — Trust only Newt's address at the dev edge
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
+Slice 1, issue #1019, trusted base (`deployment/edge/`), lane the third thread; book edit
+2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling". Caddyfile:36 says today "No
+trusted_proxies: nothing sits in front of the edge". Trusting a proxy accepts its forwarded header, so this is a
+loosening. **It needs Alex's typed line:** "yes P1.36j deployment/edge/Caddyfile dev trusted proxy Newt only". It covers
+`staging.unset.ac` too, since both names reach the same edge through Newt.
+
+**What:**
+- Under dev, the edge trusts exactly Newt's fixed source address as its proxy, and takes the client IP from the
+  forwarded header only on that hop.
+- Prod and local stay with no trusted proxy.
+- The app's trust settings, edge to web, stay as they are.
+- Reds: a spoofed X-Forwarded-For from any other source never becomes the client IP the app sees; a second address, a
+  range, or a wildcard in the trusted list fails the reader; per-IP limits key on the real client address.
+
+The Traefik side (no `forwardedHeaders.insecure`, no trusted IPs) is Alex's runbook.
+
+---
+
+### P1.36k — Refuse dev-only runtime keys outside local
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1021, product (`deployment/preflight/` and its tests only; no runtime or trusted-base change), lane the
+third thread; book edit 2026-10-19-p125c-as-built, "Step-book mapping of architecture's 03:50Z sites". A tightening
+(SE-7b).
+
+**What:**
+- Preflight gains a local-only key list (none exists today: P1.35r's pins are compose tests, and
+  `deployment/preflight/local-only.ts` lists services and networks only). `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK`
+  and `DEV_VITE_ORIGIN` are its first entries, so preflight refuses each one under `--env dev` and `--env prod`.
+- Under dev and prod, every origin-valued key must be `https`.
+- Sites today: oauth-client.ts:128; netGuard.ts:18; shared/http/config.ts:27; config.ts:90; csp/headers.ts:25.
+
+- `PDS_DISABLE_SSRF_PROTECTION` is never a local-only map entry: set under any env, local included, it fails
+  (architecture 04:40Z; book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book mapping of 04:40Z").
+
+Done when one red per key under dev and under prod passes, an http origin under dev fails,
+`PDS_DISABLE_SSRF_PROTECTION` fails under each env, local is otherwise unchanged, and check is green.
+
+---
+
+### P1.36l — Refuse the zero commit under dev
+Tags: [SEC]            Depends on: P1.27s
+Slice 1, issue #1022, product (`deployment/preflight/`, `deployment/compose.dev.yaml`), lane the third thread; book
+edit 2026-10-19-p125c-as-built, "Step-book mapping of architecture's 03:50Z sites". A tightening.
+
+**What:** under dev, preflight refuses the zero `UNSET_COMMIT` (schema.ts:183). compose.dev.yaml (:62, :176) takes the
+signed image's commit instead of the zero value.
+
+Done when the zero commit under dev fails, the signed commit passes, and check is green.
+
+---
+
+### P1.36h — Fix migrate index lint and PDS data dir locally
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1012, product (`deployment/`, `infrastructure/postgres/`), lane the third thread, before P1.35t; book
+edit 2026-10-19-p135t-local-stack-ci-job, "P1.36h" and "Architecture on P1.36h's fix shape" (03:16Z). P1.35t's first
+green job failed for these two product reasons (run 39190048082).
+
+**What:**
+1. **migrate:** `sqlLint` takes `checkQueryFiles: boolean`. The migrate CLI in the image passes `false`: it keeps
+   every comment-shape check and skips only the file lookup. Every repo-time caller passes `true`, so a missing file
+   fails exactly as before. Skipping a file because it is missing is fail-open, and is refused; shipping cited source
+   files into the image is rejected, and 0012 stays untouched. Reds: repo mode with a migration citing a missing file
+   fails; a pin that the image's CLI passes `false`.
+2. **pds:** keep `pdsdata:/home/node` and point the PDS at the mount point: `PDS_DATA_DIRECTORY=/home/node`,
+   `PDS_BLOBSTORE_DISK_LOCATION=/home/node/blocks`, and the token reader's `ACCOUNT_DB=/data/account.sqlite`, in
+   compose.local.yaml, compose.dev.yaml, the compose.dev.test.ts pins and tests/support/pds-email-token.ts:522. Never
+   `user: root`, an init container, a chown step, extra capabilities or a writable root layer.
+
+Done when P1.35t's green job, rerun on this fix through a main merge into #1005, gets past both points, each with its
+red first, and check is green.
+As built: #1015 (merged as 22b4ef6).
+
+---
+
+### P1.35u — Narrow and pin the islands owner lines
+Tags: [SEC] check [ALEX] (typed line)            Depends on: —
+Slice 1, issue #985, check class (`.github/CODEOWNERS`, `scripts/workspace/`), SE-6 alone, lane Phase 2 (P1.25u's
+owner); book edit 2026-10-19-merged-step-leftovers, (1), from 2026-10-15-verify-912-followups (S3, "S4 ruled") and
+2026-10-12-p125i-islands-move-split (architecture 12:50Z, a tightening). #960 merged P1.25u without these. Needs Alex's
+typed line: "yes P1.35u .github/CODEOWNERS scripts/workspace".
+
+**What:**
+1. The trusted section's `/shared/islands/` line (CODEOWNERS:118) becomes two lines, `/shared/islands/props.ts` and
+   `/shared/islands/readProps.ts`. The main section's "Islands and links" line (:51) stays as it is.
+2. `scripts/workspace/codeowners.test.ts` pins the main-section `/shared/islands/` line and both narrowed trusted
+   lines exactly: removing or widening any of them, or changing its owner, fails. It also asserts that no trusted line
+   matches `shared/islands/define.ts`, `slot.ts` or `index.ts`. Starting point:
+   /mnt/project-files/unset-plan/verify/verify-912-8f80128-codeowners-pin-optional.patch.
+
+Done when, red first, each mutant (line removed, widened, owner changed, a trusted line covering define.ts) fails the
+test, the trusted-base tests pass, and check is green.
+
+---
+
+### P1.35v — Split secret key words on every boundary
+Tags: [SEC]            Depends on: —
+Slice 1, issue #986, product (`deployment/` tests), lane Phase 1; book edit 2026-10-19-merged-step-leftovers, (3),
+from 2026-10-15-verify-903-info-items (architecture 13:05Z, clause (a)). #935 merged P1.35r splitting on `_` only
+(deployment/compose.local.test.ts:283). A tightening.
+
+**What:** the secret-bearing predicate in `deployment/compose.local.test.ts` splits a key into words on `_`, `-` and
+`.`, and at each lowercase-to-uppercase boundary, before matching the closed word list case-insensitively. Reds, each
+with a literal value: `Db.apiToken`, `db-password`, `dbPassword`. A green: a key with none of the words after splitting
+stays accepted with a literal.
+
+Done when, red first, the three reds fail on main's predicate and pass after, and check is green.
+As built: #1016 (merged as 90ecfe6).
+
+---
+
+### P1.36t — Widen the secret key split to every compose env
+Tags: [SEC]            Depends on: P1.35v
+Slice 1, product test (`deployment/compose.local.test.ts` or a sibling test file there), lane Phase 1. Book edit
+2026-10-15-verify-903-info-items, "Step-book mapping of 05:00Z". A tightening, so no card or typed line. Issue: the
+board opens it.
+**What:**
+1. **M1.** Keys split on `_`, `-` and `.`; on lower-to-upper case; on letter-to-digit and digit-to-letter; and at the
+   end of an acronym (`([A-Z])([A-Z][a-z])`). The 12 closed words, the case-insensitive match and the accepted forms
+   are unchanged.
+2. **M3.** The predicate runs over every `environment` entry (keys and values) of every service in compose.dev.yaml
+   and compose.local.yaml. It reports in fixed words plus the key name, never the value.
+3. **M2.** `db.password` and `myDbPassword` are added as reds.
+Reds, each with a literal value: `db2Password`, `apiKey2`, `token1`, `PASSWORD2`, `DB_PASSWORD2`, `APIKey`,
+`DBPassword`, `JWTSecret`, `PGPassword`; `db.password` and `myDbPassword`; and a literal `dbPassword` or
+`PLC_DB_PASSWORD` on postgres, in each compose file. Greens: every existing green, plus `S3_BUCKET`.
+The PR body re-measures that no env key in either compose file changes status, at its own head. Preflight's C9 is
+unchanged.
+Done when every new red fails on main's predicate first and passes at the head, the K3 and K5 mutants are killed, and
+check is green.
+
+---
+
+### P1.36m — Draft ADR 0028 for the edge DNS module
+Tags: [SEC]            Depends on: —
+Slice 1, docs only (`docs/human/decisions/0028-edge-dns-01-provider-module.md`, Status: Proposed), lane the plan
+thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1 (architecture 04:10Z). Issue #1027.
+
+**What:** exactly architecture's five points: the module pinned by pseudo-version and checksum; dev only until
+Phase 5; the token as a C9 file secret; the failure mode; and `edge_image_plugins_exact` becoming exactly two modules.
+It also gives the reason the module is needed even with Pangolin. It does not edit ADR 0018. From architecture 04:50Z
+(book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z"), it also records:
+- the validation zone as a subdomain delegated by NS from Namecheap (for example `acme.unset.sh`);
+- each `_acme-challenge` record as a CNAME into it;
+- Caddy's DNS-challenge override option in `dev/tls.caddy`, its exact name confirmed against the pinned Caddy;
+- Namecheap's API ruled out as the token host, because its tokens are account-wide.
+The provider it names is the one Alex picks on his card, deSEC (recommended) or Cloudflare. The draft waits for his
+answer, or carries both with the choice left open, at the plan thread's choice. The number is confirmed
+free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is taken, it is the next free number.
+
+---
+
+### P1.36n — Accept ADR 0028
+Tags: [ALEX]            Depends on: P1.36m
+Slice 1, docs only (the Status line), lane the plan thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1.
+Issue #1028. Its PR opens only on Alex's typed yes: "yes accept ADR 0028 edge DNS-01 provider module
+docs/human/decisions/0028", quoted with its time.
+
+---
+
+### P1.36o — Mount the edge dev snippet and map it in C18
+Tags: [SEC]            Depends on: P1.36e
+Slice 1, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread, right after P1.36e
+with nothing that touches the edge or C18 between them (architecture 04:35Z); book edit
+2026-10-19-alex-cards-and-edge-dev-mode, M2. Issue #1029. Tightenings only, so no typed line.
+
+**What:**
+- C18 (preflight/checks/edge.ts:228) maps local to `local/tls.caddy`, dev to `dev/tls.caddy` and prod to
+  `snippets/tls.caddy`, and passes the reader's `dev` mode.
+- compose.dev.yaml mounts `deployment/edge/dev/` read-only into the edge, the way compose.local mounts `local/`.
+- Under `--env prod`, preflight refuses a `dns` issuer in the served snippet and refuses a `dev/` mount. Under
+  `--env local`, it refuses a `dev/` mount.
+- Reds: the dev snippet missing under dev; a `dev/` mount under prod; a `dev/` mount under local; dns-01 in the served
+  snippet under prod.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a DNS-01 issuer or the dev
+snippet reaching prod or local. Answered by the per-profile snippet map and the refused mounts, each with a red.
+
+---
+
+### P1.36p — Cap the PDS temp blob tmpfs
+Tags: [SEC]            Depends on: P1.36h
+Slice 1, product (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`, `deployment/preflight/`), lane the
+third thread, a staging go-live blocker; book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2a)
+and 04:35Z. Issue #1030.
+
+**What:**
+- The PDS's temp blobs at `/tmp/pds/blobs` get a tmpfs of their own: `size=20m,mode=0700`, owned by the PDS user
+  (uid and gid 1000). That is 4 (the fixed concurrency, named once as a constant) times the pinned upload limit, and
+  never larger; `pds_blob_tmpfs_is_four_times_the_limit` ties the two, so the size changes with the limit. Any other
+  `/tmp` tmpfs the PDS keeps is capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same
+  in compose.local).
+- `PDS_BLOB_UPLOAD_LIMIT` becomes one exact value in the env map, 5242880 (5 MiB). The floor check that it is at least
+  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays.
+- Preflight checks both under local and dev.
+- Reds: the blobs tmpfs without `size=`; a `size=` above the cap; a mode other than 0700; a missing or different
+  upload limit.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): memory exhaustion from
+concurrent large uploads by invited accounts. Answered by the capped tmpfs and the pinned limit, both checked by
+preflight.
+
+---
+
+### P1.36q — Require the exact key set in pds.env
+Tags: [SEC]            Depends on: P1.36g
+Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
+2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue #1031.
+
+**What:**
+- Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
+  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP URL key that
+  P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env table. Delivery follows
+  the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
+- Preflight reads names only, and never prints a value.
+- Reds: a sixth key (for example a non-secret SMTP setting); a missing key; a duplicate key.
+- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
+  architecture 06:15Z).
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
+secret, slipped into the PDS env. Answered by an exact key set.
+
+---
+
+### P1.36r — Refuse a checkout-built migrate under dev
+Tags: [SEC]            Depends on: —
+Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
+2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N5). Issue #1032.
+
+**What:** main already refuses this: under dev, C2 fails any service with no digest image (images.ts:24-37), and
+compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P1.27s publishes
+signed images (compose.dev.yaml:4-6). This step pins that with a named red, `c2_dev_migrate_built_from_checkout_fails`,
+and a comment in C2 saying migrate gets no dev exception. Local's unsigned path for migrate stays unchanged. When
+P1.27s switches compose.dev.yaml's migrate to its digest, this red stays.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): schema changes with migration
+privileges run from an unsigned operator build. Answered by signed digests only under dev.
 
 ---
 
@@ -9078,7 +9621,7 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     P2.26b, the step that makes it passable (it needs `deployment/images.lock.json` and an edge that is not `build:`);
     no test is skipped or left red (book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
     2026-10-13-p127s-split; P1.27s is check paths only, so the product test cannot ride it).
-13. Moved to P1.33z (the CI integration run), after this step.
+13. Moved to P1.33z, and its CI run and probe to P1.35t (book edit 2026-10-19-verify-1013-followups, N2).
 14. Mail-off logging on local (book edit 2026-10-13-p127l-local-gaps, "Step-book mapping of verify-836-7f7582a N1 and
     N2"; verify-842-e4f6e94 N1): with mail refused on local, the preflight no longer checks "mail unset means
     LOG_ENABLED is exactly false and LOG_LEVEL is allowlisted" there; the rule lives only in
@@ -9112,8 +9655,11 @@ Done when P1.34d's own red tests pass: item 15's handshake red test; item 11's d
 `compose.local.yaml`; the wrapper's down-on-mismatch test; item 12's real `compose.local.yaml` test under `--env local`;
 and C17's local-only list module refusing a `plc_*` network under dev (02:32Z ruling); and check is green. Item 5's
 checks are P1.33g's and item 6's refusal is P1.33w's (book edit 2026-10-15-verify-890-postmerge-followups, B6).
-P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
-2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
+P1.29t's client_id probe red and green move to P1.35t, which P1.33z cites (session containers cannot pull the PDS
+image; book edit 2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"; book edit
+2026-10-19-verify-1013-followups, N2). Its PR body names this departure.
+As built: #903, merged as 5e9d1ee at 516 changed source lines, accepted after the fact with no split (book edit
+2026-10-14-p134d-split, "P1.34d size as merged").
 
 ---
 
@@ -9214,16 +9760,18 @@ service, so the plc and seed limits/env rows this step deferred never arrive. Th
   with. This step pins the ones that exist when it lands (pds-token-reader); P1.34v adds plc and P1.29s adds seed, each
   with its limits row and env pins, in its own PR (Codex on #910: seed does not exist before P1.29s). Each one's
   environment is pinned in the drift test as an exact key-value map, written as the compose file has it: a literal, or a
-  `${VAR}` reference kept as text and never resolved, so no secret enters the table. Secret-bearing key: split on `_`,
-  and any word is one of PASSWORD, PASSWD, PASS, PW, SECRET, TOKEN, KEY, PRIVATE, CREDS, CREDENTIALS, SEED, DSN. The
-  list is closed. Secret-bearing value: any URL with userinfo, under any key. Accepted: (1) a `*_FILE` key whose literal
-  value is a path under `/run/secrets/` (as `compose.dev.yaml:41`, :65); (2) the whole value exactly `${NAME:?message}`,
-  where NAME matches `[A-Z][A-Z0-9_]*` and the message is non-empty; (3) a userinfo URL whose password is exactly one
-  `${NAME:?message}`. Everything else is refused: a literal, a plain `${NAME}`, any `:-` `-` `:+` `+` form, a `:?` with
-  no message, an unbraced `$NAME`, a bare key, a userinfo URL without a password part, or any other composite. The same
-  predicate applies in compose and in the table (architecture 12:40Z, the record's section "Architecture on
-  verify-910-a686fe0 S3"). Its `env_file` list is pinned exactly, in order. Any added, removed or changed entry fails,
-  naming the service and key (for example APP_* on the reader). The reader has no environment and no `env_file` today
+  `${VAR}` reference kept as text and never resolved, so no secret enters the table. Secret-bearing key: split into
+  words (on `_` as built; P1.35v and P1.36t widen it to `-`, `.`, case, letter-digit and acronym boundaries, over every
+  `environment` entry of every service in compose.dev.yaml and compose.local.yaml), and any word is one of PASSWORD,
+  PASSWD, PASS, PW, SECRET, TOKEN, KEY, PRIVATE, CREDS, CREDENTIALS, SEED, DSN. The list is closed. Secret-bearing
+  value: any URL with userinfo, under any key. Accepted: (1) a `*_FILE` key whose literal value is a path under
+  `/run/secrets/` (as `compose.dev.yaml:41`, :65); (2) the whole value exactly `${NAME:?message}`, where NAME matches
+  `[A-Z][A-Z0-9_]*` and the message is non-empty; (3) a userinfo URL whose password is exactly one `${NAME:?message}`.
+  Everything else is refused: a literal, a plain `${NAME}`, any `:-` `-` `:+` `+` form, a `:?` with no message, an
+  unbraced `$NAME`, a bare key, a userinfo URL without a password part, or any other composite. The same predicate
+  applies in compose and in the table (architecture 12:40Z, the record's section "Architecture on verify-910-a686fe0
+  S3"). Its `env_file` list is pinned exactly, in order. Any added, removed or changed entry fails, naming the service
+  and key (for example APP_* on the reader). The reader has no environment and no `env_file` today
   (`compose.dev.yaml:198`, "No network, no env, no secret"), so its pin is an exact empty map and an empty list. This
   step still builds the full key-value comparison and the secret-bearing predicate as code, so the value red tests in
   P1.34v and P1.29s have code to test. The predicate's minimum reds run on fixtures in this step's own test, since the
@@ -9232,7 +9780,7 @@ service, so the plc and seed limits/env rows this step deferred never arrive. Th
   "Codex P2 on #910"). Red tests here: APP_HOST on the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an
   unlisted `env_file` on the reader. The value red tests (a changed value of an allowed key, a deleted allowed key, a
   literal in place of a `${VAR}` reference, and a literal on a secret-bearing key) need a service with environment, so
-  they ride P1.34v on plc and P1.29s on seed (Codex on #910).
+  they ride P1.34v on plc and P1.29s on seed (Codex on #910), both with the wider split.
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
@@ -9287,12 +9835,13 @@ Slice 1, issue #856, product, kind/feature, lane the third thread; book edit 202
 still govern the text. Not paused. Nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the local stack's
-trust (the leaf, the per-file mounts, the read-only root) untested end to end, answered by the run below.
+trust (the leaf, the per-file mounts, the read-only root) untested end to end, answered by P1.35t's run, cited here.
 
 **What** (P1.34d item 13): a CI integration run: the local stack starts and the edge serves both names with the leaf.
 If a file mount on the read-only root fails, stop and report; never add a writable layer or a placeholder. The CI job
 and its client_id probe are P1.35t (#983), the check step before this one; this step no longer adds
-`deployment/local-stack-probe.ts` (book edit 2026-10-19-p135t-local-stack-ci-job, last section).
+`deployment/local-stack-probe.ts` (book edit 2026-10-19-p135t-local-stack-ci-job, last section). Any `.github/` change
+is its own check step with Alex's typed line.
 
 README, as docs riding this product step (SE-6; book edit 2026-10-14-outside-review-lows, item 3): a "Run it locally"
 section, written here because this step's run proves `compose.local.yaml` starts. It covers installing Node 26 (nvm
@@ -10236,9 +10785,10 @@ Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the
   the red cases below), and `/deployment/sigstore/` joining CODEOWNERS' last section (trusted base: the trusted root
   decides which signatures count). Also `.github/workflows/sigstore-root.yml`, a manual-only (`workflow_dispatch`)
   workflow, with its workflow tests (architecture on verify-842-e4f6e94 S5, mapped in the last section of book edit
-  2026-10-13-verify-819-fixes). The ADR `docs/human/decisions/0023-image-signing-keyless.md` rides as docs (0021 is
-  reserved, 0022 is guarded schemas), with the ADR 0001 log entry decision 35 D8 requires (verify-842-e4f6e94 S3).
-  No product file rides with it.
+  2026-10-13-verify-819-fixes). The keyless signing ADR, `docs/human/decisions/<next free
+  number>-image-signing-keyless.md` (numbered when it opens; 0021 to 0027 are taken and P1.36m reserves 0028, and the
+  guarded-schemas ADR takes its own number), rides as docs, with the ADR 0001 log entry decision 35 D8 requires
+  (verify-842-e4f6e94 S3). No product file rides with it.
 PLAN.md gate (verify-842-e4f6e94 S4): the plan thread's PLAN.md edit (:528, :626, text in book edit
   2026-10-13-verify-819-fixes, "Architecture on Alex's keyless answer") is a docs PR. Until it merges, PLAN.md and the
   book disagree, and the plan wins: P1.27s is not built before it merges.
@@ -10276,8 +10826,9 @@ signature from our exact workflow is refused):
   - Removed: `deployment/cosign.pub`, `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, the KMS option and Alex's key-generation
     item. Alex's setup is only the `signing` environment (branch rule and reviewer), which the agent checks with a
     read-only GitHub API GET.
-  - ADR 0023 records the answer with its question, option and time, and the attestation-availability finding for
-    public repositories, and says that moving back to a key needs a new ADR.
+  - The keyless signing ADR (written by P1.27s; numbered when it opens) records the answer with its question, option and
+    time, and the attestation-availability finding for public repositories, and says that moving back to a key needs a
+  new ADR.
   - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
   - One digest: publish scans, signs and attests the one digest it pushes (book edit
     2026-10-15-verify-863-866-followups, "N7 ruled"; P1.35e does the same for the PR check).
@@ -10305,6 +10856,7 @@ Shape (architecture ruling 2026-10-06-p127q-packages-write-shape, amended 03:15Z
     and attests that digest keylessly (above), then runs `verify-images`. It never pushes or signs an artifact
     from another job or run.
   - No cache from untrusted runs: no `actions/cache`, no `setup-*` cache option, no `cache-from`.
+  - migrate is signed and digest-pinned under dev like every other image, with no exception (P1.36r).
   - SHA-pinned actions and the image-variable rules are unchanged.
 
 Done when (tests):
@@ -11198,9 +11750,9 @@ would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
-- `images.lock.json` and the trusted root arrive with P2.26b and P2.26e. Signing is keyless (ADR 0023; book edits
-  2026-10-13-p127s-split and 2026-10-13-verify-819-fixes): no `cosign.pub` exists, and P2.26b's lock carries the
-  keyless identity (`cosign.pub` above is superseded). The network table
+- `images.lock.json` and the trusted root arrive with P2.26b and P2.26e. Signing is keyless (the keyless signing ADR,
+  numbered when it opens; book edits 2026-10-13-p127s-split and 2026-10-13-verify-819-fixes): no `cosign.pub` exists,
+  and P2.26b's lock carries the keyless identity (`cosign.pub` above is superseded). The network table
   with P1.29 and the retirement report with P1.33a. Until then the checks that read them FAIL (below); the tests use
   fixtures for every input, so both parts are green on main without those steps.
 - C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
@@ -11242,8 +11794,8 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
-| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
+| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
 | C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
@@ -11287,8 +11839,8 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 
 **Edge cases and failures:**
 - No network for signature verification → C3/C4 FAIL (never pass on unknown).
-- An input a later step brings (lock, trusted root, network table, retirement report; `cosign.pub` superseded by ADR
-  0023, keyless) is missing → that check FAILs,
+- An input a later step brings (lock, trusted root, network table, retirement report; `cosign.pub` superseded by the
+  keyless signing ADR) is missing → that check FAILs,
   `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
   or secret files, a compose parse error). The only skips are C21 on other hostnames, C22 before Phase 4 and C23
   outside prod (as built by P1.30j) and C24 on `.localhost` (as built by P1.30d), each a PASS with a fixed reason
@@ -12657,8 +13209,9 @@ P1.29h, P1.29s, P1.29t.
    - **PDS hardening:** `user: "1000:1000"`, `read_only: true`, `cap_drop: [ALL]`,
      `security_opt: [no-new-privileges:true]`, a tmpfs at `/tmp`. One named volume at a directory that exists in
      the image and is owned by 1000 (`/home/node` on a `node:*-alpine` base), so a fresh volume copies that owner;
-     `PDS_DATA_DIRECTORY` and `PDS_BLOBSTORE_DISK_LOCATION` both sit under it (e.g. `/home/node/pds` and
-     `/home/node/pds/blocks`). Never `/pds`: it is not in the image, so a fresh volume there is root-owned.
+     `PDS_DATA_DIRECTORY` and `PDS_BLOBSTORE_DISK_LOCATION` both sit under it (the volume root `/home/node`
+     and `/home/node/blocks`, as built in #1015, P1.36h). Never `/pds`: it is not in the image, so a fresh volume there
+     is root-owned.
    - **Edge ports:** 80 and 443 publish on `127.0.0.1` only (no `::`, no `0.0.0.0`); a test refuses any other host
      IP in `compose.dev.yaml`. The tailnet bind moves to P1.34.
    - **AppView and report-service settings** stay unset.
@@ -13616,6 +14169,8 @@ resolution lexicons-scripts row scripts/workspace nested references". The PR sta
 source lines it says so (800 is the gate).
 
 Done when every fixture goes red without its change and passes with it, and check is green.
+As built: #911. Amendment 3 is built: a nested project counts only files whose real path lies inside its own folder
+(scripts/workspace/references.ts:307; book edit 2026-10-19-merged-step-leftovers, (2)).
 
 ---
 
@@ -14676,10 +15231,10 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
 2026-10-12-p133p-public-opening, from architecture's amendment 4 of 2026-10-12-refocus-local-signin-rulings and
 2026-10-12-p133-p133a-tailnet-gates):**
-- This step runs on Alex's home server, tailnet only until P1.33p opens it. It moves the same compose stack used for
-  local sign-in there, right after P2.13a's scenario passes locally and its Depends merge: the pulled-forward signing
-  steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d). The paused P1.34f, P1.34r
-  (#735) and P1.34l (#754) resume first (refocus order, section 8).
+- This step runs on Alex's home server, reached through his Pangolin with a password until P1.33p opens it. It moves the
+  same compose stack used for local sign-in there, right after P2.13a's scenario passes locally and its Depends merge:
+  the pulled-forward signing steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d).
+  The paused P1.34f, P1.34r (#735) and P1.34l (#754) resume first (refocus order, section 8).
 - Alex's hands-on items, added to the checklist: install Docker (the native Engine on Linux, not Docker Desktop,
   P1.34s), install Tailscale, and open a Remote Control session there for the agent.
 - First check: check the dev stack with read-only calls only (describeServer, health), no account and no probe
@@ -14687,14 +15242,21 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   CGNAT address (100.64/10) as it may refuse a private one, stop and bring architecture the exact error and the PDS
   version. No workaround.
 - Names: non-public only, either the dev root's constrained hosts or names under `int.unset.sh` (then the root's
-  `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued and no public DNS changes. The
+  `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued, and public DNS changes only
+  as ADR 0025 and #1008 record them (Pangolin A/AAAA and CAA records; the challenge CNAMEs). The
   tailnet stack is the dev stack: `PDS_DID_PLC_URL=https://plc.directory` (P1.34t's dev arm), no PLC service, no seed
   or probe runs on it (the first check above is a read-only call; architecture's Amendment 6 of 2026-10-13-local-plc,
   S3); test identities stay on the local stack's PLC (architecture's Amendment 4 of
   2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
-  For staging this is replaced by architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
+  For staging TLS, the `int.unset.sh` names and the dev root are replaced (its PLC and no-seed rules stay) by
+  architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
   the names are ADR 0025's `staging.unset.*`, with Let's Encrypt DNS-01 through a delegated validation zone (P1.36d,
-  P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root.
+  P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root. `staging.unset.sh` and `staging.unset.ac` are
+  reached through Alex's Pangolin behind one Pangolin user login per tester (Alex, 2026-10-19 02:39:57Z; his "Keep
+  password" tap at 02:56:58Z on "Keep the Pangolin password on staging, or open it with invites only?"; architecture
+  03:35Z, 04:00Z and 05:15Z). Only the two `.sh` sign-in files skip the login, GET and HEAD only; nothing on `.ac` does.
+  Public DNS points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
+  through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture 04:05Z, S4).
 - P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
   (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
   the public opening (P1.33p).
@@ -15325,8 +15887,8 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 - **P1b-A3 — image signing while the repo is private** (P1.27, P1.30). (a) cosign with a key pair,
   `--tlog-upload=false`, key in a protected environment or KMS, upstream images mirrored into private GHCR and
   signed. **Recommended (provisional, default).** (b) GitHub Enterprise Cloud and GitHub attestations. (c) Keyless
-  cosign to public Rekor, publishing the repo's identity. Superseded by ADR 0023: keyless (c), since the repository
-  is public.
+  cosign to public Rekor, publishing the repo's identity. Superseded by the keyless signing ADR (written by P1.27s;
+  numbered when it opens): keyless (c), since the repository is public.
 - **P1b-A4 — offline keys for the authority** (P1.35). (a) Two offline keys at the top of `rotationKeys`, the primary
   at creation with `--recovery-key`, the backup added by an operation the primary signs. **Recommended
   (provisional).** (b) One offline key. **Answered by Alex 2026-10-03 11:48Z: (a) two keys** (P0.12 rows K1 and K1b;
@@ -15357,7 +15919,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
     logging is on; §6's "the PDS log level is set likewise" is not enough. A choice is needed (P1b-A1). [34, F2]
 23. §6.1 and §8 Phase 0 require cosign; private-repo GitHub attestations may need Enterprise Cloud (unverified).
     Proposed: cosign key pair without a transparency log until the repo is public (P1b-A3). [19, F4] Superseded by
-    ADR 0023: keyless.
+    the keyless signing ADR (written by P1.27s; numbered when it opens): keyless.
 24. §10's risk "permission set unresolvable → nobody can log in" overstates it: authorization servers keep the
     last good copy. Updating a set changes every existing grant at the next refresh; the plan should name that
     as the evolution path for new collections, behind an Alex gate. [27, F8]
@@ -15435,7 +15997,7 @@ part or a choice was made among the reviewer's options, the reason is given.
 | F1 | Fixed | P1.22, P1.25, P1.26, P1.24a; Note 16 | `resolvePrefs(group, req)`: public pages read no pref cookie, `Vary: Accept-Language` only, `?lang` override, language links; app pages keep the cookies with `Vary: Cookie` and `private, no-store`; `color-scheme` meta matches; tests from the review added. P3.12 fix sent to the editor. |
 | F2 | Fixed (P1b-A1 default) | P1.28, P1.29, P1.30 (C12), P1.34, P1.36; P1b-A1 | Edge strips `X-Forwarded-For`/`X-Real-IP`/`Forwarded`; per-client limits at the edge in memory (one plugin); `LOG_ENABLED=false` with a debug runbook; `device` table test; RoPA row. |
 | F3 | Fixed | P1.29, P1.30 (C7, C8) | Bypass list empty in Phase 1, never the edge; any `/` refused; `PDS_RATE_LIMITS_ENABLED=true` and no bypass key checked. |
-| F4 | Fixed (P1b-A3 default) | P1.27, P1.30 (C3, C4); P1b-A3 | cosign key pair with `--tlog-upload=false`, key in a protected environment or KMS, verification with `--key`; GitHub attestations only in addition if available; lock PR opened with a GitHub App token (or committed by Alex); GHCR read token named. Superseded by ADR 0023: keyless. |
+| F4 | Fixed (P1b-A3 default) | P1.27, P1.30 (C3, C4); P1b-A3 | cosign key pair with `--tlog-upload=false`, key in a protected environment or KMS, verification with `--key`; GitHub attestations only in addition if available; lock PR opened with a GitHub App token (or committed by Alex); GHCR read token named. Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens): keyless. |
 | F5 | Fixed | P1.35, P1.34 probe, P1.28 | `goat account create --recovery-key`; local handle first, then `update-handle`; `_lexicon` TXT before `lex publish`, never `--skip-dns-check`; `sync.getRecord` with proof / `LexResolver` everywhere; exactly one `did=` line; the "offline key unavailable" case corrected. |
 | F6 | Fixed | P1.34, P1.35, P1.29; Notes 12, 15, 17 | Only Alex holds the dev PDS admin password and host shell; Alex issues the authority invite; `dev-seed` refuses once the authority is hosted; P2.25 and P3.16 changes noted; 2FA on the account with its mail caveat (real SMTP, no Mailpit). |
 | F7 | Fixed (P1b-A2 default) | P1.34, P1.35; P1b-A2 | 99.5 % replaced by durability and integrity requirements; best-effort 15-min probe outside private minutes (default a public probe-only repo; the reviewer's "free external uptime service" option was not made the default because it adds a third party for no gain over a public repo); gaps counted separately. |

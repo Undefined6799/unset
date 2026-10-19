@@ -17,7 +17,8 @@ checked: 2026-10-19
 **What it owns.** The screens of unset.sh: the document (`src/document.tsx`) with its head (`src/shell/head.tsx`),
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under
 `src/screens/` (P1.25: `Home`, `Legal`; P2.15: `src/legal/` parses the build-inlined English markdown once;
-P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink`;
+P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink` (P2.08b: the recorded issuer, its copy in
+`screens/messages.ts`, also on `Me`);
 P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
 `SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner), and the islands runtime under
 `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
@@ -28,8 +29,10 @@ Header menu stays a plain `<details>`), and no script. With `shell` the page ren
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
 login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). P1.25f added
 `AppShell`'s `feed` (no Footer; the legal links join the Header nav) and `PrefsForms` in the Footer: page.ts passes
-it on app pages only, with the page's path (never the query) through `safeReturnPath`, so `/login` returns to `/`.
-The favicons (P1.25a) and the language form (P1.22b) are still to come. Text is in `src/shell/messages.ts`.
+it on app pages only, with the page's path (never the query) through `safeReturnPath`, so `/login` returns to `/`
+(#963's "P1.25j" was that remainder; the booked P1.25j means something else). The Settings "Language and theme"
+section is P2.13c's; the favicons (P1.25a) and the language form (P1.22b) are still to come. Text is in
+`src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a

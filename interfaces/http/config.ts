@@ -3,7 +3,17 @@
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
-import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, oneOf, str, url, withRule } from "@unset/shared-config";
+import {
+  bool,
+  defineEntrypointConfig,
+  HOSTNAME,
+  int,
+  netGuardFields,
+  oneOf,
+  str,
+  url,
+  withRule,
+} from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
 import { securityContactAllowed, securityTxtExpiry } from "./security-txt.ts";
 
@@ -51,8 +61,13 @@ export const identityConfig = {
 export const loginConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
-  /** How long a confirmed-email cache is trusted before the PDS is asked again (P2.11). */
-  EMAIL_RECHECK_S: int({ min: 60, max: 86_400, default: 900 }),
+  /**
+   * How long a confirmed-email cache is trusted before the PDS is asked again (P2.11), so 900 (15 minutes) is the
+   * maximum. On our own PDS it also bounds how long another browser keeps rendering after the grant is revoked there
+   * (P2.11a). On any other PDS the bound is the access token's remaining life plus this, unresolved until P1.33p
+   * (P2.11c).
+   */
+  EMAIL_RECHECK_S: int({ min: 60, max: 900, default: 900 }),
   /** Full years before an account may continue (P2.12; plan §6). Never below 16. */
   MIN_AGE: int({ min: 16, max: 120, default: 16 }),
   /** When on, the terms screen requires the invite-country checkbox (P2.12; plan §6). */
@@ -87,6 +102,19 @@ export const legalConfig = {
   }),
 };
 
+/**
+ * The test-only pages (P1.25c, routes/test-routes.ts). Off by default, and a positive allowlist: only `test` may turn
+ * them on. Every other profile, dev (staging, ADR 0025) and prod included, refuses the key at start (`config.invalid`
+ * with key TEST_ROUTES, exit 78), so no deployed routing holds them. UNSET_ENV has no `local` value; the local stack
+ * runs as dev, so it refuses too.
+ */
+export const testRoutesConfig = {
+  TEST_ROUTES: withRule(
+    bool({ default: false }),
+    (config) => config.TEST_ROUTES !== true || config.UNSET_ENV === "test",
+  ),
+};
+
 export const config = defineEntrypointConfig({
   ...httpKitConfig,
   ...sessionConfig,
@@ -99,6 +127,7 @@ export const config = defineEntrypointConfig({
   ...oauthFields,
   ...loginConfig,
   ...legalConfig,
+  ...testRoutesConfig,
   /** apps/web's browser build, the directory holding `.vite/manifest.json` (P1.23). Empty means apps/web/dist/client. */
   WEB_BUILD_DIR: str({ default: "" }),
 });

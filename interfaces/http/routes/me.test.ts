@@ -27,7 +27,15 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-function setup(world: { session?: Session | null; clearCookie?: boolean; verdict?: HandleVerdict } = {}) {
+type World = {
+  session?: Session | null;
+  clearCookie?: boolean;
+  verdict?: HandleVerdict;
+  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
+  issuer?: string | null | Error;
+};
+
+function setup(world: World = {}) {
   const checked: string[] = [];
   const openedPaths: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
@@ -61,7 +69,13 @@ function setup(world: { session?: Session | null; clearCookie?: boolean; verdict
         page,
       ),
     screens: web.screens,
-    pdsHost: "pds.unset.test",
+    issuerOf: async () => {
+      const issuer = world.issuer === undefined ? "https://pds.unset.test" : world.issuer;
+      if (issuer instanceof Error) throw issuer;
+      return issuer;
+    },
+    pdsIssuer: "https://pds.unset.test",
+    log,
   };
   const server = createServer({ config: CONFIG, routes: meRoutes(deps), policies, log });
   const get = (path = ACCOUNT_PATH) =>
@@ -98,6 +112,28 @@ describe("GET /:did", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("vary")).toBe("Cookie");
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
+  });
+
+  test("me_links_our_recorded_issuer", async () => {
+    const html = await (await setup().get()).text();
+    expect(html).toContain('href="https://pds.unset.test/account"');
+    expect(html).toContain("You are going to pds.unset.test, our sign-in server");
+  });
+
+  test("me_links_a_foreign_recorded_issuer", async () => {
+    // P2.08b: the account link is where a user goes to revoke, so it follows the issuer recorded at sign-in.
+    const html = await (await setup({ issuer: "https://pds.example" }).get()).text();
+    expect(html).toContain('href="https://pds.example/"');
+    expect(html).toContain("your sign-in server (pds.example)");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  test("me_with_an_unreadable_issuer_still_renders", async () => {
+    const response = await setup({ issuer: new Error("unseal failed") }).get();
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(`<code>${DID}</code>`);
+    expect(html).not.toContain('href="https://pds.unset.test');
   });
 
   test("me_handle_unavailable", async () => {

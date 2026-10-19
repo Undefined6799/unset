@@ -8,11 +8,12 @@
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
 // and P2.08a: this browser and the last browser's grant (P2.08d removed sign-out everywhere). P2.13: the signed-in home, with
 // P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
-// error page.
+// error page. P1.25c: the test-only pages, imported only when TEST_ROUTES is on, so no deployed process loads them.
 import { fileURLToPath } from "node:url";
 import {
   createDidResolver,
   createHandleVerifier,
+  type Did,
   type EmailCache,
   PRIVACY_VERSION,
   resolveHandle,
@@ -49,6 +50,7 @@ import { createAccountStore } from "./account.ts";
 import type { AppGate } from "./app-gate.ts";
 import { openApp } from "./app-gate.ts";
 import type { config } from "./config.ts";
+import { emailRefresh } from "./email-refresh.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
@@ -201,6 +203,14 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     log,
   });
+  // Our PDS's issuer origin, and the issuer the OAuth library recorded for a DID at sign-in (its stored token set,
+  // read without a refresh). Never a DID-document field (book P2.08 `PdsAccountLink`).
+  const pdsIssuer = `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
+  const issuerOf = async (did: Did): Promise<string | null> => {
+    const saved = await oauth.sessionStore.get(did);
+    const iss = saved?.tokenSet.iss;
+    return typeof iss === "string" ? iss : null;
+  };
   const logout = logoutRoutes({
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
     ...browserLogout({
@@ -210,9 +220,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
     }),
+    issuerOf,
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    pdsIssuer,
     log,
   });
   const pds = createPdsCall({
@@ -240,27 +251,11 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       ? { confirmed: null, checkedAt: null }
       : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
   };
-  const refreshEmail: AppGate["refreshEmail"] = async (session, deadline) => {
-    const info = await pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, session.did);
-    switch (info.kind) {
-      case "transient":
-        return "transient";
-      case "ok": {
-        if (info.value.emailConfirmed === undefined) return "unconfirmed";
-        const confirmed = info.value.emailConfirmed;
-        await withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, session.idHash, confirmed));
-        return confirmed ? "confirmed" : "unconfirmed";
-      }
-      case "auth_dead":
-      case "scope_missing":
-      case "rejected":
-        return "unconfirmed";
-      default: {
-        const unexpected: never = info;
-        return unexpected;
-      }
-    }
-  };
+  const sessionInfo = (did: Did, deadline: AbortSignal) =>
+    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did);
+  const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
+    withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
+  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed });
   const gate: AppGate = {
     readSession,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
@@ -274,10 +269,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions,
-    setEmailConfirmed: (idHash, value, deadline) =>
-      withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value)),
-    sessionInfo: (did, deadline) =>
-      pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did),
+    setEmailConfirmed,
+    sessionInfo,
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
     authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
@@ -295,12 +288,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     minAge: cfg.MIN_AGE,
     countryRule: cfg.INVITE_COUNTRY_RULE === "on",
     supportEmail: cfg.SUPPORT_EMAIL,
-    pdsIssuer: `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`,
-    issuerOf: async (did) => {
-      const saved = await oauth.sessionStore.get(did);
-      const iss = saved?.tokenSet.iss;
-      return typeof iss === "string" ? iss : null;
-    },
+    pdsIssuer,
+    issuerOf,
     revoke: (did) => oauth.client.revoke(did),
     endSessions: (did, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) => sessions.destroyAllForDid(tx, did, "underage")).then(
@@ -318,8 +307,14 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    issuerOf,
+    pdsIssuer,
+    log,
   });
+  const errorPage = errorPageHook(deps, render.screens);
+  const testPages = cfg.TEST_ROUTES
+    ? (await import("./routes/test-routes.ts")).testRoutes({ page, screens: render.screens, errorPage })
+    : [];
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
     ...legalRoutes({
@@ -346,6 +341,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...welcome,
     ...verifyEmail,
     ...settings,
+    ...testPages,
     // The DID parameter route must follow every explicit app/public route.
     ...me,
   ];
@@ -356,7 +352,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       policies,
       log,
       onClose: oauth.onClose,
-      errorPage: errorPageHook(deps, render.screens),
+      errorPage,
     }),
     page,
     oauth: oauth.client,

@@ -27,7 +27,11 @@ The home, account and Settings routes pass `shell.navigation` through `PageSpec`
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
 public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
-script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook. `limits.ts` holds its
+script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
+`routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
+and an app-group page); compose mounts them only when `TEST_ROUTES` is on, and the config allows that only when `UNSET_ENV` is `test` (dev,
+which staging runs as, refuses it); with the key off the prefix answers like any unknown path. The
+book's `/__test/` paths fail the kit's path template, which refuses a leading underscore. `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
@@ -62,13 +66,32 @@ throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /l
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would
 keep the grant. `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
+it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
+deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. Architecture's
+04:15Z ruling: the cookie is single use (the page that reads it clears it), only a bare https origin with no port
+counts, "ours" is string equality with our issuer, and neither the value nor a refusal is logged; anything else falls
+back to our PDS. The account page reads the same `issuerOf` directly. A failed delete is the 503
+`logout.failed`.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
 onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
 and then is the email page itself.
+
+**A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through
+`pdsSessionInfo`; on `auth_dead`, pdsCall's `authDead` has already ended every session of the DID and its token set,
+so `refreshEmail` answers `ended` and `openApp` sends 303 to `/login?error=login.session_ended` with the cookie
+cleared. `scope_missing` and `rejected` still go to `/verify-email`; a transient answer passes on the cached `true`
+and ends nothing. **The bound:** another browser keeps rendering from its session row until the next PDS call for
+that DID or its own email recheck, whichever comes first. On our own PDS the window is at most `EMAIL_RECHECK_S`
+(default 900, config maximum 900, so at most 15 minutes); the step book's P2.11c record states this. On any other
+PDS an access token may keep working until it expires, so the window is that token's remaining life plus
+`EMAIL_RECHECK_S`. That is unresolved until P1.33p, which must make the recheck force a token refresh before it
+opens sign-in to other PDSes. A shorter window would need a PDS call per request. Pinned by
+`tests/integration/http/email-recheck.test.ts` and `config.test.ts#email_recheck_capped_at_900`. There is no audit
+row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The

@@ -460,3 +460,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   fixtures are permitted without changing operated topology or replacing manual dev SMTP/production gates. Fonts
   need a separately proved, narrowly scoped edge solution; provider asset/CSP source changes are excluded. SE-6,
   design-sheet registration, ADR 0019 and production gates stand; no admission check is changed in this record.
+- **ADR 0025 accepted (Alex, 2026-10-19 04:17:55Z):** his typed line, "yes accept ADR 0025 public domains with
+  staging TLS and Pangolin docs/human/decisions/0025-public-domains.md", accepts the record as amended in #1008:
+  staging behind his Pangolin with one login per tester, the edge's certificates by DNS-01 through a delegated
+  validation zone, own-PDS sign-in enforced in the app until P1.33p, and the dev-only refinement of ADR 0018's
+  rate-limit key. From here the record changes only to be marked superseded.

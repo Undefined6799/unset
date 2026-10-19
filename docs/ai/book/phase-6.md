@@ -49,7 +49,7 @@ type ChatAccountStatus = "none" | "pending" | "ready" | "unavailable";
 interface Chat {
   requestAccount(tx: Tx, did: Did): Promise<void>;           // P6.05: called by onboarding's terms step
   accountStatus(did: Did): Promise<ChatAccountStatus>;        // P6.17, /me card
-  endSessions(did: Did, scope: { kind: "this_browser"; appSessionRef: string } | { kind: "everywhere" }): Promise<void>; // P6.16, P6.04a
+  endSessions(did: Did, scope: { kind: "this_browser"; appSessionRef: string }): Promise<void>; // P6.16
   setSuspended(did: Did, suspended: boolean): Promise<void>;  // P6.04a
   erase(did: Did): Promise<"done" | "pending">;               // P6.04a, the `hooks.chat` entry of eraseDid's `eraseHooks` (P3.07)
 }
@@ -112,7 +112,7 @@ examples below stands for an opaque id).
 | P1.32 | ADR value `matrix.server_name` (config key `MATRIX_SERVER_NAME`) |
 | P2.01/P2.02 | `resolveHandle(handle) → did`, `verifyHandle(did) → { handle, verified }` |
 | P2.03 | `getSession(req) → { did, sid } \| null` |
-| P2.08 | `POST /logout` and `POST /logout/everywhere` as written; **no sign-out hook exists**. P6.16 adds one call to `chat.endSessions` after the session row is destroyed (routed to the editor as a P2.08 change) |
+| P2.08 | `POST /logout` as written ("sign out everywhere" dropped 2026-10-19); **no sign-out hook exists**. P6.16 adds one call to `chat.endSessions` after the session row is destroyed (routed to the editor as a P2.08 change) |
 | P2.12 | onboarding state machine with a `chat` placeholder step: `onboarding.current(did)`, `onboarding.advance(did, step)`, hook `onTermsAccepted(did, tx)` |
 | P2.14 | As written (`phase-2.md` P2.14): `mintModuleAssertion(did, moduleId, nonce)`, 60 s TTL, no custom claims; `verifyModuleAssertion(token, { audience, expectedNonce, keys, consumeJti, now })`; `app.module_account(module, did, account_ref, created_at)` with `moduleAccounts.link(tx, module, did, ref)`, `byDid`, `byRef`. **Phase 6 needs the extension in F8.1** (routed to phase-2's writer): `mintModuleAssertion(did, moduleId, { nonce, claims })` with a reserved-claim check (no `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `nonce` override) and a per-module TTL from `MODULES` (≤120 s); `verifyModuleAssertion` returns the claims. Modules `chat-auth` and `chat-admin` are two entries in the fixed `MODULES` list in `web`'s composition root (decision 25) |
 | P2.16 | the fingerprint-check stage: `fingerprintGate.check(did, luma)` (image entry) and `fingerprintGate.checkHashes(freezeDid: Did | null, hashes)` (positional and first, so no caller can leave it out; `null` freezes no one) (for callers that hashed with P2.16b themselves, such as P6.14a), both `→ { kind: "clear", hashes, checkedBy } \| { kind: "blocked" } \| { kind: "unavailable" }` (never "match"; there is no other check path) over the `FingerprintCheck` interface (`check(hashes, { timeoutMs })`; PDQ computed locally, P2.16b). Its fake runs until **P5.07b** adds the real Arachnid client; production refuses to boot without the real check (Alex 02:58Z, decision 23). PDQ only: no MD5, no TMK; classifications hyphenated (`harmful-abusive-material`, `no-known-match`) |
@@ -140,7 +140,7 @@ flowchart TD
   P2_14([P2.14 identity seam + claims]) --> P6_03
   P6_02 --> P6_04[P6.04 chat-admin seed]
   P2_14 --> P6_04
-  P6_04 --> P6_04a[P6.04a suspend, erase, sign-out everywhere STOP]
+  P6_04 --> P6_04a[P6.04a suspend, takedown, erase STOP]
   P6_05 --> P6_04a
   P6_15 --> P6_04a
   P6_16 --> P6_04a
@@ -2735,7 +2735,7 @@ Edge cases and failures:
   - The member signed in to chat through a third-party client → the same back-channel path applies (the MAS session
     came through chat-auth too).
   - No `login_session` row for that app session (chat never opened in that browser) → `ended: 0`; nothing to do.
-  - "Sign out everywhere" ends chat devices too → P6.04a, through `chat-admin` `end_sessions`: MAS's
+  - A freeze, takedown or erasure ends chat devices too → P6.04a, through `chat-admin` `end_sessions`: MAS's
     back-channel action is fixed per provider (`backchannel_logout.rs:247`), so this provider stays
     `logout_browser_only` and no logout token can end devices.
   - MAS logs `sub` (the DID) and `sid` at info for every back-channel logout (`backchannel_logout.rs:245`) → P6.02's
@@ -2770,11 +2770,13 @@ Diagram: none.
 
 ---
 
-### P6.04a — Chat accounts on suspension, takedown, erasure and "sign out everywhere"
-Tags: [SEC] [CHAT]            Depends on: P6.04, P6.05, P6.16, P6.15, P3.06, P3.07, P2.08            Plan: §2 rule 7, §6 `eraseDid`, §5.6 decision 13 ("one verb") and back-channel logout (03:02Z)
+### P6.04a — Chat accounts on suspension, takedown and erasure
+Tags: [SEC] [CHAT]            Depends on: P6.04, P6.05, P6.16, P6.15, P3.06, P3.07            Plan: §2 rule 7, §6 `eraseDid`, §5.6 decision 13 ("one verb") and back-channel logout (03:02Z)
 Where: `interfaces/chat-admin/` (new verbs), `infrastructure/matrix/chat/account-jobs.ts`,
   `interfaces/chat-auth/` (internal purge route), `interfaces/admin/chat-reports/erase-media.ts`, migration `app.chat_erasure`
 Size: ~220 source lines, ~320 test lines
+Dropped: the "sign out everywhere" trigger (Alex, 2026-10-19 02:34:31Z; book edit 2026-10-19-drop-sign-out-everywhere).
+  Suspension, takedown and erasure stay, and still end every chat session.
 
 Added because: plan §2 rule 7 requires takedown, suspension, deactivation and deletion to end the account's sessions,
 and §6 requires `eraseDid` to reach every store holding the DID. Chat holds a MAS user and its upstream link (subject =
@@ -2787,7 +2789,7 @@ chat accounts are suspended, erased and signed out, then build it
 so that each path reaches every chat store and never blocks the core.
 
 Inputs: P6.04 `chat-admin`; P6.05 `app.chat_seed` and the mapping; P6.16 back-channel logout; P6.15's service account
-  and report proxy (media deletion); P3.06 account-state machine; P3.07 erase hooks; P2.08 "sign out everywhere".
+  and report proxy (media deletion); P3.06 account-state machine; P3.07 erase hooks.
   Reference: MAS `M:crates/handlers/src/admin/v1/users/deactivate.rs:118` and `users/lock.rs:84-86` (queued jobs),
   `upstream_oauth_links/delete.rs` (route `M:crates/handlers/src/admin/v1/mod.rs:247-255`),
   `M:docs/topics/data-retention.md:110-131` (what MAS keeps after deactivation), `M:crates/handlers/src/oauth2/introspection.rs:376`
@@ -2799,8 +2801,8 @@ Inputs: P6.04 `chat-admin`; P6.05 `app.chat_seed` and the mapping; P6.16 back-ch
   (`oauth2_sessions/finish.rs:57`); Synapse's introspection cache is 2 minutes (`S:synapse/api/auth/mas.py:140-146`); Synapse `S:docs/admin_api/user_admin_api.md:357-418`
   (erase keeps media and messages), `:868` (delete a user's media).
 Outputs (option a′, settled):
-  - Chat contract methods implemented in `MatrixChat` (header): `setSuspended(did, true|false)`, `erase(did)`,
-    `endSessions(did, { kind: "everywhere" })`. Each enqueues a durable job (the P6.05 job pattern, copied, not
+  - Chat contract methods implemented in `MatrixChat` (header): `setSuspended(did, true|false)` and `erase(did)`.
+    Each enqueues a durable job (the P6.05 job pattern, copied, not
     abstracted) and returns; a chat outage never blocks the core transaction.
   - `chat-admin` verbs (each its own assertion `verb`, each looking the user up by upstream-link subject = DID, never by
     localpart): `lock`, `unlock`, `deactivate` (with Synapse erase), `delete_link` and `end_sessions`. `end_sessions` is
@@ -2819,16 +2821,15 @@ Outputs (option a′, settled):
     SELECT and UPDATE on `step = 'delete_media'` rows only.
 Algorithm (full detail: suspension, erasure and session ending):
   1. Settled by Alex (2026-10-03 16:49Z, P6-A2: "automatic", option a′; and 16:56Z, answer 52: chat is tied to the
-     account's sign-in). Sessions: app "sign out" in one browser, or a revoke of that app session, ends **that
-     browser's chat**: its MAS browser session by back-channel logout (P6.16, `logout_browser_only`, matched by `sid`)
-     **and** the chat device sessions started in that browser, by `chat-admin` `end_sessions` limited to them (P6.01
-     confirms how MAS links an OAuth 2.0 session to the browser session that authorised it; if it cannot, every chat
-     session of the DID is ended, the fail-closed side). App "sign out everywhere", a freeze (P3.06 inactive),
-     takedown and erasure end **every** chat session, including chat devices, by `end_sessions` (a `logout_all`
-     back-channel token is not possible: MAS fixes the action per provider, `backchannel_logout.rs:247`).
-     Suspension = `lock`/`unlock`. Erasure = the chain in step 3. The confirmation on "sign out" and "sign out
-     everywhere" says it also signs out chat, and that messages stay readable later only if the recovery key is saved.
-     (Options b, moderator-driven, and c, chat left out, are closed.)
+     account's sign-in). Sessions: app "sign out" in one browser, or a revoke of that app session, ends **that browser's
+     chat**: its MAS browser session by back-channel logout (P6.16, `logout_browser_only`, matched by `sid`) **and** the
+     chat device sessions started in that browser, by `chat-admin` `end_sessions` limited to them (P6.01 confirms how
+     MAS links an OAuth 2.0 session to the browser session that authorised it; if it cannot, every chat session of the
+     DID is ended, the fail-closed side). A freeze (P3.06 inactive), takedown and erasure end **every** chat session,
+     including chat devices, by `end_sessions` (a `logout_all` back-channel token is not possible: MAS fixes the action
+     per provider, `backchannel_logout.rs:247`). Suspension = `lock`/`unlock`. Erasure = the chain in step 3. The
+     confirmation on "sign out" says it also signs out chat, and that messages stay readable later only if the recovery
+     key is saved. (Options b, moderator-driven, and c, chat left out, are closed.)
   2. Suspension (full detail: account-state boundary): P3.06 "inactive" →
      `setSuspended(did, true)` → `lock` then `end_sessions`; reactivated → `unlock` (no session is restored; the
      member signs in to chat again). `lock` is a queued MAS job: poll `GET /users/{id}` until `locked_at` is set
@@ -2846,8 +2847,8 @@ Algorithm (full detail: suspension, erasure and session ending):
      f. `delete_mapping` → delete `module_account` (`chat`) and `app.chat_seed` for the DID, then the erasure row
         itself, then `core.erase_hook_mark(did, 'chat', 'done')` (P3.07 `hooks.chat`); `eraseDid`'s report changes "chat pending" to "chat erased".
      Any step failing 24 times → alert and a held case in `admin`; the core erasure has already completed.
-  4. "Sign out everywhere" (P2.08) → `chat.endSessions(did, { kind: "everywhere" })` → `end_sessions` for every chat
-     session (step 1).
+  4. Dropped: "sign out everywhere" (P2.08) no longer exists, so no app action ends every chat session except a
+     freeze, takedown or erasure.
 Edge cases and failures:
   - Chat stack down during erasure → job waits; the core erasure completes; `eraseDid`'s report lists "chat pending".
   - The MXID localpart stays reserved in MAS after deactivation (no reuse); a new account never gets it.
@@ -2856,10 +2857,9 @@ Edge cases and failures:
     and reports about the member kept under P3.15's retention.
   - A report naming an erased sender arrives later → P6.15 stores the MXID only ("unmapped sender").
   - The member is erased while their evidence is held for a case → P6.14a's rows follow P4.07's legal-hold rule.
-Threats: chat accounts when the atproto account is suspended, taken down, erased or signed out everywhere.
+Threats: chat accounts when the atproto account is suspended, taken down or erased.
   - E Chat sessions outliving a suspension or sign-out → locked and every session kind ended
-    (`lock-on-account-inactive-ends-sessions`, `end-sessions-finishes-all-three-kinds`,
-    `sign-out-everywhere-ends-chat-sessions`).
+    (`lock-on-account-inactive-ends-sessions`, `end-sessions-finishes-all-three-kinds`).
   - I Chat data surviving erasure → media, link, chat-auth rows and mapping deleted, mapping last
     (`erase-deletes-user-media`, `erase-deletes-upstream-link`, `erase-purges-chat-auth`,
     `erase-deletes-mapping-last`).
@@ -2868,7 +2868,7 @@ Threats: chat accounts when the atproto account is suspended, taken down, erased
 Done when (tests):
   - `lock-on-account-inactive-ends-sessions`, `unlock-on-reactivate`, `lock-waits-for-job`,
     `deactivate-waits-for-job`, `erase-deletes-user-media`, `erase-deletes-upstream-link`, `erase-purges-chat-auth`,
-    `erase-deletes-mapping-last`, `erase-report-pending-then-erased`, `sign-out-everywhere-ends-chat-sessions`,
+    `erase-deletes-mapping-last`, `erase-report-pending-then-erased`,
     `job-retries-and-alerts`, `lookup-by-subject-not-localpart`, `mas-path-allowlist-grows-only-by-these`,
     `end-sessions-finishes-all-three-kinds` (fake MAS: a session created during the first round is finished in the
     second), `end-sessions-round-cap-errors`,

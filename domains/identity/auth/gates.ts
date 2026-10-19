@@ -11,12 +11,27 @@ export function emailGate(cache: EmailCache, nowMs: number, recheckS: number): E
   return ageS >= 0 && ageS <= recheckS ? "pass" : "refresh";
 }
 
+/** What the PDS said when asked again. `ended`: the grant is dead, and every session of the DID has ended (P2.11a). */
+export type EmailRefresh = "transient" | "confirmed" | "unconfirmed" | "ended";
+
 /**
  * The gate after a stale cache. A PDS outage keeps a previously confirmed member in (`transient`). A fresh `false`
- * sends them to confirm. Anything else is not a pass.
+ * sends them to confirm. A dead grant signs them out.
  */
-export function verifiedAfterRefresh(answer: "transient" | "confirmed" | "unconfirmed"): "pass" | "verify" {
-  return answer === "unconfirmed" ? "verify" : "pass";
+export function verifiedAfterRefresh(answer: EmailRefresh): "pass" | "verify" | "ended" {
+  switch (answer) {
+    case "transient":
+    case "confirmed":
+      return "pass";
+    case "unconfirmed":
+      return "verify";
+    case "ended":
+      return "ended";
+    default: {
+      const unexpected: never = answer;
+      return unexpected;
+    }
+  }
 }
 
 /** Where an account is in onboarding. `blocked_underage` is terminal. */

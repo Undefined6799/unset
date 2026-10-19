@@ -93,33 +93,42 @@ describe("continue screen", () => {
 
 describe("signed-out screen", () => {
   test("signed_out_links_to_the_pds_account_and_sign_in", () => {
-    const page = html(screens.signedOut({ pdsHost: "pds.example" }));
+    const page = html(screens.signedOut({ issuer: "https://pds.example", ours: true }));
     expect(page).toContain("You are signed out");
-    expect(page).toContain("our sign-in server; it is the only place you type your password");
+    expect(page).toContain(
+      "You are going to pds.example, our sign-in server; it is the only place you type your password",
+    );
+    expect(page).toContain("On a shared computer, sign out there too.");
     const links = tags(page, "a").map((a) => a.href);
     expect(links).toEqual(["https://pds.example/account", "/login"]);
     expect(page).not.toContain("<script");
   });
 
   test("pdsAccountLink.own_vs_foreign", () => {
-    const own = html(screens.signedOut({ pdsHost: "pds.test" }));
+    const own = html(screens.signedOut({ issuer: "https://pds.test", ours: true }));
     expect(own).toContain("https://pds.test/account");
-    expect(own).toContain("pds.test, our sign-in server; it is the only place you type your password");
-    const foreign = html(screens.signedOut({ pdsHost: "pds.test", issuer: "https://pds.example", ours: false }));
-    expect(foreign).toContain("https://pds.example/");
-    expect(foreign).not.toContain("/account");
+    expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
+    expect(own).toContain(">Your account on pds.test<svg");
+    const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
+    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/login"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
     expect(foreign).not.toContain("only place you type your password");
+  });
+
+  test("pdsAccountLink_refuses_a_non_https_issuer", () => {
+    for (const issuer of ["http://pds.example", "javascript:alert(1)", "not a url"]) {
+      const page = html(screens.signedOut({ issuer, ours: false }));
+      expect(tags(page, "a").map((a) => a.href)).toEqual(["/login"]);
+    }
   });
 });
 
 describe("me screen", () => {
   const DID = `did:plc:${"a".repeat(24)}`;
+  const OURS = { issuer: "https://pds.example", ours: true };
 
   test("me_shows_the_account_and_sign_out", () => {
-    const page = html(
-      screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, pdsHost: "pds.example" }),
-    );
+    const page = html(screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, ...OURS }));
     expect(page).toContain("alice.pds.example");
     expect(page).toContain(`<code>${DID}</code>`);
     // P2.08d: one sign-out form, for this browser; "Sign out everywhere" is removed.
@@ -128,14 +137,36 @@ describe("me screen", () => {
     expect(page).not.toContain('name="confirm"');
     expect(page).not.toContain("Sign out everywhere");
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
+    expect(page).toContain(">Your account on pds.example<svg");
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");
   });
 
-  test("me_says_when_the_handle_could_not_be_checked", () => {
+  test("me_links_the_recorded_foreign_issuer", () => {
+    // P2.08b: the account link follows the issuer recorded at sign-in, so an account on another PDS is sent there.
     const page = html(
-      screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, pdsHost: "pds.example" }),
+      screens.me({
+        handle: "alice.pds.example",
+        did: DID,
+        handleUnavailable: false,
+        issuer: "https://pds.example",
+        ours: false,
+      }),
     );
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/"]);
+    expect(page).toContain("your sign-in server (pds.example)");
+    expect(page).not.toContain("only place you type your password");
+  });
+
+  test("me_without_a_recorded_issuer_shows_no_account_link", () => {
+    const page = html(
+      screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, issuer: null, ours: false }),
+    );
+    expect(tags(page, "a")).toEqual([]);
+  });
+
+  test("me_says_when_the_handle_could_not_be_checked", () => {
+    const page = html(screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, ...OURS }));
     expect(page).toContain("handle.invalid");
     expect(page).toContain("We could not check your handle just now");
   });
