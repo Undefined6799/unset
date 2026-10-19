@@ -13,3 +13,9 @@ import.meta.glob(["./**/*.module.css", "../../../shared/ui/components/**/*.modul
   eager: true,
   query: "?styles-entry",
 });
+
+export { default as appleTouchIcon } from "./shell/icons/unset-apple-touch-icon.png?url&no-inline";
+// P1.25a: the two PNG icons from the design sheet's Logos (README head snippet), as URL exports so the manifest lists
+// them under this entry's assets (vite 8.3.4 asset plugin: an emitted file a chunk references joins its
+// importedAssets). `no-inline` keeps each a file, never a data: URL, which no page's img-src allows.
+export { default as favicon } from "./shell/icons/unset-favicon-32.png?url&no-inline";

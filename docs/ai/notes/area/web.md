@@ -30,9 +30,10 @@ Header, `<main id="main">` with a danger Callout for a checked `?error=` code, F
 login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). P1.25f added
 `AppShell`'s `feed` (no Footer; the legal links join the Header nav) and `PrefsForms` in the Footer: page.ts passes
 it on app pages only, with the page's path (never the query) through `safeReturnPath`, so `/login` returns to `/`
-(#963's "P1.25j" was that remainder; the booked P1.25j means something else). The Settings "Language and theme"
-section is P2.13c's; the favicons (P1.25a) and the language form (P1.22b) are still to come. Text is in
-`src/shell/messages.ts`.
+(#963's "P1.25j" was that remainder; the booked P1.25j means something else). P1.25a added the 32 px favicon and
+180 px apple-touch PNGs: the styles entry imports them `?url&no-inline`, so they are manifest files of
+`src/styles.ts`, and build.ts requires both. The Settings "Language and theme" section is P2.13c's; the SVG favicon
+and the language form (P1.22b) are still to come. Text is in `src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a

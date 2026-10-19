@@ -67,7 +67,13 @@ function setup(
         pageResponse(
           {
             build: {
-              manifest: { boot: "assets/boot.js", styles: [], fonts: [], islands: new Map() },
+              manifest: {
+                boot: "assets/boot.js",
+                styles: [],
+                fonts: [],
+                icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
+                islands: new Map(),
+              },
               files: new Map(),
             },
             render: web.renderPage,

@@ -10,6 +10,8 @@ export type BuildManifest = Readonly<{
   styles: readonly string[];
   /** The woff2 files those styles' font faces load, which every page preloads (P1.25). */
   fonts: readonly string[];
+  /** The two PNG icons the styles entry exports (P1.25a), which every page's head links. */
+  icons: Readonly<{ favicon: string; appleTouch: string }>;
   /** Per island name: its chunk and the chunks it imports statically, the chunk first. */
   islands: ReadonlyMap<string, readonly string[]>;
 }>;

@@ -1,7 +1,8 @@
 // The <head> of every page (P1.23, P1.25). Charset first, then the viewport, the colour scheme the server chose
 // (P1.22), the title, a preload for each font face so text does not wait on the stylesheet to find them, and the
 // stylesheets the manifest names. Nothing inline: the CSP allows styles and fonts from the assets path only.
-// Favicons are left out until the design sheet names their files (book P1.25, "Favicons").
+// P1.25a: the 32 px PNG favicon and the 180 px apple-touch icon, as the sheet's Logos README links them; the
+// self-switching SVG favicon waits for the sheet to publish it by name (book P1.25, "Favicons").
 import type { BuildManifest } from "../islands/runtime/manifest.ts";
 
 export type HeadProps = {
@@ -29,6 +30,8 @@ export function Head({ title, colorScheme, assets, noindex }: HeadProps) {
       {assets.manifest.styles.map((file) => (
         <link key={file} rel="stylesheet" href={url(file)} />
       ))}
+      <link rel="icon" href={url(assets.manifest.icons.favicon)} sizes="32x32" type="image/png" />
+      <link rel="apple-touch-icon" href={url(assets.manifest.icons.appleTouch)} />
     </head>
   );
 }

@@ -11,6 +11,7 @@ const ASSETS: Assets = {
     boot: "assets/boot-1.js",
     styles: ["assets/styles-2.css"],
     fonts: ["assets/Display-3.woff2", "assets/Mono-4.woff2"],
+    icons: { favicon: "assets/unset-favicon-32-6.png", appleTouch: "assets/unset-apple-touch-icon-7.png" },
     islands: new Map([["header-menu", ["assets/header-menu-5.js"]]]),
   },
 };
@@ -101,8 +102,12 @@ describe("app shell", () => {
     expect(html).toContain('<link rel="stylesheet" href="https://assets.unset.test/assets/styles-2.css"/>');
     expect(html).toContain('<meta name="color-scheme" content="light"/>');
     expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1"/>');
-    // The favicons wait for the sheet to name their files (book P1.25, "Favicons"); no SVG favicon either way.
-    expect(html).not.toMatch(/rel="(?:icon|apple-touch-icon)"/);
+    // The two PNG icons, as the sheet's Logos README links them; the SVG favicon waits for the sheet (P1.25a).
+    expect(html.match(/<link rel="(?:icon|apple-touch-icon)"[^>]*>/g)).toEqual([
+      '<link rel="icon" href="https://assets.unset.test/assets/unset-favicon-32-6.png" sizes="32x32" type="image/png"/>',
+      '<link rel="apple-touch-icon" href="https://assets.unset.test/assets/unset-apple-touch-icon-7.png"/>',
+    ]);
+    expect(html).not.toContain("image/svg+xml");
     expect(html).not.toContain('name="robots"');
   });
 

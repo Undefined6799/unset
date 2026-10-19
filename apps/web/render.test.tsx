@@ -31,6 +31,7 @@ const ASSETS: Assets = {
     boot: "assets/boot-1.js",
     styles: ["assets/styles-1.css", "assets/styles-5.css"],
     fonts: [],
+    icons: { favicon: "assets/icon-6.png", appleTouch: "assets/touch-7.png" },
     islands: new Map([
       ["demo", ["assets/demo-2.js", "assets/boot-1.js"]],
       ["echo", ["assets/echo-3.js", "assets/shared-4.js"]],
