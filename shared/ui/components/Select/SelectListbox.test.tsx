@@ -26,7 +26,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(extra: { placeholder?: string; required?: boolean } = {}) {
+async function mount(extra: { placeholder?: string; required?: boolean; disabled?: boolean } = {}) {
   const html = renderToString(<Select id="lang" name="lang" label="Language" options={options} {...extra} />);
   const form = document.createElement("form");
   form.append(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
@@ -156,6 +156,14 @@ test("select_label_click_focuses_combobox", async () => {
   await act(async () => (form.querySelector("label") as HTMLLabelElement).click());
   expect(document.activeElement).toBe(box);
   expect(document.activeElement).not.toBe(native);
+});
+
+test("select_label_click_disabled_no_focus", async () => {
+  const { form, box } = await mount({ disabled: true });
+  const before = document.activeElement;
+  await act(async () => (form.querySelector("label") as HTMLLabelElement).click());
+  expect(document.activeElement).not.toBe(box);
+  expect(document.activeElement).toBe(before);
 });
 
 test("select_island_leaves_required_native", async () => {
