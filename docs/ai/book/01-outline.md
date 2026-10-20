@@ -464,7 +464,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35x | Pin the dev hosts to the staging names | [SEC] | P1.35y | `phase-1.md` |
 | P1.36d | Build the edge image with one DNS module (trusted) | [SEC] trusted | P1.36n | `phase-1.md` |
 | P1.36e | Add the edge dev mode with one DNS-01 issuer (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36d | `phase-1.md` |
-| P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36e, P1.36o, P1.35x, P1.35y | `phase-1.md` |
+| P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.35x, P1.35y | `phase-1.md` |
 | P1.36c | Wire the dev edge's DNS token and app site | [SEC] | P1.36b | `phase-1.md` |
 | P1.36g | Fix dev mail and the first-invite runbook | [SEC] | — | `phase-1.md` |
 | P1.36i | Pin the dev edge aliases and public paths | [SEC] | P1.36b | `phase-1.md` |
