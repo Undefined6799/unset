@@ -8871,8 +8871,9 @@ that certificate is ADR 0032's decision, approved by its acceptance; the app sit
 and requires the served `(tls)` to read the same as `snippets/tls.caddy` (:200-206, :223), so `dev:up` refuses the
 dev `(tls)` until P1.38e loosens that rule for dev, which needs Alex's own typed line (ADR 0032, decision 3).
 
-**The edge reds of ADR 0031 decision 2 as ADR 0032 restates them, in `deployment/edge` tests:** no `:80` site
-under dev; prod refuses a file certificate; headers present on both sites. The bind address and the absent port
+**The edge reds of ADR 0031 decision 2 as ADR 0032 restates them, in `deployment/edge` tests:** no `:80` site in
+the dev configuration (Caddy's run-time redirect listener on `:80` is not a site; the deploy check in P1.37v covers
+it); prod refuses a file certificate; headers present on both sites. The bind address and the absent port
 ride P1.37v, which owns the compose side; the "scheme never taken from the request" red is the app's and the PDS
 configuration's, in P1.36c. The Decision 4 blob denies on `staging.unset.ac` are their own step, P1.38f, so this
 step stays under 800 changed lines.
@@ -16108,8 +16109,10 @@ the scope a builder follows.
    (ADR 0031, decision 2); the dev zones key on the client address and the trusted proxy equals Newt's
    `ipv4_address` (decision 3; the edge side is P1.36j's).
 5. ADR 0031's Compliance deploy check as ADR 0032 restates it: from the `newt_edge` network, the edge answers
-   `https` with the self-signed leaf on its bound address and refuses `:80`, and the certificate expires more than
-   30 days out; run after the first deploy and every edge change, as a runbook command.
+   `https` with the self-signed leaf on its bound address, `:80` answers only a `308` to `https://` with no body
+   and no upstream (Caddy's automatic redirect, which a file certificate does not switch off, ADR 0032 decision
+   4), and the certificate expires more than 30 days out; run after the first deploy and every edge change, as a
+   runbook command.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
 beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
