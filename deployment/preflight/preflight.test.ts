@@ -105,7 +105,27 @@ const LOCK = {
   pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-key" },
   web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
-const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
+/**
+ * The dev stack (P1.38e; ADR 0032): the edge runs the lock's image with the dev sites and the dev (tls) over the
+ * shipped one, reads the self-signed leaf's two secrets, publishes nothing, and has the dev app site's two keys.
+ */
+const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
+  .replace('    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n', '    user: "65532:65532"\n')
+  .replace(
+    "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
+    "      - ./edge/dev/sites:/etc/caddy/sites/enabled:ro\n" +
+      "      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n" +
+      "    secrets: [dev_tls_cert, dev_tls_key]\n",
+  )
+  .replace(
+    "      ACME_EMAIL: edge@example.test\n",
+    "      ACME_EMAIL: edge@example.test\n      APP_HOST: staging.unset.sh\n      APP_UPSTREAM: web:8080\n",
+  )
+  .replace(
+    "    file: ../../unset-dev-secrets/db_password\n",
+    "$&  dev_tls_cert:\n    file: ../../unset-dev-secrets/dev_tls_cert\n" +
+      "  dev_tls_key:\n    file: ../../unset-dev-secrets/dev_tls_key\n",
+  );
 // The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
 /** A from address of 254 or 255 characters, every part within its own cap, so only the length decides. */
@@ -225,6 +245,13 @@ function stack({
   // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; fakeFs reads it as owned by web's uid.
   writeFileSync(join(secretsOf(root), "db_password"), `${CANARY}\n`);
   chmodSync(join(secretsOf(root), "db_password"), 0o400);
+  // The dev edge's leaf and key (P1.38e), when the stack mounts them.
+  for (const name of ["dev_tls_cert", "dev_tls_key"].filter((n) =>
+    compose.includes(`file: ../../unset-dev-secrets/${n}`),
+  )) {
+    writeFileSync(join(secretsOf(root), name), "fixture\n");
+    chmodSync(join(secretsOf(root), name), 0o400);
+  }
   chmodSync(secretsOf(root), 0o700);
   // C9 judges every parent of the secrets folder and of each bind source, so the fixture sets its own modes whatever
   // the umask.
@@ -235,11 +262,18 @@ function stack({
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
   // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
   const edge = join(root, "deployment/edge");
-  for (const part of ["Caddyfile", "snippets", "sites"])
+  for (const part of ["Caddyfile", "snippets", "sites", "dev"])
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
   mkdirSync(join(edge, "sites/enabled"));
   // C9 judges every bind source and its parents too (P1.27u), so these get fixed modes whatever the umask.
-  for (const dir of [edge, join(edge, "sites"), join(edge, "sites/enabled")]) chmodSync(dir, 0o755);
+  for (const dir of [
+    edge,
+    join(edge, "sites"),
+    join(edge, "sites/enabled"),
+    join(edge, "dev"),
+    join(edge, "dev/sites"),
+  ])
+    chmodSync(dir, 0o755);
   symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
   for (const [name, text] of Object.entries(sites ?? {})) writeFileSync(join(edge, "sites/enabled", name), text);
   for (const env of ["dev", "prod"]) {
@@ -1490,6 +1524,74 @@ describe("preflight", () => {
     const result = await check({ compose, sites: { "probe.caddy": '"{$PDS_HOST}" {\n\trespond 204\n}\n' } });
     expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable/);
     expect(result.lines.join("\n")).not.toContain(sentinel);
+  });
+
+  test("c18_dev_serves_the_self_signed_leaf_files", async () => {
+    // P1.38e (ADR 0032 Decision 3): under dev C18 takes exactly the dev shape: the dev sites, the dev (tls) mounted from
+    // deployment/edge/dev/tls.caddy and reading `tls <cert> <key>`, the leaf's two secrets and no published port.
+    const c18 = async (edit: (text: string) => string, files: Record<string, string> = {}, env = "dev") =>
+      (await check({ compose: edit(env === "dev" ? DEV : COMPOSE), pdsEnv: DEV_ENV, files }, env)).lines.find((line) =>
+        / C18 /.test(line),
+      );
+    const same = (text: string) => text;
+    expect(await c18(same)).toBe("PASS C18 ok");
+    const tlsMount = "      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
+    const leaf = "    secrets: [dev_tls_cert, dev_tls_key]\n";
+    const cases: [string, (text: string) => string][] = [
+      [
+        "FAIL C18 the edge publishes a port under dev",
+        (t) => t.replace(leaf, `${leaf}    ports: ["127.0.0.1:443:443"]\n`),
+      ],
+      [
+        "FAIL C18 the edge reads a secret other than the dev leaf's",
+        (t) => t.replace(leaf, "    secrets: [dev_tls_cert, dev_tls_key, db_password]\n"),
+      ],
+      ["FAIL C18 the edge does not read the dev leaf", (t) => t.replace(leaf, "    secrets: [dev_tls_cert]\n")],
+      ["FAIL C18 the TLS snippet is not mounted", (t) => t.replace(tlsMount, "")],
+      ["FAIL C18 the TLS snippet is not mounted read-only", (t) => t.replace(tlsMount, tlsMount.replace(":ro", ""))],
+      [
+        "FAIL C18 the TLS snippet is not deployment/edge/dev/tls.caddy",
+        (t) => t.replace(tlsMount, tlsMount.replace("./edge/dev/", "./edge/local/")),
+      ],
+      [
+        "FAIL C18 the TLS snippet is not deployment/edge/dev/tls.caddy",
+        (t) => t.replace(tlsMount, tlsMount.replace("./edge/dev/tls.caddy", "./edge/snippets/tls.caddy")),
+      ],
+      [
+        "FAIL C18 the edge config is unreadable: the dev mode reads the enabled sites from dev/sites/",
+        (t) => t.replace("./edge/dev/sites:", "./edge/sites:"),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+    // The dev (tls) itself: anything but the leaf's two files fails, an issuer and Caddy's internal CA included.
+    for (const other of [
+      "(tls) {\n\ttls internal\n}\n",
+      "(tls) {\n\ttls {\n\t\tissuer acme {\n\t\t\tdir https://acme-v02.api.letsencrypt.org/directory\n\t\t}\n\t}\n}\n",
+      "(tls) {\n\ttls /run/secrets/dev_tls_key /run/secrets/dev_tls_cert\n}\n",
+    ]) {
+      expect(await c18(same, { "deployment/edge/dev/tls.caddy": other }), other).toBe(
+        "FAIL C18 the dev (tls) is not the self-signed leaf's files",
+      );
+    }
+    // No :80 site under dev.
+    const plain = readFileSync(join(EDGE_DIR, "dev/sites/pds.caddy"), "utf8").replace(
+      "{$PDS_HOST} {",
+      "http://{$PDS_HOST} {",
+    );
+    expect(await c18(same, { "deployment/edge/dev/sites/pds.caddy": plain })).toMatch(
+      /^FAIL C18 \{\$PDS_HOST\}: a plain-http dev site/,
+    );
+    // The app site takes only its ruled name under dev.
+    expect(await c18((t) => t.replace("APP_HOST: staging.unset.sh", "APP_HOST: other.unset.sh"))).toMatch(
+      /^FAIL C18 the edge config is unreadable: \{\$APP_HOST\} is not the dev app site's ruled value/,
+    );
+    // Prod is unchanged: the shipped sites with Let's Encrypt, and a file certificate fails.
+    expect(await c18(same, {}, "prod")).toBe("PASS C18 ok");
+    const file = "{$PDS_HOST} {\n\ttls /run/secrets/x_cert /run/secrets/x_key\n";
+    const shipped = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8").replace("{$PDS_HOST} {\n", file);
+    expect(await c18(same, { "deployment/edge/sites/pds.caddy": shipped }, "prod")).toMatch(
+      /\{\$PDS_HOST\}: a file certificate outside dev and local/,
+    );
   });
 
   test("c18_pds_host_is_the_pds_hostname_in_every_env", async () => {
@@ -4532,17 +4634,22 @@ networks:
       ["tls.caddy", "/etc/caddy/snippets/tls.caddy"],
       ["app.caddy", "/etc/caddy/sites/enabled/app.caddy"],
     ]) {
-      const mount = (text: string) =>
-        text.replace(
-          "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
-          `$&      - ./edge/local/${file}:${target}:ro\n`,
-        );
-      for (const [env, s] of [
-        ["dev", { compose: mount(DEV), pdsEnv: DEV_ENV }],
-        ["prod", { compose: mount(COMPOSE) }],
+      const mount = (text: string, sites: string) => {
+        const anchor = `      - ./edge/${sites}:/etc/caddy/sites/enabled:ro\n`;
+        expect(text).toContain(anchor);
+        return text.replace(anchor, `$&      - ./edge/local/${file}:${target}:ro\n`);
+      };
+      // Under dev the dev (tls) is the one file mount allowed beside the sites (P1.38e), so a second fails as twice.
+      const devLine =
+        file === "tls.caddy"
+          ? "FAIL C18 the edge mounts /etc/caddy/snippets/tls.caddy more than once"
+          : `FAIL C18 the edge mounts over ${target}`;
+      for (const [env, s, line] of [
+        ["dev", { compose: mount(DEV, "dev/sites"), pdsEnv: DEV_ENV }, devLine],
+        ["prod", { compose: mount(COMPOSE, "sites/enabled") }, `FAIL C18 the edge mounts over ${target}`],
       ] as const) {
         const { lines } = await check(s, env);
-        expect(lines, `${env} ${file}`).toContain(`FAIL C18 the edge mounts over ${target}`);
+        expect(lines, `${env} ${file}`).toContain(line);
       }
     }
   });

@@ -123,6 +123,28 @@ offline only. Put the `did:key` line, and nothing else from that output, in `pds
 **The first account.** Make it once by hand, with an invite code from the one-off below, as the tester it is for;
 its password, DID and email live only with that person (ADR 0026).
 
+## The dev edge's self-signed leaf (P1.38e, dev only; ADR 0032)
+
+Under dev the edge serves both staging names with one self-signed leaf certificate that nobody trusts and nothing
+installs; Pangolin reaches it through Newt without verifying it. Make the pair on the staging host, in the folder that
+holds `unset-dev-secrets/`, with the host's own OpenSSL (checked with OpenSSL 3.0.13, Ubuntu 24.04's): a P-256 key,
+both staging names as SANs, no CA flag, 825 days. The key never leaves the host.
+
+```sh
+umask 077
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-secrets/.leaf.key
+openssl req -new -key unset-dev-secrets/.leaf.key -subj "/CN=staging.unset.sh" \
+  | openssl x509 -req -signkey unset-dev-secrets/.leaf.key -days 825 -out unset-dev-secrets/.leaf.pem \
+    -extfile <(printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac\n')
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.leaf.pem unset-dev-secrets/dev_tls_cert
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.leaf.key unset-dev-secrets/dev_tls_key
+rm unset-dev-secrets/.leaf.pem unset-dev-secrets/.leaf.key
+openssl x509 -in unset-dev-secrets/dev_tls_cert -noout -enddate
+```
+
+The last line prints the expiry; put the date 30 days before it in the staging calendar and remake the pair the same
+way then (C18 reads only the two files' places, not their dates). Only the edge mounts them (P1.36c).
+
 ## The first invite codes (one-off, until P2.09)
 
 Invites are required (`PDS_INVITE_REQUIRED`). Until `interfaces/pds-admin` (P2.09) exists, Alex makes each code by hand
