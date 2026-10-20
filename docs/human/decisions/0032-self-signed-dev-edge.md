@@ -60,9 +60,13 @@ ADR 0028 and the Phase 5 records.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
    Under dev the edge's mounts take the local stack's shape (`compose.local.yaml:123-124`): exactly three read-only
    file binds, each required and used once, each checked by realpath the way `localFileMount` checks the local
-   files (`edge.ts:346-375`): `deployment/edge/sites/pds.caddy` at `/etc/caddy/sites/enabled/pds.caddy`,
+   files (`edge.ts:346-375`): `deployment/edge/dev/pds.caddy` at `/etc/caddy/sites/enabled/pds.caddy`,
    `deployment/edge/dev/app.caddy` at `/etc/caddy/sites/enabled/app.caddy`, and `deployment/edge/dev/tls.caddy` at
-   `/etc/caddy/snippets/tls.caddy`; the image's Caddyfile reads nothing else (`import snippets/*.caddy`,
+   `/etc/caddy/snippets/tls.caddy`. Dev has its own PDS site file, not `sites/pds.caddy` (prod's), because the dev
+   site must bind the `newt_edge` address (P1.36j's trusted-proxy block for `10.250.37.3:443` matches only a site
+   bound there; prod's file would silently lose Newt-only trust and per-client keys on `staging.unset.ac`), carry
+   the `noindex` header, P1.38f's blob denies and the dev `(tls)` rules; all three files live under `dev/` with the
+   reader's containment. The image's Caddyfile reads nothing else (`import snippets/*.caddy`,
    `Caddyfile:46`; `import sites/enabled/*.caddy`, :56), and any other bind at, under or above `/etc/caddy`,
    including today's `sites/` directory mount (`compose.dev.yaml:143`), fails. No directory is mounted under dev.
    Today C18 refuses any edge mount over `/etc/caddy` but the sites directory (`edge.ts:78-81`), so P1.38e merges
