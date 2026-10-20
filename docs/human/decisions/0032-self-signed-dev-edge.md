@@ -77,8 +77,10 @@ ADR 0028 and the Phase 5 records.
   instead of without TLS; P1.36c mounts the snippet, the certificate and the key (C9); P1.37v's deploy check
   asserts `https` and the expiry; the runbook gains the generation command and the renewal date. The step book
   changes in the same book edit as ADR 0031's (`unset-plan/book-edits/2026-10-20-adr-0031-no-login.md`).
-- ADR 0031's status line gains, at this record's acceptance, "Decision 2 superseded by ADR 0032"; nothing else in
-  0031 changes. ADR 0001 gets an appended entry at acceptance.
+- ADR 0031 is not edited, not even its status line: the docs immutability test allows an accepted record only the
+  whole-record "Status: Superseded by NNNN." change (`scripts/docs/docs.test.ts:107-110`), and 0031 stands in
+  every other decision. The partial supersession is recorded here, in 0031's README row ("Decision 2 superseded
+  by 0032", the shape 0008 and 0017 use) and in the appended ADR 0001 entry, all at this record's acceptance.
 - A certificate that expires takes staging down until the runbook command runs; the deploy check's 30-day
   warning is the only guard. Accepted as a staging cost.
 
