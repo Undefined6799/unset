@@ -98,8 +98,10 @@ production name is a Phase 5 decision.
    not part of this record. What is lost, with nothing replacing it today: the per-tester Pangolin identity, a second
    credential in front of the app. The app's audit log stores no network address
    (`infrastructure/postgres/migrations/0008_audit.sql:50`) and has no sign-in action
-   (`infrastructure/audit/actions.ts:5-21`); a signed-in DID exists only in `app.session` for the session's
-   lifetime. Pangolin's own access log never carried a name either under 0030 Decision 4's keep-list. A sign-in
+   (`infrastructure/audit/actions.ts:5-21`); the DID itself persists in `app.account` (`0015_app_account.sql:6-9`,
+   with `first_seen_at`) and `app.oauth_session` (`0013_app_oauth.sql:12-17`, with `updated_at`), so what is
+   missing is a record of each sign-in, not of the account. Pangolin's own access log never carried a name either
+   under 0030 Decision 4's keep-list. A sign-in
    audit action (DID only, never an address) is follow-up work for the audit owner, not a precondition. Two more
    things a public app name exposes: search engines, since no app page sends `noindex` and there is no
    `robots.txt` route, so under dev the edge adds `X-Robots-Tag: noindex, nofollow` on every response of both
