@@ -1,15 +1,18 @@
-// Verifies every image in a lock before anything runs it (P1.27q; used by the P1.30 deploy preflight and by the
-// images workflow on what it just pushed). Each entry must sit in our private registry by digest and carry our
-// cosign signature; a first-party entry must also carry SLSA provenance naming this repository, refs/heads/main and
-// the images workflow. Fails closed: any error, timeout or unreadable output is a failure.
+// Verifies every image in a lock before anything runs it (P1.27q; keyless since P1.27s, ADR 0033). Each entry must sit in
+// our registry by digest and carry a keyless cosign signature whose certificate names exactly the workflow that signs
+// that kind of image: publish-images.yml for first-party images, mirror.yml for mirrors, both on refs/heads/main of
+// this repository, issued by GitHub Actions' OIDC issuer. A first-party entry must also carry SLSA provenance naming
+// this repository, refs/heads/main and publish-images.yml. Fails closed: any error, timeout or unreadable output is a
+// failure, and no flag that skips the transparency log is ever passed.
 //
-// cosign v3.0.5 (source read at the tag): verify and verify-attestation take `--key` and
-// `--insecure-ignore-tlog=true` (no Rekor lookup: we never upload, see the step's ADR), and
-// `--new-bundle-format=false` to read the classic signature format our sign step writes (cmd/cosign/cli/options/
-// verify.go; certificate.go). verify-attestation prints one DSSE envelope per line with a base64 in-toto payload.
-// Provenance shape: SLSA v1 buildDefinition.externalParameters.workflow {repository, ref, path}
-// (https://slsa.dev/spec/v1.0/provenance; GitHub Actions build type 1). Unverified against a real registry until the
-// first signed push.
+// cosign v3.1.3 (source read at the tag, cmd/cosign/cli/options/certificate.go and verify.go): verify and
+// verify-attestation take --certificate-identity and --certificate-oidc-issuer (exact; the -regexp forms are never
+// used), --certificate-github-workflow-repository and --certificate-github-workflow-ref (the Fulcio certificate's
+// repository and ref extensions), and --trusted-root for offline trust material. The new bundle format, with its Rekor
+// inclusion proof, is the default and is read from the registry. verify-attestation is taken to print one DSSE
+// envelope per line with a base64 in-toto payload. Provenance shape: SLSA v1
+// buildDefinition.externalParameters.workflow {repository, ref, path} (https://slsa.dev/spec/v1.0/provenance; GitHub
+// Actions build type 1). Unverified against a real registry until publish-images.yml's first run on main.
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -18,14 +21,20 @@ export type LockEntry = {
   ref: string;
   origin: "first-party" | "upstream";
   upstreamSource?: string;
-  verify: "cosign-key";
+  verify: "cosign-keyless";
 };
 export type ImageLock = Record<string, LockEntry>;
 export type CosignRun = (args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
-export type VerifyOptions = { key: string; repository: string; workflow: string; run: CosignRun };
+/** `repository` is owner/name; `trustedRoot`, when set, makes verification offline (P2.26b passes the committed one). */
+export type VerifyOptions = { repository: string; trustedRoot?: string; run: CosignRun };
 export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
 
 const BRANCH = "refs/heads/main";
+const ISSUER = "https://token.actions.githubusercontent.com";
+const OWNER_NAME = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
+/** The one workflow whose certificate each kind of entry must carry (ADR 0033, Decision 2). */
+const SIGNER = { "first-party": ".github/workflows/publish-images.yml", upstream: ".github/workflows/mirror.yml" };
+const ENTRY_KEYS = new Set(["ref", "origin", "upstreamSource", "verify"]);
 const OUR_REGISTRY = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$/;
 const COSIGN_TIMEOUT_MS = 5 * 60_000;
 
@@ -43,7 +52,7 @@ function provenanceWorkflows(stdout: string): Workflow[] {
     });
 }
 
-/** Why the provenance does not name our repository, main and the images workflow, or null when it does. */
+/** Why the provenance does not name our repository, main and publish-images.yml, or null when it does. */
 function provenanceProblem(stdout: string, options: VerifyOptions): string | null {
   let workflows: Workflow[];
   try {
@@ -53,21 +62,37 @@ function provenanceProblem(stdout: string, options: VerifyOptions): string | nul
   }
   if (workflows.length === 0) return "no provenance";
   for (const workflow of workflows) {
-    if (workflow.repository !== options.repository) return `provenance names repository ${String(workflow.repository)}`;
+    const repository = `https://github.com/${options.repository}`;
+    if (workflow.repository !== repository) return `provenance names repository ${String(workflow.repository)}`;
     if (workflow.ref !== BRANCH) return `provenance names ref ${String(workflow.ref)}`;
-    if (workflow.path !== options.workflow) return `provenance names workflow ${String(workflow.path)}`;
+    if (workflow.path !== SIGNER["first-party"]) return `provenance names workflow ${String(workflow.path)}`;
   }
   return null;
 }
 
+/** The exact certificate checks for one kind of entry; never a -regexp flag, never a tlog opt-out. */
+function identityFlags(entry: LockEntry, options: VerifyOptions): string[] {
+  const identity = `https://github.com/${options.repository}/${SIGNER[entry.origin]}@${BRANCH}`;
+  const flags = ["--certificate-identity", identity, "--certificate-oidc-issuer", ISSUER];
+  flags.push(
+    "--certificate-github-workflow-repository",
+    options.repository,
+    "--certificate-github-workflow-ref",
+    BRANCH,
+  );
+  return options.trustedRoot === undefined ? flags : [...flags, "--trusted-root", options.trustedRoot];
+}
+
 async function entryProblem(entry: LockEntry, options: VerifyOptions): Promise<string | null> {
-  if (entry.verify !== "cosign-key" || !OUR_REGISTRY.test(entry.ref))
-    return "ref is not ghcr.io/undefined6799/… by digest";
-  const common = ["--key", options.key, "--insecure-ignore-tlog=true", "--new-bundle-format=false"];
-  const signature = await options.run(["verify", ...common, entry.ref]);
+  const extra = Object.keys(entry).find((key) => !ENTRY_KEYS.has(key));
+  if (extra !== undefined) return `the entry names ${extra}; the signer is fixed by its origin`;
+  if (entry.verify !== "cosign-keyless" || !Object.hasOwn(SIGNER, entry.origin) || !OUR_REGISTRY.test(entry.ref))
+    return "ref is not ghcr.io/undefined6799/… by digest, signed keyless";
+  const flags = identityFlags(entry, options);
+  const signature = await options.run(["verify", ...flags, entry.ref]);
   if (signature.code !== 0) return `signature does not verify: ${signature.stderr.trim()}`;
   if (entry.origin === "upstream") return null;
-  const attestation = await options.run(["verify-attestation", ...common, "--type", "slsaprovenance1", entry.ref]);
+  const attestation = await options.run(["verify-attestation", ...flags, "--type", "slsaprovenance1", entry.ref]);
   if (attestation.code !== 0) return `provenance does not verify: ${attestation.stderr.trim()}`;
   return provenanceProblem(attestation.stdout, options);
 }
@@ -75,6 +100,8 @@ async function entryProblem(entry: LockEntry, options: VerifyOptions): Promise<s
 export async function verifyImages(lock: ImageLock, options: VerifyOptions): Promise<VerifyResult> {
   // An empty lock would verify nothing and pass; a deploy always runs at least one image.
   if (Object.keys(lock).length === 0) return { ok: false, failures: ["the lock names no images"] };
+  // An identity is built from the repository, so a pattern there would widen it (ADR 0033: exact match only).
+  if (!OWNER_NAME.test(options.repository)) return { ok: false, failures: ["the repository is not owner/name"] };
   const failures: string[] = [];
   for (const [name, entry] of Object.entries(lock)) {
     const problem = await entryProblem(entry, options);
@@ -96,11 +123,16 @@ const cosign: CosignRun = (args) =>
   });
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const lock: ImageLock = JSON.parse(readFileSync(process.argv[2] ?? "deployment/images.lock.json", "utf8"));
+  // verify-images.ts <lock> [--trusted-root <file>]
+  const [lockPath = "deployment/images.lock.json", flag, trustedRoot] = process.argv.slice(2);
+  if (flag !== undefined && (flag !== "--trusted-root" || trustedRoot === undefined)) {
+    console.error("usage: verify-images.ts <lock> [--trusted-root <file>]");
+    process.exit(2);
+  }
+  const lock: ImageLock = JSON.parse(readFileSync(lockPath, "utf8"));
   const result = await verifyImages(lock, {
-    key: "deployment/cosign.pub",
-    repository: "https://github.com/Undefined6799/unset",
-    workflow: ".github/workflows/images.yml",
+    repository: "Undefined6799/unset",
+    ...(trustedRoot === undefined ? {} : { trustedRoot }),
     run: cosign,
   });
   if (!result.ok) {
