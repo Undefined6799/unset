@@ -8861,7 +8861,7 @@ are production work now, so this step builds the parts it needs. The reader gain
 (`caddyfile.ts:429` is `"shipped" | "local"` today, and `LOCAL_ONLY` refuses `{$APP_HOST}` outside `local/`, :435)
 with the same `edgeDir/dev/` containment P1.36e described, holding the dev app site and the dev `(tls)` snippet;
 the reader refuses a `dev/` directory under prod and local (P1.36o's refusals, now in the reader's own tests under
-`deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose `dev/` mount itself is P1.36c's.
+`deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose file binds themselves are P1.36c's.
 TLS under dev follows ADR 0032 (Proposed; it supersedes ADR 0031 decision 2's plain `http` after Alex's
 2026-10-20 21:42:50Z choice): both dev sites keep `import tls`, and `dev/tls.caddy` defines `(tls)` as exactly
 `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, the local stack's shape (`local/tls.caddy:7-8`): the
@@ -8895,9 +8895,11 @@ edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What (the DNS-token parts move to production with P1.36e under ADR 0031, book edit 2026-10-20-adr-0031-no-login;
 the app-site mounts and the allowlist entries stay in this step; it also takes the compose `dev/` mount that P1.36o
-would have added (the dev `(tls)` snippet over `snippets/tls.caddy`, and the self-signed certificate and its key,
-both C9 file secrets mounted only into the edge with a test that no other service mounts them; ADR 0032 decision 1;
-the mounts pass C18 only once P1.38e's dev mount rule exists, so this step merges after it), with
+would have added (the three dev file binds of P1.38e's rule, `sites/pds.caddy` and `dev/app.caddy` into
+`sites/enabled/` and `dev/tls.caddy` over `snippets/tls.caddy`, replacing the `sites/` directory mount, and the
+self-signed certificate and its key, both C9 file secrets mounted only into the edge with a test that no other
+service mounts them; ADR 0032 decision 1 and 3; the mounts pass C18 only once P1.38e's rule exists, so this step
+merges after it), with
 the preflight refusal of a `dev/` mount under prod and local, and the
 red that the app's and the PDS's scheme never comes from the request, cookies `Secure` and every public URL `https`
 from configuration, ADR 0031 decision 2):** the DNS token is a C9 file secret, mounted only
@@ -16154,11 +16156,15 @@ any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https` gl
 `import tls`, any `:80` site in the configuration, any certificate path outside `/run/secrets/` and any published
 port under dev fail. The mount rule changes with it: today C18 refuses any edge mount at, under or above
 `/etc/caddy` other than the sites directory (`edgeSitesDir`, `edge.ts:78-81`; `compose.dev.test.ts:673` runs it on
-the real `compose.dev.yaml`), so under dev it now allows exactly two more, both read-only binds from inside
-`deployment/edge/` with the sites mount's containment: `dev/tls.caddy` at `/etc/caddy/snippets/tls.caddy` and the
-`dev/` directory at the target P1.36c names; a third mount over `/etc/caddy`, a writable one, one from outside
-`deployment/edge/`, or either of the two under prod or local fails. That rule is part of the typed line's "C18 dev"
-change, since those mounts are how the file certificate is served. Under prod C18 is unchanged and keeps refusing
+the real `compose.dev.yaml`). Under dev the edge instead takes the local stack's shape (`compose.local.yaml:123-124`):
+exactly three read-only file binds, each required and used once, each checked by realpath as `localFileMount`
+checks the local files (`edge.ts:346-375`): `deployment/edge/sites/pds.caddy` at
+`/etc/caddy/sites/enabled/pds.caddy`, `deployment/edge/dev/app.caddy` at `/etc/caddy/sites/enabled/app.caddy`, and
+`deployment/edge/dev/tls.caddy` at `/etc/caddy/snippets/tls.caddy`; the Caddyfile reads nothing else
+(`import snippets/*.caddy`, `Caddyfile:46`; `import sites/enabled/*.caddy`, :56). Any other bind at, under or above
+`/etc/caddy`, today's `sites/` directory mount included (`compose.dev.yaml:143`), a writable one, a wrong source, a
+missing one, or any of the three under prod or local fails. That rule is part of the typed line's "C18 dev" change,
+since those mounts are how the file certificate is served. Under prod C18 is unchanged and keeps refusing
 anything but Let's Encrypt; a file certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds:
 each of the dev refusals; each of the mount refusals; prod with a file certificate; local with the dev snippet; the
 main-branch dev rendering passing. It merges before P1.36c, whose mounts fail C18 until this rule exists, so P1.36c
