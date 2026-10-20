@@ -1,0 +1,11 @@
+# The app's two public sign-in files are read-only (P1.36b; ADR 0030:51-53, kept by ADR 0031 Decision 1): any method
+# but GET and HEAD gets 405 from the edge, on every spelling the decoded path takes (letter case, runs of slashes, a
+# trailing slash), and never reaches web.
+(signin-files) {
+	@signin_files_write {
+		path_regexp (?i)^/+(?:oauth-client-metadata\.json|oauth/+jwks\.json)/*$
+		not method GET HEAD
+	}
+	header @signin_files_write Allow "GET, HEAD"
+	respond @signin_files_write 405
+}

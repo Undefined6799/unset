@@ -132,3 +132,41 @@
 		disable_metrics
 	}
 }
+
+# The dev app site's own zones (P1.36b; ADR 0031 Decision 1, architecture 2026-10-20 13:18Z): new names, so no state is
+# shared with the PDS site's zones (one pool per zone name, as above), and the dev app site imports these alone, never
+# pds-ratelimit. app_signin holds one client below web's shared sign-in bucket, app_burst below the 5 a second at which
+# web refills its shared default bucket, and app_global, with no matcher, keeps every app route in a zone, under the
+# 1500 per 5 minutes that app_burst makes safe. Values as limits.json appRateLimitZones (edge_app_zones_match_limits).
+# app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
+# (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
+(app-ratelimit) {
+	rate_limit {
+		zone app_signin {
+			match {
+				method POST
+				path /login /verify-email/reconsent
+			}
+			match {
+				path /oauth/callback
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 5
+			window 5m
+		}
+		zone app_burst {
+			key {remote_host}
+			ipv6_prefix 64
+			events 20
+			window 10s
+		}
+		zone app_global {
+			key {remote_host}
+			ipv6_prefix 64
+			events 1200
+			window 5m
+		}
+		disable_metrics
+	}
+}

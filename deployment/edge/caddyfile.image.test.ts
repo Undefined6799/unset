@@ -17,7 +17,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { type Caddyfile, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
+import { type Caddyfile, DEV_APP, DEV_EDGE_ADDRESS, DEV_TLS, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
@@ -205,6 +205,26 @@ describe("caddyfile reader against caddy adapt", () => {
       match: { sni: [local.APP_HOST, local.PDS_HOST] },
       certificate_selection: { any_tag: ["cert0"] },
     });
+  }, 600_000);
+
+  // P1.36b (ADR 0032): the dev sites, mounted as dev/sites at the enabled sites with dev/tls.caddy over the shipped
+  // (tls), adapt to https on the edge's newt_edge address and nothing else: no :80 server and no issuer, only the dev
+  // leaf's two files. Caddy's run-time HTTP->HTTPS redirect is added after adapt (caddy v2.11.7
+  // modules/caddyhttp/autohttps.go:229-268), so it is not in this config.
+  test("dev_sites_listen_https_with_the_leaf_files", () => {
+    const image = buildEdgeImage();
+    const adapted = adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, [
+      `${join(EDGE, "dev", "sites")}:/etc/caddy/sites/enabled:ro`,
+      `${join(EDGE, "dev", "tls.caddy")}:/etc/caddy/snippets/tls.caddy:ro`,
+    ]);
+    const listens = Object.values(adapted.apps.http.servers).flatMap((server) => server.listen);
+    expect(listens.sort()).toEqual([`${DEV_EDGE_ADDRESS}:443`, "127.0.0.1:8081"].sort());
+    expect(modules(adapted)).not.toContain("acme");
+    expect(modules(adapted)).not.toContain("internal");
+    expect(adapted.apps.tls).toStrictEqual({
+      certificates: { load_files: [{ certificate: DEV_TLS[0], key: DEV_TLS[1], tags: ["cert0"] }] },
+    });
+    expect(adaptedHosts(adapted).sort()).toEqual(["127.0.0.1", "staging.unset.ac", "staging.unset.sh"]);
   }, 600_000);
 });
 
