@@ -1460,9 +1460,9 @@ Arachnid application, and the Phase 1 exit.
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
 | P1.37v | Run Newt in the dev compose stack | [SEC] | P1.36b, P1.36j | `phase-1.md` |
 | P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
-| P1.38e | Let C18 accept the dev file certificate | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
+| P1.38e | Let C18 accept the dev file certificate | [SEC] [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
-| P1.38g | Drop the dev directory bind from C18 | [SEC] trusted | P1.36c | `phase-1.md` |
+| P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |

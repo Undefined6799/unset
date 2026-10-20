@@ -8873,7 +8873,7 @@ the reader refuses a `dev/` directory under prod and local (P1.36o's refusals, n
 `deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose file binds themselves are P1.36c's.
 TLS under dev follows ADR 0032 (Proposed; it supersedes ADR 0031 decision 2's plain `http` after Alex's
 2026-10-20 21:42:50Z choice): both dev sites keep `import tls`, and `dev/tls.caddy` defines `(tls)` as exactly
-`tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, the local stack's shape (`local/tls.caddy:7-8`): the
+`tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, the local stack's shape (`local/tls.caddy:8-10`): the
 snippet lives in `dev/`, the self-signed leaf for both staging names and its key are C9 file secrets under
 `/run/secrets/` (P1.36c mounts them); no issuer, no ACME, no `tls internal`, no CA. Reds: the dev
 rendering names no acme issuer and no `:80` site; a `dev/tls.caddy` of any other shape fails; the shipped and local
@@ -16105,7 +16105,7 @@ its fake (P2.16); storing the API key (P5.06).
 
 ### P1.37v — Run Newt in the dev compose stack
 Tags: [SEC]            Depends on: P1.36b, P1.36j
-Slice 1, issue #1115, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, `bases.lock.json`, the
+Slice 2, issue #1115, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, `bases.lock.json`, the
 images test's vendor allowlist), lane the third thread; architecture 2026-10-19 20:01Z (book edit
 2026-10-19-staging-tailnet-rulings) and ADR 0031 (book edit 2026-10-20-adr-0031-no-login). Every change is a
 tightening or a new pin, so nothing is needed from Alex. It comes after P1.36b and P1.36j, since its cross reds tie
@@ -16142,7 +16142,7 @@ the scope a builder follows.
    check and the runbook renewal date are the only guards); one request through Pangolin to each name succeeds (each
    resource's TLS Server Name must be its own staging name, since Traefik sends no SNI to an IP target and Caddy
    with file certificates refuses a handshake without one; ADR 0032 decision 5, Alex's Pangolin step); run after
-   the first deploy and every edge change, as a runbook command (ADR 0032, Compliance).
+   each deploy and edge change, as a runbook command (ADR 0032, Compliance).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
 beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
@@ -16152,7 +16152,7 @@ reds above and P1.36j's trusted proxy.
 
 ### P1.38d — Refuse `[to fill:` values under dev
 Tags: [SEC]            Depends on: —
-Slice 1, product (`deployment/preflight/`), lane the third thread; ADR 0031 decision 1 (book edit
+Slice 2, product (`deployment/preflight/`), lane the third thread; ADR 0031 decision 1 (book edit
 2026-10-20-adr-0031-no-login). A tightening, so nothing is needed from Alex.
 
 **What:** under `--env dev` (and prod) preflight fails any environment value that starts with `[to fill:`, naming
@@ -16163,7 +16163,7 @@ first Pangolin resource is created). Reds: a placeholder under dev fails; under 
 ---
 
 ### P1.38e — Let C18 accept the dev file certificate
-Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.36b
 Slice 2, product (`deployment/preflight/checks/edge.ts`; CODEOWNERS :98-149 names no preflight path as trusted
 base), lane the third thread; ADR 0032 decision 3 (book
 edit 2026-10-20-adr-0031-no-login). **A loosening of two C18 rules, that the served `(tls)` reads the same as
@@ -16200,7 +16200,7 @@ the real `compose.dev.yaml`; so under dev this step accepts exactly one of two s
 read-only bind of `deployment/edge/sites` at `/etc/caddy/sites/enabled` (`compose.dev.yaml:143`; not any other
 directory under `deployment/edge/`, which the rule as it stands would take) or the three file binds above; a mix,
 a second directory, or
-anything else fails. P1.36c then switches compose and its test to the three file binds, and P1.38g (trusted, a
+anything else fails. P1.36c then switches compose and its test to the three file binds, and P1.38g (product, a
 tightening, no line) drops the directory shape under dev, before any deploy. That rule is part of the typed line's
 "C18 dev" change, since those mounts are how the file certificate is served, and the transitional acceptance is
 today's rule kept, not a new one. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file
@@ -16227,7 +16227,7 @@ unchanged prod branch and the C9 mount test in P1.36c.
 ---
 
 ### P1.38g — Drop the dev directory bind from C18
-Tags: [SEC] trusted            Depends on: P1.36c
+Tags: [SEC]            Depends on: P1.36c
 Slice 2, product (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
 edit 2026-10-20-adr-0031-no-login, Codex finding on #1137). A tightening, so nothing is needed from Alex.
 
