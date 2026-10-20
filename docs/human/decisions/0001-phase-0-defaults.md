@@ -483,3 +483,13 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   settings add to the short retention 0025:192 asked for. At acceptance the two doubled-slash probes
   (`/oauth//jwks.json`, `//oauth-client-metadata.json`) were added to Decision 1's no-login group, a
   tightening. 0025 is not edited. P1.37v (#1115) unblocks.
+- **ADR 0031 accepted (Alex, 2026-10-20 21:04:02Z; own record:
+  [0031](0031-public-staging-pds.md)):** the exact acceptance line, typed in the project chat, accepts the
+  record departing from 0025 and 0030 for the dev profile only: both staging names are public resources at
+  Pangolin with no login and no rules, the invite code is the tester gate; the edge serves plain `http` to Newt
+  with no certificate under dev (Pangolin holds both Let's Encrypt certificates); web reaches the PDS by its
+  public name through Pangolin; the edge zones key on the client address behind Newt; the public PDS is a
+  denylist (admin, Basic auth, malformed paths, and the blob methods until P5.07b); three per-client app zones
+  and a `noindex` header land in P1.36b before either resource is created; web's shared sign-in and default
+  buckets stay an accepted availability cost that fails closed. 0025 and 0030 are not edited. P1.37v (#1115)
+  unblocks; P1.36e, P1.36o and ADR 0028 move to production.
