@@ -62,8 +62,9 @@ production name is a Phase 5 decision.
    Pangolin's 0030 Decision 4 logging, and its CrowdSec bouncer if enabled (0030:163-168), apply to both names; and
    no media is served. Rate limits need one more step before the app name opens: the edge's per-client zones of
    Decision 3 match PDS paths only (`session`, `oauth_signin`: `deployment/edge/snippets/ratelimit.caddy:17`,
-   `:35-36`); on the app host only `global` applies, and web keys its own `login` and `default` buckets on the
-   edge's socket address (`TRUSTED_PROXY_MODE: socket`, `deployment/compose.dev.yaml:189`;
+   `:35-36`), and none of them is imported by the dev app site, which today has no per-client zone at all, while
+   web keys its own `login` and `default` buckets on the edge's socket address (`TRUSTED_PROXY_MODE: socket`,
+   `deployment/compose.dev.yaml:189`;
    `deployment/edge/snippets/upstream.caddy:15-18`; `shared/http/trustedProxy.ts:64`), so every visitor shares one
    `login` bucket of 10 at once refilled at 10 a minute (`interfaces/http/limits.ts:12`) on `POST /login`,
    `/oauth/callback` and `/verify-email/reconsent`, and one `default` bucket of 60 refilled at 5 a second. Behind
