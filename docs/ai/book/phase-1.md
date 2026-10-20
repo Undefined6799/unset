@@ -97,7 +97,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
 - **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode),
   P1.33q, P1.33 (server baseline, Tailscale), P1.33a, P1.27s, P2.26e, P2.26b, P2.26c, P2.26d (pulled forward, Q3 B),
-  P1.33d, P1.34, P1.33p, P1.35q, P1.35 (lexicon authority), P1.27v (Renovate managers for the image locks), P1.37a,
+  P1.33d, then P1.37v, P1.38d, P1.38e, P1.38g and P1.38f (ADR 0031 and 0032 preconditions of P1.34; P1.36b, P1.36j,
+  P1.36c and P1.36i are slice 1), P1.34, P1.33p, P1.35q, P1.35 (lexicon authority), P1.27v (Renovate managers for the
+  image locks), P1.37a,
   then the Phase 1 exit P1.38 (book edit 2026-10-14-verify-834-fixes, S4).
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
@@ -689,6 +691,8 @@ flowchart LR
   P1_38e["P1.38e C18 accepts the dev file certificate"]
   P1_36b --> P1_38e
   P1_38f["P1.38f blob methods denied on the public PDS name"]
+  P1_38g["P1.38g dev directory bind dropped from C18"]
+  P1_36c --> P1_38g
   P1_38d["P1.38d [to fill: values refused under dev"]
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
@@ -758,6 +762,7 @@ flowchart LR
   P1_38e --> P1_34
   P1_38d --> P1_34
   P1_38f --> P1_34
+  P1_38g --> P1_34
   P1_36j --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
@@ -8908,19 +8913,16 @@ the preflight mirror of P1.38e's prod and local refusal (the red itself is P1.38
 `compose.dev.test.ts:660-682`, whose `edge_serves_the_repository_sites` reads the directory mount and fails once
 these binds land, and the
 red that the app's and the PDS's scheme never comes from the request, cookies `Secure` and every public URL `https`
-from configuration, ADR 0031 decision 2):** the DNS token is a C9 file secret, mounted only
-into the edge, under the C9 owner and mode rules; a test asserts that no other service mounts it. The compose wiring
-adds the app site's mounts as P1.36b reads them, and the two
-dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. The token, when P1.36e
-brings it to production, is wired into the same `deployment/edge/dev/` mount. Alex's tasks (runbook): create the
-validation zone, the `_acme-challenge`
-CNAMEs, the zone-scoped token and the per-name CAA records (book edit 2026-10-19-verify-1013-followups, M5). They
-also delegate the validation zone by NS from Namecheap and create the scoped token at the provider Alex picks (book
-edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z").
+from configuration, ADR 0031 decision 2):** the certificate and its key are C9 file secrets, mounted only into
+the edge, under the C9 owner and mode rules; a test asserts that no other service mounts them. The compose wiring
+adds the app site's binds as P1.36b reads them, and the two dev allowlist entries if that allowlist lives in
+`deployment/preflight/`. Prod is unchanged. No DNS token, validation zone, challenge CNAME or provider token
+belongs to this step: that is production work in P1.36e (ADR 0028), and P1.33p's CAA step lists no challenge
+CNAME for staging. Alex's only runbook step here is the OpenSSL command that writes the leaf and key (P1.38e).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): the certificate's private
-key, or a DNS token, readable by services other than the edge. Answered by C9 file secrets mounted only into the
-edge, with a test (book edit 2026-10-19-verify-1013-followups, M4).
+key readable by services other than the edge. Answered by C9 file secrets mounted only into the edge, with a test
+(book edit 2026-10-19-verify-1013-followups, M4).
 
 ---
 
@@ -15406,8 +15408,12 @@ every public gate and its evidence lives here.
      return that file's bytes or a `4xx`, never other content (ADR 0030, decision 1, lists both sets; the `405`
      survives in P1.36b as a tightening, ADR 0031);
   3. TLS certificate (Pangolin's) valid for more than 14 days;
-  4. on staging.unset.ac, the admin probes → 404/401 and a blob method → refused (ADR 0031, decision 4), where any
-     2xx fails with "admin surface exposed".
+  4. on staging.unset.ac, the admin probes → the guard's exact answers (`404` for the admin paths, `401` for Basic
+     auth, `400` for malformed paths, `xrpc-guard.caddy:12-25`) and each of P1.38f's three blob methods → P1.38f's
+     exact deny status from our edge, with the edge's security headers and no PDS JSON error body; a PDS-shaped
+     `4xx` (an `AuthMissing` or `InvalidRequest` body, which the PDS returns on its own when the guard is absent or
+     bypassed) fails with "blob guard not reached", and any `2xx` fails with "admin surface exposed" (ADR 0031,
+     decision 4).
   The PDS checks that follow are part of the outside probe too under ADR 0031 (the homelab runbook command keeps
   only calls made against the PDS container): `_health` → 200;
   `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200 and a
@@ -15608,7 +15614,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f, P1.38d (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f, P1.38d, P1.38g (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -15704,9 +15710,11 @@ dev-pds-admin-custody.md}`; `docs/human/domains.md` updated. `deployment/ddns/` 
 
 **Size:** ~200 lines of config, scripts and workflow, ~220 lines of runbooks, ~150 test lines.
 
-**Goal:** `unset.ac` is owned and locked down, and the dev PDS on the home server is reachable on the tailnet only,
-through the edge, under non-public names with dev-root certificates, invite-only, with its admin surface
-unreachable, a recovery key set, no client address stored or logged, and backed up with a passing restore test.
+**Goal:** `unset.ac` is owned and locked down, and the dev PDS on the home server is reachable from the internet
+only through Pangolin and Newt, under the two public staging names, with ADR 0032's self-signed leaf at our edge
+and Pangolin's Let's Encrypt certificates in front (ADR 0031, ADR 0032; the tailnet-only, non-public-name and
+dev-root shape is superseded), invite-only, with its admin surface unreachable, a recovery key set, no client
+address stored or logged, and backed up with a passing restore test.
 Every public gate and its evidence (the public env, the Let's Encrypt certificate, the outside probe and its tests)
 is P1.33p's (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5).
 
@@ -15736,8 +15744,8 @@ D. Dev PDS fit for the authority
     file 0600, owned by the deploy user). The flag is required (P1.34f
     amendment 1). It runs the preflight (P1.30, all PASS), stops on any failure, then runs
     `docker compose … --env-file … up -d` with the same files (services without a profile start by default; there is
-    no "default" profile). The edge serves the dev-root leaf for the non-public names (P1.34d); the Let's Encrypt
-    certificate (TLS-ALPN-01) is P1.33p's.
+    no "default" profile). The edge serves ADR 0032's self-signed leaf for both staging names from the C9 secrets
+    (P1.36c, P1.38e); Pangolin holds the Let's Encrypt certificates (ADR 0031 decision 1).
 12. Power and recovery: the homelab and router on a UPS; both restart automatically after power loss.
 13. Store the secrets bundle (pds.env with the admin password and the PDS's PLC rotation key, cosign and age
     material excluded) separately encrypted, per secrets-bundle.md.
@@ -15747,15 +15755,15 @@ D. Dev PDS fit for the authority
 
 **Agent prepares and verifies:**
 - The outside probe moved to P1.33p (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5). `dev-public.env`
-  stays here as the tailnet dev stack's env, with the tailnet hostnames and `https://plc.directory` (architecture's
-  Amendment 2 of 2026-10-13-local-plc, point 5, and Amendment 4).
+  stays here as the staging stack's env, with the two public staging hostnames and `https://plc.directory`
+  (architecture's Amendment 2 of 2026-10-13-local-plc, point 5, and Amendment 4; ADR 0031).
 - `pds.env` gains the SMTP names on deployed dev (C11 and C19 require them there); the values come with the SMTP card
   before P1.34 (book edit 2026-10-13-p134n-p129a-follow-up, from Codex's #774 P1).
-- Hairpin: the stack reaches its own hosts through P1.29a's edge network aliases for `APP_HOST` and `PDS_HOST`, not
-  through `0x40.space` and never with `extra_hosts` (book edit 2026-10-13-p129a-build-rulings, Amendment 1; the tailnet
-  ruling); tap reaches `PDS_HOST` through the edge's alias on `tap_edge` (Amendment 3; built in P3.02). Check from
-  inside the compose network that each host resolves to the edge. The PDS resolves its own lexicons locally
-  (`pds/src/context.ts:357-410`), and its source names this failure mode (`context.ts:363-366`).
+- Hairpin: under ADR 0031 decision 2 there are no edge network aliases under dev (P1.36i pins zero and an empty
+  `NETGUARD_INTERNAL_HOSTS`); web reaches the PDS by its public name through Pangolin, never with `extra_hosts`.
+  Check from inside the compose network that `PDS_HOST` resolves to Pangolin's public address, not to the edge. The
+  PDS resolves its own lexicons locally (`pds/src/context.ts:357-410`), and its source names this failure mode
+  (`context.ts:363-366`).
 - `deployment/backup/dev-pds.sh` (daily, run by a systemd timer on the host as a dedicated user):
   1. for every SQLite file of the PDS (account DB, sequencer, DID cache, and each actor store), use SQLite's
      `.backup` (WAL-safe); if any `.backup` fails → stop the PDS container for at most 60 s, copy the files, start
@@ -15794,8 +15802,9 @@ threats and their tests, E and S, are P1.33p's).
     non-public name (`backup_script_encrypts_and_leaves_no_plaintext`, `restore_test_has_no_public_name`).
   - D Data loss on the only copy → every actor store backed up (`backup_covers_every_sqlite_file`).
 
-**Done when (tests):** the private names and dev-root certificates in place; the read-only dev-stack check
-(describeServer, health; no account, no probe) green on the tailnet; P1.30's C-checks all PASS;
+**Done when (tests):** both public staging names answer from our edge through Pangolin with ADR 0032's leaf behind
+Pangolin's certificate (P1.37v's deploy check green); the read-only dev-stack check (describeServer, health; no
+account, no probe) green from outside; P1.30's C-checks all PASS;
 `backup_script_encrypts_and_leaves_no_plaintext`; `backup_covers_every_sqlite_file` (fixture data dir with three actor
 stores); `restore_test_has_no_public_name` (script refuses when the scratch host resolves as `0x40.space`); V1, V5, V6
 and V8 recorded in `dev-pds-on-login-path.md` (V2, V3, V4 and V7 are P1.33p's).
@@ -16175,20 +16184,27 @@ matches only a site bound there, so prod's file would silently lose Newt-only tr
 decision 3). The Caddyfile reads nothing else
 (`import snippets/*.caddy`, `Caddyfile:46`; `import sites/enabled/*.caddy`, :56). Any other bind on the edge
 service, wherever its target, fails, as the local branch refuses any bind beyond its sites and local files
-(`edge.ts:354`); so today's `sites/` directory mount (`compose.dev.yaml:143`), a writable one, a wrong source or a
-missing one fails under dev, and any of the three `dev/` binds under prod or local fails (that red is this step's;
-P1.36c books only the compose side). That rule is part of the typed line's "C18 dev" change,
-since those mounts are how the file certificate is served. Under prod C18 is unchanged and keeps refusing
-anything but Let's Encrypt; a file certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds:
-each of the dev refusals; each of the mount refusals; prod with a file certificate; local with the dev snippet; the
-main-branch dev rendering passing. It merges before P1.36c, whose mounts fail C18 until this rule exists, so P1.36c
-depends on this step. `--env dev` fails on main today and keeps failing after this step: C2 refuses the four
+(`edge.ts:354`); so a writable bind, a wrong source or a missing one fails under dev, and any of the three `dev/`
+binds under prod or local fails (that red is this step's; P1.36c books only the compose side). **Transitional
+rule (SE-6 sequencing):** this step is trusted base and cannot edit `compose.dev.yaml` or `compose.dev.test.ts`
+(product), whose `edge_serves_the_repository_sites` (:660-682) runs `edgeSitesDir` on the real file, so under dev
+this step accepts exactly one of two shapes: today's single read-only `sites/` directory bind
+(`compose.dev.yaml:143`, the rule as it stands) or the three file binds above; a mix, a second directory, or
+anything else fails. P1.36c then switches compose and its test to the three file binds, and P1.38g (trusted, a
+tightening, no line) drops the directory shape under dev, before any deploy. That rule is part of the typed line's
+"C18 dev" change, since those mounts are how the file certificate is served, and the transitional acceptance is
+today's rule kept, not a new one. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file
+certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; each of the
+mount refusals (the mixed shape included); prod with a file certificate; local with the dev snippet; the main-branch
+dev rendering passing C18's mount rule and failing its `(tls)` rule. It merges before P1.36c, whose file binds fail
+C18 until this rule exists, so P1.36c depends on this step; its own PR stays green because the directory shape is
+still accepted. `--env dev` fails on main today and keeps failing after this step: C2 refuses the four
 services `compose.dev.yaml` builds (postgres, migrate, edge, web; `images.ts:39`) and takes the PDS and Newt images
 only from our mirror (P1.27s's list names both; P2.26b pins them) until P2.26b pins them from the
 lock, C3 and C4 need P2.26e's trusted root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`)
 until P2.26b, C21 needs P1.33a's retirement report (`host.ts:18-40`), and P1.38d refuses every `[to fill:` value
-until Alex replaces them. It first passes once P1.36b, P1.38e, P1.36c, P1.37v, P1.27s, P2.26e and P2.26b have
-merged, P1.33a's report is committed and the `[to fill:` values are replaced; P2.26b's lock needs the
+until Alex replaces them. It first passes once P1.36b, P1.38e, P1.36c, P1.38g, P1.37v, P1.27s, P2.26e and P2.26b
+have merged, P1.33a's report is committed and the `[to fill:` values are replaced; P2.26b's lock needs the
 digests from P1.27s's first run on main, so those two are a second sitting after the rest. The runbook gains the
 OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both staging names as SANs, no CA
 flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder owned by the deploy user,
@@ -16197,6 +16213,22 @@ flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 fold
 Threats (SE-1): a dev edge quietly switching to an issuer or a CA nobody rules on, a prod edge taking a file
 certificate under the dev rule, or the key readable by another service. Answered by the exact dev shape, the
 unchanged prod branch and the C9 mount test in P1.36c.
+
+---
+
+### P1.38g — Drop the dev directory bind from C18
+Tags: [SEC] trusted            Depends on: P1.36c
+Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
+edit 2026-10-20-adr-0031-no-login, Codex finding on #1137). A tightening, so nothing is needed from Alex.
+
+**What:** P1.38e's transitional rule accepts, under dev, either the single `sites/` directory bind or the three
+`dev/` file binds, because P1.38e (trusted) cannot edit `compose.dev.yaml` or `compose.dev.test.ts` (product,
+SE-6). Once P1.36c has switched compose and its test to the three file binds, this step removes the directory
+shape from C18's dev branch, so the end state is exactly ADR 0032 decision 3: three pinned read-only file binds,
+each required and used once, nothing else over `/etc/caddy`, no directory mount under dev. Reds: the directory
+bind under dev fails; the mixed shape fails; the three file binds pass; prod and local unchanged. Done when the
+real `compose.dev.yaml` passes C18's mount rule with the three binds and the directory fixture fails. It merges
+before any deploy: P1.34 depends on it, and the first `--env dev` on main that passes (P1.38e) counts it.
 
 ---
 

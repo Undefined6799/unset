@@ -1253,6 +1253,8 @@ flowchart TD
   P1_38e["P1.38e C18 accepts the dev file certificate"]
   P1_36b --> P1_38e
   P1_38f["P1.38f Blob methods denied on the public PDS name"]
+  P1_38g["P1.38g Dev directory bind dropped from C18"]
+  P1_36c --> P1_38g
   P1_38d["P1.38d [to fill: values refused under dev"]
   P1_36k["P1.36k Dev-only runtime keys refused outside local"]
   P1_36l["P1.36l Zero commit refused under dev"]
@@ -1456,16 +1458,17 @@ Arachnid application, and the Phase 1 exit.
 | P2.26c | Pull the edge bases from the mirror (trusted base; pulled forward, Q3 B) | [SEC] trusted | P2.26b | `phase-2.md` |
 | P2.26d | Drop the edge dual spelling from the lock test (pulled forward, Q3 B) | [SEC] | P2.26c | `phase-2.md` |
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
+| P1.37v | Run Newt in the dev compose stack | [SEC] | P1.36b, P1.36j | `phase-1.md` |
+| P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
+| P1.38e | Let C18 accept the dev file certificate | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
+| P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
+| P1.38g | Drop the dev directory bind from C18 | [SEC] trusted | P1.36c | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
-| P1.37v | Run Newt in the dev compose stack | [SEC] | P1.36b, P1.36j | `phase-1.md` |
-| P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
-| P1.38e | Let C18 accept the dev file certificate | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
-| P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.33p, P1.34, P1.36, P1.37, P1.37a, P1.15s | `phase-1.md` |
 
 ```mermaid
@@ -1497,6 +1500,7 @@ flowchart TD
   P1_38e --> P1_34
   P1_38d --> P1_34
   P1_38f --> P1_34
+  P1_38g --> P1_34
   P1_36j --> P1_34
   P1_33a --> P1_34
   P1_33d --> P1_34
