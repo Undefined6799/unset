@@ -16167,9 +16167,10 @@ services `compose.dev.yaml` builds (postgres, migrate, edge, web; `images.ts:38`
 lock, C3 and C4 need P2.26e's trusted root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`)
 until P2.26b, and C21 needs P1.33a's retirement report (`host.ts:18-40`). It first passes once P1.36b, P1.38e,
 P1.36c, P1.37v, P1.27s, P2.26e and P2.26b have merged and P1.33a's report is committed; P2.26b's lock needs the
-digests from P1.27s's first run on main, so those two are a second sitting after the rest. The runbook gains the OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both
-staging names as SANs, no CA flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder
-owned by the deploy user, `secrets.ts:4-8`) and the renewal date.
+digests from P1.27s's first run on main, so those two are a second sitting after the rest. The runbook gains the
+OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both staging names as SANs, no CA
+flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder owned by the deploy user,
+`secrets.ts:4-8`) and the renewal date.
 
 Threats (SE-1): a dev edge quietly switching to an issuer or a CA nobody rules on, a prod edge taking a file
 certificate under the dev rule, or the key readable by another service. Answered by the exact dev shape, the
