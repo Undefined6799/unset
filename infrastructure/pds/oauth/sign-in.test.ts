@@ -64,6 +64,8 @@ type World = {
   others?: readonly { did: string; pds: string }[];
   /** Our PDS's issuer as configured; PDS unless a test says otherwise. */
   ownIssuer?: string;
+  /** An authorization server our PDS's resource metadata names in place of itself. */
+  foreignServer?: string;
 };
 
 const TOKENS = { access_token: "at", refresh_token: "rt", token_type: "DPoP", sub: DID, expires_in: 3600 };
@@ -126,8 +128,12 @@ async function setup(world: World = {}) {
   const tokenBodies: URLSearchParams[] = [];
   const par = world.par ?? [() => json({ request_uri: REQUEST_URI, expires_in: 299 }, 201)];
   const box: StandIn = { pars, posts, tokenBodies, par, ...(world.token ? { token: world.token } : {}) };
-  const server = (url: URL, request: Request): Promise<Response> =>
-    world.server ? Promise.resolve(world.server(url)) : standIn(url, request, box);
+  const server = (url: URL, request: Request): Promise<Response> => {
+    if (world.foreignServer && url.pathname === "/.well-known/oauth-protected-resource") {
+      return Promise.resolve(json({ resource: url.origin, authorization_servers: [world.foreignServer] }));
+    }
+    return world.server ? Promise.resolve(world.server(url)) : standIn(url, request, box);
+  };
   /** Every host the client sent a request to, so a refusal can show it asked no outside server. */
   const hosts: string[] = [];
   const states = new Map<string, SavedState>();
@@ -224,6 +230,20 @@ describe("authorize", () => {
     expect(await run(other)).toEqual({ ok: false, reason: "account_elsewhere" });
     expect(pars).toHaveLength(0);
     expect(hosts).toEqual([]);
+  });
+
+  test("authorize_foreign_authorization_server_is_never_asked", async () => {
+    // P1.36v What-1 (verify-1131 N1): our PDS's resource metadata naming another authorization server never reaches
+    // that server: neither its metadata request nor PAR leaves. From a DID the sign-in is refused. From the chooser
+    // the library falls back to our URL as the issuer itself (oauth-resolver.js:31-44, 0.8.9), so PAR goes to ours.
+    const did = await setup({ foreignServer: "https://evil-as.example" });
+    expect(await did.run(DID)).toEqual({ ok: false, reason: "account_elsewhere" });
+    expect(did.pars).toHaveLength(0);
+    expect(did.hosts.filter((host) => host !== "pds-test.dev")).toEqual([]);
+    const chooser = await setup({ foreignServer: "https://evil-as.example" });
+    const result = await chooser.run(PDS);
+    expect(result.ok && result.url.origin).toBe(PDS);
+    expect(chooser.hosts.filter((host) => host !== "pds-test.dev")).toEqual([]);
   });
 
   test("authorize_issuer_is_ours_exactly", async () => {
@@ -371,13 +391,15 @@ describe("completeAuthorization", () => {
     // verifyIssuer (oauth-server-agent.js, 0.8.9) resolves the sub's DID document through our resolver, which refuses
     // an account on another PDS (P1.36v: the sub's PDS must still be ours), so the library revokes the grant.
     const other = `did:plc:${"b".repeat(24)}`;
-    const { started, complete, sessions, posts } = await setup({
+    const { started, complete, sessions, posts, logged } = await setup({
       others: [{ did: other, pds: "https://evil.example" }],
       token: () => json({ ...TOKENS, sub: other, scope: scopeString() }),
     });
     expect(await complete(await started())).toEqual({ ok: false, reason: "account_elsewhere" });
     expect(sessions.size).toBe(0);
     expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
+    // verify-1131 N5: the refusal is logged as a fixed kind, never the DID, handle or host (SE-7).
+    expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "account_elsewhere" } });
   });
 
   test("callback_second_login_replaces_the_set", async () => {

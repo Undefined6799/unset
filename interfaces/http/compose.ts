@@ -49,7 +49,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import { createAccountStore } from "./account.ts";
 import type { AppGate } from "./app-gate.ts";
 import { openApp } from "./app-gate.ts";
-import type { config } from "./config.ts";
+import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
@@ -72,8 +72,6 @@ import { errorPageHook, type PageDeps, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
-/** Our PDS's issuer, from PDS_HOSTNAME: the only server whose accounts sign in (P1.36v), with no switch to widen it. */
-const pdsIssuerOf = (cfg: WebConfig): string => `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
 
 export type Services = {
   server: ReturnType<typeof createServer>;

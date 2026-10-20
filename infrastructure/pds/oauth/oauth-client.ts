@@ -20,7 +20,7 @@ import {
 import type { Consistency, Did, IdentityNetwork, ResolvedDid } from "@unset/domains-identity";
 import { bool, type Field, str, withRule } from "@unset/shared-config";
 import type { Logger } from "@unset/shared-log";
-import { didResolverForOAuth, handleResolverForOAuth } from "./identity-resolvers.ts";
+import { AccountElsewhereError, didResolverForOAuth, handleResolverForOAuth } from "./identity-resolvers.ts";
 import { SCOPE_METADATA } from "./scopes.ts";
 
 export type SavedState = NodeSavedState;
@@ -179,6 +179,20 @@ export type OAuthClientOptions = {
 };
 
 /**
+ * The library's fetch, sending only to our PDS (P1.36v, book What-1). Every request it makes (resource and
+ * authorization-server metadata, PAR, token, revocation) goes to the issuer, so an authorization server our PDS's
+ * metadata names in place of itself is refused before it is asked anything. Identities resolve through the domain,
+ * not this fetch.
+ */
+function ownIssuerOnly(send: typeof fetch, ownIssuer: string): typeof fetch {
+  const origin = new URL(ownIssuer).origin;
+  return (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    return URL.parse(url)?.origin === origin ? send(input, init) : Promise.reject(new AccountElsewhereError());
+  };
+}
+
+/**
  * Builds the client; a failure fails boot. The library fires `onSessionDeleted` on every callback (it revokes the
  * previous set first, even when there was none) and on sign-out, so the hook writes nothing and ends no app session:
  * that would sign a member out of every other browser at each login (P2.04 step 7). It logs the reason word only.
@@ -196,7 +210,7 @@ export async function createOAuthClient(options: OAuthClientOptions) {
     stateStore: options.stateStore,
     sessionStore: options.sessionStore,
     requestLock: options.requestLock,
-    fetch: options.fetch,
+    fetch: ownIssuerOnly(options.fetch, options.ownIssuer),
     handleResolver: handleResolverForOAuth(options.network),
     didResolver: didResolverForOAuth(options.resolveDid, options.ownIssuer),
     allowHttp: options.allowHttp,

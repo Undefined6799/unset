@@ -146,7 +146,10 @@ export async function completeAuthorization(
     completed = await client.callback(query);
   } catch (error) {
     const reason = callbackReason(error);
-    if (reason === "failed") log.warn("oauth.callback_failed", { kind: kindOf(error) });
+    // A grant for an account on another PDS is a refusal worth seeing, logged by its fixed kind only (SE-7).
+    if (reason === "failed" || reason === "account_elsewhere") {
+      log.warn("oauth.callback_failed", { kind: reason === "failed" ? kindOf(error) : reason });
+    }
     return { ok: false, reason };
   }
   const { session, state } = completed;
