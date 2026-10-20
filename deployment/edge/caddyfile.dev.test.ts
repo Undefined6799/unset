@@ -22,6 +22,8 @@ import {
   CaddyfileError,
   DEV_APP,
   DEV_EDGE_ADDRESS,
+  DEV_LISTENER,
+  DEV_PROXY_ADDRESS,
   DEV_TLS,
   type Directive,
   type EdgeFiles,
@@ -252,7 +254,7 @@ describe("dev edge (P1.36b)", () => {
     });
     expect((limits.appRateLimitZones as { app_global: { events: number } }).app_global.events).toBeLessThan(1500);
     for (const zone of zones) {
-      expect([value(zone, "key"), value(zone, "ipv6_prefix")], zone.args[0]).toEqual([["{remote_host}"], ["64"]]);
+      expect([value(zone, "key"), value(zone, "ipv6_prefix")], zone.args[0]).toEqual([["{client_ip}"], ["64"]]);
     }
     const matchers = (name: string) =>
       zones
@@ -386,5 +388,89 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
     for (const other of ["/oauth/callback", "/oauth-client-metadata.jsonx", "/x/oauth/jwks.json", "/"]) {
       expect(files.test(other), other).toBe(false);
     }
+  });
+});
+
+// P1.36j (ADR 0030 Decision 2): the dev listener trusts Newt's address alone and reads X-Forwarded-For right to left;
+// nothing else trusts a proxy, every zone keys on {client_ip}, and outside dev no site binds the dev address.
+describe("dev edge trusts only Newt (P1.36j)", () => {
+  const CADDYFILE = read("Caddyfile");
+  const caddyfile = (from: string, to: string) => {
+    expect(CADDYFILE, from).toContain(from);
+    return devProblems({ Caddyfile: CADDYFILE.replace(from, to) });
+  };
+  const TRUST = "trusted_proxies static 10.250.37.2/32";
+  const NOT_EXACT = `${DEV_LISTENER} does not trust exactly ${DEV_PROXY_ADDRESS}`;
+
+  test("trusted_proxy_is_newt_alone", () => {
+    expect(DEV_LISTENER).toBe(`${DEV_EDGE_ADDRESS}:443`);
+    expect(devProblems()).toEqual([]);
+    // A second address, a range, a wildcard, the private ranges: each fails.
+    for (const wider of [
+      `${TRUST} 10.250.37.4/32`,
+      "trusted_proxies static 10.250.37.0/29",
+      "trusted_proxies static 0.0.0.0/0",
+      "trusted_proxies static private_ranges",
+      "trusted_proxies static 10.250.37.3/32",
+    ]) {
+      expect(caddyfile(TRUST, wider), wider).toEqual([NOT_EXACT]);
+    }
+    expect(caddyfile(`\t\t${TRUST}\n`, "")).toEqual([NOT_EXACT]);
+    expect(caddyfile(`\t\t${TRUST}\n`, `\t\t${TRUST}\n\t\t${TRUST}\n`)).toEqual([NOT_EXACT]);
+    expect(caddyfile("\t\ttrusted_proxies_strict\n", "")).toEqual([`${DEV_LISTENER} does not read right to left`]);
+    expect(caddyfile("client_ip_headers X-Forwarded-For", "client_ip_headers X-Forwarded-For X-Real-IP")).toEqual([
+      `${DEV_LISTENER} reads a header other than X-Forwarded-For`,
+    ]);
+    expect(caddyfile("\t\tclient_ip_headers X-Forwarded-For\n", "")).toEqual([
+      `${DEV_LISTENER} reads a header other than X-Forwarded-For`,
+    ]);
+  });
+
+  test("no_other_server_trusts_a_proxy", () => {
+    expect(caddyfile("\tservers {\n", `\tservers {\n\t\t${TRUST}\n`)).toEqual([
+      "the shared servers block trusts a proxy",
+    ]);
+    expect(caddyfile(`servers ${DEV_LISTENER} {`, "servers :443 {")).toEqual([
+      "servers :443: only 10.250.37.3:443 may have its own options",
+      "not one shared and one 10.250.37.3:443 servers block",
+    ]);
+    expect(caddyfile(`servers ${DEV_LISTENER} {`, `servers ${DEV_EDGE_ADDRESS}:80 {`)).toEqual([
+      `servers ${DEV_EDGE_ADDRESS}:80: only 10.250.37.3:443 may have its own options`,
+      "not one shared and one 10.250.37.3:443 servers block",
+    ]);
+    expect(caddyfile("\t\t\twrite 135s\n", "\t\t\twrite 300s\n")).toEqual([
+      `${DEV_LISTENER} does not keep the shared timeouts`,
+    ]);
+  });
+
+  test("every_zone_keys_on_the_client_address", () => {
+    const limits = read("snippets/ratelimit.caddy");
+    const keys = limits.match(/^\t+key \{client_ip\}$/gm) ?? [];
+    expect(keys.length).toBe(limits.match(/^\t+zone /gm)?.length);
+    for (const [zone, at] of [
+      ["session", limits.indexOf("key {client_ip}")],
+      ["app_global", limits.lastIndexOf("key {client_ip}")],
+    ] as const) {
+      const unkeyed = `${limits.slice(0, at)}key {client_ip}x${limits.slice(at + "key {client_ip}".length)}`;
+      expect(() => devProblems({ "snippets/ratelimit.caddy": unkeyed }), zone).toThrow(CaddyfileError);
+      const dropped = `${limits.slice(0, limits.lastIndexOf("\n", at))}${limits.slice(limits.indexOf("\n", at))}`;
+      expect(devProblems({ "snippets/ratelimit.caddy": dropped }), zone).toEqual([
+        `the ${zone} zone is not keyed on {client_ip}`,
+      ]);
+    }
+  });
+
+  test("outside_dev_no_site_binds_the_dev_address", () => {
+    const edgeDir = devTree({
+      "sites/pds.caddy": read("sites/pds.caddy").replace(
+        "{$PDS_HOST} {\n",
+        `{$PDS_HOST} {\n\tbind ${DEV_EDGE_ADDRESS}\n`,
+      ),
+    });
+    const enabled = join(edgeDir, "sites", "enabled");
+    cpSync(join(edgeDir, "sites", "pds.caddy"), join(enabled, "pds.caddy"), { recursive: true });
+    expect(edgeSiteProblems(readEdgeConfig(edgeDir, enabled, ENV, FILES))).toEqual([
+      "{$PDS_HOST}: bound to the dev edge address outside dev",
+    ]);
   });
 });

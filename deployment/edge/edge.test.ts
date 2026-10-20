@@ -182,7 +182,7 @@ describe("edge config", () => {
     expect(memoryOnlyProblems(config())).toEqual([]);
     // Every zone is keyed by the client address, IPv6 by its /64.
     for (const zone of zones()) {
-      expect(zone.key, zone.name).toBe("{remote_host}");
+      expect(zone.key, zone.name).toBe("{client_ip}");
       expect(zone.ipv6Prefix, zone.name).toBe("64");
     }
     // A fixture with shared state, storage or a metrics label fails.
@@ -243,7 +243,7 @@ describe("edge config", () => {
     ]);
     const forwarded = limits.replace(
       /\t\tdisable_metrics\n\t\}\n/,
-      "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {remote_host}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
+      "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {client_ip}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
     );
     expect(forwarded).not.toBe(limits);
     expect(siteProblems({ "snippets/ratelimit.caddy": forwarded })).toEqual([
@@ -319,7 +319,12 @@ describe("edge config", () => {
   test("edge_admin_api_off_in_config", () => {
     expect(read("Caddyfile")).toMatch(/^\tadmin off$/m);
     expect(read("Caddyfile")).toMatch(/^\tpersist_config off$/m);
-    expect(config()).not.toMatch(/trusted_proxies/);
+    // The one trust is the dev listener's (P1.36j); caddyfile.dev.test.ts holds its reds.
+    expect(
+      config()
+        .match(/^\s*(?:trusted_proxies|client_ip_headers).*$/gm)
+        ?.map((line) => line.trim()),
+    ).toEqual(["trusted_proxies static 10.250.37.2/32", "trusted_proxies_strict", "client_ip_headers X-Forwarded-For"]);
   });
 });
 
