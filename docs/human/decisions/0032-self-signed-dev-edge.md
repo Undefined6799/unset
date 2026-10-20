@@ -30,11 +30,13 @@ ADR 0028 and the Phase 5 records.
 
 1. **The certificate.** Under dev each edge site serves one self-signed leaf certificate for both staging names
    (`staging.unset.sh`, `staging.unset.ac` as SANs), from PEM files, through a dev `(tls)` snippet
-   `deployment/edge/dev/tls.caddy` of exactly the local shape, `tls <cert_file> <key_file>`
-   (`local/tls.caddy:7-8`), mounted read-only over `snippets/tls.caddy` by the dev compose file only. No
-   issuer, no ACME account, no DNS token, no CA: nobody is asked to trust the certificate, and nothing installs
-   it anywhere. The key is a C9 file secret mounted only into the edge, with a test that no other service mounts
-   it; the certificate is public by nature. Validity is at most 825 days; the runbook generates the pair on the
+   `deployment/edge/dev/tls.caddy` of exactly the local shape (`local/tls.caddy:7-8`), reading
+   `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`; the snippet is mounted read-only over
+   `snippets/tls.caddy` by the dev compose file only, and both files are C9 file secrets under `/run/secrets/`,
+   mounted only into the edge, with a test that no other service mounts them (the key is secret; the certificate
+   is public by nature but travels the same way, so nothing certificate-shaped sits in the checkout). No issuer,
+   no ACME account, no DNS token, no CA: nobody is asked to trust the certificate, and nothing installs it
+   anywhere. Validity is at most 825 days; the runbook generates the pair on the
    staging host with one command (OpenSSL from the host's packages, parameters fixed in the runbook: P-256, the
    two SANs, no CA flag) and regenerates it the same way; the deploy check fails 30 days before expiry.
 2. **What it buys, and does not.** The bytes between Newt and the edge, two containers on the same host on the
@@ -46,12 +48,14 @@ ADR 0028 and the Phase 5 records.
    from configuration; both sites keep the security headers.
 3. **C18 under dev** (P1.38e, a loosening of C18's rule that the served `(tls)` must read the same as
    `snippets/tls.caddy`, so it needs Alex's own typed line, separate from this record's): under `--env dev` the
-   served `(tls)` must read the same as `dev/tls.caddy`, which must be exactly `tls <cert_file> <key_file>` with
-   both paths under the dev mount; any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https`
-   global, any site without `import tls`, any `:80` site in the configuration, and any published port under dev
-   fail. Under prod C18 is
+   served `(tls)` must read the same as `dev/tls.caddy` (in the dev mount), which must be exactly
+   `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`; any `tls internal`, any acme issuer, any
+   `local_certs`, `pki` or `auto_https` global, any site without `import tls`, any `:80` site in the
+   configuration, any certificate path outside `/run/secrets/`, and any published port under dev fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
+   P1.38e merges after P1.36c, which mounts the snippet and the secrets, so `--env dev` never fails on main
+   between the two.
 4. **Edge shape otherwise as 0031 Decision 2:** bound only to the edge's address on `newt_edge`, no published
    port, no `:80` site in the configuration (replacing 0031's "no `:443` site"). Caddy still opens `:80` on that
    address at run time for its automatic redirect to `https` (Caddy v2.11.7 `caddyhttp/autohttps.go:198-212`
@@ -95,7 +99,7 @@ ADR 0028 and the Phase 5 records.
 - The private key never enters the repo, CI, logs or a message; the runbook command writes it with mode 0600
   under the C9 owner, and the preflight secret predicate refuses a literal key anywhere else.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
-  device; a check asserts the certificate is a leaf (no CA flag) and that no service names `NODE_EXTRA_CA_CERTS`
-  (0031 Decision 3's red).
+  device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs,
+  and P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS` (0031 Decision 3).
 - Acceptance line: "yes accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
   docs/human/decisions/0032-self-signed-dev-edge.md".
