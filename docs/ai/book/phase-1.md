@@ -685,7 +685,7 @@ flowchart LR
   P1_37v["P1.37v Newt in the dev compose stack"]
   P1_36j --> P1_37v
   P1_37v --> P1_36i
-  P1_38e["P1.38e C18 accepts the plain-http dev edge"]
+  P1_38e["P1.38e C18 accepts the dev file certificate"]
   P1_36b --> P1_38e
   P1_38f["P1.38f blob methods denied on the public PDS name"]
   P1_38d["P1.38d [to fill: values refused under dev"]
@@ -8831,9 +8831,10 @@ his acceptance of ADR 0025 (P1.35y), since the exact name comes from it. Alex ty
 21:05:51Z, after accepting ADR 0031.
 
 **ADR 0031 (accepted 2026-10-20 21:04:02Z; book edit 2026-10-20-adr-0031-no-login) reshapes this step.** P1.36e and
-P1.36o leave its Depends: the dev app site has no TLS. Under dev both edge sites listen on plain `http`, bound only to
-the edge's address on the internal `newt_edge` network, no published port, no `:443` site, security headers on both
-(decision 2; the bind-address red rides P1.37v). The step also carries, all tightenings that need no card and no line
+P1.36o leave its Depends: no DNS-01 and no Let's Encrypt at the dev edge. Under dev both edge sites serve a
+self-signed leaf from files (ADR 0032, which supersedes decision 2's plain `http`), bound only to the edge's address
+on the internal `newt_edge` network, no published port, no `:80` site, security headers on both (the bind-address
+red rides P1.37v). The step also carries, all tightenings that need no card and no line
 (architecture 13:18Z): the `405` with `Allow: GET, HEAD` for any method but GET and HEAD on
 `/oauth-client-metadata.json` and `/oauth/jwks.json` (ADR 0030:51-53); `X-Robots-Tag: noindex, nofollow` on every
 response of both names, with no `robots.txt` `Disallow` beside it; and three per-client zones on the app site, keyed on
@@ -8850,29 +8851,31 @@ accepts `APP_HOST` only as ADR 0025's accepted app name, one exact string (not a
 until a ruling of its own. Local is unchanged. The PDS site's header and guard rules apply to the app site (its
 zones do not, above), it has no TLS under dev (ADR 0031, decision 2), and the edge-only PDS neighbour rule (P1.34d
 option C) applies under dev as P1.36i now reads it. Reds: any other host under dev, any other upstream under dev, and
-either one under prod. Alex's Pangolin reaches the edge through Newt by plain `http` on the edge's `newt_edge`
-address; no port is published (P1.37v; ADR 0031, decision 2).
+either one under prod. Alex's Pangolin reaches the edge through Newt over `https` to the self-signed leaf on the
+edge's `newt_edge` address, without verifying it (0030:71-74); no port is published (P1.37v; ADR 0032).
 
 **Taken over from P1.36e and P1.36o (ADR 0031):** those two steps built the dev mode this step relies on, and they
 are production work now, so this step builds the parts it needs. The reader gains the `dev` edge mode
 (`caddyfile.ts:429` is `"shipped" | "local"` today, and `LOCAL_ONLY` refuses `{$APP_HOST}` outside `local/`, :435)
-with the same `edgeDir/dev/` containment P1.36e described, holding the dev app site and nothing for TLS; the reader
-refuses a `dev/` directory under prod and local (P1.36o's refusals, now in the reader's own tests under
+with the same `edgeDir/dev/` containment P1.36e described, holding the dev app site and the dev `(tls)` snippet;
+the reader refuses a `dev/` directory under prod and local (P1.36o's refusals, now in the reader's own tests under
 `deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose `dev/` mount itself is P1.36c's.
-Both dev sites are plain `http`: under dev the reader renders `sites/pds.caddy` without its `import tls` (the
-shipped file keeps the import for prod; the dev rendering drops it, with a red that the dev output names no `tls`
-directive and no `:443` site) and the dev app site never carries one. The PDS site riding plain `http` under dev is
-ADR 0031 decision 2 itself, approved by Alex's acceptance of the record; the app site is under his P1.36b line.
+TLS under dev follows ADR 0032 (Proposed; it supersedes ADR 0031 decision 2's plain `http` after Alex's
+2026-10-20 21:42:50Z choice): both dev sites keep `import tls`, and `dev/tls.caddy` defines `(tls)` as exactly
+`tls <cert_file> <key_file>`, the local stack's shape (`local/tls.caddy:7-8`), pointing at a self-signed leaf for
+both staging names and its key under the dev mount; no issuer, no ACME, no `tls internal`, no CA. Reds: the dev
+rendering names no acme issuer and no `:80` site; a `dev/tls.caddy` of any other shape fails. The PDS site riding
+that certificate is ADR 0032's decision, approved by its acceptance; the app site is under his P1.36b line.
 **C18 is not changed here, and it blocks the first deploy until P1.38e lands:** on main C18 runs under `--env dev`
 (`deployment/preflight/checks/edge.ts:400-401`, then `deployedEdgeZones`, then `certificateProblems` at :152-153)
-and fails every site that does not import `tls` (:236-245), so `dev:up` refuses these plain-`http` sites until
-P1.38e loosens C18's import-`tls` rule for dev, which needs Alex's own typed line (ADR 0031, decision 2).
+and requires the served `(tls)` to read the same as `snippets/tls.caddy` (:200-206, :223), so `dev:up` refuses the
+dev `(tls)` until P1.38e loosens that rule for dev, which needs Alex's own typed line (ADR 0032, decision 3).
 
-**The reds of Decision 2 (ADR 0031 Consequences), in `deployment/edge` tests:** no `:443` site under dev; prod
-refuses a plain-`http` site; headers present on both sites. The bind address and the absent port ride P1.37v, which
-owns the compose side; the "scheme never taken from the request" red is the app's and the PDS configuration's, in
-P1.36c. The Decision 4 blob denies on `staging.unset.ac` are their own step, P1.38f, so this step stays under 800
-changed lines.
+**The edge reds of ADR 0031 decision 2 as ADR 0032 restates them, in `deployment/edge` tests:** no `:80` site
+under dev; prod refuses a file certificate; headers present on both sites. The bind address and the absent port
+ride P1.37v, which owns the compose side; the "scheme never taken from the request" red is the app's and the PDS
+configuration's, in P1.36c. The Decision 4 blob denies on `staging.unset.ac` are their own step, P1.38f, so this
+step stays under 800 changed lines.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an app site served under dev
 with a host or upstream that isn't the ruled one. Answered by exact values and prod refused (book edit
@@ -8887,7 +8890,9 @@ edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What (the DNS-token parts move to production with P1.36e under ADR 0031, book edit 2026-10-20-adr-0031-no-login;
 the app-site mounts and the allowlist entries stay in this step; it also takes the compose `dev/` mount that P1.36o
-would have added, with the preflight refusal of a `dev/` mount under prod and local, and the
+would have added (the dev `(tls)` snippet over `snippets/tls.caddy`, the self-signed certificate, and its key as a
+C9 file secret mounted only into the edge with a test that no other service mounts it; ADR 0032 decision 1), with
+the preflight refusal of a `dev/` mount under prod and local, and the
 red that the app's and the PDS's scheme never comes from the request, cookies `Secure` and every public URL `https`
 from configuration, ADR 0031 decision 2):** the DNS token is a C9 file secret, mounted only
 into the edge, under the C9 owner and mode rules; a test asserts that no other service mounts it. The compose wiring
@@ -15307,17 +15312,18 @@ VerifyEmail.tsx:34 link our PDS for every user, which is correct while P1.36v li
 **Staging opening (architecture 07:10Z, word for word; book edit 2026-10-19-codex-1063-batch66):**
 - No inbound router forwards, no DDNS, and no public ports on the edge host.
 - Public DNS for staging.unset.sh and staging.unset.ac is A/AAAA to Pangolin's public address, plus CAA per ADR 0025.
-- The edge has no certificate under dev: Pangolin terminates TLS with its own Let's Encrypt certificate and reaches
-  our edge over plain `http` through Newt (ADR 0031, decision 2, accepted 2026-10-20 21:04:02Z; book edit
-  2026-10-20-adr-0031-no-login). DNS-01 at the edge (P1.36d, P1.36e, ADR 0028) moves to production.
+- Pangolin terminates the internet's TLS with its own Let's Encrypt certificate and reaches our edge through Newt
+  over `https` to a self-signed leaf certificate nobody is asked to trust (ADR 0032, Proposed, superseding ADR
+  0031 decision 2's plain `http`; Alex 2026-10-20 21:42:50Z; book edit 2026-10-20-adr-0031-no-login). DNS-01 at
+  the edge (P1.36d, P1.36e, ADR 0028) moves to production.
 - The only inbound path is Pangolin through Newt. Both names are public resources: no Pangolin login, no rules and
   no bypass paths (Alex, 2026-10-20 13:00:31Z; ADR 0031, decision 1). The invite code is the gate.
 - The dev-preflight resolution check (P1.36u) passes before opening.
 - Before either resource is created: P1.37v, P1.36j and P1.36b are merged and deployed (the per-client keys, Newt
   as the only trusted proxy, and the three app zones; ADR 0031, decisions 1 and 3), and Alex has replaced every
   `[to fill: …]` legal and `security.txt` value in `deployment/compose.dev.yaml:208-212`; P1.38d's preflight red
-  under dev refuses a `[to fill:` value (a tightening, third lane). P1.38e's C18 change (Alex's line) comes first
-  too, or `dev:up` refuses the plain-`http` edge.
+  under dev refuses a `[to fill:` value (a tightening, third lane). P1.38e's C18 change (Alex's line, after ADR
+  0032's acceptance) comes first too, or `dev:up` refuses the dev edge.
 The 80/443 forwards, DDNS, TLS-ALPN and CGNAT text moved verbatim to P5.02b, which applies only if production is
 exposed directly.
 
@@ -15365,8 +15371,8 @@ Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
 **Moved from P1.34, public gates** (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5): P1.34's Done-when
 is the private names and dev-root certificates, the read-only dev-stack check (describeServer, health) and the C-checks;
 every public gate and its evidence lives here.
-- The edge has no certificate under dev (ADR 0031, decision 2); Pangolin's Let's Encrypt certificate is the only
-  one on the staging names. DNS-01 at the edge (P1.36d, ADR 0028) is production work.
+- The edge serves a self-signed leaf under dev (ADR 0032); Pangolin's Let's Encrypt certificate is the only one the
+  internet sees. DNS-01 at the edge (P1.36d, ADR 0028) is production work.
 - `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
   bypass key or IPs), no public edge ports (Pangolin through Newt only). Mail: real SMTP from the start (no Mailpit,
   book edit 2026-10-07-no-mailpit); the provider is set up before P1.34 — Notes, SMTP provider.
@@ -15595,7 +15601,7 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   gate (Alex, 2026-10-20 13:00:31Z; ADR 0031, accepted 21:04:02Z; book edit 2026-10-20-adr-0031-no-login). Because
   this deploy is reachable from the internet from its first minute, ADR 0031's preconditions sit here, not only in
   P1.33p: P1.37v, P1.36j, P1.36b, P1.38e and P1.38f (client-address keys, Newt the only trusted proxy, the three app
-  zones, the `405` rule, the noindex header, C18 accepting the plain-`http` dev edge, the blob denies) are merged and
+  zones, the `405` rule, the noindex header, C18 accepting the dev file certificate, the blob denies) are merged and
   deployed, and Alex has replaced every
   `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` (P1.38d's preflight red refuses them under dev),
   before either Pangolin resource is created. It moves the
@@ -15618,10 +15624,10 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   For staging TLS, the `int.unset.sh` names and the dev root are replaced (its PLC and no-seed rules stay) by
   architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
   the names are ADR 0025's `staging.unset.*`, never `int.unset.sh` or the dev root. ADR 0031 (accepted 2026-10-20
-  21:04:02Z; book edit 2026-10-20-adr-0031-no-login) then replaces the certificate and the login: the edge has no
-  certificate under dev and serves plain `http` to Newt on the internal bind (P1.36b, P1.37v), Pangolin's Let's
-  Encrypt certificate is the only one on the names, and DNS-01 through a delegated validation zone (P1.36d, P1.36e,
-  P1.36o, P1.36c's token parts) is production work. `staging.unset.sh` and `staging.unset.ac` are public resources
+  21:04:02Z; book edit 2026-10-20-adr-0031-no-login) then replaces the certificate and the login: the edge serves a
+  self-signed leaf from files on the internal bind (ADR 0032, Proposed, superseding 0031 decision 2; P1.36b,
+  P1.36c, P1.37v), Pangolin's Let's Encrypt certificate is the only one the internet sees, and DNS-01 through a
+  delegated validation zone (P1.36d, P1.36e, P1.36o, P1.36c's token parts) is production work. `staging.unset.sh` and `staging.unset.ac` are public resources
   at Pangolin with no login, no rules and no bypass paths (Alex, 2026-10-20 13:00:31Z, superseding his "Keep
   password" tap of 2026-10-19 02:56:58Z); the invite code and P1.36v's own-PDS sign-in are the gate. Public DNS
   points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
@@ -16100,8 +16106,9 @@ the scope a builder follows.
    address fixed and inside the subnet; the edge's bind address is its `newt_edge` address and no port is published
    (ADR 0031, decision 2); the dev zones key on the client address and the trusted proxy equals Newt's
    `ipv4_address` (decision 3; the edge side is P1.36j's).
-5. ADR 0031's Compliance deploy check: from the `newt_edge` network, the edge answers plain `http` on its bound
-   address and refuses `:443`; run after the first deploy and every edge change, as a runbook command.
+5. ADR 0031's Compliance deploy check as ADR 0032 restates it: from the `newt_edge` network, the edge answers
+   `https` with the self-signed leaf on its bound address and refuses `:80`, and the certificate expires more than
+   30 days out; run after the first deploy and every edge change, as a runbook command.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
 beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
@@ -16121,23 +16128,27 @@ first Pangolin resource is created). Reds: a placeholder under dev fails; under 
 
 ---
 
-### P1.38e — Let C18 accept the plain-`http` dev edge
+### P1.38e — Let C18 accept the dev file certificate
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
-Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0031 decision 2 (book
-edit 2026-10-20-adr-0031-no-login). **A loosening of C18's import-`tls` rule, so it needs Alex's typed line:**
-"yes P1.38e deployment/preflight/checks/edge.ts C18 dev plain http no TLS at our edge", quoted with its time in
+Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
+edit 2026-10-20-adr-0031-no-login). **A loosening of C18's rule that the served `(tls)` reads the same as
+`snippets/tls.caddy`, so it needs Alex's typed line, after he accepts ADR 0032:** "yes P1.38e
+deployment/preflight/checks/edge.ts C18 dev self-signed file certificate at our edge", quoted with its time in
 the PR body.
 
-**What:** today C18 runs under `--env dev` (`edge.ts:400-401`, `certificateProblems` at :152-153) and fails every
-site that does not import `tls` (:236-245), so `dev:up` refuses the edge P1.36b renders. Under dev C18 instead
-checks exactly ADR 0031's shape: every site plain `http`, bound only to the edge's `newt_edge` address, no `:443`
-site, no `tls` directive, no published port; any `tls` directive, any `:443` site or any published port under dev
-fails. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a plain-`http` site under prod
-fails. Local is unchanged. Reds: each of the dev refusals; prod with a plain-`http` site; the main-branch dev
-rendering passing.
+**What:** today C18 runs under `--env dev` (`edge.ts:400-401`, `certificateProblems` at :152-153) and fails any
+site whose served `(tls)` differs from `snippets/tls.caddy` (:200-206, :223), so `dev:up` refuses the edge P1.36b
+renders. Under dev C18 instead requires the served `(tls)` to read the same as `dev/tls.caddy`, which must be
+exactly `tls <cert_file> <key_file>` with both paths under the dev mount; any `tls internal`, any acme issuer, any
+`local_certs`, `pki` or `auto_https` global, any site without `import tls`, any `:80` site and any published port
+under dev fail. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file certificate under
+prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; prod with a file
+certificate; the main-branch dev rendering passing. The runbook gains the OpenSSL command that writes the leaf
+and key (P-256, both staging names as SANs, no CA flag, at most 825 days, key mode 0600) and the renewal date.
 
-Threats (SE-1): a dev edge quietly terminating TLS with a certificate nobody rules on, or a prod edge dropping TLS
-under the dev rule. Answered by the exact dev shape and the unchanged prod branch.
+Threats (SE-1): a dev edge quietly switching to an issuer or a CA nobody rules on, a prod edge taking a file
+certificate under the dev rule, or the key readable by another service. Answered by the exact dev shape, the
+unchanged prod branch and the C9 mount test in P1.36c.
 
 ---
 

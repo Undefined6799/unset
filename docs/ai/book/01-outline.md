@@ -1249,7 +1249,7 @@ flowchart TD
   P1_37v["P1.37v Newt in the dev compose stack"]
   P1_36j --> P1_37v
   P1_37v --> P1_36i
-  P1_38e["P1.38e C18 accepts the plain-http dev edge"]
+  P1_38e["P1.38e C18 accepts the dev file certificate"]
   P1_36b --> P1_38e
   P1_38f["P1.38f Blob methods denied on the public PDS name"]
   P1_38d["P1.38d [to fill: values refused under dev"]
@@ -1463,7 +1463,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.37v | Run Newt in the dev compose stack | [SEC] | P1.36b, P1.36j | `phase-1.md` |
 | P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
-| P1.38e | Let C18 accept the plain-`http` dev edge | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
+| P1.38e | Let C18 accept the dev file certificate | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.33p, P1.34, P1.36, P1.37, P1.37a, P1.15s | `phase-1.md` |
 
