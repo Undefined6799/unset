@@ -68,15 +68,20 @@ production name is a Phase 5 decision.
    `login` bucket of 10 at once refilled at 10 a minute (`interfaces/http/limits.ts:12`) on `POST /login`,
    `/oauth/callback` and `/verify-email/reconsent`, and one `default` bucket of 60 refilled at 5 a second. Behind
    the login that was harmless; public, one stranger could lock every tester out of sign-in, and P1.37v alone
-   does not change it. So the dev edge gains a per-client zone on exactly those three app routes, keyed on the
-   client address behind Newt like Decision 3's zones, with events 5 per 5 minutes as the starting value (below
-   web's shared bucket, so no single client can drain it), in P1.36b beside its `405` rule, with a red pinning the
-   zone's matcher, key and values to `limits.json`. That zone, P1.36j (the trusted-proxy change) and P1.37v are
-   preconditions of creating either resource at Pangolin. What stays shared, and is a cost Alex accepts with this
-   record: web's own `login` and `default` buckets, which a crowd of distinct clients can still exhaust together;
-   web keying on the client address the edge forwards would end that and is a loosening of web's trust settings
-   (0025:203-205, "web's own trust settings are unchanged"), so it is a later step on its own typed line, not part
-   of this record. What is lost, with nothing replacing it today: the per-tester Pangolin identity, a second
+   does not change it. So the dev edge gains two per-client zones on the app site, keyed on the client address
+   behind Newt like Decision 3's zones, in P1.36b beside its `405` rule, each with a red pinning the matcher, key
+   and values to `limits.json`: a sign-in zone matching `POST /login`, `POST /verify-email/reconsent` and
+   `/oauth/callback` on any method (the callback arrives as a `GET` redirect), events 5 per 5 minutes as the
+   starting value, below web's shared bucket so no single client can drain it; and a global zone with no matcher,
+   as the PDS site has (`ratelimit.caddy:9-10`), sized from the app's measured page load plus headroom, so every
+   public app route has a per-client limit (architecture, 2026-10-20 13:18Z). Those zones, P1.36j (the
+   trusted-proxy change) and P1.37v are preconditions of creating either resource at Pangolin. What stays shared,
+   and is a cost Alex accepts with this record: web's own `login` bucket (`limits.ts:12`) and `default` bucket are
+   one bucket for everyone, so many addresses, each under the edge limit, can still drain them together and block
+   sign-in for every tester. That is an availability cost on staging, not an authorization bypass, and it fails
+   closed. Web keying on the client address the edge forwards would end it and is a loosening of web's trust
+   settings (0025:203-205, "web's own trust settings are unchanged"), so it is a later step on its own typed line,
+   not part of this record. What is lost, with nothing replacing it today: the per-tester Pangolin identity, a second
    credential in front of the app. The app's audit log stores no network address
    (`infrastructure/postgres/migrations/0008_audit.sql:50`) and has no sign-in action
    (`infrastructure/audit/actions.ts:5-21`); a signed-in DID exists only in `app.session` for the session's
@@ -84,7 +89,8 @@ production name is a Phase 5 decision.
    audit action (DID only, never an address) is follow-up work for the audit owner, not a precondition. Two more
    things a public app name exposes: search engines, since no app page sends `noindex` and there is no
    `robots.txt` route, so under dev the edge adds `X-Robots-Tag: noindex, nofollow` on every response of both
-   names (a tightening, in P1.36b, with a red; staging is never indexed, production decides for itself); and the
+   names (a tightening, in P1.36b, with a red; no `robots.txt` `Disallow` beside it, which would stop crawlers
+   from ever fetching the header; staging is never indexed, production decides for itself); and the
    legal pages and `security.txt`, which ship "[to fill: …]" placeholders (`deployment/compose.dev.yaml:210-212`)
    that Alex fills in the runbook before the resource is created, with a preflight red under dev that refuses a
    `[to fill:` value (a tightening for the preflight lane). `POST /login` also lets a stranger make web resolve any
@@ -188,7 +194,8 @@ production name is a Phase 5 decision.
   (`docs/ai/book/phase-1.md:15282-15287`, `:15301-15308`, threat E at `:15324-15325`), in P1.34 (`:15516`,
   `:15537-15540`) and in P1.36i's rationale (`:8922-8925`); the plan thread rewrites them in one book edit,
   `unset-plan/book-edits/2026-10-20-adr-0031-no-login.md`, before the first deploy, and P1.36b's scope gains the
-  app zone and the `X-Robots-Tag` header of Decision 1. ADR 0001 gets an appended entry at acceptance, never a
+  two app zones and the `X-Robots-Tag` header of Decision 1 (all tightenings inside an edge step: no card and no
+  line, architecture 13:18Z). ADR 0001 gets an appended entry at acceptance, never a
   rewrite.
 - Every app-to-PDS call leaves the host and returns through Pangolin's WireGuard tunnel to Newt; latency and the
   shared rate-limit bucket of Decision 3 are accepted costs.
@@ -217,6 +224,6 @@ production name is a Phase 5 decision.
 - ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from the clauses of
   0025 and 0030 listed at the top of Decision, for dev only. The C18 change needs Alex's own typed line, separate
   from this record's. Decision 3's key change (P1.36j's trusted proxy and P1.37v's Newt, 0025:205), with
-  Decision 1's app zone and `X-Robots-Tag` in P1.36b, land before either name is created at Pangolin.
+  Decision 1's app zones and `X-Robots-Tag` in P1.36b, land before either name is created at Pangolin.
 - Acceptance line: "yes accept ADR 0031 staging public through Pangolin no login no certificate at our edge
   docs/human/decisions/0031-public-staging-pds.md".
