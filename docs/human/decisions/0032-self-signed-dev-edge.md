@@ -1,6 +1,7 @@
 # 0032 — Self-signed certificate at the dev edge behind Pangolin
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-10-20 21:54:54Z (the acceptance line below, typed in the project chat against this
+record at ae9d8e7). From here the record changes only to be marked superseded.
 
 ## Context
 Accepted ADR 0031 (2026-10-20 21:04:02Z), Decision 2, has the dev edge's two sites listen on plain `http` behind
@@ -134,3 +135,6 @@ ADR 0028 and the Phase 5 records.
   under dev allows exactly the three pinned file mounts in Decision 3 (a loosening his P1.38e line covers, since
   those mounts are how the file certificate is served), and the manual Pangolin step in Decision 5 that sets each
   resource's TLS Server Name. His lines stand unless he says otherwise.
+- Accepted by Alex on 2026-10-20 at 21:54:54Z with exactly that line, typed in the project chat in answer to the
+  coordinator's request, against ae9d8e7; the verifier passed the record at 4b522e8 with the two additions above.
+  0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.

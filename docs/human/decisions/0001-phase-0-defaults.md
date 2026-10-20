@@ -493,3 +493,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   and a `noindex` header land in P1.36b before either resource is created; web's shared sign-in and default
   buckets stay an accepted availability cost that fails closed. 0025 and 0030 are not edited. P1.37v (#1115)
   unblocks; P1.36e, P1.36o and ADR 0028 move to production.
+- **ADR 0032 accepted (Alex, 2026-10-20 21:54:54Z; own record:
+  [0032](0032-self-signed-dev-edge.md)):** the exact acceptance line, typed in the project chat, supersedes 0031
+  Decision 2 for the dev profile only: the dev edge serves both staging names over `https` with a self-signed
+  leaf certificate from PEM files, no CA and no trust store anywhere, both files C9 mounted secrets for the edge
+  alone; C18 under dev accepts exactly that `(tls)` shape and exactly three pinned read-only file mounts (P1.38e,
+  his own line); `:80` answers only a `308` to `https`; Pangolin targets the edge over `https` unverified, each
+  resource with its TLS Server Name set to its own staging name; the leaf is valid at most 825 days and the deploy
+  check fails 30 days before expiry. 0031 is not edited; its other decisions stand. Everything else is unchanged.
