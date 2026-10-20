@@ -362,12 +362,30 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
           segments.map((segment, i) => `${"/".repeat(runs[i] ?? 1)}${flip(segment)}`).join("") + "/".repeat(trailing)
         );
       });
-  /** Percent-encodes some characters; Caddy decodes the path before path_regexp, so the decoded form is matched. */
-  const decoded = (path: string) => decodeURIComponent(path);
+  /** Percent-encodes the characters `mask` picks, slashes included, as a client may send them on the wire. */
   const encoded = (path: string, mask: boolean[]) =>
-    [...path]
-      .map((ch, i) => (mask[i % mask.length] && ch !== "/" ? `%${ch.charCodeAt(0).toString(16).toUpperCase()}` : ch))
-      .join("");
+    [...path].map((ch, i) => (mask[i % mask.length] ? `%${ch.charCodeAt(0).toString(16).toUpperCase()}` : ch)).join("");
+  /** The raw path with a dot segment or a parent hop (`/x/..`) before each segment `dots` picks. */
+  const dotted = (path: string, dots: number[]) => {
+    let at = 0;
+    return path.replace(/\/(?=[^/])/g, () => ["/", "/./", "/x/../"][dots[at++ % dots.length] ?? 0] as string);
+  };
+  /**
+   * The path a path_regexp matcher sees for a raw request path, as Caddy v2.11.7 makes it: r.URL.Path is the
+   * URI-decoded path (Go net/url, %2F included), then cleanPath runs path.Clean and keeps a trailing slash
+   * (modules/caddyhttp/matchers.go:812-823, caddyhttp.go:302-308; website 1957519 matchers.md:707).
+   */
+  const matched = (raw: string) => {
+    const path = decodeURIComponent(raw);
+    const parts: string[] = [];
+    for (const part of path.split("/")) {
+      if (part === "" || part === ".") continue;
+      if (part === "..") parts.pop();
+      else parts.push(part);
+    }
+    const clean = `/${parts.join("/")}`;
+    return path.endsWith("/") && !clean.endsWith("/") ? `${clean}/` : clean;
+  };
 
   const regexOf = (snippet: string, matcher: string) => {
     const at = devConfig().snippet(snippet);
@@ -385,8 +403,10 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
         fc.property(
           spelled(["xrpc", method]),
           fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }),
-          (path, mask) => {
-            expect(blob.test(decoded(encoded(path, mask))), path).toBe(true);
+          fc.array(fc.integer({ min: 0, max: 2 }), { minLength: 1, maxLength: 4 }),
+          (path, mask, dots) => {
+            const raw = encoded(dotted(path, dots), mask);
+            expect(blob.test(matched(raw)), raw).toBe(true);
           },
         ),
       );
@@ -394,6 +414,18 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
     for (const other of ["/xrpc/com.atproto.sync.getRecord", "/xrpc/com.atproto.repo.uploadBlobx", "/blob/getBlob"]) {
       expect(blob.test(other), other).toBe(false);
     }
+    // Fixed raw spellings, each decoded and cleaned as Caddy does before the matcher runs.
+    for (const raw of [
+      "/xrpc%2Fcom.atproto.sync.getBlob",
+      "/xrpc/com.atproto.sync.get%42lob",
+      "/x/../xrpc/com.atproto.sync.getBlob",
+      "/xrpc/./com.atproto.repo.uploadBlob/",
+      "/xrpc/com.atproto.sync.GETBLOB",
+      "/%78rpc/com%2Eatproto%2Erepo%2EimportRepo",
+    ]) {
+      expect(blob.test(matched(raw)), raw).toBe(true);
+    }
+    expect(matched("/a/../xrpc//x/./y/")).toBe("/xrpc/x/y/");
   });
 
   test("signin_files_405_in_every_spelling", () => {
@@ -401,7 +433,8 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
     for (const segments of [["oauth-client-metadata.json"], ["oauth", "jwks.json"]]) {
       fc.assert(
         fc.property(spelled(segments), fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }), (path, mask) => {
-          expect(files.test(decoded(encoded(path, mask))), path).toBe(true);
+          const raw = encoded(path, mask);
+          expect(files.test(matched(raw)), raw).toBe(true);
         }),
       );
     }
