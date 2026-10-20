@@ -249,5 +249,5 @@ production name is a Phase 5 decision.
 - Acceptance line: "yes accept ADR 0031 staging public through Pangolin no login no certificate at our edge
   docs/human/decisions/0031-public-staging-pds.md".
 - Accepted by Alex on 2026-10-20 at 21:04:02Z with exactly that line, typed in the project chat in answer to
-  the coordinator's request, after #1132 put this text on main. P1.37v (#1115) unblocks; P1.36b's scope gains
-  Decision 1's zones and header; the step-book follow-up named in Consequences is the plan thread's next PR.
+  the coordinator's request, after #1132 put this text on main. P1.37v (#1115) unblocks, and P1.36b's scope gains
+  Decision 1's zones and header.
