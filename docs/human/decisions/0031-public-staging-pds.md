@@ -1,4 +1,4 @@
-# 0031 — Staging PDS public through Pangolin, no certificate at our edge
+# 0031 — Staging public through Pangolin, no login, no certificate at our edge
 
 Status: Proposed (awaiting Alex)
 
@@ -15,6 +15,12 @@ use certificate internally for now but we will set it up for production deployme
 both have a lets encrypt certificate" (23:20:10Z), "Pangolin will issue them certificate" (23:20:21Z), "Its ok the
 pds will be facing out as well" (23:20:39Z), "Pds is meant to be queried publicly" (23:20:49Z).
 
+On 2026-10-20 at 13:00:31Z, asked for the simplest deploy, Alex dropped the login on the app name as well: "Go
+ahead for ADR 31, and also I'll take time to add to say that no need for a Pangolin login for staging right now.
+So no password needed right now for to access the app. Like the invite only is gonna be like the gate for the
+staging. And then we can figure something out later once we become more popular." The tester gate is therefore
+the PDS invite code (`PDS_INVITE_REQUIRED`), not a Pangolin login, on both names.
+
 Why that removes the certificate question: Pangolin terminates public TLS for both names with its own Let's Encrypt
 certificates and does not verify the edge's certificate (0030, Context). The one client inside the stack that did
 verify the edge's certificate was web reaching the PDS through the edge's PDS alias (0025:86). With the PDS public,
@@ -24,16 +30,32 @@ edge's certificate, so under dev the edge needs none. Architecture ruled this sh
 (`unset-plan/book-edits/2026-10-19-staging-tailnet-rulings.md`).
 
 ## Decision
-This record departs from ADR 0025 at the two clauses above, and from ADR 0030 at three points, for the dev profile
-only: 0030's "`staging.unset.ac` has no bypass" (Decision 1), 0030:78-79 ("The edge keeps its own Let's
-Encrypt DNS-01 certificate for the staging names"), and the alternative 0030:130-132 rejected, plain HTTP from
-the edge to Newt, which this record adopts. Neither record is edited; both keep their status. Production is
-unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge.
+This record departs from ADR 0025 at three clauses, for the dev profile only: the two above, and 0025:74-78
+(`staging.unset.sh` behind the login with two bypass paths) together with 0025:49-51 (one SSO login per tester).
+It departs from ADR 0030 at four points: 0030's "`staging.unset.ac` has no bypass" and the whole of Decision 1
+(the two ACCEPT rules, their probes and the live-resource rule check, which now has no login to demand), 0030
+Decision 3 (the resource session cookie, which a public resource never sets), 0030:78-79 ("The edge keeps its own
+Let's Encrypt DNS-01 certificate for the staging names"), and the alternative 0030:130-132 rejected, plain HTTP
+from the edge to Newt, which this record adopts. 0030 Decision 2 (host conditions) and Decision 4 (logging) stand
+unchanged. Neither record is edited; both keep their status. Production is unchanged: `unset.ac` stays behind
+whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge, and a login or other gate on a
+production name is a Phase 5 decision.
 
-1. **Pangolin.** `staging.unset.ac` is a public resource at Pangolin: no login, no rules. `staging.unset.sh` keeps
-   the tester login and exactly the two ACCEPT rules of 0030. Never an ACCEPT-by-IP rule on `staging.unset.sh`:
-   anyone sharing Alex's egress address would skip the login. Pangolin's targets to Newt are plain `http`; Pangolin
-   does not verify the edge in any case (0030).
+1. **Pangolin.** Both `staging.unset.sh` and `staging.unset.ac` are public resources at Pangolin: no login, no
+   rules, no bypass paths to carve out. Pangolin's targets to Newt are plain `http`; Pangolin does not verify the
+   edge in any case (0030). What the login on `staging.unset.sh` was protecting: the app's unreleased surface and
+   its unauthenticated routes (the welcome page, sign-in start and callback, static assets) from the open internet,
+   a second, per-tester identity in front of the app's own session, and scanner noise before the live checks had
+   run. What holds without it: nobody gets an account without an invite code, and the app refuses sign-in for any
+   account not on our PDS (P1.36v, #1131, never waived), so a stranger can read the public pages and nothing more;
+   the app's own verified session, Origin gate and `__Host-` cookies are the authorization, as 0030:84 already
+   said; the edge's per-visitor zones of Decision 3 cover the app routes too (`session`, `oauth_signin`, `global`),
+   so Decision 3's key change is a precondition of opening either name; the security headers, CSP and audit log
+   (DID and address only) stay; Pangolin's own protections (its CrowdSec bouncer and 0030 Decision 4 logging)
+   apply to both names; and no media is served. Tester profile pages are public by design (ADR 0004). What is
+   lost and accepted: the per-tester Pangolin identity, which gave a second credential and a name in Pangolin's
+   log; the app's audit log keeps the DID. Alex revisits a gate "once we become more popular"; until then any
+   gate on a staging name is a new Proposed record.
 2. **Edge without a certificate under dev.** Under dev the edge's two sites listen on plain `http`, bound only to
    the edge's address on the internal `newt_edge` network (0030, Decision 2), with no published port and no `:443`
    site. Preflight C18 under dev will check exactly that shape, a future change to C18 that needs Alex's own typed
@@ -87,8 +109,9 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    nothing breaks; a blob path that opens later carries the sandbox CSP and `nosniff`. Each deny gets a property-test
    red (TE-6) covering case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of 0030's
    probe groups. Still holding: `PDS_INVITE_REQUIRED` (open sign-up waits on P5.02a), the admin password usable
-   only from the host, the edge's rate-limit zones, the app behind the Pangolin login, own-PDS-only sign-in
-   (P1.36v, never waived), and no media in the milestone. The PDS's own rate limits are not a layer: they stay off
+   only from the host, the edge's rate-limit zones, own-PDS-only sign-in (P1.36v, never waived), and no media in
+   the milestone; the app itself is public under Decision 1 and gated by its own session. The PDS's own rate
+   limits are not a layer: they stay off
    (`PDS_RATE_LIMITS_ENABLED=false`, `deployment/compose.dev.yaml:114`, required exactly so by preflight C7) because
    the edge strips the forwarded-address headers on the PDS route and the PDS would see one address for everyone,
    so turning them on would make one bucket that anyone could exhaust. On the public PDS, `createSession`, the
@@ -115,13 +138,19 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
 - **Rewriting web's PDS calls from `https` to `http` on the internal alias.** Rejected: it changes the sign-in code
   and turns off TLS verification in [SEC] code.
 - **Web through Pangolin by public name while the PDS keeps the login.** Rejected: web's back-channel calls (PAR,
-  token, XRPC) would need the PDS API past the login, or an ACCEPT-by-IP rule, which Decision 1 forbids.
+  token, XRPC) would need the PDS API past the login, or an ACCEPT-by-IP rule, which 0030 forbids.
+- **Keep the Pangolin login on `staging.unset.sh` only.** The shape of this record until 2026-10-20 13:00:31Z. Not
+  chosen by Alex: "no need for a Pangolin login for staging right now"; the invite code is the gate.
 
 ## Consequences
 - The staging milestone needs no Cloudflare token on the host and nothing bought; the DNS provider module and ADR
   0028 are deferred to production.
-- `staging.unset.ac` stays in the staging Pangolin org, so 0030's Decision 4 (request-log retention 0, the five-field
-  access log, log level, failed-attempt logging off) covers its public requests as well.
+- Both names stay in the staging Pangolin org, so 0030's Decision 4 (request-log retention 0, the five-field
+  access log, log level, failed-attempt logging off) covers their public requests; failed-attempt logging has
+  nothing to log, since no login exists.
+- Alex's staging list loses the two ACCEPT rules and the tester logins of 0030 and gains nothing: both resources
+  are created public. P1.33p's book text (the login probes, the bypass paths, the exemption rules) is rewritten
+  in the follow-up this record names in Compliance.
 - Every app-to-PDS call leaves the host and returns through Pangolin's WireGuard tunnel to Newt; latency and the
   shared rate-limit bucket of Decision 3 are accepted costs.
 - Anyone on the internet can read tester repos, create nothing without an invite, and reach no blob or admin method.
@@ -132,19 +161,22 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
 
 ## Compliance
 - Reds listed in Decisions 2, 3 and 4 land with the steps named in Consequences before staging opens.
-- The live deploy checks of 0030 keep running on `staging.unset.sh`; 0030's login-demand probes never applied to
-  `staging.unset.ac` and now cannot, since the resource has no login (Codex on #1127, finding 4319934630). A third
-  check confirms, from outside, that `staging.unset.ac` answers `describeServer` without a login, that
-  `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic` request get the edge's deny. That the edge
+- 0030 Decision 1's login-demand probes and its live-resource rule check apply to neither name now (Codex on
+  #1127, finding 4319934630, extended to `staging.unset.sh` by Alex's 13:00:31Z words). In their place the deploy
+  check reads both resources through Pangolin's API and asserts each is public with no rules at all, so a login
+  or an ACCEPT rule added by hand later is caught, and confirms from outside that `staging.unset.sh` answers
+  its welcome page and `/oauth-client-metadata.json` without a login, that `staging.unset.ac` answers
+  `describeServer` without a login, and that `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic`
+  request get the edge's deny. That the edge
   presents no certificate and has no `:443` listener cannot be seen from outside, where TLS ends at Pangolin, so
   that assertion runs on the host, in two future steps: the C18 change of Decision 2 (its own typed line) reads
   the edge configuration, and the deploy check that P1.37v brings connects from the `newt_edge` network and
   asserts plain `http` on the bound address and a refused `:443`. On the first deploy and after every Pangolin
-  update the same check also reads a real resource-session response from `staging.unset.sh` and asserts that
-  `Set-Cookie` carries `Domain` equal to exactly that host, never `unset.sh`, since 0030 Decision 3 derived the
-  exact-domain guarantee from the 1.24.0 source only (Codex on #1127, finding 4319934639).
-- ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from two clauses of 0025
-  and from 0030's no-bypass sentence, its certificate sentence (0030:78-79) and its rejected plain-HTTP alternative
-  (0030:130-132), for dev only. The C18 change needs Alex's own typed line, separate from this record's.
-- Acceptance line: "yes accept ADR 0031 staging PDS public through Pangolin no certificate at our edge
+  update the same check also asserts that no response from either name carries a `Set-Cookie` from Pangolin: a
+  public resource sets no resource session cookie, so 0030 Decision 3's exact-domain guarantee (Codex on #1127,
+  finding 4319934639) has nothing to cover, and any such cookie means a login came back.
+- ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from the clauses of
+  0025 and 0030 listed at the top of Decision, for dev only. The C18 change needs Alex's own typed line, separate
+  from this record's. Decision 3's key change (P1.37v) lands before either name is created at Pangolin.
+- Acceptance line: "yes accept ADR 0031 staging public through Pangolin no login no certificate at our edge
   docs/human/decisions/0031-public-staging-pds.md".
