@@ -69,6 +69,8 @@ const PLACEHOLDERS: Readonly<Record<string, readonly string[]>> = {
   "{http.request.orig_uri}": ["map", "vars_regexp"],
   "{route_class}": ["map", "log_append"],
   "{client_ip}": ["key"],
+  // The request's own Host, the one value (upstream) sets X-Forwarded-Host to (P1.36j, forwardsOwnHost).
+  "{host}": ["header_up"],
 };
 
 const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars_regexp"];
@@ -1019,7 +1021,20 @@ function siteProblems(site: Site, zones: string): string[] {
   for (const header of ADDRESS_HEADERS) {
     if (proxies.some((proxy) => passes(proxy, header))) found.push(`${name}: a reverse_proxy passes ${header}`);
   }
+  if (proxies.some((proxy) => !forwardsOwnHost(proxy))) found.push(`${name}: a reverse_proxy passes X-Forwarded-Host`);
   return found;
+}
+
+/**
+ * Whether `proxy` sets X-Forwarded-Host to the request's own Host, once, and touches it nowhere else (P1.36j). Caddy
+ * v2.11.7 keeps an incoming X-Forwarded-Host from a trusted proxy instead of setting it from Host
+ * (reverseproxy.go:1012-1022), and under dev Newt is trusted, so without this the upstream would get Traefik's value.
+ */
+function forwardsOwnHost(proxy: Directive): boolean {
+  const ups = named(proxy.block ?? [], "header_up").filter(
+    (up) => up.args[0]?.replace(/^[+-]/, "").toLowerCase() === "x-forwarded-host",
+  );
+  return ups.length === 1 && ups[0]?.args.join(" ") === "X-Forwarded-Host {host}";
 }
 
 /**

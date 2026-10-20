@@ -137,13 +137,21 @@ describe("edge", () => {
   test("edge_strips_client_address_headers", async () => {
     const from = edge.seen.length;
     const path = "/xrpc/com.atproto.server.describeServer?strip";
-    await send(path, { "x-forwarded-for": "192.0.2.10", "x-real-ip": "192.0.2.10", forwarded: "for=192.0.2.10" });
+    await send(path, {
+      "x-forwarded-for": "192.0.2.10",
+      "x-real-ip": "192.0.2.10",
+      forwarded: "for=192.0.2.10",
+      "x-forwarded-host": "spoofed.example.test",
+    });
     const seen = edge.seen.slice(from).find((s) => s.rawPath === path);
     expect(seen).toBeDefined();
     for (const header of ["x-forwarded-for", "x-real-ip", "forwarded"]) {
       expect(seen?.headers[header], header).toBeUndefined();
     }
     expect(seen?.headers["x-forwarded-proto"]).toBe("https");
+    // P1.36j: X-Forwarded-Host is the request's own Host, never the client's.
+    expect(seen?.headers.host).toBeDefined();
+    expect(seen?.headers["x-forwarded-host"]).toBe(seen?.headers.host);
   });
 
   test("pds_route_strips_forwarded_headers", async () => {

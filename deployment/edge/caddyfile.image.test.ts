@@ -250,10 +250,7 @@ describe("caddyfile reader against caddy adapt", () => {
       expect(trust(server)).toStrictEqual({ listen: server.listen, ...NO_TRUST });
     }
     const dev = Object.values(
-      adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, [
-        `${join(EDGE, "dev", "sites")}:/etc/caddy/sites/enabled:ro`,
-        `${join(EDGE, "dev", "tls.caddy")}:/etc/caddy/snippets/tls.caddy:ro`,
-      ]).apps.http.servers,
+      adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, DEV_MOUNTS).apps.http.servers,
     );
     expect(dev.map(trust).sort((a, b) => a.listen[0]?.localeCompare(b.listen[0] ?? "") ?? 0)).toStrictEqual([
       {

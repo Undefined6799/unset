@@ -628,13 +628,27 @@ describe("edge site rules (P1.28f)", () => {
     ]);
   });
 
+  test("edge_upstream_sets_its_own_forwarded_host", () => {
+    // P1.36j: a trusted proxy's X-Forwarded-Host is never passed on; (upstream) sets it from the request's Host, once.
+    const upstream = read("snippets/upstream.caddy");
+    const line = "\t\theader_up X-Forwarded-Host {host}\n";
+    expect(upstream).toContain(line);
+    const problem = "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host";
+    for (const other of ["", "\t\theader_up -X-Forwarded-Host\n", "\t\theader_up X-Forwarded-Host example.test\n"]) {
+      expect(siteProblems({ "snippets/upstream.caddy": upstream.replace(line, other) }), other).toEqual([problem]);
+    }
+    const twice = upstream.replace(line, `${line}\t\theader_up +x-forwarded-host other.test\n`);
+    expect(siteProblems({ "snippets/upstream.caddy": twice })).toEqual([problem]);
+  });
+
   test("edge_upstream_is_one_placeholder", () => {
     // Amendment 9, point 2 (replacing #541's canonical form): after an optional matcher, a reverse_proxy names exactly
     // one upstream, and it is a placeholder, so no literal can alias the value behind {$PDS_UPSTREAM}.
     const proxy = (args: string) =>
       site.replace(
         "\t\timport upstream {$PDS_UPSTREAM}\n",
-        `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n`,
+        `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n` +
+          "\t\t\theader_up X-Forwarded-Host {host}\n\t\t}\n",
       );
     const pds = (args: string) => siteProblems({ "sites/pds.caddy": proxy(args) });
     const literal = "{$PDS_HOST}: a reverse_proxy does not name one placeholder upstream";
