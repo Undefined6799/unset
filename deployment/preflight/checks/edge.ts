@@ -153,37 +153,14 @@ export function edgeZones(
 ): Outcome {
   const image = edgeImage(compose, edgeRef);
   if (image !== null) return image;
-  const shape = mode === "dev" && mountsSitesDir(compose) ? "directory" : mode;
-  if (shape === "directory") {
-    // Transition (book P1.38e): until P1.36c switches compose.dev.yaml to the three file binds and P1.38g drops this
-    // branch, dev may still mount main's sites directory alone, read as before P1.38e.
-    const mixed = devFileTargets(compose);
-    if (mixed !== undefined) return fail(`the dev edge mounts both the sites directory and ${mixed}`);
-    const shipped = edgeSitesDir(compose, edgeDir);
-    if ("dir" in shipped && shipped.dir !== EDGE_FILES.realpath(join(edgeDir, "sites"))) {
-      return fail(`${SITES_TARGET} is not mounted from deployment/edge/sites`);
-    }
-  }
-  const sites = shape === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
+  const sites = mode === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
   if (!Array.isArray(sites) && !("dir" in sites)) return sites;
-  if (shape === "dev") {
+  if (mode === "dev") {
     const problem = devEdgeProblem(compose);
     if (problem !== null) return problem;
   }
   if (env === undefined) return missing("the edge service's environment");
-  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, shape === "dev" ? "dev" : "shipped");
-}
-
-/** Whether the edge mounts anything at the enabled sites directory itself: the transition's shape (a). */
-function mountsSitesDir(compose: Compose): boolean {
-  const edge = compose.services.find((service) => service.name === "edge");
-  return edge?.mounts.some((mount) => mountTarget(mount) === SITES_TARGET) ?? false;
-}
-
-/** The first of shape (b)'s targets the edge also mounts: a site file under the enabled sites, or the (tls) file. */
-function devFileTargets(compose: Compose): string | undefined {
-  const edge = compose.services.find((service) => service.name === "edge");
-  return edge?.mounts.map(mountTarget).find((target) => siteFileTarget(target) || DEV_MOUNTS[target] !== undefined);
+  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, mode);
 }
 
 /** The dev leaf's certificate and key (P1.36c; ADR 0032), the only secrets a dev edge reads, both required. */
