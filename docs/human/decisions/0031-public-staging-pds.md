@@ -68,25 +68,31 @@ production name is a Phase 5 decision.
    `login` bucket of 10 at once refilled at 10 a minute (`interfaces/http/limits.ts:12`) on `POST /login`,
    `/oauth/callback` and `/verify-email/reconsent`, and one `default` bucket of 60 refilled at 5 a second. Behind
    the login that was harmless; public, one stranger could lock every tester out of sign-in, and P1.37v alone
-   does not change it. So the dev edge gains two per-client zones on the app site, keyed on the client address
-   behind Newt like Decision 3's zones, in P1.36b beside its `405` rule, each with a red pinning the matcher, key
-   and values to `limits.json`: `app_signin`, matching `POST /login`, `POST /verify-email/reconsent` and
-   `/oauth/callback` on any method (the callback arrives as a `GET` redirect), events 5 per 5 minutes as the
-   starting value, below web's shared bucket so no single client can drain it (about two sign-ins per address in
-   five minutes, and every tester behind one NAT shares that address); and `app_global`, with no matcher, as the
-   PDS site has (`ratelimit.caddy:9-10`), sized from the app's measured page load plus headroom but below web's
-   `default` refill, so fewer than 1500 events per 5 minutes, since `default` (`limits.ts:9`, 60 at once refilled
-   at 5 a second, serving `GET /login` too, `routes.manifest.json:104-108`) is shared and a single client allowed
-   more would drain it and lock every tester out of every page. The PDS's `global` at 3000 per 5 minutes is not
-   the template. Both names are new, so no zone shares state across the two sites (architecture, 2026-10-20
-   13:18Z). Those zones, P1.36j (the trusted-proxy change) and P1.37v are preconditions of creating either
-   resource at Pangolin. What stays shared, and is a cost Alex accepts with this record: web's own `login` bucket
-   (`limits.ts:12`) and `default` bucket are one bucket for everyone, so many addresses, each under the edge
-   limit, can still drain them together and block sign-in for every tester. In numbers: about a dozen addresses
-   each sending their five keep the sign-in bucket empty, and one person with an ordinary IPv6 connection already
-   has that many, since the edge counts an IPv6 client by its /64 (`ratelimit.caddy:20`) and a home connection
+   does not change it. So the dev edge gains three per-client zones on the app site, keyed on the client address
+   behind Newt like Decision 3's zones (architecture agreed the sign-in zone and a global app zone at 13:18Z on
+   2026-10-20), in P1.36b beside its `405` rule, each with a red pinning the matcher, key and values to
+   `limits.json`: `app_signin`, matching `POST /login`, `POST /verify-email/reconsent` and `/oauth/callback` on
+   any method (the callback arrives as a `GET` redirect), events 5 per 5 minutes as the starting value, below
+   web's shared bucket so no single client can drain it (about two sign-ins per address in five minutes, and
+   every tester behind one NAT shares that address); `app_burst`, with no matcher, events 20 per 10 seconds, which
+   holds one client at 2 a second, under the 5 a second at which web refills its shared `default` bucket
+   (`limits.ts:9`, 60 at once, serving `GET /login` too, `routes.manifest.json:104-108`), so no single client
+   can keep `default` empty; and `app_global`, with no matcher, as the PDS site has (`ratelimit.caddy:9-10`),
+   sized from the app's measured page load plus headroom and below 1500 events per 5 minutes, the 5-minute
+   ceiling that `app_burst` makes safe (a 5-minute zone alone lets one client burst its whole allowance at once
+   and hold `default` empty for most of the window). The PDS's `global` at 3000 per 5 minutes is not the
+   template. The zone names are new, so nothing shares state with the PDS site's zones, and the dev app site
+   imports only these three, never `pds-ratelimit` (the local app site does, `deployment/edge/local/app.caddy:12`).
+   Those zones, P1.36j (the trusted-proxy change) and P1.37v are preconditions of creating either resource at
+   Pangolin. What stays shared, and is a cost Alex accepts with this record: web's own `login` bucket
+   (`limits.ts:12`) and `default` bucket are one bucket for everyone, so several addresses, each under the edge
+   limit, can still drain them together. In numbers: about a dozen addresses each sending their five keep the
+   sign-in bucket empty, and three addresses each at 2 a second keep `default` empty, which locks every tester
+   out of every page while it lasts; one person with an ordinary IPv6 connection already has that many
+   addresses, since the edge counts an IPv6 client by its /64 (`ratelimit.caddy:20`) and a home connection usually
    gets more than one /64. That is an availability cost on staging, not an authorization bypass, and it fails
-   closed. Web keying on the client address the edge forwards would end it and is a loosening of web's trust
+   closed: nobody gets in who should not, testers get a `429` until the burst stops. Web keying on the client
+   address the edge forwards would end it and is a loosening of web's trust
    settings (0025:203-205, "web's own trust settings are unchanged"), so it is a later step on its own typed line,
    not part of this record. What is lost, with nothing replacing it today: the per-tester Pangolin identity, a second
    credential in front of the app. The app's audit log stores no network address
@@ -203,7 +209,8 @@ production name is a Phase 5 decision.
   (`docs/ai/book/phase-1.md:15282-15287`, `:15301-15308`, threat E at `:15324-15325`), in P1.34 (`:15516`,
   `:15537-15540`) and in P1.36i's rationale (`:8922-8925`); the plan thread rewrites them in one book edit,
   `unset-plan/book-edits/2026-10-20-adr-0031-no-login.md`, before the first deploy, and P1.36b's scope gains the
-  `app_signin`, `app_global` and the `X-Robots-Tag` header of Decision 1 (all tightenings inside an edge step:
+  `app_signin`, `app_burst`, `app_global` and the `X-Robots-Tag` header of Decision 1 (all tightenings inside an
+  edge step:
   no card and no
   line, architecture 13:18Z). ADR 0001 gets an appended entry at acceptance, never a
   rewrite.
