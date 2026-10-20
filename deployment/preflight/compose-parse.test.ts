@@ -139,28 +139,55 @@ describe("compose subset", () => {
         );
       }
     }
-    // The edge on edge or app with no aliases, in either form, is refused too (verify-895 N3): "each network must carry
-    // exactly both" has no empty case. Other services join both networks bare, and the edge joins others bare.
+    // The edge carries its aliases on each of edge and app it joins, or on none (verify-895 N3; under dev it carries
+    // none, ADR 0031 Decision 3): bare on both, in either form, is accepted, and half-aliased is refused below.
     const bare = (networks: string) =>
       `name: unset-prod\nservices:\n  edge:\n    image: x\n    networks: ${networks}\nnetworks:\n  edge: {}\n  app: {}\n  front: {}\n`;
-    for (const network of ["edge", "app"]) {
-      for (const form of [`[${network}]`, `[front, ${network}]`, `\n      ${network}: {}`, `\n      ${network}:`]) {
-        expect(() => parseCompose(bare(form), "c.yaml"), form).toThrow(
-          new RegExp(`^c\\.yaml:[56]: the edge on network ${network} must carry its aliases$`),
-        );
-      }
-      expect(
-        parseCompose(bare(`[${network}]`).replace("  edge:\n    image", "  web:\n    image"), "c.yaml").services[0]
-          ?.networks,
-      ).toEqual([network]);
+    for (const form of ["[edge, app]", "[front, edge]", "\n      edge: {}\n      app:", "\n      app:\n      front:"]) {
+      expect(() => parseCompose(bare(form), "c.yaml"), form).not.toThrow();
     }
     const halfBare = both.replace(`      app:\n        aliases: ${hosts}\n`, "      app: {}\n");
     expect(() => parseCompose(halfBare, "c.yaml")).toThrow(/the edge on network app must carry its aliases/);
+    const halfBareEdge = both.replace(`      edge:\n        aliases: ${hosts}\n`, "      edge:\n");
+    expect(() => parseCompose(halfBareEdge, "c.yaml")).toThrow(/the edge on network edge must carry its aliases/);
     expect(parseCompose(bare("[front]"), "c.yaml").services[0]?.networks).toEqual(["front"]);
     // Any other `$` under networks is still refused.
     expect(() =>
       parseCompose(stack("edge", "edge", hosts).replace("edge:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
     ).toThrow(/\$ in networks/);
+  });
+  // P1.37v (ADR 0030 Decision 2): newt_edge has a fixed subnet, so Newt's and the edge's addresses on it are fixed. Only
+  // `ipam: {config: [{subnet}]}` with one IPv4 CIDR is read; any other ipam shape is refused.
+  test("ipam_only_one_ipv4_subnet", () => {
+    const stack = (ipam: string) =>
+      `name: unset-prod\nservices:\n  a:\n    image: x\n    networks: [n]\nnetworks:\n  n:\n    internal: true\n    ipam:${ipam}\n`;
+    const one = "\n      config:\n        - subnet: 10.250.37.0/29";
+    expect(parseCompose(stack(one), "c.yaml").networks).toEqual([
+      { name: "n", internal: true, subnet: "10.250.37.0/29" },
+    ]);
+    expect(parseCompose(stack(" {config: [{subnet: 172.16.0.0/12}]}"), "c.yaml").networks[0]?.subnet).toBe(
+      "172.16.0.0/12",
+    );
+    const shape = /network n: ipam must be exactly \{config: \[\{subnet\}\]\}/;
+    for (const ipam of [
+      " {}",
+      " {driver: default}",
+      `\n      driver: default${one}`,
+      " {config: []}",
+      " {config: [{subnet: 10.0.0.0/8}, {subnet: 10.1.0.0/16}]}",
+      " {config: [{subnet: 10.0.0.0/8, gateway: 10.0.0.1}]}",
+      " {config: [{ip_range: 10.0.0.0/8}]}",
+      " {config: {subnet: 10.0.0.0/8}}",
+    ]) {
+      expect(() => parseCompose(stack(ipam), "c.yaml"), ipam).toThrow(shape);
+    }
+    for (const subnet of ["10.0.0.0", "10.0.0.256/24", "10.0.0.0/33", "fd00::/64", "010.0.0.0/8", "10.0.0.0/8 "]) {
+      expect(() => parseCompose(stack(` {config: [{subnet: "${subnet}"}]}`), "c.yaml"), subnet).toThrow(
+        /is not an IPv4 CIDR/,
+      );
+    }
+    expect(() => parseCompose(stack(' {config: [{subnet: "${SUBNET}"}]}'), "c.yaml")).toThrow(/\$ in networks/);
+    expect(parseCompose(stack(one).replace(`    ipam:${one}\n`, ""), "c.yaml").networks[0]?.subnet).toBeNull();
   });
   // P1.30u: the edge service's mounts decide which Caddy config runs (C18), so `volumes` is read in a strict subset:
   // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with

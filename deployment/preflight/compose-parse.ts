@@ -69,8 +69,11 @@ export type Hardening = {
 };
 /** One entry of a service's `volumes` (compose-spec 05-services.md "volumes"), in the strict subset. */
 export type Mount = { type: "bind" | "volume" | "tmpfs"; source: string | null; target: string; readOnly: boolean };
-/** A top-level network: only `internal`, a `bridge` driver and `name` are read; anything else is refused. */
-export type Network = { name: string; internal: boolean };
+/**
+ * A top-level network: only `internal`, a `bridge` driver and an `ipam` of exactly one IPv4 subnet are read; anything
+ * else is refused. `subnet` is null when the engine picks it.
+ */
+export type Network = { name: string; internal: boolean; subnet: string | null };
 export type Compose = {
   name: string | null;
   services: Service[];
@@ -629,7 +632,7 @@ function longMount(r: Reader, node: YAMLMap): Mount {
 const ATTACHMENT_KEYS = new Set(["aliases", "ipv4_address", "ipv6_address", "priority"]);
 // No `name`: it is the real Docker network name, so two keys could share one network, or one key could take another's
 // `<project>_<key>`, merging networks the C17 table keeps apart (P1.30n). The project's own `name:` is unaffected.
-const NETWORK_KEYS = new Set(["internal", "driver"]);
+const NETWORK_KEYS = new Set(["internal", "driver", "ipam"]);
 const isEmpty = (node: unknown): boolean => node === null || (isScalar(node) && node.value === null);
 
 /**
@@ -682,9 +685,14 @@ function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: st
   }
   if (names.length === 0) r.fail(node, `networks of ${service} is empty`);
   if (new Set(names).size !== names.length) r.fail(node, `networks of ${service} repeats a network`);
-  // The other half of "each network carries exactly both" (verify-895 N3): the edge on edge or app carries its aliases.
-  const bare = names.find((name) => service === "edge" && ALIAS_NETWORKS.has(name) && !aliased(node, name));
-  if (bare !== undefined) r.fail(node, `the edge on network ${bare} must carry its aliases`);
+  // The other half of "each network carries exactly both" (verify-895 N3): an edge that carries its aliases carries them
+  // on each of edge and app it joins. Under dev it carries none, so the PDS and web reach both hosts through Pangolin
+  // (ADR 0031, Decision 3); compose.dev.test.ts pins that.
+  const joined = names.filter((name) => service === "edge" && ALIAS_NETWORKS.has(name));
+  const bare = joined.find((name) => !aliased(node, name));
+  if (bare !== undefined && joined.some((name) => aliased(node, name))) {
+    r.fail(node, `the edge on network ${bare} must carry its aliases`);
+  }
   return names;
 }
 
@@ -696,7 +704,7 @@ function networks(r: Reader, node: unknown): Network[] {
   r.noDollar(node, "networks");
   return node.items.map((pair) => {
     const name = r.text(pair.key, "network name");
-    if (isEmpty(pair.value)) return { name, internal: false };
+    if (isEmpty(pair.value)) return { name, internal: false, subnet: null };
     const spec = pair.value;
     if (!isMap(spec)) return r.fail(spec, `network ${name} is not a mapping`);
     for (const key of spec.items) {
@@ -706,14 +714,35 @@ function networks(r: Reader, node: unknown): Network[] {
     if (spec.has("driver") && r.text(spec.get("driver", true), "driver") !== "bridge") {
       r.fail(spec.get("driver", true), `network ${name}: driver other than bridge`);
     }
+    const subnet = spec.has("ipam") ? ipamSubnet(r, spec.get("ipam", true), name) : null;
     const internal = spec.get("internal", true);
-    if (internal === undefined) return { name, internal: false };
+    if (internal === undefined) return { name, internal: false, subnet };
     if (!isScalar(internal) || typeof internal.value !== "boolean") {
       return r.fail(internal, `network ${name}: internal is not true or false`);
     }
     r.text(internal, "internal");
-    return { name, internal: internal.value };
+    return { name, internal: internal.value, subnet };
   });
+}
+
+const IPV4_CIDR =
+  /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(?:[1-2]?\d|3[0-2])$/;
+
+/**
+ * `ipam` as exactly `{config: [{subnet: <IPv4 CIDR>}]}` (compose-spec 06-networks.md "ipam"): a fixed subnet, so a
+ * service's `ipv4_address` on it is fixed too (ADR 0030, Decision 2). No driver, options, gateway or ranges: the default
+ * driver gives the first address to the gateway.
+ */
+function ipamSubnet(r: Reader, node: unknown, network: string): string {
+  const refuse = (at: unknown): never => r.fail(at, `network ${network}: ipam must be exactly {config: [{subnet}]}`);
+  if (!isMap(node) || node.items.length !== 1 || !node.has("config")) return refuse(node);
+  const config = node.get("config", true);
+  if (!isSeq(config) || config.items.length !== 1) return refuse(config);
+  const [entry] = config.items;
+  if (!isMap(entry) || entry.items.length !== 1 || !entry.has("subnet")) return refuse(entry);
+  const subnet = r.text(entry.get("subnet", true), "subnet");
+  if (!IPV4_CIDR.test(subnet)) r.fail(entry, `network ${network}: subnet ${subnet} is not an IPv4 CIDR`);
+  return subnet;
 }
 
 /** Every network the stack has, as Compose creates them: the declared ones, plus `default` when a service is on it
@@ -722,7 +751,7 @@ export function networksOf(compose: Pick<Compose, "services" | "networks">): Net
   const declared = compose.networks;
   const onDefault = compose.services.some((service) => service.networks.includes("default"));
   const implicit = onDefault && !declared.some((network) => network.name === "default");
-  return implicit ? [...declared, { name: "default", internal: false }] : declared;
+  return implicit ? [...declared, { name: "default", internal: false, subnet: null }] : declared;
 }
 
 function environment(r: Reader, node: unknown, service: string): [string, EnvValue][] {
