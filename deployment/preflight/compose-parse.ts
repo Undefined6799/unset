@@ -730,7 +730,8 @@ const IPV4_CIDR =
 
 /**
  * `ipam` as exactly `{config: [{subnet: <IPv4 CIDR>}]}` (compose-spec 06-networks.md "ipam"): a fixed subnet, so a
- * service's `ipv4_address` on it is fixed too (ADR 0030, Decision 2). No driver, options, gateway or ranges: the default
+ * service's `ipv4_address` on it is fixed too (compose-spec de28432 spec.md:1893-1897: a static address needs an ipam
+ * subnet covering it; ADR 0030, Decision 2). No driver, options, gateway or ranges: the default
  * driver gives the first address to the gateway.
  */
 function ipamSubnet(r: Reader, node: unknown, network: string): string {

@@ -1,6 +1,7 @@
 # The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
-# migrate, the PDS, the edge in front of it, web, and Newt in front of the edge (P1.37v), for the homelab, through the wrapper
-# (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose alike.
+# migrate, the PDS, the edge in front of it, web, and Newt in front of the edge (P1.37v), for the homelab, through the
+# wrapper (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose
+# alike.
 # A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every
 # image is built here from a Dockerfile images.yml scans; none is pulled, so the preflight's signed-image checks (C2 to
 # C5) refuse this stack until P1.27s publishes signed images (architecture record
@@ -196,8 +197,8 @@ services:
       # The OAuth client (P2.04c, P2.04w): Postgres as web, whose pools must fit the role's 40 connections across three
       # replicas with the 8-connection lock pool (checkConnectionBudget), so 5; the seal keyring and the client keys as
       # mounted files; no internal host for net-guard, since web reaches our own PDS through Pangolin like any other
-      # server (ADR 0031, Decision 3); the key new sign-ins sign with. PLC_URL is the shared public directory: we run no PLC of our own, and
-      # web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
+      # server (ADR 0031, Decision 3); the key new sign-ins sign with. PLC_URL is the shared public directory: we run no
+      # PLC of our own, and web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
       PG_HOST: postgres
       PG_DATABASE: unset
       PG_USER: web
@@ -231,10 +232,11 @@ services:
     restart: unless-stopped
 
   # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
-  # Pangolin over newt_egress and forwards Pangolin's targets, plain http to the edge's newt_edge address, as a
-  # userspace WireGuard peer, so it needs no capability. Upstream image run as shipped, pinned as its run-only lock
-  # entry. Its credentials are newt.env's three names; it saves them back to CONFIG_FILE, on its tmpfs. No SSH, no
-  # client access, no Docker socket, no metrics or pprof listener (newt 1.18.1 newtconfig/newtconfig.go:452-503).
+  # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
+  # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
+  # Upstream image run as shipped, pinned as its run-only lock entry. Its credentials are newt.env's three names; it
+  # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
+  # listener (newt 1.18.1 newtconfig/newtconfig.go:452-503).
   newt:
     image: docker.io/fosrl/newt:1.18.1@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f
     user: "65532:65532"

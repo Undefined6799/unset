@@ -18,7 +18,8 @@ export const c31: Check = {
     // One file holds the set, so its names cannot be split across a second, unreviewed one.
     if (newt.envFiles.length !== 1)
       return fail(`the newt service reads ${newt.envFiles.length} env files, not exactly one`);
-    // Compose's environment wins over env_file, so a name of the set written there would shadow newt.env's value.
+    // Compose's environment wins over env_file (compose-spec de28432 spec.md:1427: "values set by `environment` have
+    // precedence"), so a name of the set written there would shadow newt.env's value.
     const inCompose = newt.environment.find(([name]) => NEWT_ENV.includes(name));
     if (inCompose !== undefined) return fail(`${inCompose[0]} is set in the newt service's environment, not newt.env`);
     const names = envFileNames.get("newt") ?? [];
