@@ -15701,7 +15701,7 @@ grant at the next refresh, P1.31). Hence the requirements below.
   Notes for the Phase 2 file).
 
 **Where:** `deployment/env/dev-public.example.env` (committed placeholders, no secrets: "public" means only that; this
-step sets the tailnet hostnames in it, with `PDS_DID_PLC_URL=https://plc.directory`; the live files sit in
+step sets the two public staging names in it, with `PDS_DID_PLC_URL=https://plc.directory`; the live files sit in
 `unset-dev-env/`, P1.27u
 amendment 4; `local.example.env` stays the laptop-only template; architecture's Amendment 2 of 2026-10-13-local-plc,
 point 5); `deployment/edge/dev/pds.caddy` enabled in dev (ADR 0032 decision 3); `deployment/backup/dev-pds.sh`;
@@ -15738,7 +15738,7 @@ D. Dev PDS fit for the authority
  9. (Moved: the public A/AAAA record to P1.33p, the DDNS updater to P5.02b; G-1.)
 10. (Merged into step 11; book edit 2026-10-12-p130a-p130l-compose-inputs-booked.)
 11. Run P1.27w's wrapper with `compose.dev.yaml` and
-    `--interpolation-env <absolute path of unset-dev-env/dev-public.env>` (the tailnet dev stack's env; Amendment 2,
+    `--interpolation-env <absolute path of unset-dev-env/dev-public.env>` (the staging stack's env; Amendment 2,
     point 5, of 2026-10-13-local-plc),
     the env folder beside the checkout (0700;
     file 0600, owned by the deploy user). The flag is required (P1.34f
@@ -15795,8 +15795,9 @@ D. Dev PDS fit for the authority
 - Dev PDS upgrade breaks → restore the previous image digest; the backup taken before the upgrade covers data.
 - Somebody deletes the volume → restore from backup; the runbook's first line warns; `dev:down` never passes `-v`.
 
-**Threats:** the dev PDS on the tailnet, soon on the login path of the lexicon authority (the public-internet
-threats and their tests, E and S, are P1.33p's).
+**Threats:** the dev PDS on the public internet through Pangolin from its first deploy, soon on the login path
+of the lexicon authority; the public-internet threats are this step's to answer before it is done, and P1.33p's
+probe re-tests them afterwards.
   - E The PDS admin API or a debug setting exposed → the dev host runs P1.30's C-checks.
   - I Backups leak plaintext, or a restore test answers on the public name → encrypted backups, restore on a
     non-public name (`backup_script_encrypts_and_leaves_no_plaintext`, `restore_test_has_no_public_name`).
@@ -16133,8 +16134,10 @@ the scope a builder follows.
    and no upstream (Caddy's automatic redirect, which a file certificate does not switch off, ADR 0032 decision
    4), the certificate is a leaf (no CA flag) with both staging names as SANs, a P-256 key and at most 825 days of
    validity, it is self-signed (issuer equals subject and the signature verifies with its own public key, the
-   `openssl verify -CAfile leaf.pem leaf.pem` test; a CA-issued leaf with the right names fails, since C18 never
-   reads the PEM), and it expires more than 30 days out (an expired leaf keeps serving: certmagic v0.25.6
+   `openssl verify -check_ss_sig -CAfile leaf.pem leaf.pem` test, since without `-check_ss_sig` OpenSSL 3 does
+   not check a self-signed anchor's signature; a CA-issued leaf with the right names and a leaf with a broken
+   signature both fail, and C18 never reads the PEM), and it expires more than 30 days out (an expired leaf keeps
+   serving: certmagic v0.25.6
    `handshake.go:236-242` returns the only certificate expired or not, and Pangolin does not verify, so this
    check and the runbook renewal date are the only guards); one request through Pangolin to each name succeeds (each
    resource's TLS Server Name must be its own staging name, since Traefik sends no SNI to an IP target and Caddy
@@ -16161,7 +16164,8 @@ first Pangolin resource is created). Reds: a placeholder under dev fails; under 
 
 ### P1.38e — Let C18 accept the dev file certificate
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
-Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
+Slice 2, product (`deployment/preflight/checks/edge.ts`; CODEOWNERS :98-149 names no preflight path as trusted
+base), lane the third thread; ADR 0032 decision 3 (book
 edit 2026-10-20-adr-0031-no-login). **A loosening of two C18 rules, that the served `(tls)` reads the same as
 `snippets/tls.caddy` (`edge.ts:228-231`) and that the edge mounts nothing over `/etc/caddy` but the sites directory
 (:78-81), so it needs Alex's typed line, after he accepts ADR 0032:** "yes P1.38e
@@ -16190,10 +16194,12 @@ decision 3). The Caddyfile reads nothing else
 service, wherever its target, fails, as the local branch refuses any bind beyond its sites and local files
 (`edge.ts:354`); so a writable bind, a wrong source or a missing one fails under dev, and any of the three `dev/`
 binds under prod or local fails (that red is this step's; P1.36c books only the compose side). **Transitional
-rule (SE-6 sequencing):** this step is trusted base and cannot edit `compose.dev.yaml` or `compose.dev.test.ts`
-(product), whose `edge_serves_the_repository_sites` (:660-682) runs `edgeSitesDir` on the real file, so under dev
-this step accepts exactly one of two shapes: today's single read-only `sites/` directory bind
-(`compose.dev.yaml:143`, the rule as it stands) or the three file binds above; a mix, a second directory, or
+rule (order):** this step lands before P1.36c and is kept to the one file Alex's typed line names, so it must not
+turn main's `compose.dev.test.ts` red, whose `edge_serves_the_repository_sites` (:660-682) runs `edgeSitesDir` on
+the real `compose.dev.yaml`; so under dev this step accepts exactly one of two shapes: exactly today's single
+read-only bind of `deployment/edge/sites` at `/etc/caddy/sites/enabled` (`compose.dev.yaml:143`; not any other
+directory under `deployment/edge/`, which the rule as it stands would take) or the three file binds above; a mix,
+a second directory, or
 anything else fails. P1.36c then switches compose and its test to the three file binds, and P1.38g (trusted, a
 tightening, no line) drops the directory shape under dev, before any deploy. That rule is part of the typed line's
 "C18 dev" change, since those mounts are how the file certificate is served, and the transitional acceptance is
@@ -16222,12 +16228,13 @@ unchanged prod branch and the C9 mount test in P1.36c.
 
 ### P1.38g — Drop the dev directory bind from C18
 Tags: [SEC] trusted            Depends on: P1.36c
-Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
+Slice 2, product (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0032 decision 3 (book
 edit 2026-10-20-adr-0031-no-login, Codex finding on #1137). A tightening, so nothing is needed from Alex.
 
-**What:** P1.38e's transitional rule accepts, under dev, either the single `sites/` directory bind or the three
-`dev/` file binds, because P1.38e (trusted) cannot edit `compose.dev.yaml` or `compose.dev.test.ts` (product,
-SE-6). Once P1.36c has switched compose and its test to the three file binds, this step removes the directory
+**What:** P1.38e's transitional rule accepts, under dev, either today's single read-only bind of
+`deployment/edge/sites` at `/etc/caddy/sites/enabled` or the three `dev/` file binds, because P1.38e lands before
+P1.36c and must not turn main's compose test red. Once P1.36c has switched compose and its test to the three file
+binds, this step removes the directory
 shape from C18's dev branch, so the end state is exactly ADR 0032 decision 3: three pinned read-only file binds,
 each required and used once, nothing else over `/etc/caddy`, no directory mount under dev. Reds: the directory
 bind under dev fails; the mixed shape fails; the three file binds pass; prod and local unchanged. Done when the
@@ -16238,7 +16245,7 @@ before any deploy: P1.34 depends on it, and the first `--env dev` on main that p
 
 ### P1.38f — Deny the blob methods on the public PDS name
 Tags: [SEC] trusted            Depends on: —
-Slice 1, trusted base (`deployment/edge/snippets/xrpc-guard.caddy` and its tests), lane the third thread; ADR 0031
+Slice 2, trusted base (`deployment/edge/snippets/xrpc-guard.caddy` and its tests), lane the third thread; ADR 0031
 decision 4 (book edit 2026-10-20-adr-0031-no-login). A tightening, so nothing is needed from Alex.
 
 **What:** on `staging.unset.ac` the edge denies `com.atproto.repo.uploadBlob`, `com.atproto.sync.getBlob` and
