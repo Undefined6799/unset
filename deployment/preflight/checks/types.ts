@@ -3,6 +3,7 @@
 import type { Stats } from "node:fs";
 import type { WalkInputs } from "@unset/shared-host-pin";
 import type { Compose, Service } from "../compose-parse.ts";
+import { LOCAL_ONLY_KEY_NAMES } from "../local-only.ts";
 import type { SecretMap } from "../secret-map.ts";
 
 /** `local` is an agent's or developer's throwaway stack built from source (P1.27l); `dev` and `prod` are deployed. */
@@ -61,8 +62,18 @@ export type Inputs = WalkInputs & {
   readdir: (path: string) => Buffer[];
 };
 
-/** `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED. */
-export type Outcome = { pass: boolean; reason: string; unsigned?: true };
+/** The http kit's origin-valued keys (shared/http/config.ts); an empty ASSETS_BASE means the public origin's. */
+export const ORIGIN_KEYS = ["PUBLIC_ORIGIN", "MEDIA_ORIGIN", "ASSETS_BASE"] as const;
+/** Every key an outcome may name, C29's: the only keys a preflight line prints beside its verdict (P1.37k). */
+export const NAMED_KEYS = [...LOCAL_ONLY_KEY_NAMES, ...ORIGIN_KEYS] as const;
+export type NamedKey = (typeof NAMED_KEYS)[number];
+
+/**
+ * `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED.
+ * `key` and `service` name what failed; the runner prints each beside the verdict only after checking it against its
+ * closed list (P1.37k), so they survive a withheld reason.
+ */
+export type Outcome = { pass: boolean; reason: string; unsigned?: true; key?: NamedKey; service?: string };
 export type Check = {
   id: string;
   network?: true;

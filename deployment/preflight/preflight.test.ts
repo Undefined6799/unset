@@ -28,7 +28,7 @@ import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { c9 } from "./checks/secrets.ts";
-import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
+import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -2338,14 +2338,14 @@ describe("preflight C29 (P1.36k)", () => {
         ["DEV_VITE_ORIGIN", '""'],
       ]) {
         expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key}`).toBe(
-          `FAIL C29 ${key} is set in web; it is for a local stack only`,
+          `FAIL C29 key=${key} service=web it is for a local stack only`,
         );
       }
       // From an env file too, and in any service.
       const fromFile = env === "dev" ? { compose: DEV, pdsEnv: { ...DEV_ENV, OAUTH_ALLOW_HTTP: "true" } } : {};
       const prodFile = { pdsEnv: { OAUTH_ALLOW_HTTP: "true" } };
       expect(await expectOnly("C29", env === "dev" ? fromFile : prodFile, env)).toBe(
-        "FAIL C29 OAUTH_ALLOW_HTTP is set in pds; it is for a local stack only",
+        "FAIL C29 key=OAUTH_ALLOW_HTTP service=pds it is for a local stack only",
       );
     }
   });
@@ -2360,8 +2360,10 @@ describe("preflight C29 (P1.36k)", () => {
         ["PUBLIC_ORIGIN", '""'],
         ["MEDIA_ORIGIN", "HTTP://media.example.net"],
       ]) {
-        expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key} ${value}`).toBe(
-          `FAIL C29 ${key} in web is not https`,
+        // The real dev stack sets UNSET_SERVICE: http, so the reason must not hold "http" or it is withheld.
+        const lines = `      UNSET_SERVICE: http\n      ${key}: ${value}`;
+        expect(await expectOnly("C29", withWeb(env, lines), env), `${env} ${key} ${value}`).toBe(
+          `FAIL C29 key=${key} service=web the origin lacks TLS`,
         );
       }
     }
@@ -2447,6 +2449,53 @@ describe("preflight C22 pinned upload bounds (P1.36p)", () => {
       pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: null },
     });
     expect(prod.lines.find((l) => / C22 /.test(l))).toBe("PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset");
+  });
+});
+
+// P1.37k (architecture 07:19Z on verify-1071, N2): the failing key and service print beside the verdict, each from a
+// closed list and checked before printing, so a withheld reason no longer hides which key failed.
+describe("preflight named key and service (P1.37k)", () => {
+  const WITHHELD = "reason withheld (it contained a configured value)";
+  const named = (outcome: Partial<Outcome>): Check => ({
+    id: "CX",
+    run: () => ({ pass: false, reason: "refused", ...outcome }),
+  });
+
+  test("a_failure_on_web_prints_its_key_and_service", async () => {
+    // The real dev stack sets PG_USER: web, so the service name is also a configured value and must still print.
+    const lines = '$&\n      OAUTH_ALLOW_HTTP: "true"\n      PG_USER: web';
+    const compose = DEV.replace("      FINGERPRINT_CHECK: arachnid", lines);
+    expect(await expectOnly("C29", { compose, pdsEnv: DEV_ENV }, "dev")).toBe(
+      "FAIL C29 key=OAUTH_ALLOW_HTTP service=web it is for a local stack only",
+    );
+  });
+
+  test("a_key_or_service_not_on_its_list_prints_nothing", async () => {
+    const unlisted = named({ key: "PDS_ADMIN_PASSWORD" as never, service: "web" });
+    expect((await check({}, "prod", { checks: [unlisted] })).lines).toEqual(["FAIL CX service=web refused"]);
+    const elsewhere = named({ key: "OAUTH_ALLOW_HTTP", service: "not-in-this-stack" });
+    expect((await check({}, "prod", { checks: [elsewhere] })).lines).toEqual(["FAIL CX key=OAUTH_ALLOW_HTTP refused"]);
+    // A parsed name outside compose-spec's service-name characters is not printed either.
+    const spaced = COMPOSE.replace("services:\n  edge:", "services:\n  'we b':\n    image: x\n  edge:");
+    const odd = named({ key: "OAUTH_ALLOW_HTTP", service: "we b" });
+    expect((await check({ compose: spaced }, "prod", { checks: [odd] })).lines).toEqual([
+      "FAIL CX key=OAUTH_ALLOW_HTTP refused",
+    ]);
+  });
+
+  test("a_reason_holding_a_configured_value_is_still_withheld_whole", async () => {
+    const quoting: Check = {
+      id: "CX",
+      run: (inputs) => ({
+        pass: false,
+        reason: `saw ${inputs.serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v) ?? ""}`,
+        key: "PUBLIC_ORIGIN",
+        service: "pds",
+      }),
+    };
+    expect((await check({}, "prod", { checks: [quoting] })).lines).toEqual([
+      `FAIL CX key=PUBLIC_ORIGIN service=pds ${WITHHELD}`,
+    ]);
   });
 });
 

@@ -14,13 +14,13 @@
 //
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
 // malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3
-// to C5, and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a
-// secret value: env files are read into SecretMaps, Compose is parsed here, never through `docker compose config`, and
-// a reason that holds any configured value is withheld whole.
+// to C5, and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> [key=<k>] [service=<s>] <reason>` line per
+// check and never a secret value: env files are read into SecretMaps, Compose is parsed here, never through `docker
+// compose config`, and a reason that holds any configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CHECKS, LOCAL_CHECKS } from "./checks/index.ts";
-import { type Check, type Inputs, MISSING, type Outcome, type Run } from "./checks/types.ts";
+import { type Check, type Inputs, MISSING, NAMED_KEYS, type Outcome, type Run } from "./checks/types.ts";
 import { ParseError } from "./compose-parse.ts";
 import { CannotRun, type Deps, type Loaded, loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -78,14 +78,31 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
   const lines: string[] = [];
   let failed = false;
   const local = loaded.inputs.env === "local";
+  const services = new Set(loaded.inputs.compose.services.map((service) => service.name));
   for (const check of [...(deps.checks ?? CHECKS), ...(local ? LOCAL_CHECKS : [])]) {
     const outcome = await runCheck(check, loaded, deps.timeoutMs ?? NETWORK_TIMEOUT_MS);
     failed ||= !outcome.pass;
-    lines.push(`${verdict(outcome)} ${check.id} ${printable(outcome.reason)}`);
+    lines.push(`${verdict(outcome)} ${check.id}${named(outcome, services)} ${printable(outcome.reason)}`);
   }
   // A local stack's last word, pass or fail (architecture record 2026-10-12-p129-local-build-preflight, item 2).
   if (local) lines.push(LOCAL_LAST_LINE);
   return { code: failed ? 1 : 0, lines };
+}
+
+/** A Compose service name as compose-spec allows it ("services" top-level element): nothing else is printed as one. */
+const SERVICE_NAME = /^[a-zA-Z0-9._-]+$/;
+
+/**
+ * The key and service an outcome names, printed beside the verdict (P1.37k). Each prints only when it is on its closed
+ * list: the key on C29's names (NAMED_KEYS), the service among this stack's parsed service names. The closed lists are
+ * what make them safe to print, not the withholding filter: a service name may equal a configured value (PG_USER: web),
+ * and it still prints, so a withheld reason no longer hides which key or service failed.
+ */
+function named(outcome: Outcome, services: ReadonlySet<string>): string {
+  const { key, service } = outcome;
+  const keyText = key !== undefined && (NAMED_KEYS as readonly string[]).includes(key) ? ` key=${key}` : "";
+  const known = service !== undefined && services.has(service) && SERVICE_NAME.test(service);
+  return `${keyText}${known ? ` service=${service}` : ""}`;
 }
 
 /** A line's first word: UNSIGNED only ever marks a pass (types.ts `unsigned`), so it never hides a failure. */
