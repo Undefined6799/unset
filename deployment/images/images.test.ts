@@ -1027,7 +1027,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1072,6 +1072,15 @@ describe("base images", () => {
     expect(lock.pds).toStrictEqual({
       ref: "ghcr.io/bluesky-social/pds",
       tag: expect.stringMatching(/^0\.4\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // Fossorial's Newt (P1.37v, ADR 0030 Decision 2), the dev edge's tunnel to Pangolin, run as shipped likewise.
+    expect(lock.newt).toStrictEqual({
+      ref: "docker.io/fosrl/newt",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
