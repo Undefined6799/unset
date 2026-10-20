@@ -16104,8 +16104,11 @@ the scope a builder follows.
 5. ADR 0031's Compliance deploy check as ADR 0032 restates it: from the `newt_edge` network, the edge answers
    `https` with the self-signed leaf on its bound address, `:80` answers only a `308` to `https://` with no body
    and no upstream (Caddy's automatic redirect, which a file certificate does not switch off, ADR 0032 decision
-   4), the certificate is a leaf (no CA flag) with both staging names as SANs, and it expires more than 30 days
-   out; run after the first deploy and every edge change, as a runbook command (ADR 0032, Compliance).
+   4), the certificate is a leaf (no CA flag) with both staging names as SANs, a P-256 key and at most 825 days of
+   validity, and it expires more than 30 days out; one request through Pangolin to each name succeeds (each
+   resource's TLS Server Name must be its own staging name, since Traefik sends no SNI to an IP target and Caddy
+   with file certificates refuses a handshake without one; ADR 0032 decision 5, Alex's Pangolin step); run after
+   the first deploy and every edge change, as a runbook command (ADR 0032, Compliance).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
 beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
@@ -16142,9 +16145,12 @@ any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https` gl
 port under dev fail. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file
 certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; prod with
 a file certificate; local with the dev snippet; the main-branch dev rendering passing. It merges after P1.36c, which
-mounts the snippet and the secrets, so `--env dev` never fails on main between the two. The runbook gains the
-OpenSSL command that writes the leaf
-and key (P-256, both staging names as SANs, no CA flag, at most 825 days, key mode 0600) and the renewal date.
+mounts the snippet and the secrets. `--env dev` fails on main today (C18 refuses edge mounts over `/etc/caddy` but
+the sites directory, `edge.ts:78-81`, and requires the served `(tls)` to match `snippets/tls.caddy`, :228-231; C2
+refuses the checkout-built edge, :132-137) and first passes once P1.36b, P1.36c, P1.38e, P1.37v and P1.27s have all
+merged. The runbook gains the OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both
+staging names as SANs, no CA flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder
+owned by the deploy user, `secrets.ts:4-8`) and the renewal date.
 
 Threats (SE-1): a dev edge quietly switching to an issuer or a CA nobody rules on, a prod edge taking a file
 certificate under the dev rule, or the key readable by another service. Answered by the exact dev shape, the
