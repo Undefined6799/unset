@@ -236,10 +236,17 @@ describe("authorize", () => {
     // P1.36v What-1 (verify-1131 N1): our PDS's resource metadata naming another authorization server never reaches
     // that server: neither its metadata request nor PAR leaves. From a DID the sign-in is refused. From the chooser
     // the library falls back to our URL as the issuer itself (oauth-resolver.js:31-44, 0.8.9), so PAR goes to ours.
-    const did = await setup({ foreignServer: "https://evil-as.example" });
-    expect(await did.run(DID)).toEqual({ ok: false, reason: "account_elsewhere" });
-    expect(did.pars).toHaveLength(0);
-    expect(did.hosts.filter((host) => host !== "pds-test.dev")).toEqual([]);
+    // Another host, a lookalike that starts with our origin, and our host on another port (verify-1131 64eabac): the
+    // lock compares whole origins, not a prefix or a hostname.
+    for (const foreignServer of ["https://evil-as.example", `${PDS}.evil.example`, `${PDS}:8443`]) {
+      const did = await setup({ foreignServer });
+      expect(await did.run(DID), foreignServer).toEqual({ ok: false, reason: "account_elsewhere" });
+      expect(did.pars, foreignServer).toHaveLength(0);
+      expect(
+        did.hosts.filter((host) => host !== "pds-test.dev"),
+        foreignServer,
+      ).toEqual([]);
+    }
     const chooser = await setup({ foreignServer: "https://evil-as.example" });
     const result = await chooser.run(PDS);
     expect(result.ok && result.url.origin).toBe(PDS);
