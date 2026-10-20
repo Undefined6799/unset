@@ -85,6 +85,11 @@ other two are web's alone. Make each with `umask 077`, then `chown 65532:65532` 
 
 Neither value is ever printed by the server: the keyring and the keys show as `[keyring]` and `[oauth keys]`.
 
+The legal pages' three values are not secrets and live in `deployment/compose.dev.yaml` itself
+(`PRIVACY_OFFICER_TITLE`, `PRIVACY_OFFICER_CONTACT`, `SUPPORT_EMAIL`). They ship as `"[to fill: ...]"`, and the
+preflight's C32 fails `--env dev` while any value still starts with `[to fill:` (P1.38d), naming the service and keys.
+Alex writes his own values there, in a PR, before the first Pangolin resource is created.
+
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
 The PDS reads its settings only from its environment (`@atproto/pds` 0.5.37, `dist/config/env.js`), so its secrets
