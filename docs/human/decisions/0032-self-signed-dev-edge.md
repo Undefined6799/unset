@@ -120,8 +120,12 @@ ADR 0028 and the Phase 5 records.
   whole-record "Status: Superseded by NNNN." change (`scripts/docs/docs.test.ts:107-110`), and 0031 stands in
   every other decision. The partial supersession is recorded here, in 0031's README row ("Decision 2 superseded
   by 0032", the shape 0008 and 0017 use) and in the appended ADR 0001 entry, all at this record's acceptance.
-- A certificate that expires takes staging down until the runbook command runs; the deploy check's failure 30
-  days before expiry is the only guard. Accepted as a staging cost.
+- An expired certificate does not stop traffic: Caddy keeps serving the only certificate it has after
+  `NotAfter` (certmagic v0.25.6 `handshake.go:236-242`, `DefaultCertificateSelector` returns the single choice
+  expired or not), and Pangolin's transport for a resource with a TLS Server Name does not verify
+  (`getTraefikConfig.ts:472-476`, `insecureSkipVerify: true`). The guards are the deploy check, which fails from
+  30 days before expiry and refuses the next deploy, and the renewal date in the runbook; nothing scheduled
+  enforces it. Accepted as a staging cost.
 
 ## Compliance
 - Reds listed in Decision 3 and 4 land with P1.38e, P1.36b, P1.36c and P1.37v before the first deploy.
@@ -131,8 +135,11 @@ ADR 0028 and the Phase 5 records.
   reads a PEM body (`local-leaf.ts` reads one under local only); a PEM committed by mistake is caught only by
   gitleaks in CI, and C9 refuses a secret file anywhere inside `deployment/`.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
-  device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs,
-  and P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS` (0031 Decision 3).
+  device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs
+  and that it is self-signed (issuer equals subject and the signature verifies with the leaf's own public key,
+  `openssl verify -CAfile leaf.pem leaf.pem`), so a CA-issued leaf carrying the right names fails; C18 reads only
+  the directive and the paths, not the PEM. P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS`
+  (0031 Decision 3).
 - Acceptance line: "yes accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
   docs/human/decisions/0032-self-signed-dev-edge.md". Alex typed it at 2026-10-20 21:54:54Z against this record at
   ae9d8e7. Two commitments were added after that, from the verifier's reading, without changing the decision: C18
@@ -144,5 +151,8 @@ ADR 0028 and the Phase 5 records.
   Before merge, Decision 3's first bind was corrected from `deployment/edge/sites/pds.caddy` to
   `deployment/edge/dev/pds.caddy` (26e13e6): the dev PDS site must bind the `newt_edge` address for P1.36j's
   trusted-proxy match. The correction came from the third lane's finding and was ruled by the coordinator; the
-  decision itself is unchanged, and Alex was told in the project chat at 2026-10-20 22:57Z.
+  decision itself is unchanged, and Alex was told in the project chat at 2026-10-20 22:57Z. Codex's review of
+  01eb573 (23:05Z) asked that a record which calls itself immutable after acceptance be accepted against its final
+  text, and added the self-signed and expiry points above; so the final revision goes back to Alex for one fresh
+  line against its commit, and the status line records that commit when he types it.
   0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.
