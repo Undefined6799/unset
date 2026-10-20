@@ -67,7 +67,8 @@ const EVENTS = [
   "pds.unexpected",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
-  // P2.08a, a revocation that failed on the last browser's sign-out. No DID.
+  // A revocation that failed: on the last browser's sign-out (P2.08a, routes/logout.ts, also when dropping the stored
+  // set fails) and at the under-16 block (P2.12, routes/welcome.ts). `kind` is the class name. No DID.
   "oauth.revoke_failed",
   // P2.08b, the issuer recorded at sign-in could not be read at sign-out; `kind` is the class name. No DID.
   "auth.logout_issuer_unknown",

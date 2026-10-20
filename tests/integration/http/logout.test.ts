@@ -1,6 +1,6 @@
 // P2.08a: HTTP proof that one of two sessions can sign out, and account access ends when the grant is gone.
 // The route tests stub the store. This file uses Postgres as web and the real session store (P2.03, P2.04s).
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -140,7 +140,7 @@ beforeAll(async () => {
         ...browserLogout({
           pool: webPool,
           sessions: store,
-          idleS: LIMITS.idleS,
+          limits: LIMITS,
           revoke: async (owner: Did) => {
             revoked.push({ did: owner, hadToken: await hasToken(owner) });
             if (mode === "keep") throw new Error("RevokeDown");
@@ -351,6 +351,31 @@ test("logout.last_browser_counts_inside_idle", () =>
 
 test("logout.last_browser_counts_inside_absolute", () => expectKept({ idleS: 60, absoluteS: 60 + INSIDE_S }));
 
+// The count reads the idle limit from the store's limits object; reading its touch interval instead would drop a
+// browser seen a few minutes ago and revoke a grant a live browser still uses (verify-1009 M3).
+test("logout.last_browser_counts_past_the_touch_interval", () =>
+  expectKept({ idleS: LIMITS.touchIntervalS * 2, absoluteS: LIMITS.absoluteS }));
+
+// verify-1020 M1: when the revocation fails, the stored set is still dropped, so no grant outlives the last browser.
+test("logout.last_browser_revoke_fails", async () => {
+  mode = "keep";
+  revoked = [];
+  lines.length = 0;
+  const owner = newDid();
+  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  const only = await open(owner);
+  const response = await post("/logout", only.cookieValue, "");
+  expect(response.headers.get("location")).toBe("/signed-out");
+  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
+  expect(await hasToken(owner)).toBe(false);
+  expect(await sessionsOf(owner)).toBe(0);
+  expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toEqual([
+    expect.objectContaining({ kind: "Error" }),
+  ]);
+  expect(JSON.stringify(lines)).not.toContain(owner);
+  mode = "drop";
+});
+
 test("logout.remaining_sessions_need_a_token_set", async () => {
   const owner = newDid();
   await open(owner);
@@ -358,4 +383,42 @@ test("logout.remaining_sessions_need_a_token_set", async () => {
   expect(await withTransaction(webPool, null, count)).toBe(0);
   await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
   expect(await withTransaction(webPool, null, count)).toBe(1);
+});
+
+// P2.08c, pinned to the store. now() does not move inside one transaction, so the count and the store's own read judge
+// the same instant, with no runner time between the insert and either check. Offsets are seconds from now(); a row's
+// absolute expiry is its creation plus the absolute limit, as the store writes it. The neighbour's live session and
+// token set must never count for another DID.
+const EDGES = [
+  { edge: "1 s inside the idle limit", seenS: -LIMITS.idleS + 1, createdS: -LIMITS.idleS + 1, live: true },
+  { edge: "idle limit reached", seenS: -LIMITS.idleS, createdS: -LIMITS.idleS, live: true },
+  { edge: "idle limit passed by 1 s", seenS: -LIMITS.idleS - 1, createdS: -LIMITS.idleS - 1, live: false },
+  { edge: "1 s inside the absolute limit", seenS: -60, createdS: -LIMITS.absoluteS + 1, live: true },
+  { edge: "absolute limit reached", seenS: -60, createdS: -LIMITS.absoluteS, live: true },
+  { edge: "absolute limit passed by 1 s", seenS: -60, createdS: -LIMITS.absoluteS - 1, live: false },
+  { edge: "created two idle limits ago, seen a minute ago", seenS: -60, createdS: -2 * LIMITS.idleS, live: true },
+] as const;
+
+test("logout.remaining_sessions_match_the_store", async () => {
+  const neighbour = newDid();
+  await tokenSets.set(neighbour, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  await open(neighbour);
+  for (const { edge, seenS, createdS, live } of EDGES) {
+    const owner = newDid();
+    await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+    const cookie = randomBytes(32);
+    const judged = await withTransaction(webPool, null, async (tx) => {
+      await tx.query(
+        "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) VALUES ($1, $2, " +
+          "now() + make_interval(secs => $3), now() + make_interval(secs => $4), " +
+          "now() + make_interval(secs => $3) + make_interval(secs => $5))",
+        [createHash("sha256").update(cookie).digest(), owner, createdS, seenS, LIMITS.absoluteS],
+      );
+      const counted = await remainingSessions(tx, owner, LIMITS.idleS);
+      const sameInstant = createSessionStore({ withDb: (_deadline, fn) => fn(tx), limits: LIMITS, log: quiet });
+      const read = await sameInstant.read({ key: {}, cookieValue: cookie.toString("base64url"), deadline: null });
+      return { edge, counted, accepted: read.session !== null };
+    });
+    expect(judged).toEqual({ edge, counted: live ? 1 : 0, accepted: live });
+  }
 });

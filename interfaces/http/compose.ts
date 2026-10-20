@@ -6,9 +6,10 @@
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
 // connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
-// and P2.08a: this browser and the last browser's grant (P2.08d removed sign-out everywhere). P2.13: the signed-in home, with
-// P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
-// error page. P1.25c: the test-only pages, imported only when TEST_ROUTES is on, so no deployed process loads them.
+// and P2.08a: this browser and the last browser's grant (P2.08d removed sign-out everywhere). P2.13: the signed-in
+// home, with P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on
+// apps/web's error page. P1.25c: the test-only pages, imported only when TEST_ROUTES is on, so no deployed process
+// loads them.
 import { fileURLToPath } from "node:url";
 import {
   createDidResolver,
@@ -159,13 +160,15 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   const oauth = await composeOAuth(cfg, log);
   const page: Services["page"] = (input) => pageResponse(deps, input);
   const nonces = createSingleUseStore({ log });
+  // One object for the store and the sign-out count (P2.08c), so the two cannot read different idle limits.
+  const sessionLimits = {
+    idleS: cfg.SESSION_IDLE_S,
+    absoluteS: cfg.SESSION_ABSOLUTE_S,
+    touchIntervalS: cfg.SESSION_TOUCH_INTERVAL_S,
+  };
   const sessions = createSessionStore({
     withDb: (deadline, fn) => withClient(oauth.pool, deadline, fn),
-    limits: {
-      idleS: cfg.SESSION_IDLE_S,
-      absoluteS: cfg.SESSION_ABSOLUTE_S,
-      touchIntervalS: cfg.SESSION_TOUCH_INTERVAL_S,
-    },
+    limits: sessionLimits,
     log,
   });
   const readSession = (request: Request, deadline: AbortSignal) => {
@@ -219,7 +222,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...browserLogout({
       pool: oauth.pool,
       sessions,
-      idleS: cfg.SESSION_IDLE_S,
+      limits: sessionLimits,
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
     }),

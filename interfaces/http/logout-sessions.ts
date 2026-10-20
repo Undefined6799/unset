@@ -1,10 +1,10 @@
 // The session work behind signing out (P2.08a; book phase-2.md "POST /logout" step 4; plan §5.3 "Logout"). P2.08d
-// removed "sign out everywhere" and its destroy-all here. The count is the book's SELECT, run in the same transaction as the delete so a
-// failed count rolls the delete back. It lives here, not on infrastructure/session: that folder is trusted base
-// (SE-6, CODEOWNERS) and cannot share a pull request with these routes.
+// removed "sign out everywhere" and its destroy-all here. The count (live sessions only since P2.08c) runs in the same
+// transaction as the delete, so a failed count rolls the delete back. It lives here, not on infrastructure/session:
+// that folder is trusted base (SE-6, CODEOWNERS) and cannot share a pull request with these routes.
 import type { Did } from "@unset/domains-identity";
 import { type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
-import type { Session, SessionDb, SessionStore } from "@unset/infrastructure-session";
+import type { Session, SessionDb, SessionLimits, SessionStore } from "@unset/infrastructure-session";
 
 /**
  * How many of `did`'s sessions can still sign a browser in (P2.08c). A row past its idle or absolute expiry is not
@@ -29,8 +29,8 @@ export async function remainingSessions(db: SessionDb, did: Did, idleS: number):
 export function browserLogout(options: {
   readonly pool: Pool;
   readonly sessions: SessionStore;
-  /** The store's idle lifetime in seconds (SessionLimits.idleS), so a stale row is not counted as a browser. */
-  readonly idleS: number;
+  /** The store's own limits object (compose's `sessionLimits`), so a stale row is not counted as a browser. */
+  readonly limits: SessionLimits;
   /** `@atproto/oauth-client` 0.8.9 `OAuthClient.revoke` (dist/oauth-client.js). Deletes the stored set in a `finally`. */
   readonly revoke: (did: Did) => Promise<void>;
 }): {
@@ -38,12 +38,12 @@ export function browserLogout(options: {
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
 } {
-  const { pool, sessions, idleS, revoke } = options;
+  const { pool, sessions, limits, revoke } = options;
   return {
     destroySession: (session, deadline) =>
       withTransaction(pool, deadline, async (tx) => {
         await sessions.destroy(tx, session.idHash);
-        return remainingSessions(tx, session.did, idleS);
+        return remainingSessions(tx, session.did, limits.idleS);
       }),
     revokeGrant: (did) => revoke(did),
     deleteTokenSet: (did, deadline) =>
