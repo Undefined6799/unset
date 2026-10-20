@@ -48,14 +48,20 @@ ADR 0028 and the Phase 5 records.
    `snippets/tls.caddy`, so it needs Alex's own typed line, separate from this record's): under `--env dev` the
    served `(tls)` must read the same as `dev/tls.caddy`, which must be exactly `tls <cert_file> <key_file>` with
    both paths under the dev mount; any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https`
-   global, any site without `import tls`, any `:80` site, and any published port under dev fail. Under prod C18 is
+   global, any site without `import tls`, any `:80` site in the configuration, and any published port under dev
+   fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
 4. **Edge shape otherwise as 0031 Decision 2:** bound only to the edge's address on `newt_edge`, no published
-   port, no `:80` site (replacing 0031's "no `:443` site"); the `_acme-challenge` CNAMEs are not created for
-   staging and the CAA records drop the edge's `dns-01` line, as 0031 already says; P1.36e, P1.36o and the DNS
-   provider steps stay production work; the deploy check that P1.37v brings connects from `newt_edge` and asserts
-   `https` with this certificate on the bound address and a refused `:80`, and reads the expiry.
+   port, no `:80` site in the configuration (replacing 0031's "no `:443` site"). Caddy still opens `:80` on that
+   address at run time for its automatic redirect to `https` (Caddy v2.11.7 `caddyhttp/autohttps.go:198-212`
+   skips only certificate management for a file certificate, and `:229-268` records a redirect for every
+   listener unless `disable_redirects` is set, a global this record keeps outside the reader's allowlist), so
+   `:80` answers only a `308` to `https://` with no body and no upstream, and the deploy check asserts exactly
+   that. The `_acme-challenge` CNAMEs are not created for staging and the CAA records drop the edge's `dns-01`
+   line, as 0031 already says; P1.36e, P1.36o and the DNS provider steps stay production work; the deploy check
+   that P1.37v brings connects from `newt_edge` and asserts `https` with this certificate on the bound address,
+   the `308`-only `:80`, and reads the expiry.
 5. **Pangolin.** Both resources target the edge over `https`; no Pangolin setting is changed to make it verify
    the certificate, since it cannot be verified by anyone and 0030 already accepts the unverified last hop.
 
