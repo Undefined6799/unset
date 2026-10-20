@@ -4,6 +4,7 @@
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
 import { DEV_ONLY_NETWORKS, isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
+import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
 import { readBases, readLock } from "./lock.ts";
 import { type Check, type Env, fail, type Inputs, missing, pass } from "./types.ts";
@@ -94,6 +95,30 @@ export function pdsNeighbours(inputs: Inputs): string[] {
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 
 /**
+ * Under dev the PDS and web reach both staging names only through Pangolin, Newt and the edge (ADR 0031 Decision 3;
+ * P1.36i): the edge carries no alias on any network, and no service names an internal host for net-guard, so net-guard
+ * keeps no exception on staging. The host list is read from the environment each container gets, its env files
+ * included, as C29 reads keys. Local keeps both; prod is untouched here. The reasons are fixed words: a network or
+ * service name, or "dev", can be a configured value, which would withhold the whole reason (P1.30m).
+ */
+export function devTunnelProblems(inputs: Pick<Inputs, "compose" | "env" | "serviceEnv">): string[] {
+  if (inputs.env !== "dev") return [];
+  const problems: string[] = [];
+  if (inputs.compose.edgeAliasNetworks.length > 0) problems.push("the edge carries a network alias");
+  const named = (env: SecretMap) => env.use(INTERNAL_HOSTS, (hosts) => hosts !== undefined && hosts !== "");
+  const inCompose = inputs.compose.services.some((service) => {
+    const hosts = service.environment.find(([key]) => key === INTERNAL_HOSTS)?.[1];
+    return hosts !== undefined && !("literal" in hosts && hosts.literal === "");
+  });
+  if (inCompose || [...inputs.serviceEnv.values()].some(named)) {
+    problems.push("a service names an internal host for net-guard");
+  }
+  return problems;
+}
+
+const INTERNAL_HOSTS = "NETGUARD_INTERNAL_HOSTS";
+
+/**
  * An image reference reduced to its repository, the image a service runs whatever version, in the one form every
  * spelling of it shares (architecture 03:05Z addendum): lower case, no digest, no tag, and Docker Hub's default
  * registry and `library/` namespace written out, as the Docker CLI resolves a short name (distribution/reference
@@ -140,7 +165,11 @@ export const c17: Check = {
     if (local !== null) return fail(local);
     const expected = withLocalOnly(table, env);
     if (typeof expected === "string") return fail(expected);
-    const problems = [...pdsNeighbours(inputs), ...networkTableProblems(compose, expected)];
+    const problems = [
+      ...pdsNeighbours(inputs),
+      ...devTunnelProblems(inputs),
+      ...networkTableProblems(compose, expected),
+    ];
     return problems.length === 0 ? pass() : fail(problems.join("; "));
   },
 };

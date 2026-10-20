@@ -214,6 +214,8 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   const networks: Network[] = [];
   const secretFiles: string[] = [];
   const secretFileByName = new Map<string, string>();
+  // A service is defined in one file only, so the edge's aliases are its own file's.
+  const edgeAliasNetworks: string[] = [];
   const mounted = new Map<string, MountedSecret["mountedBy"]>();
   const interpolated = new Set<string>();
   let name: string | null = null;
@@ -252,8 +254,9 @@ export function loadCompose(files: string[], readText: (path: string) => string 
       networks.push(network);
     }
     secretFiles.push(...compose.secretFiles.map((path) => resolve(projectDir, path)));
+    edgeAliasNetworks.push(...compose.edgeAliasNetworks);
   }
-  const compose: Compose = { name, services, networks, secretFiles, secretFileByName };
+  const compose: Compose = { name, services, networks, secretFiles, secretFileByName, edgeAliasNetworks };
   const [undeclared] = undeclaredNetworks(compose);
   if (undeclared !== undefined) throw new CannotRun(undeclared);
   const mountedSecrets = [...mounted].map(([path, mountedBy]) => ({ path, mountedBy }));
