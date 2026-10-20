@@ -193,6 +193,7 @@ describe("dev edge (P1.36b)", () => {
       ["dev/pds.caddy", PDS, "\timport security-headers\n", "{$PDS_HOST}: does not import security-headers"],
       ["dev/pds.caddy", PDS, "\timport noindex\n", "{$PDS_HOST}: does not import noindex"],
       ["dev/pds.caddy", PDS, "\t\timport xrpc-guard\n", "{$PDS_HOST}: does not import xrpc-guard"],
+      ["dev/pds.caddy", PDS, "\t\timport blob-deny\n", "{$PDS_HOST}: does not import blob-deny"],
     ];
     for (const [file, text, line, problem] of cases) {
       expect(text, line).toContain(line);
@@ -375,6 +376,25 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
     // Caddy's RE2 `(?i)` as a JavaScript flag.
     return new RegExp(arg.replace(/^\(\?i\)/, ""), arg.startsWith("(?i)") ? "i" : "");
   };
+
+  // P1.38f (ADR 0031 Decision 4; TE-6): every spelling of the three blob methods a client can send is denied.
+  test("blob_routes_denied_in_every_spelling", () => {
+    const blob = regexOf("blob-deny", "@blob");
+    for (const method of ["com.atproto.repo.uploadBlob", "com.atproto.sync.getBlob", "com.atproto.repo.importRepo"]) {
+      fc.assert(
+        fc.property(
+          spelled(["xrpc", method]),
+          fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }),
+          (path, mask) => {
+            expect(blob.test(decoded(encoded(path, mask))), path).toBe(true);
+          },
+        ),
+      );
+    }
+    for (const other of ["/xrpc/com.atproto.sync.getRecord", "/xrpc/com.atproto.repo.uploadBlobx", "/blob/getBlob"]) {
+      expect(blob.test(other), other).toBe(false);
+    }
+  });
 
   test("signin_files_405_in_every_spelling", () => {
     const files = regexOf("signin-files", "@signin_files_write");

@@ -868,7 +868,7 @@ const blockText = (directives: Directive[]): unknown[] =>
 /**
  * The dev shape (P1.36b; ADR 0032): under dev every public site is its bare host placeholder (https), bound to
  * DEV_EDGE_ADDRESS alone, importing the dev `(tls)`, the security headers and noindex; the PDS site keeps
- * the admin guard, and the app site refuses writes to the sign-in files. No dev site is plain http, so there is no
+ * the admin guard and shuts the blob routes (P1.38f), and the app site refuses writes to the sign-in files. No dev site is plain http, so there is no
  * :80 site (ADR 0032 Decision 4); outside dev a site is never plain http either, and prod serves no file certificate.
  */
 function schemeProblems(site: Site, mode: EdgeMode): string[] {
@@ -905,7 +905,7 @@ function schemeProblems(site: Site, mode: EdgeMode): string[] {
     [site.directives, "security-headers"],
     [site.directives, "noindex"],
   ];
-  if (host === "PDS_HOST") required.push([route, "xrpc-guard"]);
+  if (host === "PDS_HOST") required.push([route, "xrpc-guard"], [route, "blob-deny"]);
   if (host === "APP_HOST") required.push([route, "signin-files"]);
   for (const [block, snippet] of required) {
     if (!block.some((directive) => directive.via === snippet)) found.push(`${name}: does not import ${snippet}`);
