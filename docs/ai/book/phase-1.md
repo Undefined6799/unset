@@ -8849,7 +8849,7 @@ accepts `APP_HOST` only as ADR 0025's accepted app name, one exact string (not a
 `APP_UPSTREAM` only as the internal web address that local already pins. Both join the dev positive allowlist
 (P1.34z's); if that allowlist lives in `deployment/preflight/`, P1.36c adds the two entries there. Prod stays refused
 until a ruling of its own. Local is unchanged. The PDS site's header and guard rules apply to the app site (its
-zones do not, above), it has no TLS under dev (ADR 0031, decision 2), and the edge-only PDS neighbour rule (P1.34d
+zones do not, above), its TLS is ADR 0032's file certificate, and the edge-only PDS neighbour rule (P1.34d
 option C) applies under dev as P1.36i now reads it. Reds: any other host under dev, any other upstream under dev, and
 either one under prod. Alex's Pangolin reaches the edge through Newt over `https` to the self-signed leaf on the
 edge's `newt_edge` address, without verifying it (0030:71-74); no port is published (P1.37v; ADR 0032).
@@ -8862,8 +8862,9 @@ the reader refuses a `dev/` directory under prod and local (P1.36o's refusals, n
 `deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose `dev/` mount itself is P1.36c's.
 TLS under dev follows ADR 0032 (Proposed; it supersedes ADR 0031 decision 2's plain `http` after Alex's
 2026-10-20 21:42:50Z choice): both dev sites keep `import tls`, and `dev/tls.caddy` defines `(tls)` as exactly
-`tls <cert_file> <key_file>`, the local stack's shape (`local/tls.caddy:7-8`), pointing at a self-signed leaf for
-both staging names and its key under the dev mount; no issuer, no ACME, no `tls internal`, no CA. Reds: the dev
+`tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, the local stack's shape (`local/tls.caddy:7-8`): the
+snippet lives in the dev mount, the self-signed leaf for both staging names and its key are C9 file secrets under
+`/run/secrets/` (P1.36c mounts them); no issuer, no ACME, no `tls internal`, no CA. Reds: the dev
 rendering names no acme issuer and no `:80` site; a `dev/tls.caddy` of any other shape fails. The PDS site riding
 that certificate is ADR 0032's decision, approved by its acceptance; the app site is under his P1.36b line.
 **C18 is not changed here, and it blocks the first deploy until P1.38e lands:** on main C18 runs under `--env dev`
@@ -16075,14 +16076,6 @@ its fake (P2.16); storing the API key (P5.06).
 
 ---
 
-### P1.38 — Phase 1 exit
-
-**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
-
-**Where:** `.github/workflows/phase-exit.yml`; `scripts/phase-metrics.ts`; `docs/human/phase-exits/phase-1.md`.
-
----
-
 ### P1.37v — Run Newt in the dev compose stack
 Tags: [SEC]            Depends on: P1.36b, P1.36j
 Slice 1, issue #1115, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, `bases.lock.json`, the
@@ -16111,8 +16104,8 @@ the scope a builder follows.
 5. ADR 0031's Compliance deploy check as ADR 0032 restates it: from the `newt_edge` network, the edge answers
    `https` with the self-signed leaf on its bound address, `:80` answers only a `308` to `https://` with no body
    and no upstream (Caddy's automatic redirect, which a file certificate does not switch off, ADR 0032 decision
-   4), and the certificate expires more than 30 days out; run after the first deploy and every edge change, as a
-   runbook command.
+   4), the certificate is a leaf (no CA flag) with both staging names as SANs, and it expires more than 30 days
+   out; run after the first deploy and every edge change, as a runbook command (ADR 0032, Compliance).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
 beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
@@ -16142,12 +16135,15 @@ the PR body.
 
 **What:** today C18 runs under `--env dev` (`edge.ts:400-401`, `certificateProblems` at :152-153) and fails any
 site whose served `(tls)` differs from `snippets/tls.caddy` (:200-206, :223), so `dev:up` refuses the edge P1.36b
-renders. Under dev C18 instead requires the served `(tls)` to read the same as `dev/tls.caddy`, which must be
-exactly `tls <cert_file> <key_file>` with both paths under the dev mount; any `tls internal`, any acme issuer, any
-`local_certs`, `pki` or `auto_https` global, any site without `import tls`, any `:80` site and any published port
-under dev fail. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file certificate under
-prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; prod with a file
-certificate; the main-branch dev rendering passing. The runbook gains the OpenSSL command that writes the leaf
+renders. Under dev C18 instead requires the served `(tls)` to read the same as `dev/tls.caddy` (in the dev mount),
+which must be exactly `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, both C9 file secrets (P1.36c);
+any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https` global, any site without
+`import tls`, any `:80` site in the configuration, any certificate path outside `/run/secrets/` and any published
+port under dev fail. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file
+certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; prod with
+a file certificate; local with the dev snippet; the main-branch dev rendering passing. It merges after P1.36c, which
+mounts the snippet and the secrets, so `--env dev` never fails on main between the two. The runbook gains the
+OpenSSL command that writes the leaf
 and key (P-256, both staging names as SANs, no CA flag, at most 825 days, key mode 0600) and the renewal date.
 
 Threats (SE-1): a dev edge quietly switching to an issuer or a CA nobody rules on, a prod edge taking a file
@@ -16167,6 +16163,14 @@ decision 4 (book edit 2026-10-20-adr-0031-no-login). A tightening, so nothing is
 tolerance for CSAM and the vault note `research/atproto-blob-serving-security` forbid. Each deny gets a
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
+
+---
+
+### P1.38 — Phase 1 exit
+
+**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
+
+**Where:** `.github/workflows/phase-exit.yml`; `scripts/phase-metrics.ts`; `docs/human/phase-exits/phase-1.md`.
 
 **Size:** ~150 lines.
 
