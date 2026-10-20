@@ -140,12 +140,13 @@ From the checkout, with the same files the wrapper passes (`deployment/preflight
 is the one `docker compose` command this runbook allows by hand:
 
 ```sh
-docker compose -f deployment/compose.dev.yaml --env-file ../unset-dev-env/dev-public.env exec pds node -e 'fetch("http://127.0.0.1:3000/xrpc/com.atproto.server.createInviteCode", { method: "POST", headers: { authorization: "Basic " + Buffer.from("admin:" + process.env.PDS_ADMIN_PASSWORD).toString("base64"), "content-type": "application/json" }, body: JSON.stringify({ useCount: 1 }) }).then((r) => r.json()).then((j) => console.log(j.code))'
+docker compose -f deployment/compose.dev.yaml --env-file ../unset-dev-env/dev-public.env exec pds node -e 'fetch("http://127.0.0.1:3000/xrpc/com.atproto.server.createInviteCode", { method: "POST", headers: { authorization: "Basic " + Buffer.from("admin:" + process.env.PDS_ADMIN_PASSWORD).toString("base64"), "content-type": "application/json" }, body: JSON.stringify({ useCount: 1 }) }).then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok || typeof j.code !== "string") { console.error("no invite code: HTTP " + r.status); process.exit(1); } console.log(j.code); })'
 ```
 
-The request is the one the PDS's own `pdsadmin create-invite-code` sends (bluesky-social/pds v0.4.5037
-`pdsadmin/create-invite-code.sh`), aimed at loopback instead of the public name. The code it prints goes to the tester
-and nowhere else.
+If the PDS refuses the request (a wrong admin password, say), the command prints only the HTTP status and exits
+non-zero, so a failure never looks like a code. The request is the one the PDS's own `pdsadmin create-invite-code`
+sends (bluesky-social/pds v0.4.5037 `pdsadmin/create-invite-code.sh`), aimed at loopback instead of the public name.
+The code it prints goes to the tester and nowhere else.
 
 ## Creating or rotating a file
 
