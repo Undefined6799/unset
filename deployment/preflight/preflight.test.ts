@@ -2911,8 +2911,6 @@ describe("preflight C29 (P1.36k)", () => {
   });
 });
 
-// P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
-// stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
 // P1.38d (ADR 0031 Decision 1): a public stack never serves a legal placeholder, so under dev and prod any environment
 // value that still starts with "[to fill:" fails, naming the service and the keys, never the value.
 describe("preflight C32 (P1.38d)", () => {
@@ -2959,6 +2957,8 @@ describe("preflight C32 (P1.38d)", () => {
   });
 });
 
+// P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
+// stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
 describe("preflight C22 pinned upload bounds (P1.36p)", () => {
   const PINNED_TMP = '"/tmp:uid=1000,gid=1000,mode=1777,size=20m"';
   const devWith = (pdsEnv: Record<string, string | null>, tmpfs = `    tmpfs: [${PINNED_TMP}]\n`): Stack => ({

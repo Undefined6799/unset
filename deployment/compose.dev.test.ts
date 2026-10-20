@@ -11,6 +11,7 @@ import { c26 } from "./preflight/checks/build.ts";
 import { edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
+import { c32 } from "./preflight/checks/placeholders.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import { switchesProtectionOff } from "./preflight/checks/settings.ts";
 import { fail, type Outcome, pass } from "./preflight/checks/types.ts";
@@ -900,6 +901,16 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
     // Renamed, the PDS is still known by its image.
     expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
+  });
+
+  test("c32_passes_on_the_dev_stack", async () => {
+    // P1.38d on this file: Alex's legal values (P1.36c) leave no "[to fill:" value for staging to serve, and a token
+    // put back fails.
+    const signal = new AbortController().signal;
+    expect(await c32.run(devInputs(), signal)).toEqual({ pass: true, reason: "ok" });
+    const token = (text: string) =>
+      text.replace("SUPPORT_EMAIL: support@staging.unset.sh", 'SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"');
+    expect((await c32.run(devInputs(token), signal)).pass).toBe(false);
   });
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
