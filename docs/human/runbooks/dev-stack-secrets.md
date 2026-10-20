@@ -148,6 +148,38 @@ The `-enddate` line prints the expiry while the deploy user can still read the c
 65532 can); every line runs in a plain `sh`. Put the date 30 days before the expiry in the staging calendar and remake
 the pair the same way then (C18 reads only the two files' places, not their dates). Only the edge mounts them (P1.36c).
 
+## Newt's env file (P1.37v, dev only)
+
+Under dev the edge publishes no port: Pangolin reaches it through Newt, a service in `compose.dev.yaml` (ADR 0030,
+Decision 2). Newt's credentials go in `unset-dev-env/newt.env`, yours, mode `0600`, beside `pds.env`. Start it from
+`deployment/env/newt.example.env`. It holds exactly three names, which the preflight's C31 checks by name only; every
+other Newt setting is written out in `compose.dev.yaml`. The local stack has no Newt and reads no `newt.env`.
+
+| Name | Where it comes from |
+| --- | --- |
+| `PANGOLIN_ENDPOINT` | Pangolin's own `https` address |
+| `NEWT_ID` | shown by Pangolin when you create the staging site |
+| `NEWT_SECRET` | shown once, with the id; if lost, regenerate it in Pangolin and replace it here |
+
+Each Pangolin target for the two staging names is `https` to the edge's fixed address, `10.250.37.3`, port 443, with
+certificate checks off for that target, since the leaf above is self-signed (ADR 0032, Decisions 4 and 5). Newt saves its credentials back to `/tmp` inside its container, which holds nothing after a
+restart; this file stays the only copy on the host.
+
+**After each deploy**, check the edge on its `newt_edge` address. Run these on the host, which reaches that internal
+network through its bridge gateway (`10.250.37.1`) until isolated gateway mode removes it; they use the host's own curl
+and OpenSSL. The first prints `200` or another status from the app; the second prints the leaf's names and expiry; the
+third must print exactly `308 https://staging.unset.sh/`, since Caddy answers `:80` only with its redirect to https
+(caddy v2.11.7 modules/caddyhttp/autohttps.go:229-268) and serves nothing there.
+
+```sh
+curl -sS -k -o /dev/null -w '%{http_code}\n' --resolve staging.unset.sh:443:10.250.37.3 https://staging.unset.sh/
+openssl s_client -connect 10.250.37.3:443 -servername staging.unset.sh </dev/null 2>/dev/null \
+  | openssl x509 -noout -ext subjectAltName -enddate
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' --resolve staging.unset.sh:80:10.250.37.3 http://staging.unset.sh/
+```
+
+If the expiry is less than 30 days away, remake the leaf as above before anything else.
+
 ## The first invite codes (one-off, until P2.09)
 
 Invites are required (`PDS_INVITE_REQUIRED`). Until `interfaces/pds-admin` (P2.09) exists, Alex makes each code by hand
