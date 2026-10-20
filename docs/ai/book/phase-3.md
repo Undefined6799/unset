@@ -2077,7 +2077,11 @@ Outputs (contract):
     sent at once, never suppressed and never digest-only, and does not count toward the 30-per-hour total. Its payload
     carries no DID, handle, text or hash (only the hold reference).
   - `digest.send` args (fixed schema): `{heads: [{lane, seq, row_hash}], roster_serial, roster_sha256, counts:
-    {accounts_new, reports_opened, actions}, suppressed_alerts, canary_code}`; `pds-admin` adds its own log head.
+    {accounts_new, reports_opened, actions, open_hosted_blocks}, suppressed_alerts, canary_code}`; `pds-admin` adds
+    its own log head. `open_hosted_blocks` is derived, never set by hand (P3.20c; Codex item 5 on #1081, architecture's
+    section labelled 06:15Z, mapped by the step book at 07:07Z).
+  - The `age_gate_hosted_block` alert payload is the audit row id only, under the normal caps (test
+    `alert_hosted_block_payload_is_row_id`).
   - **Mail preflight (F3, plan issue PI-6):** the deploy preflight (P1.30, production P5.02a) fails unless
     `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` are set on the PDS. Delivery itself is
     proven by the owner's weekly canary (P3.20c, runbook 8), since `sendEmail` cannot report it.
@@ -2781,11 +2785,20 @@ Outputs (contract):
   - `ops.metric(name PK, value double precision, reported_at, source_role)`; definer `ops.report(name, value)`
     with the name-to-role mapping written as a fixed `CASE` inside the function (no mapping table): `indexer` →
     `tap_lag_seconds_relay`, `tap_lag_seconds_own`, `ingest_dead_letters`, `track_queue_depth`,
-    `account_jobs_overdue`; `web` → `sessions_active`; `media` → `media_cid_mismatch`; `auditor` →
-    `audit_chain_ok_*`, `audit_head_*`. A string value is impossible (numeric column). These per-service health
-    signals sit beside `metrics_daily` by Alex's decision 35 D9 (2026-10-04; decision 17 clarified): never per user (no
-    DID, IP or handle in a name or value), and `ops.metric` has a row in the retention table (latest value only,
-    overwritten; P5.09) and a line in the RoPA (P1.36, P5.12).
+    `account_jobs_overdue`; `web` → `sessions_active`, `auth_dead_dids_ended`, `auth_dead_sessions_ended`; `media` →
+    `media_cid_mismatch`; `auditor` → `audit_chain_ok_*`, `audit_head_*`. A string value is impossible (numeric column).
+    These per-service health signals sit beside `metrics_daily` by Alex's decision 35 D9 (2026-10-04; decision 17
+    clarified): never per user (no DID, IP or handle in a name or value), and `ops.metric` has a row in the retention
+    table (latest value only, overwritten; P5.09) and a line in the RoPA (P1.36, P5.12).
+  - `auth_dead_dids_ended` and `auth_dead_sessions_ended` (moved from the retired P2.11b, architecture 07:08Z; two
+    fixed names, architecture 19:32Z, real UTC; issue #1052): counters, not latest values. P2.11a's `auth_dead` path
+    adds the DIDs and the sessions it ended to `ops.counter(name PK, value bigint)` with `value = value + $n`, in the
+    transaction that enqueues the end (architecture 20:09Z). Counts only, with no DID, IP or label value; no audit row
+    (P1.15); a transient failure raises nothing.
+  - `open_hosted_blocks` for the digest: the count of `age_gate.blocked` audit rows with reason `age_gate_hosted`
+    that have no matching succeeded `deactivate` or `takedown` outcome in `pds-admin`'s log. "Handled" is derived,
+    never set by hand; until P3.16 lands, every such row stays open (Codex item 5 on #1081, architecture's section
+    labelled 06:15Z, step book 07:07Z).
   - `adm.canary(id, code_sha256, sent_at, confirmed_at NULL)`: the mail canary (F3).
   - **Alert outbox, `alert.send(class)`** (editor pass, phase-5 note 10): a process with no mail path (`indexer`,
     `auditor`, and later `retention` and `backup`) never sends an alert itself. `alert.send(class)` calls the
@@ -2820,7 +2833,12 @@ Edge cases and failures: `ops.report` for a name the role does not own → raise
 outside switch alerts (P3-B2).
 
 Done when (tests):
-  - `ops-report-name-ownership`; `ops-numeric-only`; `alert-outbox-class-ownership`; `alert-outbox-delivered-once`.
+  - `ops-report-name-ownership`; `ops-numeric-only`; `ops_auth_dead_counters` (one revoked DID with 3 sessions
+    moves `auth_dead_dids_ended` by 1 and `auth_dead_sessions_ended` by 3, and writes no audit row; a transient
+    failure raises nothing); `ops_auth_dead_counters_concurrent` (two concurrent ends add up exactly);
+    `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (an
+    outcome for another target leaves the count unchanged); `alert-outbox-class-ownership`;
+    `alert-outbox-delivered-once`.
   - `monitor-alerts-each-threshold` (fake clock, one per class); `monitor-csam-report-alert`.
   - `csam-emergency-delivered-same-cycle`: a `csam_emergency` outbox row is delivered in the monitor cycle that sees
     it, before other rows.

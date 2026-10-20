@@ -68,6 +68,7 @@ flowchart TD
   P135([P1.35 lexicon authority]) -.-> P502a
   P502 --> P503[P5.03 deploy by verified digest]
   P502a --> P503
+  P502a --> P502b[P5.02b direct exposure, if chosen ALEX]; P502 --> P502b
   P130([P1.30 preflight]) -.-> P503
   P502 --> P504[P5.04 backups]
   P504 --> P505[P5.05 restore drill ALEX]
@@ -1662,6 +1663,14 @@ Outputs:
 - **The production PDS settings:**
   - `PDS_HOSTNAME=unset.ac`, `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`, `PDS_RECOVERY_DID_KEY` set;
   - `PDS_INVITE_REQUIRED=true`;
+    **Before PDS_INVITE_REQUIRED goes false (open sign-up)**, each of these holds, and Alex flips it (book edit
+    2026-10-19-alex-cards-and-edge-dev-mode, "P1.37g (#1080) answered"; architecture 05:03Z):
+    1. **The temporary-blob sweep:** either upstream ships a sweep we have verified in the pinned dist, or a reviewed
+       [SEC] step builds an age-based job outside the PDS. That job never runs in the PDS process, deletes only
+       `tempt` entries older than a fixed age well above any upload's lifetime, and has its own reds and an
+       audit-free ops counter. No step is lettered until then.
+    2. **Per-account write limits keyed by DID,** the gap recorded in P1.28 ("revisit before open sign-up").
+    The list is closed. New items join it only through a record.
   - **`PDS_RATE_LIMITS_ENABLED=false`, set explicitly** (global resolution 1; provisional while Alex's edge-IP card is
     queued). Every request reaches the PDS from the edge's address, so per-IP limits would put every user in one
     bucket. Per-client limiting happens at the edge, in memory (`caddy-ratelimit`, P1.28). Setting it explicitly means a
@@ -1886,6 +1895,36 @@ sequenceDiagram
     H->>N: getRecord(schema) via permissionSetCheck
   end
 ```
+
+### P5.02b — Expose production directly, if Alex chooses
+Tags: [ALEX] [SEC]            Depends on: P5.02, P5.02a
+Phase 5, issue #1087. Book edit 2026-10-19-codex-1063-batch66, "Architecture 07:10Z item 1, mapped". **It applies
+only if production is exposed directly rather than through Pangolin. That choice is Alex's, at P5.** If he picks
+Pangolin for production, this step is retired and P5.02a's exposure follows the P1.33p staging pattern. The body below
+is P1.33p's former exposure text (phase-1.md on main c5d979a), moved verbatim, with 0x40.space read as production's
+names (unset.sh and unset.ac) and "P1.35 starts" read as "production opens"; nothing else changed.
+
+**What (moved out of P1.33):** the 80/443 forwards and the accept rule; ip-echo and the echo assertion; V5; the
+CGNAT and DDNS branches. Alex's router and DNS actions are as P1.33 lists them.
+
+```text
+ 9. Public address: if the ISP address is static → A records for unset.sh and unset.ac. If dynamic → the DDNS
+    updater (deployment/ddns) with an API token scoped to those records only; if the DNS provider cannot scope a
+    token to them → STOP and choose with the agent (another provider for those records, or a static address).
+    _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
+    No AAAA record unless IPv6 was probed in P1.33.
+```
+
+- V7: probe green for 24 h before production opens; the hairpin check passed (P1.29a's edge aliases).
+- The edge obtains its Let's Encrypt certificate (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
+- Edge cases:
+  - Address changes while DDNS lags → the probe fails; the authorization servers' cached copies cover logins.
+  - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
+    the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
+    revisited), or bringing P5.02a forward. IPv6-only is not enough (some resolvers and authorization servers lack
+    IPv6).
+  - ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
+Threats: a directly exposed home address (the CGNAT and ISP edge cases, the DDNS token's scope), as moved.
 
 ### P5.03 — Deploy by verified digest
 Tags: [SEC]            Depends on: P5.02, P5.02a, P1.30, P1.30s, P1.30t, P1.30u, P2.26a            Plan: §2 rule 23, §5.2 (`docker-rollout`, `migrate`, expand-then-contract), §6.1 SLSA row, admin design §6.3 (human pulls), §11.4
