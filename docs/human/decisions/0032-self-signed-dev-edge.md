@@ -56,12 +56,14 @@ ADR 0028 and the Phase 5 records.
    configuration, any certificate path outside `/run/secrets/`, and any published port under dev fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
-   P1.38e merges after P1.36c, which mounts the snippet and the secrets. `--env dev` fails on main today and keeps
-   failing until the batch is complete: C18 refuses any edge mount over `/etc/caddy` but the sites directory
-   (`edge.ts:78-81`) and requires the served `(tls)` to match `snippets/tls.caddy` (:228-231) until P1.38e, and C2
-   refuses an edge built from the checkout instead of run from the lock's image (:132-137) until P1.27s. The first
-   green `--env dev` on main is after P1.36b, P1.36c, P1.38e, P1.37v and P1.27s have all merged; the order inside
-   the batch only keeps each PR's own checks green.
+   The same rule under dev also allows exactly two more edge mounts, the snippet at `/etc/caddy/snippets/tls.caddy`
+   and the `dev/` directory, both read-only from inside `deployment/edge/`; today C18 refuses any edge mount over
+   `/etc/caddy` but the sites directory (`edge.ts:78-81`), so P1.38e merges before P1.36c, whose mounts would
+   otherwise fail it. `--env dev` fails on main today and keeps failing after both: C2 refuses the four services
+   `compose.dev.yaml` builds until P2.26b pins them from the lock (`images.ts:38`), C3 and C4 need P2.26e's trusted
+   root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`) until P2.26b, and C21 needs P1.33a's
+   retirement report (`host.ts:18-40`). The first green `--env dev` on main is after P1.36b, P1.38e, P1.36c, P1.37v,
+   P1.27s, P2.26e and P2.26b have merged and P1.33a's report is committed.
 4. **Edge shape otherwise as 0031 Decision 2:** bound only to the edge's address on `newt_edge`, no published
    port, no `:80` site in the configuration (replacing 0031's "no `:443` site"). Caddy still opens `:80` on that
    address at run time for its automatic redirect to `https` (Caddy v2.11.7 `caddyhttp/autohttps.go:198-212`
