@@ -7,12 +7,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
-import { edgeSitesDir } from "./preflight/checks/edge.ts";
+import { edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import { switchesProtectionOff } from "./preflight/checks/settings.ts";
-import type { Outcome } from "./preflight/checks/types.ts";
+import { fail, type Outcome, pass } from "./preflight/checks/types.ts";
 import {
   type Compose,
   type Hardening,
@@ -22,6 +22,7 @@ import {
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
+import { SecretMap } from "./preflight/secret-map.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
@@ -658,27 +659,116 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
   });
 
-  test("edge_serves_the_repository_sites", () => {
-    // C18's own reading of the mount: a read-only bind of deployment/edge/sites at the directory the image imports.
-    const compose = dev();
-    const resolved: Compose = {
-      ...compose,
-      services: compose.services.map((s) => ({
-        ...s,
-        mounts: s.mounts.map((m) =>
-          m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
-        ),
-      })),
-    };
-    expect(edgeSitesDir(resolved, join(DEPLOYMENT, "edge"))).toEqual({
-      dir: realpathSync.native(join(DEPLOYMENT, "edge", "sites")),
-    });
-    const edge = envOf(service(compose, "edge"));
-    expect(Object.fromEntries(edge)).toEqual({
+  test("edge_serves_the_dev_sites_and_leaf", () => {
+    // P1.36c (ADR 0032 Decisions 1 and 3; book P1.38e shape (b)): three read-only file binds, dev/app.caddy and
+    // dev/pds.caddy by name where the image imports sites and dev/tls.caddy over the shipped (tls).
+    const edge = service(dev(), "edge");
+    expect(edge.mounts.filter((m) => m.type === "bind")).toEqual([
+      { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
+      { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
+      { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
+    ]);
+    expect(Object.fromEntries(envOf(edge))).toEqual({
       PDS_HOST: "${PDS_HOSTNAME}",
       PDS_UPSTREAM: "pds:3000",
       ACME_EMAIL: "${EDGE_ACME_EMAIL}",
+      APP_HOST: "${APP_HOST}",
+      APP_UPSTREAM: "web:8080",
     });
+  });
+
+  test("c18_reads_this_files_dev_edge", () => {
+    // C18's own reading of this file under dev, as the deploy runs it: the lock's edge image in place of the build, the
+    // binds resolved from deployment/, and the edge's env with the ruled staging names. The ports go in P1.37v, so
+    // until then C18 refuses exactly them, and passes without them.
+    const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
+    const compose = dev();
+    const deployed = (ports: boolean): Compose => ({
+      ...compose,
+      services: compose.services.map((s) =>
+        s.name !== "edge"
+          ? s
+          : {
+              ...s,
+              image: ref,
+              ports: ports ? s.ports : [],
+              mounts: s.mounts.map((m) =>
+                m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
+              ),
+            },
+      ),
+    });
+    const env = new SecretMap([
+      ["PDS_HOST", "staging.unset.ac"],
+      ["PDS_UPSTREAM", "pds:3000"],
+      ["ACME_EMAIL", "edge@example.test"],
+      ["APP_HOST", "staging.unset.sh"],
+      ["APP_UPSTREAM", "web:8080"],
+    ]);
+    const edgeDir = join(DEPLOYMENT, "edge");
+    expect(edgeZones(deployed(true), edgeDir, env, ref, "dev")).toEqual(fail("the edge publishes a port under dev"));
+    expect(edgeZones(deployed(false), edgeDir, env, ref, "dev")).toEqual(pass());
+  });
+
+  test("dev_leaf_and_key_reach_only_the_edge", () => {
+    // ADR 0032 Decision 1: the leaf's key is a C9 file secret beside the checkout, and only the edge mounts it.
+    const compose = dev();
+    for (const s of compose.services) {
+      const leaf = s.secrets.filter((name) => name.startsWith("dev_tls_"));
+      expect(leaf, s.name).toEqual(s.name === "edge" ? ["dev_tls_cert", "dev_tls_key"] : []);
+    }
+    const raw = parseStrictData(read(FILE), FILE) as { secrets: Record<string, { file: string }> };
+    expect(raw.secrets.dev_tls_cert).toEqual({ file: "../../unset-dev-secrets/dev_tls_cert" });
+    expect(raw.secrets.dev_tls_key).toEqual({ file: "../../unset-dev-secrets/dev_tls_key" });
+  });
+
+  test("scheme_comes_from_configuration", () => {
+    // ADR 0031 Decision 2, kept by ADR 0032 Decision 2: web never takes its scheme or host from a request. Its public
+    // URLs are https from configuration (C29 refuses plain http outside local), its cookies are Secure, and no server
+    // code reads a forwarded scheme or host; the edge sets X-Forwarded-Proto https itself (snippets/upstream.caddy).
+    const web = new Map(envOf(service(dev(), "web")));
+    expect([web.get("PUBLIC_ORIGIN"), web.get("MEDIA_ORIGIN")]).toEqual([
+      "${WEB_PUBLIC_ORIGIN}",
+      "${WEB_MEDIA_ORIGIN}",
+    ]);
+    const example = read("env/dev-public.example.env");
+    for (const key of ["WEB_PUBLIC_ORIGIN", "WEB_MEDIA_ORIGIN"])
+      expect(example).toMatch(new RegExp(`^${key}=https://`, "m"));
+    const sources = ["shared/http", "interfaces/http"].flatMap((dir) =>
+      readdirSync(join(DEPLOYMENT, "..", dir), { recursive: true, encoding: "utf8" })
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.endsWith("test-env.ts"))
+        .map((f) => [`${dir}/${f}`, readFileSync(join(DEPLOYMENT, "..", dir, f), "utf8")] as const),
+    );
+    expect(sources.length).toBeGreaterThan(10);
+    for (const [file, text] of sources) {
+      expect(text, file).not.toMatch(/x-forwarded-(?:proto|host|scheme)|["'`]forwarded["'`]|\.encrypted\b/i);
+    }
+    // Every cookie attribute string web writes, wherever it lives (the session, the theme, and sign-in-state.ts's
+    // nonce, signed-out, target and issuer cookies), is Secure and HttpOnly.
+    const attributes = sources.flatMap(([file, text]) =>
+      [...text.matchAll(/"(Path=[^"]*)"/g)].map((match) => [file, match[1] as string] as const),
+    );
+    expect(attributes.map(([file]) => file)).toEqual(
+      expect.arrayContaining([
+        "interfaces/http/session-cookie.ts",
+        "interfaces/http/prefs/theme.ts",
+        "interfaces/http/routes/sign-in-state.ts",
+      ]),
+    );
+    expect(attributes.length).toBeGreaterThanOrEqual(5);
+    for (const [file, text] of attributes) {
+      expect(text.split("; "), `${file}: ${text}`).toEqual(expect.arrayContaining(["Secure", "HttpOnly"]));
+    }
+    // The PDS half: @atproto/pds 0.5.37 makes its public URL `https://${hostname}` unless the hostname is localhost
+    // (dist/config/config.js:10-13), and it trusts X-Forwarded-Proto from private addresses (dist/index.js:178), which
+    // the edge sets to https itself. So its hostname comes from configuration, is never localhost, and nothing in its
+    // env names a plain-http URL.
+    const pds = new Map(envOf(service(dev(), "pds")));
+    expect(pds.get("PDS_HOSTNAME")).toBe("${PDS_HOSTNAME}");
+    expect(example).toMatch(/^PDS_HOSTNAME=(?!localhost$)\S+$/m);
+    const pdsEnv = [...pds.values(), read("env/pds.example.env")].join("\n");
+    expect(pdsEnv).not.toMatch(/http:\/\//i);
+    expect(read("edge/snippets/upstream.caddy")).toMatch(/^\t\theader_up X-Forwarded-Proto https$/m);
   });
 });
 
@@ -706,6 +796,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_indexer_password: 65532,
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
+    dev_tls_cert: 65532,
+    dev_tls_key: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -797,7 +889,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "2 files, 9 mounted secrets" },
+      { pass: true, reason: "2 files, 11 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

@@ -53,6 +53,15 @@ const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
   web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
+/** The dev edge's own leaf (P1.36c; ADR 0032), which the local file must leave out: local reads the dev root's leaf. */
+const DEV_SECRETS: Record<string, string[]> = { edge: ["dev_tls_cert", "dev_tls_key"] };
+/**
+ * web's legal contacts (P2.15): dev carries Alex's staging values (2026-10-20T23:09:25Z), any literal; local keeps each
+ * one's `[to fill: KEY]` token, so a throwaway stack never names a real contact.
+ */
+const LEGAL_KEYS: Record<string, string[]> = {
+  web: ["PRIVACY_OFFICER_TITLE", "PRIVACY_OFFICER_CONTACT", "SUPPORT_EMAIL"],
+};
 /** The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g). */
 const DEV_ONLY: Record<string, string[]> = { pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"] };
 /**
@@ -73,9 +82,16 @@ const APP_SITE: { mount: Mount; environment: [string, EnvValue][] } = {
   ],
 };
 const APP_SITE_KEYS = new Set(APP_SITE.environment.map(([key]) => key));
-/** The edge's sites, each its own read-only file in local (item 12), where dev binds the sites folder. */
+/**
+ * The edge's sites, each its own read-only file in local (item 12) and in dev, which binds dev/app.caddy, dev/pds.caddy
+ * and the dev (tls) (P1.36c; ADR 0032 Decision 3).
+ */
 const EDGE_SITES: { dev: Mount[]; local: Mount[] } = {
-  dev: [{ type: "bind", source: "./edge/sites", target: "/etc/caddy/sites/enabled", readOnly: true }],
+  dev: [
+    { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
+    { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
+    { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
+  ],
   local: [
     { type: "bind", source: "./edge/sites/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
     APP_SITE.mount,
@@ -96,20 +112,31 @@ function environmentDrift(dev: Service, local: Service): string[] {
     .filter((s) => new Map(s.environment).size !== s.environment.length)
     .map(() => `${dev.name}: environment repeats a key`);
   for (const key of new Set([...devEnv.keys(), ...localEnv.keys()])) {
-    if (devEnv.has(key) && APP_SITE_KEYS.has(key)) problems.push(`${dev.name}: environment ${key} is in the dev file`);
+    if (devEnv.has(key) && APP_SITE_KEYS.has(key) && dev.name !== "edge") {
+      problems.push(`${dev.name}: environment ${key} is in the dev file`);
+    }
     if (dev.name === "edge" && APP_SITE_KEYS.has(key)) continue;
     const value = localEnv.get(key);
     if (DEV_ONLY[dev.name]?.includes(key)) {
       if (localEnv.has(key)) problems.push(`${dev.name}: environment ${key} is set in the local file`);
       continue;
     }
+    const legal = LEGAL_KEYS[dev.name]?.includes(key) === true;
     const permitted =
-      same(devEnv.get(key), value) ||
+      (legal && "literal" in (devEnv.get(key) ?? {}) && same(value, { literal: `[to fill: ${key}]` })) ||
+      (!legal && same(devEnv.get(key), value)) ||
       (allowed[key] !== undefined && same(allowed[key], value)) ||
       (key === "UNSET_ENV" && devEnv.has(key) && same(UNSET_ENV_LOCAL, value));
     if (!permitted) problems.push(`${dev.name}: environment ${key} differs`);
   }
-  return dev.name === "edge" ? [...problems, ...appSiteDrift(local)] : problems;
+  return dev.name === "edge" ? [...problems, ...appSiteDrift(local), ...devAppSiteDrift(dev)] : problems;
+}
+
+/** Whether the dev edge sets exactly APP_SITE's two keys, which its dev/app.caddy reads (P1.36c). */
+function devAppSiteDrift(edge: Service): string[] {
+  const keys = edge.environment.filter(([key]) => APP_SITE_KEYS.has(key));
+  const byKey = (list: [string, EnvValue][]) => [...list].sort(([a], [b]) => a.localeCompare(b));
+  return same(byKey(keys), byKey(APP_SITE.environment)) ? [] : ["edge: the dev app site keys are not APP_SITE's"];
 }
 
 /** Whether the local edge has the app-site mount and its two keys together, or neither (APP_SITE). */
@@ -158,7 +185,11 @@ function serviceDrift(dev: Service, local: Service): string[] {
         ? []
         : [`${dev.name}: networks differs`],
     mounts: () => (same(devMounts, localMounts) ? [] : [`${dev.name}: mounts differs`]),
-    secrets: () => (same(dev.secrets, without(local.secrets, added.secrets)) ? [] : [`${dev.name}: secrets differs`]),
+    secrets: () =>
+      same(without(dev.secrets, DEV_SECRETS[dev.name]), without(local.secrets, added.secrets)) &&
+      (DEV_SECRETS[dev.name] ?? []).every((name) => dev.secrets.includes(name) && !local.secrets.includes(name))
+        ? []
+        : [`${dev.name}: secrets differs`],
     environment: () => environmentDrift(dev, local),
     envFiles: () => (envFilesAgree(dev, local) ? [] : [`${dev.name}: env_file differs`]),
   };
@@ -550,9 +581,31 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         "pds: environment APP_UPSTREAM differs",
       ],
       [
-        editService(dev, "edge", (s) => setEnv(s, "APP_HOST", { ref: "APP_HOST" })),
+        editService(dev, "edge", (s) => setEnv(s, "APP_HOST", { literal: "staging.unset.sh" })),
         local,
-        "edge: environment APP_HOST is in the dev file",
+        "edge: the dev app site keys are not APP_SITE's",
+      ],
+      [
+        editService(dev, "edge", (s) => dropEnv(s, "APP_UPSTREAM")),
+        local,
+        "edge: the dev app site keys are not APP_SITE's",
+      ],
+      [
+        dev,
+        editService(local, "edge", (s) => ({ ...s, secrets: [...s.secrets, "dev_tls_key"] })),
+        "edge: secrets differs",
+      ],
+      [editService(dev, "edge", (s) => ({ ...s, secrets: ["dev_tls_cert"] })), local, "edge: secrets differs"],
+      // The legal contacts: local keeps its token, and dev's value is a literal, never interpolated.
+      [
+        dev,
+        editService(local, "web", (s) => setEnv(s, "SUPPORT_EMAIL", { literal: "support@staging.unset.sh" })),
+        "web: environment SUPPORT_EMAIL differs",
+      ],
+      [
+        editService(dev, "web", (s) => setEnv(s, "PRIVACY_OFFICER_CONTACT", { ref: "PRIVACY_OFFICER_CONTACT" })),
+        local,
+        "web: environment PRIVACY_OFFICER_CONTACT differs",
       ],
       [
         editService(dev, "web", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8080" })),
