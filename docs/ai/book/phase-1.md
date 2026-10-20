@@ -15627,7 +15627,8 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   21:04:02Z; book edit 2026-10-20-adr-0031-no-login) then replaces the certificate and the login: the edge serves a
   self-signed leaf from files on the internal bind (ADR 0032, Proposed, superseding 0031 decision 2; P1.36b,
   P1.36c, P1.37v), Pangolin's Let's Encrypt certificate is the only one the internet sees, and DNS-01 through a
-  delegated validation zone (P1.36d, P1.36e, P1.36o, P1.36c's token parts) is production work. `staging.unset.sh` and `staging.unset.ac` are public resources
+  delegated validation zone (P1.36d, P1.36e, P1.36o, P1.36c's token parts) is production work. `staging.unset.sh`
+  and `staging.unset.ac` are public resources
   at Pangolin with no login, no rules and no bypass paths (Alex, 2026-10-20 13:00:31Z, superseding his "Keep
   password" tap of 2026-10-19 02:56:58Z); the invite code and P1.36v's own-PDS sign-in are the gate. Public DNS
   points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
