@@ -18,11 +18,11 @@ An accepted record is never edited, so this record supersedes exactly one decisi
 in force. Caddy's own internal CA stays closed: C18's certificate rule exists to refuse it (edge.ts:200-206,
 refocus Amendment 1 of 2026-10-12), and the global options that would turn it on (`local_certs`, `pki`,
 `auto_https`) stay outside the reader's allowlist. The local stack already serves a leaf certificate from a file
-through one `(tls)` snippet mounted over `snippets/tls.caddy` (`deployment/edge/local/tls.caddy:1-8`); dev takes
+through one `(tls)` snippet mounted over `snippets/tls.caddy` (`deployment/edge/local/tls.caddy:8-10`); dev takes
 the same shape with a self-signed leaf instead of the dev root's.
 
 ## Decision
-This record supersedes ADR 0031 Decision 2 ("Edge without a certificate under dev", 0031:119-139) for the dev
+This record supersedes ADR 0031 Decision 2 ("Edge without a certificate under dev", 0031:119-137) for the dev
 profile only. Everything else in 0031 stands: both names public with no login (Decision 1), web through Pangolin
 and the client-address keys (Decision 3), the PDS denylist (Decision 4), federation and handles (5, 6), and the
 0025 and 0030 clauses it departs from. Production is unchanged: `unset.ac` keeps Let's Encrypt at the edge under
@@ -30,7 +30,7 @@ ADR 0028 and the Phase 5 records.
 
 1. **The certificate.** Under dev each edge site serves one self-signed leaf certificate for both staging names
    (`staging.unset.sh`, `staging.unset.ac` as SANs), from PEM files, through a dev `(tls)` snippet
-   `deployment/edge/dev/tls.caddy` of exactly the local shape (`local/tls.caddy:7-8`), reading
+   `deployment/edge/dev/tls.caddy` of exactly the local shape (`local/tls.caddy:7-9`), reading
    `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`; the snippet is mounted read-only over
    `snippets/tls.caddy` by the dev compose file only, and both files are C9 file secrets under `/run/secrets/`,
    mounted only into the edge, with a test that no other service mounts them (the key is secret; the certificate
@@ -38,7 +38,9 @@ ADR 0028 and the Phase 5 records.
    no ACME account, no DNS token, no CA: nobody is asked to trust the certificate, and nothing installs it
    anywhere. Validity is at most 825 days; the runbook generates the pair on the
    staging host with one command (OpenSSL from the host's packages, parameters fixed in the runbook: P-256, the
-   two SANs, no CA flag) and regenerates it the same way; the deploy check fails 30 days before expiry.
+   two SANs, no CA flag) and regenerates it the same way; the deploy check fails 30 days before expiry (the
+   failure is the only guard; nothing renews on its own). P1.37v's deploy check also asserts the leaf's key type
+   (P-256) and that its validity is at most 825 days; the runbook's parameters are otherwise unchecked.
 2. **What it buys, and does not.** The bytes between Newt and the edge, two containers on the same host on the
    internal `newt_edge` network (0030 Decision 2), are encrypted. Nothing verifies the certificate: Pangolin's
    targets to Newt become `https` and Pangolin does not verify the upstream certificate (0030:71-74), so this is
@@ -54,20 +56,31 @@ ADR 0028 and the Phase 5 records.
    configuration, any certificate path outside `/run/secrets/`, and any published port under dev fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
-   P1.38e merges after P1.36c, which mounts the snippet and the secrets, so `--env dev` never fails on main
-   between the two.
+   P1.38e merges after P1.36c, which mounts the snippet and the secrets. `--env dev` fails on main today and keeps
+   failing until the batch is complete: C18 refuses any edge mount over `/etc/caddy` but the sites directory
+   (`edge.ts:78-81`) and requires the served `(tls)` to match `snippets/tls.caddy` (:228-231) until P1.38e, and C2
+   refuses an edge built from the checkout instead of run from the lock's image (:132-137) until P1.27s. The first
+   green `--env dev` on main is after P1.36b, P1.36c, P1.38e, P1.37v and P1.27s have all merged; the order inside
+   the batch only keeps each PR's own checks green.
 4. **Edge shape otherwise as 0031 Decision 2:** bound only to the edge's address on `newt_edge`, no published
    port, no `:80` site in the configuration (replacing 0031's "no `:443` site"). Caddy still opens `:80` on that
    address at run time for its automatic redirect to `https` (Caddy v2.11.7 `caddyhttp/autohttps.go:198-212`
    skips only certificate management for a file certificate, and `:229-268` records a redirect for every
-   listener unless `disable_redirects` is set, a global this record keeps outside the reader's allowlist), so
+   listener unless the `auto_https disable_redirects` option is set, which this record keeps outside the reader's
+   allowlist), so
    `:80` answers only a `308` to `https://` with no body and no upstream, and the deploy check asserts exactly
    that. The `_acme-challenge` CNAMEs are not created for staging and the CAA records drop the edge's `dns-01`
    line, as 0031 already says; P1.36e, P1.36o and the DNS provider steps stay production work; the deploy check
    that P1.37v brings connects from `newt_edge` and asserts `https` with this certificate on the bound address,
    the `308`-only `:80`, and reads the expiry.
-5. **Pangolin.** Both resources target the edge over `https`; no Pangolin setting is changed to make it verify
-   the certificate, since it cannot be verified by anyone and 0030 already accepts the unverified last hop.
+5. **Pangolin.** Both resources target the edge over `https`, and each resource's TLS Server Name is set to its
+   own staging name. Pangolin 1.24.0 addresses Newt's target by IP literal (`server/lib/loadBalancer.ts:53-57`),
+   so Traefik sends no SNI unless `tlsServerName` is set (`server/lib/traefik/getTraefikConfig.ts:467-481`), and
+   Caddy serving only file certificates with no `default_sni` fails a handshake that carries no SNI (certmagic
+   `handshake.go:118-175`); this is from reading the source, not from running it, so the deploy check also makes
+   one request through Pangolin to each name. That setting joins Alex's Pangolin steps in the runbook. No Pangolin
+   setting is changed to make it verify the certificate, since it cannot be verified by anyone and 0030 already
+   accepts the unverified last hop.
 
 ## Alternatives
 - **Plain `http` behind Pangolin** (0031 Decision 2). Simplest, and what 0031 chose. Not chosen by Alex on
@@ -91,13 +104,16 @@ ADR 0028 and the Phase 5 records.
   whole-record "Status: Superseded by NNNN." change (`scripts/docs/docs.test.ts:107-110`), and 0031 stands in
   every other decision. The partial supersession is recorded here, in 0031's README row ("Decision 2 superseded
   by 0032", the shape 0008 and 0017 use) and in the appended ADR 0001 entry, all at this record's acceptance.
-- A certificate that expires takes staging down until the runbook command runs; the deploy check's 30-day
-  warning is the only guard. Accepted as a staging cost.
+- A certificate that expires takes staging down until the runbook command runs; the deploy check's failure 30
+  days before expiry is the only guard. Accepted as a staging cost.
 
 ## Compliance
 - Reds listed in Decision 3 and 4 land with P1.38e, P1.36b, P1.36c and P1.37v before the first deploy.
-- The private key never enters the repo, CI, logs or a message; the runbook command writes it with mode 0600
-  under the C9 owner, and the preflight secret predicate refuses a literal key anywhere else.
+- The private key never enters the repo, CI, logs or a message (SE-7); the runbook command writes both files as C9
+  mounted file secrets: mode 0400, owned by the edge's uid (65532), inside a 0700 folder owned by the deploy user
+  (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Nothing in preflight reads a PEM
+  body; a PEM committed by mistake is caught only by gitleaks in CI, and the C9 path rule keeps the files out of
+  the checkout in the first place.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
   device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs,
   and P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS` (0031 Decision 3).
