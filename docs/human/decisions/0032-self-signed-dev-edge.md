@@ -141,4 +141,8 @@ ADR 0028 and the Phase 5 records.
   resource's TLS Server Name. His lines stand unless he says otherwise.
 - Accepted by Alex on 2026-10-20 at 21:54:54Z with exactly that line, typed in the project chat in answer to the
   coordinator's request, against ae9d8e7; the verifier passed the record at 4b522e8 with the two additions above.
+  Before merge, Decision 3's first bind was corrected from `deployment/edge/sites/pds.caddy` to
+  `deployment/edge/dev/pds.caddy` (26e13e6): the dev PDS site must bind the `newt_edge` address for P1.36j's
+  trusted-proxy match. The correction came from the third lane's finding and was ruled by the coordinator; the
+  decision itself is unchanged, and Alex was told in the project chat at 2026-10-20 22:57Z.
   0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.
