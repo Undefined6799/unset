@@ -209,10 +209,12 @@ export const c30: Check = {
   run: ({ env: stage, envFileNames, compose }) => {
     const names = envFileNames.get("pds");
     if (names === undefined) return fail("no pds service");
+    const pds = compose.services.find((s) => s.name === "pds");
+    // One file holds the set, so its names cannot be split across a second, unreviewed one.
+    if (pds !== undefined && pds.envFiles.length !== 1)
+      return fail(`the pds service reads ${pds.envFiles.length} env files; its set lives in pds.env alone`);
     // Compose's environment wins over env_file, so a name of the set written there would shadow pds.env's value.
-    const inCompose = compose.services
-      .find((s) => s.name === "pds")
-      ?.environment.find(([name]) => [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL].includes(name));
+    const inCompose = pds?.environment.find(([name]) => [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL].includes(name));
     if (inCompose !== undefined) return fail(`${inCompose[0]} is set in the pds service's environment, not pds.env`);
     const expected = stage === "local" ? PDS_ENV_SECRETS : [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL];
     const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");

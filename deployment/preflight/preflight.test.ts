@@ -1297,6 +1297,27 @@ describe("preflight", () => {
       const line = (await check({ compose })).lines.find((l) => l.startsWith("FAIL C30"));
       expect(line, name).toBe(`FAIL C30 ${name} is set in the pds service's environment, not pds.env`);
     }
+    // Codex on #1129: the set lives in one env file, so it cannot be split across a second one or beside one holding nothing.
+    const urls = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL"].map((k) => `${k}=${PDS_ENV[k]}\n`).join("");
+    for (const mail of ["# nothing here\n", urls]) {
+      const pdsEnv = mail.startsWith("#") ? {} : { PDS_EMAIL_SMTP_URL: null, PDS_MODERATION_EMAIL_SMTP_URL: null };
+      const compose = COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env\n",
+        "    env_file: [../../unset-dev-env/pds.env, ../../unset-dev-env/mail.env]\n",
+      );
+      const { root, file } = stack({ compose, pdsEnv });
+      writeFileSync(join(envOf(root), "mail.env"), mail);
+      chmodSync(join(envOf(root), "mail.env"), 0o600);
+      const result = await preflight(["--env", "prod", "--compose", file], {
+        root,
+        run: fakeRun().run,
+        ...fakeFs(root),
+      });
+      expect(
+        result.lines.filter((l) => l.startsWith("FAIL")),
+        JSON.stringify(mail),
+      ).toEqual(["FAIL C30 the pds service reads 2 env files; its set lives in pds.env alone"]);
+    }
     const dev = (unset: Record<string, null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...unset } });
     expect(await expectWithC30("C11", dev({ PDS_EMAIL_SMTP_URL: null }), "dev")).toBe(
       "FAIL C11 PDS_EMAIL_SMTP_URL missing",
