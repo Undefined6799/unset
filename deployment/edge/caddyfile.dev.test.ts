@@ -1,6 +1,6 @@
 // P1.36b: the dev edge (ADR 0031 Decisions 1 and 4, ADR 0032; book edit 2026-10-20-adr-0031-no-login). The dev stack
-// serves both staging names from dev/sites/, https with one self-signed leaf from files (dev/tls.caddy) on the edge's
-// newt_edge address; the app site has its
+// serves both staging names from dev/app.caddy and dev/pds.caddy, each its own file mount (ADR 0032 Decision 3),
+// https with one self-signed leaf from files (dev/tls.caddy) on the edge's newt_edge address; the app site has its
 // own three zones and refuses writes to the sign-in files; both sites say noindex.
 // The reader reads dev/ only in the "dev" mode, and there accepts APP_HOST and APP_UPSTREAM only as their ruled values.
 import {
@@ -55,7 +55,7 @@ afterAll(() => {
   for (const dir of trees) rmSync(dir, { recursive: true, force: true });
 });
 
-/** A copy of the edge files, dev/ included, with `edits` written over them; dev/ is the enabled sites, as dev mounts it. */
+/** A copy of the edge files, dev/ included, with `edits` written over them. */
 function devTree(edits: Record<string, string> = {}): string {
   const edgeDir = mkdtempSync(join(tmpdir(), "edge-dev-"));
   trees.push(edgeDir);
@@ -67,12 +67,15 @@ function devTree(edits: Record<string, string> = {}): string {
 }
 const devConfig = (edits: Record<string, string> = {}, env: Record<string, string> = ENV) => {
   const edgeDir = devTree(edits);
-  return readEdgeConfig(edgeDir, join(edgeDir, "dev", "sites"), env, FILES, "dev");
+  return readEdgeConfig(edgeDir, devMounts(edgeDir), env, FILES, "dev");
 };
+/** The dev stack's two site mounts as compose.dev.yaml binds them (P1.36b). */
+const devMounts = (edgeDir: string) =>
+  ["app.caddy", "pds.caddy"].map((name) => ({ source: join(edgeDir, "dev", name), name }));
 const devProblems = (edits: Record<string, string> = {}) => edgeSiteProblems(devConfig(edits), "dev");
 
-const APP = read("dev/sites/app.caddy");
-const PDS = read("dev/sites/pds.caddy");
+const APP = read("dev/app.caddy");
+const PDS = read("dev/pds.caddy");
 
 describe("dev edge (P1.36b)", () => {
   test("dev_sites_read_clean", () => {
@@ -91,8 +94,8 @@ describe("dev edge (P1.36b)", () => {
     // ADR 0032 Decision 4: no :80 site, the dev (tls) alone, bound to the newt_edge address alone.
     expect(DEV_EDGE_ADDRESS).toBe("10.250.37.3");
     for (const [file, text, name] of [
-      ["dev/sites/app.caddy", APP, "{$APP_HOST}"],
-      ["dev/sites/pds.caddy", PDS, "{$PDS_HOST}"],
+      ["dev/app.caddy", APP, "{$APP_HOST}"],
+      ["dev/pds.caddy", PDS, "{$PDS_HOST}"],
     ] as const) {
       const host = name.slice(2, -1);
       expect(devProblems({ [file]: text.replace(`{$${host}} {`, `http://{$${host}} {`) }), file).toEqual([
@@ -182,12 +185,12 @@ describe("dev edge (P1.36b)", () => {
     // Every header the PDS site has, and noindex, on both; the admin guard on the PDS site; the sign-in files' 405 on
     // the app site.
     const cases: [string, string, string, string][] = [
-      ["dev/sites/app.caddy", APP, "\timport security-headers\n", "{$APP_HOST}: does not import security-headers"],
-      ["dev/sites/app.caddy", APP, "\timport noindex\n", "{$APP_HOST}: does not import noindex"],
-      ["dev/sites/app.caddy", APP, "\t\timport signin-files\n", "{$APP_HOST}: does not import signin-files"],
-      ["dev/sites/pds.caddy", PDS, "\timport security-headers\n", "{$PDS_HOST}: does not import security-headers"],
-      ["dev/sites/pds.caddy", PDS, "\timport noindex\n", "{$PDS_HOST}: does not import noindex"],
-      ["dev/sites/pds.caddy", PDS, "\t\timport xrpc-guard\n", "{$PDS_HOST}: does not import xrpc-guard"],
+      ["dev/app.caddy", APP, "\timport security-headers\n", "{$APP_HOST}: does not import security-headers"],
+      ["dev/app.caddy", APP, "\timport noindex\n", "{$APP_HOST}: does not import noindex"],
+      ["dev/app.caddy", APP, "\t\timport signin-files\n", "{$APP_HOST}: does not import signin-files"],
+      ["dev/pds.caddy", PDS, "\timport security-headers\n", "{$PDS_HOST}: does not import security-headers"],
+      ["dev/pds.caddy", PDS, "\timport noindex\n", "{$PDS_HOST}: does not import noindex"],
+      ["dev/pds.caddy", PDS, "\t\timport xrpc-guard\n", "{$PDS_HOST}: does not import xrpc-guard"],
     ];
     for (const [file, text, line, problem] of cases) {
       expect(text, line).toContain(line);
@@ -210,18 +213,18 @@ describe("dev edge (P1.36b)", () => {
 
   test("app_site_has_its_own_zones_never_the_pds_ones", () => {
     const zones = "{$APP_HOST}: the route does not apply the zones first";
-    expect(devProblems({ "dev/sites/app.caddy": APP.replace("import app-ratelimit", "import pds-ratelimit") })).toEqual(
-      [zones],
-    );
-    expect(devProblems({ "dev/sites/app.caddy": APP.replace("\t\timport app-ratelimit\n", "") })).toEqual([
+    expect(devProblems({ "dev/app.caddy": APP.replace("import app-ratelimit", "import pds-ratelimit") })).toEqual([
+      zones,
+    ]);
+    expect(devProblems({ "dev/app.caddy": APP.replace("\t\timport app-ratelimit\n", "") })).toEqual([
       zones,
       "{$APP_HOST}: 0 rate_limit blocks",
     ]);
     const both = APP.replace("\t\timport app-ratelimit\n", "\t\timport app-ratelimit\n\t\timport pds-ratelimit\n");
-    expect(devProblems({ "dev/sites/app.caddy": both })).toEqual(["{$APP_HOST}: 2 rate_limit blocks"]);
-    expect(devProblems({ "dev/sites/pds.caddy": PDS.replace("import pds-ratelimit", "import app-ratelimit") })).toEqual(
-      ["{$PDS_HOST}: the route does not apply the zones first"],
-    );
+    expect(devProblems({ "dev/app.caddy": both })).toEqual(["{$APP_HOST}: 2 rate_limit blocks"]);
+    expect(devProblems({ "dev/pds.caddy": PDS.replace("import pds-ratelimit", "import app-ratelimit") })).toEqual([
+      "{$PDS_HOST}: the route does not apply the zones first",
+    ]);
     const limits = read("snippets/ratelimit.caddy");
     const narrowed = limits.replace(/(\tzone app_global \{\n)/, "$1\t\t\tmatch {\n\t\t\t\tpath /login\n\t\t\t}\n");
     expect(narrowed).not.toBe(limits);
@@ -281,36 +284,61 @@ describe("dev edge (P1.36b)", () => {
     }
     // The dev leaf stays local/'s alone.
     expect(() =>
-      devConfig({ "dev/sites/app.caddy": `${APP}\n# local_tls_cert\n(x) {\n\trespond local_tls_cert\n}\n` }),
+      devConfig({ "dev/app.caddy": `${APP}\n# local_tls_cert\n(x) {\n\trespond local_tls_cert\n}\n` }),
     ).toThrow(/local_tls_cert is allowed only in local\//);
   });
 
-  test("dev_dir_read_only_in_the_dev_mode", () => {
+  test("dev_sites_read_only_as_their_two_file_mounts", () => {
     const edgeDir = devTree();
-    const dev = join(edgeDir, "dev", "sites");
-    // Shipped (prod) and the enabled sites as dev/sites/: refused before any read.
-    expect(() => readEdgeConfig(edgeDir, dev, ENV, FILES)).toThrow("the enabled sites directory is not inside sites/");
-    // The dev mode reads dev/sites/ itself, never sites/ or dev/.
-    for (const other of [join(edgeDir, "sites"), join(edgeDir, "dev")]) {
-      expect(() => readEdgeConfig(edgeDir, other, ENV, FILES, "dev"), other).toThrow(
-        "the dev mode reads the enabled sites from dev/sites/",
+    const mounts = devMounts(edgeDir);
+    // Shipped (prod) takes no file mounts, and the dev mode no directory: both refused before any read.
+    expect(() => readEdgeConfig(edgeDir, mounts, ENV, FILES)).toThrow(
+      "site file mounts are read only in the local and dev modes",
+    );
+    for (const dir of [join(edgeDir, "sites"), join(edgeDir, "dev")]) {
+      expect(() => readEdgeConfig(edgeDir, dir, ENV, FILES, "dev"), dir).toThrow(
+        "the dev mode reads the enabled sites only as file mounts",
       );
     }
-    // A dev site file outside dev/, or a link in dev/sites/, is refused.
-    symlinkSync(join(edgeDir, "sites", "pds.caddy"), join(dev, "z.caddy"));
-    expect(() => readEdgeConfig(edgeDir, dev, ENV, FILES, "dev")).toThrow("z.caddy: not a regular file");
-    // The dev (tls) is read from dev/ only in the dev mode; a link there is refused.
+    const dev = (list: { source: string; name: string }[]) => () => readEdgeConfig(edgeDir, list, ENV, FILES, "dev");
+    const [app, pds] = mounts as [(typeof mounts)[number], (typeof mounts)[number]];
+    // Exactly dev/app.caddy and dev/pds.caddy, each by its own name: none missing, twice, renamed or from elsewhere.
+    expect(dev([app])).toThrow("pds.caddy: not mounted");
+    expect(dev([app, pds, pds])).toThrow("pds.caddy: mounted more than once");
+    expect(dev([app, { ...pds, name: "x.caddy" }])).toThrow("x.caddy: not a site the dev stack mounts");
+    expect(dev([app, { ...pds, source: join(edgeDir, "sites", "pds.caddy") }])).toThrow(
+      "pds.caddy: not mounted from dev/pds.caddy",
+    );
+    expect(dev([app, { ...pds, source: join(edgeDir, "dev") }])).toThrow(
+      "pds.caddy: the mount is not one regular file",
+    );
+    // A link in dev/ is refused, for a site and for the dev (tls).
+    rmSync(pds.source);
+    symlinkSync(join(edgeDir, "sites", "pds.caddy"), pds.source);
+    expect(dev(mounts)).toThrow("pds.caddy: the mount is not one regular file");
     const linked = devTree();
     rmSync(join(linked, "dev", "tls.caddy"));
     symlinkSync(join(linked, "snippets", "tls.caddy"), join(linked, "dev", "tls.caddy"));
-    expect(() => readEdgeConfig(linked, join(linked, "dev", "sites"), ENV, FILES, "dev")).toThrow(
-      "tls.caddy: not a regular file",
-    );
+    expect(() => readEdgeConfig(linked, devMounts(linked), ENV, FILES, "dev")).toThrow("tls.caddy: not a regular file");
     // The app site's placeholders outside dev/ and local/ are refused in every mode.
     const leaked = devTree({ "sites/pds.caddy": APP });
     const enabled = join(leaked, "sites", "enabled");
     cpSync(join(leaked, "sites", "pds.caddy"), join(enabled, "app.caddy"));
     expect(() => readEdgeConfig(leaked, enabled, ENV, FILES)).toThrow(/is allowed only in local\//);
+    // The local mode takes no dev/ file as a site, and no local/ file may name the dev leaf.
+    const local = devTree();
+    cpSync(join(EDGE, "local"), join(local, "local"), { recursive: true });
+    const localMounts = (app: string) => [
+      { source: join(local, "sites", "pds.caddy"), name: "pds.caddy" },
+      { source: join(local, app, "app.caddy"), name: "app.caddy" },
+    ];
+    expect(() => readEdgeConfig(local, localMounts("dev"), ENV, FILES, "local")).toThrow(
+      "app.caddy: not mounted from local/app.caddy",
+    );
+    writeFileSync(join(local, "local", "app.caddy"), `${read("local/app.caddy")}(x) {\n\trespond dev_tls_cert\n}\n`);
+    expect(() => readEdgeConfig(local, localMounts("local"), ENV, FILES, "local")).toThrow(
+      "dev_tls_cert is allowed only in dev/",
+    );
   });
 });
 

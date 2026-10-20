@@ -23,10 +23,11 @@
 //   `edgeSiteProblems` holds the site rules edge.test.ts and C18 share, so neither keeps a copy.
 // - The "local" mode (P1.34a, P1.34o) reads the local stack's two files in local/ as its mounts place them; only C18
 //   under --env local passes it. APP_HOST, APP_UPSTREAM and the dev leaf's secret paths are accepted only from local/.
-// - The "dev" mode (P1.36b; ADR 0031, ADR 0032) reads the dev stack's sites from dev/sites/ and its `(tls)` from
-//   dev/tls.caddy in place of snippets/tls.caddy, as its mounts place them: https with one self-signed leaf from files
-//   on the edge's newt_edge address, with APP_HOST and APP_UPSTREAM accepted there too, each only as its one ruled
-//   value. The dev leaf's secret paths are accepted only from dev/.
+// - The "dev" mode (P1.36b; ADR 0031, ADR 0032) reads the dev stack's two sites, dev/app.caddy and dev/pds.caddy, and
+//   its `(tls)` from dev/tls.caddy in place of snippets/tls.caddy, as its three file mounts place them (ADR 0032
+//   Decision 3): no directory and no shipped site. https with one self-signed leaf from files on the edge's newt_edge
+//   address, with APP_HOST and APP_UPSTREAM accepted there too, each only as its one ruled value. The dev leaf's
+//   secret paths are accepted only from dev/.
 
 /** One directive line with its arguments, its block if it opens one, and the snippet it was imported from. */
 export type Directive = {
@@ -482,7 +483,8 @@ export const DEV_EDGE_ADDRESS = "10.250.37.3";
  * place of `snippets/tls.caddy`, as the local stack's two read-only file mounts place them; each must be a regular file
  * inside local/, and no other file there is read (architecture record 2026-10-13-p127l-local-gaps, item 1). The local
  * mode takes the enabled sites only as a list of file mounts, checked by `mountedSites` (P1.34q; local-gaps Amendment 3
- * S2), and refuses a directory (P1.33n); C18 passes that list (P1.33y). The shipped mode takes only a directory. In
+ * S2), and refuses a directory (P1.33n); C18 passes that list (P1.33y). The "dev" mode takes its sites the same way,
+ * as exactly dev/app.caddy and dev/pds.caddy (ADR 0032 Decision 3). The shipped mode takes only a directory. In
  * either mode a file outside local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and
  * APP_UPSTREAM must differ from the PDS ones.
  */
@@ -507,11 +509,11 @@ function readEdgeTree(
   files: EdgeFiles,
   mode: EdgeMode,
 ): Caddyfile {
-  if (typeof sitesDir !== "string" && mode !== "local") {
-    throw new CaddyfileError("site file mounts are read only in the local mode");
+  if (typeof sitesDir !== "string" && mode === "shipped") {
+    throw new CaddyfileError("site file mounts are read only in the local and dev modes");
   }
-  if (typeof sitesDir === "string" && mode === "local") {
-    throw new CaddyfileError("the local mode reads the enabled sites only as file mounts");
+  if (typeof sitesDir === "string" && mode !== "shipped") {
+    throw new CaddyfileError(`the ${mode} mode reads the enabled sites only as file mounts`);
   }
   distinctAppValues(env);
   if (mode === "dev") devAppValues(env);
@@ -528,15 +530,10 @@ function readEdgeTree(
   if (mode === "dev" && resolved(files, dev.path, "the dev directory") !== dev.path) {
     throw new CaddyfileError("dev/ leaves the edge directory");
   }
-  // The dev mode reads dev/sites/ itself as the enabled sites, and the shipped mode only sites/ or inside it, so a dev/
-  // mount is refused under prod and local (P1.36o's refusals, taken into P1.36b).
-  const devSites: Bound = { path: `${dev.path}/sites`, area: "dev/sites/" };
-  const enabledArea = mode === "dev" ? devSites : sites;
+  // The shipped mode reads only sites/ or inside it, so a dev/ or local/ directory is refused under prod.
   if (typeof sitesDir === "string") {
     const enabled = resolved(files, sitesDir, "the enabled sites directory");
-    if (mode === "dev" && enabled !== devSites.path)
-      throw new CaddyfileError("the dev mode reads the enabled sites from dev/sites/");
-    if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`) && mode !== "dev")
+    if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`))
       throw new CaddyfileError("the enabled sites directory is not inside sites/");
   }
   const checked = (path: string, name: string) =>
@@ -561,9 +558,11 @@ function readEdgeTree(
   const expanded = lines.map((line) => {
     if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
     if (line === FILE_IMPORTS[1]) {
-      if (typeof sitesDir !== "string") return mountedSites(files, sitesDir, sites, local, read);
-      // dev/sites/ holds regular files only: a link there could lead back to a shipped site.
-      return globbed(files, sitesDir, [enabledArea], mode !== "dev", line, read);
+      if (typeof sitesDir !== "string") {
+        const expected = mode === "dev" ? devSites(dev) : localSites(files, sites, local);
+        return mountedSites(files, sitesDir, expected, mode, read);
+      }
+      return globbed(files, sitesDir, [sites], true, line, read);
     }
     return line;
   });
@@ -653,31 +652,42 @@ function globbed(files: EdgeFiles, dir: string, bounds: Bound[], links: boolean,
     .join("\n");
 }
 
-/**
- * The text of the local stack's enabled sites, given as its file mounts (P1.34q; architecture record
- * 2026-10-13-p127l-local-gaps, Amendment 3 S2): exactly one mount for every `*.caddy` in sites/, under its own name,
- * plus local/app.caddy as MOUNTED_SITE, and nothing else. Each source is the regular file itself, never a link or a
- * directory, so the mount binds what the reader reads; then each is read in byte order, as Caddy's glob over the mount
- * targets reads them, under `entry`'s containment and hard-link rules.
- */
-function mountedSites(
-  files: EdgeFiles,
-  mounts: readonly SiteMount[],
-  sites: Bound,
-  local: Bound,
-  read: Reader,
-): string {
+/** The sites the dev stack mounts, each from dev/ by its own name (ADR 0032 Decision 3), and nothing else. */
+const DEV_SITES = ["app.caddy", "pds.caddy"] as const;
+
+/** The local stack's sites by name: every `*.caddy` in sites/, plus local/app.caddy as MOUNTED_SITE (P1.34q). */
+function localSites(files: EdgeFiles, sites: Bound, local: Bound): Map<string, Bound> {
   const expected = new Map<string, Bound>();
   for (const name of files.list(sites.path).filter((n) => n.endsWith(".caddy"))) expected.set(name, sites);
   if (expected.has(MOUNTED_SITE)) {
     throw new CaddyfileError(`${MOUNTED_SITE}: an enabled site has the mounted app site's name`);
   }
   expected.set(MOUNTED_SITE, local);
+  return expected;
+}
+
+/** The dev stack's sites by name: exactly DEV_SITES, each from dev/; no shipped site. */
+const devSites = (dev: Bound): Map<string, Bound> => new Map(DEV_SITES.map((name) => [name, dev]));
+
+/**
+ * The text of the enabled sites, given as file mounts (P1.34q; architecture record 2026-10-13-p127l-local-gaps,
+ * Amendment 3 S2; dev since P1.36b): exactly one mount for every name in `expected`, from its own area, and nothing
+ * else. Each source is the regular file itself, never a link or a directory, so the mount binds what the reader reads;
+ * then each is read in byte order, as Caddy's glob over the mount targets reads them, under `entry`'s containment and
+ * hard-link rules.
+ */
+function mountedSites(
+  files: EdgeFiles,
+  mounts: readonly SiteMount[],
+  expected: ReadonlyMap<string, Bound>,
+  mode: EdgeMode,
+  read: Reader,
+): string {
   const seen = new Set<string>();
   for (const { source, name } of mounts) {
     if (files.kind(source).type !== "file") throw new CaddyfileError(`${name}: the mount is not one regular file`);
     const bound = expected.get(name);
-    if (bound === undefined) throw new CaddyfileError(`${name}: not a site the local stack mounts`);
+    if (bound === undefined) throw new CaddyfileError(`${name}: not a site the ${mode} stack mounts`);
     if (resolved(files, source, name) !== `${bound.path}/${name}`) {
       throw new CaddyfileError(`${name}: not mounted from ${bound.area}${name}`);
     }

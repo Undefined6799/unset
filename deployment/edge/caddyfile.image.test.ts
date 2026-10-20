@@ -207,16 +207,13 @@ describe("caddyfile reader against caddy adapt", () => {
     });
   }, 600_000);
 
-  // P1.36b (ADR 0032): the dev sites, mounted as dev/sites at the enabled sites with dev/tls.caddy over the shipped
-  // (tls), adapt to https on the edge's newt_edge address and nothing else: no :80 server and no issuer, only the dev
-  // leaf's two files. Caddy's run-time HTTP->HTTPS redirect is added after adapt (caddy v2.11.7
+  // P1.36b (ADR 0032): the dev sites, mounted as ADR 0032 Decision 3's three file binds (DEV_MOUNTS), adapt
+  // to https on the edge's newt_edge address and nothing else: no :80 server and no issuer, only the dev leaf's two
+  // files. Caddy's run-time HTTP->HTTPS redirect is added after adapt (caddy v2.11.7
   // modules/caddyhttp/autohttps.go:229-268), so it is not in this config.
   test("dev_sites_listen_https_with_the_leaf_files", () => {
     const image = buildEdgeImage();
-    const adapted = adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, [
-      `${join(EDGE, "dev", "sites")}:/etc/caddy/sites/enabled:ro`,
-      `${join(EDGE, "dev", "tls.caddy")}:/etc/caddy/snippets/tls.caddy:ro`,
-    ]);
+    const adapted = adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, DEV_MOUNTS);
     const listens = Object.values(adapted.apps.http.servers).flatMap((server) => server.listen);
     expect(listens.sort()).toEqual([`${DEV_EDGE_ADDRESS}:443`, "127.0.0.1:8081"].sort());
     expect(modules(adapted)).not.toContain("acme");
@@ -241,6 +238,12 @@ type Adapted = { apps: { http: { servers: Record<string, AdaptedServer> }; tls?:
 
 /** The PDS site's file mount, as P1.29 and P5 enable it. */
 const PDS_SITE = `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`;
+/** The dev edge's three read-only file binds, as compose.dev.yaml mounts them (ADR 0032 Decision 3). */
+const DEV_MOUNTS = [
+  `${join(EDGE, "dev", "app.caddy")}:/etc/caddy/sites/enabled/app.caddy:ro`,
+  `${join(EDGE, "dev", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`,
+  `${join(EDGE, "dev", "tls.caddy")}:/etc/caddy/snippets/tls.caddy:ro`,
+];
 
 /** Every `module` name anywhere in the adapted config. */
 const modules = (value: unknown): string[] =>

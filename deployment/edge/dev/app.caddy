@@ -2,7 +2,7 @@
 # on the edge's newt_edge address only, which Pangolin reaches through Newt without verifying it (P1.37v); no published
 # port and no :80 site. Its name and upstream are ADR 0025's app name and web, exact (readEdgeConfig's dev mode). Its
 # own zones apply first, never pds-ratelimit; the sign-in files refuse writes; the client's address is dropped before
-# web, as on every site.
+# web, as on every site. One read-only file bind at /etc/caddy/sites/enabled/app.caddy (ADR 0032 Decision 3).
 {$APP_HOST} {
 	bind 10.250.37.3
 	import tls
