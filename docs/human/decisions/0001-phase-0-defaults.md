@@ -493,7 +493,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   and a `noindex` header land in P1.36b before either resource is created; web's shared sign-in and default
   buckets stay an accepted availability cost that fails closed. 0025 and 0030 are not edited. P1.37v (#1115)
   unblocks; P1.36e, P1.36o and ADR 0028 move to production.
-- **ADR 0032 accepted (Alex, 2026-10-20 21:54:54Z; own record:
+- **ADR 0032 accepted (Alex, 2026-10-20 23:52:59Z against 2ebf132; own record:
   [0032](0032-self-signed-dev-edge.md)):** the exact acceptance line, typed in the project chat, supersedes 0031
   Decision 2 for the dev profile only: the dev edge serves both staging names over `https` with a self-signed
   leaf certificate from PEM files, no CA and no trust store anywhere, both files C9 mounted secrets for the edge

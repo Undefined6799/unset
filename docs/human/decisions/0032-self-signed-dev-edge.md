@@ -1,8 +1,8 @@
 # 0032 — Self-signed certificate at the dev edge behind Pangolin
 
-Status: Proposed (re-acceptance pending against the final text). Alex's line of 2026-10-20 21:54:54Z was typed
-against ae9d8e7 and the text changed after it; a fresh line against the final commit is recorded here when typed,
-and from then the record changes only to be marked superseded.
+Status: Accepted by Alex, 2026-10-20 23:52:59Z (the acceptance line below with "at 2ebf132", typed in the project
+chat against this record at 2ebf132, the text this commit's parent carries; his first line of 21:54:54Z was against
+ae9d8e7). From here the record changes only to be marked superseded.
 
 ## Context
 Accepted ADR 0031 (2026-10-20 21:04:02Z), Decision 2, has the dev edge's two sites listen on plain `http` behind
@@ -165,5 +165,9 @@ ADR 0028 and the Phase 5 records.
   text, and added the self-signed and expiry points above; so the final revision goes back to Alex for one fresh
   line against its commit, and the status line records that commit when he types it. His line against 9ead8b0
   (23:21:15Z) does not stand: the verifier then found three text fixes (the `-check_ss_sig` flag, the deploy
-  check gating no deploy, and the transitional shape above), so the line is asked again against the fixed text.
+  check gating no deploy, and the transitional shape above), so the line was asked again against the fixed text.
+  Alex typed it at 2026-10-20 23:52:59Z, in the project chat in answer to the coordinator's request, as "yes
+  accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
+  docs/human/decisions/0032-self-signed-dev-edge.md at 2ebf132", against 2ebf132, which the verifier had passed
+  as final. This status flip is the only change after it.
   0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.
