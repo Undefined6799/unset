@@ -688,11 +688,11 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
 
   test("c18_reads_this_files_dev_edge", () => {
     // C18's own reading of this file under dev, as the deploy runs it: the lock's edge image in place of the build, the
-    // binds resolved from deployment/, and the edge's env with the ruled staging names. The ports go in P1.37v, so
-    // until then C18 refuses exactly them, and passes without them.
+    // binds resolved from deployment/, and the edge's env with the ruled staging names. It passes since P1.37v dropped
+    // the ports, and a loopback publish put back fails.
     const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
     const compose = dev();
-    const deployed = (ports: boolean): Compose => ({
+    const deployed = (ports: Compose["services"][number]["ports"] = []): Compose => ({
       ...compose,
       services: compose.services.map((s) =>
         s.name !== "edge"
@@ -700,7 +700,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
           : {
               ...s,
               image: ref,
-              ports: ports ? s.ports : [],
+              ports: [...s.ports, ...ports],
               mounts: s.mounts.map((m) =>
                 m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
               ),
@@ -715,8 +715,11 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       ["APP_UPSTREAM", "web:8080"],
     ]);
     const edgeDir = join(DEPLOYMENT, "edge");
-    expect(edgeZones(deployed(true), edgeDir, env, ref, "dev")).toEqual(fail("the edge publishes a port under dev"));
-    expect(edgeZones(deployed(false), edgeDir, env, ref, "dev")).toEqual(pass());
+    expect(edgeZones(deployed(), edgeDir, env, ref, "dev")).toEqual(pass());
+    const loopback = [{ hostIp: "127.0.0.1", published: "443", target: "443" }];
+    expect(edgeZones(deployed(loopback), edgeDir, env, ref, "dev")).toEqual(
+      fail("the edge publishes a port under dev"),
+    );
   });
 
   test("dev_leaf_and_key_reach_only_the_edge", () => {
@@ -949,7 +952,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     const caddyfile = read("edge/Caddyfile");
     expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);
     for (const site of ["app.caddy", "pds.caddy"]) {
-      expect(read(`edge/dev/sites/${site}`).match(/^\tbind .*$/gm), site).toEqual([`\tbind ${EDGE_ADDRESS}`]);
+      expect(read(`edge/dev/${site}`).match(/^\tbind .*$/gm), site).toEqual([`\tbind ${EDGE_ADDRESS}`]);
     }
     const limits = read("edge/snippets/ratelimit.caddy");
     expect(limits.match(/^\t+key .*$/gm)?.every((line) => line.trim() === "key {client_ip}")).toBe(true);
