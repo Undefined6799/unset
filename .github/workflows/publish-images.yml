@@ -1,0 +1,97 @@
+# Publish, sign and attest our first-party images (P1.27s; ADR 0033, keyless). On a push to main, or by hand, one job
+# builds each image under deployment/ from the checked-out commit, pushes it by digest, scans that digest, signs it and
+# attests its SLSA provenance and SPDX SBOM with keyless cosign (a Fulcio certificate for exactly this workflow on
+# refs/heads/main, recorded in public Rekor), then verifies the lock it just wrote with scripts/ci/verify-images.ts. It
+# never touches a pull request: it has no pull_request trigger (the workflow guard refuses one), and images.yml stays
+# the unprivileged PR check.
+#
+# The gate (scripts/guards/workflows.ts): the job runs in the `signing` environment (main only, Alex as required
+# reviewer, so each run waits for his approval) and its `if:` is exactly the push-to-main condition. Only this job
+# holds `packages: write`, and only it and mirror.yml's copy-and-sign job hold `id-token: write`. No cache of any kind.
+#
+# cosign v3.1.3 (2026-08-05; v3.1.4 of 2026-10-20 is inside the seven-day rule) is pinned by its release checksum.
+# Its sign and attest defaults upload to Rekor through the public-good signing config and write the new bundle format
+# beside the image (cmd/cosign/cli/options/sign.go and attest.go at the tag); no flag here turns either off.
+
+name: publish-images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: signing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      REGISTRY: ghcr.io/undefined6799/unset
+      COSIGN_VERSION: v3.1.3
+      COSIGN_SHA256: 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71
+      TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+      SYFT_IMAGE: anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install cosign by checksum
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/cosign" \
+            "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-amd64"
+          echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -
+          install -m 0755 "$RUNNER_TEMP/cosign" /usr/local/bin/cosign
+      - name: Log in to GHCR
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      # One digest: each image is pushed by digest, and that digest alone is scanned, signed, attested and locked.
+      - name: Build, push, scan, sign and attest
+        shell: bash
+        run: |
+          GITHUB_OUTPUT="$RUNNER_TEMP/list" node scripts/ci/list-dockerfiles.ts
+          sed -n 's/^images=//p' "$RUNNER_TEMP/list" | jq -r '.[] | [.name, .dockerfile] | @tsv' > "$RUNNER_TEMP/images"
+          test -s "$RUNNER_TEMP/images"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          echo '{}' > "$RUNNER_TEMP/images.lock.json"
+          while IFS=$'\t' read -r name dockerfile; do
+            case "$dockerfile" in */Dockerfile) context="${dockerfile%/*}" ;; *) context=. ;; esac
+            case "$name" in node-app) name=web ;; esac
+            docker buildx build --platform linux/amd64 --build-arg SOURCE_DATE_EPOCH -f "$dockerfile" \
+              --output "type=image,name=$REGISTRY/$name,push-by-digest=true,name-canonical=true,push=true" \
+              --metadata-file "$RUNNER_TEMP/meta.json" "$context" < /dev/null
+            ref="$REGISTRY/$name@$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/meta.json")"
+            case "$ref" in *@sha256:????????????????????????????????????????????????????????????????) ;; *) exit 1 ;; esac
+            docker run --rm -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" "$TRIVY_IMAGE" \
+              image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /dev/null --timeout 10m "$ref"
+            docker run --rm -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" "$SYFT_IMAGE" \
+              "registry:$ref" -o spdx-json > "$RUNNER_TEMP/sbom.json"
+            jq -n --arg repo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF" --arg sha "$GITHUB_SHA" \
+              --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
+              '{buildDefinition: {buildType: "https://actions.github.io/buildtypes/workflow/v1",
+                externalParameters: {workflow: {ref: $ref, repository: $repo, path: ".github/workflows/publish-images.yml"}},
+                resolvedDependencies: [{uri: ("git+" + $repo + "@" + $ref), digest: {gitCommit: $sha}}]},
+                runDetails: {builder: {id: $run}}}' > "$RUNNER_TEMP/provenance.json"
+            cosign sign --yes "$ref" < /dev/null
+            cosign attest --yes --type slsaprovenance1 --predicate "$RUNNER_TEMP/provenance.json" "$ref" < /dev/null
+            cosign attest --yes --type spdxjson --predicate "$RUNNER_TEMP/sbom.json" "$ref" < /dev/null
+            jq --arg name "$name" --arg ref "$ref" '.[$name] = {ref: $ref, origin: "first-party", verify: "cosign-keyless"}' \
+              "$RUNNER_TEMP/images.lock.json" > "$RUNNER_TEMP/lock.next" && mv "$RUNNER_TEMP/lock.next" "$RUNNER_TEMP/images.lock.json"
+            echo "- $ref" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/images"
+      - name: Verify what was published
+        run: node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"
