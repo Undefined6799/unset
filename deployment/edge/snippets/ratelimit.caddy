@@ -138,6 +138,14 @@
 # pds-ratelimit. app_signin holds one client below web's shared sign-in bucket, app_burst below the 5 a second at which
 # web refills its shared default bucket, and app_global, with no matcher, keeps every app route in a zone, under the
 # 1500 per 5 minutes that app_burst makes safe. Values as limits.json appRateLimitZones (edge_app_zones_match_limits).
+# app_global's size (ADR 0031 Decision 1, "measured page load plus headroom"), counted from the code at P1.36b: a page
+# with a cold cache is 18 requests to the app name (the HTML; the 7 CSS files and 2 woff2 preloads apps/web's build
+# emits and head.tsx links; the 2 icons; boot and the 5 chunks the header-menu island on every page preloads,
+# document.tsx). Hashed assets are cached a year (interfaces/http/routes/assets.ts), so a warm page is 1. A first visit
+# from / through sign-in, the three welcome steps and /me is 6 pages, 4 POSTs and the callback: 29 requests warm, 113
+# with no cache at all. 1200 is about 10 such uncached visits, or 66 uncached pages, per address per 5 minutes: room
+# for a few testers behind one address. app_burst (20 per 10s) already holds one address to 600 per 5 minutes, so
+# app_global binds only if app_burst is loosened.
 # app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
 # (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
 (app-ratelimit) {
