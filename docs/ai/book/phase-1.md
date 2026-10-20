@@ -682,6 +682,13 @@ flowchart LR
   P1_36b --> P1_36i
   P1_36j["P1.36j dev edge trusts only Newt"]
   P1_36b --> P1_36j
+  P1_37v["P1.37v Newt in the dev compose stack"]
+  P1_36j --> P1_37v
+  P1_37v --> P1_36i
+  P1_38e["P1.38e C18 accepts the plain-http dev edge"]
+  P1_36b --> P1_38e
+  P1_38f["P1.38f blob methods denied on the public PDS name"]
+  P1_38d["P1.38d [to fill: values refused under dev"]
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
   P1_27s --> P1_36l
@@ -746,6 +753,9 @@ flowchart LR
   P1_36b --> P1_34
   P1_36c --> P1_34
   P1_36i --> P1_34
+  P1_37v --> P1_34
+  P1_38e --> P1_34
+  P1_38f --> P1_34
   P1_36j --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
@@ -8846,19 +8856,23 @@ address; no port is published (P1.37v; ADR 0031, decision 2).
 **Taken over from P1.36e and P1.36o (ADR 0031):** those two steps built the dev mode this step relies on, and they
 are production work now, so this step builds the parts it needs. The reader gains the `dev` edge mode
 (`caddyfile.ts:429` is `"shipped" | "local"` today, and `LOCAL_ONLY` refuses `{$APP_HOST}` outside `local/`, :435)
-with the same `edgeDir/dev/` containment P1.36e described, holding the dev app site and nothing for TLS; a `dev/`
-mount is refused under prod and local (P1.36o's refusals). The compose `dev/` mount itself is P1.36c's. C18's dev
-mapping is not built here: under dev C18 will check exactly the plain-`http` shape, and that C18 change needs Alex's
-own typed line (ADR 0031, decision 2), so until it lands C18 keeps refusing anything but Let's Encrypt under prod and
-is not consulted for a dev site that has no TLS.
+with the same `edgeDir/dev/` containment P1.36e described, holding the dev app site and nothing for TLS; the reader
+refuses a `dev/` directory under prod and local (P1.36o's refusals, now in the reader's own tests under
+`deployment/edge/`; the preflight mirror of that refusal is P1.36c's). The compose `dev/` mount itself is P1.36c's.
+Both dev sites are plain `http`: under dev the reader renders `sites/pds.caddy` without its `import tls` (the
+shipped file keeps the import for prod; the dev rendering drops it, with a red that the dev output names no `tls`
+directive and no `:443` site) and the dev app site never carries one. The PDS site riding plain `http` under dev is
+ADR 0031 decision 2 itself, approved by Alex's acceptance of the record; the app site is under his P1.36b line.
+**C18 is not changed here, and it blocks the first deploy until P1.38e lands:** on main C18 runs under `--env dev`
+(`deployment/preflight/checks/edge.ts:400-401`, then `deployedEdgeZones`, then `certificateProblems` at :152-153)
+and fails every site that does not import `tls` (:236-245), so `dev:up` refuses these plain-`http` sites until
+P1.38e loosens C18's import-`tls` rule for dev, which needs Alex's own typed line (ADR 0031, decision 2).
 
-**The denies of Decision 4 and the reds of Decision 2 (ADR 0031 Consequences):** on `staging.unset.ac` the edge
-denies `com.atproto.repo.uploadBlob`, `com.atproto.sync.getBlob` and `com.atproto.repo.importRepo` until P5.07b's
-real scan exists, beside the admin denies `xrpc-guard.caddy` already carries; each deny gets a property-test red
-(TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of ADR 0030's probe
-groups. Decision 2's reds in `deployment/edge` tests: no `:443` site under dev; prod refuses a plain-`http` site; the
-bind address and the absent port (that red rides P1.37v, which owns the compose side). The "scheme never taken from
-the request" red is the app's and the PDS configuration's, in P1.36c.
+**The reds of Decision 2 (ADR 0031 Consequences), in `deployment/edge` tests:** no `:443` site under dev; prod
+refuses a plain-`http` site; headers present on both sites. The bind address and the absent port ride P1.37v, which
+owns the compose side; the "scheme never taken from the request" red is the app's and the PDS configuration's, in
+P1.36c. The Decision 4 blob denies on `staging.unset.ac` are their own step, P1.38f, so this step stays under 800
+changed lines.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an app site served under dev
 with a host or upstream that isn't the ruled one. Answered by exact values and prod refused (book edit
@@ -8866,13 +8880,14 @@ with a host or upstream that isn't the ruled one. Answered by exact values and p
 
 ---
 
-### P1.36c — Wire the dev edge's DNS token and app site
+### P1.36c — Wire the dev edge's app site and mounts
 Tags: [SEC]            Depends on: P1.36b
 Slice 1, issue #1000, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread; book
 edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What (the DNS-token parts move to production with P1.36e under ADR 0031, book edit 2026-10-20-adr-0031-no-login;
-the app-site mounts and the allowlist entries stay in this step; it also takes P1.36o's compose `dev/` mount, and the
+the app-site mounts and the allowlist entries stay in this step; it also takes the compose `dev/` mount that P1.36o
+would have added, with the preflight refusal of a `dev/` mount under prod and local, and the
 red that the app's and the PDS's scheme never comes from the request, cookies `Secure` and every public URL `https`
 from configuration, ADR 0031 decision 2):** the DNS token is a C9 file secret, mounted only
 into the edge, under the C9 owner and mode rules; a test asserts that no other service mounts it. The compose wiring
@@ -8940,7 +8955,7 @@ predicate, and the runbook's four conditions (book edit 2026-10-19-verify-1013-f
 ---
 
 ### P1.36i — Pin the dev edge aliases and public paths
-Tags: [SEC]            Depends on: P1.36b
+Tags: [SEC]            Depends on: P1.36b, P1.37v
 Slice 1, issue #1018, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, the app's route tests), lane the
 third thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling" and the
 03:58Z `.ac` mapping. A tightening, so nothing is needed from Alex.
@@ -8950,8 +8965,9 @@ third thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping o
    host alias" shape of 2026-10-19): both `APP_HOST` and the PDS host are dropped, so web and the PDS resolve each
    other's names through public DNS to Alex's Pangolin, and web reaches the PDS through Pangolin, Newt and the
    edge. `NETGUARD_INTERNAL_HOSTS` is empty under dev, so net-guard keeps no internal-host exception on staging
-   (a tightening). Local keeps both aliases and its exception. The compose change lands with P1.37v; this step
-   pins it.
+   (a tightening). Local keeps both aliases and its exception. The compose change lands with P1.37v, which comes
+   first (its Depends); this step pins it, and its red would fail on `compose.dev.yaml:161-163` and `:202` before
+   P1.37v.
 2. The P1.34d option C preflight check gains a dev branch: the edge carries zero aliases and
    `NETGUARD_INTERNAL_HOSTS` is empty. Under dev, any alias, or any internal host, fails. Local is unchanged.
 3. A repo test pins that the app serves `/oauth-client-metadata.json` and the client's `jwks_uri` path exactly as
@@ -15300,7 +15316,8 @@ VerifyEmail.tsx:34 link our PDS for every user, which is correct while P1.36v li
 - Before either resource is created: P1.37v, P1.36j and P1.36b are merged and deployed (the per-client keys, Newt
   as the only trusted proxy, and the three app zones; ADR 0031, decisions 1 and 3), and Alex has replaced every
   `[to fill: …]` legal and `security.txt` value in `deployment/compose.dev.yaml:208-212`; P1.38d's preflight red
-  under dev refuses a `[to fill:` value (a tightening, third lane).
+  under dev refuses a `[to fill:` value (a tightening, third lane). P1.38e's C18 change (Alex's line) comes first
+  too, or `dev:up` refuses the plain-`http` edge.
 The 80/443 forwards, DDNS, TLS-ALPN and CGNAT text moved verbatim to P5.02b, which applies only if production is
 exposed directly.
 
@@ -15308,7 +15325,8 @@ exposed directly.
 P1.34 is tailnet only, so its public items live here; P1.33p depends on P1.34 and not the other way round). The rule
 for the book: any step that first makes something reachable from the internet depends on P1.33p. Under ADR 0031 the
 first deploy (P1.34) is itself reachable from the internet, so P1.34 carries the preconditions bullet above in its
-own Depends and target (P1.37v, P1.36j, P1.36b, the `[to fill:` values); this step keeps the DNS steps, the probe
+own Depends and target (P1.37v, P1.36j, P1.36b, P1.38e, P1.38f, the `[to fill:` values); this step keeps the DNS
+steps, the probe
 and the verifies, and still comes after P1.34.
 
 Alex's steps (P1.34's former steps 5, 6 and 9):
@@ -15566,7 +15584,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section; the Newt step #1115, which has no book row yet, and the ADR 0031 preconditions, book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -15576,8 +15594,9 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   resources and the invite code is the
   gate (Alex, 2026-10-20 13:00:31Z; ADR 0031, accepted 21:04:02Z; book edit 2026-10-20-adr-0031-no-login). Because
   this deploy is reachable from the internet from its first minute, ADR 0031's preconditions sit here, not only in
-  P1.33p: P1.37v, P1.36j and P1.36b (client-address keys, Newt the only trusted proxy, the three app zones, the
-  `405` rule, the noindex header, the blob denies) are merged and deployed, and Alex has replaced every
+  P1.33p: P1.37v, P1.36j, P1.36b, P1.38e and P1.38f (client-address keys, Newt the only trusted proxy, the three app
+  zones, the `405` rule, the noindex header, C18 accepting the plain-`http` dev edge, the blob denies) are merged and
+  deployed, and Alex has replaced every
   `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` (P1.38d's preflight red refuses them under dev),
   before either Pangolin resource is created. It moves the
   same compose stack used for local sign-in there, right after P2.13a's scenario passes locally and its Depends merge:
@@ -16053,6 +16072,86 @@ its fake (P2.16); storing the API key (P5.06).
 **Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
 
 **Where:** `.github/workflows/phase-exit.yml`; `scripts/phase-metrics.ts`; `docs/human/phase-exits/phase-1.md`.
+
+---
+
+### P1.37v — Run Newt in the dev compose stack
+Tags: [SEC]            Depends on: P1.36b, P1.36j
+Slice 1, issue #1115, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, `bases.lock.json`, the
+images test's vendor allowlist), lane the third thread; architecture 2026-10-19 20:01Z (book edit
+2026-10-19-staging-tailnet-rulings) and ADR 0031 (book edit 2026-10-20-adr-0031-no-login). Every change is a
+tightening or a new pin, so nothing is needed from Alex. It comes after P1.36b and P1.36j, since its cross reds tie
+compose's fixed addresses to the edge's literal bind and trusted proxy. #1115 predates ADR 0031; this section is
+the scope a builder follows.
+
+**What:**
+1. Newt pinned by digest as a run-only vendor entry (`bases.lock.json`, the images test's vendor allowlist), under
+   the seven-day age rule. The `newt` service: digest-pinned, non-root, read-only root, `cap_drop: ALL`,
+   `no-new-privileges`, limits; from Newt's own config source: SSH and clients disabled, no Docker socket, no
+   admin, metrics or pprof address. Its secrets (`NEWT_ID`, `NEWT_SECRET`, `PANGOLIN_ENDPOINT`) come from `newt.env`
+   beside `pds.env`, with an exact-name-set preflight check like C30.
+2. Networks: `newt_egress`, plus `newt_edge` (internal, fixed subnet through ipam; the compose parser gains narrow
+   ipam support), with Newt and the edge at fixed addresses (default 10.250.37.0/29, Newt .2, edge .3, outside
+   Docker's default pools and Alex's VLANs); `networks.dev.json` gains both rows. The edge publishes nothing under
+   dev; `compose.local.yaml` keeps its loopback publish, and `compose.local.test.ts` records the divergence.
+3. ADR 0031 decision 3's compose change: under dev the edge carries no network alias and `NETGUARD_INTERNAL_HOSTS`
+   is empty (P1.36i pins it afterwards); no staging service names `NODE_EXTRA_CA_CERTS` (a red).
+4. Reds: only `newt` and `edge` on `newt_edge`; `newt_edge` internal; the edge publishes nothing under dev; Newt's
+   address fixed and inside the subnet; the edge's bind address is its `newt_edge` address and no port is published
+   (ADR 0031, decision 2); the dev zones key on the client address and the trusted proxy equals Newt's
+   `ipv4_address` (decision 3; the edge side is P1.36j's).
+5. ADR 0031's Compliance deploy check: from the `newt_edge` network, the edge answers plain `http` on its bound
+   address and refuses `:443`; run after the first deploy and every edge change, as a runbook command.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a published edge port
+beside the tunnel; a third service on `newt_edge`; a spoofed forwarded address from a non-Newt peer. Answered by the
+reds above and P1.36j's trusted proxy.
+
+---
+
+### P1.38d — Refuse `[to fill:` values under dev
+Tags: [SEC]            Depends on: —
+Slice 1, product (`deployment/preflight/`), lane the third thread; ADR 0031 decision 1 (book edit
+2026-10-20-adr-0031-no-login). A tightening, so nothing is needed from Alex.
+
+**What:** under `--env dev` (and prod) preflight fails any environment value that starts with `[to fill:`, naming
+the service and key only, never the value. The legal pages and `security.txt` ship such placeholders as literals in
+`deployment/compose.dev.yaml:208-212`, so `--env dev` is red on main until Alex fills them (his values, before the
+first Pangolin resource is created). Reds: a placeholder under dev fails; under prod fails; local passes.
+
+---
+
+### P1.38e — Let C18 accept the plain-`http` dev edge
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
+Slice 1, trusted base (`deployment/preflight/checks/edge.ts`), lane the third thread; ADR 0031 decision 2 (book
+edit 2026-10-20-adr-0031-no-login). **A loosening of C18's import-`tls` rule, so it needs Alex's typed line:**
+"yes P1.38e deployment/preflight/checks/edge.ts C18 dev plain http no TLS at our edge", quoted with its time in
+the PR body.
+
+**What:** today C18 runs under `--env dev` (`edge.ts:400-401`, `certificateProblems` at :152-153) and fails every
+site that does not import `tls` (:236-245), so `dev:up` refuses the edge P1.36b renders. Under dev C18 instead
+checks exactly ADR 0031's shape: every site plain `http`, bound only to the edge's `newt_edge` address, no `:443`
+site, no `tls` directive, no published port; any `tls` directive, any `:443` site or any published port under dev
+fails. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a plain-`http` site under prod
+fails. Local is unchanged. Reds: each of the dev refusals; prod with a plain-`http` site; the main-branch dev
+rendering passing.
+
+Threats (SE-1): a dev edge quietly terminating TLS with a certificate nobody rules on, or a prod edge dropping TLS
+under the dev rule. Answered by the exact dev shape and the unchanged prod branch.
+
+---
+
+### P1.38f — Deny the blob methods on the public PDS name
+Tags: [SEC] trusted            Depends on: —
+Slice 1, trusted base (`deployment/edge/snippets/xrpc-guard.caddy` and its tests), lane the third thread; ADR 0031
+decision 4 (book edit 2026-10-20-adr-0031-no-login). A tightening, so nothing is needed from Alex.
+
+**What:** on `staging.unset.ac` the edge denies `com.atproto.repo.uploadBlob`, `com.atproto.sync.getBlob` and
+`com.atproto.repo.importRepo` until P5.07b's real scan exists, beside the admin denies the guard already carries
+(0031 lists them). A public `getBlob` would make an unscanned public image host, which the 20:58Z ruling, our zero
+tolerance for CSAM and the vault note `research/atproto-blob-serving-security` forbid. Each deny gets a
+property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
+ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
 
 **Size:** ~150 lines.
 
