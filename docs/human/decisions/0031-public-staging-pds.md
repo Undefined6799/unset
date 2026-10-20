@@ -56,7 +56,7 @@ production name is a Phase 5 decision.
    from memory), a second, per-tester identity in front of the app's own session, and scanner noise before the
    live checks had run. What holds without it: nobody gets an account without an invite code, and the app refuses
    sign-in for any account not on our PDS (P1.36v, #1131, never waived), so a stranger can read the public pages
-   and nothing more; the app's own verified session, Origin gate and `__Host-` cookies are the authorization, as
+   and reach no account; the app's own verified session, Origin gate and `__Host-` cookies are the authorization, as
    0030:84 already said; `/<DID>` stays owner-only (0025:194, `interfaces/http/routes/me.ts:2`), so what is
    public is the tester's repo on the PDS (ADR 0004), not an app page; the security headers and CSP stay;
    Pangolin's 0030 Decision 4 logging, and its CrowdSec bouncer if enabled (0030:163-168), apply to both names; and
@@ -70,15 +70,22 @@ production name is a Phase 5 decision.
    the login that was harmless; public, one stranger could lock every tester out of sign-in, and P1.37v alone
    does not change it. So the dev edge gains two per-client zones on the app site, keyed on the client address
    behind Newt like Decision 3's zones, in P1.36b beside its `405` rule, each with a red pinning the matcher, key
-   and values to `limits.json`: a sign-in zone matching `POST /login`, `POST /verify-email/reconsent` and
+   and values to `limits.json`: `app_signin`, matching `POST /login`, `POST /verify-email/reconsent` and
    `/oauth/callback` on any method (the callback arrives as a `GET` redirect), events 5 per 5 minutes as the
-   starting value, below web's shared bucket so no single client can drain it; and a global zone with no matcher,
-   as the PDS site has (`ratelimit.caddy:9-10`), sized from the app's measured page load plus headroom, so every
-   public app route has a per-client limit (architecture, 2026-10-20 13:18Z). Those zones, P1.36j (the
-   trusted-proxy change) and P1.37v are preconditions of creating either resource at Pangolin. What stays shared,
-   and is a cost Alex accepts with this record: web's own `login` bucket (`limits.ts:12`) and `default` bucket are
-   one bucket for everyone, so many addresses, each under the edge limit, can still drain them together and block
-   sign-in for every tester. That is an availability cost on staging, not an authorization bypass, and it fails
+   starting value, below web's shared bucket so no single client can drain it (about two sign-ins per address in
+   five minutes, and every tester behind one NAT shares that address); and `app_global`, with no matcher, as the
+   PDS site has (`ratelimit.caddy:9-10`), sized from the app's measured page load plus headroom but below web's
+   `default` refill, so fewer than 1500 events per 5 minutes, since `default` (`limits.ts:9`, 60 at once refilled
+   at 5 a second, serving `GET /login` too, `routes.manifest.json:104-108`) is shared and a single client allowed
+   more would drain it and lock every tester out of every page. The PDS's `global` at 3000 per 5 minutes is not
+   the template. Both names are new, so no zone shares state across the two sites (architecture, 2026-10-20
+   13:18Z). Those zones, P1.36j (the trusted-proxy change) and P1.37v are preconditions of creating either
+   resource at Pangolin. What stays shared, and is a cost Alex accepts with this record: web's own `login` bucket
+   (`limits.ts:12`) and `default` bucket are one bucket for everyone, so many addresses, each under the edge
+   limit, can still drain them together and block sign-in for every tester. In numbers: about a dozen addresses
+   each sending their five keep the sign-in bucket empty, and one person with an ordinary IPv6 connection already
+   has that many, since the edge counts an IPv6 client by its /64 (`ratelimit.caddy:20`) and a home connection
+   gets more than one /64. That is an availability cost on staging, not an authorization bypass, and it fails
    closed. Web keying on the client address the edge forwards would end it and is a loosening of web's trust
    settings (0025:203-205, "web's own trust settings are unchanged"), so it is a later step on its own typed line,
    not part of this record. What is lost, with nothing replacing it today: the per-tester Pangolin identity, a second
@@ -91,11 +98,13 @@ production name is a Phase 5 decision.
    `robots.txt` route, so under dev the edge adds `X-Robots-Tag: noindex, nofollow` on every response of both
    names (a tightening, in P1.36b, with a red; no `robots.txt` `Disallow` beside it, which would stop crawlers
    from ever fetching the header; staging is never indexed, production decides for itself); and the
-   legal pages and `security.txt`, which ship "[to fill: …]" placeholders (`deployment/compose.dev.yaml:210-212`)
-   that Alex fills in the runbook before the resource is created, with a preflight red under dev that refuses a
-   `[to fill:` value (a tightening for the preflight lane). `POST /login` also lets a stranger make web resolve any
+   legal pages and `security.txt`, which ship "[to fill: …]" placeholders as literals in
+   `deployment/compose.dev.yaml:208-212`, so filling them is a change to that file that Alex makes before the
+   resource is created, not a runbook step; a preflight red under dev refuses a `[to fill:` value (a tightening
+   for the preflight lane) and fails `--env dev` on main until the values land. `POST /login` also lets a
+   stranger make web resolve any
    handle or `did:web` host before P1.36v refuses it (`infrastructure/pds/oauth/sign-in.ts:65-67`); net-guard,
-   the new edge zone and web's `login` bucket bound that, and it is accepted. Alex revisits a gate "once we become
+   the `app_signin` zone and web's `login` bucket bound that, and it is accepted. Alex revisits a gate "once we become
    more popular"; until then any gate on a staging name is a new Proposed record.
 2. **Edge without a certificate under dev.** Under dev the edge's two sites listen on plain `http`, bound only to
    the edge's address on the internal `newt_edge` network (0030, Decision 2), with no published port and no `:443`
@@ -194,7 +203,8 @@ production name is a Phase 5 decision.
   (`docs/ai/book/phase-1.md:15282-15287`, `:15301-15308`, threat E at `:15324-15325`), in P1.34 (`:15516`,
   `:15537-15540`) and in P1.36i's rationale (`:8922-8925`); the plan thread rewrites them in one book edit,
   `unset-plan/book-edits/2026-10-20-adr-0031-no-login.md`, before the first deploy, and P1.36b's scope gains the
-  two app zones and the `X-Robots-Tag` header of Decision 1 (all tightenings inside an edge step: no card and no
+  `app_signin`, `app_global` and the `X-Robots-Tag` header of Decision 1 (all tightenings inside an edge step:
+  no card and no
   line, architecture 13:18Z). ADR 0001 gets an appended entry at acceptance, never a
   rewrite.
 - Every app-to-PDS call leaves the host and returns through Pangolin's WireGuard tunnel to Newt; latency and the
