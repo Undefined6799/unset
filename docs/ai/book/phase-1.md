@@ -15281,8 +15281,10 @@ Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
 - V2: P1.34's V1 DNSSEC check on `unset.sh` and `unset.ac`, plus the CAA record; registrar lock confirmed by Alex.
 - V3: from outside, every path on staging.unset.sh and staging.unset.ac answers with Pangolin's login, except GET and
   HEAD on staging.unset.sh's /oauth-client-metadata.json and /oauth/jwks.json, which answer 200. staging.unset.ac
-  has no bypass (ADR 0025). A POST to either of those two gets the
-  login, which proves Pangolin 1.24.0's method scope.
+  has no bypass (ADR 0025). Pangolin passes both paths for every method, so any other method on them gets `405`
+  with `Allow: GET, HEAD` from our edge (ADR 0030, decision 1). As a runbook command after the first deploy, every
+  rule or policy change and every Pangolin update, the deploy check also reads the resource's effective rule list
+  and asserts ADR 0030's ACCEPT rules exactly; it needs a Pangolin login, so it never runs from the outside probe.
 - V4: from the homelab host, behind Pangolin, as a runbook command: `describeServer` on staging.unset.ac → 200 with
   `inviteCodeRequired: true`, `_health` → 200, and the admin probes → 404/401 (the P1.28 tests, now against the live
   host). There is no tailnet path for the PDS (Alex, 02:50:36Z). No Pangolin credential is ever stored in the repo or
@@ -15303,8 +15305,10 @@ every public gate and its evidence lives here.
   behind it):
   1. every probed path on both hosts answers with Pangolin's login; any other answer fails the run with "login
      bypassed";
-  2. on staging.unset.sh only, GET and HEAD on /oauth-client-metadata.json and /oauth/jwks.json → 200, and a POST to
-     either → the login;
+  2. on staging.unset.sh only, GET and HEAD on /oauth-client-metadata.json and /oauth/jwks.json → 200 with that
+     file's bytes, and a POST to either → `405` from our edge; ADR 0030's normalised spellings of the two paths
+     return that file's bytes or a `4xx`, never other content, and its login-demanded paths get the login (ADR 0030,
+     decision 1, lists both sets);
   3. TLS certificate valid for more than 14 days.
   The PDS checks run from the homelab host as a runbook command, never from outside: `_health` → 200;
   `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200 and a
