@@ -1,7 +1,8 @@
 # 0032 — Self-signed certificate at the dev edge behind Pangolin
 
-Status: Accepted by Alex, 2026-10-20 21:54:54Z (the acceptance line below, typed in the project chat against this
-record at ae9d8e7). From here the record changes only to be marked superseded.
+Status: Proposed (re-acceptance pending against the final text). Alex's line of 2026-10-20 21:54:54Z was typed
+against ae9d8e7 and the text changed after it; a fresh line against the final commit is recorded here when typed,
+and from then the record changes only to be marked superseded.
 
 ## Context
 Accepted ADR 0031 (2026-10-20 21:04:02Z), Decision 2, has the dev edge's two sites listen on plain `http` behind
@@ -58,9 +59,9 @@ ADR 0028 and the Phase 5 records.
    configuration, any certificate path outside `/run/secrets/`, and any published port under dev fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
-   Under dev the edge's mounts take the local stack's shape (`compose.local.yaml:123-124`): exactly three read-only
+   Under dev the edge's mounts take the local stack's shape (`compose.local.yaml:123-125`): exactly three read-only
    file binds, each required and used once, each checked by realpath the way `localFileMount` checks the local
-   files (`edge.ts:346-375`): `deployment/edge/dev/pds.caddy` at `/etc/caddy/sites/enabled/pds.caddy`,
+   files (`edge.ts:346-377`): `deployment/edge/dev/pds.caddy` at `/etc/caddy/sites/enabled/pds.caddy`,
    `deployment/edge/dev/app.caddy` at `/etc/caddy/sites/enabled/app.caddy`, and `deployment/edge/dev/tls.caddy` at
    `/etc/caddy/snippets/tls.caddy`. Dev has its own PDS site file, not `sites/pds.caddy` (prod's), because the dev
    site must bind the `newt_edge` address (P1.36j's trusted-proxy block for `10.250.37.3:443` matches only a site
@@ -69,6 +70,10 @@ ADR 0028 and the Phase 5 records.
    reader's containment. The image's Caddyfile reads nothing else (`import snippets/*.caddy`,
    `Caddyfile:46`; `import sites/enabled/*.caddy`, :56), and any other bind at, under or above `/etc/caddy`,
    including today's `sites/` directory mount (`compose.dev.yaml:143`), fails. No directory is mounted under dev.
+   One transitional shape: until P1.38g lands, C18 under dev also accepts exactly today's single read-only bind of
+   `deployment/edge/sites` at `/etc/caddy/sites/enabled` (`compose.dev.yaml:143`), never mixed with the file
+   binds, so that P1.38e lands before P1.36c without turning main's `compose.dev.test.ts` red; P1.38g (a
+   tightening, no line) removes that shape before the first deploy, and P1.34 depends on it.
    Today C18 refuses any edge mount over `/etc/caddy` but the sites directory (`edge.ts:78-81`), so P1.38e merges
    before P1.36c, whose mounts would otherwise fail it. `--env dev` fails on main today and keeps failing after
    both: C2 refuses the four services `compose.dev.yaml` builds until P2.26b pins them from the lock
@@ -123,12 +128,13 @@ ADR 0028 and the Phase 5 records.
 - An expired certificate does not stop traffic: Caddy keeps serving the only certificate it has after
   `NotAfter` (certmagic v0.25.6 `handshake.go:236-242`, `DefaultCertificateSelector` returns the single choice
   expired or not), and Pangolin's transport for a resource with a TLS Server Name does not verify
-  (`getTraefikConfig.ts:472-476`, `insecureSkipVerify: true`). The guards are the deploy check, which fails from
-  30 days before expiry and refuses the next deploy, and the renewal date in the runbook; nothing scheduled
-  enforces it. Accepted as a staging cost.
+  (`getTraefikConfig.ts:472-476`, `insecureSkipVerify: true`). The guards are the deploy check, a runbook command run
+  after each deploy and edge change that fails when run from 30 days before expiry (nothing in preflight reads the
+  PEM, so no deploy is refused by it), and the renewal date in the runbook; nothing scheduled enforces it.
+  Accepted as a staging cost.
 
 ## Compliance
-- Reds listed in Decision 3 and 4 land with P1.38e, P1.36b, P1.36c and P1.37v before the first deploy.
+- Reds listed in Decision 3 and 4 land with P1.38e, P1.36b, P1.36c, P1.38g and P1.37v before the first deploy.
 - The private key never enters the repo, CI, logs or a message (SE-7); the runbook command writes both files as C9
   mounted file secrets: mode 0400, owned by the edge's uid (65532), inside a 0700 folder owned by the deploy user
   (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Under dev nothing in preflight
@@ -137,8 +143,10 @@ ADR 0028 and the Phase 5 records.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
   device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs
   and that it is self-signed (issuer equals subject and the signature verifies with the leaf's own public key,
-  `openssl verify -CAfile leaf.pem leaf.pem`), so a CA-issued leaf carrying the right names fails; C18 reads only
-  the directive and the paths, not the PEM. P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS`
+  `openssl verify -check_ss_sig -CAfile leaf.pem leaf.pem`; without `-check_ss_sig` OpenSSL 3 accepts a
+  self-signed anchor without checking its signature), so a CA-issued leaf carrying the right names and a leaf
+  with a broken signature both fail; C18 reads only the directive and the paths, not the PEM. P1.37v's red
+  asserts that no service names `NODE_EXTRA_CA_CERTS`
   (0031 Decision 3).
 - Acceptance line: "yes accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
   docs/human/decisions/0032-self-signed-dev-edge.md". Alex typed it at 2026-10-20 21:54:54Z against this record at
@@ -154,5 +162,7 @@ ADR 0028 and the Phase 5 records.
   decision itself is unchanged, and Alex was told in the project chat at 2026-10-20 22:57Z. Codex's review of
   01eb573 (23:05Z) asked that a record which calls itself immutable after acceptance be accepted against its final
   text, and added the self-signed and expiry points above; so the final revision goes back to Alex for one fresh
-  line against its commit, and the status line records that commit when he types it.
+  line against its commit, and the status line records that commit when he types it. His line against 9ead8b0
+  (23:21:15Z) does not stand: the verifier then found three text fixes (the `-check_ss_sig` flag, the deploy
+  check gating no deploy, and the transitional shape above), so the line is asked again against the fixed text.
   0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.
