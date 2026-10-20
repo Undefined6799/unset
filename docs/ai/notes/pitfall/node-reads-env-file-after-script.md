@@ -56,3 +56,5 @@ Re-checked at P1.29s: `up` runs `scripts/dev-precheck.ts` as the first child, sa
 are env, compose, interpolation-env, none of which Node reads, and it then runs the preflight the same way.
 Re-checked at P1.37n, which swaps `--build` for `--no-build` in the docker child under `dev` only; the precheck child,
 its argv form and the child environment are unchanged.
+Re-checked at P1.36g, which makes `inputs.ts` also record each service's env-file names for C30; the files are read
+by the same reader, and no flag, argv form or child environment changed.

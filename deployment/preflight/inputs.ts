@@ -320,10 +320,15 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
   const resolveValue = (value: EnvValue): string =>
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
   const serviceEnv = new Map<string, SecretMap>();
+  const envFileNames = new Map<string, string[]>();
   const values = interpolationFile.map(([, value]) => value);
   for (const service of compose.services) {
     secretPaths.push(...service.envFiles);
     const fromFiles = service.envFiles.flatMap((path) => envFiles.parse(path));
+    envFileNames.set(
+      service.name,
+      fromFiles.map(([name]) => name),
+    );
     const fromCompose = service.environment.map(([key, value]): [string, string] => [key, resolveValue(value)]);
     serviceEnv.set(service.name, new SecretMap([...fromFiles, ...fromCompose]));
     values.push(...[...fromFiles, ...fromCompose].map(([, value]) => value));
@@ -334,6 +339,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     projectDir: dirname(files[0] as string),
     compose,
     serviceEnv,
+    envFileNames,
     secretPaths: [...new Set(secretPaths)],
     envReads: envFiles.ids,
     mountedSecrets,

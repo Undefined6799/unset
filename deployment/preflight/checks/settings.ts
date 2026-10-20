@@ -3,7 +3,7 @@
 // packages/common/src/env.ts: envStr treats an empty value as unset, envList splits on commas, envInt parses an
 // integer. A reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
-import { localMail, smtpProblem, withPds } from "./pds.ts";
+import { fromAddressProblem, localMail, smtpProblem, withPds } from "./pds.ts";
 import { type Check, fail, type Inputs, pass, serviceNamed } from "./types.ts";
 
 const present = (env: SecretMap, name: string): boolean => env.has(name);
@@ -53,12 +53,14 @@ export const c14: Check = {
 export const c15: Check = {
   id: "C15",
   run: withPds((env, { env: stage }) => {
-    const domains = (value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "").split(",").filter((d) => d !== "");
+    const raw = value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "";
+    const domains = raw.split(",").filter((d) => d !== "");
     if (domains.length === 0) return fail("PDS_SERVICE_HANDLE_DOMAINS is not set");
     if (domains.some((d) => d === ".0x40.me" || d.endsWith(".0x40.me"))) {
       return fail("PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     }
-    if (stage === "dev" && !(domains.length === 1 && domains[0] === ".staging.unset.im")) {
+    // The raw value, not the split list: a stray comma is not the one exact entry.
+    if (stage === "dev" && raw !== ".staging.unset.im") {
       return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     if (stage === "local" && !domains.every((domain) => underLocalHost(env, domain))) {
@@ -95,9 +97,8 @@ export const c19: Check = {
       smtpProblem(v, stage, "PDS_MODERATION_EMAIL_SMTP_URL"),
     );
     if (problem !== null) return fail(problem);
-    return (value(env, "PDS_MODERATION_EMAIL_ADDRESS") ?? "") === ""
-      ? fail("PDS_MODERATION_EMAIL_ADDRESS missing")
-      : pass();
+    const from = env.use("PDS_MODERATION_EMAIL_ADDRESS", (v) => fromAddressProblem(v, "PDS_MODERATION_EMAIL_ADDRESS"));
+    return from === null ? pass() : fail(from);
   }),
 };
 

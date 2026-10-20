@@ -85,22 +85,68 @@ other two are web's alone. Make each with `umask 077`, then `chown 65532:65532` 
 
 Neither value is ever printed by the server: the keyring and the keys show as `[keyring]` and `[oauth keys]`.
 
-## The PDS's env file (P1.29a)
+## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
 The PDS reads its settings only from its environment (`@atproto/pds` 0.5.37, `dist/config/env.js`), so its secrets
 cannot be mounted files. They go in `unset-dev-env/pds.env`, yours, mode `0600`, which the preflight checks like
-`dev-public.env`. Start it from `deployment/env/pds.example.env`; it holds exactly these four names, and every other PDS
-setting is written out in `compose.dev.yaml`:
+`dev-public.env`. Start it from `deployment/env/pds.example.env`; every other PDS setting is written out in
+`compose.dev.yaml`. One env per host: the same file is loaded by both compose files, and the preflight requires its
+exact name set for the env it runs under (P1.36q). Under `--env local` it holds the first four names only; under dev
+and prod all six.
 
 | Name | Make it with |
 | --- | --- |
 | `PDS_JWT_SECRET` | `openssl rand -hex 32` |
 | `PDS_ADMIN_PASSWORD` | `openssl rand -hex 32` (the preflight's C7 wants at least 32 characters) |
 | `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX` | `openssl ecparam --name secp256k1 --genkey --noout --outform DER \| tail --bytes=+8 \| head --bytes=32 \| xxd --plain --cols 32` (the PDS installer's own command, bluesky-social/pds v0.4.5037 `installer.sh:16`) |
-| `PDS_RECOVERY_DID_KEY` | the public `did:key` of a recovery key whose private half stays offline; set it before the first account, because it cannot be added to existing DID documents later (C6) |
+| `PDS_RECOVERY_DID_KEY` | the public `did:key` of a recovery key whose private half stays offline (below); set it before the first account, because it cannot be added to existing DID documents later (C6) |
+| `PDS_EMAIL_SMTP_URL` | dev and prod only: `smtps://resend:<key>@smtp.resend.com:465`, with a Resend sending-only key as `<key>` |
+| `PDS_MODERATION_EMAIL_SMTP_URL` | dev and prod only: the same form; a second sending-only key is recommended, the same key works |
 
 Write the file under `umask 077` so it is never readable by others, even for a moment. The PDS's data, its SQLite
 databases and blobs, is the named volume `pdsdata`, which Docker keeps; nothing in your folders holds it.
+
+The mail key lives only in this file: never in the repository, a log, a chat or a command line you share. The preflight
+reads the URLs' names and judges their form (C11: smtps, or `requireTLS=true`), and never prints a value. Which one
+staging uses for moderation mail, a second key or the same one, is not recorded yet: Alex says, and this line is
+updated. The preflight never compares the two.
+
+The two from addresses are not secrets and are literals in `compose.dev.yaml`: `PDS_EMAIL_FROM_ADDRESS` and
+`PDS_MODERATION_EMAIL_ADDRESS`. Each must be a sender your Resend account may send as; if the ones written there are
+not, say which to use and they are changed in a pull request. The preflight fails a mail URL without its address, and
+an address that is not a plain `name@domain` (C11, C19). Never put either in `pds.env`.
+
+**The recovery key.** Make it on a device you keep offline, for example with goat (bluesky-social/goat `key.go`, read
+2026-10-19): `goat key generate --type secp256k1` prints the secret key and its public `did:key`. Keep the secret key
+offline only. Put the `did:key` line, and nothing else from that output, in `pds.env`.
+
+**The first account.** Make it once by hand, with an invite code from the one-off below, as the tester it is for;
+its password, DID and email live only with that person (ADR 0026).
+
+## The first invite codes (one-off, until P2.09)
+
+Invites are required (`PDS_INVITE_REQUIRED`). Until `interfaces/pds-admin` (P2.09) exists, Alex makes each code by hand
+with this one-off; Claude never runs it. It is retired, and this section removed, when P2.09 lands. All four
+conditions hold every time:
+
+1. It runs with `docker compose exec` inside the PDS container, against the PDS's own loopback port. No port is
+   published, and the edge still answers 404 for `createInviteCode` (`deployment/edge/snippets/xrpc-guard.caddy`).
+2. The admin password is read inside the container from the PDS's own environment, never typed on a command line and
+   never printed: the single quotes below keep your shell from expanding anything.
+3. Each code has `useCount` 1 and goes to one tester.
+4. Your log line records the date and the number of codes, never a code.
+
+From the checkout, with the same files the wrapper passes (`deployment/preflight/stack.ts`); `exec` starts nothing and
+is the one `docker compose` command this runbook allows by hand:
+
+```sh
+docker compose -f deployment/compose.dev.yaml --env-file ../unset-dev-env/dev-public.env exec pds node -e 'fetch("http://127.0.0.1:3000/xrpc/com.atproto.server.createInviteCode", { method: "POST", headers: { authorization: "Basic " + Buffer.from("admin:" + process.env.PDS_ADMIN_PASSWORD).toString("base64"), "content-type": "application/json" }, body: JSON.stringify({ useCount: 1 }) }).then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok || typeof j.code !== "string") { console.error("no invite code: HTTP " + r.status); process.exit(1); } console.log(j.code); })'
+```
+
+If the PDS refuses the request (a wrong admin password, say), the command prints only the HTTP status and exits
+non-zero, so a failure never looks like a code. The request is the one the PDS's own `pdsadmin create-invite-code`
+sends (bluesky-social/pds v0.4.5037 `pdsadmin/create-invite-code.sh`), aimed at loopback instead of the public name.
+The code it prints goes to the tester and nowhere else.
 
 ## Creating or rotating a file
 

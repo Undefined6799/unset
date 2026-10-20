@@ -517,13 +517,21 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_CRAWLERS: "",
       PDS_RATE_LIMITS_ENABLED: "false",
       PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
+      PDS_EMAIL_FROM_ADDRESS: "noreply@staging.unset.sh",
+      PDS_MODERATION_EMAIL_ADDRESS: "moderation@staging.unset.sh",
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
-    // The local PDS differs only by the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1). Both publish to
-    // plc.directory (ADR 0023).
+    // The local PDS differs only by the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1) and by sending no
+    // mail, so it has no from addresses (P1.36g; C11 and C19 refuse them under local). Both publish to plc.directory
+    // (ADR 0023).
+    const {
+      PDS_EMAIL_FROM_ADDRESS: _from,
+      PDS_MODERATION_EMAIL_ADDRESS: _moderation,
+      ...shared
+    } = Object.fromEntries(env);
     expect(Object.fromEntries(envOf(service(local(), "pds")))).toEqual({
-      ...Object.fromEntries(env),
+      ...shared,
       NODE_EXTRA_CA_CERTS: "/etc/unset-dev-trust/root.pem",
     });
   });
@@ -540,6 +548,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       "PDS_ADMIN_PASSWORD",
       "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
       "PDS_RECOVERY_DID_KEY",
+      "PDS_EMAIL_SMTP_URL",
+      "PDS_MODERATION_EMAIL_SMTP_URL",
     ]);
     expect(service(dev(), "pds").envFiles).toEqual(["../../unset-dev-env/pds.env"]);
   });
@@ -557,6 +567,14 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const file of [FILE, LOCAL]) {
       expect(mailLogProblems(envOf(service(parseCompose(read(file), file), "pds"))), file).toEqual([]);
     }
+    // Under dev mail is required (P1.36g): the SMTP URLs come from pds.env, so compose and the template together name
+    // every mail setting, and preflight C11 and C19 fail a dev stack without them.
+    const template = read("env/pds.example.env")
+      .split("\n")
+      .filter((line) => line !== "" && !line.startsWith("#"))
+      .map((line): [string, string] => [line.slice(0, line.indexOf("=")), "x"]);
+    const devMail = new Map([...envOf(service(dev(), "pds")), ...template]);
+    expect([...SMTP, "PDS_EMAIL_FROM_ADDRESS"].filter((name) => !devMail.has(name))).toEqual([]);
     const off = new Map([["LOG_ENABLED", "false"]]);
     for (const level of ["info", "warn", "error", "fatal", "silent"]) {
       expect(mailLogProblems(new Map([...off, ["LOG_LEVEL", level]])), level).toEqual([]);
