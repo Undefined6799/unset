@@ -677,6 +677,7 @@ flowchart LR
   P1_35y --> P1_36b
   P1_36c["P1.36c dev edge DNS token and app site wired"]
   P1_36b --> P1_36c
+  P1_38e --> P1_36c
   P1_36g["P1.36g dev mail and first-invite runbook"]
   P1_36i["P1.36i dev edge aliases and public paths"]
   P1_36b --> P1_36i
@@ -755,6 +756,7 @@ flowchart LR
   P1_36i --> P1_34
   P1_37v --> P1_34
   P1_38e --> P1_34
+  P1_38d --> P1_34
   P1_38f --> P1_34
   P1_36j --> P1_34
   P1_33 -.-> P1_33a
@@ -8865,7 +8867,8 @@ TLS under dev follows ADR 0032 (Proposed; it supersedes ADR 0031 decision 2's pl
 `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, the local stack's shape (`local/tls.caddy:7-8`): the
 snippet lives in the dev mount, the self-signed leaf for both staging names and its key are C9 file secrets under
 `/run/secrets/` (P1.36c mounts them); no issuer, no ACME, no `tls internal`, no CA. Reds: the dev
-rendering names no acme issuer and no `:80` site; a `dev/tls.caddy` of any other shape fails. The PDS site riding
+rendering names no acme issuer and no `:80` site; a `dev/tls.caddy` of any other shape fails; the shipped and local
+files refuse the two `/run/secrets/dev_tls_*` paths, as they refuse `local_tls_*` outside `local/`. The PDS site riding
 that certificate is ADR 0032's decision, approved by its acceptance; the app site is under his P1.36b line.
 **C18 is not changed here, and it blocks the first deploy until P1.38e lands:** on main C18 runs under `--env dev`
 (`deployment/preflight/checks/edge.ts:400-401`, then `deployedEdgeZones`, then `certificateProblems` at :152-153)
@@ -8886,28 +8889,30 @@ with a host or upstream that isn't the ruled one. Answered by exact values and p
 ---
 
 ### P1.36c — Wire the dev edge's app site and mounts
-Tags: [SEC]            Depends on: P1.36b
+Tags: [SEC]            Depends on: P1.36b, P1.38e
 Slice 1, issue #1000, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread; book
 edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What (the DNS-token parts move to production with P1.36e under ADR 0031, book edit 2026-10-20-adr-0031-no-login;
 the app-site mounts and the allowlist entries stay in this step; it also takes the compose `dev/` mount that P1.36o
-would have added (the dev `(tls)` snippet over `snippets/tls.caddy`, the self-signed certificate, and its key as a
-C9 file secret mounted only into the edge with a test that no other service mounts it; ADR 0032 decision 1), with
+would have added (the dev `(tls)` snippet over `snippets/tls.caddy`, and the self-signed certificate and its key,
+both C9 file secrets mounted only into the edge with a test that no other service mounts them; ADR 0032 decision 1;
+the mounts pass C18 only once P1.38e's dev mount rule exists, so this step merges after it), with
 the preflight refusal of a `dev/` mount under prod and local, and the
 red that the app's and the PDS's scheme never comes from the request, cookies `Secure` and every public URL `https`
 from configuration, ADR 0031 decision 2):** the DNS token is a C9 file secret, mounted only
 into the edge, under the C9 owner and mode rules; a test asserts that no other service mounts it. The compose wiring
 adds the app site's mounts as P1.36b reads them, and the two
-dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. The token is wired into the
-same `deployment/edge/dev/` mount (P1.36o). Alex's tasks (runbook): create the validation zone, the `_acme-challenge`
+dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. The token, when P1.36e
+brings it to production, is wired into the same `deployment/edge/dev/` mount. Alex's tasks (runbook): create the
+validation zone, the `_acme-challenge`
 CNAMEs, the zone-scoped token and the per-name CAA records (book edit 2026-10-19-verify-1013-followups, M5). They
 also delegate the validation zone by NS from Namecheap and create the scoped token at the provider Alex picks (book
 edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z").
 
-Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a DNS token readable by
-services other than the edge. Answered by a C9 file secret mounted only into the edge, with a test (book edit
-2026-10-19-verify-1013-followups, M4).
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): the certificate's private
+key, or a DNS token, readable by services other than the edge. Answered by C9 file secrets mounted only into the
+edge, with a test (book edit 2026-10-19-verify-1013-followups, M4).
 
 ---
 
@@ -15319,7 +15324,10 @@ VerifyEmail.tsx:34 link our PDS for every user, which is correct while P1.36v li
   0031 decision 2's plain `http`; Alex 2026-10-20 21:42:50Z; book edit 2026-10-20-adr-0031-no-login). DNS-01 at
   the edge (P1.36d, P1.36e, ADR 0028) moves to production.
 - The only inbound path is Pangolin through Newt. Both names are public resources: no Pangolin login, no rules and
-  no bypass paths (Alex, 2026-10-20 13:00:31Z; ADR 0031, decision 1). The invite code is the gate.
+  no bypass paths (Alex, 2026-10-20 13:00:31Z; ADR 0031, decision 1). The invite code is the gate. Alex sets each
+  resource's target to `https` at the edge's `newt_edge` address with its TLS Server Name set to that resource's own
+  staging name (ADR 0032 decision 5: Traefik sends no SNI to an IP target, and Caddy with only file certificates
+  refuses a handshake without one).
 - The dev-preflight resolution check (P1.36u) passes before opening.
 - Before either resource is created: P1.37v, P1.36j and P1.36b are merged and deployed (the per-client keys, Newt
   as the only trusted proxy, and the three app zones; ADR 0031, decisions 1 and 3), and Alex has replaced every
@@ -15592,7 +15600,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f, P1.38d (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -15632,7 +15640,8 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   delegated validation zone (P1.36d, P1.36e, P1.36o, P1.36c's token parts) is production work. `staging.unset.sh`
   and `staging.unset.ac` are public resources
   at Pangolin with no login, no rules and no bypass paths (Alex, 2026-10-20 13:00:31Z, superseding his "Keep
-  password" tap of 2026-10-19 02:56:58Z); the invite code and P1.36v's own-PDS sign-in are the gate. Public DNS
+  password" tap of 2026-10-19 02:56:58Z), each targeting `https` at the edge with its TLS Server Name set to its
+  own staging name (ADR 0032 decision 5); the invite code and P1.36v's own-PDS sign-in are the gate. Public DNS
   points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
   through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture's section
   labelled 04:05Z, S4).
@@ -16086,7 +16095,8 @@ compose's fixed addresses to the edge's literal bind and trusted proxy. #1115 pr
 the scope a builder follows.
 
 **What:**
-1. Newt pinned by digest as a run-only vendor entry (`bases.lock.json`, the images test's vendor allowlist), under
+1. Newt pinned by digest as a run-only vendor entry (`bases.lock.json`, the images test's vendor allowlist; ADR
+   0030 decision 2), under
    the seven-day age rule. The `newt` service: digest-pinned, non-root, read-only root, `cap_drop: ALL`,
    `no-new-privileges`, limits; from Newt's own config source: SSH and clients disabled, no Docker socket, no
    admin, metrics or pprof address. Its secrets (`NEWT_ID`, `NEWT_SECRET`, `PANGOLIN_ENDPOINT`) come from `newt.env`
@@ -16142,13 +16152,22 @@ renders. Under dev C18 instead requires the served `(tls)` to read the same as `
 which must be exactly `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`, both C9 file secrets (P1.36c);
 any `tls internal`, any acme issuer, any `local_certs`, `pki` or `auto_https` global, any site without
 `import tls`, any `:80` site in the configuration, any certificate path outside `/run/secrets/` and any published
-port under dev fail. Under prod C18 is unchanged and keeps refusing anything but Let's Encrypt; a file
-certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds: each of the dev refusals; prod with
-a file certificate; local with the dev snippet; the main-branch dev rendering passing. It merges after P1.36c, which
-mounts the snippet and the secrets. `--env dev` fails on main today (C18 refuses edge mounts over `/etc/caddy` but
-the sites directory, `edge.ts:78-81`, and requires the served `(tls)` to match `snippets/tls.caddy`, :228-231; C2
-refuses the checkout-built edge, :132-137) and first passes once P1.36b, P1.36c, P1.38e, P1.37v and P1.27s have all
-merged. The runbook gains the OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both
+port under dev fail. The mount rule changes with it: today C18 refuses any edge mount at, under or above
+`/etc/caddy` other than the sites directory (`edgeSitesDir`, `edge.ts:78-81`; `compose.dev.test.ts:673` runs it on
+the real `compose.dev.yaml`), so under dev it now allows exactly two more, both read-only binds from inside
+`deployment/edge/` with the sites mount's containment: `dev/tls.caddy` at `/etc/caddy/snippets/tls.caddy` and the
+`dev/` directory at the target P1.36c names; a third mount over `/etc/caddy`, a writable one, one from outside
+`deployment/edge/`, or either of the two under prod or local fails. That rule is part of the typed line's "C18 dev"
+change, since those mounts are how the file certificate is served. Under prod C18 is unchanged and keeps refusing
+anything but Let's Encrypt; a file certificate under prod fails. Local is unchanged (P1.33t's own `(tls)`). Reds:
+each of the dev refusals; each of the mount refusals; prod with a file certificate; local with the dev snippet; the
+main-branch dev rendering passing. It merges before P1.36c, whose mounts fail C18 until this rule exists, so P1.36c
+depends on this step. `--env dev` fails on main today and keeps failing after this step: C2 refuses the four
+services `compose.dev.yaml` builds (postgres, migrate, edge, web; `images.ts:38`) until P2.26b pins them from the
+lock, C3 and C4 need P2.26e's trusted root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`)
+until P2.26b, and C21 needs P1.33a's retirement report (`host.ts:18-40`). It first passes once P1.36b, P1.38e,
+P1.36c, P1.37v, P1.27s, P2.26e and P2.26b have merged and P1.33a's report is committed; P2.26b's lock needs the
+digests from P1.27s's first run on main, so those two are a second sitting after the rest. The runbook gains the OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both
 staging names as SANs, no CA flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder
 owned by the deploy user, `secrets.ts:4-8`) and the renewal date.
 
