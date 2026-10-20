@@ -6,8 +6,9 @@ Status: Proposed (awaiting Alex)
 Accepted ADR 0031 (2026-10-20 21:04:02Z), Decision 2, has the dev edge's two sites listen on plain `http` behind
 Pangolin, with no certificate at our edge; preflight C18 still refuses that shape on main
 (`deployment/preflight/checks/edge.ts:400-401` runs it under `--env dev`, and `certificateProblems` at :152-153
-fails every site that does not import `tls`, :223), so the plain-`http` edge waited on a C18 change with its own
-typed line (P1.38e). On 2026-10-20, asked for that line, Alex chose otherwise: "it will have tls from lets
+fails every site that does not import `tls`, :223, and a served `(tls)` that differs from the file, :228-231), so
+the plain-`http` edge waited on a C18 change with its own typed line (P1.38e). On 2026-10-20, asked for that line,
+Alex chose otherwise: "it will have tls from lets
 encrypt / from pangolin" (21:39:10Z, 21:39:22Z), "can you not just generate a certificate on the server??"
 (21:40:01Z), "but only pangolin is the edge right? feels like a self-signed certificate could be a good
 application there" (21:41:50Z), and "self-signed and make 1 big PR for the last push" (21:42:50Z). The internet
@@ -56,14 +57,22 @@ ADR 0028 and the Phase 5 records.
    configuration, any certificate path outside `/run/secrets/`, and any published port under dev fail. Under prod C18 is
    unchanged and keeps refusing anything but Let's Encrypt; a self-signed or file certificate under prod fails.
    Local is unchanged (its own `(tls)`, P1.33t). Reds for each refusal and for the prod and local branches.
-   The same rule under dev also allows exactly two more edge mounts, the snippet at `/etc/caddy/snippets/tls.caddy`
-   and the `dev/` directory, both read-only from inside `deployment/edge/`; today C18 refuses any edge mount over
-   `/etc/caddy` but the sites directory (`edge.ts:78-81`), so P1.38e merges before P1.36c, whose mounts would
-   otherwise fail it. `--env dev` fails on main today and keeps failing after both: C2 refuses the four services
-   `compose.dev.yaml` builds until P2.26b pins them from the lock (`images.ts:38`), C3 and C4 need P2.26e's trusted
-   root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`) until P2.26b, and C21 needs P1.33a's
-   retirement report (`host.ts:18-40`). The first green `--env dev` on main is after P1.36b, P1.38e, P1.36c, P1.37v,
-   P1.27s, P2.26e and P2.26b have merged and P1.33a's report is committed.
+   Under dev the edge's mounts take the local stack's shape (`compose.local.yaml:123-124`): exactly three read-only
+   file binds, each required and used once, each checked by realpath the way `localFileMount` checks the local
+   files (`edge.ts:346-375`): `deployment/edge/sites/pds.caddy` at `/etc/caddy/sites/enabled/pds.caddy`,
+   `deployment/edge/dev/app.caddy` at `/etc/caddy/sites/enabled/app.caddy`, and `deployment/edge/dev/tls.caddy` at
+   `/etc/caddy/snippets/tls.caddy`; the image's Caddyfile reads nothing else (`import snippets/*.caddy`,
+   `Caddyfile:46`; `import sites/enabled/*.caddy`, :56), and any other bind at, under or above `/etc/caddy`,
+   including today's `sites/` directory mount (`compose.dev.yaml:143`), fails. No directory is mounted under dev.
+   Today C18 refuses any edge mount over `/etc/caddy` but the sites directory (`edge.ts:78-81`), so P1.38e merges
+   before P1.36c, whose mounts would otherwise fail it. `--env dev` fails on main today and keeps failing after
+   both: C2 refuses the four services `compose.dev.yaml` builds until P2.26b pins them from the lock
+   (`images.ts:39`) and takes the PDS and Newt images only from our mirror (P1.27s's list names both, P2.26b pins
+   them), C3 and C4 need P2.26e's trusted root, C18 refuses an edge not run from the lock's image
+   (`edge.ts:132-137`) until P2.26b, C21 needs P1.33a's retirement report (`host.ts:18-40`), and P1.38d refuses
+   every `[to fill:` value in `compose.dev.yaml` until Alex replaces them. The first green `--env dev` on main is
+   after P1.36b, P1.38e, P1.36c, P1.37v, P1.27s, P2.26e and P2.26b have merged, P1.33a's report is committed and
+   the `[to fill:` values are replaced.
 4. **Edge shape otherwise as 0031 Decision 2:** bound only to the edge's address on `newt_edge`, no published
    port, no `:80` site in the configuration (replacing 0031's "no `:443` site"). Caddy still opens `:80` on that
    address at run time for its automatic redirect to `https` (Caddy v2.11.7 `caddyhttp/autohttps.go:198-212`
@@ -76,7 +85,7 @@ ADR 0028 and the Phase 5 records.
    that P1.37v brings connects from `newt_edge` and asserts `https` with this certificate on the bound address,
    the `308`-only `:80`, and reads the expiry.
 5. **Pangolin.** Both resources target the edge over `https`, and each resource's TLS Server Name is set to its
-   own staging name. Pangolin 1.24.0 addresses Newt's target by IP literal (`server/lib/loadBalancer.ts:53-57`),
+   own staging name. Pangolin 1.24.0 addresses Newt's target by IP literal (`server/lib/traefik/loadBalancer.ts:53-57`),
    so Traefik sends no SNI unless `tlsServerName` is set (`server/lib/traefik/getTraefikConfig.ts:467-481`), and
    Caddy serving only file certificates with no `default_sni` fails a handshake that carries no SNI (certmagic
    `handshake.go:118-175`); this is from reading the source, not from running it, so the deploy check also makes
@@ -113,11 +122,15 @@ ADR 0028 and the Phase 5 records.
 - Reds listed in Decision 3 and 4 land with P1.38e, P1.36b, P1.36c and P1.37v before the first deploy.
 - The private key never enters the repo, CI, logs or a message (SE-7); the runbook command writes both files as C9
   mounted file secrets: mode 0400, owned by the edge's uid (65532), inside a 0700 folder owned by the deploy user
-  (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Nothing in preflight reads a PEM
-  body; a PEM committed by mistake is caught only by gitleaks in CI, and the C9 path rule keeps the files out of
-  the checkout in the first place.
+  (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Under dev nothing in preflight
+  reads a PEM body (`local-leaf.ts` reads one under local only); a PEM committed by mistake is caught only by
+  gitleaks in CI, and C9 refuses a secret file anywhere inside `deployment/`.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
   device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs,
   and P1.37v's red asserts that no service names `NODE_EXTRA_CA_CERTS` (0031 Decision 3).
 - Acceptance line: "yes accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
-  docs/human/decisions/0032-self-signed-dev-edge.md".
+  docs/human/decisions/0032-self-signed-dev-edge.md". Alex typed it at 2026-10-20 21:54:54Z against this record at
+  ae9d8e7. Two commitments were added after that, from the verifier's reading, without changing the decision: C18
+  under dev allows exactly the three pinned file mounts in Decision 3 (a loosening his P1.38e line covers, since
+  those mounts are how the file certificate is served), and the manual Pangolin step in Decision 5 that sets each
+  resource's TLS Server Name. His lines stand unless he says otherwise.
