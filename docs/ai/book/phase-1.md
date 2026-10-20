@@ -16132,7 +16132,11 @@ the scope a builder follows.
    `https` with the self-signed leaf on its bound address, `:80` answers only a `308` to `https://` with no body
    and no upstream (Caddy's automatic redirect, which a file certificate does not switch off, ADR 0032 decision
    4), the certificate is a leaf (no CA flag) with both staging names as SANs, a P-256 key and at most 825 days of
-   validity, and it expires more than 30 days out; one request through Pangolin to each name succeeds (each
+   validity, it is self-signed (issuer equals subject and the signature verifies with its own public key, the
+   `openssl verify -CAfile leaf.pem leaf.pem` test; a CA-issued leaf with the right names fails, since C18 never
+   reads the PEM), and it expires more than 30 days out (an expired leaf keeps serving: certmagic v0.25.6
+   `handshake.go:236-242` returns the only certificate expired or not, and Pangolin does not verify, so this
+   check and the runbook renewal date are the only guards); one request through Pangolin to each name succeeds (each
    resource's TLS Server Name must be its own staging name, since Traefik sends no SNI to an IP target and Caddy
    with file certificates refuses a handshake without one; ADR 0032 decision 5, Alex's Pangolin step); run after
    the first deploy and every edge change, as a runbook command (ADR 0032, Compliance).
