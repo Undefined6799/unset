@@ -33,7 +33,7 @@ ADR 0028 and the Phase 5 records.
 
 1. **The certificate.** Under dev each edge site serves one self-signed leaf certificate for both staging names
    (`staging.unset.sh`, `staging.unset.ac` as SANs), from PEM files, through a dev `(tls)` snippet
-   `deployment/edge/dev/tls.caddy` of exactly the local shape (`local/tls.caddy:7-9`), reading
+   `deployment/edge/dev/tls.caddy` of exactly the local shape (`local/tls.caddy:8-10`), reading
    `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`; the snippet is mounted read-only over
    `snippets/tls.caddy` by the dev compose file only, and both files are C9 file secrets under `/run/secrets/`,
    mounted only into the edge, with a test that no other service mounts them (the key is secret; the certificate
@@ -41,8 +41,8 @@ ADR 0028 and the Phase 5 records.
    no ACME account, no DNS token, no CA: nobody is asked to trust the certificate, and nothing installs it
    anywhere. Validity is at most 825 days; the runbook generates the pair on the
    staging host with one command (OpenSSL from the host's packages, parameters fixed in the runbook: P-256, the
-   two SANs, no CA flag) and regenerates it the same way; the deploy check fails 30 days before expiry (the
-   failure is the only guard; nothing renews on its own). P1.37v's deploy check also asserts the leaf's key type
+   two SANs, no CA flag) and regenerates it the same way; the deploy check fails 30 days before expiry (that
+   check and the runbook's renewal date are the two guards; nothing renews on its own). P1.37v's deploy check also asserts the leaf's key type
    (P-256) and that its validity is at most 825 days; the runbook's parameters are otherwise unchecked.
 2. **What it buys, and does not.** The bytes between Newt and the edge, two containers on the same host on the
    internal `newt_edge` network (0030 Decision 2), are encrypted. Nothing verifies the certificate: Pangolin's
