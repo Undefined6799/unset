@@ -132,18 +132,21 @@ both staging names as SANs, no CA flag, 825 days. The key never leaves the host.
 
 ```sh
 umask 077
+printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac\n' \
+  > unset-dev-secrets/.leaf.ext
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-secrets/.leaf.key
 openssl req -new -key unset-dev-secrets/.leaf.key -subj "/CN=staging.unset.sh" \
   | openssl x509 -req -signkey unset-dev-secrets/.leaf.key -days 825 -out unset-dev-secrets/.leaf.pem \
-    -extfile <(printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac\n')
+    -extfile unset-dev-secrets/.leaf.ext
+openssl x509 -in unset-dev-secrets/.leaf.pem -noout -enddate
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.leaf.pem unset-dev-secrets/dev_tls_cert
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.leaf.key unset-dev-secrets/dev_tls_key
-rm unset-dev-secrets/.leaf.pem unset-dev-secrets/.leaf.key
-openssl x509 -in unset-dev-secrets/dev_tls_cert -noout -enddate
+rm unset-dev-secrets/.leaf.ext unset-dev-secrets/.leaf.pem unset-dev-secrets/.leaf.key
 ```
 
-The last line prints the expiry; put the date 30 days before it in the staging calendar and remake the pair the same
-way then (C18 reads only the two files' places, not their dates). Only the edge mounts them (P1.36c).
+The `-enddate` line prints the expiry while the deploy user can still read the certificate (after `install` only uid
+65532 can); every line runs in a plain `sh`. Put the date 30 days before the expiry in the staging calendar and remake
+the pair the same way then (C18 reads only the two files' places, not their dates). Only the edge mounts them (P1.36c).
 
 ## The first invite codes (one-off, until P2.09)
 

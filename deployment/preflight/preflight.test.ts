@@ -113,7 +113,8 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
   .replace('    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n', '    user: "65532:65532"\n')
   .replace(
     "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
-    "      - ./edge/dev/sites:/etc/caddy/sites/enabled:ro\n" +
+    "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n" +
+      "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n" +
       "      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n" +
       "    secrets: [dev_tls_cert, dev_tls_key]\n",
   )
@@ -165,6 +166,8 @@ type Stack = {
   networks?: object | string | null;
   /** Extra enabled edge sites, by file name. */
   sites?: Record<string, string>;
+  /** Leaves out the fixture's sites/enabled folder, so deployment/edge/sites holds only the shipped site, as on main. */
+  shippedSitesOnly?: boolean;
   /** Extra files under the root, by repository-relative path (Dockerfiles a build names, P1.30y). */
   files?: Record<string, string>;
 };
@@ -208,6 +211,7 @@ function stack({
   report,
   networks = TABLE,
   sites,
+  shippedSitesOnly = false,
   files,
 }: Stack = {}) {
   // The checkout and, beside it, the deploy user's secrets folder (P1.27u: never inside the checkout, which C26's
@@ -264,17 +268,13 @@ function stack({
   const edge = join(root, "deployment/edge");
   for (const part of ["Caddyfile", "snippets", "sites", "dev"])
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
-  mkdirSync(join(edge, "sites/enabled"));
   // C9 judges every bind source and its parents too (P1.27u), so these get fixed modes whatever the umask.
-  for (const dir of [
-    edge,
-    join(edge, "sites"),
-    join(edge, "sites/enabled"),
-    join(edge, "dev"),
-    join(edge, "dev/sites"),
-  ])
-    chmodSync(dir, 0o755);
-  symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
+  for (const dir of [edge, join(edge, "sites"), join(edge, "dev")]) chmodSync(dir, 0o755);
+  if (!shippedSitesOnly) {
+    mkdirSync(join(edge, "sites/enabled"), { mode: 0o755 });
+    chmodSync(join(edge, "sites/enabled"), 0o755);
+    symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
+  }
   for (const [name, text] of Object.entries(sites ?? {})) writeFileSync(join(edge, "sites/enabled", name), text);
   for (const env of ["dev", "prod"]) {
     if (networks === null) continue;
@@ -1557,12 +1557,61 @@ describe("preflight", () => {
         "FAIL C18 the TLS snippet is not deployment/edge/dev/tls.caddy",
         (t) => t.replace(tlsMount, tlsMount.replace("./edge/dev/tls.caddy", "./edge/snippets/tls.caddy")),
       ],
-      [
-        "FAIL C18 the edge config is unreadable: the dev mode reads the enabled sites from dev/sites/",
-        (t) => t.replace("./edge/dev/sites:", "./edge/sites:"),
-      ],
     ];
+    // ADR 0032 Decision 3: exactly the three file binds, each read-only from dev/ by its own name; no directory.
+    const appMount = "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
+    const pdsMount = "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
+    const unreadable = "FAIL C18 the edge config is unreadable: ";
+    cases.push(
+      // The book's transition: main's sites directory or the three binds, never a mix of the two.
+      [
+        "FAIL C18 the dev edge mounts both the sites directory and /etc/caddy/sites/enabled/app.caddy",
+        (t) => t.replace(pdsMount, `${pdsMount}      - ./edge/sites:/etc/caddy/sites/enabled:ro\n`),
+      ],
+      [
+        "FAIL C18 the dev edge mounts both the sites directory and /etc/caddy/snippets/tls.caddy",
+        (t) => t.replace(appMount, "").replace(pdsMount, "      - ./edge/dev:/etc/caddy/sites/enabled/:ro\n"),
+      ],
+      [`${unreadable}pds.caddy: not mounted`, (t) => t.replace(pdsMount, "")],
+      [`${unreadable}app.caddy: not mounted`, (t) => t.replace(appMount, "")],
+      ["FAIL C18 the site pds.caddy is not mounted read-only", (t) => t.replace(pdsMount, pdsMount.replace(":ro", ""))],
+      [
+        `${unreadable}pds.caddy: not mounted from dev/pds.caddy`,
+        (t) => t.replace(pdsMount, pdsMount.replace("./edge/dev/pds.caddy", "./edge/sites/pds.caddy")),
+      ],
+      [
+        `${unreadable}x.caddy: not a site the dev stack mounts`,
+        (t) => t.replace(pdsMount, `${pdsMount}${pdsMount.replace("enabled/pds.caddy", "enabled/x.caddy")}`),
+      ],
+      [
+        "FAIL C18 the edge binds more than the dev sites and the dev (tls)",
+        (t) => t.replace(pdsMount, `${pdsMount}      - ./edge/dev/pds.caddy:/srv/pds.caddy:ro\n`),
+      ],
+    );
     for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+    // Shape (a), main's compose.dev.yaml today: the shipped sites folder alone, read as before P1.38e, from nowhere
+    // else; P1.38g removes it once P1.36c has moved compose to the three binds.
+    const folder = (t: string) =>
+      t
+        .replace(appMount, "")
+        .replace(tlsMount, "")
+        .replace(pdsMount, "      - ./edge/sites:/etc/caddy/sites/enabled:ro\n");
+    const onMain = async (edit: (t: string) => string) =>
+      (await check({ compose: edit(DEV), pdsEnv: DEV_ENV, shippedSitesOnly: true }, "dev")).lines.find((line) =>
+        / C18 /.test(line),
+      );
+    expect(await onMain(folder)).toBe("PASS C18 ok");
+    expect(await onMain((t) => folder(t).replace("./edge/sites:", "./edge/dev:"))).toBe(
+      "FAIL C18 /etc/caddy/sites/enabled is not mounted from deployment/edge/sites",
+    );
+    // Shape (b): a directory, or a file from outside deployment/edge/dev/, at a site's own path fails by its name.
+    const app = (source: string) => (t: string) =>
+      t.replace(appMount, appMount.replace("./edge/dev/app.caddy", source));
+    expect(await c18(app("./edge/dev"))).toBe(`${unreadable}app.caddy: the mount is not one regular file`);
+    expect(await c18(app("/etc/hostname"))).toBe(`${unreadable}app.caddy: not mounted from dev/app.caddy`);
+    expect(await c18(app("./edge/dev/../sites/pds.caddy"))).toBe(
+      `${unreadable}app.caddy: not mounted from dev/app.caddy`,
+    );
     // The dev (tls) itself: anything but the leaf's two files fails, an issuer and Caddy's internal CA included.
     for (const other of [
       "(tls) {\n\ttls internal\n}\n",
@@ -1574,13 +1623,21 @@ describe("preflight", () => {
       );
     }
     // No :80 site under dev.
-    const plain = readFileSync(join(EDGE_DIR, "dev/sites/pds.caddy"), "utf8").replace(
+    const plain = readFileSync(join(EDGE_DIR, "dev/pds.caddy"), "utf8").replace(
       "{$PDS_HOST} {",
       "http://{$PDS_HOST} {",
     );
-    expect(await c18(same, { "deployment/edge/dev/sites/pds.caddy": plain })).toMatch(
+    expect(await c18(same, { "deployment/edge/dev/pds.caddy": plain })).toMatch(
       /^FAIL C18 \{\$PDS_HOST\}: a plain-http dev site/,
     );
+    // Both dev sites stay bound to the newt_edge address alone, the listener P1.36j's trusted proxy names.
+    for (const name of ["app", "pds"]) {
+      const site = readFileSync(join(EDGE_DIR, `dev/${name}.caddy`), "utf8");
+      expect(site).toContain("\tbind 10.250.37.3\n");
+      expect(
+        await c18(same, { [`deployment/edge/dev/${name}.caddy`]: site.replace("\tbind 10.250.37.3\n", "") }),
+      ).toMatch(/^FAIL C18 \{\$(APP|PDS)_HOST\}: not bound to the edge's newt_edge address alone/);
+    }
     // The app site takes only its ruled name under dev.
     expect(await c18((t) => t.replace("APP_HOST: staging.unset.sh", "APP_HOST: other.unset.sh"))).toMatch(
       /^FAIL C18 the edge config is unreadable: \{\$APP_HOST\} is not the dev app site's ruled value/,
@@ -4463,6 +4520,13 @@ networks:
     expect(await c18((text) => text.replace("./edge/local/tls.caddy:", "./edge/snippets/tls.caddy:"))).toBe(
       "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
     );
+    // Local never takes the dev files (P1.38e): not dev/tls.caddy as its (tls), nor dev/app.caddy as its app site.
+    expect(await c18((text) => text.replace("./edge/local/tls.caddy:", "./edge/dev/tls.caddy:"))).toBe(
+      "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
+    );
+    expect(await c18((text) => text.replace("./edge/local/app.caddy:", "./edge/dev/app.caddy:"))).toBe(
+      "FAIL C18 the edge config is unreadable: app.caddy: not mounted from local/app.caddy",
+    );
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
     );
@@ -4635,18 +4699,31 @@ networks:
       ["app.caddy", "/etc/caddy/sites/enabled/app.caddy"],
     ]) {
       const mount = (text: string, sites: string) => {
-        const anchor = `      - ./edge/${sites}:/etc/caddy/sites/enabled:ro\n`;
+        const anchor = `      - ./edge/${sites}:ro\n`;
         expect(text).toContain(anchor);
         return text.replace(anchor, `$&      - ./edge/local/${file}:${target}:ro\n`);
       };
-      // Under dev the dev (tls) is the one file mount allowed beside the sites (P1.38e), so a second fails as twice.
+      // Under dev the dev (tls) and the two dev sites are the file mounts allowed (P1.38e), so the local (tls) fails as
+      // a second (tls), and local/app.caddy as an app site not from dev/.
       const devLine =
         file === "tls.caddy"
           ? "FAIL C18 the edge mounts /etc/caddy/snippets/tls.caddy more than once"
-          : `FAIL C18 the edge mounts over ${target}`;
+          : "FAIL C18 the edge config is unreadable: app.caddy: not mounted from dev/app.caddy";
       for (const [env, s, line] of [
-        ["dev", { compose: mount(DEV, "dev/sites"), pdsEnv: DEV_ENV }, devLine],
-        ["prod", { compose: mount(COMPOSE, "sites/enabled") }, `FAIL C18 the edge mounts over ${target}`],
+        [
+          "dev",
+          {
+            compose: mount(DEV, "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy"),
+            pdsEnv: DEV_ENV,
+            files: { [`deployment/edge/local/${file}`]: readFileSync(join(EDGE_DIR, "local", `${file}`), "utf8") },
+          },
+          devLine,
+        ],
+        [
+          "prod",
+          { compose: mount(COMPOSE, "sites/enabled:/etc/caddy/sites/enabled") },
+          `FAIL C18 the edge mounts over ${target}`,
+        ],
       ] as const) {
         const { lines } = await check(s, env);
         expect(lines, `${env} ${file}`).toContain(line);
