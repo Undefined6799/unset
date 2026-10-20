@@ -307,6 +307,21 @@ async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps
   return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
 }
 
+/** C2's line for a build under dev or prod (P1.37n): every build C25 to C27 judge there fails C2 as well. */
+const BUILD_REFUSED = /^FAIL C2 \S+ has a build; dev and prod run only registry images$/;
+/** `failed` without C2, after checking that C2 failed on the build and on nothing else. */
+function failedBesideBuild(lines: string[]): (string | undefined)[] {
+  expect(lines.find((l) => l.startsWith("FAIL C2"))).toMatch(BUILD_REFUSED);
+  return failed(lines).filter((id) => id !== "C2");
+}
+/** `expectOnly` for a stack with a build: `id` fails, and C2 fails only on the build. */
+async function expectOnlyBesideBuild(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
+  const result = await check(s, env, deps);
+  expect(failedBesideBuild(result.lines)).toEqual([id]);
+  expect(result.code).toBe(1);
+  return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
+}
+
 describe("preflight", () => {
   test("preflight_all_good_passes", async () => {
     const result = await check();
@@ -334,9 +349,9 @@ describe("preflight", () => {
   });
 
   test("c2_dev_migrate_built_from_checkout_fails", async () => {
-    // P1.36r (architecture 2026-10-19 04:20Z): migrate runs schema changes with migration privileges, so under dev it
-    // is signed and digest-pinned like every other image. A build from the checkout, as compose.dev.yaml has until
-    // P1.27s, fails C2 under dev and prod alike; only --env local takes the unsigned path.
+    // P1.36r (architecture's section labelled 04:20Z): migrate runs schema changes with migration privileges, so under
+    // dev it is digest-pinned like every other image, and C3 verifies its signature. A build from the checkout, as
+    // compose.dev.yaml has until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
     const migrate = [
       "  migrate:",
       "    build:",
@@ -356,7 +371,23 @@ describe("preflight", () => {
         files: { "deployment/images/migrate.Dockerfile": "FROM scratch\n" },
       };
       expect(await expectOnly("C2", stack, env), env).toBe(
-        "FAIL C2 migrate image is not ghcr.io/undefined6799/... by digest",
+        "FAIL C2 migrate has a build; dev and prod run only registry images",
+      );
+    }
+  });
+
+  test("c2_build_beside_a_locked_image_fails_under_dev_and_prod", async () => {
+    // P1.37n (architecture 07:24Z on verify-1079 M1): a locked digest beside a build doesn't hold, because Compose
+    // builds the bytes from the checkout. Under dev and prod any build fails C2, and the run exits non-zero.
+    const build = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+    for (const env of ["dev", "prod"] as const) {
+      const stack: Stack = {
+        compose: (env === "dev" ? DEV : COMPOSE).replace(`    image: ${WEB}\n`, `$&${build}`),
+        ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
+        files: { "deployment/images/node-app.Dockerfile": "FROM scratch\n" },
+      };
+      expect(await expectOnly("C2", stack, env), env).toBe(
+        "FAIL C2 web has a build; dev and prod run only registry images",
       );
     }
   });
@@ -2028,13 +2059,13 @@ describe("preflight C25 (P1.30x)", () => {
     const compose = built("edge", EDGE, "deployment/images/node-app.Dockerfile");
     const result = await check({ compose, files: DOCKERFILES });
     // A mismatched edge is no edge, so C17 also refuses it beside the PDS (P1.35o, architecture 03:05Z F3).
-    expect(failed(result.lines)).toEqual(["C17", "C25"]);
+    expect(failedBesideBuild(result.lines)).toEqual(["C17", "C25"]);
     expect(result.lines).toContain("FAIL C25 edge adds a capability but its image and build name different images");
   });
 
   test("c25_other_image_built_from_the_edge_dockerfile_fails", async () => {
     const compose = built("web", WEB, "deployment/edge/Dockerfile", adds);
-    expect(await expectOnly("C25", { compose, files: DOCKERFILES })).toBe(
+    expect(await expectOnlyBesideBuild("C25", { compose, files: DOCKERFILES })).toBe(
       "FAIL C25 web adds a capability but its image and build name different images",
     );
   });
@@ -2042,7 +2073,7 @@ describe("preflight C25 (P1.30x)", () => {
   test("c25_edge_image_built_from_the_edge_dockerfile_passes", async () => {
     const compose = built("edge", EDGE, "deployment/edge/Dockerfile");
     const result = await check({ compose, files: DOCKERFILES });
-    expect(failed(result.lines)).toEqual([]);
+    expect(failedBesideBuild(result.lines)).toEqual([]);
   });
 
   test("c25_lock_without_an_edge_entry_fails", async () => {
@@ -2078,7 +2109,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       compose: webBuilds("..", "deployment/images/node-app.Dockerfile"),
       files: DOCKERFILES,
     });
-    expect(failed(result.lines)).toEqual([]);
+    expect(failedBesideBuild(result.lines)).toEqual([]);
   });
 
   test("c26_context_other_than_the_root_fails", async () => {
@@ -2089,7 +2120,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       ["./images", "node-app.Dockerfile"],
     ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
+        await expectOnlyBesideBuild("C26", {
+          compose: webBuilds(context as string, dockerfile as string),
+          files: DOCKERFILES,
+        }),
         context,
       ).toBe("FAIL C26 web builds from a context other than the images workflow's");
     }
@@ -2099,7 +2133,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   // folder, and an image name outside ^[a-z0-9-]+$. That workflow's discover job is not a required check, so C26 is.
   test("c26_symlinks_and_bad_image_names_fail", async () => {
     const files = { ...DOCKERFILES, "deployment/images/Web_App.Dockerfile": "FROM scratch\n" };
-    const name = await expectOnly("C26", { compose: webBuilds("..", "deployment/images/Web_App.Dockerfile"), files });
+    const name = await expectOnlyBesideBuild("C26", {
+      compose: webBuilds("..", "deployment/images/Web_App.Dockerfile"),
+      files,
+    });
     expect(name).toBe("FAIL C26 web builds from a Dockerfile the images workflow does not scan");
     const linked = stack({ compose: webBuilds("..", "deployment/images/linked.Dockerfile"), files: DOCKERFILES });
     symlinkSync(
@@ -2112,6 +2149,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       ...fakeFs(linked.root),
     });
     expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C2 web has a build; dev and prod run only registry images",
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
     ]);
     const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
@@ -2122,6 +2160,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       ...fakeFs(folder.root),
     });
     expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C2 web has a build; dev and prod run only registry images",
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
     ]);
   });
@@ -2139,7 +2178,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "deployment/images/folder.Dockerfile/x": "FROM scratch\n",
     };
     for (const dockerfile of ["other/web.Dockerfile", "deployment/images/folder.Dockerfile"]) {
-      expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files }), dockerfile).toBe(
+      expect(await expectOnlyBesideBuild("C26", { compose: webBuilds("..", dockerfile), files }), dockerfile).toBe(
         "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
       );
     }
@@ -2154,7 +2193,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       ["./edge", "Dockerfile"],
     ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files }),
+        await expectOnlyBesideBuild("C26", { compose: webBuilds(context as string, dockerfile as string), files }),
         dockerfile,
       ).toBe("FAIL C26 web builds an image whose name another Dockerfile also takes");
     }
@@ -2240,18 +2279,23 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "FAIL C26 web builds from a context that another user can change",
     );
     // The sibling layout passes.
-    expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
+    expect(failedBesideBuild((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
   });
 
   test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
-    expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
+    expect(
+      failedBesideBuild((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines),
+    ).toEqual([]);
     for (const [context, dockerfile] of [
       ["..", "deployment/edge/Dockerfile"],
       ["./edge/sites", "../Dockerfile"],
       [".", "edge/Dockerfile"],
     ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
+        await expectOnlyBesideBuild("C26", {
+          compose: webBuilds(context as string, dockerfile as string),
+          files: DOCKERFILES,
+        }),
         context,
       ).toBe("FAIL C26 web builds from a context other than the images workflow's");
     }
@@ -2269,9 +2313,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "deployment/images/node-app",
       "../outside.Dockerfile",
     ]) {
-      expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files: DOCKERFILES }), dockerfile).toBe(
-        "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
-      );
+      expect(
+        await expectOnlyBesideBuild("C26", { compose: webBuilds("..", dockerfile), files: DOCKERFILES }),
+        dockerfile,
+      ).toBe("FAIL C26 web builds from a Dockerfile the images workflow does not scan");
     }
   });
 
@@ -2304,7 +2349,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       `    image: ${WEB}\n`,
       `    image: ${WEB}\n    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n    tmpfs: [/var/run/postgresql]\n`,
     );
-    expect(await expectOnly("C27", { compose: pg, lock, files: DOCKERFILES })).toBe(
+    expect(await expectOnlyBesideBuild("C27", { compose: pg, lock, files: DOCKERFILES })).toBe(
       "FAIL C27 web mounts the socket-directory tmpfs but its image and build name different images",
     );
     expect((await check({ compose: webTmpfs("    tmpfs: [/tmp]\n"), lock: null })).lines).toContain("PASS C27 ok");
@@ -2728,8 +2773,8 @@ describe("preflight --env local (P1.27l)", () => {
       "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       unsigned: [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
-      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
-      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
+      "build only": ["FAIL C2 web has a build; dev and prod run only registry images", ...PASSED.slice(1)],
+      "dev build only": ["FAIL C2 web has a build; dev and prod run only registry images", ...PASSED.slice(1)],
       "no key": [PASSED[0], ...NO_KEY, PASSED[3]],
       "dev no key": [PASSED[0], ...NO_KEY, PASSED[3]],
       "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],

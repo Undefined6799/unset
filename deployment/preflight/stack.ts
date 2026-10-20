@@ -8,7 +8,8 @@
 // and interpolation env file, all after a `--` so Node reads none of them as its own flags (Node loads an --env-file
 // it finds in argv, Amendment 3), and stops on any non-zero exit. The precheck refuses a production host and a foreign
 // describeServer DID, then runs the deploy preflight as its own child. It then runs
-// `docker compose … --env-file <file> up -d --build` with the same files in the same order. `down` stops the stack and
+// `docker compose … --env-file <file> up -d` with the same files in the same order, adding `--build` under local and
+// `--no-build` under dev (P1.37n), so only a local stack builds from the checkout. `down` stops the stack and
 // never passes -v, so the data volumes survive. A COMPOSE_* variable in the caller's shell is refused outright, and
 // both children get an environment built from an allowlist only, so no interpolated name in the shell can change what
 // the precheck read or what Compose runs. Both children talk to a Docker daemon on this host only: C9, C18 and C26
@@ -146,7 +147,13 @@ export function plan(
               envFile,
             ],
           },
-          { name: "docker", file: "docker", args: [...compose, "up", "-d", "--build"] },
+          // Only a local stack builds from the checkout. Dev runs the registry images C2 pinned, and --no-build stops
+          // Compose building even a build key added after C2 read the files (P1.37n; docs.docker.com compose up).
+          {
+            name: "docker",
+            file: "docker",
+            args: [...compose, "up", "-d", env === "local" ? "--build" : "--no-build"],
+          },
           ...(env === "local" ? [leafCheck] : []),
         ]
       : [down];

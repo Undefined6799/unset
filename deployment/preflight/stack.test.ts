@@ -139,6 +139,7 @@ describe("stack wrapper (P1.27w)", () => {
       envFile,
     ]);
     expect(commands[0]?.args[0]).toMatch(/scripts\/dev-precheck\.ts$/);
+    // --no-build: Compose may not build even a build key added after C2 read the files (P1.37n; Codex on #1111).
     expect(commands[1]?.args).toEqual([
       "compose",
       "-f",
@@ -149,7 +150,7 @@ describe("stack wrapper (P1.27w)", () => {
       envFile,
       "up",
       "-d",
-      "--build",
+      "--no-build",
     ]);
   });
 

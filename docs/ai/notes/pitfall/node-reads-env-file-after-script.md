@@ -54,3 +54,5 @@ Re-checked at P1.01a, which spells `stack.ts`'s host-pin import as `@unset/share
 child environment changed, and the rules above still hold.
 Re-checked at P1.29s: `up` runs `scripts/dev-precheck.ts` as the first child, same `node … --` form; its `CLI_OPTIONS`
 are env, compose, interpolation-env, none of which Node reads, and it then runs the preflight the same way.
+Re-checked at P1.37n, which swaps `--build` for `--no-build` in the docker child under `dev` only; the precheck child,
+its argv form and the child environment are unchanged.
