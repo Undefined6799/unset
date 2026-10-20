@@ -1322,10 +1322,12 @@ describe("preflight", () => {
     const dev = { pdsEnv: DEV_ENV };
     expect(failed((await check({ ...dev, compose: DEV }, "dev")).lines)).toEqual([]);
     const edgePort = (port: string) => DEV.replace("    cap_add: [NET_BIND_SERVICE]\n", `$&    ports: ["${port}"]\n`);
+    // C18 refuses a published edge port under dev too (P1.38e).
     for (const port of ["80:80", "127.0.0.1:443:443", "127.0.0.1:2019:2019"]) {
-      expect(await expectOnly("C10", { ...dev, compose: edgePort(port) }, "dev"), port).toBe(
-        "FAIL C10 edge publishes a port under dev",
-      );
+      const { lines } = await check({ ...dev, compose: edgePort(port) }, "dev");
+      expect(failed(lines), port).toEqual(["C10", "C18"]);
+      expect(lines, port).toContain("FAIL C10 edge publishes a port under dev");
+      expect(lines, port).toContain("FAIL C18 the edge publishes a port under dev");
     }
     const newtPort = DEV.replace("    networks: [tunnel]\n", '$&    ports: ["127.0.0.1:2112:2112"]\n');
     expect(await expectOnly("C10", { ...dev, compose: newtPort }, "dev")).toBe(
