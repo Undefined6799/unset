@@ -2,7 +2,7 @@
 // The domain runs as itself; only the network under it is a stand-in (DNS, PLC and handle hosts are unmanaged, TE-1).
 import { createDidResolver, type HttpOutcome, type IdentityNetwork, type TxtOutcome } from "@unset/domains-identity";
 import { describe, expect, test } from "vitest";
-import { didResolverForOAuth, handleResolverForOAuth } from "./identity-resolvers.ts";
+import { AccountElsewhereError, didResolverForOAuth, handleResolverForOAuth } from "./identity-resolvers.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const PLC = new URL("https://plc.directory");
@@ -69,7 +69,10 @@ describe("handleResolverForOAuth", () => {
 
 describe("didResolverForOAuth", () => {
   const resolverOver = (get: HttpOutcome) =>
-    didResolverForOAuth(createDidResolver({ network: network({ get }), plcUrl: PLC, cacheTtlS: 60, cacheMax: 10 }));
+    didResolverForOAuth(
+      createDidResolver({ network: network({ get }), plcUrl: PLC, cacheTtlS: 60, cacheMax: 10 }),
+      "https://pds.example.com",
+    );
 
   test("oauthAdapter_document_carries_only_what_the_library_reads", async () => {
     const doc = await resolverOver(json(document)).resolve(DID);
@@ -83,6 +86,18 @@ describe("didResolverForOAuth", () => {
   test("oauthAdapter_no_usable_pds_means_no_service", async () => {
     const plain = { ...document, service: [{ ...document.service[0], serviceEndpoint: "http://pds.example.com" }] };
     expect((await resolverOver(json(plain)).resolve(DID)).service).toEqual([]);
+  });
+
+  test("oauthAdapter_refuses_an_account_on_another_pds", async () => {
+    // P1.36v: only our own PDS's accounts resolve; another host, however close, throws before the library asks it.
+    for (const endpoint of [
+      "https://pds.example.org",
+      "https://evil-pds.example.com",
+      "https://pds.example.com:8443",
+    ]) {
+      const elsewhere = { ...document, service: [{ ...document.service[0], serviceEndpoint: endpoint }] };
+      await expect(resolverOver(json(elsewhere)).resolve(DID), endpoint).rejects.toBeInstanceOf(AccountElsewhereError);
+    }
   });
 
   test("oauthAdapter_did_failures_throw", async () => {

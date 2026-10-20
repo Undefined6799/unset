@@ -1,7 +1,7 @@
 // P2.03x: the session timeouts the store (P2.03) reads, with the defaults of plan section 5.3 and their bounds.
 import { defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
-import { config, loginConfig, sessionConfig } from "./config.ts";
+import { config, loginConfig, pdsIssuerOf, sessionConfig } from "./config.ts";
 
 const load = (env: Record<string, string>) =>
   loadConfig(defineConfig({ ...sessionConfig }), env, { onUnknownKeys: () => undefined });
@@ -72,5 +72,14 @@ describe("email recheck", () => {
         expect.objectContaining({ problems: [{ key: "EMAIL_RECHECK_S", reason: "invalid" }] }),
       );
     }
+  });
+});
+
+describe("own PDS issuer", () => {
+  test("pds_issuer_is_https_and_the_pds_host", () => {
+    // P1.36v (verify-1131 N3): the only issuer whose accounts sign in, from PDS_HOSTNAME alone. Plain http only under
+    // OAUTH_ALLOW_HTTP, which no deployment can set (preflight C29), and which then refuses every sign-in.
+    expect(pdsIssuerOf({ PDS_HOSTNAME: "staging.unset.ac", OAUTH_ALLOW_HTTP: false })).toBe("https://staging.unset.ac");
+    expect(pdsIssuerOf({ PDS_HOSTNAME: "pds.example.test", OAUTH_ALLOW_HTTP: true })).toBe("http://pds.example.test");
   });
 });

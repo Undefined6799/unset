@@ -45,11 +45,24 @@ export function handleResolverForOAuth(network: IdentityNetwork) {
 }
 
 /**
+ * An account whose PDS is not ours (P1.36v). Thrown from inside the library's identity step, so it refuses before the
+ * library asks that PDS anything: its resource metadata, its authorization server and PAR all come after.
+ */
+export class AccountElsewhereError extends Error {
+  constructor() {
+    super("account is not on our PDS");
+    this.name = "AccountElsewhereError";
+  }
+}
+
+/**
  * The document the library reads, rebuilt from what the domain checked: the id, the PDS service and `alsoKnownAs`,
  * which the library compares with the handle it was given (the one accepted exception to "only verifyHandle reads
  * alsoKnownAs", scripts/guards/also-known-as.ts). An unusable PDS endpoint means no service, so the login fails.
+ * Only accounts on our own PDS resolve (P1.36v): a PDS origin other than `ownIssuer` throws AccountElsewhereError, for
+ * sign-in and for the callback's check of the token's `sub` alike.
  */
-export function didResolverForOAuth(resolveDid: ResolveDid): DidResolver<AtprotoIdentityDidMethods> {
+export function didResolverForOAuth(resolveDid: ResolveDid, ownIssuer: string): DidResolver<AtprotoIdentityDidMethods> {
   return {
     async resolve<D extends LibraryDid>(input: D, options?: ResolveDidOptions) {
       const did = parseDid(input);
@@ -58,6 +71,7 @@ export function didResolverForOAuth(resolveDid: ResolveDid): DidResolver<Atproto
         consistency: "fresh",
         ...(options?.signal ? { signal: options.signal } : {}),
       });
+      if (resolved.pds !== null && resolved.pds.origin !== ownIssuer) throw new AccountElsewhereError();
       const service =
         resolved.pds === null
           ? []

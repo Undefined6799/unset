@@ -118,6 +118,10 @@ export const testRoutesConfig = {
   ),
 };
 
+/** Our PDS's issuer, from PDS_HOSTNAME: the only server whose accounts sign in (P1.36v), with no switch to widen it. */
+export const pdsIssuerOf = (cfg: { PDS_HOSTNAME: string; OAUTH_ALLOW_HTTP: boolean }): string =>
+  `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
+
 export const config = defineEntrypointConfig({
   ...httpKitConfig,
   ...sessionConfig,

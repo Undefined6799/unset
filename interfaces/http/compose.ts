@@ -50,7 +50,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import { createAccountStore } from "./account.ts";
 import type { AppGate } from "./app-gate.ts";
 import { openApp } from "./app-gate.ts";
-import type { config } from "./config.ts";
+import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
@@ -125,6 +125,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     network,
     resolveDid,
     allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    ownIssuer: pdsIssuerOf(cfg),
     log,
   });
   const boot = () =>
@@ -184,6 +185,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     onUnexpected: (error) =>
       log.warn("handle.verify_failed", { kind: error instanceof Error ? error.constructor.name : "unknown" }),
   });
+  const pdsIssuer = pdsIssuerOf(cfg);
   const login = loginRoutes({
     page,
     screens: render.screens,
@@ -192,14 +194,14 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     resolveHandle: (handle) => resolveHandle(oauth.network, handle),
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
-    authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
+    authorize: (input, options) => authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log }),
     pdsHost: cfg.PDS_HOSTNAME,
     handleDomain: cfg.HANDLE_SUFFIX.slice(1),
     allowHttp: cfg.OAUTH_ALLOW_HTTP,
     log,
   });
   const callback = oauthCallbackRoutes({
-    complete: (query) => completeAuthorization(oauth.client, query, log),
+    complete: (query) => completeAuthorization(oauth.client, query, log, pdsIssuer),
     consumeNonce: (nonce, deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
     createSession: (did, replacingCookie, deadline) =>
@@ -209,9 +211,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     log,
   });
-  // Our PDS's issuer origin, and the issuer the OAuth library recorded for a DID at sign-in (its stored token set,
-  // read without a refresh). Never a DID-document field (book P2.08 `PdsAccountLink`).
-  const pdsIssuer = `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
+  // The issuer the OAuth library recorded for a DID at sign-in (its stored token set, read without a refresh). Never a
+  // DID-document field (book P2.08 `PdsAccountLink`).
   const issuerOf = async (did: Did): Promise<string | null> => {
     const saved = await oauth.sessionStore.get(did);
     const iss = saved?.tokenSet.iss;
@@ -279,7 +280,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     sessionInfo,
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
-    authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
+    authorize: (input, options) => authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log }),
     safeHref: render.safeHref,
     allowHttp: cfg.OAUTH_ALLOW_HTTP,
     page,

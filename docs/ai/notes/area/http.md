@@ -52,6 +52,12 @@ and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600
 refresh to that cookie's URL. Every failure goes back to `/login?error=<code>`. The target never rides in a query, and
 there is no table for it: the cookie can only send a browser where its own POST pointed it.
 `routes/sign-in-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
+Only accounts on our own PDS sign in (P1.36v): `config.ts` derives the one issuer from PDS_HOSTNAME (`pdsIssuerOf`),
+and `compose.ts` hands it to the OAuth client's DID resolver, to `authorize` and to the callback, so another PDS's
+account fails with `login.account_elsewhere` before that PDS is asked anything. The client's own fetch also sends only
+to that origin (`oauth-client.ts` `ownIssuerOnly`), so an authorization server our PDS's metadata names in place of
+itself is never asked. Every library request (metadata, PAR, token, revocation, and a session's XRPC calls to its
+token set's `aud`) goes to our PDS.
 
 **The callback (P2.06).** `routes/oauth-callback.ts`, the one GET that mutates (P1.07's GET_MUTATION_EXCEPTIONS):
 completeAuthorization, then in order the appState shape, the nonce cookie against the appState (constant time; a
