@@ -26,7 +26,30 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.numberOfRuns).toBe(3);
     // @lhci/cli 0.15.1 collect.settings.chromeFlags (docs/configuration.md). ubuntu-24.04's
     // AppArmor blocks Chrome's unprivileged user namespace, so the launcher needs --no-sandbox.
-    expect(config.ci.collect.settings.chromeFlags).toBe("--no-sandbox --disable-dev-shm-usage");
+    // P1.37j: our COOP header moves the page into a spare renderer that the trace can miss the
+    // start of (Lighthouse NO_NAVSTART), so SpareRendererForSitePerProcess is off. Chrome keeps
+    // only the last --disable-features, so the list repeats chrome-launcher 1.2.2's defaults
+    // (dist/flags.js DEFAULT_FLAGS), RenderDocument among them, then adds the one feature.
+    const launcherDefaults = [
+      "Translate",
+      "OptimizationHints",
+      "MediaRouter",
+      "DialMediaRouteProvider",
+      "CalculateNativeWinOcclusion",
+      "InterestFeedContentSuggestions",
+      "CertificateTransparencyComponentUpdater",
+      "AutofillServerCommunication",
+      "PrivacySandboxSettings4",
+      "RenderDocument",
+    ];
+    const features = [...launcherDefaults, "SpareRendererForSitePerProcess"].join(",");
+    expect(config.ci.collect.settings.chromeFlags).toBe(
+      `--no-sandbox --disable-dev-shm-usage --disable-features=${features}`,
+    );
+    // lhci 0.15.1 passes settings to the Lighthouse CLI as its flags file (src/collect/node-runner.js:45-69), and
+    // Lighthouse 12.6.1 maps chromeIgnoreDefaultFlags to the launcher's ignoreDefaultFlags (cli/run.js:87), which
+    // would drop the defaults this list repeats.
+    expect(config.ci.collect.settings).not.toHaveProperty("chromeIgnoreDefaultFlags");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
     // expectJs false stays at 0 scripts, including /welcome/blocked (islands off).
