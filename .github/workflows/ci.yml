@@ -8,8 +8,8 @@
 #   that declares that `environment:` and has
 #   `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`.
 # - Any OIDC trust policy (cosign keyless, a cloud role) pins ref:refs/heads/main and the environment.
-# - pull_request_target and workflow_run are banned: they run with base-branch privileges on
-#   PR-controlled input.
+# - pull_request_target is banned. workflow_run is banned except docs-auto-merge.yml,
+#   which checks out the default branch only and never runs pull request code (P0.07e).
 # - Every action is GitHub-owned and pinned by commit SHA; every tool image by index digest.
 # - No `${{ }}` expression inside a run: value; values reach scripts through env: only.
 

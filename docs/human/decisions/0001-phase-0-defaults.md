@@ -509,3 +509,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   his own line); `:80` answers only a `308` to `https`; Pangolin targets the edge over `https` unverified, each
   resource with its TLS Server Name set to its own staging name; the leaf is valid at most 825 days and the deploy
   check fails 30 days before expiry. 0031 is not edited; its other decisions stand. Everything else is unchanged.
+- **Docs-only auto-merge (P0.07e; own record: [0034](0034-docs-only-auto-merge.md)):** a pull request
+  that changes only the docs allowlist, carries `kind/docs` and passes every CI check may
+  squash-merge without Alex's approval, and it does not count toward the D4 queue. The allowlist is
+  `scripts/guards/docs-only-paths.ts`. `.github/workflows/docs-only.yml` is the read-only check;
+  `.github/workflows/docs-auto-merge.yml` runs from the default branch, re-checks the file list and
+  never checks out pull request code. Forks are refused. ADR 0019 is not edited: this class is the
+  only narrowing of "all other merges stay with Alex", and a verifier still must not merge the pull
+  request that adds this record. Proposed, awaiting Alex.
