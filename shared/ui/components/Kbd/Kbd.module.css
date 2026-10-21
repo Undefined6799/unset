@@ -12,7 +12,6 @@
     border-bottom-width: 2px;
     border-radius: var(--radius-xs);
     color: var(--color-ink);
-    font-family: var(--font-mono);
     font-size: var(--type-label-size);
     line-height: var(--type-label-line);
   }

@@ -55,6 +55,7 @@ checked: 2026-10-21
 
 **Rules worth knowing.** `shared/ui` imports no Node built-in (dependency-cruiser). Node never loads `index.ts`:
 [[ui-build]] imports it for types only (P1.25h). The 0x40 "v2e" look is superseded; follow only
-the design sheet.
+the design sheet. Native Table, CodeBlock, CommandBlock and Kbd tags reuse base.css for identical
+properties; keep the base sheet before component layers, as Input already requires.
 
 **Links.** ADR 0016 (design source), [[web]].

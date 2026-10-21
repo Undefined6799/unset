@@ -29,19 +29,23 @@
     display: none;
   }
 
+  .combobox,
+  .list {
+    border: 1px solid var(--color-line-strong);
+    background-color: var(--color-ground);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+  }
+
   .combobox {
     box-sizing: border-box;
     display: flex;
     align-items: center;
     height: 40px;
     padding: 0 var(--space-8) 0 var(--space-3);
-    border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-xs);
-    background-color: var(--color-ground);
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-size: var(--type-code-size);
-    line-height: var(--type-code-line);
     cursor: pointer;
   }
 
@@ -68,12 +72,7 @@
     margin: var(--space-1) 0 0;
     padding: 0;
     overflow-y: auto;
-    border: 1px solid var(--color-line-strong);
-    background-color: var(--color-ground);
     box-shadow: var(--shadow-menu);
-    font-family: var(--font-mono);
-    font-size: var(--type-code-size);
-    line-height: var(--type-code-line);
     list-style: none;
   }
 

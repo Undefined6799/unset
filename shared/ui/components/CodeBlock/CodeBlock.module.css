@@ -18,12 +18,7 @@
 
   .pre {
     margin: 0;
-    padding: var(--space-3) var(--space-4);
-    overflow-x: auto;
     color: var(--color-ink);
-    font-family: var(--font-mono);
-    font-size: var(--type-code-size);
-    line-height: var(--type-code-line);
     white-space: pre;
   }
 

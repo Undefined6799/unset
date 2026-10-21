@@ -110,17 +110,23 @@
     color: var(--color-ink-muted);
   }
 
-  th {
-    padding: var(--space-2) var(--space-3) var(--space-2) 0;
-    border-bottom: 1px solid var(--color-line-strong);
-    text-align: left;
-    color: var(--color-ink-muted);
+  th,
+  button,
+  input[type="submit"],
+  legend {
     font-family: var(--font-mono);
     font-size: var(--type-label-size);
     line-height: var(--type-label-line);
     font-weight: var(--type-label-weight);
     letter-spacing: var(--type-label-tracking);
     text-transform: uppercase;
+  }
+
+  th {
+    padding: var(--space-2) var(--space-3) var(--space-2) 0;
+    border-bottom: 1px solid var(--color-line-strong);
+    text-align: left;
+    color: var(--color-ink-muted);
   }
 
   td {
@@ -186,12 +192,6 @@
     border-radius: var(--radius-xs);
     background-color: transparent;
     color: var(--color-on-ink);
-    font-family: var(--font-mono);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-line);
-    font-weight: var(--type-label-weight);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: uppercase;
     white-space: nowrap;
     cursor: pointer;
     appearance: none;
@@ -223,12 +223,6 @@
     margin-bottom: var(--space-2);
     padding: 0;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-line);
-    font-weight: var(--type-label-weight);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: uppercase;
   }
 
   /* The sheet's Checkbox and RadioGroup: drawn as text over the real input ("keep real inputs underneath"). */

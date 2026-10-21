@@ -25,7 +25,7 @@ describe("Table", () => {
     expect(id).not.toBe("");
     expect(html).toBe(
       `<section class="${styles.wrap}" aria-labelledby="${id}" tabindex="0"><table class="${styles.table}">` +
-        `<caption id="${id}" class="${styles.caption}">Services</caption><thead><tr>` +
+        `<caption id="${id}">Services</caption><thead><tr>` +
         `<th scope="col">Service</th><th scope="col">State</th><th scope="col" class="${styles.right}">Latency</th>` +
         `</tr></thead><tbody><tr><td>PDS</td><td class="${styles.mono}">${renderToStaticMarkup(<Tag status="ok">live</Tag>)}</td>` +
         `<td class="${styles.mono} ${styles.muted} ${styles.right}">—</td></tr></tbody></table></section>`,

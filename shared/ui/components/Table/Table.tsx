@@ -36,9 +36,7 @@ export function Table({ columns, rows, caption, className }: TableProps) {
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must take focus to scroll by keyboard
     <section className={classNames(styles.wrap, className)} aria-labelledby={captionId} tabIndex={0}>
       <table className={styles.table}>
-        <caption id={captionId} className={styles.caption}>
-          {caption}
-        </caption>
+        <caption id={captionId}>{caption}</caption>
         <thead>
           <tr>
             {columns.map((column) => (

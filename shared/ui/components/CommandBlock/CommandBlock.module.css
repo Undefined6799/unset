@@ -21,10 +21,6 @@
 
   .command,
   .output {
-    overflow-x: auto;
-    font-family: var(--font-mono);
-    font-size: var(--type-code-size);
-    line-height: var(--type-code-line);
     white-space: pre;
   }
 
@@ -54,13 +50,6 @@
     border: 0;
     background: none;
     color: var(--color-ink-muted);
-    font-family: var(--font-mono);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-line);
-    font-weight: var(--type-label-weight);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: uppercase;
-    cursor: pointer;
   }
 
   .copy:hover {
