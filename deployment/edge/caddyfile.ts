@@ -23,6 +23,11 @@
 //   `edgeSiteProblems` holds the site rules edge.test.ts and C18 share, so neither keeps a copy.
 // - The "local" mode (P1.34a, P1.34o) reads the local stack's two files in local/ as its mounts place them; only C18
 //   under --env local passes it. APP_HOST, APP_UPSTREAM and the dev leaf's secret paths are accepted only from local/.
+// - The "dev" mode (P1.36b; ADR 0031, ADR 0032) reads the dev stack's two sites, dev/app.caddy and dev/pds.caddy, and
+//   its `(tls)` from dev/tls.caddy in place of snippets/tls.caddy, as its three file mounts place them (ADR 0032
+//   Decision 3): no directory and no shipped site. https with one self-signed leaf from files on the edge's newt_edge
+//   address, with APP_HOST and APP_UPSTREAM accepted there too, each only as its one ruled value. The dev leaf's
+//   secret paths are accepted only from dev/.
 
 /** One directive line with its arguments, its block if it opens one, and the snippet it was imported from. */
 export type Directive = {
@@ -74,7 +79,7 @@ const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars
 const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   global: ["admin", "persist_config", "log", "servers"],
   site: ["bind", "respond", "tls", "log", "map", "log_append", "header", "route"],
-  route: ["@", "rate_limit", "respond", "reverse_proxy"],
+  route: ["@", "rate_limit", "respond", "header", "reverse_proxy"],
   snippet: ["@", "log", "rate_limit", "map", "log_append", "header", "tls", "reverse_proxy", "respond"],
   "@": MATCHERS,
   log: ["output", "level", "exclude", "format"],
@@ -185,6 +190,15 @@ function fail(line: number, why: string): never {
   throw new CaddyfileError(`line ${line}: ${why}`);
 }
 
+/** The host placeholders a site address may be, each alone on its site (APP_HOST from P1.34a). */
+const HOSTS: readonly EnvName[] = ["PDS_HOST", "APP_HOST"];
+/**
+ * A placeholder is a whole word (P1.28l), or a host placeholder after `http://`, the one scheme a dev site address
+ * carries (P1.36b): Caddy serves an `http://` site on port 80 with no automatic HTTPS (caddyserver/website 1957519
+ * src/docs/markdown/automatic-https.md:84-89).
+ */
+const WHOLE_PLACEHOLDER = /^(http:\/\/)?\{\$([A-Z_]+)\}$/;
+
 /** `{$NAME}` replaced inside one token; an unlisted name, a default, a missing or a mis-shaped value fails. */
 function withEnv(token: Token, env: Env): Token {
   const text = token.text.replaceAll(/\{\$([^}]*)\}/g, (_, name: string) => {
@@ -198,8 +212,10 @@ function withEnv(token: Token, env: Env): Token {
   if (text.includes("{$")) fail(token.line, `unsupported placeholder in ${token.text}`);
   if (text === token.text) return token;
   // A placeholder is a whole word, so where it sits is a fact the edge rules can check (P1.28l).
-  const name = /^\{\$([A-Z_]+)\}$/.exec(token.text)?.[1];
-  if (name === undefined) fail(token.line, "an environment placeholder must be a whole word");
+  const [, scheme, name] = WHOLE_PLACEHOLDER.exec(token.text) ?? [];
+  if (name === undefined || (scheme !== undefined && !HOSTS.includes(name as EnvName))) {
+    fail(token.line, "an environment placeholder must be a whole word");
+  }
   return { ...token, text, env: name as EnvName };
 }
 
@@ -426,13 +442,26 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  * passes "local" (P1.27l). It is a mode, not a path: it resolves to `edgeDir/local/` here, under the same containment
  * as sites/.
  */
-export type EdgeMode = "shipped" | "local";
+export type EdgeMode = "shipped" | "local" | "dev";
 /**
  * What a file may hold only when read from local/: the app site's placeholders and the dev leaf's secrets (P1.34c). A
  * token containing any of these fails anywhere else, so a leaf path spelled `/run/secrets//local_tls_cert` or through
  * `..` fails too, with no path normalising to get wrong (P1.34b). A prod app site is a later ruling.
  */
 const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
+/** What a file read from dev/ may hold of LOCAL_ONLY: the app site's placeholders, never the local leaf (P1.36b). */
+const DEV_ALLOWED = ["{$APP_HOST}", "{$APP_UPSTREAM}"];
+/** The dev leaf's secret names, accepted only in files read from dev/ (P1.36b; ADR 0032). */
+const DEV_ONLY = ["dev_tls_"];
+/** The dev `(tls)` snippet's one line: the self-signed leaf and its key as the dev stack mounts them (ADR 0032). */
+export const DEV_TLS = ["/run/secrets/dev_tls_cert", "/run/secrets/dev_tls_key"] as const;
+/**
+ * The dev stack's app site, exactly (P1.36b): ADR 0025's accepted app name, one string and not a suffix or pattern, and
+ * the web address the local stack already pins. Prod has no app site until a ruling of its own.
+ */
+export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" } as const;
+/** The edge's address on newt_edge, the only address a dev site binds (ADR 0030 Decision 2; compose.dev.yaml, P1.37v). */
+export const DEV_EDGE_ADDRESS = "10.250.37.3";
 
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
@@ -454,7 +483,8 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
  * place of `snippets/tls.caddy`, as the local stack's two read-only file mounts place them; each must be a regular file
  * inside local/, and no other file there is read (architecture record 2026-10-13-p127l-local-gaps, item 1). The local
  * mode takes the enabled sites only as a list of file mounts, checked by `mountedSites` (P1.34q; local-gaps Amendment 3
- * S2), and refuses a directory (P1.33n); C18 passes that list (P1.33y). The shipped mode takes only a directory. In
+ * S2), and refuses a directory (P1.33n); C18 passes that list (P1.33y). The "dev" mode takes its sites the same way,
+ * as exactly dev/app.caddy and dev/pds.caddy (ADR 0032 Decision 3). The shipped mode takes only a directory. In
  * either mode a file outside local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and
  * APP_UPSTREAM must differ from the PDS ones.
  */
@@ -479,13 +509,14 @@ function readEdgeTree(
   files: EdgeFiles,
   mode: EdgeMode,
 ): Caddyfile {
-  if (typeof sitesDir !== "string" && mode !== "local") {
-    throw new CaddyfileError("site file mounts are read only in the local mode");
+  if (typeof sitesDir !== "string" && mode === "shipped") {
+    throw new CaddyfileError("site file mounts are read only in the local and dev modes");
   }
-  if (typeof sitesDir === "string" && mode === "local") {
-    throw new CaddyfileError("the local mode reads the enabled sites only as file mounts");
+  if (typeof sitesDir === "string" && mode !== "shipped") {
+    throw new CaddyfileError(`the ${mode} mode reads the enabled sites only as file mounts`);
   }
   distinctAppValues(env);
+  if (mode === "dev") devAppValues(env);
   const root = resolved(files, edgeDir, "the edge directory");
   const sites: Bound = { path: `${root}/sites`, area: "sites/" };
   if (resolved(files, sites.path, "the sites directory") !== sites.path) {
@@ -495,13 +526,20 @@ function readEdgeTree(
   if (mode === "local" && resolved(files, local.path, "the local directory") !== local.path) {
     throw new CaddyfileError("local/ leaves the edge directory");
   }
+  const dev: Bound = { path: `${root}/dev`, area: "dev/" };
+  if (mode === "dev" && resolved(files, dev.path, "the dev directory") !== dev.path) {
+    throw new CaddyfileError("dev/ leaves the edge directory");
+  }
+  // The shipped mode reads only sites/ or inside it, so a dev/ or local/ directory is refused under prod.
   if (typeof sitesDir === "string") {
     const enabled = resolved(files, sitesDir, "the enabled sites directory");
     if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`))
       throw new CaddyfileError("the enabled sites directory is not inside sites/");
   }
+  const checked = (path: string, name: string) =>
+    localOnlyChecked(files, path, name, local, mode === "dev" ? dev : null);
   const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
-  const lines = localOnlyChecked(files, caddyfile, "Caddyfile", local).split("\n");
+  const lines = checked(caddyfile, "Caddyfile").split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
@@ -510,14 +548,20 @@ function readEdgeTree(
   const snippets: Bound = { path: `${root}/snippets`, area: "snippets/" };
   const read: Reader = (dir, name, bounds, links) => {
     if (mode === "local" && dir === snippets.path && name === "tls.caddy") {
-      return localOnlyChecked(files, entry(files, local.path, name, [local], false), name, local);
+      return checked(entry(files, local.path, name, [local], false), name);
     }
-    return localOnlyChecked(files, entry(files, dir, name, bounds, links), name, local);
+    if (mode === "dev" && dir === snippets.path && name === "tls.caddy") {
+      return checked(entry(files, dev.path, name, [dev], false), name);
+    }
+    return checked(entry(files, dir, name, bounds, links), name);
   };
   const expanded = lines.map((line) => {
     if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
     if (line === FILE_IMPORTS[1]) {
-      if (typeof sitesDir !== "string") return mountedSites(files, sitesDir, sites, local, read);
+      if (typeof sitesDir !== "string") {
+        const expected = mode === "dev" ? devSites(dev) : localSites(files, sites, local);
+        return mountedSites(files, sitesDir, expected, mode, read);
+      }
       return globbed(files, sitesDir, [sites], true, line, read);
     }
     return line;
@@ -535,13 +579,37 @@ function distinctAppValues(env: Env): void {
   }
 }
 
-/** The text of the file at `path`, which may hold a LOCAL_ONLY part only when it lies inside local/. */
-function localOnlyChecked(files: EdgeFiles, path: string, name: string, local: Bound): string {
+/** The dev app site's host and upstream, when given, are exactly DEV_APP's; anything else fails (P1.36b). */
+function devAppValues(env: Env): void {
+  for (const name of ["APP_HOST", "APP_UPSTREAM"] as const) {
+    if (env[name] !== undefined && env[name] !== DEV_APP[name]) {
+      throw new CaddyfileError(`{$${name}} is not the dev app site's ruled value`);
+    }
+  }
+}
+
+/**
+ * The text of the file at `path`, which may hold a LOCAL_ONLY part only when it lies inside local/, or DEV_ALLOWED's
+ * parts inside `dev` when the dev mode reads it (null otherwise).
+ */
+function localOnlyChecked(files: EdgeFiles, path: string, name: string, local: Bound, dev: Bound | null): string {
   const text = files.read(path);
-  if (path.startsWith(`${local.path}/`)) return text;
+  const inLocal = path.startsWith(`${local.path}/`);
+  const inDev = dev !== null && path.startsWith(`${dev.path}/`);
+  const allowed = inDev ? DEV_ALLOWED : [];
   for (const line of lex(text)) {
-    const word = line.tokens.find((token) => LOCAL_ONLY.some((part) => token.text.includes(part)));
-    if (word !== undefined) throw new CaddyfileError(`${name}: ${word.text} is allowed only in local/`);
+    const has = (token: Token, parts: readonly string[]) => parts.some((part) => token.text.includes(part));
+    const local = line.tokens.find(
+      (t) =>
+        !inLocal &&
+        has(
+          t,
+          LOCAL_ONLY.filter((part) => !allowed.includes(part)),
+        ),
+    );
+    if (local !== undefined) throw new CaddyfileError(`${name}: ${local.text} is allowed only in local/`);
+    const devWord = line.tokens.find((t) => !inDev && has(t, DEV_ONLY));
+    if (devWord !== undefined) throw new CaddyfileError(`${name}: ${devWord.text} is allowed only in dev/`);
   }
   return text;
 }
@@ -584,31 +652,42 @@ function globbed(files: EdgeFiles, dir: string, bounds: Bound[], links: boolean,
     .join("\n");
 }
 
-/**
- * The text of the local stack's enabled sites, given as its file mounts (P1.34q; architecture record
- * 2026-10-13-p127l-local-gaps, Amendment 3 S2): exactly one mount for every `*.caddy` in sites/, under its own name,
- * plus local/app.caddy as MOUNTED_SITE, and nothing else. Each source is the regular file itself, never a link or a
- * directory, so the mount binds what the reader reads; then each is read in byte order, as Caddy's glob over the mount
- * targets reads them, under `entry`'s containment and hard-link rules.
- */
-function mountedSites(
-  files: EdgeFiles,
-  mounts: readonly SiteMount[],
-  sites: Bound,
-  local: Bound,
-  read: Reader,
-): string {
+/** The sites the dev stack mounts, each from dev/ by its own name (ADR 0032 Decision 3), and nothing else. */
+const DEV_SITES = ["app.caddy", "pds.caddy"] as const;
+
+/** The local stack's sites by name: every `*.caddy` in sites/, plus local/app.caddy as MOUNTED_SITE (P1.34q). */
+function localSites(files: EdgeFiles, sites: Bound, local: Bound): Map<string, Bound> {
   const expected = new Map<string, Bound>();
   for (const name of files.list(sites.path).filter((n) => n.endsWith(".caddy"))) expected.set(name, sites);
   if (expected.has(MOUNTED_SITE)) {
     throw new CaddyfileError(`${MOUNTED_SITE}: an enabled site has the mounted app site's name`);
   }
   expected.set(MOUNTED_SITE, local);
+  return expected;
+}
+
+/** The dev stack's sites by name: exactly DEV_SITES, each from dev/; no shipped site. */
+const devSites = (dev: Bound): Map<string, Bound> => new Map(DEV_SITES.map((name) => [name, dev]));
+
+/**
+ * The text of the enabled sites, given as file mounts (P1.34q; architecture record 2026-10-13-p127l-local-gaps,
+ * Amendment 3 S2; dev since P1.36b): exactly one mount for every name in `expected`, from its own area, and nothing
+ * else. Each source is the regular file itself, never a link or a directory, so the mount binds what the reader reads;
+ * then each is read in byte order, as Caddy's glob over the mount targets reads them, under `entry`'s containment and
+ * hard-link rules.
+ */
+function mountedSites(
+  files: EdgeFiles,
+  mounts: readonly SiteMount[],
+  expected: ReadonlyMap<string, Bound>,
+  mode: EdgeMode,
+  read: Reader,
+): string {
   const seen = new Set<string>();
   for (const { source, name } of mounts) {
     if (files.kind(source).type !== "file") throw new CaddyfileError(`${name}: the mount is not one regular file`);
     const bound = expected.get(name);
-    if (bound === undefined) throw new CaddyfileError(`${name}: not a site the local stack mounts`);
+    if (bound === undefined) throw new CaddyfileError(`${name}: not a site the ${mode} stack mounts`);
     if (resolved(files, source, name) !== `${bound.path}/${name}`) {
       throw new CaddyfileError(`${name}: not mounted from ${bound.area}${name}`);
     }
@@ -678,11 +757,17 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * Each env placeholder sits only in its position in PLACEHOLDER_POSITIONS, every upstream is a placeholder, and a
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
  */
-export function edgeSiteProblems(config: Caddyfile): string[] {
-  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", null)];
+export function edgeSiteProblems(config: Caddyfile, mode: EdgeMode = "shipped"): string[] {
+  const found = [
+    ...zoneProblems(config, "pds-ratelimit", "global"),
+    ...zoneProblems(config, "app-ratelimit", "app_global"),
+    ...positionProblems(config.global ?? [], "the global options", null),
+    ...(mode === "dev" ? devTlsProblems(config) : []),
+  ];
   const proxied = new Set<string>();
   for (const site of config.sites) {
-    found.push(...addressProblems(site), ...siteProblems(site));
+    const zones = mode === "dev" && hostOf(site) === "APP_HOST" ? "app-ratelimit" : "pds-ratelimit";
+    found.push(...addressProblems(site), ...siteProblems(site, zones), ...schemeProblems(site, mode));
     found.push(...positionProblems(site.directives, siteName(site), hostOf(site)));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
@@ -704,25 +789,86 @@ function siteName(site: Site): string {
     .join(" ");
 }
 
-function zoneProblems(config: Caddyfile): string[] {
+/**
+ * A zones snippet holds one rate_limit block whose `global` zone has no matcher, so every route of a site importing it
+ * is counted. Messages name the PDS's snippet as "the zones snippet", as before P1.36b, and the app's by its name.
+ */
+function zoneProblems(config: Caddyfile, snippet: string, global: string): string[] {
+  const label = snippet === "pds-ratelimit" ? "the zones snippet" : `the ${snippet} snippet`;
+  const zone = global === "global" ? "global zone" : `${global} zone`;
   let directives: Directive[];
   try {
-    directives = config.snippet("pds-ratelimit");
+    directives = config.snippet(snippet);
   } catch (error) {
-    if (error instanceof CaddyfileError) return [`the zones snippet is unreadable: ${error.message}`];
+    if (error instanceof CaddyfileError) return [`${label} is unreadable: ${error.message}`];
     throw error;
   }
   const limits = named(directives, "rate_limit");
-  const found = positionProblems(directives, "the zones snippet", null);
-  if (limits.length !== 1) found.push(`the zones snippet holds ${limits.length} rate_limit blocks`);
-  const global = named(limits[0]?.block ?? [], "zone").find((zone) => zone.args[0] === "global");
-  if (global === undefined) found.push("there is no global zone");
-  else if (named(global.block ?? [], "match").length > 0) found.push("the global zone has a matcher");
+  const found = positionProblems(directives, label, null);
+  if (limits.length !== 1) found.push(`${label} holds ${limits.length} rate_limit blocks`);
+  const unmatched = named(limits[0]?.block ?? [], "zone").find((z) => z.args[0] === global);
+  if (unmatched === undefined) found.push(`there is no ${zone}`);
+  else if (named(unmatched.block ?? [], "match").length > 0) found.push(`the ${zone} has a matcher`);
   return found;
 }
 
-/** The host placeholders a site address may be, each alone on its site (APP_HOST from P1.34a, local/ only). */
-const HOSTS: readonly EnvName[] = ["PDS_HOST", "APP_HOST"];
+/**
+ * The dev shape (P1.36b; ADR 0032): under dev every public site is its bare host placeholder (https), bound to
+ * DEV_EDGE_ADDRESS alone, importing the dev `(tls)`, the security headers and noindex; the PDS site keeps
+ * the admin guard, and the app site refuses writes to the sign-in files. No dev site is plain http, so there is no
+ * :80 site (ADR 0032 Decision 4); outside dev a site is never plain http either, and prod serves no file certificate.
+ */
+function schemeProblems(site: Site, mode: EdgeMode): string[] {
+  const name = siteName(site);
+  const host = hostOf(site);
+  if (host === null) return [];
+  const plain = site.addresses.every((address) => address.startsWith("http://"));
+  if (mode !== "dev") {
+    // The local leaf's paths are confined to local/ by the reader (LOCAL_ONLY); any other file pair is refused.
+    const files = named(flatten(site.directives), "tls").some(
+      (tls) => tls.args.length > 1 && !tls.args.every((arg) => arg.startsWith("/run/secrets/local_tls_")),
+    );
+    return [
+      ...(plain ? [`${name}: a plain-http site outside dev`] : []),
+      ...(files ? [`${name}: a file certificate outside dev and local`] : []),
+    ];
+  }
+  const found = site.addresses.some((address) => address.startsWith("http://"))
+    ? [`${name}: a plain-http dev site`]
+    : [];
+  const binds = named(site.directives, "bind");
+  if (binds.length !== 1 || binds[0]?.args.join(" ") !== DEV_EDGE_ADDRESS) {
+    found.push(`${name}: not bound to the edge's newt_edge address alone`);
+  }
+  const certificates = named(flatten(site.directives), "tls");
+  if (certificates.length !== 1 || certificates[0]?.via !== "tls") {
+    found.push(`${name}: a certificate other than the dev (tls)`);
+  }
+  const route = named(site.directives, "route")[0]?.block ?? [];
+  const required: [Directive[], string][] = [
+    [site.directives, "tls"],
+    [site.directives, "security-headers"],
+    [site.directives, "noindex"],
+  ];
+  if (host === "PDS_HOST") required.push([route, "xrpc-guard"]);
+  if (host === "APP_HOST") required.push([route, "signin-files"]);
+  for (const [block, snippet] of required) {
+    if (!block.some((directive) => directive.via === snippet)) found.push(`${name}: does not import ${snippet}`);
+  }
+  return found;
+}
+
+/**
+ * The dev `(tls)` (ADR 0032 Decision 1): exactly `tls <cert_file> <key_file>` with DEV_TLS's two paths, the local
+ * stack's shape. No issuer block, no `internal`, no other line.
+ */
+function devTlsProblems(config: Caddyfile): string[] {
+  const lines = config.snippet("tls").map((d) => [d.name, ...d.args, ...(d.block === null ? [] : ["{"])].join(" "));
+  return lines.join("\n") === ["tls", ...DEV_TLS].join(" ")
+    ? []
+    : ["the dev (tls) is not the self-signed leaf's files"];
+}
+
 /** The host placeholder a site is written as, or null when it has none. */
 const hostOf = (site: Site): EnvName | null =>
   site.placeholders.find((env) => env !== null && HOSTS.includes(env)) ?? null;
@@ -796,7 +942,7 @@ function positionProblems(
   ]);
 }
 
-function siteProblems(site: Site): string[] {
+function siteProblems(site: Site, zones: string): string[] {
   const name = siteName(site);
   const all = flatten(site.directives);
   const proxies = named(all, "reverse_proxy");
@@ -806,7 +952,7 @@ function siteProblems(site: Site): string[] {
   const route = routes.length === 1 && routes[0]?.args.length === 0 ? routes[0] : undefined;
   if (route === undefined) found.push(`${name}: not exactly one plain route`);
   const first = route?.block?.[0];
-  if (first?.name !== "rate_limit" || first.via !== "pds-ratelimit") {
+  if (first?.name !== "rate_limit" || first.via !== zones) {
     found.push(`${name}: the route does not apply the zones first`);
   }
   if (named(flatten(route?.block ?? []), "reverse_proxy").length !== proxies.length) {

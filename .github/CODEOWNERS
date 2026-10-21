@@ -147,3 +147,5 @@
 /interfaces/legal-hold-export/ @Undefined6799
 # Edge
 /deployment/edge/ @Undefined6799
+# Sigstore trusted root: it decides which keyless signatures count (P1.27s, ADR 0033); placed by P2.26e
+/deployment/sigstore/ @Undefined6799

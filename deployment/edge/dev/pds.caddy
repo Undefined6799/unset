@@ -1,0 +1,16 @@
+# The dev stack's PDS site (P1.36b; ADR 0031 Decision 2 as ADR 0032 restates it): sites/pds.caddy with the
+# self-signed dev leaf (dev/tls.caddy) on the edge's newt_edge address only, no :80 site; the admin guard as shipped.
+# One read-only file bind at /etc/caddy/sites/enabled/pds.caddy (ADR 0032 Decision 3).
+{$PDS_HOST} {
+	bind 10.250.37.3
+	import tls
+	import access-log
+	import pds-route-class
+	import security-headers
+	import noindex
+	route {
+		import pds-ratelimit
+		import xrpc-guard
+		import upstream {$PDS_UPSTREAM}
+	}
+}

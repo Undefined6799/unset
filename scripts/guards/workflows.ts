@@ -74,8 +74,9 @@ function lineProblems(line: string): string[] {
   // An image variable may only come from the workflow text, where the digest check above can see it.
   if (/_IMAGE=/.test(line) && /\bGITHUB_ENV\b/.test(line)) found.push("image variable written at run time");
   if (/\b(pull_request_target|workflow_run)\b/.test(line)) found.push("banned trigger");
+  // id-token and packages are judged per job by signingProblems; every other write scope is refused here.
   for (const m of line.matchAll(/([\w-]+)["']?\s*:\s*["']?write\b/g)) {
-    if (m[1] !== "id-token") found.push(`write permission: ${line.trim()}`);
+    if (m[1] !== "id-token" && m[1] !== "packages") found.push(`write permission: ${line.trim()}`);
   }
   return found;
 }
@@ -83,13 +84,62 @@ function lineProblems(line: string): string[] {
 /** A job that touches a secret or OIDC without the environment + main-only gate. */
 function ungated(body: string[]): boolean {
   const text = body.join("\n");
-  const privileged = /\bid-token:\s*write\b/.test(text) || /\$\{\{[^}]*\bsecrets\b(?!\.GITHUB_TOKEN\b)/.test(text);
+  const privileged =
+    /\b(?:id-token|packages):\s*write\b/.test(text) || /\$\{\{[^}]*\bsecrets\b(?!\.GITHUB_TOKEN\b)/.test(text);
   const gated = /^ {4}environment:\s*\S/m.test(text) && body.some((l) => l.trim() === GATE_IF && indent(l) === 4);
   return privileged && !gated;
 }
 
-/** Every rule violation in one workflow file, as readable strings. */
-export function problems(text: string): string[] {
+/**
+ * The only jobs that sign (P1.27s; ADR 0033, Decision 1): each runs in the `signing` environment and alone may hold
+ * `id-token: write` and, as a job-level block entry, `packages: write`.
+ */
+export const SIGNING_JOBS: Readonly<Record<string, string>> = {
+  "publish-images.yml": "publish",
+  "mirror.yml": "copy-and-sign",
+};
+
+const CACHE = /\bactions\/cache@|^\s*(?:- )?cache(?:-dependency-path)?:|\bcache-(?:from|to)\b/;
+
+/** One job's signing problems: OIDC or package writes outside a signing job, and a signing job's required shape. */
+function jobSigningProblems(file: string, id: string, body: string[]): string[] {
+  const found: string[] = [];
+  const signing = SIGNING_JOBS[file] === id;
+  if (body.some((l) => /\bid-token["']?\s*:\s*["']?write\b/.test(l)) && !signing)
+    found.push("id-token: write outside a signing job");
+  body.forEach((line, i) => {
+    if (!/\bpackages["']?\s*:\s*["']?write\b/.test(line)) return;
+    const header = body.slice(0, i).findLast((l) => l.trim() !== "" && indent(l) <= 4);
+    if (!signing) found.push("packages: write outside a signing job");
+    else if (line !== "      packages: write" || header !== "    permissions:")
+      found.push("packages: write not at job level");
+  });
+  if (!signing) return found;
+  if (!body.some((l) => l === "    environment: signing")) found.push("a signing job not in the signing environment");
+  if (body.some((l) => CACHE.test(l))) found.push("a cache in a signing job");
+  return found;
+}
+
+/** The signing rules over one file: per job, plus publish-images.yml's own shape (push or dispatch, one job). */
+function signingProblems(file: string, lines: string[]): string[] {
+  const all = jobs(lines);
+  const found = [...all].flatMap(([id, body]) => jobSigningProblems(file, id, body).map((p) => `job ${id}: ${p}`));
+  const start = lines.findIndex((l) => /^jobs:\s*$/.test(l));
+  if (
+    lines
+      .slice(0, start < 0 ? lines.length : start)
+      .some((l) => /\b(?:id-token|packages)["']?\s*:\s*["']?write\b/.test(l))
+  )
+    found.push("a workflow-level id-token or packages write");
+  if (file !== "publish-images.yml") return found;
+  if (lines.some((l) => /\bpull_request\b/.test(l))) found.push("publish-images.yml has a pull_request trigger");
+  if (lines.some((l) => CACHE.test(l))) found.push("publish-images.yml uses a cache");
+  if ([...all.keys()].join() !== "publish") found.push("publish-images.yml has a job other than publish");
+  return found;
+}
+
+/** Every rule violation in one workflow file (`file` is its name under .github/workflows/), as readable strings. */
+export function problems(text: string, file = ""): string[] {
   const lines = code(text);
   const found = lines.flatMap((line, i) => lineProblems(line).map((p) => `line ${i + 1}: ${p}`));
   if (!lines.some((l) => /^permissions:\s*\{\s*\}\s*$/.test(l))) found.push("top-level permissions is not {}");
@@ -97,5 +147,6 @@ export function problems(text: string): string[] {
   for (const [id, body] of jobs(lines)) {
     if (ungated(body)) found.push(`job ${id}: secret or OIDC outside an environment-bound main-only job`);
   }
+  found.push(...signingProblems(file, lines));
   return found;
 }

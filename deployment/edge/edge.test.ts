@@ -187,7 +187,7 @@ describe("edge config", () => {
     }
     // A fixture with shared state, storage or a metrics label fails.
     const shipped = config();
-    const withMetrics = shipped.replace("disable_metrics", "");
+    const withMetrics = shipped.replaceAll("disable_metrics", "");
     for (const fixture of [
       shipped.replace("rate_limit {", "rate_limit {\n\t\tdistributed {\n\t\t}"),
       `${shipped}\n{\n\tstorage file_system /data\n}`,
@@ -595,7 +595,8 @@ describe("edge site rules (P1.28f)", () => {
   test("edge_zones_written_in_place_fail", () => {
     // Mutation pin for the via check: the same rate_limit block written straight into the route, not imported from
     // pds-ratelimit, is not the zones (amendment 8, point 3).
-    const body = limits.slice(limits.indexOf("\trate_limit {"), limits.lastIndexOf("}"));
+    const pdsZones = limits.slice(0, limits.indexOf("(app-ratelimit)"));
+    const body = pdsZones.slice(pdsZones.indexOf("\trate_limit {"), pdsZones.lastIndexOf("}"));
     const inline = site.replace("\t\timport pds-ratelimit\n", body.replaceAll(/^/gm, "\t").replace(/\t$/, ""));
     expect(inline).not.toBe(site);
     expect(siteProblems({ "sites/pds.caddy": inline })).toEqual([

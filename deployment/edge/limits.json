@@ -53,5 +53,19 @@
       "events": 3000,
       "window": "5m"
     }
+  },
+  "appRateLimitZones": {
+    "app_signin": {
+      "events": 5,
+      "window": "5m"
+    },
+    "app_burst": {
+      "events": 20,
+      "window": "10s"
+    },
+    "app_global": {
+      "events": 1200,
+      "window": "5m"
+    }
   }
 }

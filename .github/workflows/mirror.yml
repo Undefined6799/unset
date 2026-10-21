@@ -1,8 +1,14 @@
 # Upstream images we run (P1.27q): every `source` in deployment/mirror.list.json is scanned by digest with Trivy, on
-# a change to main and weekly, so a newly published CVE in an image we already pinned turns this red. Copying into
-# the private GHCR mirror and signing it need `packages: write` and the `signing` environment, which wait on Alex
-# (see the P1.27q PR); until P1.27 adds the list the job prints a notice and passes. This workflow is not a required
-# pull-request check; the list's own rules (digest only) are unit tests that run in `check`.
+# a change to main and weekly, so a newly published CVE in an image we already pinned turns this red. This workflow is
+# not a required pull-request check; the list's own rules (digest only) are unit tests that run in `check`.
+#
+# P1.27s (ADR 0033): on a push to main, after the scan passes, copy-and-sign copies each source into its GHCR mirror
+# by the same digest and signs that digest with keyless cosign (a certificate for exactly this workflow on
+# refs/heads/main, in public Rekor), then verifies the mirror lock it wrote. It runs in the `signing` environment with
+# `packages: write` and `id-token: write`, the only job besides publish-images.yml's publish to hold them, and never
+# on the weekly schedule. crane v0.22.1 (go-containerregistry) copies "while retaining the digest value" (crane copy
+# --help at the tag); the job reads each copy's digest back and fails on any difference. cosign v3.1.3 and crane are
+# pinned by their release checksums.
 
 name: mirror
 
@@ -120,3 +126,63 @@ jobs:
             echo "$failed upstream source(s) failed the scan"
             exit 1
           fi
+
+  copy-and-sign:
+    needs: scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: signing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      MIRROR_LIST: deployment/mirror.list.json
+      COSIGN_VERSION: v3.1.3
+      COSIGN_SHA256: 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71
+      CRANE_VERSION: v0.22.1
+      CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install cosign and crane by checksum
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/cosign" \
+            "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-amd64"
+          echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -
+          curl -sSfL -o "$RUNNER_TEMP/ggcr.tar.gz" \
+            "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Linux_x86_64.tar.gz"
+          echo "$CRANE_SHA256  $RUNNER_TEMP/ggcr.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/ggcr.tar.gz" -C "$RUNNER_TEMP" crane
+          install -m 0755 "$RUNNER_TEMP/cosign" "$RUNNER_TEMP/crane" /usr/local/bin/
+      - name: Log in to GHCR
+        run: echo "$GH_TOKEN" | crane auth login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      # The mirror keeps the source's digest: copy to that digest, read it back, then sign and lock exactly it.
+      - name: Copy, sign and lock each source
+        shell: bash
+        run: |
+          jq -r '.[] | [.source, .mirror] | @tsv' "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
+          test -s "$RUNNER_TEMP/entries"
+          echo '{}' > "$RUNNER_TEMP/mirror.lock.json"
+          while IFS=$'\t' read -r source mirror; do
+            digest="${source##*@}"
+            case "$digest" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 1 ;; esac
+            crane copy "$source" "$mirror@$digest" < /dev/null
+            test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"
+            cosign sign --yes "$mirror@$digest" < /dev/null
+            name="${source%@*}"
+            name="${name##*/}"
+            jq --arg name "$name" --arg ref "$mirror@$digest" --arg source "$source" \
+              '.[$name] = {ref: $ref, origin: "upstream", upstreamSource: $source, verify: "cosign-keyless"}' \
+              "$RUNNER_TEMP/mirror.lock.json" > "$RUNNER_TEMP/lock.next"
+            mv "$RUNNER_TEMP/lock.next" "$RUNNER_TEMP/mirror.lock.json"
+            echo "- $mirror@$digest" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/entries"
+      - name: Verify what was mirrored
+        run: node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"

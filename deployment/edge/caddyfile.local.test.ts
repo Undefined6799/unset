@@ -483,6 +483,8 @@ describe("edge reader, local sites as per-file mounts (P1.34q)", () => {
 
   test("file_mounts_are_read_only_in_the_local_mode", () => {
     const tree = localTree();
-    expect(() => mounted(tree, mountsOf(tree), "shipped")).toThrow("site file mounts are read only in the local mode");
+    expect(() => mounted(tree, mountsOf(tree), "shipped")).toThrow(
+      "site file mounts are read only in the local and dev modes",
+    );
   });
 });
