@@ -113,6 +113,13 @@ const LOCK = {
 const NEWT_SERVICE = `  newt:
     image: ${NEWT}
     env_file: ../../unset-dev-env/newt.env
+    environment:
+      CONFIG_FILE: /tmp/newt.json
+      DISABLE_SSH: "true"
+      DISABLE_CLIENTS: "true"
+      NEWT_METRICS_PROMETHEUS_ENABLED: "false"
+      NEWT_PPROF_ENABLED: "false"
+      LOG_LEVEL: WARN
     networks: [tunnel]
 `;
 /**
@@ -272,7 +279,7 @@ function stack({
   if (compose.includes("unset-dev-env/newt.env")) {
     writeFileSync(
       join(envOf(root), "newt.env"),
-      newtEnvFile ?? `${NEWT_ENV_NAMES.map((k) => `${k}=${CANARY}`).join("\n")}\n`,
+      newtEnvFile ?? `PANGOLIN_ENDPOINT=https://${CANARY}.example.test\nNEWT_ID=${CANARY}\nNEWT_SECRET=${CANARY}\n`,
     );
     chmodSync(join(envOf(root), "newt.env"), 0o600);
   }
@@ -1361,7 +1368,7 @@ describe("preflight", () => {
       expect(await only(names(NEWT_ENV_NAMES.filter((k) => k !== name))), name).toBe(
         `FAIL C31 ${name} is missing from the newt env file`,
       );
-      const compose = DEV.replace("    networks: [tunnel]\n", `$&    environment:\n      ${name}: shadow\n`);
+      const compose = DEV.replace("      LOG_LEVEL: WARN\n", `$&      ${name}: shadow\n`);
       expect(await expectOnly("C31", { ...dev, compose }, "dev"), name).toBe(
         `FAIL C31 ${name} is set in the newt service's environment, not newt.env`,
       );
@@ -1384,6 +1391,69 @@ describe("preflight", () => {
       "FAIL C31 no newt service; under dev it is the edge's only way in",
     );
     expect((await check({})).lines).toContain("PASS C31 ok");
+  });
+
+  test("c31_newt_runs_the_locked_image_with_its_features_off", async () => {
+    // P1.37 follow-up: the dev Newt runs exactly the lock's newt image, with SSH, client access, metrics and pprof off
+    // as compose literals and no other setting, no mount and no secret.
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const only = (compose: string) => expectOnly("C31", { ...dev, compose }, "dev");
+    expect(await only(DEV.replace(`    image: ${NEWT}\n    env_file`, `    image: ${WEB}\n    env_file`))).toBe(
+      "FAIL C31 the newt service does not run the lock's newt image",
+    );
+    for (const [name, value] of [
+      ["DISABLE_SSH", '"true"'],
+      ["DISABLE_CLIENTS", '"true"'],
+      ["NEWT_METRICS_PROMETHEUS_ENABLED", '"false"'],
+      ["NEWT_PPROF_ENABLED", '"false"'],
+    ]) {
+      const line = `      ${name}: ${value}\n`;
+      expect(await only(DEV.replace(line, "")), name).toBe(`FAIL C31 ${name} is not set in the newt service`);
+      expect(await only(DEV.replace(line, `      ${name}: "1"\n`)), name).toBe(
+        `FAIL C31 ${name} is not its reviewed literal in the newt service`,
+      );
+      expect(await only(DEV.replace(line, `      ${name}: \${FLAG}\n`)), name).toBe(
+        `FAIL C31 ${name} is not its reviewed literal in the newt service`,
+      );
+    }
+    expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      NEWT_ADMIN_ADDR: 0.0.0.0:2022\n"))).toBe(
+      "FAIL C31 NEWT_ADMIN_ADDR is not a newt setting the preflight allows",
+    );
+    // A socket bind and a second reader of a secret also fail C9; C31 names the Newt rule itself.
+    const lines = async (compose: string) => (await check({ ...dev, compose }, "dev")).lines;
+    const socket = "$&    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]\n";
+    expect(await lines(DEV.replace("    networks: [tunnel]\n", socket))).toContain(
+      "FAIL C31 the newt service mounts a file or volume",
+    );
+    expect(await lines(DEV.replace("    networks: [tunnel]\n", "$&    secrets: [db_password]\n"))).toContain(
+      "FAIL C31 the newt service reads a secret",
+    );
+  });
+
+  test("c31_newt_env_values_are_real_and_the_endpoint_is_https", async () => {
+    // P1.37 follow-up: newt.env's values are not the example's replace-me, and Pangolin's endpoint is an https address
+    // with no credentials in it. No value is ever printed.
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const only = (newtEnvFile: string) => expectOnly("C31", { ...dev, newtEnvFile }, "dev");
+    const env = (endpoint: string, id = CANARY, secret = CANARY) =>
+      `PANGOLIN_ENDPOINT=${endpoint}\nNEWT_ID=${id}\nNEWT_SECRET=${secret}\n`;
+    const good = `https://${CANARY}.example.test`;
+    expect(await only(env("replace-me"))).toBe("FAIL C31 PANGOLIN_ENDPOINT is still the example file's placeholder");
+    expect(await only(env(good, "replace-me"))).toBe("FAIL C31 NEWT_ID is still the example file's placeholder");
+    expect(await only(env(good, CANARY, "replace-me"))).toBe(
+      "FAIL C31 NEWT_SECRET is still the example file's placeholder",
+    );
+    for (const endpoint of [
+      `http://${CANARY}.example.test`,
+      `https://user:${CANARY}@pangolin.example.test`,
+      `https://${CANARY}@pangolin.example.test`,
+      CANARY,
+      "",
+    ]) {
+      const outcome = await only(env(endpoint));
+      expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not an https address without credentials");
+    }
+    expect(await check({ ...dev, newtEnvFile: env(`${good}/`) }, "dev").then((r) => r.lines)).toContain("PASS C31 ok");
   });
 
   test("c11_smtp_fails", async () => {
