@@ -3,7 +3,7 @@ title: lexicons
 weight: 6
 ---
 
-The `sh.unset.*` record schemas, their validator, the field limits and the OAuth scope strings. Package `@unset/shared-lexicons`. Publishing the schemas is (planned). The step book names that as P1.35. `published.lock.json` is `{}`.
+The `sh.unset.*` record schemas, their validator, the field limits and the OAuth scope strings. Package `@unset/shared-lexicons`. `published.lock.json` is `{}`.
 
 ## Owns
 
@@ -39,7 +39,7 @@ Vendored files (`vendor/SOURCE.md`; sha256 of the JSON value):
 
 `validateRecord` also accepts `app.bsky.actor.profile`. That record is not strict on write.
 
-Consent text is English. `build.ts` sets `LANGUAGES` to `en`. French is (planned), with the i18n slice.
+Consent text is English. `build.ts` sets `LANGUAGES` to `en`.
 
 From the repository root:
 

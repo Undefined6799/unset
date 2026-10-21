@@ -94,7 +94,7 @@ Reads, and does not own:
 | `deployment/images/bases.lock.json` | C2 under local |
 | `deployment/sigstore/trusted_root.json` | C3, C4 |
 | `deployment/networks.dev.json` or `deployment/networks.prod.json` | C17. Local reads the dev file. |
-| `docs/human/retirement/retirement-check.json` | C21, when the host is `0x40.space`. The path is `RETIREMENT_REPORT` in `inputs.ts`. The file is not on the tree. |
+| `RETIREMENT_REPORT` in `deployment/preflight/inputs.ts` | C21, when the host is `0x40.space`. The constant is `docs/human/retirement/retirement-check.json`. |
 | compose file, interpolation env, secret files | the inputs |
 
 No schema, role or table. Configured values stay in `SecretMap` and are not printed.

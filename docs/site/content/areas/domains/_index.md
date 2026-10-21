@@ -8,17 +8,11 @@ cascade:
     reversePagination: false
 ---
 
-Product rules. Decision 34 names `domains/{identity,content,social,feed,messaging,moderation,privacy}` ([ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md); [guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md)). A folder appears with its first code.
+Product rules. Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md). Folder rules are [guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md). A folder appears with its first code.
 
-| Domain | Path | Status |
+| Domain | Path | Page |
 | --- | --- | --- |
 | identity | `domains/identity` | [identity](identity/) |
-| content | `domains/content` | (planned). The folder is not on the tree. |
-| social | `domains/social` | (planned). The folder is not on the tree. |
-| feed | `domains/feed` | (planned). The folder is not on the tree. |
-| messaging | `domains/messaging` | (planned). The folder is not on the tree. |
-| moderation | `domains/moderation` | (planned). The folder is not on the tree. |
-| privacy | `domains/privacy` | (planned). The folder is not on the tree. |
 
 ## Owns
 

@@ -3,13 +3,13 @@ title: media
 weight: 5
 ---
 
-The media proxy. Package `@unset/interfaces-media`. `UNSET_SERVICE` is `media`.
+Package `@unset/interfaces-media`. `UNSET_SERVICE` is `media`.
 
 Route table: [Endpoints](/endpoints/).
 
 ## Owns
 
-The process entry for the media proxy. `interfaces/media/main.ts` reads config, composes and listens. `interfaces/media/compose.ts` builds a logger and `createServer` with `routes: []`. The kit adds `GET /health` (`shared/http/server.ts`). The comment in `compose.ts` says later steps add adapters here. This folder does not fetch a blob and does not call net-guard.
+`interfaces/media/main.ts` reads config, composes and listens. `interfaces/media/compose.ts` builds a logger and `createServer` with `routes: []`. The kit adds `GET /health` (`shared/http/server.ts`). This folder does not fetch a blob and does not call net-guard.
 
 `interfaces/media/limits.ts` defines one policy, `default`. No route in this process names it. Health is `rateLimit: exempt` in `interfaces/media/routes.manifest.json`.
 

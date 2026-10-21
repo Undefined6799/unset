@@ -30,7 +30,7 @@ The browser cookie is host-only. The database stores a hash.
 | Welcome, verify-email, logout | `interfaces/http/routes/welcome.ts`, `verify-email.ts`, `logout.ts` | These handlers read the session themselves. They do not call `openApp`. |
 | Domain attribute | [`scripts/guards/cookie-domain.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/cookie-domain.ts) | A `Domain` attribute on a cookie fails CI. The guard has no allow. |
 
-Two layers. The manifest value is not the page gate, and this is not fully enforced: unset master is having the checker file the gap.
+Two layers. The manifest value is not the page gate.
 
 `defineRoute` records `session: "required"` or `"none"` with no default (`shared/http/routes.ts`). `requiresSession` is set only when the value is `"required"`. `shared/http/server.ts` `admit` returns before reading a session when that flag is absent, and `interfaces/http/compose.ts` does not pass a session reader to `createServer`. Every route under `interfaces/http/routes/` passes `"none"`. `"none"` does not mean no auth. No current route sets `"required"`, so the kit does not run its session middleware. `GET /health` is `session: "none"` and skips the host check and the trusted-proxy step.
 

@@ -158,9 +158,9 @@
   errors: "welcome.terms_required when accept is not yes. welcome.country_required when the country rule applies and country is not yes."
   auth: "reads session"
 "GET /welcome/chat":
-  why: "Placeholder step for chat, which is not built here (interfaces/http/routes/welcome.ts)."
+  why: "Shows the chat onboarding step (interfaces/http/routes/welcome.ts). The screen is apps/web/src/screens/welcome/ChatLater.tsx. The heading is Chat comes later."
   input: "No request body."
-  output: "HTML chat-later page, or a redirect to login or to another step."
+  output: "HTML for that step, or a redirect to login or to another step."
   errors: "The handler names no error code of its own."
   auth: "reads session"
 "POST /welcome/chat":

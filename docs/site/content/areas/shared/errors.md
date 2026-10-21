@@ -13,7 +13,7 @@ The error-code catalog, and the only way a code goes into or comes out of a URL.
 
 `shared/errors/redirect.ts`: `withErrorParam` sets `error=<code>` on a path. `readErrorParam` returns the code when it is a public catalog code, and `null` otherwise.
 
-`shared/errors/messages.ts`: `ERROR_MESSAGES`, English text for each public code. French catalogs are (planned). The file names the i18n slice (P1.19). `shared/i18n` is not on the tree.
+`shared/errors/messages.ts`: `ERROR_MESSAGES`, English text for each public code.
 
 ## May import
 

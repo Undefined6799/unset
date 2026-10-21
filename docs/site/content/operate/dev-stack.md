@@ -30,7 +30,7 @@ npm run local:down
 | `dev` | `deployment/compose.dev.yaml` | `unset-dev` | `postgres`, `migrate`, `pds`, `edge`, `web`, `newt` |
 | `local` | `deployment/compose.local.yaml` | `unset-local` | `postgres`, `migrate`, `pds`, `edge`, `web`, `pds-token-reader` |
 
-`compose.prod.yaml` is not on the tree. The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`.
+The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`.
 
 ## What the wrapper runs
 
@@ -80,11 +80,3 @@ Basenames of the `file:` secrets. Owner, mode and how to create each file are in
 | `pg_superuser_password`, `pg_migrator_password`, `pg_tap_password`, `migrate_pg_password`, `pg_web_password`, `pg_api_password`, `pg_indexer_password`, `web_seal_keyring`, `web_oauth_client_keys` | both |
 | `dev_tls_cert`, `dev_tls_key` | `deployment/compose.dev.yaml` |
 | `local_tls_cert`, `local_tls_key` | `deployment/compose.local.yaml` |
-
-## Planned
-
-| Path | Status |
-| --- | --- |
-| `deployment/backup/` | (planned, Phase 5). [Backups](../backups/). |
-| `deployment/terraform/`, `deployment/ansible/` | (planned, Phase 5). [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md); [guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md). |
-| `apps/pds/`, `deployment/pds/` | (planned). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md). |

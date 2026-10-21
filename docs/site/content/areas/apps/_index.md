@@ -3,17 +3,15 @@ title: Apps
 weight: 1
 ---
 
-Screens, islands and styles. UI only: no product rules and no database access. Decision 34 names `apps/{web,admin,chat}` ([ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md); [guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md)). Folders are created with their first code.
+Screens, islands and styles. UI only: no product rules and no database access. Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md). Folder rules are [guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md). Folders are created with their first code.
 
-| App | Path | Status |
+| App | Path | Page |
 | --- | --- | --- |
 | web | `apps/web` | [web](web/) |
-| admin | `apps/admin` | (planned, Phase 3). The folder is not on the tree. The step book names admin screens from P3.20. |
-| chat | `apps/chat` | (planned, Phase 6). The folder is not on the tree. |
 
 ## Owns
 
-[web](web/) is the public site, and it is the only app folder on the tree. `admin` and `chat` are the other two apps decision 34 names. The cruiser already reserves `interfaces/admin` → `apps/admin/render.tsx`, and `matrix-js-sdk` → `apps/chat/matrix/`.
+[web](web/) is the public site, and it is the only app folder on the tree. `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names `apps/web/render.tsx` for `interfaces/http` and `apps/admin/render.tsx` for `interfaces/admin`. `SDK_ADAPTERS` names `matrix-js-sdk` in `apps/chat/matrix/`.
 
 ## May import
 
@@ -37,7 +35,7 @@ Rules that refuse an edge the row would otherwise allow:
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. An app does not import one. |
 | `island-import-boundary` | A `*.island.tsx` may import `shared/ui/`, `shared/islands/`, `react/jsx-runtime`, and type-only modules. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. The Vite config row above is the exception the cruiser states. |
-| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only in its adapter folder. The only adapter under `apps/` is `matrix-js-sdk` in `apps/chat/matrix/` (planned, Phase 6). |
+| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only in its adapter folder. The `apps/` entry in that list is `matrix-js-sdk` in `apps/chat/matrix/`. |
 | `web-not-admin` | `apps/web` imports nothing whose path is `admin/…` or contains `/admin/`. |
 
 ## Entry points
@@ -47,7 +45,7 @@ An app has no `main.ts`. The serving interface may import that app's render file
 | Interface | Render file | On this tree |
 | --- | --- | --- |
 | `interfaces/http` | `apps/web/render.tsx` | [web](web/) |
-| `interfaces/admin` | `apps/admin/render.tsx` | (planned, Phase 3). `interfaces/admin` does not import an app. |
+| `interfaces/admin` | `apps/admin/render.tsx` | `interfaces/admin` does not import an app. |
 
 `interfaces/http/web/render-entry.ts` and `tests/e2e/fixtures/servers.ts` are the two files allowed to import the unresolved specifier `@unset/apps-web/server` (`RENDER_BUILD_MODULE`). Tests and `scripts/` are the tooling row, which `app-render-entry-only` excludes.
 

@@ -21,7 +21,7 @@ Database roles match that split. `web` is the only roster role the dev stack log
 
 ## Egress
 
-Caller-influenced outbound HTTP is scanned by `scripts/guards/egress.ts`. A dynamic `fetch`, a raw `http`/`https`/`net`/`tls` client, `undici`, or `new WebSocket` / `new EventSource` fails outside `infrastructure/net-guard/` and test files. The guard's file exemption is `interfaces/pds-admin/pds.mjs`, which is not in the tree **(planned)**.
+Caller-influenced outbound HTTP is scanned by `scripts/guards/egress.ts`. A dynamic `fetch`, a raw `http`/`https`/`net`/`tls` client, `undici`, or `new WebSocket` / `new EventSource` fails outside `infrastructure/net-guard/` and test files. `EGRESS_FILE_EXEMPTIONS` in that file is `interfaces/pds-admin/pds.mjs`.
 
 `infrastructure/net-guard/src/request.ts`: a caller-influenced request names a policy, connects only to addresses `resolveVetted` accepted, and a 301, 302, 303, 307 or 308 is refused rather than followed. `undici` is imported only in this folder (`vendor-sdk-one-adapter`).
 
@@ -49,5 +49,4 @@ Paths the section names that are in the tree:
 | `infrastructure/audit/` | audit append |
 | `shared/lexicons/` | lexicons and the permission set |
 | `deployment/edge/` | edge |
-
-The same section names paths that have no file in the tree: `interfaces/media/headers.ts`, `interfaces/http/jobs/erase-storage.ts`, `interfaces/indexer/erase-untrack.ts`, `shared/admin-envelope/`, `interfaces/pds-admin/`, `interfaces/chat-admin/`, `interfaces/chat-auth/`, `domains/moderation/legal-hold/`, `interfaces/legal-hold-export/`. `pds-admin`, `chat-admin` and `shared/admin-envelope/` are **(planned)**. `deployment/sigstore/` is in the tree (`trusted_root.json`), placed by P2.26e ([ADR 0033](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0033-image-signing-keyless.md)).
+| `deployment/sigstore/` | `trusted_root.json` ([ADR 0033](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0033-image-signing-keyless.md)) |

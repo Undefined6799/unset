@@ -101,5 +101,3 @@ English legal markdown, inlined at build by `apps/web/src/legal/documents.ts` (`
 | `apps/web/legal/terms.en.md` | `terms` |
 | `apps/web/legal/privacy.en.md` | `privacy` |
 | `apps/web/legal/domains.en.md` | `domains` |
-
-French legal files are (planned). `documents.ts` says they land in the i18n slice. They are not on the tree.
