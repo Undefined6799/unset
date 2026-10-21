@@ -33,6 +33,7 @@
         "Pure ./presentation package entry exports Navigation/Button/Input/Icon/Avatar/safeHref and needed types without Header or island runtime",
         "Alex approved browser feedback on 2026-10-21: remove the redundant popup Close control while retaining title and ordinary links",
         "Phone current glyph/avatar lifts 6px using space-3 / 2 inside its stationary 48px target and focus outline; no current/open-menu underline",
+        "Alex approved a centered 200px by 60px floating phone dock on 2026-10-21: three 48px columns, 16px gaps, 12px side padding, 6px vertical padding; bottom max(20px, safe area), radius-xs, line outline and shadow-menu",
         "Menu is current only when an item is current; opening the popup alone selects no destination; desktop rail and popup row treatment stay unchanged"
       ]
     },

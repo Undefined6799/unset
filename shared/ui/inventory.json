@@ -22,7 +22,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "2b4bf84f26e38cf1da4e6bd179d3859f256314f519546511eba14875c5ff9c76"
+        "sha256": "e4bfba26ddb3c3301c989362d66f6f0b59767469d7c34040a5c9dea129eba4df"
       }
     ]
   },
@@ -91,7 +91,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "2b4bf84f26e38cf1da4e6bd179d3859f256314f519546511eba14875c5ff9c76"
+        "sha256": "e4bfba26ddb3c3301c989362d66f6f0b59767469d7c34040a5c9dea129eba4df"
       }
     ]
   },
@@ -104,7 +104,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "2b4bf84f26e38cf1da4e6bd179d3859f256314f519546511eba14875c5ff9c76"
+        "sha256": "e4bfba26ddb3c3301c989362d66f6f0b59767469d7c34040a5c9dea129eba4df"
       }
     ]
   },
@@ -152,14 +152,14 @@
   },
   "Navigation": {
     "sheet": "components/Navigation/README.md",
-    "sheetSha256": "3420fb78eaf3dd20438381ec3cf56847f77e81d767063aff62967a5ce7ed0a8a",
+    "sheetSha256": "42060350a4d0eefe80d001aeb1c0f6365a5dd8d1ae8a1cfb3fd03678567b1e18",
     "props": "NavigationProps",
     "variants": ["desktop rail", "phone bar and popup"],
     "status": "built",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "2b4bf84f26e38cf1da4e6bd179d3859f256314f519546511eba14875c5ff9c76"
+        "sha256": "e4bfba26ddb3c3301c989362d66f6f0b59767469d7c34040a5c9dea129eba4df"
       }
     ]
   },
