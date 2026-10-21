@@ -5,8 +5,6 @@ weight: 6
 
 Accepted records stay as written. This page is the index in [`docs/human/decisions/README.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/README.md). The files are not rendered on this site.
 
-0028 has no file. It is reserved for P1.36m, the edge DNS-01 provider module (`docs/ai/book/phase-1.md`). [ADR 0031](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0031-public-staging-pds.md) defers that module to production.
-
 0013, 0022 and 0023 are still Proposed in the index. Citations of 0022 and 0023 say decided (0001 log), acceptance pending. The 0001 log records both on 2026-10-16. It has no 0013 entry; that file stays Proposed.
 
 | # | Decision | Status |
@@ -37,8 +35,7 @@ Accepted records stay as written. This page is the index in [`docs/human/decisio
 | [0024](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0024-atproto-api-agent.md) | @atproto/api Agent as the XRPC client over an OAuth session (P2.07) | Proposed (awaiting Alex) |
 | [0025](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0025-public-domains.md) | Public domains: app `unset.sh`, PDS `unset.ac`, handles `unset.im`, chat `unset.cc`; development `staging.unset.*` | Accepted by Alex 2026-10-19 |
 | [0026](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0026-local-email-gate-exception.md) | Local-only email-gate exception for `alice.unset.im` and `bob.unset.im` (mechanism 2) | Proposed (awaiting Alex) |
-| [0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) | PDS frontend distribution replacement with unchanged backend and runtime configuration (P2.24a) | Accepted by Alex 2026-10-18; implementation pending |
-| 0028 | Edge DNS-01 provider module (P1.36m); ADR 0031 defers it to production | reserved |
+| [0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) | PDS frontend distribution replacement with unchanged backend and runtime configuration (P2.24a) | Accepted by Alex 2026-10-18 |
 | [0029](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0029-media-domain.md) | Media domain `unset.site`; development `staging.unset.site` | Proposed (awaiting Alex) |
 | [0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md) | Staging behind Pangolin: method scope and last-hop trust move to our edge, cookie and logging clauses of 0025 restated | Accepted by Alex 2026-10-19 |
 | [0031](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0031-public-staging-pds.md) | Staging public through Pangolin, no login, no certificate at our edge; departs from 0025 and 0030 for dev only | Accepted 2026-10-20; Decision 2 and Decision 1's plain-http sentence superseded by 0032 |

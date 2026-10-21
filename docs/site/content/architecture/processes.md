@@ -20,7 +20,7 @@ Every service drops all capabilities, sets `no-new-privileges`, uses a read-only
 | web | `deployment/images/node-app.Dockerfile` | 65532:65532 | db, app, web_egress | `web` |
 | newt | `docker.io/fosrl/newt:1.18.1` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
 
-Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending). There is no prod compose file.
+Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending).
 
 `deployment/compose.local.yaml` is the throwaway stack on one machine. `deployment/compose.local.test.ts` holds it to the dev file. Differences that change this picture: no Newt; the edge publishes `127.0.0.1:80` and `127.0.0.1:443`; web sets `NETGUARD_INTERNAL_HOSTS` from `PDS_HOSTNAME`; `pds-token-reader` is a `tools` profile service and `up` does not start it. The file header lists the rest.
 
@@ -79,8 +79,6 @@ These folders start a server. `compose.ts` passes an empty route list, so the ki
 | --- | --- | --- |
 | `interfaces/admin` | `main.ts` | `GET /health` |
 | `interfaces/api` | `main.ts` | `GET /health` |
-| `interfaces/indexer` | `main.ts` | `GET /health` (comment: until its Tap consumer lands) |
+| `interfaces/indexer` | `main.ts` | `GET /health` |
 | `interfaces/media` | `main.ts` | `GET /health` |
-| `interfaces/review` | `main.ts` | `GET /health` (comment: until its checks land) |
-
-`interfaces/pds-admin` and `interfaces/chat-admin` are **(planned)**. The import rule names them (`scripts/lint/.dependency-cruiser.cjs`, row `admin-service`); the folders are absent.
+| `interfaces/review` | `main.ts` | `GET /health` |

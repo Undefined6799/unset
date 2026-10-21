@@ -22,12 +22,11 @@ Typed configuration, read once at boot. Package `@unset/shared-config`. Permanen
 | `MATRIX_SERVER_NAME` | `unset.cc` |
 | `PERMISSION_SET_NSID` | `sh.unset.authApp` |
 
-`SERVICES` in `schema.ts` is the `UNSET_SERVICE` allowlist. A process joins the list in the step that creates it. `pds-admin` and `chat-admin` are absent: they import nothing outside their own folder.
+`SERVICES` in `schema.ts` is the `UNSET_SERVICE` allowlist: `http`, `admin`, `api`, `indexer`, `media`, `review`, `jobs`, `audit-verify`, `chat-auth`.
 
-| Name | Folder on this tree |
+| Name | Folder |
 | --- | --- |
 | `http`, `admin`, `api`, `indexer`, `media`, `review` | `interfaces/<name>/` |
-| `jobs`, `audit-verify`, `chat-auth` | Not on the tree |
 
 ## May import
 

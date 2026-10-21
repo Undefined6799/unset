@@ -51,7 +51,7 @@ Pages under `docs/site/content/` follow the outline in [issue #1161](https://git
 | --- | --- |
 | One topic | One short page |
 | Reference | Tables, the command the repository runs, and a path |
-| Absent from `main` | Mark `(planned)` or `(planned, Phase N)` |
+| On this site | Describe only what is in the code on `main`. Do not describe planned work. Roadmap: [`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md) |
 | Agent text and ADRs | Link the file. The page keeps the path and the status line |
 | Security | Say what the check is for, and link the source |
 | Order | `weight` in front matter. The navbar entries are `menu.main` in `docs/site/hugo.yaml` |
@@ -85,7 +85,7 @@ docker run --rm --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.
 | Path | Writer |
 | --- | --- |
 | `docs/site/content/endpoints/*.md` | The command below. Hand-editing a page fails `endpoint_pages_match_manifests` |
-| `docs/site/data/endpoints/<process>.yaml` | Hand-written. Keys are `"METHOD path"`. The generator reads the prose and leaves the file as written. A manifest route needs a key. A key with no manifest route needs `planned` |
+| `docs/site/data/endpoints/<process>.yaml` | Hand-written. Keys are `"METHOD path"`. The generator reads the prose and leaves the file as written. Every manifest route needs a key. A key for a route that is not in the manifest does not belong on this site |
 
 ```sh
 node scripts/docs/endpoints.ts --write

@@ -18,11 +18,10 @@ The same README calls the repository a rebuild of the 0x40 prototype around a sm
 
 | Source | Statement |
 | --- | --- |
-| [README](https://github.com/Undefined6799/unset/blob/main/README.md) Status | Not usable yet. No public launch, invite-only included, until all six phases are done. |
+| [README](https://github.com/Undefined6799/unset/blob/main/README.md) Status | Not usable yet. |
 | `apps/web/src/screens/welcome/messages.ts` | `termsLead` is "unset.sh is invite-only." |
-| [PLAN.md](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md) §8 | A closed test track from the end of Phase 2. The plan says it is not a launch. |
 
-`GET /legal/terms`, `GET /legal/privacy` and `GET /legal/domains` render the English files under the banner in `LEGAL.banner` (`apps/web/src/shell/messages.ts`), shown by `apps/web/src/screens/Legal.tsx`: "This page is a placeholder. It has not been reviewed by a lawyer, and it is not legal advice." The files are `apps/web/legal/terms.en.md`, `apps/web/legal/privacy.en.md` and `apps/web/legal/domains.en.md`, inlined by `apps/web/src/legal/documents.ts`. That file says French files land in the i18n slice. There is no `shared/i18n`. (planned, P1.19; [PLAN.md](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md) §8)
+`GET /legal/terms`, `GET /legal/privacy` and `GET /legal/domains` render the English files under the banner in `LEGAL.banner` (`apps/web/src/shell/messages.ts`), shown by `apps/web/src/screens/Legal.tsx`: "This page is a placeholder. It has not been reviewed by a lawyer, and it is not legal advice." The files are `apps/web/legal/terms.en.md`, `apps/web/legal/privacy.en.md` and `apps/web/legal/domains.en.md`, inlined by `apps/web/src/legal/documents.ts`.
 
 ## What the http app is
 
@@ -49,13 +48,13 @@ Routes are `interfaces/http/routes.manifest.json`.
 | `GET /oauth/callback` | Return from the authorization server. `interfaces/http/routes/oauth-callback.ts` |
 | `POST /logout`, `GET /signed-out` | Sign-out routes. `interfaces/http/routes/logout.ts` |
 | `GET /verify-email`, `POST /verify-email/reconsent` | Confirmed-email page. `interfaces/http/routes/verify-email.ts` takes `sessionInfo` and has no mail sender in its dependencies. |
-| `GET /welcome`, `GET` and `POST /welcome/age`, `/welcome/terms`, `/welcome/chat`, `GET /welcome/blocked` | Onboarding. `interfaces/http/routes/welcome.ts`. Screens are `apps/web/src/screens/welcome/`. `ChatLater.tsx` says chat is not open. |
+| `GET /welcome`, `GET` and `POST /welcome/age`, `/welcome/terms`, `/welcome/chat`, `GET /welcome/blocked` | Onboarding. `interfaces/http/routes/welcome.ts`. Screens are `apps/web/src/screens/welcome/`. `ChatLater.tsx` shows the heading "Chat comes later". |
 | `GET /did`, `GET /me` | `303` to `/<DID>` of the session. `interfaces/http/routes/me.ts` |
 | `GET /:did` | The caller's own account page: handle, DID, a PDS link when the recorded issuer can be read, and sign out. Another DID is `http.not_found`. The file says this is not a public profile. |
 | `GET /settings/profile` | The heading `Profile`. `apps/web/src/screens/SettingsProfile.tsx` says the body is a placeholder. |
 | `POST /prefs/theme` | Theme form. `interfaces/http/routes/prefs.ts` |
 | `GET /health`, `GET /assets/:file`, `GET /oauth-client-metadata.json`, `GET /oauth/jwks.json`, `GET /.well-known/security.txt` | Listed in the manifest. `security.txt` is built in `interfaces/http/security-txt.ts`. |
 
-Sign-in on this tree is one PDS issuer. `pdsIssuerOf` in `interfaces/http/config.ts` builds it as `http` or `https` plus `PDS_HOSTNAME`, from `OAUTH_ALLOW_HTTP`. `authorize` in `infrastructure/pds/oauth/sign-in.ts` refuses an `http:` or `https:` input that is not exactly that issuer. `didResolverForOAuth` in `infrastructure/pds/oauth/identity-resolvers.ts` throws `AccountElsewhereError` when the resolved PDS origin is not that issuer. `completeAuthorization` revokes the grant and refuses when `session.serverMetadata.issuer` is not that issuer. [ADR 0025](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0025-public-domains.md) names P1.33p as the later opening. The book steps are `P1.36v` and `P1.33p` in `docs/ai/book/phase-1.md`.
+Sign-in on this tree is one PDS issuer. `pdsIssuerOf` in `interfaces/http/config.ts` builds it as `http` or `https` plus `PDS_HOSTNAME`, from `OAUTH_ALLOW_HTTP`. `authorize` in `infrastructure/pds/oauth/sign-in.ts` refuses an `http:` or `https:` input that is not exactly that issuer. `didResolverForOAuth` in `infrastructure/pds/oauth/identity-resolvers.ts` throws `AccountElsewhereError` when the resolved PDS origin is not that issuer. `completeAuthorization` revokes the grant and refuses when `session.serverMetadata.issuer` is not that issuer.
 
 The account page shows `displayHandle` from `domains/identity/verify-handle.ts`. `createHandleVerifier` returns `verifyHandle`. `check` keeps a handle when the DID document claims it and `resolveHandle` (`domains/identity/resolve-handle.ts`) returns that same DID.

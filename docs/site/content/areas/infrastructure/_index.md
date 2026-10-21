@@ -14,7 +14,7 @@ External systems behind small contracts. Decision 34 is recorded in [ADR 0001](h
 
 One package per folder. A vendor SDK named in `SDK_ADAPTERS` (`scripts/lint/.dependency-cruiser.cjs`) is imported only in its adapter folder.
 
-`CLAUDE.md` decision 34 names `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit}` and does not name `infrastructure/session`. The tree has `session` and does not have `tap`, `matrix`, `storage`, `arachnid` or `email`. These pages follow the tree.
+The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit` and `session`. These pages follow the tree.
 
 | Package | Path | Page |
 | --- | --- | --- |
@@ -24,16 +24,6 @@ One package per folder. A vendor SDK named in `SDK_ADAPTERS` (`scripts/lint/.dep
 | postgres | `infrastructure/postgres` | [postgres](postgres/) |
 | seal | `infrastructure/seal` | [seal](seal/) |
 | session | `infrastructure/session` | [session](session/) |
-
-No folder **(planned)**:
-
-| Name | Where the code names it |
-| --- | --- |
-| `tap` | `CREATE ROLE tap` and `CREATE DATABASE tap` in `deployment/postgres/init/00-bootstrap.sh`. No `infrastructure/tap/`. |
-| `matrix` | Both locations are right, for different runtimes. `infrastructure/matrix/` holds the server adapter plus the synapse module. `apps/chat/matrix/` holds the browser `matrix-js-sdk` adapter (one adapter per runtime, `docs/ai/PLAN.md:604`). Both are planned for Phase 6. Neither folder is on the tree. |
-| `storage` | `SDK_ADAPTERS` reserves `@aws-sdk/client-s3` for `infrastructure/storage/`. No folder, and no `package.json` depends on that SDK. |
-| `arachnid` | Decision 34 names `infrastructure/arachnid`. No folder. |
-| `email` | Decision 34 names `infrastructure/email`. No folder. |
 
 ## May import
 
@@ -53,7 +43,7 @@ Rules that refuse an edge a row would otherwise allow:
 | `infra-shared-via-index` | Another module under `infrastructure/<name>/` or `shared/<name>/` is reached through its `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. `domains/` is not this rule. |
 | `infrastructure-not-entry` | No import from `interfaces/` or `apps/`. |
 | `net-guard-leaf` | A non-test file under `infrastructure/net-guard/` reaches only its own folder, `undici` and Node built-ins. A `*.test.ts` there may also import `fast-check` and `vitest`. |
-| `vendor-sdk-one-adapter` | `pg` only in `infrastructure/postgres/`. `undici` only in `infrastructure/net-guard/`. `@atproto/oauth-client-node` and `@atproto/api` only in `infrastructure/pds/`. `age-encryption` only in `infrastructure/seal/`. `@aws-sdk/client-s3` only in `infrastructure/storage/` **(planned)**. `@atproto/lex*` only in `shared/lexicons/`. `matrix-js-sdk` only in `apps/chat/matrix/` **(planned, Phase 6)**. |
+| `vendor-sdk-one-adapter` | `pg` only in `infrastructure/postgres/`. `undici` only in `infrastructure/net-guard/`. `@atproto/oauth-client-node` and `@atproto/api` only in `infrastructure/pds/`. `age-encryption` only in `infrastructure/seal/`. `@aws-sdk/client-s3` only in `infrastructure/storage/`. `@atproto/lex*` only in `shared/lexicons/`. `matrix-js-sdk` only in `apps/chat/matrix/`. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported only by tests and by `interfaces/<name>/compose.ts`, and only with a dynamic `import()` after the `UNSET_ENV` check. |
 

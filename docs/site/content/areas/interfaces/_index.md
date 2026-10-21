@@ -25,19 +25,6 @@ The six folders under `interfaces/` on this tree. Each one is its own package an
 | media | `interfaces/media` | [media](media/) |
 | review | `interfaces/review` | [review](review/) |
 
-Guideline §1 names `admin`, `pds-admin` and `chat-admin`. The tree has `interfaces/admin` and does not have the other two. These pages follow the tree.
-
-No folder on the tree **(planned)**:
-
-| Name | Where it is named |
-| --- | --- |
-| `pds-admin` | `MATRIX` row `admin-service`. Absent from `SERVICES` (`shared/config/schema.ts`). |
-| `chat-admin` | Same row. Absent from `SERVICES`. |
-| `jobs` | `SERVICES` in `shared/config/schema.ts` |
-| `audit-verify` | `SERVICES` |
-| `chat-auth` | `SERVICES` |
-| `legal-hold-export` | Planned, phase 4 (P4.07). An offline CLI (guideline §1, `interfaces/legal-hold-export/`), which is why it is not in `SERVICES`. |
-
 ## May import
 
 Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
@@ -54,8 +41,8 @@ Extra rows, and the rules that refuse an edge the row would otherwise allow:
 | --- | --- |
 | `interface-http-render` | `interfaces/http/` may also import the file `apps/web/render.tsx`. |
 | `interface-http-render-build` | `interfaces/http/web/render-entry.ts` may import `@unset/apps-web/server` when that specifier does not resolve. |
-| `interface-admin-render` | `interfaces/admin/` may also import the file `apps/admin/render.tsx`. That file is not on the tree **(planned)**. |
-| `admin-service` | `interfaces/pds-admin/` and `interfaces/chat-admin/` may import `node:*`, their own folder, and the zero-dependency allowlist (`ZERO_DEP_ALLOWLIST`, today `shared/admin-envelope/`). No npm. Both service folders are **(planned)**. `shared/admin-envelope/` is not on the tree **(planned)**. The forbidden rule `admin-services-zero-deps` states the same bound. |
+| `interface-admin-render` | `interfaces/admin/` may also import the file `apps/admin/render.tsx` (`RENDER_ENTRIES`). |
+| `admin-service` | `interfaces/pds-admin/` and `interfaces/chat-admin/` may import `node:*`, their own folder, and `ZERO_DEP_ALLOWLIST` (`shared/admin-envelope/`). No npm. `admin-services-zero-deps` states the same bound. |
 | `no-interface-to-interface` | An interface does not import another interface. |
 | `app-render-entry-only` | From outside `apps/`, only `interfaces/http` and `interfaces/admin` import an app, and only the render file in the two rows above. |
 | `web-not-admin` | `interfaces/http/` imports nothing whose path is `admin/…` or contains `/admin/`. |
@@ -63,8 +50,6 @@ Extra rows, and the rules that refuse an edge the row would otherwise allow:
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported only by tests and by `interfaces/<name>/compose.ts`, and only with a dynamic `import()` after the `UNSET_ENV` check. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
 | `vendor-sdk-one-adapter` | `pg`, `undici`, `@atproto/oauth-client-node`, `@atproto/api`, `age-encryption` and `@atproto/lex*` are imported only in their adapter folders, not from an interface. |
-
-Guideline §1 states that bound. Admin services may import `node:*`, their own folder, and the zero-dependency allowlist (`shared/admin-envelope/`, planned). The `admin-service` row and `admin-services-zero-deps` are what the cruiser checks.
 
 ## Entry points
 
@@ -97,4 +82,4 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 Only [http](./http/) opens a pool. The other five `compose.ts` files build the server kit and nothing else. Per-role grants are on each page.
 
-`review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2). There is no `interfaces/review-egress/` folder **(planned)**.
+`review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2).

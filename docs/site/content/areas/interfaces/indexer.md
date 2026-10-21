@@ -9,13 +9,11 @@ Route table: [Endpoints](/endpoints/).
 
 ## Owns
 
-A health-only server until its Tap consumer lands. That sentence is the comment in `interfaces/indexer/main.ts`, `compose.ts` and `config.ts`. `compose.ts` builds a logger and `createServer` with `routes: []` and `policies: {}`. There is no `limits.ts`. The kit adds `GET /health` (`shared/http/server.ts`).
-
-No Tap client is imported. `infrastructure/tap/` is not on the tree **(planned)**.
+A health-only server. `compose.ts` builds a logger and `createServer` with `routes: []` and `policies: {}`. There is no `limits.ts`. The kit adds `GET /health` (`shared/http/server.ts`). No Tap client is imported.
 
 ## May import
 
-The [`interface` row](../). No extra render row. `no-interface-to-interface` applies. `vendor-sdk-one-adapter` does not give this folder a Tap SDK; no Tap SDK is in `SDK_ADAPTERS`.
+The [`interface` row](../). No extra render row. `no-interface-to-interface` applies. No Tap SDK is in `SDK_ADAPTERS`.
 
 Declared in `interfaces/indexer/package.json`: `@unset/shared-config`, `@unset/shared-http`, `@unset/shared-log`, all workspace.
 

@@ -18,14 +18,10 @@ Each package on the tree has `"license": "MIT"` in its `package.json` and a `LIC
 | log | `shared/log` | [log](log/) |
 | ui | `shared/ui` | [ui](ui/) |
 | ui-build | `shared/ui-build` | [ui-build](ui-build/) |
-| i18n | `shared/i18n` | (planned). The folder is not on the tree. Decision 34 and ADR 0012 name it. The step book names P1.19 in the i18n slice. |
-| admin-envelope | `shared/admin-envelope` | (planned, Phase 3). The folder is not on the tree. The step book names it at P3.16. |
 
 ## Owns
 
-The nine packages above. `i18n` is the catalog slice. `admin-envelope` is the signed admin-action format the zero-dependency admin services may import.
-
-`.github/CODEOWNERS` names paths that do not exist yet on purpose (its header). `shared/admin-envelope/` is one of those. The cruiser already has row `shared-admin-envelope` and lists the path in `ZERO_DEP_ALLOWLIST` (`scripts/lint/.dependency-cruiser.cjs`).
+The packages in the table. `LEAF_SHARED` in `scripts/lint/.dependency-cruiser.cjs` also names `admin-envelope`. `ZERO_DEP_ALLOWLIST` in that file is `shared/admin-envelope/`.
 
 | Path | CODEOWNERS section |
 | --- | --- |
@@ -35,11 +31,10 @@ The nine packages above. `i18n` is the catalog slice. `admin-envelope` is the si
 | `shared/ui/islands/` | Security review |
 | `shared/ui/safe-href.ts` | Security review, and trusted base |
 | `shared/lexicons/` | Security review, and trusted base |
-| `shared/admin-envelope/` | Security review, and trusted base. The folder is not on the tree. |
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`. The config states that an edge no row lists fails as `not-in-allowed`. A generator for these tables is a later PR in #1161.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`. The config states that an edge no row lists fails as `not-in-allowed`.
 
 `shared-leaf`: `shared/` imports nothing under `apps/`, `interfaces/`, `domains/` or `infrastructure/`.
 
@@ -58,7 +53,7 @@ Who may reach `shared/`:
 | `domains/<name>/` | `shared/errors/`, `shared/lexicons/`, and `shared/config/` as types only |
 | `infrastructure/<name>/`, except `net-guard` | `shared/` |
 | `deployment/preflight/` | `shared/host-pin/index.ts` |
-| `interfaces/pds-admin/`, `interfaces/chat-admin/` | `shared/admin-envelope/` only. The folder is not on the tree. |
+| `interfaces/pds-admin/`, `interfaces/chat-admin/` | `shared/admin-envelope/` only |
 | `infrastructure/net-guard/` | Nothing under `shared/` |
 | Tooling (`scripts/`, `tests/`, `*.test.ts`, an app `vite.config.ts`) | The tooling row, which allows every target |
 
