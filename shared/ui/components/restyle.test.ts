@@ -18,6 +18,7 @@ describe("restyle 2026-10-21", () => {
     expect(rule(select, ".combobox")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
     expect(rule(select, ".list")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
     expect(rule(css("./Navigation/Navigation.module.css"), ".panel")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
+    expect(rule(css("./Header/Header.module.css"), ".panel")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
     expect(rule(css("./Modal/Modal.module.css"), ".root")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
   });
 
@@ -28,6 +29,8 @@ describe("restyle 2026-10-21", () => {
       ["./CodeBlock/CodeBlock.module.css", "surface-raised"],
       ["./NewPosts/NewPosts.module.css", "surface-raised"],
       ["./Footer/Footer.module.css", "surface-sunken"],
+      // A dialog moves to the top layer but still inherits from where it sits in the DOM, so it names its own ground.
+      ["./Modal/Modal.module.css", "ground"],
     ] as const)
       expect(rule(css(path), ".root"), path).toMatch(new RegExp(`--surface:\\s*var\\(--color-${surface}\\)`));
   });
