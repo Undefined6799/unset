@@ -179,7 +179,26 @@ function devEdgeProblem(compose: Compose): Outcome | null {
     return fail("the edge reads a secret other than the dev leaf's");
   }
   if (DEV_EDGE_SECRETS.some((name) => !edge.secrets.includes(name))) return fail("the edge does not read the dev leaf");
-  return null;
+  return leafReaders(compose).some((service) => service !== "edge")
+    ? fail("a service other than the edge reads the dev leaf")
+    : null;
+}
+
+/**
+ * Every service that can read the dev leaf's files: by a secret whose file resolves to one of them, under any name, or
+ * by a bind of that file or a folder above it. The leaf's key signs for both staging names (ADR 0032 Decision 3).
+ */
+function leafReaders(compose: Compose): string[] {
+  const leaf = DEV_EDGE_SECRETS.flatMap((name) => compose.secretFileByName.get(name) ?? []);
+  const isLeaf = (path: string) =>
+    leaf.some((file) => file === path || file.startsWith(`${path.replace(/\/+$/, "")}/`));
+  return compose.services
+    .filter(
+      (service) =>
+        service.secrets.some((name) => isLeaf(compose.secretFileByName.get(name) ?? "")) ||
+        service.mounts.some((mount) => mount.type === "bind" && mount.source !== null && isLeaf(mount.source)),
+    )
+    .map((service) => service.name);
 }
 
 /**

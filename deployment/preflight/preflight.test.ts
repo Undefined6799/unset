@@ -1760,6 +1760,27 @@ describe("preflight", () => {
         (t) => t.replace(leaf, "    secrets: [dev_tls_cert, dev_tls_key, db_password]\n"),
       ],
       ["FAIL C18 the edge does not read the dev leaf", (t) => t.replace(leaf, "    secrets: [dev_tls_cert]\n")],
+      // The leaf's files stay with the edge: by its name, under another name or bound from disk (P1.37 follow-up).
+      ...[
+        (t: string) => t.replace("    secrets: [db_password]\n", "    secrets: [db_password, dev_tls_key]\n"),
+        (t: string) =>
+          t
+            .replace("    secrets: [db_password]\n", "    secrets: [db_password, leaf_key]\n")
+            .replace(
+              "secrets:\n  db_password:",
+              "secrets:\n  leaf_key:\n    file: ../../unset-dev-secrets/dev_tls_key\n  db_password:",
+            ),
+        (t: string) =>
+          t.replace(
+            "    secrets: [db_password]\n",
+            "$&    volumes:\n      - ../../unset-dev-secrets/dev_tls_cert:/c:ro\n",
+          ),
+        (t: string) =>
+          t.replace("    secrets: [db_password]\n", "$&    volumes:\n      - ../../unset-dev-secrets:/s:ro\n"),
+      ].map((edit): [string, (text: string) => string] => [
+        "FAIL C18 a service other than the edge reads the dev leaf",
+        edit,
+      ]),
       ["FAIL C18 the TLS snippet is not mounted", (t) => t.replace(tlsMount, "")],
       ["FAIL C18 the TLS snippet is not mounted read-only", (t) => t.replace(tlsMount, tlsMount.replace(":ro", ""))],
       [
