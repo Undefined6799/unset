@@ -6,4 +6,28 @@
 #   - id: CVE-0000-00000
 #     statement: why the finding cannot reach us, and what removes it
 #     expired_at: yyyy-mm-dd
-vulnerabilities: []
+# P1.37x: Alex's typed line 2026-10-21T00:17:36Z waives exactly these three ids for Newt 1.18.1's binary, scoped by
+# path and PURL (Trivy v0.75.0 pkg/result/ignore.go MatchVulnerability), until 2026-10-28.
+vulnerabilities:
+  - id: CVE-2026-78667
+    paths:
+      - "usr/local/bin/newt"
+    purls:
+      - "pkg:golang/stdlib@v1.26.8"
+    statement: "fosrl/newt 1.18.1 sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f: denial of service only, in FileServer/ServeContent/ServeFile Range parsing, which Newt v1.18.1 never calls; accepted by Alex 2026-10-21T00:17:36Z until Newt 1.19.0 clears the 7-day release age"
+    expired_at: 2026-10-28
+  - id: CVE-2026-78669
+    paths:
+      - "usr/local/bin/newt"
+    purls:
+      - "pkg:golang/stdlib@v1.26.8"
+      - "pkg:golang/golang.org/x/net@v0.59.0"
+    statement: "fosrl/newt 1.18.1 sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f: denial of service only, an HTTP/2 SETTINGS flood from the peer; Newt's HTTP clients and servers face only Pangolin (visitor bytes pass as raw TCP, proxy/manager.go:678-685; DISABLE_CLIENTS, DISABLE_SSH, metrics and pprof off); accepted by Alex 2026-10-21T00:17:36Z until Newt 1.19.0 clears the 7-day release age"
+    expired_at: 2026-10-28
+  - id: CVE-2026-97031
+    paths:
+      - "usr/local/bin/newt"
+    purls:
+      - "pkg:golang/stdlib@v1.26.8"
+    statement: "fosrl/newt 1.18.1 sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f: denial of service only, a crypto/tls server-side ECH memory blowup; Newt's TLS servers are off under our config (authdaemon by DISABLE_SSH, netstack2 https by DISABLE_CLIENTS); accepted by Alex 2026-10-21T00:17:36Z until Newt 1.19.0 clears the 7-day release age"
+    expired_at: 2026-10-28
