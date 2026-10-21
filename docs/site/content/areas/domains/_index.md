@@ -39,7 +39,7 @@ Rules that refuse an edge the row would otherwise allow:
 | `domain-no-io-builtins` | No `node:fs`, `node:net`, `node:http`, `node:https`, `node:http2`, `node:dgram`, `node:dns`, `node:tls`, `node:child_process` or `node:worker_threads`. The prefix `node:` is optional in the rule. A test file under `domains/` is included. |
 | `infra-shared-via-index` | From outside, `shared/<name>/` is reached through its `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
-| `vendor-sdk-one-adapter` | `pg`, `undici`, `@atproto/oauth-client-node`, `@atproto/api`, `@aws-sdk/client-s3`, `age-encryption`, `@atproto/lex*` and `matrix-js-sdk` are imported only in their adapter folders. |
+| `vendor-sdk-one-adapter` | `pg`, `undici`, `@atproto/oauth-client-node`, `@atproto/api`, `age-encryption` and `@atproto/lex*` are imported only in their adapter folders. `SDK_ADAPTERS` also names the path `infrastructure/storage/` for `@aws-sdk/client-s3` and the path `apps/chat/matrix/` for `matrix-js-sdk`. |
 
 `node:crypto` is a built-in the `domain` row allows and `domain-no-io-builtins` does not name. The fixture is `scripts/lint/depcruise.test.ts`.
 

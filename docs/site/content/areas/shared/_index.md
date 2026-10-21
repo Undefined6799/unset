@@ -21,7 +21,7 @@ Each package on the tree has `"license": "MIT"` in its `package.json` and a `LIC
 
 ## Owns
 
-The packages in the table. `LEAF_SHARED` in `scripts/lint/.dependency-cruiser.cjs` also names `admin-envelope`. `ZERO_DEP_ALLOWLIST` in that file is `shared/admin-envelope/`.
+The packages in the table. `LEAF_SHARED` in `scripts/lint/.dependency-cruiser.cjs` also names the path `shared/admin-envelope/`. `ZERO_DEP_ALLOWLIST` in that file is that same path.
 
 | Path | CODEOWNERS section |
 | --- | --- |
@@ -38,7 +38,7 @@ Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbi
 
 `shared-leaf`: `shared/` imports nothing under `apps/`, `interfaces/`, `domains/` or `infrastructure/`.
 
-The general `shared` row applies where `LEAF_SHARED` does not. `LEAF_SHARED` is `ui`, `ui-build`, `islands`, `lexicons`, `admin-envelope` and `host-pin`. Those six have their own rows, on each package page.
+The general `shared` row applies where `LEAF_SHARED` does not. `LEAF_SHARED` names `ui`, `ui-build`, `islands`, `lexicons`, `host-pin` and the path `shared/admin-envelope/`. The five packages on the tree have their own rows, on each package page. `admin-envelope` is a path that file names.
 
 | From | May reach |
 | --- | --- |
@@ -49,11 +49,11 @@ Who may reach `shared/`:
 | From | May reach |
 | --- | --- |
 | `apps/<app>/` | `shared/` |
-| `interfaces/<name>/`, except `pds-admin` and `chat-admin` | `shared/` |
+| `interfaces/<name>/`, except the paths `ADMIN_SERVICES` names | `shared/` |
 | `domains/<name>/` | `shared/errors/`, `shared/lexicons/`, and `shared/config/` as types only |
 | `infrastructure/<name>/`, except `net-guard` | `shared/` |
 | `deployment/preflight/` | `shared/host-pin/index.ts` |
-| `interfaces/pds-admin/`, `interfaces/chat-admin/` | `shared/admin-envelope/` only |
+| `interfaces/pds-admin/`, `interfaces/chat-admin/` (paths `ADMIN_SERVICES` names) | `shared/admin-envelope/` (the path `ZERO_DEP_ALLOWLIST` names) |
 | `infrastructure/net-guard/` | Nothing under `shared/` |
 | Tooling (`scripts/`, `tests/`, `*.test.ts`, an app `vite.config.ts`) | The tooling row, which allows every target |
 

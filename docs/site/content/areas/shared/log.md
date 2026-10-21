@@ -9,7 +9,7 @@ Structured logging for every process. Package `@unset/shared-log`. One JSON line
 
 `shared/log/logger.ts`: `createLogger`. A line carries `ts`, `level`, `svc`, `commit` and `event`. `level` is `info`, `warn` or `error`.
 
-An event name not in the `EVENTS` array is written as `log.unknown_event` with `kind` set to `[event]`. The names live in that array. A later step adds the events it logs.
+An event name not in the `EVENTS` array is written as `log.unknown_event` with `kind` set to `[event]`. The names live in that array.
 
 `cleanFields` keeps a field only when its name is in `ALLOWED` and the value is a string, number, boolean or `null`. Anything else increments `dropped` and is left out. `version` must be a non-negative safe integer.
 

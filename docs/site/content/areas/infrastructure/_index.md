@@ -12,7 +12,7 @@ External systems behind small contracts. Decision 34 is recorded in [ADR 0001](h
 
 ## Owns
 
-One package per folder. A vendor SDK named in `SDK_ADAPTERS` (`scripts/lint/.dependency-cruiser.cjs`) is imported only in its adapter folder.
+One package per folder. `SDK_ADAPTERS` in `scripts/lint/.dependency-cruiser.cjs` names one adapter path per vendor SDK.
 
 The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit` and `session`. These pages follow the tree.
 
@@ -43,7 +43,7 @@ Rules that refuse an edge a row would otherwise allow:
 | `infra-shared-via-index` | Another module under `infrastructure/<name>/` or `shared/<name>/` is reached through its `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. `domains/` is not this rule. |
 | `infrastructure-not-entry` | No import from `interfaces/` or `apps/`. |
 | `net-guard-leaf` | A non-test file under `infrastructure/net-guard/` reaches only its own folder, `undici` and Node built-ins. A `*.test.ts` there may also import `fast-check` and `vitest`. |
-| `vendor-sdk-one-adapter` | `pg` only in `infrastructure/postgres/`. `undici` only in `infrastructure/net-guard/`. `@atproto/oauth-client-node` and `@atproto/api` only in `infrastructure/pds/`. `age-encryption` only in `infrastructure/seal/`. `@aws-sdk/client-s3` only in `infrastructure/storage/`. `@atproto/lex*` only in `shared/lexicons/`. `matrix-js-sdk` only in `apps/chat/matrix/`. |
+| `vendor-sdk-one-adapter` | `pg` only in `infrastructure/postgres/`. `undici` only in `infrastructure/net-guard/`. `@atproto/oauth-client-node` and `@atproto/api` only in `infrastructure/pds/`. `age-encryption` only in `infrastructure/seal/`. `@atproto/lex*` only in `shared/lexicons/`. The list also names the path `infrastructure/storage/` for `@aws-sdk/client-s3` and the path `apps/chat/matrix/` for `matrix-js-sdk`. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported only by tests and by `interfaces/<name>/compose.ts`, and only with a dynamic `import()` after the `UNSET_ENV` check. |
 
