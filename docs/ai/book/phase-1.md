@@ -15485,11 +15485,11 @@ P1.33a, which runs before P1.34 (book edit 2026-10-13-verify-814-fixes, Amendmen
 
 ### P1.33a — Retire the 0x40 prototype before going public (Alex; formerly L.01 part A)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.34, and so before P1.33p's public opening (book
-edit 2026-10-12-p133p-public-opening; P1.34 depended on it for the staging PDS too, because under `--env dev` C21
-applied whatever the hostname (architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit
-2026-10-13-verify-814-fixes, S2 and Amendment 1), until Alex waived C21 under dev on 2026-10-21 (#1174); P1.30 C21
-still checks it under prod and local on `0x40.space`) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03:
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.33p's public opening, which depends on it and on
+P1.34 (book edit 2026-10-12-p133p-public-opening). It ran before P1.34 too, because under `--env dev` C21 applied
+whatever the hostname (architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit 2026-10-13-verify-814-fixes,
+S2 and Amendment 1), until Alex waived C21 under dev on 2026-10-21 (#1174); P1.34 no longer depends on it, and P1.30
+C21 still checks it under prod and local on `0x40.space` · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03:
 retire the old accounts before the
 development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19
 (settled by decision 24)
