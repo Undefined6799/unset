@@ -36,9 +36,9 @@ actually built before any gate step runs.
 runs on `0x40.space`, the hostname the new development PDS takes at the public opening (P1.33p); P1.34 moves the dev PDS
 to the home server on non-public tailnet names only. Once P1.33p replaces it, the old accounts can no longer be
 deactivated or deleted through their PDS. So the retirement (formerly L.01 part A) is now **P1.33a** in `phase-1.md`.
-Since 2026-10-13 it runs before P1.34's tailnet move and the public opening (P1.33p; architecture's Amendment 7 of
-2026-10-13-local-plc, Q1; book edits 2026-10-12-p133p-public-opening and 2026-10-13-verify-814-fixes, S2). Only part B
-stays here as L.01.
+Since 2026-10-13 it runs before the public opening (P1.33p), and before P1.34's tailnet move too until Alex waived C21
+under dev on 2026-10-21 (#1174; architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edits
+2026-10-12-p133p-public-opening and 2026-10-13-verify-814-fixes, S2). Only part B stays here as L.01.
 
 ```mermaid
 flowchart TD
@@ -127,8 +127,8 @@ Where: `deployment/bin/retirement-check` (built by P1.33a), the runbook `deploym
 `docs/human/retirement/0x40-record.md`, `docs/human/decisions/` (decision 24)
 Size: ~30 source lines (the placeholder call), ~40 runbook lines, ~60 test lines
 
-**Part A moved (global resolution 8).** Retiring the prototype is **P1.33a** in `phase-1.md`, before P1.34: the
-notice and export window, deactivation and deletion through the old PDS,
+**Part A moved (global resolution 8).** Retiring the prototype is **P1.33a** in `phase-1.md`, before P1.33p's public
+opening: the notice and export window, deactivation and deletion through the old PDS,
 the tombstones, the shutdown, `retire-0x40-secrets.md`, the dated record and the `retirement-check` script. Its
 "old PDS already replaced" and "rotation key lost" branches live there too. This step keeps only what must happen at the
 gate.

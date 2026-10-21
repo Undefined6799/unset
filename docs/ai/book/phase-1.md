@@ -13917,7 +13917,7 @@ There is no dev-seed. The createAccount / invite-code / .seeded.json algorithm t
 
 **Edge cases and failures:**
 - Secrets file mode not 0600 → P1.30 C9 refuses.
-- The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.34).
+- The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.33p takes the hostname).
 - Postgres not healthy within 60 s → `migrate` never starts; compose reports unhealthy.
 - A container added to the `edge` network without a review → `compose_dev_networks_match_table` fails.
 - `tap` profile not enabled → nothing depends on it in Phase 1.
@@ -15479,7 +15479,8 @@ every public gate and its evidence lives here.
   key); `probe_gap_not_counted_as_up`; the outside probe green.
 
 **Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space`. This step runs after
-P1.33a, which runs before P1.34 (book edit 2026-10-13-verify-814-fixes, Amendment 1).
+P1.33a and P1.34 (P1.34 no longer waits for P1.33a since the C21 waiver under dev, #1174; book edit
+2026-10-13-verify-814-fixes, Amendment 1).
 
 ---
 
