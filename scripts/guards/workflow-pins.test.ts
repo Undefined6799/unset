@@ -22,7 +22,7 @@ const job = (body: string): string =>
 
 describe("workflows", () => {
   test.each(workflowFiles)("workflow_rules_hold %s", (file) => {
-    expect(problems(readFileSync(join(WORKFLOWS, file), "utf8"))).toEqual([]);
+    expect(problems(readFileSync(join(WORKFLOWS, file), "utf8"), file)).toEqual([]);
   });
 
   test("all_actions_sha_pinned", () => {
@@ -54,6 +54,7 @@ describe("workflows", () => {
     const flowOidc = "    permissions: { contents: read, id-token: write }\n";
     expect(problems(withJob(`  planted:\n    runs-on: ubuntu-24.04\n${flowOidc}`))).toEqual([
       expect.stringMatching(/^job planted: secret or OIDC/),
+      "job planted: id-token: write outside a signing job",
     ]);
   });
 
@@ -64,11 +65,13 @@ describe("workflows", () => {
     const env = "    environment: production\n";
     const gate = `    ${GATE_IF}\n`;
     const planted = (body: string) => `  planted:\n    runs-on: ubuntu-24.04\n${body}`;
+    // The gate alone; OIDC outside the two signing jobs is its own problem, tested under "signing jobs" below.
+    const gateProblems = (text: string) => problems(text).filter((p) => !p.endsWith("outside a signing job"));
     for (const body of [oidc, secret]) {
-      expect(problems(withJob(planted(body)))).toHaveLength(1);
-      expect(problems(withJob(planted(env + body)))).toHaveLength(1);
-      expect(problems(withJob(planted(gate + body)))).toHaveLength(1);
-      expect(problems(withJob(planted(env + gate + body)))).toEqual([]);
+      expect(gateProblems(withJob(planted(body)))).toHaveLength(1);
+      expect(gateProblems(withJob(planted(env + body)))).toHaveLength(1);
+      expect(gateProblems(withJob(planted(gate + body)))).toHaveLength(1);
+      expect(gateProblems(withJob(planted(env + gate + body)))).toEqual([]);
     }
     // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
     expect(problems(withJob(planted("    env:\n      T: ${{ secrets.GITHUB_TOKEN }}\n")))).toEqual([]);
@@ -132,6 +135,113 @@ describe("workflows", () => {
     expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape", "e2e"]);
     const ids = workflowFiles.flatMap((f) => [...jobs(code(readFileSync(join(WORKFLOWS, f), "utf8"))).keys()]);
     for (const name of required) expect(ids).toContain(name);
+  });
+});
+
+// P1.27s (ADR 0033; Alex's typed line 2026-10-20 21:57:26Z): packages: write and id-token: write belong to the two
+// signing jobs alone, each gated and in the signing environment; publish-images.yml never runs on a pull request and
+// never reads a cache.
+describe("signing jobs (P1.27s)", () => {
+  const publish = readFileSync(join(WORKFLOWS, "publish-images.yml"), "utf8");
+  const mirror = readFileSync(join(WORKFLOWS, "mirror.yml"), "utf8");
+  const PACKAGES = "      packages: write\n";
+
+  test("packages_write_gated_publish_passes", () => {
+    expect(problems(publish, "publish-images.yml")).toEqual([]);
+    expect(problems(mirror, "mirror.yml")).toEqual([]);
+  });
+
+  test("packages_write_ungated_fails", () => {
+    const ungatedIf = publish.replace(`    ${GATE_IF}\n`, "    if: github.ref == 'refs/heads/main'\n");
+    expect(problems(ungatedIf, "publish-images.yml")).toEqual([
+      expect.stringMatching(/^job publish: secret or OIDC outside an environment-bound main-only job$/),
+    ]);
+    const noEnvironment = publish.replace("    environment: signing\n", "");
+    expect(problems(noEnvironment, "publish-images.yml")).toEqual([
+      "job publish: secret or OIDC outside an environment-bound main-only job",
+      "job publish: a signing job not in the signing environment",
+    ]);
+    const otherEnvironment = publish.replace("    environment: signing\n", "    environment: production\n");
+    expect(problems(otherEnvironment, "publish-images.yml")).toEqual([
+      "job publish: a signing job not in the signing environment",
+    ]);
+    // Gated without OIDC, packages: write still counts as privileged.
+    const packagesOnly = publish.replace("    environment: signing\n", "").replace("      id-token: write\n", "");
+    expect(problems(packagesOnly, "publish-images.yml")).toContain(
+      "job publish: secret or OIDC outside an environment-bound main-only job",
+    );
+  });
+
+  test("packages_write_other_job_fails", () => {
+    const scan = mirror.replace(
+      "    permissions:\n      contents: read\n    env:\n      MIRROR_LIST",
+      `    permissions:\n      contents: read\n${PACKAGES}    env:\n      MIRROR_LIST`,
+    );
+    expect(problems(scan, "mirror.yml")).toContain("job scan: packages: write outside a signing job");
+    const renamed = publish.replace("  publish:\n", "  release:\n");
+    expect(problems(renamed, "publish-images.yml")).toEqual([
+      "job release: id-token: write outside a signing job",
+      "job release: packages: write outside a signing job",
+      "publish-images.yml has a job other than publish",
+    ]);
+    const flow = publish
+      .replace(
+        `      contents: read\n${PACKAGES}      id-token: write\n`,
+        "      contents: read\n      id-token: write\n",
+      )
+      .replace("    permissions:\n", "    permissions: { packages: write }\n    perms:\n");
+    expect(problems(flow, "publish-images.yml")).toContain("job publish: packages: write not at job level");
+    const topLevel = publish.replace("permissions: {}\n", `permissions: {}\nx-permissions:\n${PACKAGES}`);
+    expect(problems(topLevel, "publish-images.yml")).toContain("a workflow-level id-token or packages write");
+  });
+
+  test("packages_write_other_file_fails", () => {
+    for (const file of ["images.yml", "ci.yml", "publish-images.yaml", ""]) {
+      expect(problems(publish, file), file).toEqual([
+        "job publish: id-token: write outside a signing job",
+        "job publish: packages: write outside a signing job",
+      ]);
+    }
+  });
+
+  test("id_token_write_only_on_signing_jobs", () => {
+    // Gated and in the signing environment, but not one of the two signing jobs.
+    const planted = `  planted:\n    ${GATE_IF}\n    environment: signing\n    runs-on: ubuntu-24.04\n    permissions:\n      contents: read\n      id-token: write\n`;
+    expect(problems(withJob(planted), "ci.yml")).toEqual(["job planted: id-token: write outside a signing job"]);
+    const images = readFileSync(join(WORKFLOWS, "images.yml"), "utf8");
+    expect(problems(images, "images.yml")).toEqual([]);
+    expect(code(images).join("\n")).not.toMatch(/id-token|packages: write/);
+    // Exactly the two signing jobs hold it today.
+    const holders = readdirSync(WORKFLOWS).flatMap((file) =>
+      [...jobs(code(readFileSync(join(WORKFLOWS, file), "utf8")))]
+        .filter(([, body]) => body.some((l) => /id-token:\s*write/.test(l)))
+        .map(([id]) => `${file} ${id}`),
+    );
+    expect(holders.sort()).toEqual(["mirror.yml copy-and-sign", "publish-images.yml publish"]);
+  });
+
+  test("publish_images_pull_request_trigger_fails", () => {
+    for (const trigger of ["  pull_request:\n", "  pull_request:\n    types: [opened]\n"]) {
+      const text = publish.replace("  workflow_dispatch:\n", `  workflow_dispatch:\n${trigger}`);
+      expect(problems(text, "publish-images.yml")).toEqual(["publish-images.yml has a pull_request trigger"]);
+    }
+    expect(problems(publish.replace("on:\n", "on: [pull_request]\nx:\n"), "publish-images.yml")).toContain(
+      "publish-images.yml has a pull_request trigger",
+    );
+  });
+
+  test("publish_job_cache_fails", () => {
+    const setupNode = "          node-version-file: .nvmrc\n";
+    for (const cache of [
+      `${setupNode}          cache: npm\n`,
+      `${setupNode}      - uses: actions/cache@${"a".repeat(40)}\n`,
+    ]) {
+      const found = problems(publish.replace(setupNode, cache), "publish-images.yml");
+      expect(found).toContain("job publish: a cache in a signing job");
+      expect(found).toContain("publish-images.yml uses a cache");
+    }
+    const from = publish.replace("--metadata-file", "--cache-from type=gha --metadata-file");
+    expect(problems(from, "publish-images.yml")).toContain("job publish: a cache in a signing job");
   });
 });
 

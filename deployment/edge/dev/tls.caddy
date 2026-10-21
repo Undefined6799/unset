@@ -1,0 +1,10 @@
+# The dev stack only (P1.36b; ADR 0032 Decision 1): replaces snippets/tls.caddy through one read-only mount at
+# /etc/caddy/snippets/tls.caddy (P1.36c), so both dev sites' `import tls` serve one self-signed leaf for both staging
+# names from files, the local stack's shape (local/tls.caddy). No issuer, no ACME, no internal CA: nobody is asked to
+# trust it, and Pangolin does not verify it (ADR 0030:71-74). The host makes the pair with the runbook's OpenSSL
+# command (docs/human/runbooks/dev-stack-secrets.md); both are Compose secrets mounted into the edge only, the key a C9
+# file secret. Never copied into the image and never mounted by the local or prod stack. Caddy v2.11.7 tls directive
+# (caddyserver/website 1957519 src/docs/markdown/caddyfile/directives/tls.md: `tls <cert_file> <key_file>`, both PEM).
+(tls) {
+	tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key
+}

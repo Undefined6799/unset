@@ -13,3 +13,9 @@
 (strict-csp) {
 	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 }
+
+# Staging is never indexed (P1.36b; ADR 0031 Decision 1): every response of both dev sites says so. No robots.txt
+# Disallow beside it, which would stop a crawler from ever fetching the header.
+(noindex) {
+	header X-Robots-Tag "noindex, nofollow"
+}
