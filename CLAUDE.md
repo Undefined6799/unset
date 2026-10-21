@@ -35,7 +35,7 @@ guideline wins.
 | Entry points, auth, CSRF gate, limits | `interfaces/{http,admin,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
 | Product rules | `domains/{identity,content,social,feed,messaging,moderation,privacy}` |
 | External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit,session}` |
-| Generic, no product meaning (MIT) | `shared/{lexicons,ui,config,errors,i18n}` |
+| Generic, no product meaning (MIT) | `shared/{config,errors,host-pin,http,islands,lexicons,log,ui,ui-build}`. Planned `i18n` and `admin-envelope`: [`docs/ai/PLAN.md`](docs/ai/PLAN.md) |
 | Compose, edge, backup, preflight | `deployment/` |
 | Integration and e2e tests | `tests/`; unit tests sit beside their file |
 
