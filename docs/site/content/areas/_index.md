@@ -10,6 +10,6 @@ Where each part of the code lives, and what it may import. Decision 34 is record
 | apps | `apps/` | [Apps](apps/) |
 | interfaces | `interfaces/` | [Interfaces](interfaces/) |
 | domains | `domains/` | [Domains](domains/) |
-| infrastructure | `infrastructure/` | later PR |
+| infrastructure | `infrastructure/` | [Infrastructure](infrastructure/) |
 | shared | `shared/` | [Shared](shared/) |
-| deployment | `deployment/` | later PR |
+| deployment | `deployment/` | [Deployment](deployment/) |
