@@ -3,7 +3,7 @@
 // directions, so no service joins a network, and no network opens up, without a reviewed change to the table. The
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
-import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
+import { DEV_ONLY_NETWORKS, isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
 import { runsBuilt } from "./build.ts";
 import { readBases, readLock } from "./lock.ts";
 import { type Check, type Env, fail, type Inputs, missing, pass } from "./types.ts";
@@ -153,11 +153,13 @@ function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string
 }
 
 /**
- * Under local, the table plus the local-only networks, matched as one. The table never lists a local-only network,
- * listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no local-only rows; verify-903 S3).
+ * Under local, the table without the dev-only networks and plus the local-only ones, matched as one. The table never
+ * lists a local-only network, listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no
+ * local-only rows; verify-903 S3).
  */
 function withLocalOnly(table: NetworkTable, env: Env): NetworkTable | string {
   const clash = [...table.keys()].find(isLocalOnlyNetwork);
   if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
-  return env === "local" ? new Map([...table, ...LOCAL_ONLY_NETWORKS]) : table;
+  if (env !== "local") return table;
+  return new Map([...[...table].filter(([name]) => !DEV_ONLY_NETWORKS.has(name)), ...LOCAL_ONLY_NETWORKS]);
 }

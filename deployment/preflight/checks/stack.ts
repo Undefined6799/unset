@@ -18,11 +18,15 @@ function couldBeWebPort(published: string | null): boolean {
 }
 const isWebPort = (port: Port): boolean => port.published === "80" || port.published === "443";
 
-/** C10: the edge alone publishes 80 and 443; every other published port binds 127.0.0.1. */
+/**
+ * C10: the edge alone publishes 80 and 443; every other published port binds 127.0.0.1. Under dev nothing publishes at
+ * all: Newt reaches the edge on newt_edge (ADR 0030 Decision 2, ADR 0031 Decision 2, P1.37v).
+ */
 export const c10: Check = {
   id: "C10",
-  run: ({ compose }) => {
+  run: ({ compose, env }) => {
     for (const { name, ports } of compose.services) {
+      if (env === "dev" && ports.length > 0) return fail(`${name} publishes a port under dev`);
       for (const port of ports) {
         if (name === "edge" && isWebPort(port)) continue;
         if (name !== "edge" && couldBeWebPort(port.published)) return fail(`${name} may publish a web port`);

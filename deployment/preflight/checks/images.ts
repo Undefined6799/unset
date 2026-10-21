@@ -47,10 +47,10 @@ export const c2: Check = {
 
 /**
  * deployment/images/vendor.ts's VENDOR_IMAGES, which the preflight may not import (dependency-cruiser row
- * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z). compose.dev.test.ts
- * preflight_vendor_images_match keeps the two equal.
+ * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z) and Newt (ADR 0030 Decision 2,
+ * P1.37v). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
  */
-export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds"]);
+export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds", "docker.io/fosrl/newt"]);
 
 /** The node runtime base, which the local token reader runs unbuilt (P1.29h). */
 const NODE_BASE = "docker.io/library/node";

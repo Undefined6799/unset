@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeZones } from "./preflight/checks/edge.ts";
@@ -29,6 +30,10 @@ const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf
 const FILE = "compose.dev.yaml";
 const dev = (): Compose => parseCompose(read(FILE), FILE);
 /** The local stack's file, which alone carries the token reader (P1.34d item 11). */
+/** newt_edge's fixed subnet and the two addresses on it (ADR 0030 Decision 2, P1.37v); .1 is the bridge's gateway. */
+const NEWT_SUBNET = "10.250.37.0/29";
+const NEWT_ADDRESS = "10.250.37.2";
+const EDGE_ADDRESS = "10.250.37.3";
 const LOCAL = "compose.local.yaml";
 const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
 const service = (compose: Compose, name: string): Service => {
@@ -356,16 +361,10 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(web.ports).toEqual([]);
   });
 
-  test("compose_dev_only_edge_publishes", () => {
-    // Only the edge publishes, 80 and 443 on loopback (P1.29a); the homelab's own address is P1.34's.
-    for (const s of dev().services) {
-      if (s.name === "edge") continue;
-      expect(s.ports, s.name).toEqual([]);
-    }
-    expect(service(dev(), "edge").ports).toEqual([
-      { hostIp: "127.0.0.1", published: "80", target: "80" },
-      { hostIp: "127.0.0.1", published: "443", target: "443" },
-    ]);
+  test("compose_dev_publishes_nothing", () => {
+    // ADR 0030 Decision 2 and ADR 0031 Decision 2 (P1.37v): under dev no service publishes, the edge included; Newt
+    // reaches the edge on newt_edge. compose.local.yaml keeps the edge's loopback publish (compose.local.test.ts).
+    for (const s of dev().services) expect(s.ports, s.name).toEqual([]);
   });
 
   test("compose_dev_secrets_have_one_reader_uid", () => {
@@ -644,19 +643,29 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const [name, value] of on) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(false);
   });
 
-  test("edge_answers_for_the_app_and_pds_hosts", () => {
-    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1: the PDS reaches both hosts (it fetches
-    // the app's client metadata) through the edge's aliases on the network they share, never extra_hosts or a fixed
-    // address; web reaches them the same way on the app network, which the PDS is never on (architecture 2026-10-15
-    // 02:05Z, option C). compose-parse refuses aliases anywhere else or with other values
-    // (aliases_only_on_the_edges_edge_and_app_networks_with_its_two_hosts).
+  test("no_service_answers_for_the_app_or_pds_host", () => {
+    // ADR 0031 Decision 3 (P1.37v): under dev the edge carries no aliases, so the PDS and web resolve both staging names
+    // through public DNS to Pangolin; and web has no internal host for net-guard, so every host it fetches must resolve
+    // to public unicast addresses. The PDS is still never on the app network (architecture 2026-10-15 02:05Z, option C).
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
-    const hosts = { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] };
-    expect(raw.services.edge?.networks).toEqual({ edge: hosts, app: hosts });
-    expect(service(dev(), "pds").networks).toContain("edge");
-    expect(service(dev(), "pds").networks).not.toContain("app");
+    expect(raw.services.edge?.networks).toEqual({ edge: null, app: null, newt_edge: { ipv4_address: EDGE_ADDRESS } });
+    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
-    expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
+    expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
+  });
+
+  test("no_dev_service_trusts_a_dev_root", () => {
+    // ADR 0031 Decision 3: no NODE_EXTRA_CA_CERTS anywhere on staging, so no staging service trusts a root of ours.
+    for (const s of dev().services) {
+      expect(
+        s.environment.map(([key]) => key),
+        s.name,
+      ).not.toContain("NODE_EXTRA_CA_CERTS");
+      expect(
+        s.mounts.map((m) => m.target),
+        s.name,
+      ).not.toContain("/etc/unset-dev-trust");
+    }
   });
 
   test("edge_serves_the_dev_sites_and_leaf", () => {
@@ -679,11 +688,11 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
 
   test("c18_reads_this_files_dev_edge", () => {
     // C18's own reading of this file under dev, as the deploy runs it: the lock's edge image in place of the build, the
-    // binds resolved from deployment/, and the edge's env with the ruled staging names. The ports go in P1.37v, so
-    // until then C18 refuses exactly them, and passes without them.
+    // binds resolved from deployment/, and the edge's env with the ruled staging names. It passes since P1.37v dropped
+    // the ports, and a loopback publish put back fails.
     const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
     const compose = dev();
-    const deployed = (ports: boolean): Compose => ({
+    const deployed = (ports: Compose["services"][number]["ports"] = []): Compose => ({
       ...compose,
       services: compose.services.map((s) =>
         s.name !== "edge"
@@ -691,7 +700,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
           : {
               ...s,
               image: ref,
-              ports: ports ? s.ports : [],
+              ports: [...s.ports, ...ports],
               mounts: s.mounts.map((m) =>
                 m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
               ),
@@ -706,8 +715,11 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       ["APP_UPSTREAM", "web:8080"],
     ]);
     const edgeDir = join(DEPLOYMENT, "edge");
-    expect(edgeZones(deployed(true), edgeDir, env, ref, "dev")).toEqual(fail("the edge publishes a port under dev"));
-    expect(edgeZones(deployed(false), edgeDir, env, ref, "dev")).toEqual(pass());
+    expect(edgeZones(deployed(), edgeDir, env, ref, "dev")).toEqual(pass());
+    const loopback = [{ hostIp: "127.0.0.1", published: "443", target: "443" }];
+    expect(edgeZones(deployed(loopback), edgeDir, env, ref, "dev")).toEqual(
+      fail("the edge publishes a port under dev"),
+    );
   });
 
   test("dev_leaf_and_key_reach_only_the_edge", () => {
@@ -814,6 +826,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     [ENV, made("dir", 0o700, DEPLOY_UID, 2)],
     [ENV_FILE, made("file", 0o600, DEPLOY_UID, 3)],
     [join(ENV, "pds.env"), made("file", 0o600, DEPLOY_UID, 4)],
+    [join(ENV, "newt.env"), made("file", 0o600, DEPLOY_UID, 5)],
     ...Object.entries(SECRET_OWNERS).map(([name, uid], at): [string, Stats] => [
       join(SECRETS, name),
       made("file", 0o400, uid, 10 + at),
@@ -856,7 +869,9 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
           : path === join(ENV, "pds.env")
             ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
-            : null,
+            : path === join(ENV, "newt.env")
+              ? { text: read("env/newt.example.env"), id: `${DEV}:5` }
+              : null,
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,
@@ -889,7 +904,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "2 files, 11 mounted secrets" },
+      { pass: true, reason: "3 files, 11 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
@@ -912,6 +927,82 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect((await outcomes(context))[1]).toEqual({
       pass: false,
       reason: "postgres builds from a Dockerfile the images workflow does not scan",
+    });
+  });
+});
+
+describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", () => {
+  type RawNetworks = Record<string, { ipv4_address?: string } | null>;
+  const raw = () => parseStrictData(read(FILE), FILE) as { services: Record<string, { networks?: RawNetworks }> };
+
+  test("newt_edge_is_internal_with_only_newt_and_the_edge", () => {
+    const network = dev().networks.find((n) => n.name === "newt_edge");
+    expect(network).toEqual({ name: "newt_edge", internal: true, subnet: NEWT_SUBNET });
+    const members = dev().services.filter((s) => s.networks.includes("newt_edge"));
+    expect(members.map((s) => s.name).sort()).toEqual(["edge", "newt"]);
+    expect(service(dev(), "newt").networks).toEqual(["newt_egress", "newt_edge"]);
+  });
+
+  test("compose_addresses_are_the_edge_configs", () => {
+    // The cross reds (P1.37v): the address the edge's dev sites bind and its one trusted proxy, both in
+    // deployment/edge (P1.36b, P1.36j), are exactly the addresses this file gives the edge and Newt on newt_edge; the
+    // trusted listener is the dev sites' https listener; every zone keys on the client address behind Newt.
+    expect([DEV_EDGE_ADDRESS, DEV_PROXY_ADDRESS]).toEqual([EDGE_ADDRESS, NEWT_ADDRESS]);
+    expect(DEV_LISTENER).toBe(`${EDGE_ADDRESS}:443`);
+    const caddyfile = read("edge/Caddyfile");
+    expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);
+    for (const site of ["app.caddy", "pds.caddy"]) {
+      expect(read(`edge/dev/${site}`).match(/^\tbind .*$/gm), site).toEqual([`\tbind ${EDGE_ADDRESS}`]);
+    }
+    const limits = read("edge/snippets/ratelimit.caddy");
+    expect(limits.match(/^\t+key .*$/gm)?.every((line) => line.trim() === "key {client_ip}")).toBe(true);
+  });
+
+  test("newt_and_the_edge_have_fixed_addresses_inside_the_subnet", () => {
+    // The edge binds its own address (P1.36b) and trusts Newt's alone as a proxy (P1.36j), so both are fixed, distinct,
+    // inside the subnet, and neither the network, gateway nor broadcast address.
+    const networks = raw().services;
+    expect(networks.newt?.networks?.newt_edge).toEqual({ ipv4_address: NEWT_ADDRESS });
+    expect(networks.edge?.networks?.newt_edge).toEqual({ ipv4_address: EDGE_ADDRESS });
+    const [base = "", bits = ""] = NEWT_SUBNET.split("/");
+    const toInt = (ip: string) => ip.split(".").reduce((n, octet) => n * 256 + Number(octet), 0);
+    const first = toInt(base);
+    const last = first + 2 ** (32 - Number(bits)) - 1;
+    for (const address of [NEWT_ADDRESS, EDGE_ADDRESS]) {
+      expect(toInt(address), address).toBeGreaterThan(first + 1);
+      expect(toInt(address), address).toBeLessThan(last);
+    }
+    expect(NEWT_ADDRESS).not.toBe(EDGE_ADDRESS);
+    // No other service names a fixed address on any network.
+    for (const [name, spec] of Object.entries(networks)) {
+      if (name === "newt" || name === "edge") continue;
+      const attachments = spec.networks !== undefined && !Array.isArray(spec.networks) ? spec.networks : {};
+      for (const attachment of Object.values(attachments)) expect(attachment?.ipv4_address, name).toBeUndefined();
+    }
+  });
+
+  test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
+    const newt = service(dev(), "newt");
+    expect(newt.image).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
+    expect(newt.build).toBeNull();
+    expect(newt.hardening).toMatchObject({
+      readOnly: true,
+      capDrop: ["ALL"],
+      capAdd: [],
+      securityOpt: ["no-new-privileges:true"],
+      user: "65532:65532",
+    });
+    expect([newt.ports, newt.mounts, newt.secrets]).toEqual([[], [], []]);
+    expect(newt.envFiles).toEqual(["../../unset-dev-env/newt.env"]);
+    // Every setting a literal: no SSH, no client access, no Docker socket, no metrics or pprof listener, and its saved
+    // credentials on its tmpfs (newt 1.18.1 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
+    expect(Object.fromEntries(newt.environment)).toEqual({
+      CONFIG_FILE: { literal: "/tmp/newt.json" },
+      DISABLE_SSH: { literal: "true" },
+      DISABLE_CLIENTS: { literal: "true" },
+      NEWT_METRICS_PROMETHEUS_ENABLED: { literal: "false" },
+      NEWT_PPROF_ENABLED: { literal: "false" },
+      LOG_LEVEL: { literal: "WARN" },
     });
   });
 });

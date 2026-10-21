@@ -148,6 +148,78 @@ The `-enddate` line prints the expiry while the deploy user can still read the c
 65532 can); every line runs in a plain `sh`. Put the date 30 days before the expiry in the staging calendar and remake
 the pair the same way then (C18 reads only the two files' places, not their dates). Only the edge mounts them (P1.36c).
 
+## Newt's env file (P1.37v, dev only)
+
+Under dev the edge publishes no port: Pangolin reaches it through Newt, a service in `compose.dev.yaml` (ADR 0030,
+Decision 2). Newt's credentials go in `unset-dev-env/newt.env`, yours, mode `0600`, beside `pds.env`. Start it from
+`deployment/env/newt.example.env`. It holds exactly three names, which the preflight's C31 checks by name only; every
+other Newt setting is written out in `compose.dev.yaml`. The local stack has no Newt and reads no `newt.env`.
+
+| Name | Where it comes from |
+| --- | --- |
+| `PANGOLIN_ENDPOINT` | Pangolin's own `https` address |
+| `NEWT_ID` | shown by Pangolin when you create the staging site |
+| `NEWT_SECRET` | shown once, with the id; if lost, regenerate it in Pangolin and replace it here |
+
+Each Pangolin target for the two staging names is `https` to the edge's fixed address, `10.250.37.3`, port 443, with
+certificate checks off for that target, since the leaf above is self-signed (ADR 0032, Decisions 4 and 5). Set each
+resource's **TLS Server Name** to its own staging name, `staging.unset.sh` and `staging.unset.ac`: Pangolin 1.24.0 sends
+no SNI to an IP target otherwise, and the edge refuses a handshake without one (ADR 0032 Decision 5). Newt saves its
+credentials back to `/tmp` inside its container, which holds nothing after a restart; this file stays the only copy on
+the host.
+
+**The staging host itself (ADR 0030 Decision 2).** Containers on `newt_edge` can reach host services listening on that
+network's bridge address, `10.250.37.1`, including any bound to `0.0.0.0` (docker/docs d8edfe0
+content/manuals/engine/network/port-publishing.md:186-192), until isolated gateway mode removes that address; Newt can
+also reach the host and its LAN through `newt_egress`. So three conditions are yours and must hold for as long as
+staging runs:
+
+1. The staging host is single-purpose: it runs this stack and nothing else.
+2. No container uses host networking unless it is part of this stack.
+3. Nobody else's workloads run there.
+
+**After each deploy**, run the check below on the host, which reaches `newt_edge` through that bridge address; it uses
+the host's own `sh`, curl, OpenSSL and GNU `date`, and needs no secret. It prints `PASS the staging edge` and ends with
+status 0, or prints one `FAIL` line per problem and ends with status 1; a failure stops the deploy. For each staging
+name it takes the certificate the edge serves for that name as SNI and checks that it is the one self-signed leaf
+(`-check_ss_sig`, since OpenSSL 3.0.13 accepts a broken self-signature without it), with no CA flag, a P-256 key,
+exactly the two staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
+only expiry guard, ADR 0032 Decision 1), and that `:80` answers only an empty `308` to its https URL (caddy v2.11.7
+modules/caddyhttp/autohttps.go:229-268). Then it asks the PDS's health route at the edge, and makes one request through
+Pangolin to each name. Every network call gives up after 10 seconds (`timeout 10`, `--max-time 10`), so a stalled edge or
+Pangolin fails the check instead of hanging the deploy.
+
+```sh
+edge=10.250.37.3 failed=0 tmp=$(mktemp -d)
+fail() { echo "FAIL $*"; failed=1; }
+for name in staging.unset.sh staging.unset.ac; do
+  timeout 10 openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
+    || { fail "$name: no certificate over TLS"; continue; }
+  leaf="$tmp/$name.pem"
+  openssl verify -check_ss_sig -CAfile "$leaf" "$leaf" >/dev/null 2>&1 || fail "$name: not a validly self-signed leaf"
+  openssl x509 -in "$leaf" -noout -ext basicConstraints | grep -q 'CA:FALSE' || fail "$name: not marked CA:FALSE"
+  openssl x509 -in "$leaf" -noout -text | grep -q 'ASN1 OID: prime256v1' || fail "$name: key is not P-256"
+  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac" ] \
+    || fail "$name: names are not exactly the two staging names"
+  start=$(date -d "$(openssl x509 -in "$leaf" -noout -startdate | cut -d= -f2)" +%s)
+  end=$(date -d "$(openssl x509 -in "$leaf" -noout -enddate | cut -d= -f2)" +%s)
+  [ $((end - start)) -le $((825 * 86400)) ] || fail "$name: valid for more than 825 days"
+  openssl x509 -in "$leaf" -noout -checkend 2592000 >/dev/null || fail "$name: expires within 30 days; remake the leaf"
+  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
+    = "308 https://$name/ 0" ] || fail "$name: :80 is not only an empty 308 to https"
+done
+cmp -s "$tmp/staging.unset.sh.pem" "$tmp/staging.unset.ac.pem" || fail "the two names are not served one leaf"
+[ "$(curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
+  || fail "staging.unset.ac: the PDS health route does not answer 200 at the edge"
+for url in https://staging.unset.sh/ https://staging.unset.ac/xrpc/_health; do
+  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$url")" = 200 ] || fail "$url: no 200 through Pangolin"
+done
+rm -r "$tmp"
+[ "$failed" = 0 ] && echo "PASS the staging edge"
+```
+
+If the only failure is the expiry, remake the leaf as above, then deploy and run the check again.
+
 ## The first invite codes (one-off, until P2.09)
 
 Invites are required (`PDS_INVITE_REQUIRED`). Until `interfaces/pds-admin` (P2.09) exists, Alex makes each code by hand

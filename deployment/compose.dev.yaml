@@ -1,12 +1,13 @@
 # The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
-# migrate, the PDS, the edge in front of it, and web, for the homelab, through the wrapper
-# (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose alike.
+# migrate, the PDS, the edge in front of it, web, and Newt in front of the edge (P1.37v), for the homelab, through the
+# wrapper (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose
+# alike.
 # A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every
 # image is built here from a Dockerfile images.yml scans; none is pulled, so the preflight's signed-image checks (C2 to
 # C5) refuse this stack until P1.27s publishes signed images (architecture record
-# 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image run as shipped (Alex, "Allow
-# pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the mirror workflow scans
-# (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
+# 2026-10-12-p129-local-build-preflight). The exceptions are the PDS, Bluesky's own image run as shipped (Alex, "Allow
+# pinned", 2026-10-07T13:00:19Z), and Newt (ADR 0030 Decision 2): each named here exactly as its run-only lock entry,
+# which the mirror workflow scans (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
@@ -124,10 +125,11 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
-  # The edge (P1.28 image), the only service that publishes, and on loopback only: the homelab's own address is P1.34's.
-  # Its sites are the repository's deployment/edge/dev/app.caddy and dev/pds.caddy, each mounted read-only where the
-  # image imports them, as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the
-  # image seeds as caddy's, 0700 (P1.27o).
+  # The edge (P1.28 image). Under dev it publishes nothing: Newt alone reaches it, on newt_edge at its fixed address
+  # (ADR 0030 Decision 2, ADR 0031 Decision 2), and compose.local.yaml keeps the loopback publish. Its sites are the
+  # repository's deployment/edge/dev/app.caddy and dev/pds.caddy, each mounted read-only where the image imports them,
+  # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
+  # 0700 (P1.27o).
   edge:
     # A file named Dockerfile builds from its own folder, as images.yml builds it (C26).
     build:
@@ -156,20 +158,16 @@ services:
       ACME_EMAIL: ${EDGE_ACME_EMAIL}
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
-    ports:
-      - 127.0.0.1:80:80
-      - 127.0.0.1:443:443
     depends_on:
       pds:
         condition: service_started
-    # The PDS reaches the app's host and its own through these names on the network it shares with the edge, and web
-    # through the same names on the app network, never extra_hosts or a fixed address (architecture record
-    # 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1; architecture 2026-10-15 02:05Z, option C).
+    # No aliases under dev: the PDS and web resolve both staging names through public DNS to Pangolin, and reach them
+    # through Newt and this edge (ADR 0031, Decision 3). compose.local.yaml keeps them for its own stack.
     networks:
       edge:
-        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
       app:
-        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
+      newt_edge:
+        ipv4_address: 10.250.37.3
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 128
@@ -198,9 +196,9 @@ services:
       TRUSTED_PROXY_MODE: socket
       # The OAuth client (P2.04c, P2.04w): Postgres as web, whose pools must fit the role's 40 connections across three
       # replicas with the 8-connection lock pool (checkConnectionBudget), so 5; the seal keyring and the client keys as
-      # mounted files; our own PDS as net-guard's one internal host, reached through the edge's alias on the app
-      # network; the key new sign-ins sign with. PLC_URL is the shared public directory: we run no PLC of our own, and
-      # web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
+      # mounted files; no internal host for net-guard, since web reaches our own PDS through Pangolin like any other
+      # server (ADR 0031, Decision 3); the key new sign-ins sign with. PLC_URL is the shared public directory: we run no
+      # PLC of our own, and web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
       PG_HOST: postgres
       PG_DATABASE: unset
       PG_USER: web
@@ -208,7 +206,6 @@ services:
       PG_SSLMODE: disable
       PG_POOL_MAX: "5"
       SEAL_KEYRING_FILE: /run/secrets/web_seal_keyring
-      NETGUARD_INTERNAL_HOSTS: ${PDS_HOSTNAME}
       PLC_URL: https://plc.directory
       OAUTH_CLIENT_KEYS_FILE: /run/secrets/web_oauth_client_keys
       OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
@@ -234,6 +231,40 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
+  # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
+  # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
+  # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
+  # Upstream image run as shipped, pinned as its run-only lock entry. Its credentials are newt.env's three names; it
+  # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
+  # listener (newt 1.18.1 newtconfig/newtconfig.go:452-503).
+  newt:
+    image: docker.io/fosrl/newt:1.18.1@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777,size=1m
+    env_file: ../../unset-dev-env/newt.env
+    environment:
+      CONFIG_FILE: /tmp/newt.json
+      DISABLE_SSH: "true"
+      DISABLE_CLIENTS: "true"
+      NEWT_METRICS_PROMETHEUS_ENABLED: "false"
+      NEWT_PPROF_ENABLED: "false"
+      LOG_LEVEL: WARN
+    depends_on:
+      edge:
+        condition: service_started
+    networks:
+      newt_egress:
+      newt_edge:
+        ipv4_address: 10.250.37.2
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+
 networks:
   db:
     internal: true
@@ -249,6 +280,15 @@ networks:
   # web's own way out (ADR 0022): the shared PLC, handle resolution and other servers' OAuth metadata. Only web joins
   # it, and every request web makes goes through net-guard (resolve, vet, pin, no redirects, private ranges refused).
   web_egress:
+  # Newt to the edge and nothing else (ADR 0030, Decision 2): internal, a fixed subnet, Newt at .2 and the edge at .3.
+  # The edge's sites bind .3 (P1.36b) and trust .2 alone as a proxy (P1.36j); compose.dev.test.ts ties the three.
+  newt_edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.37.0/29
+  # Newt's own way out: its tunnel to Pangolin.
+  newt_egress:
 
 volumes:
   pgdata:
