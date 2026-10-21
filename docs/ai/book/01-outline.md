@@ -1551,7 +1551,8 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.24c | Build the paired unstyled frontend | [SEC] | P2.24b | `phase-2.md` |
 | P2.24d | Prove fonts through the existing edge | [SPIKE] [SEC] | P2.24c | `phase-2.md` |
 | P2.24e | Deliver the proved edge font policy | [SEC] [ALEX] | P2.24d | `phase-2.md` |
-| P2.24f | Extend generic shared UI for the PDS | — | P2.24e | `phase-2.md` |
+| P2.24t | Support registered icon additions | — | P2.24e | `phase-2.md` |
+| P2.24f | Extend generic shared UI for the PDS | — | P2.24t | `phase-2.md` |
 | P2.24g | Register build-only presentation boundaries | [SEC] | P2.24f | `phase-2.md` |
 | P2.24h | Add isolated native PDS test fixtures | — | P2.24g, P2.24c | `phase-2.md` |
 | P2.24i | Build the account shell and Devices presentation | — | P2.24h | `phase-2.md` |

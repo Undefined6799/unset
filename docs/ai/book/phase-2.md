@@ -4476,8 +4476,14 @@ Where: `deployment/edge/ trusted base` (one ownership path, its tests/docs)
 Goal: Implement only the font delivery/policy demonstrated by P2.24d, with focused edge tests and security review. No product UI or repository-check changes ride.
 Done when: Exact origin/path and HTML-only policy change; hashes/nonces, other directives/headers/redirects/non-HTML unchanged; remote/wildcard/unsafe-inline/body rewriting and provider bypass rejected. Alex reviews the concrete loosening. Notes updated or none needed.
 
-### P2.24f — Extend generic shared UI for the PDS
+### P2.24t — Support registered icon additions
 Tags: —            Depends on: P2.24e            Plan: §5.3; §9; ADR 0027
+Where: `shared/ui-build/` (one ownership path, its tests/docs)
+Goal: Task 3 generator prerequisite: support the hash-pinned registration of the two approved Iconoir 7.12.1 additions without changing the imported 36-icon sheet. Read one fixed optional inventory extension pin; validate its closed schema, approval/source evidence, immutable hashes and exact drawings. No product component/data/generated-output or check-path change rides.
+Done when: Today's 36-icon outputs stay byte-identical; focused fixtures prove the approved 38-icon union succeeds and missing/altered evidence, unregistered additions, collisions, changed SVG bytes/drawings and unsafe data fail. No parser/attribute allowlist broadening, downloads or runtime dependency. Notes updated or none needed.
+
+### P2.24f — Extend generic shared UI for the PDS
+Tags: —            Depends on: P2.24t            Plan: §5.3; §9; ADR 0027
 Where: `shared/ui/` (one ownership path, its tests/docs)
 Goal: Task 3: design-sheet registration/approval for generic extensions and pinned Iconoir 7.12.1 devices/apps icons, minimal native props/slots, localized brand label and reusable keyboard/menu behavior.
 Done when: Existing app/core-shell, CSS/token freshness and bundle-budget checks pass; focus/escape/dismissal/route close work. No PDS/router/auth types or duplicate React/island runtime. Notes updated or none needed.
