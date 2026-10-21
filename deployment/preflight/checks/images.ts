@@ -52,14 +52,17 @@ export const c2: Check = {
  */
 export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds", "docker.io/fosrl/newt"]);
 
+/** Newt runs only under dev (P1.37v): a local stack has no tunnel, so its image may not stand in for any service. */
+const DEV_ONLY_VENDOR = "docker.io/fosrl/newt";
+
 /** The node runtime base, which the local token reader runs unbuilt (P1.29h). */
 const NODE_BASE = "docker.io/library/node";
 
 /**
  * The images a local stack may run unbuilt, as `ref:tag@digest`. `runOnly` holds the vendor images we run as shipped,
  * each a runtime lock entry no Dockerfile builds on, as compose.dev.yaml may (record
- * 2026-10-07-p129-migrate-image-and-run-only-images, point 2); a builder, or a base our own Dockerfiles harden (caddy,
- * postgres), is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
+ * 2026-10-07-p129-migrate-image-and-run-only-images, point 2); a builder, a base our own Dockerfiles harden (caddy,
+ * postgres), or the dev-only Newt is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
  * 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
  */
 function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
@@ -68,7 +71,9 @@ function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<
   const entries = Object.values(bases);
   return {
     runOnly: new Set(
-      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exactImage),
+      entries
+        .filter((b) => VENDOR_IMAGES.has(b.ref) && b.ref !== DEV_ONLY_VENDOR && b.stage === "runtime" && !b.buildStage)
+        .map(exactImage),
     ),
     readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exactImage)),
   };

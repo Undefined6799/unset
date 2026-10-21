@@ -81,6 +81,8 @@ export type Compose = {
   secretFiles: string[];
   /** Each top-level secret's file, by name: what a service's `secrets` entry mounts (P1.30o). */
   secretFileByName: ReadonlyMap<string, string>;
+  /** The networks on which the edge carries its aliases; only the edge may carry any (P1.36i reads it under dev). */
+  edgeAliasNetworks: string[];
 };
 
 export class ParseError extends Error {}
@@ -187,7 +189,17 @@ export function parseCompose(text: string, file: string): Compose {
     networks: networks(r, root.get("networks", true)),
     secretFiles: [...secrets.values()],
     secretFileByName: secrets,
+    edgeAliasNetworks: edgeAliasNetworks(servicesNode.get("edge", true)),
   };
+}
+
+/** The networks the edge's `networks:` mapping gives aliases, in file order; none for a list or no edge. */
+function edgeAliasNetworks(edge: unknown): string[] {
+  const node = isMap(edge) ? edge.get("networks", true) : undefined;
+  if (!isMap(node)) return [];
+  return node.items
+    .map((pair) => (isScalar(pair.key) ? String(pair.key.value) : ""))
+    .filter((network) => aliased(node, network));
 }
 
 /**

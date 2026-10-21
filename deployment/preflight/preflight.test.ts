@@ -2437,6 +2437,36 @@ describe("preflight C17 (P1.30t)", () => {
     expect(dev.lines).toContain("FAIL C17 network plc_web is local only");
   });
 
+  test("c17_dev_refuses_edge_aliases_and_internal_hosts", async () => {
+    // P1.36i (ADR 0031 Decision 3), through the check (verify-1145 B2): under dev an aliased edge or a net-guard
+    // internal host fails C17 alone, in fixed words, so no configured value withholds the reason; local is not refused.
+    const dev = { pdsEnv: DEV_ENV };
+    const table = { ...TABLE, tunnel: { internal: false, members: ["newt"] } };
+    // The edge leaves the default network for edge and app, where it carries the aliases.
+    const aliasTable = {
+      ...table,
+      default: { ...TABLE.default, members: TABLE.default.members.filter((member) => member !== "edge") },
+      edge: { internal: false, members: ["edge"] },
+      app: { internal: false, members: ["edge"] },
+    };
+    const aliased = (text: string) =>
+      text
+        .replace(
+          "    secrets: [dev_tls_cert, dev_tls_key]\n",
+          '$&    networks:\n      edge:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n      app:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n',
+        )
+        .replace("  tunnel: {}\n", "$&  edge: {}\n  app: {}\n");
+    const hosts = (text: string) =>
+      text.replace("      FINGERPRINT_CHECK: arachnid\n", "$&      NETGUARD_INTERNAL_HOSTS: pds.example.test\n");
+    expect(failed((await check({ ...dev, compose: DEV, networks: table }, "dev")).lines)).not.toContain("C17");
+    expect(await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable }, "dev")).toBe(
+      "FAIL C17 the edge carries a network alias",
+    );
+    expect(await expectOnly("C17", { ...dev, compose: hosts(DEV), networks: table }, "dev")).toBe(
+      "FAIL C17 a service names an internal host for net-guard",
+    );
+  });
+
   test("c17_table_duplicate_key_refused", async () => {
     const twice =
       '{"default": {"internal": true, "members": []}, "default": {"internal": false, "members": ["edge", "pds", "web"]}}';
@@ -3992,6 +4022,8 @@ networks:
       exact("caddy-builder"),
       exact("postgres"),
       exact("caddy"),
+      // Newt runs only under dev (P1.37v); a local stack has no tunnel, so its image may not stand in for a service.
+      exact("newt"),
       pds.ref,
       `${pds.ref}:${pds.tag}`,
       `${pds.ref}@${pds.digest}`,
