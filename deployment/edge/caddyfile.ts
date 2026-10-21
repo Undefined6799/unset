@@ -68,7 +68,9 @@ export type EnvName = keyof typeof ENV_NAMES;
 const PLACEHOLDERS: Readonly<Record<string, readonly string[]>> = {
   "{http.request.orig_uri}": ["map", "vars_regexp"],
   "{route_class}": ["map", "log_append"],
-  "{remote_host}": ["key"],
+  "{client_ip}": ["key"],
+  // The request's own Host, the one value (upstream) sets X-Forwarded-Host to (P1.36j, forwardsOwnHost).
+  "{host}": ["header_up"],
 };
 
 const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars_regexp"];
@@ -85,7 +87,7 @@ const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   log: ["output", "level", "exclude", "format"],
   format: ["wrap", "fields"],
   fields: "data",
-  servers: ["timeouts"],
+  servers: ["trusted_proxies", "trusted_proxies_strict", "client_ip_headers", "timeouts"],
   timeouts: ["read_body", "write", "idle"],
   tls: ["issuer"],
   issuer: ["dir", "email"],
@@ -462,6 +464,10 @@ export const DEV_TLS = ["/run/secrets/dev_tls_cert", "/run/secrets/dev_tls_key"]
 export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" } as const;
 /** The edge's address on newt_edge, the only address a dev site binds (ADR 0030 Decision 2; compose.dev.yaml, P1.37v). */
 export const DEV_EDGE_ADDRESS = "10.250.37.3";
+/** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */
+export const DEV_PROXY_ADDRESS = "10.250.37.2";
+/** The listener the dev sites produce, and the only server whose options may trust a proxy (P1.36j). */
+export const DEV_LISTENER = `${DEV_EDGE_ADDRESS}:443`;
 
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
@@ -763,6 +769,7 @@ export function edgeSiteProblems(config: Caddyfile, mode: EdgeMode = "shipped"):
     ...zoneProblems(config, "app-ratelimit", "app_global"),
     ...positionProblems(config.global ?? [], "the global options", null),
     ...(mode === "dev" ? devTlsProblems(config) : []),
+    ...proxyProblems(config.global ?? []),
   ];
   const proxied = new Set<string>();
   for (const site of config.sites) {
@@ -809,13 +816,59 @@ function zoneProblems(config: Caddyfile, snippet: string, global: string): strin
   const unmatched = named(limits[0]?.block ?? [], "zone").find((z) => z.args[0] === global);
   if (unmatched === undefined) found.push(`there is no ${zone}`);
   else if (named(unmatched.block ?? [], "match").length > 0) found.push(`the ${zone} has a matcher`);
+  for (const each of named(limits[0]?.block ?? [], "zone")) {
+    const keys = named(each.block ?? [], "key");
+    if (keys.length !== 1 || keys[0]?.args.join(" ") !== "{client_ip}") {
+      found.push(`the ${each.args[0]} zone is not keyed on {client_ip}`);
+    }
+  }
   return found;
 }
 
 /**
+ * The trusted proxy (P1.36j; ADR 0030 Decision 2): one `servers` block for DEV_LISTENER trusts exactly Newt's address,
+ * reads X-Forwarded-For alone, right to left, and keeps the shared timeouts; the one unscoped block trusts nothing.
+ * Prod and local bind no site to the dev address (schemeProblems), so the dev block applies to no server there.
+ */
+function proxyProblems(global: Directive[]): string[] {
+  const servers = named(global, "servers");
+  const shared = servers.filter((block) => block.args.length === 0);
+  const dev = servers.filter((block) => block.args.join(" ") === DEV_LISTENER);
+  const found = servers
+    .filter((block) => !shared.includes(block) && !dev.includes(block))
+    .map((block) => `servers ${block.args.join(" ")}: only ${DEV_LISTENER} may have its own options`);
+  if (shared.length !== 1 || dev.length !== 1)
+    return [...found, `not one shared and one ${DEV_LISTENER} servers block`];
+  const trusts = (block: Directive) =>
+    (block.block ?? []).filter((d) => d.name.startsWith("trusted_proxies") || d.name === "client_ip_headers");
+  if (trusts(shared[0] as Directive).length > 0) found.push("the shared servers block trusts a proxy");
+  const options = (dev[0] as Directive).block ?? [];
+  const line = (name: string) => named(options, name).map((d) => d.args.join(" "));
+  if (line("trusted_proxies").join("|") !== `static ${DEV_PROXY_ADDRESS}/32`) {
+    found.push(`${DEV_LISTENER} does not trust exactly ${DEV_PROXY_ADDRESS}`);
+  }
+  const strict = line("trusted_proxies_strict");
+  if (strict.length !== 1 || strict[0] !== "") found.push(`${DEV_LISTENER} does not read right to left`);
+  if (line("client_ip_headers").join("|") !== "X-Forwarded-For") {
+    found.push(`${DEV_LISTENER} reads a header other than X-Forwarded-For`);
+  }
+  if (
+    JSON.stringify(blockText(named(options, "timeouts"))) !==
+    JSON.stringify(blockText(named(shared[0]?.block ?? [], "timeouts")))
+  ) {
+    found.push(`${DEV_LISTENER} does not keep the shared timeouts`);
+  }
+  return found;
+}
+
+/** Directives as comparable text: names, arguments and blocks, without lines or provenance. */
+const blockText = (directives: Directive[]): unknown[] =>
+  directives.map((d) => [d.name, d.args, d.block === null ? null : blockText(d.block)]);
+
+/**
  * The dev shape (P1.36b; ADR 0032): under dev every public site is its bare host placeholder (https), bound to
  * DEV_EDGE_ADDRESS alone, importing the dev `(tls)`, the security headers and noindex; the PDS site keeps
- * the admin guard, and the app site refuses writes to the sign-in files. No dev site is plain http, so there is no
+ * the admin guard and shuts the blob routes (P1.38f), and the app site refuses writes to the sign-in files. No dev site is plain http, so there is no
  * :80 site (ADR 0032 Decision 4); outside dev a site is never plain http either, and prod serves no file certificate.
  */
 function schemeProblems(site: Site, mode: EdgeMode): string[] {
@@ -828,9 +881,11 @@ function schemeProblems(site: Site, mode: EdgeMode): string[] {
     const files = named(flatten(site.directives), "tls").some(
       (tls) => tls.args.length > 1 && !tls.args.every((arg) => arg.startsWith("/run/secrets/local_tls_")),
     );
+    const devBound = named(site.directives, "bind").some((bind) => bind.args.includes(DEV_EDGE_ADDRESS));
     return [
       ...(plain ? [`${name}: a plain-http site outside dev`] : []),
       ...(files ? [`${name}: a file certificate outside dev and local`] : []),
+      ...(devBound ? [`${name}: bound to the dev edge address outside dev`] : []),
     ];
   }
   const found = site.addresses.some((address) => address.startsWith("http://"))
@@ -850,7 +905,7 @@ function schemeProblems(site: Site, mode: EdgeMode): string[] {
     [site.directives, "security-headers"],
     [site.directives, "noindex"],
   ];
-  if (host === "PDS_HOST") required.push([route, "xrpc-guard"]);
+  if (host === "PDS_HOST") required.push([route, "xrpc-guard"], [route, "blob-deny"]);
   if (host === "APP_HOST") required.push([route, "signin-files"]);
   for (const [block, snippet] of required) {
     if (!block.some((directive) => directive.via === snippet)) found.push(`${name}: does not import ${snippet}`);
@@ -966,7 +1021,20 @@ function siteProblems(site: Site, zones: string): string[] {
   for (const header of ADDRESS_HEADERS) {
     if (proxies.some((proxy) => passes(proxy, header))) found.push(`${name}: a reverse_proxy passes ${header}`);
   }
+  if (proxies.some((proxy) => !forwardsOwnHost(proxy))) found.push(`${name}: a reverse_proxy passes X-Forwarded-Host`);
   return found;
+}
+
+/**
+ * Whether `proxy` sets X-Forwarded-Host to the request's own Host, once, and touches it nowhere else (P1.36j). Caddy
+ * v2.11.7 keeps an incoming X-Forwarded-Host from a trusted proxy instead of setting it from Host
+ * (reverseproxy.go:1012-1022), and under dev Newt is trusted, so without this the upstream would get Traefik's value.
+ */
+function forwardsOwnHost(proxy: Directive): boolean {
+  const ups = named(proxy.block ?? [], "header_up").filter(
+    (up) => up.args[0]?.replace(/^[+-]/, "").toLowerCase() === "x-forwarded-host",
+  );
+  return ups.length === 1 && ups[0]?.args.join(" ") === "X-Forwarded-Host {host}";
 }
 
 /**

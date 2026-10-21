@@ -493,6 +493,13 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   and a `noindex` header land in P1.36b before either resource is created; web's shared sign-in and default
   buckets stay an accepted availability cost that fails closed. 0025 and 0030 are not edited. P1.37v (#1115)
   unblocks; P1.36e, P1.36o and ADR 0028 move to production.
+- **ADR 0033 accepted (Alex, 2026-10-20 23:27:26Z, against 55c626d; own record:
+  [0033](0033-image-signing-keyless.md)):** images are signed and attested with keyless cosign, a short-lived
+  Fulcio certificate for our exact workflow identity, and verified by that full identity and issuer only, never a
+  regexp; the Rekor transparency log is required; the deploy preflight verifies offline against the stored bundle
+  and a committed Sigstore trusted root; every image-lock entry verifies as `cosign-keyless`; GitHub artifact
+  attestations may sit alongside; the cosign key pair, its two secrets and the KMS option are removed; cosign is
+  pinned by version and checksum in CI and in the preflight.
 - **ADR 0032 accepted (Alex, 2026-10-20 23:52:59Z against 2ebf132; own record:
   [0032](0032-self-signed-dev-edge.md)):** the exact acceptance line, typed in the project chat, supersedes 0031
   Decision 2 and Decision 1's plain-http sentence for the dev profile only: the dev edge serves both staging names

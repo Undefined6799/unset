@@ -22,6 +22,8 @@ import {
   CaddyfileError,
   DEV_APP,
   DEV_EDGE_ADDRESS,
+  DEV_LISTENER,
+  DEV_PROXY_ADDRESS,
   DEV_TLS,
   type Directive,
   type EdgeFiles,
@@ -191,6 +193,7 @@ describe("dev edge (P1.36b)", () => {
       ["dev/pds.caddy", PDS, "\timport security-headers\n", "{$PDS_HOST}: does not import security-headers"],
       ["dev/pds.caddy", PDS, "\timport noindex\n", "{$PDS_HOST}: does not import noindex"],
       ["dev/pds.caddy", PDS, "\t\timport xrpc-guard\n", "{$PDS_HOST}: does not import xrpc-guard"],
+      ["dev/pds.caddy", PDS, "\t\timport blob-deny\n", "{$PDS_HOST}: does not import blob-deny"],
     ];
     for (const [file, text, line, problem] of cases) {
       expect(text, line).toContain(line);
@@ -252,7 +255,7 @@ describe("dev edge (P1.36b)", () => {
     });
     expect((limits.appRateLimitZones as { app_global: { events: number } }).app_global.events).toBeLessThan(1500);
     for (const zone of zones) {
-      expect([value(zone, "key"), value(zone, "ipv6_prefix")], zone.args[0]).toEqual([["{remote_host}"], ["64"]]);
+      expect([value(zone, "key"), value(zone, "ipv6_prefix")], zone.args[0]).toEqual([["{client_ip}"], ["64"]]);
     }
     const matchers = (name: string) =>
       zones
@@ -359,12 +362,30 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
           segments.map((segment, i) => `${"/".repeat(runs[i] ?? 1)}${flip(segment)}`).join("") + "/".repeat(trailing)
         );
       });
-  /** Percent-encodes some characters; Caddy decodes the path before path_regexp, so the decoded form is matched. */
-  const decoded = (path: string) => decodeURIComponent(path);
+  /** Percent-encodes the characters `mask` picks, slashes included, as a client may send them on the wire. */
   const encoded = (path: string, mask: boolean[]) =>
-    [...path]
-      .map((ch, i) => (mask[i % mask.length] && ch !== "/" ? `%${ch.charCodeAt(0).toString(16).toUpperCase()}` : ch))
-      .join("");
+    [...path].map((ch, i) => (mask[i % mask.length] ? `%${ch.charCodeAt(0).toString(16).toUpperCase()}` : ch)).join("");
+  /** The raw path with a dot segment or a parent hop (`/x/..`) before each segment `dots` picks. */
+  const dotted = (path: string, dots: number[]) => {
+    let at = 0;
+    return path.replace(/\/(?=[^/])/g, () => ["/", "/./", "/x/../"][dots[at++ % dots.length] ?? 0] as string);
+  };
+  /**
+   * The path a path_regexp matcher sees for a raw request path, as Caddy v2.11.7 makes it: r.URL.Path is the
+   * URI-decoded path (Go net/url, %2F included), then cleanPath runs path.Clean and keeps a trailing slash
+   * (modules/caddyhttp/matchers.go:812-823, caddyhttp.go:302-308; website 1957519 matchers.md:707).
+   */
+  const matched = (raw: string) => {
+    const path = decodeURIComponent(raw);
+    const parts: string[] = [];
+    for (const part of path.split("/")) {
+      if (part === "" || part === ".") continue;
+      if (part === "..") parts.pop();
+      else parts.push(part);
+    }
+    const clean = `/${parts.join("/")}`;
+    return path.endsWith("/") && !clean.endsWith("/") ? `${clean}/` : clean;
+  };
 
   const regexOf = (snippet: string, matcher: string) => {
     const at = devConfig().snippet(snippet);
@@ -374,17 +395,148 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
     return new RegExp(arg.replace(/^\(\?i\)/, ""), arg.startsWith("(?i)") ? "i" : "");
   };
 
+  // P1.38f (ADR 0031 Decision 4; TE-6): every spelling of the three blob methods a client can send is denied.
+  test("blob_routes_denied_in_every_spelling", () => {
+    const blob = regexOf("blob-deny", "@blob");
+    for (const method of ["com.atproto.repo.uploadBlob", "com.atproto.sync.getBlob", "com.atproto.repo.importRepo"]) {
+      fc.assert(
+        fc.property(
+          spelled(["xrpc", method]),
+          fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }),
+          fc.array(fc.integer({ min: 0, max: 2 }), { minLength: 1, maxLength: 4 }),
+          (path, mask, dots) => {
+            const raw = encoded(dotted(path, dots), mask);
+            expect(blob.test(matched(raw)), raw).toBe(true);
+          },
+        ),
+      );
+    }
+    for (const other of ["/xrpc/com.atproto.sync.getRecord", "/xrpc/com.atproto.repo.uploadBlobx", "/blob/getBlob"]) {
+      expect(blob.test(other), other).toBe(false);
+    }
+    // Fixed raw spellings, each decoded and cleaned as Caddy does before the matcher runs.
+    for (const raw of [
+      "/xrpc%2Fcom.atproto.sync.getBlob",
+      "/xrpc/com.atproto.sync.get%42lob",
+      "/x/../xrpc/com.atproto.sync.getBlob",
+      "/xrpc/./com.atproto.repo.uploadBlob/",
+      "/xrpc/com.atproto.sync.GETBLOB",
+      "/%78rpc/com%2Eatproto%2Erepo%2EimportRepo",
+    ]) {
+      expect(blob.test(matched(raw)), raw).toBe(true);
+    }
+    expect(matched("/a/../xrpc//x/./y/")).toBe("/xrpc/x/y/");
+    // The snippet's whole shape, as signin-files is pinned: the one matcher and a 404 on it, nothing else.
+    expect(
+      devConfig()
+        .snippet("blob-deny")
+        .map((d) => [d.name, ...d.args]),
+    ).toEqual([
+      [
+        "@blob",
+        "path_regexp",
+        "(?i)^/+xrpc/+com\\.atproto\\.(?:repo\\.uploadblob|sync\\.getblob|repo\\.importrepo)/*$",
+      ],
+      ["respond", "@blob", "404"],
+    ]);
+  });
+
   test("signin_files_405_in_every_spelling", () => {
     const files = regexOf("signin-files", "@signin_files_write");
     for (const segments of [["oauth-client-metadata.json"], ["oauth", "jwks.json"]]) {
       fc.assert(
         fc.property(spelled(segments), fc.array(fc.boolean(), { minLength: 1, maxLength: 16 }), (path, mask) => {
-          expect(files.test(decoded(encoded(path, mask))), path).toBe(true);
+          const raw = encoded(path, mask);
+          expect(files.test(matched(raw)), raw).toBe(true);
         }),
       );
     }
     for (const other of ["/oauth/callback", "/oauth-client-metadata.jsonx", "/x/oauth/jwks.json", "/"]) {
       expect(files.test(other), other).toBe(false);
     }
+  });
+});
+
+// P1.36j (ADR 0030 Decision 2): the dev listener trusts Newt's address alone and reads X-Forwarded-For right to left;
+// nothing else trusts a proxy, every zone keys on {client_ip}, and outside dev no site binds the dev address.
+describe("dev edge trusts only Newt (P1.36j)", () => {
+  const CADDYFILE = read("Caddyfile");
+  const caddyfile = (from: string, to: string) => {
+    expect(CADDYFILE, from).toContain(from);
+    return devProblems({ Caddyfile: CADDYFILE.replace(from, to) });
+  };
+  const TRUST = "trusted_proxies static 10.250.37.2/32";
+  const NOT_EXACT = `${DEV_LISTENER} does not trust exactly ${DEV_PROXY_ADDRESS}`;
+
+  test("trusted_proxy_is_newt_alone", () => {
+    expect(DEV_LISTENER).toBe(`${DEV_EDGE_ADDRESS}:443`);
+    expect(devProblems()).toEqual([]);
+    // A second address, a range, a wildcard, the private ranges: each fails.
+    for (const wider of [
+      `${TRUST} 10.250.37.4/32`,
+      "trusted_proxies static 10.250.37.0/29",
+      "trusted_proxies static 0.0.0.0/0",
+      "trusted_proxies static private_ranges",
+      "trusted_proxies static 10.250.37.3/32",
+    ]) {
+      expect(caddyfile(TRUST, wider), wider).toEqual([NOT_EXACT]);
+    }
+    expect(caddyfile(`\t\t${TRUST}\n`, "")).toEqual([NOT_EXACT]);
+    expect(caddyfile(`\t\t${TRUST}\n`, `\t\t${TRUST}\n\t\t${TRUST}\n`)).toEqual([NOT_EXACT]);
+    expect(caddyfile("\t\ttrusted_proxies_strict\n", "")).toEqual([`${DEV_LISTENER} does not read right to left`]);
+    expect(caddyfile("client_ip_headers X-Forwarded-For", "client_ip_headers X-Forwarded-For X-Real-IP")).toEqual([
+      `${DEV_LISTENER} reads a header other than X-Forwarded-For`,
+    ]);
+    expect(caddyfile("\t\tclient_ip_headers X-Forwarded-For\n", "")).toEqual([
+      `${DEV_LISTENER} reads a header other than X-Forwarded-For`,
+    ]);
+  });
+
+  test("no_other_server_trusts_a_proxy", () => {
+    expect(caddyfile("\tservers {\n", `\tservers {\n\t\t${TRUST}\n`)).toEqual([
+      "the shared servers block trusts a proxy",
+    ]);
+    expect(caddyfile(`servers ${DEV_LISTENER} {`, "servers :443 {")).toEqual([
+      "servers :443: only 10.250.37.3:443 may have its own options",
+      "not one shared and one 10.250.37.3:443 servers block",
+    ]);
+    expect(caddyfile(`servers ${DEV_LISTENER} {`, `servers ${DEV_EDGE_ADDRESS}:80 {`)).toEqual([
+      `servers ${DEV_EDGE_ADDRESS}:80: only 10.250.37.3:443 may have its own options`,
+      "not one shared and one 10.250.37.3:443 servers block",
+    ]);
+    expect(caddyfile("\t\t\twrite 135s\n", "\t\t\twrite 300s\n")).toEqual([
+      `${DEV_LISTENER} does not keep the shared timeouts`,
+    ]);
+  });
+
+  test("every_zone_keys_on_the_client_address", () => {
+    const limits = read("snippets/ratelimit.caddy");
+    const keys = limits.match(/^\t+key \{client_ip\}$/gm) ?? [];
+    expect(keys.length).toBe(limits.match(/^\t+zone /gm)?.length);
+    for (const [zone, at] of [
+      ["session", limits.indexOf("key {client_ip}")],
+      ["app_global", limits.lastIndexOf("key {client_ip}")],
+    ] as const) {
+      const unkeyed = `${limits.slice(0, at)}key {client_ip}x${limits.slice(at + "key {client_ip}".length)}`;
+      expect(() => devProblems({ "snippets/ratelimit.caddy": unkeyed }), zone).toThrow(CaddyfileError);
+      const dropped = `${limits.slice(0, limits.lastIndexOf("\n", at))}${limits.slice(limits.indexOf("\n", at))}`;
+      expect(devProblems({ "snippets/ratelimit.caddy": dropped }), zone).toEqual([
+        `the ${zone} zone is not keyed on {client_ip}`,
+      ]);
+    }
+  });
+
+  test("outside_dev_no_site_binds_the_dev_address", () => {
+    const edgeDir = devTree({
+      "sites/pds.caddy": read("sites/pds.caddy").replace(
+        "{$PDS_HOST} {\n",
+        `{$PDS_HOST} {\n\tbind ${DEV_EDGE_ADDRESS}\n`,
+      ),
+    });
+    const enabled = join(edgeDir, "sites", "enabled");
+    cpSync(join(edgeDir, "sites", "pds.caddy"), join(enabled, "pds.caddy"), { recursive: true });
+    expect(edgeSiteProblems(readEdgeConfig(edgeDir, enabled, ENV, FILES))).toEqual([
+      "{$PDS_HOST}: bound to the dev edge address outside dev",
+    ]);
   });
 });

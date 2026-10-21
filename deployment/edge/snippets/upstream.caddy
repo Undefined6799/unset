@@ -10,13 +10,15 @@
 # `reverse_proxy` with the client address withheld: the client's own forwarding headers are dropped, so the upstream
 # sees only the edge's socket address (the PDS stores what it is given; P1b-A1, Alex's "Do not forward"). Caddy
 # v2.11.7 sets X-Forwarded-For before applying header_up (reverseproxy.go:909 and 714), so the removal wins; it passes
-# Host and X-Forwarded-Host by default.
+# Host by default. X-Forwarded-Host is set to the request's own Host (P1.36j): from a trusted proxy, Newt under dev,
+# Caddy would otherwise keep the incoming value (reverseproxy.go:1012-1022); elsewhere it already sets that same value.
 (upstream) {
 	reverse_proxy {args[0]} {
 		header_up -X-Forwarded-For
 		header_up -X-Real-IP
 		header_up -Forwarded
 		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
 		transport http {
 			dial_timeout 5s
 			response_header_timeout 130s

@@ -39,4 +39,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0030](0030-pangolin-checks-at-our-edge.md) | Staging behind Pangolin: method scope and last-hop trust move to our edge, cookie and logging clauses of 0025 restated | Accepted by Alex 2026-10-19 |
 | [0031](0031-public-staging-pds.md) | Staging public through Pangolin, no login, no certificate at our edge; departs from 0025 and 0030 for dev only | Accepted 2026-10-20; Decision 2 and Decision 1's plain-http sentence superseded by 0032 |
 | [0032](0032-self-signed-dev-edge.md) | Self-signed certificate at the dev edge behind Pangolin; supersedes 0031 Decision 2 for dev only | Accepted 2026-10-20 |
-| [0033](0033-image-signing-keyless.md) | Image signing: keyless cosign with our exact workflow identity (P1.27s) | Proposed (awaiting Alex) |
+| [0033](0033-image-signing-keyless.md) | Image signing: keyless cosign with our exact workflow identity (P1.27s) | Accepted 2026-10-20 |

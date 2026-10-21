@@ -32,8 +32,27 @@
 			}
 		}
 	}
+	# The dev edge's one listener (P1.36j; ADR 0030 Decision 2): its sites bind the newt_edge address, and Newt, at its
+	# fixed address on that internal network, is the only peer whose X-Forwarded-For is read, right to left, so the
+	# address Pangolin appended is the client's and anything a client wrote before it is ignored. A `servers` block with
+	# a listener applies only to the server bound to exactly that address and port (caddyserver/website 1957519
+	# src/docs/markdown/caddyfile/options.md:836-880, "trusted_proxies" and "trusted_proxies_strict" at 1090-1140), so
+	# prod and local, which bind nothing there, keep no trusted proxy. Caddy v2.11.7 sorts these blocks longest
+	# listener first and applies the first that matches a server (caddyconfig/httpcaddyfile/httptype.go:453-466,
+	# serveroptions.go:427-437), so this block wins over the shared one wherever it applies. The zones key on {client_ip}, which is the
+	# socket address for every request not from a trusted proxy (options.md:1094).
+	servers 10.250.37.3:443 {
+		trusted_proxies static 10.250.37.2/32
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+		timeouts {
+			read_body 30s
+			write 135s
+			idle 2m
+		}
+	}
 	servers {
-		# No trusted_proxies: nothing sits in front of the edge (P1.34 revisits it for a tunnelled VPS edge).
+		# No trusted_proxies: nothing else sits in front of the edge.
 		# Above the upstream's 130 s (snippets/upstream.caddy, limits.json).
 		timeouts {
 			read_body 30s

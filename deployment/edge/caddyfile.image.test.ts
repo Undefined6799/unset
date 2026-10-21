@@ -17,7 +17,16 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { type Caddyfile, DEV_APP, DEV_EDGE_ADDRESS, DEV_TLS, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
+import {
+  type Caddyfile,
+  DEV_APP,
+  DEV_EDGE_ADDRESS,
+  DEV_LISTENER,
+  DEV_PROXY_ADDRESS,
+  DEV_TLS,
+  type EdgeFiles,
+  readEdgeConfig,
+} from "./caddyfile.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
@@ -223,6 +232,36 @@ describe("caddyfile reader against caddy adapt", () => {
     });
     expect(adaptedHosts(adapted).sort()).toEqual(["127.0.0.1", "staging.unset.ac", "staging.unset.sh"]);
   }, 600_000);
+
+  // P1.36j (ADR 0030 Decision 2): adapted, the shipped PDS site's server trusts no proxy, and the dev sites' server on
+  // DEV_LISTENER trusts Newt's address alone, right to left, from X-Forwarded-For. Caddy applies a listener's
+  // `servers` block only to the server bound to exactly that address (caddyserver/caddy v2.11.7
+  // caddyconfig/httpcaddyfile/serveroptions.go:427-437).
+  test("only_the_dev_listener_trusts_newt", () => {
+    const image = buildEdgeImage();
+    const trust = (server: AdaptedServer) => ({
+      listen: server.listen,
+      trusted_proxies: server.trusted_proxies,
+      trusted_proxies_strict: server.trusted_proxies_strict,
+      client_ip_headers: server.client_ip_headers,
+    });
+    const shipped = Object.values(adapt(image, env, [PDS_SITE]).apps.http.servers);
+    for (const server of shipped) {
+      expect(trust(server)).toStrictEqual({ listen: server.listen, ...NO_TRUST });
+    }
+    const dev = Object.values(
+      adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, DEV_MOUNTS).apps.http.servers,
+    );
+    expect(dev.map(trust).sort((a, b) => a.listen[0]?.localeCompare(b.listen[0] ?? "") ?? 0)).toStrictEqual([
+      {
+        listen: [DEV_LISTENER],
+        trusted_proxies: { source: "static", ranges: [`${DEV_PROXY_ADDRESS}/32`] },
+        trusted_proxies_strict: 1,
+        client_ip_headers: ["X-Forwarded-For"],
+      },
+      { listen: ["127.0.0.1:8081"], ...NO_TRUST },
+    ]);
+  }, 600_000);
 });
 
 type AdaptedHandler = { handler: string; routes?: AdaptedRoute[]; rate_limits?: Record<string, AdaptedZone> };
@@ -233,7 +272,11 @@ type AdaptedServer = {
   routes: AdaptedRoute[];
   automatic_https?: { ignore_loaded_certificates?: boolean };
   tls_connection_policies?: unknown[];
+  trusted_proxies?: unknown;
+  trusted_proxies_strict?: number;
+  client_ip_headers?: string[];
 };
+const NO_TRUST = { trusted_proxies: undefined, trusted_proxies_strict: undefined, client_ip_headers: undefined };
 type Adapted = { apps: { http: { servers: Record<string, AdaptedServer> }; tls?: unknown } };
 
 /** The PDS site's file mount, as P1.29 and P5 enable it. */
@@ -256,7 +299,7 @@ const modules = (value: unknown): string[] =>
 /** The Caddyfile directive each adapted handler comes from, where the names differ. */
 const HANDLER: Record<string, string> = { respond: "static_response" };
 /** Caddyfile placeholder shorthands the zones use, in their adapted long form (Caddy v2.11.7 caddyfile/parse.go). */
-const KEY: Record<string, string> = { "{remote_host}": "{http.request.remote.host}" };
+const KEY: Record<string, string> = { "{client_ip}": "{http.vars.client_ip}" };
 
 const pick = (zone: AdaptedZone | undefined) => ({
   key: zone?.key,
