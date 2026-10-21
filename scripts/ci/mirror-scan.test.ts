@@ -316,12 +316,12 @@ describe("mirror scan per stage", () => {
     expect(pins).toContain("ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)");
     expect(pins).toContain('--ignorefile "$ignorefile"');
     expect(pins).not.toMatch(/--ignorefile \.github\/trivyignore\.pds\.yaml/);
-    for (const id of ["images", "edge", "scan-image", "scan-export"]) {
+    for (const id of ["images", "edge", "scan-image"]) {
       const runs = runsOf(id);
       expect(runs, id).not.toContain("trivyignore.pds.yaml");
     }
     // P1.33u: the secret scan of our own images reads no ignore file.
-    expect(runsOf("scan-export")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
+    expect(runsOf("scan-image")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
     expect(runsOf("images")).toContain("--ignorefile /dev/null");
     expect(runsOf("edge")).toContain("--ignorefile /dev/null");
   });

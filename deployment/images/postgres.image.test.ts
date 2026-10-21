@@ -28,9 +28,9 @@ const BUILD_CALL_MS = killBefore(BUILD_MS);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const ROOT_START_CALL_MS = killBefore(ROOT_START_MS);
 // A removal may queue behind CI's image builds like any container call, so it gets the same 60 s (verifier P4 on
-// #690); the hook holds up to four containers, a volume and the image.
+// #690); the hook holds up to five containers, a volume and the image (Codex on #1189).
 const REMOVE_CALL_MS = 60_000;
-const REMOVE_HOOK_MS = 6 * REMOVE_CALL_MS + 5_000;
+const REMOVE_HOOK_MS = 7 * REMOVE_CALL_MS + 5_000;
 
 describe("postgres image", () => {
   let image = "";

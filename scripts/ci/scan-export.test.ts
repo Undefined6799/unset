@@ -1,4 +1,4 @@
-// images.yml `scan-export` (P1.33u), run as Actions runs a step with no shell key:
+// images.yml's exported-filesystem secret scan (P1.33u; a step of `scan-image` since P0.07c), run as Actions runs a step with no shell key:
 // `bash -e` (docs.github.com workflow syntax, jobs.<job_id>.steps[*].shell). Pipefail is
 // the script's own `set -o pipefail`, so dropping it is visible. The stand-in `docker`
 // exports a tar this test built and answers `trivy rootfs` from flags (Trivy 0.75.0
@@ -17,7 +17,15 @@ const GH_OPEN = `$${"{{"}`;
 const PIN = "aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa";
 const gh = (inner: string): string => `$${"{{"} ${inner} }}`;
 
-type Step = { name?: string; run?: string; shell?: string };
+type Step = {
+  id?: string;
+  name?: string;
+  if?: string;
+  run?: string;
+  shell?: string;
+  env?: Record<string, string>;
+  "continue-on-error"?: boolean;
+};
 type Job = {
   needs?: string[] | string;
   if?: string;
@@ -123,7 +131,7 @@ function pack(dir: string, files: Record<string, string>): string {
 
 /** Runs the workflow's export step under bash -e with the stand-in docker. */
 function scanExport(setup: Setup = {}) {
-  const step = wf.jobs["scan-export"]?.steps?.find((candidate) => candidate.name?.startsWith("Scan exported"));
+  const step = wf.jobs["scan-image"]?.steps?.find((candidate) => candidate.name?.startsWith("Scan exported"));
   if (step?.run === undefined) throw new Error("no scan-export step");
   const dir = mkdtempSync(join(tmpdir(), "scan-export-"));
   const bin = join(dir, "bin");
@@ -154,17 +162,25 @@ function trivy(calls: string[]): string {
 }
 
 describe("scan-export gates the secret scan", () => {
-  test("scan_export_job_is_on_the_aggregate", () => {
-    const job = wf.jobs["scan-export"];
-    const image = wf.jobs["scan-image"];
-    expect(job).toBeDefined();
+  // P0.07c: the export scan is a step of scan-image, on the image that job built, so each image is built once.
+  test("scan_export_runs_in_scan_image_on_its_build", () => {
+    expect(wf.jobs["scan-export"]).toBeUndefined();
+    const job = wf.jobs["scan-image"];
     expect(job?.["continue-on-error"] ?? false).toBe(false);
-    expect(job?.if).toBe(image?.if);
     expect(job?.strategy?.["fail-fast"]).toBe(false);
     expect(job?.strategy?.matrix?.include).toBe(gh("fromJSON(needs.discover.outputs.images)"));
     expect(asList(job?.needs)).toEqual(["discover"]);
     expect(job?.env?.TRIVY_IMAGE).toBe(PIN);
-    expect(job?.env?.TRIVY_IMAGE).toBe(image?.env?.TRIVY_IMAGE);
+    const steps = job?.steps ?? [];
+    const build = steps.findIndex((step) => step.id === "build");
+    const vulns = steps.findIndex((step) => step.name === "Scan");
+    const secrets = steps.findIndex((step) => step.name?.startsWith("Scan exported"));
+    expect(build).toBeGreaterThanOrEqual(0);
+    expect(vulns).toBeGreaterThan(build);
+    expect(secrets).toBeGreaterThan(vulns);
+    // Runs after a failed vulnerability scan too, so one finding cannot hide the other; never on a failed build.
+    expect(steps[secrets]?.if).toBe("!cancelled() && steps.build.outcome == 'success'");
+    expect(steps.filter((step) => step.name === "Build")).toHaveLength(1);
     const runs = runsOf(job);
     expect(runs.includes(GH_OPEN)).toBe(false);
     expect(runs).toContain("set -o pipefail");
@@ -175,7 +191,7 @@ describe("scan-export gates the secret scan", () => {
     expect(runs).not.toMatch(/\|\|\s*true/);
     expect(runs).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
     const scan = wf.jobs.scan;
-    expect(scan?.needs).toEqual(["discover", "scan-image", "scan-export", "pds-ui"]);
+    expect(scan?.needs).toEqual(["discover", "scan-image", "pds-ui"]);
     expect(runsOf(scan).includes(GH_OPEN)).toBe(false);
     const images = readFileSync(join(ROOT, ".github", "workflows", "images.yml"), "utf8");
     expect(images).not.toContain("v0.74.0");
@@ -244,16 +260,37 @@ describe("scan-export gates the secret scan", () => {
     expect(ran.out).toContain("0 files scanned");
   });
 
-  test("scan_fails_when_scan_export_is_skipped_or_cancelled", () => {
+  // The gate reads each need's result through env only, and nothing on it or on the export step can turn a failure
+  // into a pass: no step if, no continue-on-error, and the job if keeps always() (P0.07c).
+  test("scan_gate_and_export_step_pinned", () => {
+    const scan = wf.jobs.scan;
+    expect(scan?.if).toBe(
+      "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)",
+    );
+    expect(scan?.["continue-on-error"] ?? false).toBe(false);
+    expect(scan?.steps).toHaveLength(1);
+    const gate = scan?.steps?.[0];
+    expect(gate?.env).toEqual({
+      DISCOVER: gh("needs.discover.result"),
+      SCAN_RESULT: gh("needs.scan-image.result"),
+      PDS_RESULT: gh("needs.pds-ui.result"),
+    });
+    expect(gate?.if).toBeUndefined();
+    expect(gate?.["continue-on-error"]).toBeUndefined();
+    for (const step of wf.jobs["scan-image"]?.steps ?? []) {
+      expect(step["continue-on-error"], step.name).toBeUndefined();
+    }
+  });
+
+  test("scan_fails_when_scan_image_is_skipped_or_cancelled", () => {
     const step = wf.jobs.scan?.steps?.[0];
     if (step?.run === undefined) throw new Error("no scan gate");
-    const gate = (exportResult: string, pdsResult = "success") =>
+    const gate = (scanResult: string, pdsResult = "success") =>
       spawnSync("bash", ["-e", "-c", step.run ?? ""], {
         env: {
           PATH: process.env.PATH,
           DISCOVER: "success",
-          SCAN_RESULT: "success",
-          EXPORT_RESULT: exportResult,
+          SCAN_RESULT: scanResult,
           PDS_RESULT: pdsResult,
         },
         encoding: "utf8",
