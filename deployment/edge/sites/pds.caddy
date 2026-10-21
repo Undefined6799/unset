@@ -8,6 +8,7 @@
 	route {
 		import pds-ratelimit
 		import xrpc-guard
-		import upstream {$PDS_UPSTREAM}
+		import pds-fonts
+		import pds-upstream {$PDS_UPSTREAM}
 	}
 }

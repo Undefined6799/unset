@@ -1,0 +1,23 @@
+# P2.24e / ADR 0027 section 5. Caddy v2.11.7 reverseproxy.go:1153-1162 joins all header values with commas.
+# Match that entire value with a type guard before replacement; duplicate/unknown policies are copied unchanged.
+# Only the five P2.24d policy families are recognized. The capture preserves every original policy byte.
+(pds-upstream) {
+	reverse_proxy {args[0]} {
+		import proxy-options
+		handle_response {
+			@ui {
+				method GET HEAD
+				path /account /account/* /oauth/authorize /oauth/authorize/redirect
+				expression `{http.reverse_proxy.header.Content-Type} == 'text/html; charset=utf-8' && type({http.reverse_proxy.header.Content-Security-Policy}) == string && {http.reverse_proxy.header.Content-Security-Policy}.matches("^(upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self'|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com)$") && ({http.reverse_proxy.status_code} == 200 || ({http.reverse_proxy.status_code} >= 400 && {http.reverse_proxy.status_code} <= 599))`
+			}
+			route @ui {
+				header {
+					Content-Security-Policy "^(upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self'|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com)$" "${1}; font-src https://{$PDS_HOST}/_unset/fonts/SpaceGrotesk-Variable.woff2 https://{$PDS_HOST}/_unset/fonts/JetBrainsMono-Variable.woff2"
+					defer
+				}
+				copy_response
+			}
+			copy_response
+		}
+	}
+}

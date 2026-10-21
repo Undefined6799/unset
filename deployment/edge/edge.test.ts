@@ -646,7 +646,7 @@ describe("edge site rules (P1.28f)", () => {
     // one upstream, and it is a placeholder, so no literal can alias the value behind {$PDS_UPSTREAM}.
     const proxy = (args: string) =>
       site.replace(
-        "\t\timport upstream {$PDS_UPSTREAM}\n",
+        "\t\timport pds-upstream {$PDS_UPSTREAM}\n",
         `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n` +
           "\t\t\theader_up X-Forwarded-Host {host}\n\t\t}\n",
       );
@@ -814,8 +814,8 @@ describe("edge site rules (P1.28f)", () => {
     pds(site.replace("\t\timport pds-ratelimit\n", ""));
     pds(site.replace("\troute {\n", "\troute /x {\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n\troute {\n"));
     pds(site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n"));
-    pds(site.replace("import upstream {$PDS_UPSTREAM}", "import upstream {$PDS_UPSTREAM} other:80"));
-    pds(site.replace("import upstream {$PDS_UPSTREAM}", "reverse_proxy other:80 {$PDS_UPSTREAM}"));
+    pds(site.replace("import pds-upstream {$PDS_UPSTREAM}", "import upstream {$PDS_UPSTREAM} other:80"));
+    pds(site.replace("import pds-upstream {$PDS_UPSTREAM}", "reverse_proxy other:80 {$PDS_UPSTREAM}"));
     edit({ "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") });
     // The zones: the count, the global zone and its matcher.
     edit({ "snippets/ratelimit.caddy": limits.replace("zone global {", "zone overall {") });
@@ -1058,7 +1058,14 @@ describe("local stack files (P1.34c)", () => {
         .flatMap((line) => copy(line) ?? [])
         .filter(({ flags }) => !flags.some((flag) => /^--from=/i.test(flag)))
         .flatMap(({ words }) => words.slice(0, -1));
-    expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    expect(sources(dockerfile)).toEqual([
+      "Caddyfile",
+      "snippets/",
+      "sites/pds.caddy",
+      "pds-public/_unset/fonts/",
+      "pds-licenses/",
+      "pds-fonts.json",
+    ]);
     for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
       expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
     }

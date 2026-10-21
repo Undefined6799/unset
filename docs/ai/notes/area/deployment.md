@@ -10,13 +10,15 @@ importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, deployment]
-checked: 2026-10-19
+checked: 2026-10-20
 ---
 # deployment
 
 **What it owns.** What puts the system on machines: Compose, edge, backup and preflight, as each lands.
 
 **Today.**
+- The PDS-only font policy and its threat/provenance contract live in `deployment/edge/README.md` (P2.24e).
+  Unsupported native policy families stay unchanged; an exact shape match alone is not styled-release admission.
 - `postgres/init/00-bootstrap.sh`: runs once at initdb as the bootstrap superuser and creates only `migrator`,
   `tap`, their databases and the PUBLIC revokes. Every other role comes from migrations. Trusted base.
 - `reserved-labels.txt`: handle labels no account may take; pds-admin enforces it at P2.09.

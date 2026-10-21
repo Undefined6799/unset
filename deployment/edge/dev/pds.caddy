@@ -13,6 +13,7 @@
 		import pds-ratelimit
 		import xrpc-guard
 		import blob-deny
-		import upstream {$PDS_UPSTREAM}
+		import pds-fonts
+		import pds-upstream {$PDS_UPSTREAM}
 	}
 }

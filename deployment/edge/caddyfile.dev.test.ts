@@ -197,7 +197,9 @@ describe("dev edge (P1.36b)", () => {
     ];
     for (const [file, text, line, problem] of cases) {
       expect(text, line).toContain(line);
-      expect(devProblems({ [file]: text.replace(line, "") }), line).toEqual([problem]);
+      expect(devProblems({ [file]: text.replace(line, "") }), line).toEqual(
+        line.includes("xrpc-guard") ? ["{$PDS_HOST}: outside the guarded PDS font route", problem] : [problem],
+      );
     }
     expect(read("snippets/security-headers.caddy")).toMatch(
       /^\(noindex\) \{\n\theader X-Robots-Tag "noindex, nofollow"\n\}$/m,

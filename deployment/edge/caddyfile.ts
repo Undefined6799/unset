@@ -35,6 +35,8 @@ export type Directive = {
   args: string[];
   /** For each argument, the `{$NAME}` placeholder it was written as, or null for a literal (P1.28l). */
   placeholders: (EnvName | null)[];
+  /** Exact configured-origin template provenance; never a whole-host placeholder. */
+  fontOriginArgs?: number[];
   block: Directive[] | null;
   /** The snippet whose import produced this directive at this level, or null when written in place. */
   via: string | null;
@@ -73,6 +75,21 @@ const PLACEHOLDERS: Readonly<Record<string, readonly string[]>> = {
   "{host}": ["header_up"],
 };
 
+// P2.24e: exact five-family proof, Caddy v2.11.7 CEL/reverse-proxy header joining and deferred replacement.
+// https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/reverseproxy/reverseproxy.go#L1153-L1162
+export const PDS_FONT_PATHS = [
+  "/_unset/fonts/SpaceGrotesk-Variable.woff2",
+  "/_unset/fonts/JetBrainsMono-Variable.woff2",
+];
+export const PDS_FONT_ROOT = "/etc/caddy/pds-public";
+export const PDS_FONT_TEMPLATE =
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Caddy regexp replacement capture, deliberately literal.
+  "${1}; font-src https://{$PDS_HOST}/_unset/fonts/SpaceGrotesk-Variable.woff2 https://{$PDS_HOST}/_unset/fonts/JetBrainsMono-Variable.woff2";
+export const PDS_FONT_POLICY =
+  "^(upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self'|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com)$";
+export const PDS_FONT_EXPRESSION =
+  "{http.reverse_proxy.header.Content-Type} == 'text/html; charset=utf-8' && type({http.reverse_proxy.header.Content-Security-Policy}) == string && {http.reverse_proxy.header.Content-Security-Policy}.matches(\"^(upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self'|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self'; default-src 'none'; frame-ancestors 'none'; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self'; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]='|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com|upgrade-insecure-requests; connect-src 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; default-src 'none'; frame-ancestors 'none'; frame-src https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; img-src https: data:; script-src 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' 'self' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com; style-src 'self' 'sha256-[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=' https://hcaptcha[.]com https://[*][.]hcaptcha[.]com)$\") && ({http.reverse_proxy.status_code} == 200 || ({http.reverse_proxy.status_code} >= 400 && {http.reverse_proxy.status_code} <= 599))";
+
 const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars_regexp"];
 /**
  * The directives allowed in each block: `global`, `site`, `route` and `snippet` (a snippet read on its own), then the
@@ -81,8 +98,8 @@ const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars
 const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   global: ["admin", "persist_config", "log", "servers"],
   site: ["bind", "respond", "tls", "log", "map", "log_append", "header", "route"],
-  route: ["@", "rate_limit", "respond", "header", "reverse_proxy"],
-  snippet: ["@", "log", "rate_limit", "map", "log_append", "header", "tls", "reverse_proxy", "respond"],
+  route: ["@", "rate_limit", "respond", "header", "reverse_proxy", "handle"],
+  snippet: ["@", "log", "rate_limit", "map", "log_append", "header", "tls", "reverse_proxy", "respond", "handle"],
   "@": MATCHERS,
   log: ["output", "level", "exclude", "format"],
   format: ["wrap", "fields"],
@@ -94,7 +111,13 @@ const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   map: "data",
   header: "data",
   respond: ["close"],
-  reverse_proxy: ["header_up", "transport"],
+  reverse_proxy: ["header_up", "transport", "handle_response"],
+  response: ["@", "route", "copy_response"],
+  "response-route": ["header", "copy_response"],
+  "font-header": "data",
+  "font-matcher": ["method", "path", "expression"],
+  "font-handler": ["header", "file_server"],
+  "font-files": ["root"],
   transport: ["dial_timeout", "response_header_timeout"],
   rate_limit: ["zone", "disable_metrics"],
   zone: ["match", "key", "ipv6_prefix", "events", "window"],
@@ -102,7 +125,7 @@ const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
 };
 
 /** A word; `env` names the `{$NAME}` placeholder it was written as, which is always the whole word (P1.28l). */
-type Token = { text: string; quoted: boolean; line: number; env: EnvName | null };
+type Token = { text: string; quoted: boolean; line: number; env: EnvName | null; fontOrigin?: true };
 type Line = { tokens: Token[]; via: string | null };
 type Env = Readonly<Partial<Record<EnvName, string>>>;
 
@@ -213,6 +236,7 @@ function withEnv(token: Token, env: Env): Token {
   });
   if (text.includes("{$")) fail(token.line, `unsupported placeholder in ${token.text}`);
   if (text === token.text) return token;
+  if (token.quoted && token.text === PDS_FONT_TEMPLATE) return { ...token, text, fontOrigin: true };
   // A placeholder is a whole word, so where it sits is a fact the edge rules can check (P1.28l).
   const [, scheme, name] = WHOLE_PLACEHOLDER.exec(token.text) ?? [];
   if (name === undefined || (scheme !== undefined && !HOSTS.includes(name as EnvName))) {
@@ -301,6 +325,7 @@ function word(token: Token): string {
 }
 
 function address(token: Token): string {
+  if (token.fontOrigin) fail(token.line, "a font origin template is not a site address");
   if (token.text.includes(",")) fail(token.line, "a comma in a site address is not supported");
   return word(token);
 }
@@ -333,6 +358,7 @@ function readBlock(lines: Line[], start: number, expander: Expander, level: stri
       continue;
     }
     const [name, ...rest] = line.tokens as [Token, ...Token[]];
+    if (name.fontOrigin) fail(name.line, "a font origin template cannot name a directive");
     if (name.env !== null) fail(name.line, `{$${name.env}} cannot name a directive`);
     const opens = isOpen(rest.at(-1) ?? name);
     const tokens = opens ? rest.slice(0, -1) : rest;
@@ -342,19 +368,47 @@ function readBlock(lines: Line[], start: number, expander: Expander, level: stri
       name: word(name),
       args,
       placeholders,
+      ...(tokens.some((t) => t.fontOrigin)
+        ? { fontOriginArgs: tokens.flatMap((t, i) => (t.fontOrigin ? [i] : [])) }
+        : {}),
       block: null as Directive[] | null,
       via: line.via,
       line: name.line,
     };
+    if (
+      tokens.some((t) => t.fontOrigin) &&
+      !(
+        level === "font-header" &&
+        name.text === "Content-Security-Policy" &&
+        tokens.length === 2 &&
+        tokens[1]?.fontOrigin
+      )
+    )
+      fail(name.line, "a font origin template is outside its response-header position");
     checkDirective(name, args, level);
     if (opens) {
-      const inner = name.text.startsWith("@") ? "@" : level === "site" && name.text === "route" ? "route" : name.text;
+      const inner = blockLevel(name.text, level);
       [directive.block, at] = readBlock(lines, at + 1, expander, inner);
     } else {
       at += 1;
     }
+    checkFontForm(directive, level);
     directives.push(directive);
   }
+}
+
+/** Response routes have a separate grammar from the one outer request route. */
+function blockLevel(name: string, level: string): string {
+  if (name.startsWith("@")) return level === "response" ? "font-matcher" : "@";
+  const scoped: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    site: { route: "route" },
+    response: { route: "response-route" },
+    "response-route": { header: "font-header" },
+    "font-handler": { file_server: "font-files" },
+  };
+  if (Object.hasOwn(scoped, level) && Object.hasOwn(scoped[level] ?? {}, name)) return scoped[level]?.[name] ?? name;
+  if (name === "handle_response") return "response";
+  return name === "handle" ? "font-handler" : name;
 }
 
 /** Refuses a directive the allowlist does not name at this level, and a placeholder outside where our files use it. */
@@ -365,18 +419,117 @@ function checkDirective(name: Token, args: readonly string[], level: string): vo
   if (allowed === undefined) fail(name.line, `${level} does not take a block`);
   const data = allowed === "data";
   const key = name.text.startsWith("@") ? "@" : name.text;
-  if (!data && !allowed.includes(key)) fail(name.line, `directive ${name.text} is not allowed in ${level}`);
+  if (!data && !allowed.includes(key) && !(level === "@" && key === "expression"))
+    fail(name.line, `directive ${name.text} is not allowed in ${level}`);
   if (key === "@" && args.length > 0 && !MATCHERS.includes(args[0] as string)) {
     fail(name.line, `matcher ${args[0]} is not allowed`);
   }
   if (/[{}]/.test(name.text)) fail(name.line, `unsupported placeholder in ${name.text}`);
   // A matcher line names its matcher first (`@m vars_regexp …`, `not path …`); the placeholder belongs to that.
   const user = key === "@" || key === "not" ? (args[0] ?? key) : data ? level : key;
+  if (fontArguments(key, args, level)) return;
   for (const arg of args) {
-    // A map entry's output may name a regexp capture (`${1}`), which is the map's own syntax, not a placeholder.
+    // A map entry's output may name a regexp capture (`${1}`), the map's syntax, not a placeholder.
     if (!/[{}]/.test(user === "map" ? arg.replaceAll(/\$\{\d+\}/g, "") : arg)) continue;
     if (!PLACEHOLDERS[arg]?.includes(user)) fail(name.line, `unsupported placeholder ${arg} in ${name.text}`);
   }
+}
+
+/** These whole arguments are the only embedded runtime placeholders the font forms admit. */
+function fontArguments(key: string, args: readonly string[], level: string): boolean {
+  if (key === "expression" && args.length === 1) {
+    if (level === "font-matcher") return args[0] === PDS_FONT_EXPRESSION;
+    return level === "@" && PDS_FONT_PATHS.some((path) => args[0] === `{http.request.orig_uri} == '${path}'`);
+  }
+  return (
+    level === "font-header" && key === "Content-Security-Policy" && args.length === 2 && args[0] === PDS_FONT_POLICY
+  );
+}
+
+/** Newly admitted syntax has only this proved use; no general CEL, response handler or static-file grammar. */
+function checkFontForm(d: Directive, level: string): void {
+  if (
+    !["handle_response", "handle", "expression"].includes(d.name) &&
+    !(d.name.startsWith("@font") && d.block !== null)
+  )
+    return;
+  const same = (want: unknown[]) => JSON.stringify(blockText([d])) === JSON.stringify(want);
+  const copy = ["copy_response", [], null];
+  const matcher = [
+    "@ui",
+    [],
+    [
+      ["method", ["GET", "HEAD"], null],
+      ["path", ["/account", "/account/*", "/oauth/authorize", "/oauth/authorize/redirect"], null],
+      ["expression", [PDS_FONT_EXPRESSION], null],
+    ],
+  ];
+  let valid = true;
+  if (d.name === "handle_response") {
+    const operation = d.block?.[1]?.block?.[0]?.block?.[0];
+    valid =
+      operation?.fontOriginArgs?.join() === "1" &&
+      same([
+        [
+          "handle_response",
+          [],
+          [
+            matcher,
+            [
+              "route",
+              ["@ui"],
+              [
+                [
+                  "header",
+                  [],
+                  [
+                    ["Content-Security-Policy", [PDS_FONT_POLICY, operation.args[1]], null],
+                    ["defer", [], null],
+                  ],
+                ],
+                copy,
+              ],
+            ],
+            copy,
+          ],
+        ],
+      ]);
+  } else if (d.name === "handle" || (d.name.startsWith("@font") && d.block !== null)) {
+    valid = PDS_FONT_PATHS.some((path, i) =>
+      same(
+        d.name === "handle"
+          ? [
+              [
+                "handle",
+                [`@font${i}`],
+                [
+                  ["header", ["Content-Type", "font/woff2"], null],
+                  ["header", ["Cache-Control", "public, max-age=0, must-revalidate"], null],
+                  ["header", ["Cross-Origin-Resource-Policy", "same-origin"], null],
+                  ["file_server", [], [["root", [PDS_FONT_ROOT], null]]],
+                ],
+              ],
+            ]
+          : [
+              [
+                `@font${i}`,
+                [],
+                [
+                  ["method", ["GET", "HEAD"], null],
+                  ["expression", [`{http.request.orig_uri} == '${path}'`], null],
+                ],
+              ],
+            ],
+      ),
+    );
+  } else if (d.name === "expression") {
+    valid =
+      d.args.length === 1 &&
+      (level === "font-matcher"
+        ? d.args[0] === PDS_FONT_EXPRESSION
+        : PDS_FONT_PATHS.some((path) => d.args[0] === `{http.request.orig_uri} == '${path}'`));
+  }
+  if (!valid) fail(d.line, "outside the exact PDS font form");
 }
 
 type Expander = { snippets: Map<string, Line[]>; imports: number };
@@ -385,6 +538,8 @@ type Expander = { snippets: Map<string, Line[]>; imports: number };
 function expand(line: Line, expander: Expander): Line[] {
   const [keyword, target, ...args] = line.tokens as [Token, Token | undefined, ...Token[]];
   if (target === undefined) return fail(keyword.line, "import without a target");
+  if (target.fontOrigin || args.some((token) => token.fontOrigin))
+    fail(target.line, "a font origin template cannot be a snippet name or argument");
   if (target.env !== null) return fail(target.line, `{$${target.env}} cannot name a snippet`);
   const body = expander.snippets.get(target.text);
   if (target.quoted || body === undefined) {
@@ -774,7 +929,12 @@ export function edgeSiteProblems(config: Caddyfile, mode: EdgeMode = "shipped"):
   const proxied = new Set<string>();
   for (const site of config.sites) {
     const zones = mode === "dev" && hostOf(site) === "APP_HOST" ? "app-ratelimit" : "pds-ratelimit";
-    found.push(...addressProblems(site), ...siteProblems(site, zones), ...schemeProblems(site, mode));
+    found.push(
+      ...addressProblems(site),
+      ...siteProblems(site, zones),
+      ...fontSiteProblems(site),
+      ...schemeProblems(site, mode),
+    );
     found.push(...positionProblems(site.directives, siteName(site), hostOf(site)));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
@@ -988,6 +1148,9 @@ function positionProblems(
   parents: Directive[] = [],
 ): string[] {
   return directives.flatMap((directive) => [
+    ...(directive.fontOriginArgs === undefined || fontOriginPosition(directive, parents, host)
+      ? []
+      : [`${owner}: a font origin template is outside the PDS response policy`]),
     ...directive.placeholders.flatMap((env, arg) =>
       env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, host })
         ? []
@@ -995,6 +1158,48 @@ function positionProblems(
     ),
     ...positionProblems(directive.block ?? [], owner, host, [...parents, directive]),
   ]);
+}
+
+/** The origin token is valid only on PDS_HOST's exact PDS_UPSTREAM response chain. */
+function fontOriginPosition(d: Directive, parents: Directive[], host: EnvName | null): boolean {
+  const [proxy, response, route, header] = parents.slice(-4);
+  return (
+    host === "PDS_HOST" &&
+    d.fontOriginArgs?.join() === "1" &&
+    d.name === "Content-Security-Policy" &&
+    proxy?.name === "reverse_proxy" &&
+    upstreamOf(proxy) === "PDS_UPSTREAM" &&
+    response?.name === "handle_response" &&
+    route?.name === "route" &&
+    route.args.join() === "@ui" &&
+    header?.name === "header"
+  );
+}
+
+/** Static files remain after every PDS guard and before proxying, inside the limiter's one request route. */
+function fontSiteProblems(site: Site): string[] {
+  // siteProblems already rejects an ambiguous request route; do not diagnose its partial contents.
+  if (named(site.directives, "route").length !== 1) return [];
+  const all = flatten(site.directives);
+  const special = all.filter((d) => d.name === "handle" || d.name === "handle_response");
+  if (special.length === 0) return [];
+  const route = named(site.directives, "route")[0]?.block ?? [];
+  const fonts = route.filter((d) => d.via === "pds-fonts");
+  const first = route.findIndex((d) => d.via === "pds-fonts");
+  const guardEnd = Math.max(...route.flatMap((d, i) => (["xrpc-guard", "blob-deny"].includes(d.via ?? "") ? [i] : [])));
+  const proxyAt = route.findIndex((d) => d.name === "reverse_proxy");
+  const safe =
+    hostOf(site) === "PDS_HOST" &&
+    route.some((d) => d.via === "xrpc-guard") &&
+    first > guardEnd &&
+    guardEnd >= 0 &&
+    proxyAt > first + 5 &&
+    fonts.map((d) => d.name).join() === "@font0,handle,@font1,handle,@fontspace,respond" &&
+    fonts[4]?.args.join(" ") === "path /_unset/fonts /_unset/fonts/*" &&
+    fonts[5]?.args.join(" ") === "@fontspace 404" &&
+    fonts.every((d, i) => route[first + i] === d) &&
+    special.every((d) => d.via === (d.name === "handle" ? "pds-fonts" : "pds-upstream"));
+  return safe ? [] : [`${siteName(site)}: outside the guarded PDS font route`];
 }
 
 function siteProblems(site: Site, zones: string): string[] {

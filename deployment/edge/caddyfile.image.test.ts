@@ -25,6 +25,10 @@ import {
   DEV_PROXY_ADDRESS,
   DEV_TLS,
   type EdgeFiles,
+  PDS_FONT_EXPRESSION,
+  PDS_FONT_PATHS,
+  PDS_FONT_POLICY,
+  PDS_FONT_TEMPLATE,
   readEdgeConfig,
 } from "./caddyfile.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
@@ -141,7 +145,14 @@ describe("caddyfile reader against caddy adapt", () => {
     const handlers = (route?.block ?? []).filter((d) => !d.name.startsWith("@")).map((d) => HANDLER[d.name] ?? d.name);
     const pdsRoute = adaptedPdsRoute(theirs);
     expect(handlers).toEqual(pdsRoute.flatMap((r) => r.handle.map((h) => h.handler)));
-    expect(route?.block?.map((d) => d.via)).toEqual(["pds-ratelimit", ...Array(6).fill("xrpc-guard"), "upstream"]);
+    expect(route?.block?.map((d) => d.via)).toEqual([
+      "pds-ratelimit",
+      ...Array(6).fill("xrpc-guard"),
+      ...Array(6).fill("pds-fonts"),
+      "pds-upstream",
+    ]);
+    expectFontAdapt(pdsRoute);
+    expectPackagedFonts(image);
     const zones = route?.block?.find((d) => d.name === "rate_limit")?.block?.filter((d) => d.name === "zone") ?? [];
     const limits = pdsRoute.flatMap((r) => r.handle).find((h) => h.handler === "rate_limit")?.rate_limits ?? {};
     expect(zones.map((zone) => zone.args[0]).sort()).toEqual(Object.keys(limits).sort());
@@ -264,8 +275,19 @@ describe("caddyfile reader against caddy adapt", () => {
   }, 600_000);
 });
 
-type AdaptedHandler = { handler: string; routes?: AdaptedRoute[]; rate_limits?: Record<string, AdaptedZone> };
-type AdaptedRoute = { match?: { host?: string[] }[]; handle: AdaptedHandler[] };
+type AdaptedHandler = {
+  handler: string;
+  routes?: AdaptedRoute[];
+  rate_limits?: Record<string, AdaptedZone>;
+  handle_response?: unknown;
+  hide?: string[];
+  root?: string;
+};
+type AdaptedRoute = {
+  match?: { host?: string[]; expression?: { expr: string; name: string }; method?: string[]; path?: string[] }[];
+  handle: AdaptedHandler[];
+  group?: string;
+};
 type AdaptedZone = { key: string; ipv6_prefix: number; max_events: number; window: number; match?: unknown };
 type AdaptedServer = {
   listen: string[];
@@ -297,7 +319,7 @@ const modules = (value: unknown): string[] =>
       );
 
 /** The Caddyfile directive each adapted handler comes from, where the names differ. */
-const HANDLER: Record<string, string> = { respond: "static_response" };
+const HANDLER: Record<string, string> = { respond: "static_response", handle: "subroute" };
 /** Caddyfile placeholder shorthands the zones use, in their adapted long form (Caddy v2.11.7 caddyfile/parse.go). */
 const KEY: Record<string, string> = { "{client_ip}": "{http.vars.client_ip}" };
 
@@ -383,4 +405,103 @@ function adaptedPdsRoute(adapted: Adapted): AdaptedRoute[] {
   const handlers = (site?.handle[0]?.routes ?? []).flatMap((r) => r.handle);
   const block = handlers.find((h) => h.routes?.some((r) => r.handle.some((x) => x.handler === "rate_limit")));
   return block?.routes ?? [];
+}
+
+/** Compare the full native response-handler JSON: matching, replacement deferral and both unchanged copies. */
+function expectFontAdapt(routes: AdaptedRoute[]): void {
+  const proxy = routes.flatMap((r) => r.handle).find((h) => h.handler === "reverse_proxy");
+  expect(proxy?.handle_response).toStrictEqual([
+    {
+      routes: [
+        {
+          match: [
+            {
+              expression: { expr: PDS_FONT_EXPRESSION, name: "ui" },
+              method: ["GET", "HEAD"],
+              path: ["/account", "/account/*", "/oauth/authorize", "/oauth/authorize/redirect"],
+            },
+          ],
+          handle: [
+            {
+              handler: "subroute",
+              routes: [
+                {
+                  handle: [
+                    {
+                      handler: "headers",
+                      response: {
+                        deferred: true,
+                        replace: {
+                          "Content-Security-Policy": [
+                            {
+                              search_regexp: PDS_FONT_POLICY,
+                              replace: PDS_FONT_TEMPLATE.replaceAll("{$PDS_HOST}", PDS_HOST),
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    { handler: "copy_response" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { handle: [{ handler: "copy_response" }] },
+      ],
+    },
+  ]);
+  const fontRoutes = routes.filter((r) => r.match?.[0]?.expression?.name.startsWith("font"));
+  expect(fontRoutes).toHaveLength(2);
+  expect(fontRoutes[0]?.group).toBeTypeOf("string");
+  expect(fontRoutes[1]?.group).toBe(fontRoutes[0]?.group);
+  for (const [i, path] of PDS_FONT_PATHS.entries()) {
+    const route = fontRoutes[i];
+    expect(route?.match).toStrictEqual([
+      { method: ["GET", "HEAD"], expression: { expr: `{http.request.orig_uri} == '${path}'`, name: `font${i}` } },
+    ]);
+    const handlers = route?.handle[0]?.routes?.[0]?.handle ?? [];
+    const file = handlers.at(-1);
+    expect({ ...file, hide: undefined }).toStrictEqual({
+      handler: "file_server",
+      root: "/etc/caddy/pds-public",
+      hide: undefined,
+    });
+    expect(file?.hide?.slice().sort()).toStrictEqual(
+      [
+        "/etc/caddy/sites/enabled/pds.caddy",
+        ...[
+          "log",
+          "pds-fonts",
+          "pds-upstream",
+          "ratelimit",
+          "route-class",
+          "security-headers",
+          "tls",
+          "upstream",
+          "xrpc-guard",
+        ].map((name) => `/etc/caddy/snippets/${name}.caddy`),
+      ].sort(),
+    );
+    expect(handlers.slice(0, -1)).toStrictEqual([
+      { handler: "headers", response: { set: { "Content-Type": ["font/woff2"] } } },
+      { handler: "headers", response: { set: { "Cache-Control": ["public, max-age=0, must-revalidate"] } } },
+      { handler: "headers", response: { set: { "Cross-Origin-Resource-Policy": ["same-origin"] } } },
+    ]);
+  }
+}
+
+/** Final UID can read exact fonts/licences; files remain regular, root-owned and non-writable. */
+function expectPackagedFonts(image: string): void {
+  const files = JSON.parse(readFileSync(join(EDGE, "pds-fonts.json"), "utf8")) as { copy: string; sha256: string }[];
+  for (const file of files) {
+    const path = `/etc/caddy/${file.copy}`;
+    const hashed = docker(["run", "--rm", "--entrypoint", "sha256sum", image, path], CALL_MS);
+    expect(hashed.code).toBe(0);
+    expect(hashed.out.trim()).toBe(`${file.sha256}  ${path}`);
+    const stat = docker(["run", "--rm", "--entrypoint", "stat", image, "-c", "%u:%g:%a:%h:%F", path], CALL_MS);
+    expect(stat.code).toBe(0);
+    expect(stat.out.trim()).toBe("0:0:644:1:regular file");
+  }
 }

@@ -1,0 +1,22 @@
+[
+  {
+    "source": "shared/ui/fonts/SpaceGrotesk-Variable.woff2",
+    "copy": "pds-public/_unset/fonts/SpaceGrotesk-Variable.woff2",
+    "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+  },
+  {
+    "source": "shared/ui/fonts/JetBrainsMono-Variable.woff2",
+    "copy": "pds-public/_unset/fonts/JetBrainsMono-Variable.woff2",
+    "sha256": "7fd1f69642aa7f2bd41d917bf0e434c4f21911749f6d89455d5b9114547a8c9c"
+  },
+  {
+    "source": "shared/ui/fonts/OFL-SpaceGrotesk.txt",
+    "copy": "pds-licenses/OFL-SpaceGrotesk.txt",
+    "sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72"
+  },
+  {
+    "source": "shared/ui/fonts/OFL-JetBrainsMono.txt",
+    "copy": "pds-licenses/OFL-JetBrainsMono.txt",
+    "sha256": "a76abf002c49097d146e86740a3105a5d00450b1592e820a1109a8c5680cd697"
+  }
+]

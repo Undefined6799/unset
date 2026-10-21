@@ -1,0 +1,30 @@
+# P2.24e: original-URI equality rejects query/encoding/traversal variants before the fixed static root.
+# Reusable filenames require revalidation. Licences and provenance stay outside the public root.
+(pds-fonts) {
+	@font0 {
+		method GET HEAD
+		expression `{http.request.orig_uri} == '/_unset/fonts/SpaceGrotesk-Variable.woff2'`
+	}
+	handle @font0 {
+		header Content-Type font/woff2
+		header Cache-Control "public, max-age=0, must-revalidate"
+		header Cross-Origin-Resource-Policy same-origin
+		file_server {
+			root /etc/caddy/pds-public
+		}
+	}
+	@font1 {
+		method GET HEAD
+		expression `{http.request.orig_uri} == '/_unset/fonts/JetBrainsMono-Variable.woff2'`
+	}
+	handle @font1 {
+		header Content-Type font/woff2
+		header Cache-Control "public, max-age=0, must-revalidate"
+		header Cross-Origin-Resource-Policy same-origin
+		file_server {
+			root /etc/caddy/pds-public
+		}
+	}
+	@fontspace path /_unset/fonts /_unset/fonts/*
+	respond @fontspace 404
+}
