@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { type PlaywrightReport, problems, SKIP_ALLOWANCE } from "./assert-tests-ran.ts";
+import { type PlaywrightReport, problems, problemsAcross, SKIP_ALLOWANCE } from "./assert-tests-ran.ts";
 
 const today = "2026-10-17";
 
@@ -45,5 +45,37 @@ describe("assert_tests_ran_skip_fails", () => {
 
   test("the committed allowance is empty", () => {
     expect(SKIP_ALLOWANCE).toEqual([]);
+  });
+});
+
+describe("assert_tests_ran_across_jobs", () => {
+  test("specs from every job's report count together", () => {
+    const reports = [
+      { name: "chromium.json", report: report("expected", "headers.spec.ts") },
+      { name: "webkit.json", report: report("expected") },
+    ];
+    expect(problemsAcross(reports, ["a11y.spec.ts", "headers.spec.ts"], [], today)).toEqual([]);
+  });
+
+  test("a spec no job ran fails", () => {
+    const reports = [{ name: "chromium.json", report: report("expected") }];
+    expect(problemsAcross(reports, ["a11y.spec.ts", "headers.spec.ts"], [], today)).toEqual([
+      "discovered test file did not run: headers.spec.ts",
+    ]);
+  });
+
+  test("a job whose report ran no tests fails", () => {
+    const reports = [
+      { name: "chromium.json", report: report("expected") },
+      { name: "firefox.json", report: { suites: [] } },
+    ];
+    expect(problemsAcross(reports, ["a11y.spec.ts"], [], today)).toEqual(["report ran no tests: firefox.json"]);
+  });
+
+  test("no reports at all fails", () => {
+    expect(problemsAcross([], ["a11y.spec.ts"], [], today)).toEqual([
+      "no reports given",
+      "discovered test file did not run: a11y.spec.ts",
+    ]);
   });
 });
