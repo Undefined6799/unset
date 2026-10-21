@@ -6,7 +6,7 @@
 import { IslandSlot } from "@unset/shared-islands";
 import { useId } from "react";
 import search from "../../islands/search.island.tsx";
-import type { SafeHref } from "../../safe-href.ts";
+import { type SafeHref, safeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { Kbd } from "../Kbd/Kbd.tsx";
@@ -35,6 +35,9 @@ export function Search({
   shortcut = true,
   className,
 }: SearchProps) {
+  // SafeHref does not record which schemes it was checked against, so a same-origin path is checked here: a query
+  // never leaves for another origin from the browser (ADR 0035). A wrong action is a programming error.
+  if (safeHref(action, ["path"]) === null) throw new Error("Search action must be a same-origin path");
   // The island finds the form by this id; it comes from React, never from data.
   const id = useId();
   return (
@@ -63,6 +66,12 @@ export function Search({
           />
           {shortcut ? <Kbd className={classNames(styles.hint)}>/</Kbd> : null}
         </div>
+        {/* The form's default button, first in tree order, so implicit submission (a plain Enter) goes to `action`
+          and never to the island's web button (HTML, "implicit submission"). Hidden and out of the tab order: the
+          field's own Enter is the way to it. */}
+        <button type="submit" hidden tabIndex={-1}>
+          {label}
+        </button>
         <IslandSlot name="search" island={search} props={{ form: id, web: webAction, shortcut }} />
       </form>
     </search>

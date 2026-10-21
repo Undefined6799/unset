@@ -50,9 +50,25 @@ describe("Search", () => {
     expect(html).toContain('value="a &quot;b&quot; &lt;c&gt;"');
   });
 
+  it("search_default_button_is_the_unset_search", () => {
+    // Implicit submission clicks the form's first submit button (HTML, "implicit submission"), hidden or not, so the
+    // first one must carry no formaction or a plain Enter would go to the web.
+    const html = renderToStaticMarkup(<Search action={people} webAction={web} />);
+    const first = /<button [^>]*type="submit"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(first).not.toBe("");
+    expect(first).not.toContain("formAction");
+  });
+
+  it("search_action_must_be_a_path", () => {
+    const external = safeHref("https://evil.example/search", ["https:"]) as SafeHref;
+    expect(external).not.toBeNull();
+    expect(() => renderToStaticMarkup(<Search action={external} webAction={web} />)).toThrow();
+    expect(() => renderToStaticMarkup(<Search action={people} webAction={external} />)).toThrow();
+  });
+
   it("search_web_submit_targets_web_action", () => {
     const html = renderToStaticMarkup(<Search action={people} webAction={web} />);
-    const button = /<button [^>]*>/.exec(html)?.[0] ?? "";
+    const button = /<button [^>]*formAction[^>]*>/.exec(html)?.[0] ?? "";
     for (const attribute of ['type="submit"', 'formAction="/search"', "hidden", 'tabindex="-1"'])
       expect(button).toContain(attribute);
   });
