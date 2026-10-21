@@ -11,4 +11,4 @@ This manifest records only `GET /health`.
 
 | Method | Path | Status | Group | Session | CSRF | Rate limit | Buckets | Accepts | Body limit | Mutates | Middleware | Why | Input | Output | Errors | Auth |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GET | `/health` | built | static | not recorded | no | exempt | not recorded | none | not recorded | no | requestId → methodCheck | Readiness for container probes. The kit adds this route (shared/http/health.ts). | No request body. | JSON with status, service and commit. 200 when ready. | 503 when status is starting, unready or draining (shared/http/health.ts). | The manifest omits requiresSession. The kit route is defined with session none and reads no session (shared/http/server.ts). |
+| GET | `/health` | built | static | not recorded | no | exempt | not recorded | none | not recorded | no | requestId → methodCheck | Readiness for container probes. The kit adds this route (shared/http/health.ts). | No request body. | JSON with status, service and commit. 200 when ready. | 503 when status is starting, unready or draining (shared/http/health.ts). | none |

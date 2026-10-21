@@ -4,4 +4,4 @@
   input: "No request body."
   output: "JSON with status, service and commit. 200 when ready."
   errors: "503 when status is starting, unready or draining (shared/http/health.ts)."
-  auth: "The manifest omits requiresSession. The kit route is defined with session none and reads no session (shared/http/server.ts)."
+  auth: "none"
