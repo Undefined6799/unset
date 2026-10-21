@@ -32,7 +32,7 @@
         "Native auto popover; close after caller-confirmed committed navigation",
         "Pure ./presentation package entry exports Navigation/Button/Input/Icon/Avatar/safeHref and needed types without Header or island runtime",
         "Alex approved browser feedback on 2026-10-21: remove the redundant popup Close control while retaining title and ordinary links",
-        "Phone current glyph/avatar lifts 16px using space-4 while its 48px target and focus outline stay stationary; 28px glyph/40px avatar extends 6px/12px above the dock; no current/open-menu underline",
+        "Phone current glyph/avatar lifts 12px using space-3 while its 48px target and focus outline stay stationary; 28px glyph/40px avatar extends 2px/8px above the dock; no current/open-menu underline",
         "Alex approved larger phone icons and a fixed icon-shaped hard shadow on 2026-10-21: Menu/primary 28px, anonymous profile 24px, selected artwork casts a zero-blur shadow-hard copy at its resting position; desktop sizes and global Icon API unchanged",
         "Alex's latest 2026-10-21 feedback approves a wider, thinner 48px-tall floating phone dock: equal thirds, no padding, matching left/right/bottom max(20px, safe area) gaps, radius-xs, line outline and shadow-menu; popup stays 16px above the dock",
         "Menu is current only when an item is current; opening the popup alone selects no destination; desktop rail and popup row treatment stay unchanged"

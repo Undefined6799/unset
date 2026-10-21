@@ -604,7 +604,7 @@
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "03a9123285fd5c5d230cac64f6eb075a515a6cadcee29cd4d1f216edaa702101",
+    "sha256": "529a62bee5a6acb7ee8355c5a3986db943be7a7500d210f3333bedadcc14905c",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",
