@@ -18,7 +18,7 @@ The six folders under `interfaces/` on this tree. Each one is its own package an
 
 | Process | Path | Page |
 | --- | --- | --- |
-| http | `interfaces/http` | [http](http/) |
+| http | `interfaces/http` | [http](./http/) |
 | admin | `interfaces/admin` | [admin](admin/) |
 | api | `interfaces/api` | [api](api/) |
 | indexer | `interfaces/indexer` | [indexer](indexer/) |
@@ -94,6 +94,6 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 `infrastructure/postgres/roles.ts` syncs passwords only when `passwordFrom` is not null.
 
-Only [http](http/) opens a pool. The other five `compose.ts` files build the server kit and nothing else. Per-role grants are on each page.
+Only [http](./http/) opens a pool. The other five `compose.ts` files build the server kit and nothing else. Per-role grants are on each page.
 
 `review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2). There is no `interfaces/review-egress/` folder **(planned)**.
