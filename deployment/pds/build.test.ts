@@ -107,7 +107,7 @@ test.each([
   }
 });
 
-test.each(["none", "package version", "lockfile", "package manager", "source revision"])(
+test.each(["none", "node version", "package version", "lockfile", "package manager", "source revision"])(
   "source_input_assertions_reject_drift_before_install: %s",
   (drift) => {
     const dir = mkdtempSync(join(tmpdir(), "pds-source-"));
@@ -138,7 +138,22 @@ test.each(["none", "package version", "lockfile", "package manager", "source rev
       const recipe = readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8");
       const program = /node -e '([^']+)' \/source.lock.json/.exec(recipe)?.[1];
       expect(program).toBeDefined();
-      const result = spawnSync(process.execPath, ["-e", program as string, lockPath], { cwd: dir });
+      // Execute the unchanged assertion with builder metadata, independent of the host Node version.
+      // Node 26.12.0 node:vm runInNewContext supplies the fixture global without changing the host process.
+      const result = spawnSync(
+        process.execPath,
+        [
+          "-e",
+          `require("node:vm").runInNewContext(process.argv[1], {
+            require,
+            process: { argv: ["node", process.argv[2]], versions: { node: process.argv[3] } },
+          });`,
+          program as string,
+          lockPath,
+          drift === "node version" ? "0.0.0" : lock.builder.node,
+        ],
+        { cwd: dir },
+      );
       expect(result.status === 0).toBe(drift === "none");
     } finally {
       rmSync(dir, { recursive: true, force: true });
