@@ -408,6 +408,10 @@ module.exports = {
         "^(apps|interfaces|domains|infrastructure|shared|deployment|scripts|tests)/.+/((dist|coverage)/)",
         "^scripts/guards/fixtures/",
         "^scripts/lint/semgrep/fixtures/",
+        // The docs site is not product code. Its vendored FlexSearch bundle (and Hugo's
+        // public/ and resources/ output) is browser JavaScript; the bundle contains a
+        // Node require("worker_threads") that is not an import the matrix governs (P0.09).
+        "^docs/site/(assets/js/vendor|public|resources)/",
       ],
     },
   },
