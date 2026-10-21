@@ -1,4 +1,4 @@
-// The required check job's gate (architecture rulings 2026-10-07-lint-clean-repo-duplicate and
+// The required check's gate (architecture rulings 2026-10-07-lint-clean-repo-duplicate and
 // 2026-10-07-check-job-gate-pinning). A skipped required check counts as passing, so whatever decides whether the gate
 // runs, and what it runs, is pinned by exact value here: the job's `if:`, every step through `npm test`, the
 // environment those steps see, the root scripts they call, and a ci.yml that reads one way only. Any change to them is
@@ -7,6 +7,7 @@
 // defaults, and jobs.<job_id>.continue-on-error. npm lifecycle scripts (docs.npmjs.com, "Scripts"): `npm ci` runs
 // preinstall, install, postinstall, prepare and their pre/post forms.
 // yaml 2.9.1 (node_modules/yaml): parseDocument with uniqueKeys, visit.
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -34,7 +35,7 @@ const GATE_STEPS: Step[] = [
     run: 'echo "BASE_SHA=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"',
   },
   { run: "npm run guards" },
-  { run: "npm test" },
+  { run: "npm test -- --units" },
 ];
 const CHECK_ENV = ["BASE_SHA", "RENOVATE_IMAGE"];
 const ROOT_SCRIPTS = {
@@ -42,6 +43,7 @@ const ROOT_SCRIPTS = {
   lint: "biome ci . && depcruise --config scripts/lint/.dependency-cruiser.cjs .",
   guards: "vitest run scripts/guards",
   test: "node scripts/test/run.ts",
+  "test:images": "node scripts/test/run.ts --images",
 };
 /** The scripts `npm ci` runs on its own (docs.npmjs.com, "Scripts", npm ci). */
 const LIFECYCLE = ["preinstall", "install", "postinstall", "prepare", "preprepare", "postprepare"];
@@ -58,7 +60,7 @@ function readWorkflow(text: string): { workflow: Workflow; problems: string[] } 
   return { workflow: problems.length === 0 ? (doc.toJS() as Workflow) : {}, problems };
 }
 
-const checkJob = (text: string): Job => readWorkflow(text).workflow.jobs?.check ?? {};
+const checkJob = (text: string): Job => readWorkflow(text).workflow.jobs?.code ?? {};
 
 /**
  * A step with its `uses` split on the last `@`: a 40-hex ref becomes `@<sha>`, so Renovate's SHA bumps compare equal.
@@ -76,25 +78,25 @@ function normalised(step: Step): Step {
 }
 
 const ifProblems = (text: string): string[] =>
-  checkJob(text).if === CHECK_IF ? [] : ["the check job's if differs from the pinned condition"];
+  checkJob(text).if === CHECK_IF ? [] : ["the code job's if differs from the pinned condition"];
 
 function gateStepProblems(text: string): string[] {
   const steps = checkJob(text).steps ?? [];
-  const tests = steps.findIndex((step) => step.run === "npm test");
-  if (tests === -1) return ["no step runs exactly npm test"];
+  const tests = steps.findIndex((step) => step.run === "npm test -- --units");
+  if (tests === -1) return ["no step runs exactly npm test -- --units"];
   const gate = steps.slice(0, tests + 1).map(normalised);
   return JSON.stringify(gate) === JSON.stringify(GATE_STEPS) ? [] : ["the gate steps differ from the pinned sequence"];
 }
 
 function envProblems(text: string): string[] {
   const { workflow } = readWorkflow(text);
-  const job = workflow.jobs?.check ?? {};
+  const job = workflow.jobs?.code ?? {};
   const problems: string[] = [];
   if (workflow.defaults !== undefined) problems.push("workflow defaults");
   if (workflow.env !== undefined) problems.push("workflow env");
-  if (job.defaults !== undefined) problems.push("check job defaults");
+  if (job.defaults !== undefined) problems.push("code job defaults");
   const keys = Object.keys(job.env ?? {}).sort();
-  if (JSON.stringify(keys) !== JSON.stringify(CHECK_ENV)) problems.push(`check job env keys: ${keys.join(", ")}`);
+  if (JSON.stringify(keys) !== JSON.stringify(CHECK_ENV)) problems.push(`code job env keys: ${keys.join(", ")}`);
   return problems;
 }
 
@@ -121,18 +123,18 @@ function scriptProblems(text: string): string[] {
   return [...changed.map(([name]) => `script ${name} changed`), ...lifecycle.map((name) => `lifecycle script ${name}`)];
 }
 
-/** What keeps ci.yml's check job from linting the repository, as one line each; none means it does. */
+/** What keeps ci.yml's code job from linting the repository, as one line each; none means it does. */
 function lintStepProblems(workflowText: string): string[] {
-  const job = (parseDocument(workflowText).toJS() as Workflow).jobs?.check;
-  if (job === undefined) return ["no check job"];
+  const job = (parseDocument(workflowText).toJS() as Workflow).jobs?.code;
+  if (job === undefined) return ["no code job"];
   const steps = job.steps ?? [];
   const lint = steps.findIndex((step) => step.run === "npm run lint");
-  const tests = steps.findIndex((step) => step.run === "npm test");
+  const tests = steps.findIndex((step) => step.run === "npm test -- --units");
   const problems: string[] = [];
   if (lint === -1) problems.push("no step runs exactly npm run lint");
-  if (tests === -1) problems.push("no step runs exactly npm test");
-  if (lint !== -1 && tests !== -1 && lint > tests) problems.push("npm run lint runs after npm test");
-  if (job["continue-on-error"] !== undefined) problems.push("the check job sets continue-on-error");
+  if (tests === -1) problems.push("no step runs exactly npm test -- --units");
+  if (lint !== -1 && tests !== -1 && lint > tests) problems.push("npm run lint runs after npm test -- --units");
+  if (job["continue-on-error"] !== undefined) problems.push("the code job sets continue-on-error");
   if (lint !== -1 && steps[lint]?.["continue-on-error"] !== undefined) {
     problems.push("the lint step sets continue-on-error");
   }
@@ -140,11 +142,11 @@ function lintStepProblems(workflowText: string): string[] {
 }
 
 const FIXTURE = `jobs:
-  check:
+  code:
     steps:
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      - run: npm test -- --units
 `;
 /** The real ci.yml with one edit; every red fixture below starts from the file GitHub runs. */
 const edited = (from: string, to: string): string => {
@@ -153,9 +155,9 @@ const edited = (from: string, to: string): string => {
 };
 const CHECKOUT = /actions\/checkout@[0-9a-f]{40}/.exec(CI)?.[0] ?? "";
 const LINT = "      - run: npm run lint\n";
-const TEST = "      - run: npm test\n";
+const TEST = "      - run: npm test -- --units\n";
 
-describe("check job", () => {
+describe("code job", () => {
   test("check_job_runs_lint_before_tests", () => {
     expect(lintStepProblems(CI)).toEqual([]);
     expect(lintStepProblems(FIXTURE)).toEqual([]);
@@ -171,17 +173,17 @@ describe("check job", () => {
         FIXTURE.replace("      - run: npm run lint\n", "      - run: npm run lint\n        continue-on-error: true\n"),
       ),
     ).toEqual(["the lint step sets continue-on-error"]);
-    expect(lintStepProblems(FIXTURE.replace("  check:\n", "  check:\n    continue-on-error: true\n"))).toEqual([
-      "the check job sets continue-on-error",
+    expect(lintStepProblems(FIXTURE.replace("  code:\n", "  code:\n    continue-on-error: true\n"))).toEqual([
+      "the code job sets continue-on-error",
     ]);
-    const after = "jobs:\n  check:\n    steps:\n      - run: npm test\n      - run: npm run lint\n";
-    expect(lintStepProblems(after)).toEqual(["npm run lint runs after npm test"]);
-    expect(lintStepProblems("jobs:\n  audit:\n    steps: []\n")).toEqual(["no check job"]);
+    const after = "jobs:\n  code:\n    steps:\n      - run: npm test -- --units\n      - run: npm run lint\n";
+    expect(lintStepProblems(after)).toEqual(["npm run lint runs after npm test -- --units"]);
+    expect(lintStepProblems("jobs:\n  audit:\n    steps: []\n")).toEqual(["no code job"]);
   });
 
   test("check_job_if_exact", () => {
     expect(ifProblems(CI)).toEqual([]);
-    const differs = ["the check job's if differs from the pinned condition"];
+    const differs = ["the code job's if differs from the pinned condition"];
     expect(ifProblems(edited(`if: ${CHECK_IF}`, `if: ${CHECK_IF} && false`))).toEqual(differs);
     expect(ifProblems(edited(`    if: ${CHECK_IF}\n`, ""))).toEqual(differs);
   });
@@ -200,14 +202,14 @@ describe("check job", () => {
       edited(CHECKOUT, `actions/checkout@${"f".repeat(40)}@v7`),
       edited(CHECKOUT, `someone/checkout@${"f".repeat(40)}`),
       edited(LINT, "      - run: npm run lint\n        if: false\n"),
-      edited(TEST, "      - run: npm test\n        shell: sh\n"),
+      edited(TEST, "      - run: npm test -- --units\n        shell: sh\n"),
       edited(LINT, `${LINT}      - run: echo inserted\n`),
       edited(LINT, ""),
       edited("persist-credentials: false", "persist-credentials: true"),
     ]) {
       expect(gateStepProblems(red)).toEqual(differ);
     }
-    expect(gateStepProblems(edited(TEST, ""))).toEqual(["no step runs exactly npm test"]);
+    expect(gateStepProblems(edited(TEST, ""))).toEqual(["no step runs exactly npm test -- --units"]);
   });
 
   test("check_job_no_defaults_or_extra_env", () => {
@@ -222,9 +224,9 @@ describe("check job", () => {
       envProblems(
         edited("    timeout-minutes: 15\n", "    timeout-minutes: 15\n    defaults:\n      run:\n        shell: sh\n"),
       ),
-    ).toEqual(["check job defaults"]);
+    ).toEqual(["code job defaults"]);
     expect(envProblems(edited("    env:\n", "    env:\n      npm_config_script_shell: /bin/true\n"))).toEqual([
-      "check job env keys: BASE_SHA, RENOVATE_IMAGE, npm_config_script_shell",
+      "code job env keys: BASE_SHA, RENOVATE_IMAGE, npm_config_script_shell",
     ]);
   });
 
@@ -238,7 +240,7 @@ describe("check job", () => {
       ),
     ).toEqual(["the workflow sets NPM_CONFIG_IGNORE_SCRIPTS"]);
     expect(npmConfigEnvProblems(edited("    env:\n", "    env:\n      npm_config_script_shell: /bin/true\n"))).toEqual([
-      "job check sets npm_config_script_shell",
+      "job code sets npm_config_script_shell",
     ]);
     const step =
       "jobs:\n  audit:\n    steps:\n      - run: npm ci\n        env:\n          Npm_Config_Registry: https://registry.example\n";
@@ -264,8 +266,68 @@ describe("check job", () => {
       readWorkflow(edited("    permissions:\n      contents: read\n", "    permissions: &p\n      contents: read\n"))
         .problems,
     ).toEqual(["anchor"]);
-    const aliased = "x: &a {run: npm test}\njobs:\n  check:\n    steps: [*a]\n";
+    const aliased = "x: &a {run: npm test -- --units}\njobs:\n  code:\n    steps: [*a]\n";
     expect(readWorkflow(aliased).problems).toEqual(["anchor", "alias"]);
-    expect(readWorkflow("jobs:\n  check:\n    <<: {if: 'true'}\n").problems).toEqual(["merge key"]);
+    expect(readWorkflow("jobs:\n  code:\n    <<: {if: 'true'}\n").problems).toEqual(["merge key"]);
+  });
+});
+
+// P0.07d: `check` holds the required name and runs always(), so a failed, cancelled or skipped code or image-tests
+// job turns it red instead of skipping it (expressions, "Status check functions"; a skipped required check reads as
+// passing). Its step and image-tests' steps are pinned exactly, like the code job's.
+const GATE_IF = `always() && (${CHECK_IF})`;
+const gh = (inner: string): string => `$${"{{"} ${inner} }}`;
+const GATE_STEP: Step = {
+  name: "Require code and image-tests to have succeeded",
+  env: { CODE_RESULT: gh("needs.code.result"), IMAGES_RESULT: gh("needs.image-tests.result") },
+  run: [
+    'if [ "$CODE_RESULT" != success ] || [ "$IMAGES_RESULT" != success ]; then',
+    '  echo "code=$CODE_RESULT image-tests=$IMAGES_RESULT"',
+    "  exit 1",
+    "fi",
+    "",
+  ].join("\n"),
+};
+const IMAGE_STEPS: Step[] = [
+  { uses: "actions/checkout@<sha>", with: { "persist-credentials": false, "fetch-depth": 0 } },
+  { uses: "actions/setup-node@<sha>", with: { "node-version-file": ".nvmrc", cache: "npm" } },
+  { run: "npm ci" },
+  { run: "npm run test:images" },
+];
+
+describe("check gate (P0.07d)", () => {
+  const jobs = readWorkflow(CI).workflow.jobs ?? {};
+
+  test("check_gate_needs_both_and_runs_always", () => {
+    const gate = jobs.check;
+    expect(gate?.needs).toEqual(["code", "image-tests"]);
+    expect(gate?.if).toBe(GATE_IF);
+    expect(gate?.["continue-on-error"]).toBeUndefined();
+    expect(gate?.env).toBeUndefined();
+    expect(gate?.defaults).toBeUndefined();
+    expect(gate?.steps).toEqual([GATE_STEP]);
+  });
+
+  test("check_gate_fails_unless_both_succeeded", () => {
+    const run = String(GATE_STEP.run);
+    const status = (code: string, images: string) =>
+      spawnSync("bash", ["-e", "-c", run], {
+        env: { PATH: process.env.PATH, CODE_RESULT: code, IMAGES_RESULT: images },
+        encoding: "utf8",
+      }).status;
+    expect(status("success", "success")).toBe(0);
+    for (const result of ["failure", "cancelled", "skipped", ""]) {
+      expect(status(result, "success"), `code ${result}`).not.toBe(0);
+      expect(status("success", result), `image-tests ${result}`).not.toBe(0);
+    }
+  });
+
+  test("image_tests_job_exact", () => {
+    const job = jobs["image-tests"];
+    expect(job?.if).toBe(CHECK_IF);
+    expect(job?.["continue-on-error"]).toBeUndefined();
+    expect(job?.env).toBeUndefined();
+    expect(job?.defaults).toBeUndefined();
+    expect((job?.steps ?? []).map(normalised)).toEqual(IMAGE_STEPS);
   });
 });
