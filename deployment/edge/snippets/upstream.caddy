@@ -12,8 +12,8 @@
 # v2.11.7 sets X-Forwarded-For before applying header_up (reverseproxy.go:909 and 714), so the removal wins; it passes
 # Host by default. X-Forwarded-Host is set to the request's own Host (P1.36j): from a trusted proxy, Newt under dev,
 # Caddy would otherwise keep the incoming value (reverseproxy.go:1012-1022); elsewhere it already sets that same value.
-(upstream) {
-	reverse_proxy {args[0]} {
+# Shared verbatim by the generic app proxy and the PDS response policy. Keep header_up fixture targets here.
+(proxy-options) {
 		header_up -X-Forwarded-For
 		header_up -X-Real-IP
 		header_up -Forwarded
@@ -23,5 +23,10 @@
 			dial_timeout 5s
 			response_header_timeout 130s
 		}
+}
+
+(upstream) {
+	reverse_proxy {args[0]} {
+		import proxy-options
 	}
 }
