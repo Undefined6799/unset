@@ -1526,6 +1526,27 @@ describe("preflight", () => {
     expect(result.lines.join("\n")).not.toContain(sentinel);
   });
 
+  test("c18_prod_refuses_the_dev_mount", async () => {
+    // P1.36c: the dev sites and the dev (tls) are the dev stack's alone; prod mounting either fails C18.
+    const sites = "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n";
+    const c18 = async (edit: (text: string) => string) =>
+      (await check({ compose: edit(COMPOSE) }, "prod")).lines.find((line) => / C18 /.test(line));
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    expect(await c18((text) => text.replace(sites, "      - ./edge/dev:/etc/caddy/sites/enabled:ro\n"))).toBe(
+      "FAIL C18 the edge config is unreadable: the enabled sites directory is not inside sites/",
+    );
+    expect(
+      await c18((text) =>
+        text.replace(sites, `${sites}      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n`),
+      ),
+    ).toBe("FAIL C18 the edge mounts over /etc/caddy/sites/enabled/app.caddy");
+    expect(
+      await c18((text) =>
+        text.replace(sites, `${sites}      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n`),
+      ),
+    ).toBe("FAIL C18 the edge mounts over /etc/caddy/snippets/tls.caddy");
+  });
+
   test("c18_dev_serves_the_self_signed_leaf_files", async () => {
     // P1.38e (ADR 0032 Decision 3): under dev C18 takes exactly the dev shape: the dev sites, the dev (tls) mounted from
     // deployment/edge/dev/tls.caddy and reading `tls <cert> <key>`, the leaf's two secrets and no published port.
@@ -3966,6 +3987,18 @@ networks:
     );
     expect(asBuilder.lines.find((line) => / C2 /.test(line))).toBe(
       "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+    );
+  });
+
+  test("local_c18_refuses_the_dev_mount", async () => {
+    // P1.36c: the local edge takes neither the dev (tls) nor a dev site.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    expect(await c18((text) => text.replace("./edge/local/tls.caddy:", "./edge/dev/tls.caddy:"))).toBe(
+      "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
+    );
+    expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/dev/pds.caddy:"))).toBe(
+      "FAIL C18 the edge config is unreadable: pds.caddy: not mounted from sites/pds.caddy",
     );
   });
 

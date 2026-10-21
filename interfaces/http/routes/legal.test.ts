@@ -128,10 +128,14 @@ describe("legal pages", () => {
     const dev = readFileSync(join(REPOSITORY, "deployment/compose.dev.yaml"), "utf8");
     const local = readFileSync(join(REPOSITORY, "deployment/compose.local.yaml"), "utf8");
     const image = readFileSync(join(REPOSITORY, "deployment/images/web.test.env"), "utf8");
+    // Staging carries Alex's values (2026-10-20T23:09:25Z, P1.36c); the throwaway local stack keeps the tokens.
+    expect(dev).toContain("PRIVACY_OFFICER_TITLE: Privacy Officer\n");
+    expect(dev).toContain("PRIVACY_OFFICER_CONTACT: contact@staging.unset.sh\n");
+    expect(dev).toContain("SUPPORT_EMAIL: support@staging.unset.sh\n");
+    expect(local).toContain(`PRIVACY_OFFICER_TITLE: "${PRIVACY_OFFICER_TITLE_TOKEN}"`);
+    expect(local).toContain(`PRIVACY_OFFICER_CONTACT: "${PRIVACY_OFFICER_CONTACT_TOKEN}"`);
+    expect(local).toContain(`SUPPORT_EMAIL: "${SUPPORT_EMAIL_TOKEN}"`);
     for (const text of [dev, local]) {
-      expect(text).toContain(`PRIVACY_OFFICER_TITLE: "${PRIVACY_OFFICER_TITLE_TOKEN}"`);
-      expect(text).toContain(`PRIVACY_OFFICER_CONTACT: "${PRIVACY_OFFICER_CONTACT_TOKEN}"`);
-      expect(text).toContain(`SUPPORT_EMAIL: "${SUPPORT_EMAIL_TOKEN}"`);
       expect(text).toContain(`SECURITY_CONTACT: ${SECURITY_CONTACT_PAGE}`);
       expect(text).toContain(`SECURITY_TXT_EXPIRES: "${SECURITY_TXT_EXPIRES}"`);
     }

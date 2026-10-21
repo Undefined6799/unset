@@ -125,8 +125,9 @@ services:
     restart: unless-stopped
 
   # The edge (P1.28 image), the only service that publishes, and on loopback only: the homelab's own address is P1.34's.
-  # Its sites are the repository's deployment/edge/sites, mounted read-only where the image imports them, as C18 reads
-  # them; /data (ACME state) and /config are named volumes the image seeds as caddy's, 0700 (P1.27o).
+  # Its sites are the repository's deployment/edge/dev/app.caddy and dev/pds.caddy, each mounted read-only where the
+  # image imports them, as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the
+  # image seeds as caddy's, 0700 (P1.27o).
   edge:
     # A file named Dockerfile builds from its own folder, as images.yml builds it (C26).
     build:
@@ -139,14 +140,22 @@ services:
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:uid=65532,gid=65532,mode=1777
+    # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
+    # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
+    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
     volumes:
-      - ./edge/sites:/etc/caddy/sites/enabled:ro
+      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
+      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
       - edgedata:/data
       - edgeconfig:/config
+    secrets: [dev_tls_cert, dev_tls_key]
     environment:
       PDS_HOST: ${PDS_HOSTNAME}
       PDS_UPSTREAM: pds:3000
       ACME_EMAIL: ${EDGE_ACME_EMAIL}
+      APP_HOST: ${APP_HOST}
+      APP_UPSTREAM: web:8080
     ports:
       - 127.0.0.1:80:80
       - 127.0.0.1:443:443
@@ -205,11 +214,12 @@ services:
       OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
       PDS_HOSTNAME: ${PDS_HOSTNAME}
       HANDLE_SUFFIX: ${PDS_SERVICE_HANDLE_DOMAINS}
-      # Legal placeholders (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
-      # and these are not secrets. Alex replaces the three tokens; security.txt points at the privacy page.
-      PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]"
-      PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]"
-      SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"
+      # Legal contacts (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
+      # and these are not secrets. Alex's values for staging (2026-10-20T23:09:25Z); compose.local.yaml keeps the
+      # tokens. security.txt points at the privacy page.
+      PRIVACY_OFFICER_TITLE: Privacy Officer
+      PRIVACY_OFFICER_CONTACT: contact@staging.unset.sh
+      SUPPORT_EMAIL: support@staging.unset.sh
       SECURITY_CONTACT: privacy-page
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
@@ -265,3 +275,9 @@ secrets:
     file: ../../unset-dev-secrets/web_seal_keyring
   web_oauth_client_keys:
     file: ../../unset-dev-secrets/web_oauth_client_keys
+  # The dev edge's self-signed leaf and its key (P1.36c; ADR 0032), made on the host by the runbook's OpenSSL command;
+  # the edge alone reads them.
+  dev_tls_cert:
+    file: ../../unset-dev-secrets/dev_tls_cert
+  dev_tls_key:
+    file: ../../unset-dev-secrets/dev_tls_key
