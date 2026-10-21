@@ -182,7 +182,7 @@ describe("edge config", () => {
     expect(memoryOnlyProblems(config())).toEqual([]);
     // Every zone is keyed by the client address, IPv6 by its /64.
     for (const zone of zones()) {
-      expect(zone.key, zone.name).toBe("{remote_host}");
+      expect(zone.key, zone.name).toBe("{client_ip}");
       expect(zone.ipv6Prefix, zone.name).toBe("64");
     }
     // A fixture with shared state, storage or a metrics label fails.
@@ -243,7 +243,7 @@ describe("edge config", () => {
     ]);
     const forwarded = limits.replace(
       /\t\tdisable_metrics\n\t\}\n/,
-      "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {remote_host}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
+      "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {client_ip}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
     );
     expect(forwarded).not.toBe(limits);
     expect(siteProblems({ "snippets/ratelimit.caddy": forwarded })).toEqual([
@@ -319,7 +319,12 @@ describe("edge config", () => {
   test("edge_admin_api_off_in_config", () => {
     expect(read("Caddyfile")).toMatch(/^\tadmin off$/m);
     expect(read("Caddyfile")).toMatch(/^\tpersist_config off$/m);
-    expect(config()).not.toMatch(/trusted_proxies/);
+    // The one trust is the dev listener's (P1.36j); caddyfile.dev.test.ts holds its reds.
+    expect(
+      config()
+        .match(/^\s*(?:trusted_proxies|client_ip_headers).*$/gm)
+        ?.map((line) => line.trim()),
+    ).toEqual(["trusted_proxies static 10.250.37.2/32", "trusted_proxies_strict", "client_ip_headers X-Forwarded-For"]);
   });
 });
 
@@ -623,13 +628,27 @@ describe("edge site rules (P1.28f)", () => {
     ]);
   });
 
+  test("edge_upstream_sets_its_own_forwarded_host", () => {
+    // P1.36j: a trusted proxy's X-Forwarded-Host is never passed on; (upstream) sets it from the request's Host, once.
+    const upstream = read("snippets/upstream.caddy");
+    const line = "\t\theader_up X-Forwarded-Host {host}\n";
+    expect(upstream).toContain(line);
+    const problem = "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host";
+    for (const other of ["", "\t\theader_up -X-Forwarded-Host\n", "\t\theader_up X-Forwarded-Host example.test\n"]) {
+      expect(siteProblems({ "snippets/upstream.caddy": upstream.replace(line, other) }), other).toEqual([problem]);
+    }
+    const twice = upstream.replace(line, `${line}\t\theader_up +x-forwarded-host other.test\n`);
+    expect(siteProblems({ "snippets/upstream.caddy": twice })).toEqual([problem]);
+  });
+
   test("edge_upstream_is_one_placeholder", () => {
     // Amendment 9, point 2 (replacing #541's canonical form): after an optional matcher, a reverse_proxy names exactly
     // one upstream, and it is a placeholder, so no literal can alias the value behind {$PDS_UPSTREAM}.
     const proxy = (args: string) =>
       site.replace(
         "\t\timport upstream {$PDS_UPSTREAM}\n",
-        `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n`,
+        `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n` +
+          "\t\t\theader_up X-Forwarded-Host {host}\n\t\t}\n",
       );
     const pds = (args: string) => siteProblems({ "sites/pds.caddy": proxy(args) });
     const literal = "{$PDS_HOST}: a reverse_proxy does not name one placeholder upstream";
