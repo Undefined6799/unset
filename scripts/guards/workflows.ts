@@ -71,6 +71,10 @@ function lineProblems(line: string): string[] {
   if (/\b(?:docker|podman)\s+(?:container\s+|image\s+)?(?:run|create|pull)\b/.test(line)) {
     if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
   }
+  // A BuildKit container builder runs an image too (P1.27s): it names one by digest, or through a pinned variable.
+  if (/\bbuildx\s+create\b/.test(line) && !/image=(?:\$\w+_IMAGE"|\S+@sha256:[0-9a-f]{64})/.test(line)) {
+    found.push("BuildKit builder without a digest-pinned image");
+  }
   // An image variable may only come from the workflow text, where the digest check above can see it.
   if (/_IMAGE=/.test(line) && /\bGITHUB_ENV\b/.test(line)) found.push("image variable written at run time");
   if (/\b(pull_request_target|workflow_run)\b/.test(line)) found.push("banned trigger");

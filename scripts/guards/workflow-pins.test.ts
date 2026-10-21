@@ -33,6 +33,12 @@ describe("workflows", () => {
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker create alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: podman container run alpine:3\n")))).toHaveLength(1);
+    // A BuildKit container builder pulls its image: unnamed or by tag fails; by digest or a pinned variable passes.
+    const builder = (opts: string) => withJob(job(`    steps:\n      - run: docker buildx create --use ${opts}\n`));
+    expect(problems(builder("--driver docker-container"))).toHaveLength(1);
+    expect(problems(builder('--driver-opt "image=moby/buildkit:v0.34.0"'))).toHaveLength(1);
+    expect(problems(builder(`--driver-opt "image=moby/buildkit:v0.34.0@sha256:${"a".repeat(64)}"`))).toEqual([]);
+    expect(problems(builder('--driver-opt "image=$BUILDKIT_IMAGE"'))).toEqual([]);
     expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
       1,
