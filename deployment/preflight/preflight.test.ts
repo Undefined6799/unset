@@ -32,7 +32,7 @@ import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
-import { type Deps, preflight as runPreflight, type Run } from "./index.ts";
+import { type Deps, type Run, preflight as runPreflight } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
 import { SecretMap } from "./secret-map.ts";
@@ -606,6 +606,21 @@ describe("preflight", () => {
     expect(result.lines).toContain("FAIL C3 no cosign is pinned for arm64");
     expect(result.lines).toContain("FAIL C4 no cosign is pinned for arm64");
     expect(calls.filter(([file]) => file === "sha256sum")).toEqual([]);
+  });
+
+  test("c3_c4_read_the_host_arch_without_a_dep", async () => {
+    // Without deps.arch the CLI's own process.arch decides, never a fixed x64, so a real arm64 host is still refused.
+    const { root, file } = stack();
+    const { run, calls } = fakeRun();
+    const real = Object.getOwnPropertyDescriptor(process, "arch");
+    Object.defineProperty(process, "arch", { value: "arm64", configurable: true });
+    try {
+      const { lines } = await runPreflight(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+      expect(lines).toContain("FAIL C3 no cosign is pinned for arm64");
+      expect(calls.filter(([name]) => name === "sha256sum")).toEqual([]);
+    } finally {
+      if (real !== undefined) Object.defineProperty(process, "arch", real);
+    }
   });
 
   test("c5_platform_manifest_fails", async () => {
