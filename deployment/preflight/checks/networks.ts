@@ -118,6 +118,21 @@ export function devTunnelProblems(inputs: Pick<Inputs, "compose" | "env" | "serv
 
 const INTERNAL_HOSTS = "NETGUARD_INTERNAL_HOSTS";
 
+/** The networks on which the edge carries its two host aliases outside dev (compose-parse.ts ALIAS_NETWORKS). */
+const ALIAS_NETWORKS = ["edge", "app"];
+
+/**
+ * Outside dev, an edge on the edge or app network carries its aliases there (P1.29a Amendment 1; P1.37 follow-up of
+ * P1.36i): local web and the PDS reach both hosts only by them. The parser already refuses an edge aliased on one of
+ * the two and not the other, so this refuses the fully bare edge it lets through. Fixed words, as above.
+ */
+export function edgeAliasProblems({ compose, env }: Pick<Inputs, "compose" | "env">): string[] {
+  if (env === "dev") return [];
+  const edge = compose.services.find((service) => service.name === "edge");
+  const joined = edge?.networks.some((network) => ALIAS_NETWORKS.includes(network)) ?? false;
+  return joined && compose.edgeAliasNetworks.length === 0 ? ["the edge carries no alias on its networks"] : [];
+}
+
 /**
  * An image reference reduced to its repository, the image a service runs whatever version, in the one form every
  * spelling of it shares (architecture 03:05Z addendum): lower case, no digest, no tag, and Docker Hub's default
@@ -168,6 +183,7 @@ export const c17: Check = {
     const problems = [
       ...pdsNeighbours(inputs),
       ...devTunnelProblems(inputs),
+      ...edgeAliasProblems(inputs),
       ...networkTableProblems(compose, expected),
     ];
     return problems.length === 0 ? pass() : fail(problems.join("; "));
