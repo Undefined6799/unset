@@ -6,7 +6,7 @@ Where each part of the code lives, and what it may import. Decision 34 is record
 
 | Boundary | Folder | Page |
 | --- | --- | --- |
-| apps | `apps/` | later PR |
+| apps | `apps/` | [Apps](apps/) |
 | interfaces | `interfaces/` | later PR |
 | domains | `domains/` | later PR |
 | infrastructure | `infrastructure/` | later PR |
