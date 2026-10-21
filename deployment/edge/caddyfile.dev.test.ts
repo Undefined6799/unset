@@ -426,6 +426,19 @@ describe("dev edge denies (P1.36b; TE-6)", () => {
       expect(blob.test(matched(raw)), raw).toBe(true);
     }
     expect(matched("/a/../xrpc//x/./y/")).toBe("/xrpc/x/y/");
+    // The snippet's whole shape, as signin-files is pinned: the one matcher and a 404 on it, nothing else.
+    expect(
+      devConfig()
+        .snippet("blob-deny")
+        .map((d) => [d.name, ...d.args]),
+    ).toEqual([
+      [
+        "@blob",
+        "path_regexp",
+        "(?i)^/+xrpc/+com\\.atproto\\.(?:repo\\.uploadblob|sync\\.getblob|repo\\.importrepo)/*$",
+      ],
+      ["respond", "@blob", "404"],
+    ]);
   });
 
   test("signin_files_405_in_every_spelling", () => {
