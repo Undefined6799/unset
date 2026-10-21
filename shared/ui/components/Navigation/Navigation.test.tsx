@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { act, StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type SafeHref, safeHref } from "../../safe-href.ts";
 import { Navigation, type NavigationProps } from "./Navigation.tsx";
 
@@ -137,4 +139,35 @@ describe("Navigation presentation adapter", () => {
       ),
     ).toEqual(["/me", "/", "/settings/profile"]);
   });
+});
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+it("cleans up its document Escape listener across strict replay and unmount", async () => {
+  const add = vi.spyOn(document, "addEventListener");
+  const remove = vi.spyOn(document, "removeEventListener");
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Navigation {...props} />
+        </StrictMode>,
+      ),
+    );
+    const added = add.mock.calls.filter(([type]) => type === "keydown");
+    const removed = remove.mock.calls.filter(([type]) => type === "keydown");
+    expect(added.length - removed.length).toBe(1);
+    await act(async () => root.unmount());
+    expect(remove.mock.calls.filter(([type]) => type === "keydown").map(([, listener]) => listener)).toEqual(
+      added.map(([, listener]) => listener),
+    );
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+    add.mockRestore();
+    remove.mockRestore();
+  }
 });

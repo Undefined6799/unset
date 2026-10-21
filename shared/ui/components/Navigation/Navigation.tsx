@@ -81,10 +81,19 @@ export function Navigation({
 }: NavigationProps) {
   const panel = useId();
   const panelRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLElement>(null);
   const previousKey = useRef(navigationKey);
   const [labelsDismissed, setLabelsDismissed] = useState(false);
   const [enhanced, setEnhanced] = useState(false);
   useEffect(() => setEnhanced(true), []);
+  useEffect(() => {
+    const dismiss = (event: KeyboardEvent) => {
+      const label = railRef.current?.querySelector(`a:is(:hover, :focus-visible) .${styles.label}`);
+      if (event.key === "Escape" && label && getComputedStyle(label).visibility === "visible") setLabelsDismissed(true);
+    };
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, []);
   // Caller-confirmed commits are independent of click preventDefault (SPA adapters use it on success).
   // hidePopover restores focus natively: HTML Living Standard popover algorithm, read 2026-10-21.
   useEffect(() => {
@@ -104,9 +113,7 @@ export function Navigation({
           labelsDismissed && styles.labelsDismissed,
         )}
         aria-label={menuLabel}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") setLabelsDismissed(true);
-        }}
+        ref={railRef}
         onBlur={() => setLabelsDismissed(false)}
         onPointerLeave={() => setLabelsDismissed(false)}
       >
