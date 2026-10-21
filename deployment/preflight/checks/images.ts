@@ -1,6 +1,7 @@
 // C2 to C5 (P1.30; plan section 2 rule 23, section 6.1 SLSA row): a deploy runs only images from our registry, by
-// digest, listed in deployment/images.lock.json, signed with our key, with provenance for our own builds, and every
-// lock digest names a multi-arch index. The lock and cosign.pub arrive with P1.27s; until then these checks fail.
+// digest, listed in deployment/images.lock.json, signed keyless by the workflow that made them, with provenance for our
+// own builds, and every lock digest names a multi-arch index. C3 and C4 verify offline against the committed Sigstore
+// trusted root with the pinned cosign (P2.26b; ADR 0033).
 //
 // Under --env local (P1.27l; architecture record 2026-10-12-p129-local-build-preflight, item 2; Alex, "Yes, local
 // only", 2026-10-12T16:44:52Z) a stack built from the checkout has no registry hop for these checks to guard. C2 then
@@ -144,7 +145,7 @@ function verifies(id: "C3" | "C4", origin: "first-party" | "upstream"): Check {
       if (inputs.env === "local") return unsigned(LOCAL_UNSIGNED);
       const lock = readLock(inputs);
       if (lock === null) return missing(inputs.lockPath);
-      if (inputs.readText(inputs.cosignKeyPath) === null) return missing(inputs.cosignKeyPath);
+      if (inputs.readText(inputs.trustedRootPath) === null) return missing(inputs.trustedRootPath);
       const names = Object.entries(lock).flatMap(([name, entry]) => (entry.origin === origin ? [name] : []));
       const result = await verdict(inputs, signal);
       if (result.ok) return pass(`${names.length} ${origin} images verified`);
