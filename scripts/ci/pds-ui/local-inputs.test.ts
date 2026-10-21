@@ -6,6 +6,7 @@ import { afterAll, expect, test } from "vitest";
 import { fixtureGitEnv } from "../../guards/git-env.ts";
 import { sha256 } from "./archive.ts";
 import { buildCommands, observeInputs, sameInputs, stageInputs, verifyContext } from "./build-inputs.ts";
+import { recipeContract } from "./contract.ts";
 import { INPUT_FILES, INPUT_ROOTS, inventoryHash, localInputs } from "./local-inputs.ts";
 
 const repo = join(import.meta.dirname, "../../..");
@@ -24,32 +25,20 @@ const write = (root: string, path: string, bytes: string | Buffer) => {
 };
 const policy = '{\n  "schema": 1,\n  "selection": "pds-presentation-v1"\n}\n';
 const manifest = '{\n  "patches": [],\n  "schema": 1\n}\n';
-const stock = readFileSync(join(repo, "deployment/pds/Dockerfile"));
+const stock = readFileSync(new URL("./fixtures/stock.Dockerfile", import.meta.url));
 function fixture(local = true) {
   const root = temp();
+  write(root, "deployment/pds/Dockerfile", local ? readFileSync(join(repo, "deployment/pds/Dockerfile")) : stock);
+  write(root, "deployment/pds/source.lock.json", readFileSync(join(repo, "deployment/pds/source.lock.json")));
+  if (!local) return root;
   for (const path of INPUT_FILES) {
+    if (["deployment/pds/Dockerfile", "deployment/pds/source.lock.json"].includes(path)) continue;
     if (path === "deployment/pds/build-ui.mjs") write(root, path, 'import fs from "node:fs";\n');
     else if (path === "deployment/pds/build-inputs.json") write(root, path, policy);
     else if (path.endsWith("patches/ui/manifest.json")) write(root, path, manifest);
     else write(root, path, readFileSync(join(repo, path)));
   }
   for (const path of INPUT_ROOTS) write(root, `${path}/view.tsx`, "export const view = 1;\n");
-  if (local)
-    write(
-      root,
-      "deployment/pds/Dockerfile",
-      stock
-        .toString()
-        .replace(
-          "COPY source.lock.json /source.lock.json",
-          "ARG UNSET_INPUTS_SHA256\nCOPY deployment/pds/source.lock.json /source.lock.json\nCOPY deployment/pds/build-ui.mjs /build-ui.mjs",
-        ),
-    );
-  else {
-    rmSync(join(root, "deployment/pds/build-inputs.json"));
-    rmSync(join(root, "deployment/pds/build-ui.mjs"));
-    rmSync(join(root, "deployment/pds/patches"), { recursive: true });
-  }
   return root;
 }
 function git(root: string, ...args: string[]) {
@@ -66,6 +55,7 @@ test("local_inventory_copies_only_complete_registered_bytes", () => {
   const root = committed(fixture());
   const before = observeInputs(root);
   expect(before.mode).toBe("local");
+  expect(recipeContract(root)).toEqual(JSON.parse(readFileSync(join(root, "deployment/pds/source.lock.json"), "utf8")));
   expect(before.inventorySha256).toMatch(/^[a-f0-9]{64}$/);
   const stage = temp();
   stageInputs(before, stage);
@@ -81,9 +71,11 @@ test("stock_recipe_is_fixed_and_local_policy_cannot_downgrade", () => {
   write(root, "deployment/pds/Dockerfile", `${stock.toString()}\nRUN echo local\n`);
   expect(() => localInputs(root)).toThrow();
   const local = fixture();
+  expect(localInputs(local).mode).toBe("local");
   rmSync(join(local, "deployment/pds/build-inputs.json"));
   expect(() => localInputs(local)).toThrow();
   write(local, "deployment/pds/build-inputs.json", policy);
+  expect(localInputs(local).mode).toBe("local");
   rmSync(join(local, "deployment/pds/patches/ui/manifest.json"));
   expect(() => localInputs(local)).toThrow();
 });
@@ -202,6 +194,7 @@ test("local_recipe_refuses_root_glob_json_and_external_stage_copies", () => {
     "COPY --from=unreviewed /payload /all",
   ]) {
     const root = fixture();
+    expect(localInputs(root).mode).toBe("local");
     const recipe = readFileSync(join(root, "deployment/pds/Dockerfile"), "utf8");
     write(
       root,
@@ -233,6 +226,9 @@ test("inventory_digest_has_independent_canonical_bytes_and_path_order", () => {
 test("clean_observation_validates_the_actual_recipe_and_lock_pair", () => {
   for (const change of ["runtime", "lock"]) {
     const root = fixture();
+    expect(recipeContract(root)).toEqual(
+      JSON.parse(readFileSync(join(root, "deployment/pds/source.lock.json"), "utf8")),
+    );
     if (change === "runtime")
       write(
         root,

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { sha256 } from "./archive.ts";
 import { parseLock, recipeContract, UI_DIRECTORY } from "./contract.ts";
 
 const locked = {
@@ -22,7 +23,8 @@ const locked = {
   },
   uiDirectory: UI_DIRECTORY,
 };
-const recipe = readFileSync(new URL("../../../deployment/pds/Dockerfile", import.meta.url), "utf8");
+// Byte-exact historical deployment/pds/Dockerfile from be3758ab0392bd4f9ef08e4f05c34812a9a10404.
+const recipe = readFileSync(new URL("./fixtures/stock.Dockerfile", import.meta.url), "utf8");
 function root() {
   const dir = mkdtempSync(join(tmpdir(), "pds-contract-"));
   mkdirSync(join(dir, "deployment/pds"), { recursive: true });
@@ -30,6 +32,7 @@ function root() {
 }
 describe("derived PDS recipe contract", () => {
   test("is absent only before both exact product inputs exist", () => {
+    expect(sha256(recipe)).toBe("7077f215d20a2c5da1a03980e519b0c09dd57ee7c7593f24b2363eb97ec6f851");
     const dir = root();
     expect(recipeContract(dir)).toBeNull();
     writeFileSync(join(dir, "deployment/pds/Dockerfile"), recipe);
@@ -60,6 +63,8 @@ describe("derived PDS recipe contract", () => {
     ]) {
       const dir = root();
       writeFileSync(join(dir, "deployment/pds/source.lock.json"), JSON.stringify(locked));
+      writeFileSync(join(dir, "deployment/pds/Dockerfile"), recipe);
+      expect(recipeContract(dir)).toEqual(locked);
       writeFileSync(join(dir, "deployment/pds/Dockerfile"), text);
       expect(() => recipeContract(dir)).toThrow();
     }
