@@ -1526,7 +1526,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices approved 2026-10-18); P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
+Depth: **build-ready**. 40 steps here (including the 19 P2.24 frontend slices approved 2026-10-18 and their icon-generator prerequisite); P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
