@@ -11,5 +11,5 @@ Where each part of the code lives, and what it may import. Decision 34 is record
 | interfaces | `interfaces/` | [Interfaces](interfaces/) |
 | domains | `domains/` | later PR |
 | infrastructure | `infrastructure/` | later PR |
-| shared | `shared/` | later PR |
+| shared | `shared/` | [Shared](shared/) |
 | deployment | `deployment/` | later PR |
