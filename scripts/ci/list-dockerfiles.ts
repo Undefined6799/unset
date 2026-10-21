@@ -23,8 +23,16 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
 const NAME = /^[a-z0-9-]+$/;
 
-/** Images whose scan reads an ignore file: none. Every image gets /dev/null. */
+/** Images whose scan reads an ignore file: none. Every image gets /dev/null, but for the pds-ui recipe below. */
 export const IGNOREFILES: Readonly<Record<string, string>> = {};
+
+/**
+ * P2.24t (Alex's line): the pds-ui recipe is the official PDS image with only its frontend replaced (ADR 0027), so
+ * its scan reads the findings he accepted for that image (P1.33c), and only while recipeContract accepts the pair.
+ * A refused pair throws before any image is listed; no other Dockerfile, whatever its name, reads this file.
+ */
+export const PDS_RECIPE = "deployment/pds/Dockerfile";
+export const PDS_IGNOREFILE = ".github/trivyignore.pds.yaml";
 
 export type ListedImage = { name: string; dockerfile: string; ignorefile: string };
 
@@ -81,7 +89,7 @@ export function entryProblems(root: string, dockerfile: string): string[] {
  * deployment/, or two Dockerfiles that would share a matrix name.
  */
 export function listDockerfiles(root: string): ListedImage[] {
-  recipeContract(root);
+  const paired = recipeContract(root) !== null;
   const paths = discoverDockerfiles(root);
   if (paths.length === 0) throw new Error("no Dockerfiles under deployment/");
   const problems: string[] = [];
@@ -93,7 +101,12 @@ export function listDockerfiles(root: string): ListedImage[] {
     const prior = seen.get(name);
     if (prior !== undefined) problems.push(`duplicate image name ${name}: ${prior} and ${dockerfile}`);
     else seen.set(name, dockerfile);
-    const ignorefile = Object.hasOwn(IGNOREFILES, name) ? IGNOREFILES[name] : "/dev/null";
+    const ignorefile =
+      paired && dockerfile === PDS_RECIPE
+        ? PDS_IGNOREFILE
+        : Object.hasOwn(IGNOREFILES, name)
+          ? IGNOREFILES[name]
+          : "/dev/null";
     if (ignorefile === undefined) problems.push(`ignore file missing for ${name}`);
     else listed.push({ name, dockerfile, ignorefile });
   }

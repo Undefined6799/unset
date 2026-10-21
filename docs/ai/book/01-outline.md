@@ -1547,7 +1547,7 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p, P2.24r | `phase-2.md` |
 | P2.24a | Record the frontend-only contract | [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.24b | Add frontend build and integrity checks | [SEC] | P2.24a | `phase-2.md` |
-| P2.24c | Build the paired unstyled frontend | [SEC] | P2.24b | `phase-2.md` |
+| P2.24c | Build the paired unstyled frontend | [SEC] | P2.24t | `phase-2.md` |
 | P2.24d | Prove fonts through the existing edge | [SPIKE] [SEC] | P2.24c | `phase-2.md` |
 | P2.24e | Deliver the proved edge font policy | [SEC] [ALEX] | P2.24d | `phase-2.md` |
 | P2.24f | Extend generic shared UI for the PDS | — | P2.24e | `phase-2.md` |
@@ -1564,6 +1564,7 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.24q | Add complete candidate release checks | [SEC] | P2.24p | `phase-2.md` |
 | P2.24r | Admit the fully verified UI image | [SEC] | P2.24q | `phase-2.md` |
 | P2.24s | Record release and operational acceptance | [ALEX] | P2.24, P2.24r | `phase-2.md` |
+| P2.24t | Admit the paired recipe to image checks | [SEC] [ALEX] | P2.24b | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.24s, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26f | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
 | P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
