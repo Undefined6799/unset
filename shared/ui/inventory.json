@@ -167,6 +167,13 @@
     "variants": [],
     "status": "built"
   },
+  "Search": {
+    "sheet": "sheet/components/Search/README.md",
+    "sheetSha256": "db887055fa1c50d14416e3d8bbbdfe8553e6ca8119dfae8812a3442c89e41698",
+    "props": "SearchProps",
+    "variants": [],
+    "status": "built"
+  },
   "SectionHeading": {
     "sheet": "sheet/components/SectionHeading/README.md",
     "sheetSha256": "b4ff1aea3afe2360dad99ad4cffd031a03625dc495ed337a4db0ed8e9d9f747b",

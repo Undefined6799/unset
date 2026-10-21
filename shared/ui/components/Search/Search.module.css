@@ -1,0 +1,65 @@
+/* Search (P1.24u; sheet components/Search/README.md, approved by Alex 2026-10-21): a 40px bar filled with
+   `surface-raised`, no edge at rest, `radius-sm` corners; hover shows a 1px `line-strong` edge, focus adds the 2px
+   `focus` outline around the whole bar. The field inside drops base.css's own border, height and outline. The `/`
+   hint hides while the bar has focus and on touch screens. */
+@layer components {
+  .bar {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 40px;
+    padding: 0 var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-raised);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    cursor: text;
+  }
+
+  .bar:hover {
+    border-color: var(--color-line-strong);
+  }
+
+  .bar:focus-within {
+    border-color: var(--color-line-strong);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .field {
+    flex: 1;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--color-ink);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    appearance: none;
+  }
+
+  .field:focus,
+  .field:focus-visible {
+    outline: none;
+  }
+
+  .field::placeholder {
+    color: var(--color-ink-muted);
+    opacity: 1;
+  }
+
+  .bar:focus-within .hint {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .hint {
+      display: none;
+    }
+  }
+}
