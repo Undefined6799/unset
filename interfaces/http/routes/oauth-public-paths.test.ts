@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
-import { clientMetadata, SCOPE_METADATA } from "@unset/infrastructure-pds";
+import { clientMetadata, publicJwks, SCOPE_METADATA } from "@unset/infrastructure-pds";
 import { loadConfig } from "@unset/shared-config";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
@@ -22,6 +22,8 @@ const { server } = await compose(cfg, web);
 const metadata = clientMetadata(cfg.PUBLIC_ORIGIN, SCOPE_METADATA);
 /** The paths the client's own metadata names: the two P1.36b's 405 rule and P1.33p's probe name. */
 const PUBLIC = [new URL(metadata.client_id).pathname, new URL(metadata.jwks_uri).pathname];
+/** What each path must answer through the composed router, so a broader route registered first cannot shadow it. */
+const BODIES = [metadata, publicJwks(cfg.OAUTH_CLIENT_KEYS)];
 const get = (path: string) =>
   server.request(
     new Request(`${cfg.PUBLIC_ORIGIN}${path}`, { headers: { host: new URL(cfg.PUBLIC_ORIGIN).host } }),
@@ -33,10 +35,11 @@ const under = (path: string) => PUBLIC.some((prefix) => path === prefix || path.
 describe("the public sign-in files (P1.36i)", () => {
   test("public_paths_are_the_clients_own", async () => {
     expect(PUBLIC).toEqual(["/oauth-client-metadata.json", "/oauth/jwks.json"]);
-    for (const path of PUBLIC) {
+    for (const [i, path] of PUBLIC.entries()) {
       const response = await get(path);
       expect(response.status, path).toBe(200);
       expect(response.headers.get("content-type"), path).toBe("application/json");
+      expect(await response.json(), path).toEqual(BODIES[i]);
     }
   });
 
