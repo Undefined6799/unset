@@ -48,6 +48,9 @@ describe("workflows", () => {
       problems(builder(`--driver-opt "image=$BUILDKIT_IMAGE" --driver-opt "image=moby/buildkit:latest"`)),
     ).toHaveLength(1);
     expect(problems(builder(`--driver-opt "image=${pinned},image=moby/buildkit:latest"`))).toHaveLength(1);
+    // The documented equals form passes, but an env option's value that merely starts with image= names no image.
+    expect(problems(builder(`--driver-opt=image=${pinned}`))).toEqual([]);
+    expect(problems(builder(`--driver-opt "env.X=image=${pinned}"`))).toHaveLength(1);
     expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
       1,
