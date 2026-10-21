@@ -59,11 +59,14 @@ describe("workflows", () => {
     // Only `--use` stands alone; every other flag takes a value that never starts with `-` (verify of #1243).
     expect(problems(builder(`--driver-opt --name --driver-opt "image=${pinned}"`))).toHaveLength(1);
     expect(problems(builder(`--name -x --driver-opt "image=${pinned}"`))).toHaveLength(1);
-    // A refused line is refused quickly. When a value could also read as a flag, " --a" repeated 44 times took the
-    // old pattern about 2.5 s to refuse, doubling every few options; a value now never starts with `-`, and the
+    // pflag takes `--driver-opt` as `--name`'s value here, so the image becomes a positional argument and BuildKit runs
+    // its default, unpinned image.
+    expect(problems(builder(`--name --driver-opt "image=${pinned}"`))).toHaveLength(1);
+    // A refused line is refused quickly. When a value could also read as a flag, 44 `--a` options after `--use` took
+    // the old pattern about 2.2 s to refuse, doubling every few options; a value now never starts with `-`, and the
     // option groups are bounded.
     const started = performance.now();
-    expect(problems(builder(`${" --a".repeat(44)}!`))).toHaveLength(1);
+    expect(problems(builder(`--a${" --a".repeat(43)}!`))).toHaveLength(1);
     expect(performance.now() - started).toBeLessThan(200);
     expect(problems(builder(`--driver-opt "env.X=image=${pinned}"`))).toHaveLength(1);
     // The equals form is a whole option, never the tail of another option's value.
