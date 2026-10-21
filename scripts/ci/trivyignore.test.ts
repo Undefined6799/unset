@@ -134,11 +134,52 @@ describe(".github/trivyignore.pds.yaml", () => {
   test("shared_ignorefile_never_names_pds", () => {
     const shared = readFileSync(SHARED_FILE, "utf8");
     const sharedDoc = parse(shared) as { vulnerabilities?: IgnoreEntry[] };
-    const sharedIds = (sharedDoc.vulnerabilities ?? []).map((item) => item.id);
-    const pdsIds = new Set(pdsEntries().map((item) => item.id));
-    expect(sharedIds.filter((id) => pdsIds.has(id))).toEqual([]);
+    // An id both files name is accepted in the shared file only for another binary: its paths and PURLs share
+    // nothing with the PDS entry's (P1.37x, Newt's Go stdlib carries three of the goat binary's ids).
+    const pds = new Map(pdsEntries().map((item) => [item.id, item]));
+    const overlapping = (sharedDoc.vulnerabilities ?? []).filter((item) => {
+      const twin = pds.get(item.id);
+      if (twin === undefined) return false;
+      const scope = [...(item.paths ?? []), ...(item.purls ?? [])];
+      const twinScope = new Set([...(twin.paths ?? []), ...(twin.purls ?? [])]);
+      return (item.paths ?? []).length === 0 || (item.purls ?? []).length === 0 || scope.some((s) => twinScope.has(s));
+    });
+    expect(overlapping.map((item) => item.id)).toEqual([]);
     expect(shared).not.toContain("ghcr.io/bluesky-social/pds");
     expect(shared).not.toContain("3a8feb34");
     expect(shared).not.toContain("trivyignore.pds.yaml");
+  });
+});
+
+/** P1.37x: Alex's typed line 2026-10-21T00:17:36Z, "yes waive CVE-2026-78667 CVE-2026-78669 CVE-2026-97031 for
+ * fosrl/newt 1.18.1 until 2026-10-28 in .github/trivyignore.yaml". Nothing else, nowhere else, no later. */
+describe(".github/trivyignore.yaml Newt waiver", () => {
+  const NEWT_IDS = ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"];
+  const sharedText = (): string => readFileSync(SHARED_FILE, "utf8");
+  const shared = (): IgnoreEntry[] =>
+    (parse(sharedText()) as { vulnerabilities?: IgnoreEntry[] }).vulnerabilities ?? [];
+
+  test("newt_waiver_exactly_three_ids_on_the_newt_binary", () => {
+    expect(shared().map((item) => item.id)).toEqual(NEWT_IDS);
+    for (const item of shared()) {
+      expect(item.paths, item.id).toEqual(["usr/local/bin/newt"]);
+      expect(dayOf(item.expired_at), item.id).toBe("2026-10-28");
+      expect(item.statement, item.id).toMatch(
+        /^fosrl\/newt 1\.18\.1 sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f: denial of service only, /,
+      );
+    }
+    const purls = Object.fromEntries(shared().map((item) => [item.id, item.purls]));
+    expect(purls).toEqual({
+      "CVE-2026-78667": ["pkg:golang/stdlib@v1.26.8"],
+      "CVE-2026-78669": ["pkg:golang/stdlib@v1.26.8", "pkg:golang/golang.org/x/net@v0.59.0"],
+      "CVE-2026-97031": ["pkg:golang/stdlib@v1.26.8"],
+    });
+  });
+
+  test("newt_waiver_red_once_expired", () => {
+    expect(trivyIgnoreProblems(sharedText(), new Date("2026-10-27T23:59:59Z"))).toEqual([]);
+    expect(trivyIgnoreProblems(sharedText(), new Date("2026-10-28T00:00:00Z"))).toEqual(
+      NEWT_IDS.map((id) => `vulnerabilities ${id}: expired on 2026-10-28`),
+    );
   });
 });
