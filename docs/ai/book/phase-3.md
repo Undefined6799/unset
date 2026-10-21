@@ -1763,7 +1763,8 @@ switch and button styling thread) and is not decided here. **Alex's typed line a
 until then this step is planned, not built.
 
 Goal: a signed-in visitor types in the bar and sees matches on unset.sh first, then up to ten web results from our
-own SearXNG instance, without the query, the visitor's address or our page ever reaching a search engine or a log.
+own SearXNG instance. The upstream engines receive the query from our instance (that is what a search is); what
+they never receive is the visitor's address, user agent or our page, and the query never enters a log of ours.
 
 Inputs: P3.14 `searchListed`; P1.18a net-guard (`internalPolicy`); P1.06p `limits.ts`; P1.24 `Pagination` is not
 used (one page of ten, no cursor); ADR 0035's settings and network rules.
@@ -1773,16 +1774,27 @@ Outputs (contract):
     `https:` or `http:` URL after `safeHref`, every string trimmed and capped (`title` 200, `snippet` 400); one
     net-guard `internal` policy `searxng` with the origin `http://searxng:8080`; `GET /search?q=&format=json&
     safesearch=1&language=` with the visitor's locale (P1.19); time cap 3 s, body cap 256 KiB, no redirects; the
-    adapter reads `results[].{title,url,content}` and nothing else from the body.
-  - A circuit: five failures in a row open it for 30 s; while open, `search.unavailable` without a request.
-  - Route `GET /search?q=` (session required; Notes as `/people`): `q` trimmed 2–200 characters, else
-    `search.invalid` → the page with "enter at least two characters"; the directory half calls P3.14
+    adapter reads `results[].{title,url,content}` and `unresponsive_engines` and nothing else from the body. An
+    empty `results` beside a non-empty `unresponsive_engines` is an outage, not an empty answer: SearXNG answers
+    200 with that shape when every engine is throttled, blocked or timed out, so the adapter returns
+    `search.unavailable` for it (the engine names stay inside the adapter and are never logged or shown).
+  - A circuit: five failures in a row open it for 30 s; while open, `search.unavailable` without a request. A
+    redirect from the instance is caller-induced (SearXNG's `!!` bang syntax redirects to an external target or
+    the first result), so it is `search.unavailable` for that request but never counts toward the circuit; the
+    route refuses a `q` containing `!!` with `search.invalid` before any call, so a visitor cannot hold the
+    circuit open with valid-looking queries.
+  - Route `GET /search?q=` (session required; Notes as `/people`): `q` trimmed 2–64 characters (P3.14's bound,
+    so the same `q` is valid for both halves and for the "find more on unset" link), else `search.invalid` → the
+    page with "enter two to sixty-four characters"; the directory half calls P3.14
     `searchListed(q, 5)`; the web half calls `webSearch`; both render on one server-rendered page that works
     without JavaScript. The bar's island (the switch and button styling thread's design) calls the same route
     with `Accept: application/json` and gets `{people, web, unavailable}`; it never calls the instance.
-  - `limits.ts` gains `web_search: [{capacity: 600, refillPerSec: 600 / 300, scope: "global"}]` and the route
-    consumes `search` (per address and per DID, P3.14's values) and then `web_search`; a drained global bucket
-    renders the directory half and "web search is busy", status 200.
+  - `limits.ts` gains `web_search` with a `global` scope, and the route consumes `search` (per address and per
+    DID, P3.14's values) and then `web_search`; a drained global bucket renders the directory half and "web search
+    is busy", status 200. A `global` bucket lives in one process (`shared/http/limits/rateLimit.ts:1-2`), so the
+    stack-wide budget of 600 per 5 minutes is divided by the replica count: capacity `600 / WEB_REPLICAS`, refill
+    `600 / 300 / WEB_REPLICAS` per second, with `WEB_REPLICAS` a required config value (1 under dev and local;
+    P5.02 sets 2, its table's count), validated against the compose `deploy.replicas` by the compose test.
   - Compose: the `searxng` service as ADR 0035 decision 1 lists it (digest pin, non-root, read-only root,
     `cap_drop: ALL`, `no-new-privileges`, limits, no published port, no edge site); networks `search` (internal;
     `web`, `searxng`) and `search_egress` (not internal; `searxng`); `networks.dev.json` gains both rows;
@@ -1794,8 +1806,12 @@ Outputs (contract):
     builder checks each one against that image's settings reference and cites the file and version in the PR.
     SearXNG documents no setting that turns a request log off or disables a result cache (checked against
     docs.searxng.org on 2026-10-21), so the builder finds the real mechanism for each (the process's own log
-    level and output, the image's uwsgi or granian log settings, whether any cache exists in the pinned version)
-    or records that the property does not hold and how `search_query_never_logged` still passes on our side.
+    level and output, the image's uwsgi or granian log settings, whether any cache exists in the pinned version).
+    **Request logging is a stop condition:** if the pinned image cannot be made to stop writing request URLs
+    (the query travels in the GET) to its output, the step stops with a `[STOP]` for Alex (another image, our own
+    build of it, or no web search); "does not hold" is not an outcome this step may record. The cache question
+    is recorded either way, since nothing reads it back. `search_query_never_logged` captures the instance's
+    container output as well as ours.
   - Response headers on `/search`: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`; every result link
     `rel="noopener noreferrer"`.
 
@@ -1808,8 +1824,9 @@ Algorithm (hypothesis; the storage, logging and network rules are contract):
      one line of text.
   5. Log the request with the typed fields only (`route`, `status`, `ms`, `code`); the query is never a field.
 
-Edge cases and failures: `q` of one character or over 200 → `search.invalid`, no upstream call; the instance down,
-slow, redirecting, answering non-JSON or a body over the cap → `search.unavailable` and the circuit counts it; a
+Edge cases and failures: `q` of one character, over 64, or containing `!!` → `search.invalid`, no upstream call;
+the instance down, slow, answering non-JSON, a body over the cap, or empty results with unresponsive engines →
+`search.unavailable` and the circuit counts it; a redirect → `search.unavailable`, not counted; a
 result with a `javascript:`, `data:` or relative url → dropped, not rendered; a result title or snippet with
 markup → escaped as text (we never render engine HTML); the global bucket drained → "busy", directory still shown;
 DB down → 503 page as `/people`; a signed-out visitor → the sign-in page (no public web search in v1).
@@ -1828,23 +1845,32 @@ Done when (tests):
   - `searxng_only_on_search_networks`; `searxng_publishes_nothing`; `searxng_env_exact_names` (preflight);
     `compose_dev_networks_match_table` extended by the two rows; `compose.local.test.ts` keeps local equal to dev.
   - `search_requires_session`; `search_rate_limited` (address, DID and the global bucket, each in turn);
-    `search_bounds_q_length`.
+    `search_bounds_q_length` (1 and 65 refused, 2 and 64 accepted); `search_bang_refused` (`!!` anywhere in `q`);
+    `web_search_split_by_replicas` (the per-process capacity equals `600 / WEB_REPLICAS`, and the compose test
+    fails when `WEB_REPLICAS` differs from the file's replica count).
   - `search_query_never_logged`: a canary query and a canary result url are absent from the log capture, the audit
-    tables and the metrics registry after a request that succeeded and one that failed.
+    tables and the metrics registry after a request that succeeded and one that failed, and absent from the
+    SearXNG container's output captured over the same requests (the stack test, dev and local).
+  - `search_empty_with_engine_failures_is_unavailable`: a 200 body with `results: []` and a non-empty
+    `unresponsive_engines` renders the unavailable line and counts toward the circuit; a 200 body with `results:
+    []` and no failures renders "no web results" and does not.
   - `search_no_client_address_forwarded`: the recorded upstream request carries no `X-Forwarded-For`, `Forwarded`
     or `X-Real-IP` header and no cookie.
   - `search_results_text_only`: markup in title and snippet is escaped; a non-http url is dropped; eleven results
     become ten; strings are capped.
   - `search_engine_down_page_still_renders` (timeout, 5xx, non-JSON, oversized body, redirect: each gives a 200
-    page with the directory half); `search_circuit_opens_after_five` and closes after 30 s.
+    page with the directory half); `search_circuit_opens_after_five` and closes after 30 s;
+    `search_redirect_never_opens_circuit` (five redirects in a row leave it closed).
   - `search_response_headers` (`Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `rel` on every link).
   - net-guard: the `searxng` policy is `internal` with the one origin; a public answer for the name is refused.
   - Playwright + axe on `/search` with the engine up and with it down, both themes and languages.
 
 Reuse: none (the prototype had no web search).
 Not in this step: the bar's visual design (design sheet, P1.24); image, news or video tabs; autocomplete from the
-engine; caching or ranking results; search history; public (signed-out) search; the prod service (P5.02's network
-table) and the edge zone for `/search` (P5.02a lists it with the other app zones).
+engine; caching or ranking results; search history; public (signed-out) search; the prod service, which P5.02
+builds from its network table (that table carries the `searxng` row, `web`'s `search` membership and
+`egress-search` since this step was planned) and the edge zone for `/search` (P5.02a lists it with the other app
+zones).
 Diagram: none.
 
 ### P3.15 — Report intake and the public notice form
@@ -3078,7 +3104,7 @@ Not in this step: object-locked upload and restore drill (P5.04, P5.05); Phase 5
 Diagram: none.
 
 ### P3.23 — Phase 3 exit
-Tags: none            Depends on: every Phase 3 step (P3.07, P3.13, P3.16c, P3.18a, P3.20a, P3.21, P3.22 directly)            Plan: §8 Phase 3 "Exit"
+Tags: none            Depends on: every Phase 3 step (P3.07, P3.13, P3.14s, P3.16c, P3.18a, P3.20a, P3.21, P3.22 directly)            Plan: §8 Phase 3 "Exit"
 Where: `docs/human/phase-exits/phase-3.md`, CI job `phase-3-exit`, compose service `resolver-check` (dev only)
 Size: ~40 source lines (the resolver container), ~150 test lines, a one-page exit note
 

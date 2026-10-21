@@ -1651,7 +1651,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.21 | Suspend end to end | [SEC] | P3.20, P3.09, P3.06, P3.05 | `phase-3.md` |
 | P3.22g | Grants for the audit verifier and anchoring (SE-6) | [SEC] | P1.15a, P3.20c | `phase-3.md` |
 | P3.22 | Audit chain anchors, nightly verifier and admin runbooks 1–8 | [SEC] [ALEX] | P3.22g, P1.15, P3.16d, P3.20c | `phase-3.md` |
-| P3.23 | Phase 3 exit | — | every Phase 3 step; directly P3.07, P3.13, P3.16c, P3.18a, P3.20a, P3.21, P3.22 | `phase-3.md` |
+| P3.23 | Phase 3 exit | — | every Phase 3 step; directly P3.07, P3.13, P3.14s, P3.16c, P3.18a, P3.20a, P3.21, P3.22 | `phase-3.md` |
 
 ```mermaid
 flowchart TD
@@ -1731,6 +1731,7 @@ flowchart TD
   P3_20 --> P3_21
   P3_20c --> P3_22
   P3_13 --> P3_23
+  P3_14s --> P3_23
   P3_16c --> P3_23
   P3_18a --> P3_23
   P3_20a --> P3_23

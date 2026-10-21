@@ -172,7 +172,8 @@ flowchart LR
 | Container | Internal networks it joins | Egress class | Listens publicly |
 |---|---|---|---|
 | `edge` | `edge-web`, `edge-api`, `edge-media`, `edge-pds`, `edge-ozone`; fixed `ipam` address `EDGE_ADDR` on the bridge the hairpin rule targets | fixed hosts (ACME) via `egress-edge` | yes, `0.0.0.0:443`, `:80` (redirect) |
-| `web` (2 replicas) | `edge-web`, `db-web`, `web-pdsadmin` | any host via `net-guard`, plus hairpin; `egress-web` | no |
+| `web` (2 replicas) | `edge-web`, `db-web`, `web-pdsadmin`, `search` (P3.14s) | any host via `net-guard`, plus hairpin; `egress-web` | no |
+| `searxng` (P3.14s, ADR 0035) | `search` (with `web` only) | the upstream engines of its committed settings file; `egress-search` | no |
 | `api` | `edge-api`, `db-api` | any host via `net-guard` (DID resolution for service auth); `egress-api` | no |
 | `media` | `edge-media`, `db-media`, storage | any host via `net-guard` (`public` policy, no redirects), plus hairpin (own-PDS blobs); `egress-media`. Since Alex answer 33 (P4b-E5 option C) this includes the **Bluesky picture proxy** (P4.21a): `com.atproto.sync.getBlob` on the post author's PDS (CID-verified, 2 MB cap, 5 s, no viewer data) and, from P5.07b, the Arachnid Shield PDQ lookup for each newly proxied picture. `cdn.bsky.app` is not used (its re-encode cannot be verified against the CID) | no |
 | `indexer` | `tap-indexer`, `db-indexer` | any host via `net-guard`, plus hairpin (`*.0x40.me` well-known); `egress-indexer` | no |

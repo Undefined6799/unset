@@ -31,18 +31,23 @@ forbids them in any log. The plan already has one way out of the stack for calle
    lane, a metric label or an error message. The instance's image proxy is off, and it receives no forwarded client
    address (`web` sends no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header). SearXNG documents no switch for
    its request log or a result cache (docs.searxng.org, 2026-10-21), so P3.14s makes the builder find the real
-   mechanism in the pinned image or record that the property does not hold; our own side holds either way.
+   mechanism in the pinned image. An image that cannot be made to stop writing request URLs stops the step for
+   Alex; "the instance logs queries" is not an outcome the step may record. The canary test reads the instance's
+   output as well as ours.
    Upstream engines see our instance's egress address and nothing about the visitor. The results
    page sends `Referrer-Policy: no-referrer` and every result link carries `rel="noopener noreferrer"`, so the query
    and our page do not travel with a click. No search history is stored for anyone, signed in or not.
 4. **Our limits, not the engine's.** The route uses `interfaces/http/limits.ts`'s `search` policy (60 per minute per
    address and per DID, P1.06p) plus one new `web_search` entry with a global scope, so one stack cannot be used to
-   hammer the upstream engines from our address; SearXNG's own limiter stays off, since it keys on client addresses
-   it never sees. The page is signed-in only, like `/people` (P3.14).
-5. **The engine can fail without the app failing.** A timeout, a refusal, a malformed body or an open circuit (five
+   hammer the upstream engines from our address. That bucket is per process, so the stack-wide budget is divided by
+   the `web` replica count (P5.02 runs two); SearXNG's own limiter stays off, since it keys on client addresses it
+   never sees. The page is signed-in only, like `/people` (P3.14).
+5. **The engine can fail without the app failing.** A timeout, a refusal, a malformed body, an empty answer whose
+   `unresponsive_engines` says every engine failed (SearXNG answers 200 in that case), or an open circuit (five
    failures in a row open it for 30 s) returns `search.unavailable`; the page still renders the directory matches
-   with one line saying web search is unavailable, status 200. Nothing retries inside a request. The instance's
-   health is a preflight check and a runbook line, not a boot requirement of `web`.
+   with one line saying web search is unavailable, status 200. A redirect from the instance (its `!!` bang syntax)
+   is refused before the call and never counts toward the circuit. Nothing retries inside a request. The
+   instance's health is a preflight check and a runbook line, not a boot requirement of `web`.
 6. **Results are third-party text.** `web` renders the three strings, escaped, with `safeHref` on the url; it renders
    no HTML, image, favicon or thumbnail from the engine, and stores nothing. The engine list lives in a committed
    `deployment/searxng/settings.yml`; the instance's `secret_key` is the only secret, in `searxng.env` beside
@@ -60,6 +65,8 @@ forbids them in any log. The plan already has one way out of the stack for calle
 - **Directory search only.** No new system. Rejected by Alex's line.
 
 ## Consequences
+- The service is in every environment: `compose.dev.yaml` and `compose.local.yaml` now, and P5.02's network table
+  already carries its row, `web`'s `search` membership and `egress-search`, so the prod build has an owner.
 - One more service to pin, patch and watch: the image joins `bases.lock.json` and the mirror list (P2.26b), and its
   settings file is reviewed like compose. Upstream engines may throttle or block our egress address; the app then
   shows "web search unavailable" until the engine list or the address changes, and nothing else degrades.
