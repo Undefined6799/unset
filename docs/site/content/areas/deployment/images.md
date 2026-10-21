@@ -31,6 +31,8 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/mirror.list.json` lists the same six sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>`.
 
+`deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock.
+
 `deployment/images.lock.json` is what dev and prod run. Every entry has `verify: cosign-keyless`.
 
 | Name | `origin` | Image |
