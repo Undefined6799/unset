@@ -8,6 +8,7 @@ export { Button, type ButtonProps } from "./components/Button/Button.tsx";
 export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox/Checkbox.tsx";
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
+export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHeader.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";

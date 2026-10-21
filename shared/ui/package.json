@@ -5,7 +5,9 @@
   "type": "module",
   "license": "MIT",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./presentation": "./presentation.ts",
+    "./brand-header": "./components/Header/BrandHeader.tsx"
   },
   "dependencies": {
     "@unset/shared-islands": "*",
