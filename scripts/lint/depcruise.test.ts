@@ -119,6 +119,7 @@ const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
 
 /** At least one passing edge per MATRIX row (AB-1: one fixture per matrix row). */
 const ROW_FIXTURES: Record<string, Edge[]> = {
+  "pds-presentation": [edge("apps/pds/src/view.tsx", "./other.tsx"), edge("apps/pds/src/view.tsx", "react")],
   app: [
     edge("apps/web/a.ts", "./b.ts"),
     edge("apps/web/a.ts", "../../shared/ui/index.ts"),

@@ -78,8 +78,32 @@ const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\
 const ASSET = "\\.css$";
 
 /** The allowlist matrix. Each row: a name, the importing folder, and what it may reach. */
+// P2.24g / ADR 0027: the only public code entries for the build-only PDS consumer.
+const PDS_UI_PUBLIC_ENTRIES = ["shared/ui/presentation.ts", "shared/ui/components/Header/BrandHeader.tsx"];
+const PDS_CSS = [
+  "shared/ui/src/base.css",
+  "shared/ui/src/tokens.css",
+  "shared/ui/src/layers.css",
+  ...["Navigation", "Button", "Input", "Avatar", "Header"].map(
+    (name) => `shared/ui/components/${name}/${name}.module.css`,
+  ),
+];
+const PDS_SOURCE = "^apps/pds/(src/.*\\.(ts|tsx|css)|(?:index|presentation)\\.tsx?)$";
+const PDS_PRODUCTION = "^apps/pds/(?!.*\\.test\\.(ts|tsx|mts|cts)$)";
+const PDS_TARGETS = [
+  PDS_SOURCE,
+  oneOfFiles(PDS_UI_PUBLIC_ENTRIES),
+  oneOfFiles(PDS_CSS),
+  npmModule("react"),
+  npmModule("react/jsx-runtime"),
+];
 const MATRIX = [
-  { name: "app", from: { path: "^apps/([^/]+)/" }, to: [{ path: "^apps/$1/" }, { path: "^shared/" }, NPM] },
+  { name: "pds-presentation", from: { path: "^apps/pds/" }, to: PDS_TARGETS.map((path) => ({ path })) },
+  {
+    name: "app",
+    from: { path: "^apps/([^/]+)/", pathNot: "^apps/pds/" },
+    to: [{ path: "^apps/$1/" }, { path: "^shared/" }, NPM],
+  },
   {
     name: "interface",
     from: { path: "^interfaces/([^/]+)/", pathNot: ADMIN_SERVICES },
@@ -175,7 +199,7 @@ const MATRIX = [
       CORE,
     ],
   },
-  { name: "tooling", from: { path: TOOLING }, to: [{}] },
+  { name: "tooling", from: { path: TOOLING, pathNot: PDS_PRODUCTION }, to: [{}] },
 ];
 
 const forbidden = (name, comment, from, to, severity = "error") => ({ name, comment, severity, from, to });
@@ -235,8 +259,14 @@ module.exports = {
     forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
-      { pathNot: `^${WORKSPACE_WITH_INDEX}` },
+      { pathNot: `^${WORKSPACE_WITH_INDEX}|^apps/pds/` },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "PDS reaches only its two reviewed public UI entries (ADR 0027 / DC-2); CSS is checked by its MATRIX row.",
+      { path: "^apps/pds/" },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, ASSET, oneOfFiles(PDS_UI_PUBLIC_ENTRIES)] },
     ),
     forbidden(
       "infra-shared-via-index",
@@ -425,5 +455,6 @@ Object.defineProperties(module.exports, {
   E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
+  PDS_UI_PUBLIC_ENTRIES: { value: PDS_UI_PUBLIC_ENTRIES },
   LEXICON_SCRIPT_BUILTINS: { value: LEXICON_SCRIPT_BUILTINS },
 });

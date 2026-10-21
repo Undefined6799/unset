@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { type PlaywrightReport, problems, SKIP_ALLOWANCE } from "./assert-tests-ran.ts";
+import { discoverSpecs, type PlaywrightReport, problems, SKIP_ALLOWANCE } from "./assert-tests-ran.ts";
 
 const today = "2026-10-17";
 
@@ -46,4 +49,55 @@ describe("assert_tests_ran_skip_fails", () => {
   test("the committed allowance is empty", () => {
     expect(SKIP_ALLOWANCE).toEqual([]);
   });
+});
+
+test("discovers_nested_specs_recursively", () => {
+  const root = mkdtempSync(join(tmpdir(), "pds-specs-"));
+  try {
+    mkdirSync(join(root, "pds/deep"), { recursive: true });
+    for (const file of ["auth.spec.ts", "pds/auth.spec.ts", "pds/deep/missing.spec.ts", "pds/helper.ts"])
+      writeFileSync(join(root, file), "");
+    expect(discoverSpecs(root)).toEqual(["auth.spec.ts", "pds/auth.spec.ts", "pds/deep/missing.spec.ts"]);
+    expect(problems(report("expected", "auth.spec.ts"), discoverSpecs(root), [], today)).toEqual([
+      "discovered test file did not run: pds/auth.spec.ts",
+      "discovered test file did not run: pds/deep/missing.spec.ts",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("report_paths_use_explicit_config_root", () => {
+  const root = "/repo/tests/e2e";
+  for (const file of ["pds/auth.spec.ts", "/repo/tests/e2e/pds/auth.spec.ts", "pds/./auth.spec.ts"]) {
+    expect(
+      problems({ ...report("expected", file), config: { rootDir: root } }, ["pds/auth.spec.ts"], [], today, root),
+    ).toEqual([]);
+  }
+  for (const file of ["auth.spec.ts", "/other/tests/e2e/pds/auth.spec.ts", "../pds/auth.spec.ts"]) {
+    expect(
+      problems({ ...report("expected", file), config: { rootDir: root } }, ["pds/auth.spec.ts"], [], today, root),
+    ).toEqual(["discovered test file did not run: pds/auth.spec.ts"]);
+  }
+  expect(
+    problems(
+      { ...report("expected", "pds/auth.spec.ts"), config: { rootDir: "/other" } },
+      ["pds/auth.spec.ts"],
+      [],
+      today,
+      root,
+    ),
+  ).toContain("report config root differs from expected test root");
+  expect(problems(report("skipped", "pds/auth.spec.ts"), ["pds/auth.spec.ts"], [], today)).toEqual([
+    "skipped without an allowance: axe_matrix_green / cookie-dark",
+  ]);
+});
+
+test("unexecuted_report_specs_do_not_count_as_run", () => {
+  const empty: PlaywrightReport = {
+    suites: [{ specs: [{ title: "not executed", file: "pds/auth.spec.ts", tests: [] }] }],
+  };
+  expect(problems(empty, ["pds/auth.spec.ts"], [], today)).toEqual([
+    "discovered test file did not run: pds/auth.spec.ts",
+  ]);
 });

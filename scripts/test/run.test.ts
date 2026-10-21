@@ -363,3 +363,38 @@ describe("ci failure reporting", () => {
     expect(summary).toContain("2 more not shown.");
   });
 });
+
+test("pds_native_image_smoke_is_in_normal_serial_ci_project", async () => {
+  const root = fixture(
+    {
+      "domains/x/a.test.ts": PASSING,
+      "tests/integration/pds-ui/native.image.test.ts": PASSING,
+    },
+    true,
+  );
+  const glob = discoverByGlob(root);
+  expect(glob).toEqual(["domains/x/a.test.ts", "tests/integration/pds-ui/native.image.test.ts"]);
+  expect(imagesPlan("ci", glob).runs).toEqual([["--project=!images"], ["--project=images"]]);
+  // Running the real config selects images with no unrelated integration Postgres lifecycle.
+  expect((await runMain(root, "ci")).code).toBe(0);
+}, 60_000);
+
+test("image_files_run_serially", async () => {
+  const root = fixture({}, true);
+  const lock = JSON.stringify(join(root, "image-owner"));
+  const source = `import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+    import { test } from "vitest";
+    test("exclusive image resources", async () => {
+      try { mkdirSync(${lock}); }
+      catch (error) { writeFileSync(${JSON.stringify(join(root, "overlap"))}, String(error)); throw error; }
+      try { await new Promise((resolve) => setTimeout(resolve, 500)); }
+      finally { rmSync(${lock}, { recursive: true }); }
+    });`;
+  for (const name of ["one", "two"]) {
+    mkdirSync(join(root, "tests/integration/pds-ui"), { recursive: true });
+    writeFileSync(join(root, `tests/integration/pds-ui/${name}.image.test.ts`), source);
+  }
+  const result = await runMain(root, "images");
+  expect(existsSync(join(root, "overlap")), "concurrent image fixture files overlapped").toBe(false);
+  expect(result.code, result.err).toBe(0);
+}, 60_000);

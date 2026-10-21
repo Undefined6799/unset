@@ -51,7 +51,8 @@ export default defineConfig({
           ...(GLOBAL_SETUP[name] ?? {}),
         },
       })),
-      { extends: true, test: { name: "images", include: [IMAGE_TESTS], exclude } },
+      // Vitest 5.0.4 resolves fileParallelism:false to one worker (dist/chunks/index.B8VfM7Mf.js:8828).
+      { extends: true, test: { name: "images", include: [IMAGE_TESTS], exclude, fileParallelism: false } },
     ],
   },
 });

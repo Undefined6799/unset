@@ -9,7 +9,12 @@ import { sourceFiles } from "../guards/files.ts";
 
 type PathRule = { path?: string; pathNot?: string | string[] };
 type Row = { name: string; from: PathRule; to: (PathRule & { dependencyTypes?: string[] })[] };
-type BoundaryConfig = { MATRIX: Row[]; ZERO_DEP_ALLOWLIST: string[]; RENDER_ENTRIES: Record<string, string> };
+type BoundaryConfig = {
+  PDS_UI_PUBLIC_ENTRIES: string[];
+  MATRIX: Row[];
+  ZERO_DEP_ALLOWLIST: string[];
+  RENDER_ENTRIES: Record<string, string>;
+};
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const boundaries: BoundaryConfig = createRequire(import.meta.url)(join(ROOT, "scripts/lint/.dependency-cruiser.cjs"));
@@ -79,6 +84,7 @@ function matrixAllows(fromDir: string, toFile: string): boolean {
 export function mayReference(fromDir: string, toDir: string): boolean {
   const entries = [
     `${toDir}/index.ts`,
+    ...boundaries.PDS_UI_PUBLIC_ENTRIES.filter((f) => f.startsWith(`${toDir}/`)),
     ...Object.values(boundaries.RENDER_ENTRIES).filter((f) => f.startsWith(`${toDir}/`)),
   ];
   return entries.some((file) => matrixAllows(fromDir, file));
@@ -117,6 +123,21 @@ function manifestProblems({ dir, pkg, tsconfig }: Workspace): string[] {
   return expected
     .filter(([, actual, want]) => actual !== want)
     .map(([field, actual, want]) => `${dir}: ${field} is ${JSON.stringify(actual)}, expected ${JSON.stringify(want)}`);
+}
+
+/** Unused declarations are checked too: build-only PDS never installs a server/client SDK. */
+function pdsDependencyProblems(ws: Workspace): string[] {
+  if (ws.dir !== "apps/pds") return [];
+  const runtime: Record<string, string> = { "@unset/shared-ui": "*", react: "19.3.0" };
+  const dev: Record<string, string> = { "@types/react": "19.3.0", vitest: "5.0.4", typescript: "7.0.2" };
+  return DEPENDENCY_FIELDS.flatMap((field) =>
+    Object.entries((ws.pkg[field] ?? {}) as Record<string, unknown>).flatMap(([name, version]) => {
+      const allowed = field === "devDependencies" ? dev : runtime;
+      return allowed[name] !== undefined && version === allowed[name]
+        ? []
+        : [`apps/pds: forbidden presentation dependency ${field}.${name} at ${String(version)}`];
+    }),
+  );
 }
 
 function referenceProblems(ws: Workspace, byName: Map<string, string>): string[] {
@@ -221,6 +242,7 @@ export function workspaceProblems(root: string): string[] {
     if (!sourceFiles(root, [ws.dir]).some((f) => TEST_FILE.test(f))) problems.push(`${ws.dir}: has no *.test.ts`);
     problems.push(
       ...manifestProblems(ws),
+      ...pdsDependencyProblems(ws),
       ...referenceProblems(ws, byName),
       ...zeroDependencyProblems(ws, byName),
       ...importProblems(root, ws, byName),

@@ -172,3 +172,21 @@ describe("ui-inventory", () => {
     expect(texts(root)).toEqual([`${INVENTORY}: unreadable`]);
   });
 });
+
+test("future_pds_paths_keep_inventory_enforcement", () => {
+  for (const fixture of ["unknown-icon.fixture", "inline-svg.fixture", "stop-item.fixture"]) {
+    const root = base();
+    if (fixture === "stop-item.fixture")
+      editJson(root, INVENTORY, (inventory) => {
+        (inventory.Toast as { status: string }).status = "stop";
+      });
+    const text = readFileSync(join(FIXTURES, "bad", fixture), "utf8");
+    write(root, "apps/pds/src/Probe.tsx", text);
+    const findings = scanAll(root);
+    expect(findings.length, fixture).toBeGreaterThan(0);
+    expect(
+      findings.every((f) => f.file === "apps/pds/src/Probe.tsx"),
+      report(findings),
+    ).toBe(true);
+  }
+});

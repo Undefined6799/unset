@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-19
+checked: 2026-10-21
 ---
 # tests
 
@@ -31,7 +31,12 @@ in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
-covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
+covers `scripts/test/`). P2.24g compares recursive spec paths from the explicit config/test root,
+so a same-basename spec elsewhere cannot satisfy execution. The standalone PDS native smoke uses
+`*.image.test.ts`: the images project runs after units, with one worker, and avoids the ordinary
+integration project's Postgres setup. Pure PDS helper unit tests can sit beside browser fixtures
+under `tests/e2e/pds/`; do not make a plain integration test just to share its folder.
+pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
 only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
 mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is

@@ -133,6 +133,10 @@ test("budgets_match_plan", () => {
   expect(budgets).toEqual({
     "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/config + shared/errors + shared/i18n + shared/log + shared/http + shared/admin-envelope": 9000,
     "apps/web + interfaces/http": 7000,
+    "apps/pds": {
+      max: 1500,
+      reason: "P2.24g initial implementation estimate for build-only presentation; warning only, not a plan allowance",
+    },
     "interfaces/api": 1200,
     "interfaces/indexer": 1500,
     "interfaces/media": 600,
@@ -193,4 +197,13 @@ test("summary_unwritable_still_exits_zero", () => {
 
 test("missing_folder_counts_zero", () => {
   expect(check(tree({}), { "interfaces/api": 1 })).toEqual([]);
+});
+
+test("pds_estimate_is_separate_and_warning_only", () => {
+  const budgets = readFileSync(join(import.meta.dirname, "budgets.json"), "utf8");
+  const root = tree({ "apps/pds/src/view.tsx": lines(1501), "scripts/budgets/budgets.json": budgets });
+  const out: string[] = [];
+  expect(main(root, (line) => out.push(line))).toBe(0);
+  expect(out.some((line) => line.includes("apps/pds 1501/1500"))).toBe(true);
+  expect(out.some((line) => line.includes("apps/web + interfaces/http"))).toBe(false);
 });

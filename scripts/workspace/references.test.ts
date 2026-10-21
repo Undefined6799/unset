@@ -401,3 +401,35 @@ describe("workspace references", () => {
     expect(tsc.status, tsc.stdout).toBe(0);
   });
 });
+
+test("pds_references_only_pure_ui", () => {
+  expect(reference("apps/pds", "shared/ui")).toEqual([]);
+  for (const dir of ["shared/http", "shared/islands", "shared/config", "infrastructure/pds", "apps/web"]) {
+    expect(reference("apps/pds", dir)).toContain(`apps/pds: may not reference ${dir} (MATRIX)`);
+  }
+});
+
+test("pds_checks_unused_dependencies_in_every_field", () => {
+  for (const field of ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"]) {
+    for (const [name, version] of [
+      ["left-pad", "1.0.0"],
+      ["react-dom", "19.3.0"],
+      ["react", "^19.3.0"],
+      ["@unset/shared-ui", "file:../../shared/ui"],
+      ["vitest", "*"],
+    ] as const) {
+      const root = tree({ "apps/pds": {}, "shared/ui": {} });
+      put(root, "apps/pds/package.json", { ...manifest("apps/pds"), [field]: { [name]: version } });
+      expect(
+        workspaceProblems(root).some((p) => p.includes(`presentation dependency ${field}.${name}`)),
+        `${field}.${name}`,
+      ).toBe(true);
+    }
+  }
+  const root = tree({ "apps/pds": { dependencies: { "@unset/shared-ui": "*", react: "19.3.0" } }, "shared/ui": {} });
+  put(root, "apps/pds/package.json", {
+    ...manifest("apps/pds", { "@unset/shared-ui": "*", react: "19.3.0" }),
+    devDependencies: { "@types/react": "19.3.0", vitest: "5.0.4" },
+  });
+  expect(workspaceProblems(root)).toEqual([]);
+});
