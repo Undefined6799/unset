@@ -3,7 +3,7 @@ title: identity
 weight: 1
 ---
 
-Who an account is: DID and handle syntax, resolution, the two-way handle check, and the onboarding and email decisions. Package `@unset/domains-identity`. The network port is [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md).
+Who an account is: DID and handle syntax, resolution, the two-way handle check, and the onboarding and email decisions. Package `@unset/domains-identity`. The network port is [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md), decided (0001 log), acceptance pending.
 
 ## Owns
 
@@ -25,7 +25,16 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 
 `parseDid` accepts `did:plc` (24 base32 characters) or `did:web` plus a hostname `isResolvableHostname` accepts. It does not lowercase. `parseHandle` trims, drops one leading `@`, and lowercases. It returns null unless that result is a hostname `isResolvableHostname` accepts. The lists and the spec cites are in `syntax.ts`.
 
-`resolveHandle` tries a `_atproto` TXT record, then `https://<handle>/.well-known/atproto-did`. Statuses: `found`, `not_found`, `unavailable`. `unavailable` is returned when neither method found a DID and at least one could not tell (`resolve-handle.ts`).
+`resolveHandle` tries a `_atproto` TXT record, then `https://<handle>/.well-known/atproto-did`. Statuses: `found`, `not_found`, `unavailable` (`resolve-handle.ts`). A method that returns a DID wins. If neither does, one method that could not tell makes the status `unavailable`, and two methods that found nothing make it `not_found`.
+
+| Network failure | Raised by | Adapter (`infrastructure/pds/identity-network.ts`) | Status when the other method found nothing |
+| --- | --- | --- | --- |
+| `egress.dns_no_record` | TXT: NXDOMAIN, NODATA or an empty answer (`infrastructure/net-guard/src/dns.ts`). Well-known host: NXDOMAIN or NODATA on both address families, or an empty answer (`infrastructure/net-guard/src/resolve.ts`, P2.01m). Any other error on either family is `egress.dns_failed`, not this code. | `txt` returns `no_record`. `get` returns `no_such_host`. Both are none in `resolve-handle.ts`. | `not_found` |
+| `egress.dns_failed`, `egress.dns_timeout` | Either method. | `unavailable`. `txt` maps every `NetGuardError` other than `egress.dns_no_record` to `unavailable`. | `unavailable` |
+| `egress.connect`, `egress.tls`, `egress.timeout` | The HTTPS method. | `unavailable` | `unavailable` |
+| A refusal (`egress.private_address`, `egress.redirect`, `egress.too_large`, and the other refusal codes in `FAILURE`) | The HTTPS method. `resolveTxt` does not raise them. | `get` returns `refused`, which `fromWellKnown` treats as none. | `not_found` |
+
+A handle domain with no DNS record is `egress.dns_no_record` on both methods, so `not_found`. [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md) decision 4 said that case was `unavailable` until P2.01m. P2.01m has landed, so that clause has expired. The record is decided (0001 log), acceptance pending. The ADR file is not edited. An HTTPS status of 429 or 500 and above is `unavailable` from the response (`fromWellKnown`), not from a net-guard code.
 
 `createHandleVerifier` returns `verifyHandle` and `invalidateHandle`. `verifyHandle` returns `verified` when the DID document's first syntactically valid `at://` handle resolves back to that DID. `displayHandle` returns that handle, or the string `handle.invalid`. The other verdicts are `invalid` and `unavailable` (`verify-handle.ts`).
 
