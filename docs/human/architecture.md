@@ -108,8 +108,9 @@ has no reason.
 ## Views
 
 What runs today is dependency-cruiser's forbidden-edge rules and the allowlist matrix in
-`scripts/lint/.dependency-cruiser.cjs` (dependency-cruiser 18.5.0). The CI `check` job's
-`npm run lint` step (`.github/workflows/ci.yml`) runs `depcruise` on that config (`package.json`).
+`scripts/lint/.dependency-cruiser.cjs` (dependency-cruiser 18.5.0). The CI `code` job's
+`npm run lint` step (`.github/workflows/ci.yml`) runs `depcruise` on that config (`package.json`);
+the required `check` job fails unless `code` succeeded.
 An edge the matrix does not list fails as `not-in-allowed`.
 
 The generated module view and its CI diff check are planned (AB-4, PARTLY, phase 2). AB-4 in
