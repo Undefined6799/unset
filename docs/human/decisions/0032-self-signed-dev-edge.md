@@ -26,7 +26,9 @@ the same shape with a self-signed leaf instead of the dev root's.
 
 ## Decision
 This record supersedes ADR 0031 Decision 2 ("Edge without a certificate under dev", 0031:119-137) for the dev
-profile only. Everything else in 0031 stands: both names public with no login (Decision 1), web through Pangolin
+profile only, together with the one sentence of 0031 Decision 1 that follows from it, "Pangolin's targets to Newt
+are plain `http`" (0031:52-53): under this record both targets are `https` (Decision 5 below). Everything else in
+0031 stands: both names public with no login (the rest of Decision 1), web through Pangolin
 and the client-address keys (Decision 3), the PDS denylist (Decision 4), federation and handles (5, 6), and the
 0025 and 0030 clauses it departs from. Production is unchanged: `unset.ac` keeps Let's Encrypt at the edge under
 ADR 0028 and the Phase 5 records.
@@ -37,7 +39,8 @@ ADR 0028 and the Phase 5 records.
    `tls /run/secrets/dev_tls_cert /run/secrets/dev_tls_key`; the snippet is mounted read-only over
    `snippets/tls.caddy` by the dev compose file only, and both files are C9 file secrets under `/run/secrets/`,
    mounted only into the edge, with a test that no other service mounts them (the key is secret; the certificate
-   is public by nature but travels the same way, so nothing certificate-shaped sits in the checkout). No issuer,
+   is public by nature but travels the same way, and the runbook keeps both out of the checkout; no CI guard
+   enforces that for the certificate, see Compliance). No issuer,
    no ACME account, no DNS token, no CA: nobody is asked to trust the certificate, and nothing installs it
    anywhere. Validity is at most 825 days; the runbook generates the pair on the
    staging host with one command (OpenSSL from the host's packages, parameters fixed in the runbook: P-256, the
@@ -124,8 +127,9 @@ ADR 0028 and the Phase 5 records.
   changes in the same book edit as ADR 0031's (`unset-plan/book-edits/2026-10-20-adr-0031-no-login.md`).
 - ADR 0031 is not edited, not even its status line: the docs immutability test allows an accepted record only the
   whole-record "Status: Superseded by NNNN." change (`scripts/docs/docs.test.ts:107-110`), and 0031 stands in
-  every other decision. The partial supersession is recorded here, in 0031's README row ("Decision 2 superseded
-  by 0032", the shape 0008 and 0017 use) and in the appended ADR 0001 entry, all at this record's acceptance.
+  every other decision. The partial supersession is recorded here, in 0031's README row ("Decision 2 and
+  Decision 1's plain-http sentence superseded by 0032", the shape 0008 and 0017 use) and in the appended ADR 0001
+  entry, all at this record's acceptance.
 - An expired certificate does not stop traffic: Caddy keeps serving the only certificate it has after
   `NotAfter` (certmagic v0.25.6 `handshake.go:236-242`, `DefaultCertificateSelector` returns the single choice
   expired or not), and Pangolin's transport for a resource with a TLS Server Name does not verify
@@ -139,8 +143,11 @@ ADR 0028 and the Phase 5 records.
 - The private key never enters the repo, CI, logs or a message (SE-7); the runbook command writes both files as C9
   mounted file secrets: mode 0400, owned by the edge's uid (65532), inside a 0700 folder owned by the deploy user
   (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Under dev nothing in preflight
-  reads a PEM body (`local-leaf.ts` reads one under local only); a PEM committed by mistake is caught only by
-  gitleaks in CI, and C9 refuses a secret file anywhere inside `deployment/`.
+  reads a PEM body (`local-leaf.ts` reads one under local only). A private key committed by mistake is caught by
+  gitleaks in CI (gitleaks 8.30.1's PEM rule matches `BEGIN ... PRIVATE KEY` only, `config/gitleaks.toml:2634-2637`,
+  and `.github/.gitleaks.toml` extends the defaults); a committed certificate is caught by nothing, since it is
+  not a secret, and C9 reads only the declared secret paths, so keeping the certificate out of the checkout is a
+  runbook rule, not an enforced one. C9 refuses a secret file anywhere inside `deployment/`.
 - No trust store, CA or root is created or installed by this record, on the host, in a container or on a tester's
   device; P1.37v's deploy check asserts the certificate is a leaf (no CA flag) with both staging names as SANs
   and that it is self-signed (issuer equals subject and the signature verifies with the leaf's own public key,
@@ -171,4 +178,5 @@ ADR 0028 and the Phase 5 records.
   docs/human/decisions/0032-self-signed-dev-edge.md at 2ebf132", against 2ebf132, which the verifier had passed
   as final. The status flip and this wording of it are the only changes after it; the PR lands squashed, so
   2ebf132 and the flip are pre-squash revisions, not ancestors of the commit on main.
-  0031 Decision 2 is superseded for dev; 0031 is not edited. P1.38e's line (typed in the same message) takes effect.
+  0031 Decision 2 and Decision 1's plain-http sentence are superseded for dev; 0031 is not edited. P1.38e's line
+  (typed in the same message) takes effect.
