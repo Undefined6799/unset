@@ -1,0 +1,75 @@
+# unset docs site. Theme: Hextra v0.13.0 as a Hugo module (go.mod).
+# Hextra getting started: https://imfing.github.io/hextra/docs/getting-started/
+# Configuration (menu.main, sidebar from the content tree, FlexSearch):
+# https://imfing.github.io/hextra/docs/guide/configuration/
+# theme.toml at v0.13.0 sets min_version = "0.146.0".
+baseURL: https://example.com/
+title: unset
+defaultContentLanguage: en
+
+languages:
+  en:
+    locale: en
+    label: English
+    weight: 1
+
+module:
+  hugoVersion:
+    extended: true
+    min: "0.146.0"
+  imports:
+    - path: github.com/imfing/hextra
+
+# No tag or category archives.
+disableKinds:
+  - taxonomy
+  - term
+
+menu:
+  main:
+    - name: Overview
+      pageRef: /overview
+      weight: 1
+    - name: Architecture
+      pageRef: /architecture
+      weight: 2
+    - name: Areas
+      pageRef: /areas
+      weight: 3
+    - name: Endpoints
+      pageRef: /endpoints
+      weight: 4
+    - name: Operate
+      pageRef: /operate
+      weight: 5
+    - name: Contribute
+      pageRef: /contribute
+      weight: 6
+    # Hextra renders the search trigger only for a menu item of this type
+    # (layouts/_partials/navbar.html at v0.13.0). The dialog itself is in baseof.
+    - name: Search
+      weight: 7
+      params:
+        type: search
+
+params:
+  description: Documentation for unset.
+  navbar:
+    displayTitle: true
+    displayLogo: false
+  theme:
+    default: system
+    displayToggle: true
+  # Search is on. The bundle is a site asset, so the theme's jsDelivr default is not used
+  # (layouts/_partials/scripts/search.html: a js path with no base loads resources.Get).
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      index: content
+      tokenize: forward
+      js: js/vendor/flexsearch.bundle.min.js
+  # Mermaid, KaTeX and analytics stay off.
+  # Mermaid is pulled only when a page has a mermaid block (render-codeblock-mermaid.html).
+  # KaTeX is pulled only when passthrough math renders (render-passthrough.html); passthrough is not enabled.
+  # Analytics partials emit nothing unless an id is set (components/analytics/analytics.html).

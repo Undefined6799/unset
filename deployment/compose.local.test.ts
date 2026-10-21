@@ -30,10 +30,28 @@ import {
 } from "./preflight/compose-parse.ts";
 import { type Deps, preflight } from "./preflight/index.ts";
 import { loadInputs } from "./preflight/inputs.ts";
-import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS, LOCAL_ONLY_SERVICES } from "./preflight/local-only.ts";
+import {
+  DEV_ONLY_NETWORKS,
+  DEV_ONLY_SERVICES,
+  isLocalOnlyNetwork,
+  LOCAL_ONLY_NETWORKS,
+  LOCAL_ONLY_SERVICES,
+} from "./preflight/local-only.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const parse = (file: string): Compose => parseCompose(readFileSync(join(DEPLOYMENT, file), "utf8"), file);
+
+/**
+ * The upstream image a dev mirror ref copies (P2.26b): mirror.yml copies each source to the same digest, so a local
+ * stack runs the upstream spelling of the bytes dev runs from the mirror. Any other image is itself.
+ */
+const DEPLOY_LOCK = JSON.parse(readFileSync(join(DEPLOYMENT, "images.lock.json"), "utf8")) as Record<
+  string,
+  { ref: string; origin: string; upstreamSource?: string }
+>;
+const upstreamOf = (image: string | null): string | null =>
+  Object.values(DEPLOY_LOCK).find((entry) => entry.origin === "upstream" && entry.ref === image)?.upstreamSource ??
+  image;
 
 /** The dev root's public folder, bound read-only into pds and web only (item 5). */
 const TRUST: Mount = { type: "bind", source: "../../unset-dev-trust", target: "/etc/unset-dev-trust", readOnly: true };
@@ -53,8 +71,29 @@ const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
   web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
+/** The dev edge's own leaf (P1.36c; ADR 0032), which the local file must leave out: local reads the dev root's leaf. */
+const DEV_SECRETS: Record<string, string[]> = { edge: ["dev_tls_cert", "dev_tls_key"] };
+/**
+ * web's legal contacts (P2.15): dev carries Alex's staging values (2026-10-20T23:09:25Z), any literal; local keeps each
+ * one's `[to fill: KEY]` token, so a throwaway stack never names a real contact.
+ */
+const LEGAL_KEYS: Record<string, string[]> = {
+  web: ["PRIVACY_OFFICER_TITLE", "PRIVACY_OFFICER_CONTACT", "SUPPORT_EMAIL"],
+};
 /** The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g). */
 const DEV_ONLY: Record<string, string[]> = { pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"] };
+/**
+ * The keys only the local file sets, by service, with their one value: web's internal host for net-guard, which the
+ * local stack reaches through the edge's alias, where dev reaches its PDS through Pangolin (ADR 0031 Decision 3).
+ */
+const LOCAL_ADDED_ENV: Record<string, Record<string, EnvValue>> = {
+  web: { NETGUARD_INTERNAL_HOSTS: { ref: "PDS_HOSTNAME" } },
+};
+/** Under dev the edge publishes nothing and joins newt_edge (P1.37v); the local edge publishes these on loopback. */
+const LOCAL_EDGE_PORTS = [
+  { hostIp: "127.0.0.1", published: "80", target: "80" },
+  { hostIp: "127.0.0.1", published: "443", target: "443" },
+];
 /**
  * Item 12's app site on the local edge, and the two keys its app.caddy reads with no default. They come together: with
  * the mount the edge needs both keys exactly, without it neither, and no other service or file may set them (step book
@@ -73,9 +112,16 @@ const APP_SITE: { mount: Mount; environment: [string, EnvValue][] } = {
   ],
 };
 const APP_SITE_KEYS = new Set(APP_SITE.environment.map(([key]) => key));
-/** The edge's sites, each its own read-only file in local (item 12), where dev binds the sites folder. */
+/**
+ * The edge's sites, each its own read-only file in local (item 12) and in dev, which binds dev/app.caddy, dev/pds.caddy
+ * and the dev (tls) (P1.36c; ADR 0032 Decision 3).
+ */
 const EDGE_SITES: { dev: Mount[]; local: Mount[] } = {
-  dev: [{ type: "bind", source: "./edge/sites", target: "/etc/caddy/sites/enabled", readOnly: true }],
+  dev: [
+    { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
+    { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
+    { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
+  ],
   local: [
     { type: "bind", source: "./edge/sites/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
     APP_SITE.mount,
@@ -96,20 +142,37 @@ function environmentDrift(dev: Service, local: Service): string[] {
     .filter((s) => new Map(s.environment).size !== s.environment.length)
     .map(() => `${dev.name}: environment repeats a key`);
   for (const key of new Set([...devEnv.keys(), ...localEnv.keys()])) {
-    if (devEnv.has(key) && APP_SITE_KEYS.has(key)) problems.push(`${dev.name}: environment ${key} is in the dev file`);
+    if (devEnv.has(key) && APP_SITE_KEYS.has(key) && dev.name !== "edge") {
+      problems.push(`${dev.name}: environment ${key} is in the dev file`);
+    }
     if (dev.name === "edge" && APP_SITE_KEYS.has(key)) continue;
     const value = localEnv.get(key);
     if (DEV_ONLY[dev.name]?.includes(key)) {
       if (localEnv.has(key)) problems.push(`${dev.name}: environment ${key} is set in the local file`);
       continue;
     }
+    const added = LOCAL_ADDED_ENV[dev.name]?.[key];
+    if (added !== undefined) {
+      if (devEnv.has(key)) problems.push(`${dev.name}: environment ${key} is in the dev file`);
+      if (!same(added, value)) problems.push(`${dev.name}: environment ${key} differs`);
+      continue;
+    }
+    const legal = LEGAL_KEYS[dev.name]?.includes(key) === true;
     const permitted =
-      same(devEnv.get(key), value) ||
+      (legal && "literal" in (devEnv.get(key) ?? {}) && same(value, { literal: `[to fill: ${key}]` })) ||
+      (!legal && same(devEnv.get(key), value)) ||
       (allowed[key] !== undefined && same(allowed[key], value)) ||
       (key === "UNSET_ENV" && devEnv.has(key) && same(UNSET_ENV_LOCAL, value));
     if (!permitted) problems.push(`${dev.name}: environment ${key} differs`);
   }
-  return dev.name === "edge" ? [...problems, ...appSiteDrift(local)] : problems;
+  return dev.name === "edge" ? [...problems, ...appSiteDrift(local), ...devAppSiteDrift(dev)] : problems;
+}
+
+/** Whether the dev edge sets exactly APP_SITE's two keys, which its dev/app.caddy reads (P1.36c). */
+function devAppSiteDrift(edge: Service): string[] {
+  const keys = edge.environment.filter(([key]) => APP_SITE_KEYS.has(key));
+  const byKey = (list: [string, EnvValue][]) => [...list].sort(([a], [b]) => a.localeCompare(b));
+  return same(byKey(keys), byKey(APP_SITE.environment)) ? [] : ["edge: the dev app site keys are not APP_SITE's"];
 }
 
 /** Whether the local edge has the app-site mount and its two keys together, or neither (APP_SITE). */
@@ -150,15 +213,27 @@ function serviceDrift(dev: Service, local: Service): string[] {
         .filter((key) => !same(dev.hardening[key as keyof Hardening], local.hardening[key as keyof Hardening]))
         .map((key) => `${dev.name}: ${key} differs`),
     // A pulled image may be built locally instead (judged by C2 to C5, C18, C25 and C27 under the card), never the
-    // other way round.
-    image: () => (same(dev.image, built ? dev.image : local.image) ? [] : [`${dev.name}: image differs`]),
+    // other way round; a mirrored one runs locally as its upstream source.
+    image: () =>
+      same(upstreamOf(dev.image), built ? upstreamOf(dev.image) : local.image) ? [] : [`${dev.name}: image differs`],
     build: () => (same(dev.build, built ? null : local.build) ? [] : [`${dev.name}: build differs`]),
     networks: () =>
-      same(dev.networks, without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)]))
+      same(
+        dev.networks.filter((n) => !DEV_ONLY_NETWORKS.has(n)),
+        without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)]),
+      )
         ? []
         : [`${dev.name}: networks differs`],
+    ports: () => {
+      const edge = dev.name === "edge" && dev.ports.length === 0 && same(local.ports, LOCAL_EDGE_PORTS);
+      return edge || (dev.name !== "edge" && same(dev.ports, local.ports)) ? [] : [`${dev.name}: ports differs`];
+    },
     mounts: () => (same(devMounts, localMounts) ? [] : [`${dev.name}: mounts differs`]),
-    secrets: () => (same(dev.secrets, without(local.secrets, added.secrets)) ? [] : [`${dev.name}: secrets differs`]),
+    secrets: () =>
+      same(without(dev.secrets, DEV_SECRETS[dev.name]), without(local.secrets, added.secrets)) &&
+      (DEV_SECRETS[dev.name] ?? []).every((name) => dev.secrets.includes(name) && !local.secrets.includes(name))
+        ? []
+        : [`${dev.name}: secrets differs`],
     environment: () => environmentDrift(dev, local),
     envFiles: () => (envFilesAgree(dev, local) ? [] : [`${dev.name}: env_file differs`]),
   };
@@ -332,10 +407,14 @@ function drift(dev: Compose, local: Compose): string[] {
   }
   for (const s of dev.services) {
     if (LOCAL_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is in the dev file`);
+    else if (DEV_ONLY_SERVICES.has(s.name)) continue;
     else if (!local.services.some((l) => l.name === s.name)) problems.push(`${s.name} is only in the dev file`);
   }
+  for (const s of local.services) if (DEV_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is in the local file`);
   const shared = local.networks.filter(({ name }) => !LOCAL_ONLY_NETWORKS.has(name));
-  if (!same(dev.networks, shared)) problems.push("the networks or their internal flags differ");
+  const devShared = dev.networks.filter(({ name }) => !DEV_ONLY_NETWORKS.has(name));
+  if (!same(devShared, shared)) problems.push("the networks or their internal flags differ");
+  for (const { name } of local.networks) if (DEV_ONLY_NETWORKS.has(name)) problems.push(`${name} is in the local file`);
   problems.push(...localOnlyNetworkDrift(local), ...localOnlyDrift(local));
   return problems;
 }
@@ -381,6 +460,41 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         editService(local, "edge", (s) => ({ ...s, ports: [{ hostIp: null, published: "443", target: "443" }] })),
         "edge: ports differs",
       ],
+      [editService(dev, "edge", (s) => ({ ...s, ports: LOCAL_EDGE_PORTS })), local, "edge: ports differs"],
+      [dev, editService(local, "edge", (s) => ({ ...s, ports: LOCAL_EDGE_PORTS.slice(1) })), "edge: ports differs"],
+      [
+        dev,
+        editService(local, "edge", (s) => ({ ...s, networks: [...s.networks, "newt_edge"] })),
+        "edge: networks differs",
+      ],
+      [
+        { ...dev, services: dev.services.filter((s) => s.name !== "newt") },
+        { ...local, services: [...local.services, ...dev.services.filter((s) => s.name === "newt")] },
+        "newt is in the local file",
+      ],
+      [
+        dev,
+        { ...local, networks: [...local.networks, { name: "newt_edge", internal: true, subnet: null }] },
+        "newt_edge is in the local file",
+      ],
+      [
+        editService(dev, "web", (s) => ({
+          ...s,
+          environment: [...s.environment, ["NETGUARD_INTERNAL_HOSTS", { ref: "PDS_HOSTNAME" }]],
+        })),
+        local,
+        "web: environment NETGUARD_INTERNAL_HOSTS is in the dev file",
+      ],
+      [
+        dev,
+        editService(local, "web", (s) => ({
+          ...s,
+          environment: s.environment.map(([k, v]) =>
+            k === "NETGUARD_INTERNAL_HOSTS" ? [k, { literal: "evil.example" }] : [k, v],
+          ),
+        })),
+        "web: environment NETGUARD_INTERNAL_HOSTS differs",
+      ],
       [dev, editService(local, "postgres", (s) => ({ ...s, networks: ["db", "edge"] })), "postgres: networks differs"],
       [dev, editService(local, "migrate", (s) => ({ ...s, mounts: [...s.mounts, TRUST] })), "migrate: mounts differs"],
       [
@@ -411,7 +525,7 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         dev,
         {
           ...editService(local, "web", (s) => ({ ...s, networks: [...s.networks, "plc_web"] })),
-          networks: [...local.networks, { name: "plc_web", internal: true }],
+          networks: [...local.networks, { name: "plc_web", internal: true, subnet: null }],
         },
         "plc_web is not on the local-only list",
       ],
@@ -550,9 +664,31 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         "pds: environment APP_UPSTREAM differs",
       ],
       [
-        editService(dev, "edge", (s) => setEnv(s, "APP_HOST", { ref: "APP_HOST" })),
+        editService(dev, "edge", (s) => setEnv(s, "APP_HOST", { literal: "staging.unset.sh" })),
         local,
-        "edge: environment APP_HOST is in the dev file",
+        "edge: the dev app site keys are not APP_SITE's",
+      ],
+      [
+        editService(dev, "edge", (s) => dropEnv(s, "APP_UPSTREAM")),
+        local,
+        "edge: the dev app site keys are not APP_SITE's",
+      ],
+      [
+        dev,
+        editService(local, "edge", (s) => ({ ...s, secrets: [...s.secrets, "dev_tls_key"] })),
+        "edge: secrets differs",
+      ],
+      [editService(dev, "edge", (s) => ({ ...s, secrets: ["dev_tls_cert"] })), local, "edge: secrets differs"],
+      // The legal contacts: local keeps its token, and dev's value is a literal, never interpolated.
+      [
+        dev,
+        editService(local, "web", (s) => setEnv(s, "SUPPORT_EMAIL", { literal: "support@staging.unset.sh" })),
+        "web: environment SUPPORT_EMAIL differs",
+      ],
+      [
+        editService(dev, "web", (s) => setEnv(s, "PRIVACY_OFFICER_CONTACT", { ref: "PRIVACY_OFFICER_CONTACT" })),
+        local,
+        "web: environment PRIVACY_OFFICER_CONTACT differs",
       ],
       [
         editService(dev, "web", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8080" })),

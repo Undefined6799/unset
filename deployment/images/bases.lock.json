@@ -22,7 +22,8 @@
     "digest": "sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
     "source": "upstream",
     "stage": "runtime",
-    "buildStage": false
+    "buildStage": false,
+    "stripped": ["/usr/bin/caddy"]
   },
   "postgres": {
     "ref": "docker.io/library/postgres",
@@ -41,6 +42,14 @@
     "ref": "ghcr.io/bluesky-social/pds",
     "tag": "0.4.5037",
     "digest": "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
+  },
+  "newt": {
+    "ref": "docker.io/fosrl/newt",
+    "tag": "1.18.1",
+    "digest": "sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false

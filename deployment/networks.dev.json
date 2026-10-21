@@ -2,6 +2,8 @@
   "db": { "internal": true, "members": ["postgres", "migrate", "web"] },
   "app": { "internal": true, "members": ["edge", "web"] },
   "edge": { "internal": false, "members": ["pds", "edge"] },
+  "newt_edge": { "internal": true, "members": ["newt", "edge"] },
+  "newt_egress": { "internal": false, "members": ["newt"] },
   "pds_egress": { "internal": false, "members": ["pds"] },
   "web_egress": { "internal": false, "members": ["web"] }
 }
