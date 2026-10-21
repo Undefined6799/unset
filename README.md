@@ -17,8 +17,9 @@
 </p>
 
 unset.sh is an identity and profile app for the [AT Protocol](https://atproto.com). Your profile is a set of
-records in your own repository on the network, edited and rendered in the app, and you can sign in with any atproto
-account or take a hosted one on our own PDS. Short video, follows and chat come later, on the same identity.
+records in your own repository on the network, edited and rendered in the app, and you sign in with an account on
+our own PDS ([ADR 0025](docs/human/decisions/0025-public-domains.md)). An account on any other PDS is refused until
+the public opening. Short video, follows and chat come later, on the same identity.
 
 It is a rebuild of the 0x40 prototype around a small core that one person can read and audit end to end.
 
