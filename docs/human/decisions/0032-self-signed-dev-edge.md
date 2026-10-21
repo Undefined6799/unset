@@ -176,7 +176,12 @@ ADR 0028 and the Phase 5 records.
   Alex typed it at 2026-10-20 23:52:59Z, in the project chat in answer to the coordinator's request, as "yes
   accept ADR 0032 self-signed certificate at the dev edge behind Pangolin
   docs/human/decisions/0032-self-signed-dev-edge.md at 2ebf132", against 2ebf132, which the verifier had passed
-  as final. The status flip and this wording of it are the only changes after it; the PR lands squashed, so
-  2ebf132 and the flip are pre-squash revisions, not ancestors of the commit on main.
+  as final. After it: the status flip, this wording of it, and Codex's round on the flipped text (e4ed54f: the
+  Decision intro names 0031 Decision 1's plain-http sentence in the supersession scope, which Decision 5's `https`
+  targets already implied at 2ebf132, and the Compliance section stops claiming a certificate guard; 6b6f591 a
+  cite fix; da267ab a merge of main). Told that the scope sentence touches the decision text, Alex wrote in the
+  project chat at 2026-10-21 00:21:17Z "you already got my approval.", so his 2ebf132 acceptance covers it and no
+  fresh line is asked. The PR lands squashed, so 2ebf132 and the later revisions are pre-squash revisions, not
+  ancestors of the commit on main.
   0031 Decision 2 and Decision 1's plain-http sentence are superseded for dev; 0031 is not edited. P1.38e's line
   (typed in the same message) takes effect.
