@@ -34,12 +34,6 @@
     border-radius: var(--radius-xs);
     background: var(--color-ink);
     color: var(--color-on-ink);
-    font-family: var(--font-mono);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-line);
-    font-weight: var(--type-label-weight);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: uppercase;
     white-space: nowrap;
   }
   .label::before {
@@ -125,8 +119,6 @@
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       justify-items: center;
-      width: auto;
-      padding: 0;
       border-radius: var(--radius-xs);
       box-shadow: var(--shadow-menu);
     }

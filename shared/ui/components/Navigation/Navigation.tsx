@@ -107,6 +107,7 @@ export function Navigation({
       <nav
         className={classNames(
           header.nav,
+          header.item,
           styles.rail,
           enhanced && styles.enhanced,
           inline && styles.inline,
