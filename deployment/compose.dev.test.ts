@@ -68,8 +68,11 @@ function limitProblems(s: Service, nodeBuilt: boolean): string[] {
 const nodeBuilt = (s: Service): boolean =>
   s.build !== null &&
   NODE_DOCKERFILES.has(join("deployment", s.build.context, s.build.dockerfile).replace(/^\.\.\//, ""));
-/** A Node service: one built from our Node image, or the PDS, which runs Node too (findings F-32 covers both). */
-const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
+/** The published images built from those Dockerfiles, as the deploy lock names them (P2.26b). */
+const nodePublished = (s: Service): boolean =>
+  s.image !== null && ["web", "migrate"].some((name) => readDeployLock()[name]?.ref === s.image);
+/** A Node service: one built from our Node image or running it, or the PDS, which runs Node too (findings F-32). */
+const runsNode = (s: Service): boolean => nodeBuilt(s) || nodePublished(s) || s.name === "pds";
 
 /** A service's limits, by their Compose keys, as both compose files write them. */
 type LimitRow = { mem_limit: string; cpus: number; pids_limit: number };
@@ -94,6 +97,11 @@ const limited = (compose: Compose, name: string, change: Partial<Hardening>): Co
   ...compose,
   services: compose.services.map((s) => (s.name === name ? { ...s, hardening: { ...s.hardening, ...change } } : s)),
 });
+
+/** One deploy-lock entry (deployment/images.lock.json; scripts/ci/verify-images.ts LockEntry). */
+type DeployEntry = { ref: string; origin: "first-party" | "upstream"; upstreamSource?: string; verify: string };
+const readDeployLock = (): Record<string, DeployEntry> =>
+  JSON.parse(read("images.lock.json")) as Record<string, DeployEntry>;
 
 type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
 const readLock = (): Record<string, LockEntry> =>
@@ -142,17 +150,39 @@ describe("compose.dev.yaml (P1.29)", () => {
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
     );
     expect(files).toContain(FILE);
-    for (const file of files) {
+    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here.
+    for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
-        // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile, except a
-        // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
+        // Every service is built here from a scanned Dockerfile, except a run-only image, named exactly as its lock
+        // entry, which the mirror workflow scans (P1.29a).
         if (s.build === null) {
           expect(runOnly.has(s.image ?? "") || (file === LOCAL && isTokenReaderNode(s)), `${file} ${s.name}`).toBe(
             true,
           );
         }
       }
+    }
+  });
+
+  test("compose_dev_images_by_digest", () => {
+    // P2.26b: the dev stack builds nothing; each service runs exactly the deploy lock's entry of its name, by digest,
+    // and the lock names nothing the stack does not run.
+    const deploy = readDeployLock();
+    for (const s of dev().services) {
+      expect([s.build, s.image], s.name).toEqual([null, deploy[s.name]?.ref]);
+      expect(s.image, s.name).toMatch(/^ghcr\.io\/undefined6799\/(?:unset|mirror)\/[a-z0-9-]+@sha256:[0-9a-f]{64}$/);
+    }
+    expect(Object.keys(deploy).sort()).toEqual(
+      dev()
+        .services.map((s) => s.name)
+        .sort(),
+    );
+    // A mirror entry keeps its upstream digest (mirror.yml copies by digest) and names the base lock's upstream image.
+    const bases = new Set(Object.values(readLock()).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
+    for (const [name, entry] of Object.entries(deploy).filter(([, e]) => e.origin === "upstream")) {
+      expect(bases.has(entry.upstreamSource ?? ""), name).toBe(true);
+      expect(entry.ref.split("@")[1], name).toBe(entry.upstreamSource?.split("@")[1]);
     }
   });
 
@@ -496,10 +526,12 @@ function mailLogProblems(env: Map<string, string>): string[] {
 
 describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   test("pds_runs_the_locked_image", () => {
-    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest.
+    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest, run from
+    // its mirror at that digest since P2.26b.
     const pds = readLock().pds;
     expect(pds).toBeDefined();
-    expect(service(dev(), "pds").image).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    expect(readDeployLock().pds?.upstreamSource).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    expect(service(dev(), "pds").image).toBe(`ghcr.io/undefined6799/mirror/pds@${pds?.digest}`);
     expect(service(dev(), "pds").build).toBeNull();
   });
 
@@ -858,13 +890,15 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
   };
 
   const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
-  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base lock and no deploy lock. */
+  const DEPLOY_LOCK = join(CHECKOUT, "deployment/images.lock.json");
+  const lockFile = (path: string) => (path === BASES || path === DEPLOY_LOCK ? readFileSync(path, "utf8") : null);
+  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base and deploy locks. */
   const devInputs = (edit: (text: string) => string = (text) => text) => {
     const file = join(DEPLOYMENT, FILE);
     const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : path === BASES ? readFileSync(BASES, "utf8") : null),
+      readText: (path) => (path === file ? edit(read(FILE)) : lockFile(path)),
       readEnv: (path) =>
         path === ENV_FILE
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
@@ -934,7 +968,10 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       pass: false,
       reason: "postgres binds a path that reaches an env file or the env folder",
     });
-    const context = (text: string) => text.replace("      context: ..\n", "      context: .\n");
+    // The dev stack builds nothing since P2.26b, so a build put back from the wrong context is the case.
+    const postgres = `    image: ${readDeployLock().postgres?.ref}\n`;
+    const context = (text: string) =>
+      text.replace(postgres, "    build:\n      context: .\n      dockerfile: deployment/images/postgres.Dockerfile\n");
     expect((await outcomes(context))[1]).toEqual({
       pass: false,
       reason: "postgres builds from a Dockerfile the images workflow does not scan",
@@ -994,7 +1031,8 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
 
   test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
     const newt = service(dev(), "newt");
-    expect(newt.image).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
+    expect(newt.image).toBe(`ghcr.io/undefined6799/mirror/newt@${readLock().newt?.digest}`);
+    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
     expect(newt.build).toBeNull();
     expect(newt.hardening).toMatchObject({
       readOnly: true,
