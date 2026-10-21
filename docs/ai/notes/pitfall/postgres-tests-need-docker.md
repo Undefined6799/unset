@@ -10,7 +10,7 @@ importance: high
 related: ["[[tests]]", "[[postgres]]"]
 replaced_by: null
 tags: [pitfall, tests, postgres]
-checked: 2026-10-19
+checked: 2026-10-21
 ---
 # Postgres tests need Docker and never skip
 
@@ -25,7 +25,7 @@ container and no second way (ruling 2026-10-06, P1.11g).
 
 **The rule.** Do not add a skip, a tag or a second start path to get green locally. Without Docker, run typecheck,
 lint, guards and the unit tests you touched, say in the PR that the Postgres tests ran only in CI, and let CI's
-`check` job prove them. Any second mechanism stops and asks.
+`code` job prove them (the required `check` gate needs it). Any second mechanism stops and asks.
 
 **Hung daemon.** Every docker call the helper makes is killed at 60 s (`tests/support/docker.ts`, P1.27k), so a
 stuck daemon fails the test with a message naming the call instead of blocking until `scripts/test/run.ts` kills
