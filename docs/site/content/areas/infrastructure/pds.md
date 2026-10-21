@@ -33,7 +33,7 @@ Declared in `infrastructure/pds/package.json`:
 
 | Dependency | Version |
 | --- | --- |
-| `@atproto/api` | 0.26.0 |
+| `@atproto/api` | 0.27.0 |
 | `@atproto/jwk-jose` | 0.2.4 |
 | `@atproto/oauth-client-node` | 0.5.9 |
 | `@atproto/oauth-scopes` | 0.5.13 |
