@@ -40,8 +40,9 @@ guideline wins.
 | Integration and e2e tests | `tests/`; unit tests sit beside their file |
 
 Boundaries (dependency-cruiser): domains never import infrastructure, interfaces or apps; apps never import each other
-or infrastructure; `pds-admin` and `chat-admin` import only `node:*`, their own folder and the zero-dependency
-allowlist (planned `shared/admin-envelope/`, PLAN.md:589). No `plugins/`, Redis or queue until a real need exists.
+or infrastructure; `pds-admin` and `chat-admin` import only themselves, Node built-ins and the `ZERO_DEP_ALLOWLIST`
+folders (today `shared/admin-envelope/`, which imports only Node built-ins; adding a folder needs Alex). No `plugins/`,
+Redis or queue until a real need exists.
 
 ## Non-negotiable: no security shortcuts
 Security and correct protocol design beat shipping speed. Never paper over an auth, permission or membership gap with
