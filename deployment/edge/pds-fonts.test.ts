@@ -171,3 +171,49 @@ test("response and static grammar cannot be repurposed into request routes or br
   ])
     expect(rejected(text)).toBe(true);
 });
+
+test("static font expressions require their complete matcher and guarded PDS font position", () => {
+  const original = source();
+  const expression = "expression `{http.request.orig_uri} == '/_unset/fonts/SpaceGrotesk-Variable.woff2'`";
+  const unrelated = `@unrelated {\nmethod POST\n${expression}\n}\nrespond @unrelated 418\n`;
+  const detached = `@font0 {\nmethod GET HEAD\n${expression}\n}\nrespond @font0 418\n`;
+  const app = `${read("Caddyfile").replaceAll(/^import .*$/gm, "")}\n${snippets()}\n${read("local/app.caddy")}`;
+  expect(rejected(original)).toBe(false);
+  expect(rejected(app)).toBe(false);
+  const completeEnv = { ...env, APP_HOST: "app.unset.test", APP_UPSTREAM: "web:8080" };
+  for (const changed of [
+    original.replace("import pds-fonts", `${unrelated}import pds-fonts`),
+    original.replace("import pds-fonts", `${detached}import pds-fonts`),
+    app.replace("import upstream {$APP_UPSTREAM}", `${unrelated}import upstream {$APP_UPSTREAM}`),
+    app.replace("import upstream {$APP_UPSTREAM}", `${detached}import upstream {$APP_UPSTREAM}`),
+  ])
+    expect(rejected(changed), "injected matcher").toBe(true);
+  for (const changed of [
+    original.replace("import pds-fonts", `${unrelated}import pds-fonts`),
+    app.replace("import upstream {$APP_UPSTREAM}", `${unrelated}import upstream {$APP_UPSTREAM}`),
+  ])
+    expect(() => readCaddyfile(changed, completeEnv)).toThrow("outside the exact PDS font form");
+  for (const changed of [
+    original.replace("import pds-fonts", `${detached}import pds-fonts`),
+    app.replace("import upstream {$APP_UPSTREAM}", `${detached}import upstream {$APP_UPSTREAM}`),
+  ]) {
+    const config = readCaddyfile(changed, completeEnv);
+    expect(edgeSiteProblems(config)).toContainEqual(expect.stringContaining("outside the guarded PDS font route"));
+  }
+  for (const [i, filename] of [
+    [0, "SpaceGrotesk"],
+    [1, "JetBrainsMono"],
+  ] as const) {
+    const full = `@font${i} {\n\t\tmethod GET HEAD\n\t\texpression \u0060{http.request.orig_uri} == '/_unset/fonts/${filename}-Variable.woff2'\u0060\n\t}`;
+    for (const inline of [`@font${i} method GET HEAD`, `@font${i} path /_unset/fonts/*`]) {
+      const changed = original.replace(full, inline);
+      expect(changed).not.toBe(original);
+      expect(() => readCaddyfile(changed, completeEnv), inline).toThrow("outside the exact PDS font form");
+    }
+  }
+  const generic = app.replace(
+    "import upstream {$APP_UPSTREAM}",
+    "@ordinary {\nmethod POST\npath /ordinary\n}\nrespond @ordinary 418\n@fontOther {\nmethod GET\npath /other\n}\nrespond @fontOther 418\n@inline path /inline\nrespond @inline 418\nimport upstream {$APP_UPSTREAM}",
+  );
+  expect(rejected(generic)).toBe(false);
+});

@@ -446,13 +446,24 @@ function fontArguments(key: string, args: readonly string[], level: string): boo
   );
 }
 
+/** Static expressions belong only to the two complete matchers, including when their syntax is replaced inline. */
+function staticFontMatcher(d: Directive): boolean {
+  return (
+    PDS_FONT_PATHS.some((_, i) => d.name === `@font${i}`) ||
+    (d.name.startsWith("@") &&
+      (d.block ?? []).some(
+        (matcher) =>
+          matcher.name === "expression" &&
+          PDS_FONT_PATHS.some(
+            (path) => matcher.args.length === 1 && matcher.args[0] === `{http.request.orig_uri} == '${path}'`,
+          ),
+      ))
+  );
+}
+
 /** Newly admitted syntax has only this proved use; no general CEL, response handler or static-file grammar. */
 function checkFontForm(d: Directive, level: string): void {
-  if (
-    !["handle_response", "handle", "expression"].includes(d.name) &&
-    !(d.name.startsWith("@font") && d.block !== null)
-  )
-    return;
+  if (!["handle_response", "handle", "expression"].includes(d.name) && !staticFontMatcher(d)) return;
   const same = (want: unknown[]) => JSON.stringify(blockText([d])) === JSON.stringify(want);
   const copy = ["copy_response", [], null];
   const matcher = [
@@ -494,7 +505,7 @@ function checkFontForm(d: Directive, level: string): void {
           ],
         ],
       ]);
-  } else if (d.name === "handle" || (d.name.startsWith("@font") && d.block !== null)) {
+  } else if (d.name === "handle" || staticFontMatcher(d)) {
     valid = PDS_FONT_PATHS.some((path, i) =>
       same(
         d.name === "handle"
@@ -1181,7 +1192,7 @@ function fontSiteProblems(site: Site): string[] {
   // siteProblems already rejects an ambiguous request route; do not diagnose its partial contents.
   if (named(site.directives, "route").length !== 1) return [];
   const all = flatten(site.directives);
-  const special = all.filter((d) => d.name === "handle" || d.name === "handle_response");
+  const special = all.filter((d) => d.name === "handle" || d.name === "handle_response" || staticFontMatcher(d));
   if (special.length === 0) return [];
   const route = named(site.directives, "route")[0]?.block ?? [];
   const fonts = route.filter((d) => d.via === "pds-fonts");
@@ -1198,7 +1209,8 @@ function fontSiteProblems(site: Site): string[] {
     fonts[4]?.args.join(" ") === "path /_unset/fonts /_unset/fonts/*" &&
     fonts[5]?.args.join(" ") === "@fontspace 404" &&
     fonts.every((d, i) => route[first + i] === d) &&
-    special.every((d) => d.via === (d.name === "handle" ? "pds-fonts" : "pds-upstream"));
+    special.every((d) => d.via === (d.name === "handle_response" ? "pds-upstream" : "pds-fonts")) &&
+    special.filter(staticFontMatcher).every((d) => d === fonts[0] || d === fonts[2]);
   return safe ? [] : [`${siteName(site)}: outside the guarded PDS font route`];
 }
 
