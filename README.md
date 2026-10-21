@@ -17,8 +17,9 @@
 </p>
 
 unset.sh is an identity and profile app for the [AT Protocol](https://atproto.com). Your profile is a set of
-records in your own repository on the network, edited and rendered in the app, and you can sign in with any atproto
-account or take a hosted one on our own PDS. Short video, follows and chat come later, on the same identity.
+records in your own repository on the network, edited and rendered in the app, and you sign in with an account on
+our own PDS ([ADR 0025](docs/human/decisions/0025-public-domains.md)). An account on any other PDS is refused until
+the public opening. Short video, follows and chat come later, on the same identity.
 
 It is a rebuild of the 0x40 prototype around a small core that one person can read and audit end to end.
 
@@ -68,7 +69,7 @@ apps/web  →  interfaces/http  →  domains/identity  →  infrastructure/pds  
 | `interfaces/` | Entry points, one process and container each: `http`, `admin`, `api`, `indexer`, `media`, `review`, and more as their phase arrives |
 | `domains/` | Product rules in product words: `identity`, `content`, `social`, `feed`, `messaging`, `moderation`, `privacy` |
 | `infrastructure/` | External systems behind small contracts, plus `net-guard` (the one egress check), `seal` and `audit` |
-| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `http`, `config`, `errors`, `log` |
+| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `islands`, `http`, `config`, `errors`, `log`, `host-pin` |
 | `deployment/`, `tests/` | Compose, edge, backup and preflight; integration and end-to-end tests |
 | `docs/` | `human/` for guides, decisions and the engineering guidelines; `ai/` for the plan and step book |
 | `scripts/` | Repository tooling: CI guards, budgets, docs tests, the dev-stack precheck |

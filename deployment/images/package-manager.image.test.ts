@@ -39,6 +39,8 @@ const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta
 const lock = json("bases.lock.json") as Record<string, { ref: string; tag: string; digest: string }>;
 /** The same lock-entry-to-kind map images.test.ts reads, so every kind it knows is built and checked here. */
 const KIND_BY_FINAL_ENTRY = new Map(Object.entries(json("kinds.json") as Record<string, string>));
+/** The mirror list images.test.ts reads (P2.26b), so a final stage on a mirror spelling finds its lock entry. */
+const MIRRORS = json("../mirror.list.json") as { source: string; mirror: string }[];
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
   .sort();
@@ -59,10 +61,12 @@ function finalBase(dockerfile: string): string | undefined {
   }
 }
 
-/** A Dockerfile's kind, by the lock entry its final stage builds on; undefined when it is on no known kind. */
+/** A Dockerfile's kind, by the lock entry its final stage builds on, through its mirror spelling; undefined on no known kind. */
 function kindOf(dockerfile: string): string | undefined {
-  const base = finalBase(dockerfile);
-  const entry = Object.entries(lock).find(([, b]) => `${b.ref}:${b.tag}@${b.digest}` === base)?.[0];
+  const base = finalBase(dockerfile) ?? "";
+  const [mirror, digest] = base.split("@");
+  const source = MIRRORS.find((m) => m.mirror === mirror && m.source.endsWith(`@${digest}`))?.source ?? base;
+  const entry = Object.entries(lock).find(([, b]) => `${b.ref}:${b.tag}@${b.digest}` === source)?.[0];
   return KIND_BY_FINAL_ENTRY.get(entry ?? "");
 }
 
