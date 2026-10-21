@@ -23,13 +23,17 @@
       "api": [
         "itemsPlacement?: \"end\" | \"start\" = \"end\"",
         "renderLink?: NavigationLinkRenderer",
-        "navigationKey?: string | number"
+        "navigationKey?: string | number",
+        "closeLabel?: string (deprecated; accepted for caller compatibility)"
       ],
       "behavior": [
         "Vertical start stack with existing 16px gaps",
         "Labels visible on hover and keyboard focus",
         "Native auto popover; close after caller-confirmed committed navigation",
-        "Pure ./presentation package entry exports Navigation/Button/Input/Icon/Avatar/safeHref and needed types without Header or island runtime"
+        "Pure ./presentation package entry exports Navigation/Button/Input/Icon/Avatar/safeHref and needed types without Header or island runtime",
+        "Alex approved browser feedback on 2026-10-21: remove the redundant popup Close control while retaining title and ordinary links",
+        "Phone current glyph/avatar lifts 6px using space-3 / 2 inside its stationary 48px target and focus outline; no current/open-menu underline",
+        "Menu is current only when an item is current; opening the popup alone selects no destination; desktop rail and popup row treatment stay unchanged"
       ]
     },
     "Header": {

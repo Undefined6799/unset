@@ -29,7 +29,8 @@ export type NavigationProps = {
   primary: NavigationItem;
   items: readonly NavigationItem[];
   menuLabel: string;
-  closeLabel: string;
+  /** @deprecated The native toggle, Escape and outside dismissal replace the popup Close control. */
+  closeLabel?: string;
   /** Keep the bars in document flow for the kit showcase. */
   inline?: boolean;
   itemsPlacement?: "end" | "start";
@@ -73,7 +74,6 @@ export function Navigation({
   primary,
   items,
   menuLabel,
-  closeLabel,
   inline = false,
   itemsPlacement = "end",
   renderLink = anchor,
@@ -165,15 +165,6 @@ export function Navigation({
       <nav className={`${header.item} ${styles.panel}`} id={panel} ref={panelRef} popover="auto" aria-label={menuLabel}>
         <div className={header.nav}>
           <span>{menuLabel}</span>
-          <button
-            className={controlClass}
-            type="button"
-            aria-label={closeLabel}
-            popoverTarget={panel}
-            popoverTargetAction="hide"
-          >
-            <Icon name="close" size={20} label={closeLabel} />
-          </button>
         </div>
         {items.map((item) => (
           <span key={item.href} className={styles.row}>

@@ -81,10 +81,6 @@
       height: 44px;
       color: var(--color-ink-muted);
     }
-    & button {
-      width: 44px;
-      height: 44px;
-    }
     & a {
       gap: var(--space-3);
       height: 48px;
@@ -98,8 +94,7 @@
       margin-top: var(--space-1);
     }
   }
-  .control:is([aria-current], [data-current])::after,
-  .phone:has(+ .panel:popover-open) button::after {
+  .rail .control[aria-current]::after {
     content: "";
     position: absolute;
     bottom: var(--space-1);
@@ -121,6 +116,9 @@
   @media (max-width: 767px) {
     .rail {
       display: none;
+    }
+    .phone .control:is([aria-current], [data-current]) > :first-child {
+      transform: translateY(calc(var(--space-3) / -2));
     }
     .phone {
       inset: auto 0 0;

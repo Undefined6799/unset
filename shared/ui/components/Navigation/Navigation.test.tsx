@@ -12,7 +12,6 @@ const props: NavigationProps = {
   primary: { href: path("/"), label: "Home", icon: "home" },
   items: [{ href: path("/settings/profile"), label: "Settings", icon: "settings", current: true }],
   menuLabel: "Menu",
-  closeLabel: "Close menu",
 };
 const documentFor = (value: NavigationProps = props) =>
   new DOMParser().parseFromString(renderToStaticMarkup(<Navigation {...value} />), "text/html");
@@ -35,12 +34,12 @@ describe("Navigation", () => {
     expect(doc.querySelector('[role="menu"], [role="menuitem"]')).toBeNull();
   });
 
-  it("wires native toggle and close buttons to their own popover without scripts", () => {
+  it("keeps one native toggle per popup with a title and ordinary destination links", () => {
     const doc = new DOMParser().parseFromString(
       renderToStaticMarkup(
         <>
           <Navigation {...props} />
-          <Navigation {...props} />
+          <Navigation {...props} closeLabel="Close menu" />
         </>,
       ),
       "text/html",
@@ -52,9 +51,12 @@ describe("Navigation", () => {
       const controls = [...doc.querySelectorAll("button")].filter(
         (button) => button.getAttribute("popovertarget") === panel.id,
       );
-      expect(controls.map((button) => button.getAttribute("popovertargetaction"))).toEqual(["toggle", "hide"]);
-      expect(controls.map((button) => button.getAttribute("aria-label"))).toEqual(["Menu", "Close menu"]);
+      expect(controls.map((button) => button.getAttribute("popovertargetaction"))).toEqual(["toggle"]);
+      expect(controls.map((button) => button.getAttribute("aria-label"))).toEqual(["Menu"]);
       expect(controls.every((button) => button.type === "button")).toBe(true);
+      expect(panel.querySelector("button")).toBeNull();
+      expect(panel.firstElementChild?.textContent).toBe("Menu");
+      expect(panel.querySelector("a")?.getAttribute("href")).toBe("/settings/profile");
     }
     expect(doc.querySelector("script, [data-island]")).toBeNull();
     expect(doc.body.innerHTML).not.toMatch(/\son\w+=/);

@@ -3,7 +3,7 @@
 Approved core-shell composition, 2026-10-17. Figma source:
 https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=0-1
 Uses the pinned sheet's Avatar, Icon, Menu surface and label typography; the imported sheet snapshot stays immutable.
-The composition shares Header's navigation alignment and label styles. Current icons use a 24px by 2px border line
+The composition shares Header's navigation alignment and label styles. Desktop current icons use a 24px by 2px border line
 that remains visible in forced colors. The panel reuses Header's current-link underline. Native CSS nesting keeps
 the scoped rules compact.
 
@@ -17,14 +17,18 @@ The optional `inline` mode keeps both bars in document flow for the kit showcase
 
 Phone (up to 767px): Menu, primary destination, account avatar in equal thirds. The bar reserves 60px for controls
 and at least 20px for the safe area. The page provides its own 56px header and bottom content clearance. The popup
-sits 16px above the bar, inset 16px from each viewport edge, with 8px padding, a 44px header/Close target, 4px gap and
-48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Current destinations and an open phone menu have a 2px underline.
+sits 16px above the bar, inset 16px from each viewport edge, with 8px padding, a 44px title header, 4px gap and
+48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Phone current artwork lifts 6px (`space-3 / 2`) inside its stationary 48px target and focus outline; there is no current/open-menu underline. Menu is current only when an item is current; primary/account retain `aria-current`. Opening the popup does not select a destination or lift another icon. The static displacement also applies with reduced motion and forced colors.
 
 `NavigationProps` accepts branded SafeHref destinations and already-checked identity data. It does not read
 cookies, resolve identity or fetch images. Omitted account name uses an anonymous Icon inside Avatar, never
 fabricated initials. An account image must be a media-proxy URL, as required by Avatar.
 
-The phone popup uses native `popover="auto"` and `popovertarget` buttons. The browser owns toggle, Close, Escape,
+Alex approved the phone revision above in the working browser preview on 2026-10-21, including removal of the
+redundant popup Close control. The popup keeps its title and ordinary links. `closeLabel` is optional/deprecated
+for existing callers; it no longer renders a control. Desktop labels/current treatment and popup rows are unchanged.
+
+The phone popup uses native `popover="auto"` and its `popovertarget` toggle. The browser owns toggle, Escape,
 outside dismissal, focus restoration and the top layer; no island or script is needed. Items are ordinary links,
 not ARIA menu widgets. Source: HTML Living Standard, 2026-10-16,
 https://html.spec.whatwg.org/multipage/popover.html (read 2026-10-17).

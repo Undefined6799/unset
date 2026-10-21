@@ -44,7 +44,9 @@ checked: 2026-10-21
   `brandOnly` mode delegates to pure BrandHeader for the 64px/56px top logo bar and localized home name; Avatar
   accepts anonymous fallback artwork. Generic link rendering, start/end item placement and an explicit committed
   navigation key support hydrated consumers without importing their routing/state. Hydrated labels appear on
-  hover/focus and dismiss on Escape; SSR/no-JS retains native title and accessible-name fallback.
+  hover/focus and dismiss on Escape; SSR/no-JS retains native title and accessible-name fallback. Alex's
+  2026-10-21 browser revision removes the popup Close control and lifts only current phone artwork within
+  stationary targets; `closeLabel` stays optional/deprecated for callers. Native toggle/dismissal remains intact.
 - `presentation.ts` / the explicit `./presentation` package export: Navigation, Button, Input, Icon, Avatar,
   safeHref and needed types only. `./brand-header` points directly to the pure BrandHeader module. Use these entries
   for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
