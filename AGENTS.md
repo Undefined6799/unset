@@ -5,7 +5,7 @@ the protocol-first rule and the branch rules apply to every tool, not only Claud
 
 ## Cursor Cloud specific instructions
 
-- Use the Node version in `.nvmrc` from `/usr/local/bin`. `npm ci` is `engine-strict`.
+- Use the Node version in `.nvmrc`. `npm ci` is `engine-strict`.
 - `npm run check` is the local gate: typecheck, lint, guards and tests. Postgres tests
   start the pinned image with `docker run`. The environment start script launches
   `dockerd` (`fuse-overlayfs`, iptables-legacy) before the web server.
