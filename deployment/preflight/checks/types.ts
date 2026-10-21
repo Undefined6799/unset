@@ -38,7 +38,8 @@ export type Inputs = WalkInputs & {
   /** Every top-level file secret, by absolute path, with the services that mount it (P1.30o). */
   mountedSecrets: MountedSecret[];
   lockPath: string;
-  cosignKeyPath: string;
+  /** The committed Sigstore trusted root C3 and C4 verify keyless signatures against, offline (P2.26b). */
+  trustedRootPath: string;
   verify: Verifier;
   manifestKind: ManifestKind;
   /** Host commands (C24); production runs them by fixed name and arguments, tests pass a fake. */
