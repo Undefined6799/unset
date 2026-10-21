@@ -13,6 +13,7 @@ import { join, posix } from "node:path";
 import {
   type Caddyfile,
   CaddyfileError,
+  DEV_APP,
   type Directive,
   type EdgeMode,
   ENV_NAMES,
@@ -456,10 +457,37 @@ function deployedEdgeZones(inputs: Inputs): Outcome {
     env?.use("PDS_HOST", (value) => value),
   );
   if (pds !== null) return pds;
+  if (inputs.env === "dev") {
+    const staging = devHostsProblem(inputs, env?.use("PDS_HOST", (value) => value) ?? "");
+    if (staging !== null) return staging;
+  }
   const ref = lock.edge?.ref;
   // Under dev the edge serves the dev sites with the self-signed leaf (P1.38e; ADR 0032 Decision 3); prod is unchanged.
   const mode = inputs.env === "dev" ? "dev" : "shipped";
   return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined, mode);
+}
+
+/**
+ * The dev stack's PDS host, exactly (ADR 0025's staging PDS name, P1.37 follow-up): the name the dev leaf's SAN and
+ * Pangolin's resource carry (ADR 0032), so a dev PDS under any other name could not complete TLS or routing.
+ */
+const DEV_PDS_HOST = "staging.unset.ac";
+
+/**
+ * Under dev both hosts are the ruled staging names (P1.37 follow-up): the PDS is DEV_PDS_HOST, and web's PUBLIC_ORIGIN
+ * names DEV_APP's host, the one the dev app site serves, so its OAuth metadata, redirects and CSRF origin match it.
+ * Whether that origin is https is C29's. Reasons are fixed words.
+ */
+function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
+  if (pdsHost.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "") !== DEV_PDS_HOST) {
+    return fail("PDS_HOST is not the staging PDS name");
+  }
+  const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
+  if (origin === undefined) return fail("web's PUBLIC_ORIGIN is missing");
+  if (URL.canParse(origin) && new URL(origin).hostname !== DEV_APP.APP_HOST) {
+    return fail("web's PUBLIC_ORIGIN does not name the dev app host");
+  }
+  return null;
 }
 
 export const c18: Check = {

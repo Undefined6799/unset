@@ -146,7 +146,10 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
       "  dev_tls_key:\n    file: ../../unset-dev-secrets/dev_tls_key\n",
   )
   .replace("secrets:\n  db_password:", `${NEWT_SERVICE}$&`)
-  .replace("networks:\n  back: {}\n", "$&  tunnel: {}\n");
+  .replace("networks:\n  back: {}\n", "$&  tunnel: {}\n")
+  // The ruled staging names (P1.37 follow-up): the PDS at staging.unset.ac, web's origin on the dev app host.
+  .replaceAll("pds.example.test", "staging.unset.ac")
+  .replace("      FINGERPRINT_CHECK: arachnid\n", "$&      PUBLIC_ORIGIN: https://staging.unset.sh\n");
 // The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
 /** A from address of 254 or 255 characters, every part within its own cap, so only the length decides. */
@@ -1430,6 +1433,23 @@ describe("preflight", () => {
     );
   });
 
+  test("c18_dev_hosts_are_the_staging_names", async () => {
+    // P1.37 follow-up: under dev the PDS is the ruled staging.unset.ac (the dev leaf's SAN and Pangolin's resource),
+    // and web's PUBLIC_ORIGIN names the dev app host the edge serves.
+    const dev = { pdsEnv: DEV_ENV };
+    const c18 = (compose: string) => expectOnly("C18", { ...dev, compose }, "dev");
+    expect(await c18(DEV.replaceAll("staging.unset.ac", "pds.other.test"))).toBe(
+      "FAIL C18 PDS_HOST is not the staging PDS name",
+    );
+    expect(
+      await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://other.unset.sh")),
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN does not name the dev app host");
+    expect(await c18(DEV.replace("      PUBLIC_ORIGIN: https://staging.unset.sh\n", ""))).toBe(
+      "FAIL C18 web's PUBLIC_ORIGIN is missing",
+    );
+    expect((await check({ ...dev, compose: DEV }, "dev")).lines).toContain("PASS C18 ok");
+  });
+
   test("c31_newt_env_values_are_real_and_the_endpoint_is_https", async () => {
     // P1.37 follow-up: newt.env's values are not the example's replace-me, and Pangolin's endpoint is an https address
     // with no credentials in it. No value is ever printed.
@@ -1877,12 +1897,14 @@ describe("preflight", () => {
       [mismatch, named("pds.example.test..")],
       [mismatch, named('" pds.example.test"')],
     ];
-    for (const [env, compose, pdsEnv] of [
-      ["prod", COMPOSE, {}],
-      ["dev", DEV, DEV_ENV],
+    // Dev's PDS is the ruled staging name (P1.37 follow-up), so there the cases run on it in place of pds.example.test.
+    const staging = (text: string) => text.replace(/pds\.example\.test/gi, "staging.unset.ac");
+    for (const [env, compose, pdsEnv, names] of [
+      ["prod", COMPOSE, {}, (text: string) => text],
+      ["dev", DEV.replaceAll("staging.unset.ac", "pds.example.test"), DEV_ENV, staging],
     ] as const) {
       const c18 = async (edit: (text: string) => string) =>
-        (await check({ compose: edit(compose), pdsEnv }, env)).lines.find((line) => / C18 /.test(line));
+        (await check({ compose: names(edit(compose)), pdsEnv }, env)).lines.find((line) => / C18 /.test(line));
       expect(await c18((text) => text), env).toBe("PASS C18 ok");
       for (const value of [
         "PDS.Example.Test",
@@ -2913,10 +2935,14 @@ describe("preflight C26 and C27 (P1.30y)", () => {
 // run UNSET_ENV=dev, so the runtime allowances meant for local alone are refused by key and by origin scheme here.
 describe("preflight C29 (P1.36k)", () => {
   /** The all-good stack under `env` with `lines` added to web's environment. */
-  const withWeb = (env: "dev" | "prod", lines: string): Stack => ({
-    compose: (env === "dev" ? DEV : COMPOSE).replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`),
-    ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
-  });
+  // Under dev web's origin is on the dev app host (C18, P1.37 follow-up), so a case's own origin replaces DEV's there.
+  const withWeb = (env: "dev" | "prod", lines: string): Stack => {
+    if (env === "prod") return { compose: COMPOSE.replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`) };
+    const own = lines.includes("PUBLIC_ORIGIN:") ? "      PUBLIC_ORIGIN: https://staging.unset.sh\n" : "";
+    const staged = lines.replaceAll("app.example.test", "staging.unset.sh");
+    const compose = DEV.replace(own, "").replace("      FINGERPRINT_CHECK: arachnid", `$&\n${staged}`);
+    return { compose, pdsEnv: DEV_ENV };
+  };
 
   test("c29_local_only_key_fails_under_dev_and_prod", async () => {
     for (const env of ["dev", "prod"] as const) {
