@@ -12295,7 +12295,7 @@ committed `compose.dev.yaml`, because the runner withholds whole any reason that
   `c16_confirmation_link_required`,
   `c19_moderation_mail_missing_fails`,
   `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
-  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
+  `part_a_complete_required_before_p133p`), `c22_blob_limit_below_master_fails`,
   `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
   `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
 - The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
@@ -15495,7 +15495,7 @@ retire the old accounts before the
 development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19
 (settled by decision 24)
 
-**Why here (editor pass, global resolution 8):** P1.34 gives the hostname `0x40.space` to the new development PDS. The
+**Why here (editor pass, global resolution 8):** P1.33p gives the hostname `0x40.space` to the new development PDS. The
 old prototype accounts live on the old PDS at that hostname and use `*.0x40.me` handles, the handle domain the
 production PDS will issue. Once P1.34 runs, the old PDS can no longer delete or export them. So the part of L.01 that
 needs the old PDS runs here; the launch gate keeps L.01 part B (the reserved-label placeholders and the final
@@ -15508,7 +15508,7 @@ needs the old PDS runs here; the launch gate keeps L.01 part B (the reserved-lab
 
 **Goal:** while the old PDS still answers on `0x40.space`, every prototype account is given notice and an export,
 then deactivated and deleted through that PDS, and its DID is tombstoned with the old rotation key. The old stack is
-shut down and its secrets are retired. Only then does P1.34 take the hostname.
+shut down and its secrets are retired. Only then does P1.33p take the hostname.
 
 **Decided (decision 24; no question to Alex):** every old account is retired: notice and export, then deactivate and
 delete through the old PDS, then a PLC tombstone for each DID with the old rotation key. Old handles become free. A
@@ -15568,15 +15568,14 @@ service (a holder who migrated away).
     pointed at nothing, until L.06.
 9.  Retire the old secrets (retire-0x40-secrets.md, moved here from P5.06): revoke each at its issuer, or record
     that it died with the stack (a key held only inside the destroyed volumes). Each line is dated.
-10. Hand over 0x40.space. Only now may P1.34 point 0x40.space at the new development PDS. retirement-check writes
+10. Hand over 0x40.space. Only now may P1.33p point 0x40.space at the new development PDS. retirement-check writes
     retirement_part_a_complete, which P1.30's C21 requires before any preflight for PDS_HOSTNAME=0x40.space passes.
 ```
 
 **Edge cases and failures:**
-- **The old PDS was already replaced on `0x40.space`** before this step (P1.34 ran first, or the old host died). Steps 5
-  and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain.
-  - Notice is still sent.
-  - The record says "deleted: impossible, PDS gone".
+- **The old PDS was already replaced on `0x40.space`** before this step (P1.33p ran first, or the old host died). Steps
+  5 and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain. - Notice is still
+  sent. - The record says "deleted: impossible, PDS gone".
 - **The old rotation key is lost** → no tombstone is possible. The DIDs stay pointing at a dead host and their handles
   cannot verify once `*.0x40.me` points at the new PDS. Alex accepts this in the ADR.
 - **A holder objects after the notice** → they may migrate their identity to another PDS within the window (step 3);
@@ -15584,8 +15583,8 @@ service (a holder who migrated away).
 
 **Threats:** the prototype's accounts and DIDs, which stay public identities after the prototype is gone.
   - S A retired DID or handle is reused or still points at a host we no longer control → tombstone or verified
-    migration, checked before P1.34 (`retirement_check_flags_live_did`, `retirement_check_accepts_tombstone`,
-    `part_a_complete_required_by_p134_preflight`).
+    migration, checked before P1.33p (`retirement_check_flags_live_did`, `retirement_check_accepts_tombstone`,
+    `part_a_complete_required_before_p133p`).
   - T A member's identity destroyed while they still use or moved it → tombstone refused for migrated or existing
     accounts (`tombstone_refused_for_migrated_did`, `tombstone_refused_while_account_exists`).
   - I The retirement record leaks addresses or secrets → scanned (`record_has_no_addresses_or_secrets`).
@@ -15595,7 +15594,7 @@ service (a holder who migrated away).
 - `retirement_check_accepts_tombstone`, `retirement_check_unreachable_old_pds_is_unverified`,
   `retirement_check_lists_unrotatable_dids`.
 - `tombstone_refused_for_migrated_did`, `tombstone_refused_while_account_exists`.
-- `part_a_complete_required_by_p134_preflight` (P1.30's `c21_part_a_incomplete_fails`).
+- `part_a_complete_required_before_p133p` (P1.30's `c21_part_a_incomplete_fails`).
 - `record_has_no_addresses_or_secrets` (the secret and PII scan on `0x40-record.md`).
 - Evidence: the ADR; the record, fully dated for part A; the secrets runbook ticked; a `retirement-check` run showing
   every DID retired, migrated away (not ours) or explicitly accepted.
@@ -15621,7 +15620,7 @@ sequenceDiagram
   A->>P: tombstone (old rotation key)
   C->>P: resolve each DID -> tombstoned / not ours
   A->>O: shut down stack, retire secrets
-  Note over O: only now P1.34 takes 0x40.space
+  Note over O: only now P1.33p takes 0x40.space
 ```
 
 ---
