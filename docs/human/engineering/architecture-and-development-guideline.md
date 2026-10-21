@@ -44,17 +44,28 @@ unset.sh/
 ├── infrastructure/       external systems behind small contracts
 │   ├── postgres/  pds/  tap/  matrix/  storage/  arachnid/  email/
 │   ├── net-guard/        the single egress classifier
+│   ├── session/          browser session store
 │   ├── seal/             sealed-storage encryption
 │   └── audit/            append-only audit store
 │
 ├── shared/               genuinely generic code, kept small; MIT licence [A6]
 │   ├── lexicons/         sh.unset.* record types and generated code
 │   ├── ui/               tokens, shared components, Icon
+│   ├── ui-build/         token, icon and font-metric build runners
+│   ├── islands/          island runtime: define, props, readProps, slot
 │   ├── http/             server kit: server, CSRF gate, CSP, limits, client IP, return path
+│   ├── host-pin/         pins a path and the Docker socket to this machine
 │   ├── admin-envelope/   signed admin action format, canonicalize, roster; zero dependencies
 │   └── config/  errors/  log/  i18n/
 │
-├── deployment/           compose, edge, backup, preflight
+├── deployment/           Compose files, and what puts the system on machines
+│   ├── edge/             Caddy edge: terminates TLS, writes no client address
+│   ├── preflight/        checks the stack before any compose up
+│   ├── images/           container image Dockerfiles
+│   ├── postgres/         initdb bootstrap and pg_hba.conf
+│   ├── sigstore/         offline Sigstore trusted root for keyless signatures
+│   └── env/              example interpolation env; no live values in the checkout
+│                         backup/ is added with its first script
 │                         terraform/ and ansible/ are added at P5.00 when hosting is chosen
 ├── scripts/              repository tooling only: CI guards, budgets, the dev-stack precheck
 ├── tests/                integration/ and e2e/ [A5]

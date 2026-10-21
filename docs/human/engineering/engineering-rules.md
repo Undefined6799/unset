@@ -1,6 +1,6 @@
 # Engineering Rules (unset.sh)
 
-Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the 48 rules with the recommended option for each of D1-D9). DO-3 added 2026-10-05 at Alex's request (rule 49). SE-7a written down 2026-10-15 from architecture's ruling on verify-875 F1 (the fixture-identifier rule verifiers already applied). SE-7b written down 2026-10-19 from architecture's 03:45Z ruling (runtime code never treats `dev` as local). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
+Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the recommended option for each of D1-D9). There are 49 rules, and SE-7a and SE-7b are sub-rules of SE-7 (51 headings in total). DO-3 was added 2026-10-05 at Alex's request. SE-7a was written down 2026-10-15 from architecture's ruling on verify-875 F1 (the fixture-identifier rule verifiers already applied). SE-7b was written down 2026-10-19 from architecture's 03:45Z ruling (runtime code never treats `dev` as local). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
 
 These rules sit beside the four guidelines in `engineering/` and never weaken a security or privacy decision in the plan. Where a rule and the plan disagree, the plan wins. Where a rule and the ADG disagree on structure, the ADG wins.
 

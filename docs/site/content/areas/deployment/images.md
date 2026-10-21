@@ -31,6 +31,8 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/mirror.list.json` lists the same six sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>`.
 
+`deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock.
+
 `deployment/images.lock.json` is what dev and prod run. Every entry has `verify: cosign-keyless`.
 
 | Name | `origin` | Image |
@@ -53,7 +55,7 @@ The digest strings live in the lock. This page does not copy them.
 
 | Workflow | When | What the file header says |
 | --- | --- | --- |
-| `.github/workflows/images.yml` | ready pull request, push to `main` | `images` builds `deployment/images/node-app.Dockerfile` for `APP=web`. `edge` builds `deployment/edge/Dockerfile`. `discover`, `scan-image` and `scan-export` cover every Dockerfile `list-dockerfiles.ts` emits. `scan` is green only when `discover`, `scan-image`, `scan-export` and `pds-ui` succeeded. Nothing in this workflow pushes or signs. |
+| `.github/workflows/images.yml` | ready pull request, push to `main` | `images` builds `deployment/images/node-app.Dockerfile` for `APP=web`. `edge` builds `deployment/edge/Dockerfile`. `discover` and `scan-image` cover every Dockerfile `list-dockerfiles.ts` emits. The exported-filesystem secret scan is a step of `scan-image` on that same build: it runs after a failed vulnerability scan too, and never when the build failed. `scan` is green only when `discover`, `scan-image` (both scans) and `pds-ui` succeeded. Nothing in this workflow pushes or signs. |
 | `.github/workflows/publish-images.yml` | push to `main`, or `workflow_dispatch` | Job `publish`, environment `signing`. Builds each image under `deployment/` from the checked-out commit, pushes by digest, scans, signs and attests with keyless cosign, then runs `scripts/ci/verify-images.ts`. |
 | `.github/workflows/mirror.yml` | push to `main`, and weekly `scan` | `scan` runs Trivy on every `source` in `deployment/mirror.list.json`. `copy-and-sign` copies each source to its GHCR mirror by the same digest and signs it. It does not run on the weekly schedule. |
 | `.github/workflows/sigstore-root.yml` | `workflow_dispatch` | Job `fetch`. Installs cosign v3.1.3 and uploads `trusted_root.json` as a run artifact. It does not commit. |

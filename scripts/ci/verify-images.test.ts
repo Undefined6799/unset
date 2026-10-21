@@ -170,8 +170,12 @@ describe("verify-images", () => {
     const outside: ImageLock = {
       web: { ref: "docker.io/library/node:26", origin: "first-party", verify: "cosign-keyless" },
     };
+    // Another registry by digest: only OUR_REGISTRY refuses it, as the digest rule alone passes it (verify-1150 S5).
+    const otherRegistry: ImageLock = {
+      web: { ref: `docker.io/library/node@sha256:${"a".repeat(64)}`, origin: "first-party", verify: "cosign-keyless" },
+    };
     const keyed = { web: { ...LOCK.web, verify: "cosign-key" } as unknown as LockEntry };
-    for (const lock of [outside, keyed]) {
+    for (const lock of [outside, otherRegistry, keyed]) {
       expect(await verify(lock, cosign().run)).toEqual({
         ok: false,
         failures: ["web: ref is not ghcr.io/undefined6799/… by digest, signed keyless"],

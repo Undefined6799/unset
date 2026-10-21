@@ -2,7 +2,12 @@
 
 Schema changes are SQL files in `infrastructure/postgres/migrations/`, applied once, in order, by `unset-migrate`
 (`infrastructure/postgres/migrate-cli.ts`). It runs as the one-shot Compose `migrate` service (P1.29) with only the
-`migrator` credentials; `web`, `api` and `indexer` start after it exits 0.
+`migrator` credentials. `deployment/compose.dev.yaml` defines `postgres`, `migrate`, `pds`, `edge`, `web` and `newt`.
+`deployment/compose.local.yaml` defines `postgres`, `migrate`, `pds`, `edge`, `web` and `pds-token-reader` (profile
+`tools`; `up` does not start it). Only `web` starts after `migrate` exits 0 (`depends_on` with
+`service_completed_successfully`). There is no `api` or `indexer` service. P1.11's outputs in
+`docs/ai/book/phase-1.md` say `web`, `api` and `indexer` services will declare that same `depends_on` when they join
+Compose.
 
 ## Files
 

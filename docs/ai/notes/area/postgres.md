@@ -10,11 +10,11 @@ importance: normal
 related: ["[[tests]]", "[[deployment]]", "[[postgres-tests-need-docker]]"]
 replaced_by: null
 tags: [area, postgres]
-checked: 2026-10-17
+checked: 2026-10-21
 ---
 # postgres
 
-**What it owns.** The database behind small contracts. Driver: node-postgres 8.23.0, pinned exactly (ADR 0014).
+**What it owns.** The database behind small contracts. Driver: node-postgres (`pg`) 8.23.1, pinned exactly (ADR 0014 chose the driver at 8.23.0).
 
 **Files.**
 - `migrations/`: numbered SQL files; `migrate.ts` applies them once, in order, as `migrator`, under an advisory lock,

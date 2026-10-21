@@ -74,6 +74,30 @@ docker run --rm --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.
 | `scripts/docs/compliance.ts` | Checks `docs/human/compliance/` |
 | `scripts/docs/outline.ts` | Checks the step-book dependency graph |
 | `scripts/docs/triage.ts` | Parses the severity triage comment |
-| `scripts/docs/endpoints.ts` | (planned). The file is not on the tree. [Endpoints](../../endpoints/) says the route pages will be generated from the manifests |
+| `scripts/docs/endpoints.ts` | Writes `docs/site/content/endpoints/`. [Endpoint pages](#endpoint-pages) |
 
 `scripts/docs/glue-spike.ts` recomputes the framework-glue measurements. It does not write this site.
+
+## Endpoint pages
+
+[`scripts/docs/endpoints.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.ts) reads `interfaces/<process>/routes.manifest.json`, the `policies` export of `interfaces/<process>/limits.ts` when that file exists, and `docs/site/data/endpoints/<process>.yaml`.
+
+| Path | Writer |
+| --- | --- |
+| `docs/site/content/endpoints/*.md` | The command below. Hand-editing a page fails `endpoint_pages_match_manifests` |
+| `docs/site/data/endpoints/<process>.yaml` | Hand-written. Keys are `"METHOD path"`. The generator reads the prose and leaves the file as written. A manifest route needs a key. A key with no manifest route needs `planned` |
+
+```sh
+node scripts/docs/endpoints.ts --write
+```
+
+`main` defaults a missing argument to `--write`, so `node scripts/docs/endpoints.ts` rewrites the pages too. `--check` compares them and writes nothing. No `package.json` script and no workflow runs `--check`.
+
+| Run | Failure when the pages are stale |
+| --- | --- |
+| `npm test` | [`scripts/docs/endpoints.test.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.test.ts) `endpoint_pages_match_manifests`. It expects `checkEndpoints` to return no problems |
+| `npm run check` | The same test. Root `package.json` `check` runs `npm test` |
+| CI job `code` | [`.github/workflows/ci.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/ci.yml) runs `npm test -- --units`. [`scripts/test/run.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/test/run.ts) includes this file. Job `check` needs `code` |
+| CI job `docs-site` | Hugo build only. It does not run this test |
+
+The generated section is [Endpoints](../../endpoints/).
