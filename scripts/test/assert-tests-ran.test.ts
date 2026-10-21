@@ -122,6 +122,19 @@ describe("assert_tests_ran_across_jobs", () => {
     ]);
   });
 
+  test("a report whose tests name no project fails", () => {
+    const unnamed: PlaywrightReport = {
+      suites: [{ specs: [{ title: "t", file: "a11y.spec.ts", tests: [{ status: "expected", results: [] }] }] }],
+    };
+    const reports = [
+      { project: "chromium", name: "c.json", report: ran("chromium") },
+      { project: "webkit", name: "w.json", report: unnamed },
+    ];
+    expect(problemsAcross(reports, PROJECTS, ["a11y.spec.ts"], [], today)).toEqual([
+      'w.json holds tests of project "", not webkit',
+    ]);
+  });
+
   test("no reports at all fails", () => {
     expect(problemsAcross([], PROJECTS, ["a11y.spec.ts"], [], today)).toEqual([
       "no report for project: chromium",
