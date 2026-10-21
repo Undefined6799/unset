@@ -101,7 +101,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.36b and P1.36j are slice 1; P1.36c and P1.36i moved here because they depend on P1.38e and P1.37v, and P1.36e
   and P1.36o are production work after P1.38, ADR 0031 and 0032), P1.34, P1.33p, P1.35q, P1.35 (lexicon authority),
   P1.27v (Renovate managers for the
-  image locks), P1.37a,
+  image locks; dropped 2026-10-21), P1.37a,
   then the Phase 1 exit P1.38 (book edit 2026-10-14-verify-834-fixes, S4).
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
@@ -7060,8 +7060,8 @@ use official Docker images, Alpine where offered, pinned by digest?". This gener
   official image offers it.
 
 **Bumping a pinned base digest** (book edit 2026-10-07-base-digest-bump-procedure, final 01:05Z). P0.08's Renovate
-dockerfile manager bumps only the `FROM` line, so `base_digest_matches_lock` would fail its PR until P1.27v adds
-managers for the lock files. The repeatable procedure:
+dockerfile manager bumps only the `FROM` line, so `base_digest_matches_lock` would fail its PR (P1.27v, which would
+have added managers for the lock files, is dropped). The repeatable procedure:
 1. Take the newest upstream multi-arch index digest of the same tag that is at least 7 days old (P0.08's
    `minimumReleaseAge`); `docker buildx imagetools inspect` shows an OCI index. A younger digest is allowed only when
    it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs. The age rule also applies
@@ -7073,8 +7073,9 @@ managers for the lock files. The repeatable procedure:
 3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
    digest's list.
 4. Run `base_digest_matches_lock`, `runtime_base_is_debian_slim` and the images test locally.
-- **Who bumps:** until P1.27v merges, an agent may hand-bump under this procedure; once it merges, bumps are
-  Renovate's and Alex merges them, and agents hand-bump only for a security finding Renovate has not yet opened.
+- **Who bumps:** an agent hand-bumps under this procedure and Alex merges. Renovate does not bump these pins: its PRs
+  could not change all four places and stage the mirror copy before merge, so they could never go green (Alex
+  2026-10-21 20:56Z, "drop it"; P1.27v is dropped).
 - **Id:** a hand bump is maintenance, not a book step, so it takes no step id. Subject `deps: bump <image>:<tag> index
   digest` (Renovate's `deps` convention), with the `security` label when it fixes CVEs. Phase 2 first confirms that
   pr-shape and the commit-subject check accept a `deps:` subject, as they must for Renovate PRs; if they reject it,
@@ -11238,7 +11239,13 @@ slice 1 pushes or deploys an image, and P1.29 builds locally.
 
 **Tags:** [SEC] · **Depends on:** P1.27 · record 2026-10-07-base-digest-bump-procedure.md (final 01:05Z)
 
-**Goal:** Renovate bumps a base image digest in all four places at once (`FROM` lines, `bases.lock.json`,
+**Dropped** (Alex 2026-10-21 20:56Z, "drop it", on Codex's findings on #1206; the mirror-list manager #1206 added
+was removed by the P2.26b follow-up). A Renovate PR cannot go green: the mirror copies a new digest only after a push
+to main, so a PR that moves the pins pulls a digest GHCR does not hold yet, and GHCR gives Renovate no release
+timestamps for the seven-day gate. Base digests stay hand bumps under "Bumping a pinned base digest" in P1.27. The
+plan below is kept as the record of what was planned.
+
+**Goal (not built):** Renovate bumps a base image digest in all four places at once (`FROM` lines, `bases.lock.json`,
 `mirror.list.json`, pinned test fixtures), so its PRs pass `base_digest_matches_lock`.
 
 **Contents:** in `renovate.json`, a regex `customManager` each for `deployment/images/bases.lock.json` and
@@ -11251,7 +11258,8 @@ clearance as a tightening; otherwise it is product. The `v` suffix is free on P1
 **Slice:** slice 2, confirmed at 01:19Z (book edit 2026-10-07-base-digest-bump-procedure). Slice 1 needs no Renovate
 takeover, because hand bumps under the procedure cover it.
 
-**After it merges:** bumps are Renovate's and Alex merges them (see "Bumping a pinned base digest" in P1.27).
+**After it merges:** not applicable; the step is dropped, and bumps stay hand bumps (see "Bumping a pinned base
+digest" in P1.27).
 
 ---
 
@@ -11485,7 +11493,7 @@ its entries with `stage`: `caddy` is `runtime`, `caddy-builder` is `build`.
 his decision; the book records it and does not reverse it. No entry carries `stage` yet; P1.28d adds it. The earlier
 hold (re-pin to an index 7 days old, "P1.28x waits", P1.28v as a dependency) is superseded and kept only as history in
 2026-10-07-p128-split-and-p1b-a1. The age rule still governs the next change to either Caddy digest (the bump
-procedure in P1.27, from P1.27v or a hand bump); no re-pin is needed just to satisfy the age, and nothing changes when
+procedure in P1.27, by hand bump; P1.27v is dropped); no re-pin is needed just to satisfy the age, and nothing changes when
 the pins reach 7 days on 2026-10-13T05:52Z. P1.28 is unblocked: P1.27, P1.28q and P1.28x are merged.
 
 **Mirror scan until the builder findings are settled:** with `caddy-builder` in `mirror.list.json`, main's mirror scan
