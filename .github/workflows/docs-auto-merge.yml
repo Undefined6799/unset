@@ -1,0 +1,55 @@
+# Squash auto-merge for a docs-only pull request (P0.07e; ADR 0034).
+#
+# workflow_run runs this file from the default branch and GITHUB_SHA is that
+# branch's tip (docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows,
+# workflow_run). The workflow can hold a write token the triggering workflow
+# lacks. It must not run pull request code
+# (docs.github.com/en/actions/reference/security/secure-use, untrusted checkout).
+# Checkout ref is github.sha only. Forks never get auto-merge.
+#
+# Token (docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
+# GITHUB_TOKEN permissions): contents: write is the scope of
+# PUT /pulls/{n}/merge (permissions-required-for-github-apps, Contents).
+# pull-requests: write is the pull request scope. checks: read lists the
+# docs-only check. enablePullRequestAutoMerge is not on that REST table;
+# mergeMethod defaults to MERGE, so the script passes SQUASH.
+
+name: docs-auto-merge
+
+on:
+  workflow_run:
+    workflows: ["docs-only.yml"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: docs-auto-merge-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/docs-only.yml'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          PR_NUMBERS: ${{ toJSON(github.event.workflow_run.pull_requests.*.number) }}
+        run: node scripts/guards/docs-auto-merge.ts

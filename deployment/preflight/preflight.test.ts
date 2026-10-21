@@ -31,6 +31,7 @@ import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
+import { COSIGN } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -105,10 +106,10 @@ networks:
 `;
 const NEWT = `ghcr.io/undefined6799/mirror/newt@${digest("e")}`;
 const LOCK = {
-  edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
-  pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-key" },
-  web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
-  newt: { ref: NEWT, origin: "upstream", upstreamSource: "docker.io/fosrl/newt", verify: "cosign-key" },
+  edge: { ref: EDGE, origin: "first-party", verify: "cosign-keyless" },
+  pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-keyless" },
+  web: { ref: WEB, origin: "first-party", verify: "cosign-keyless" },
+  newt: { ref: NEWT, origin: "upstream", upstreamSource: "docker.io/fosrl/newt", verify: "cosign-keyless" },
 };
 /** Newt under dev (P1.37v): the edge's only way in, so the edge publishes nothing (C10) and Newt reads newt.env (C31). */
 const NEWT_SERVICE = `  newt:
@@ -303,7 +304,8 @@ function stack({
   for (const dir of [root, join(root, "deployment")]) chmodSync(dir, 0o755);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
-  writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
+  mkdirSync(join(root, "deployment/sigstore"));
+  writeFileSync(join(root, "deployment/sigstore/trusted_root.json"), "{}\n");
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
   // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
   const edge = join(root, "deployment/edge");
@@ -334,7 +336,13 @@ function stack({
 }
 
 type Answer = { code: number; stdout: string; stderr: string; missing?: boolean };
-type Answers = { verify?: { code: number; stderr: string }; mediaType?: string; ntp?: Answer; chrony?: Answer };
+type Answers = {
+  verify?: { code: number; stderr: string };
+  mediaType?: string;
+  ntp?: Answer;
+  chrony?: Answer;
+  cosign?: Answer;
+};
 const ok = (stdout: string): Answer => ({ code: 0, stdout, stderr: "" });
 const notInstalled: Answer = { code: 1, stdout: "", stderr: "run failed", missing: true };
 const SYNCED = ok("yes\n");
@@ -348,6 +356,8 @@ function fakeRun(answers: Answers = {}) {
     calls.push([file, ...args]);
     if (file === "timedatectl") return answers.ntp ?? SYNCED;
     if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
+    // The pinned cosign for this machine (P2.26b), unless a test hands another sum.
+    if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256[process.arch]}  ${COSIGN.path}\n`);
     if (file === "docker") {
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
@@ -471,7 +481,7 @@ describe("preflight", () => {
   test("c2_dev_migrate_built_from_checkout_fails", async () => {
     // P1.36r (architecture's section labelled 04:20Z): migrate runs schema changes with migration privileges, so under
     // dev it is digest-pinned like every other image, and C3 verifies its signature. A build from the checkout, as
-    // compose.dev.yaml has until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
+    // compose.dev.yaml had until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
     const migrate = [
       "  migrate:",
       "    build:",
@@ -533,6 +543,42 @@ describe("preflight", () => {
     // A failure that names no entry (a spawn error) fails both.
     const both = await check({}, "prod", { run: fakeRun({ verify: { code: 1, stderr: "" } }).run });
     expect(failed(both.lines)).toEqual(["C3", "C4"]);
+  });
+
+  test("cosign_hash_mismatch_refused", async () => {
+    // P2.26b: before C3 and C4 verify anything, the preflight hashes the cosign it is about to run; another binary, an
+    // unreadable one or sha256sum's failure refuses both, and verify-images never runs.
+    const other = ok(`${"0".repeat(64)}  ${COSIGN.path}\n`);
+    const otherArch = ok(`${COSIGN.sha256[process.arch === "arm64" ? "x64" : "arm64"]}  ${COSIGN.path}\n`);
+    for (const cosign of [other, otherArch, ok(""), { code: 1, stdout: "", stderr: "No such file" }]) {
+      const { run, calls } = fakeRun({ cosign });
+      const result = await check({}, "prod", { run });
+      expect(failed(result.lines)).toEqual(["C3", "C4"]);
+      expect(result.lines).toContain(`FAIL C3 cosign at ${COSIGN.path} is not the pinned v3.1.3 binary`);
+      expect(calls.some(([file]) => file === "/usr/bin/env")).toBe(false);
+    }
+    // The pinned binary passes, and verify-images then runs offline with only cosign's folder on PATH.
+    const { run, calls } = fakeRun();
+    expect(failed((await check({}, "prod", { run })).lines)).toEqual([]);
+    expect(calls).toContainEqual(["sha256sum", "--", "/usr/local/bin/cosign"]);
+    const verify = calls.find(([file]) => file === "/usr/bin/env") ?? [];
+    expect(verify.slice(0, 3)).toEqual(["/usr/bin/env", "PATH=/usr/local/bin", process.execPath]);
+    expect(verify.slice(-2)).toEqual([
+      "--trusted-root",
+      expect.stringMatching(/\/deployment\/sigstore\/trusted_root\.json$/),
+    ]);
+  });
+
+  test("cosign_pins_are_v3_1_3", () => {
+    // sigstore/cosign v3.1.3 cosign_checksums.txt; the workflows install the same amd64 binary.
+    expect(COSIGN).toEqual({
+      path: "/usr/local/bin/cosign",
+      version: "v3.1.3",
+      sha256: {
+        x64: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
+        arm64: "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a",
+      },
+    });
   });
 
   test("c5_platform_manifest_fails", async () => {
@@ -3400,7 +3446,7 @@ describe("preflight --env local (P1.27l)", () => {
   /** C2 to C5's lines, with the stack's temporary root named as <root>. */
   async function imageLines(s: Stack, env: string, deps: Partial<Deps> = {}, noKey = false): Promise<string[]> {
     const { root, file } = stack(s);
-    if (noKey) rmSync(join(root, "deployment/cosign.pub"));
+    if (noKey) rmSync(join(root, "deployment/sigstore/trusted_root.json"));
     const { lines } = await preflight(["--env", env, "--compose", file], {
       root,
       run: fakeRun().run,
@@ -3431,7 +3477,7 @@ describe("preflight --env local (P1.27l)", () => {
         "dev",
         {},
       ],
-      // The verifier on #789: a mutant dropping dev's cosign.pub requirement survived nine samples. Both stages, and
+      // The verifier on #789: a mutant dropping dev's trust material requirement survived nine samples. Both stages, and
       // the failing paths under dev as under prod.
       ["no key", {}, "prod", {}, true],
       ["dev no key", dev, "dev", {}, true],
@@ -3451,7 +3497,7 @@ describe("preflight --env local (P1.27l)", () => {
     );
     const seen: Record<string, string[]> = {};
     for (const [name, s, env, deps, noKey] of cases) seen[name] = await imageLines(s, env, deps, noKey);
-    const NO_KEY = ["C3", "C4"].map((id) => `FAIL ${id} input missing: <root>/deployment/cosign.pub`);
+    const NO_KEY = ["C3", "C4"].map((id) => `FAIL ${id} input missing: <root>/deployment/sigstore/trusted_root.json`);
     expect(seen).toEqual({
       prod: PASSED,
       dev: PASSED,
