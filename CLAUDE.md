@@ -32,15 +32,15 @@ guideline wins.
 | Kind of code | Folder |
 | --- | --- |
 | Screens, islands, styles | `apps/{web,admin,chat}`: UI only, no product rules, no DB |
-| Entry points, auth, CSRF gate, limits | `interfaces/{http,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
+| Entry points, auth, CSRF gate, limits | `interfaces/{http,admin,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
 | Product rules | `domains/{identity,content,social,feed,messaging,moderation,privacy}` |
-| External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit}` |
+| External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit,session}` |
 | Generic, no product meaning (MIT) | `shared/{lexicons,ui,config,errors,i18n}` |
 | Compose, edge, backup, preflight | `deployment/` |
 | Integration and e2e tests | `tests/`; unit tests sit beside their file |
 
 Boundaries (dependency-cruiser): domains never import infrastructure, interfaces or apps; apps never import each other
-or infrastructure; `pds-admin` and `chat-admin` import only themselves and Node built-ins. No `plugins/`, Redis or
+or infrastructure; `pds-admin` and `chat-admin` import only themselves, Node built-ins and `ZERO_DEP_ALLOWLIST` (today `shared/admin-envelope/`; adding one needs Alex's approval). No `plugins/`, Redis or
 queue until a real need exists.
 
 ## Non-negotiable: no security shortcuts
