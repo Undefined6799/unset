@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { parseCompose } from "../compose-parse.ts";
 import { SecretMap } from "../secret-map.ts";
-import { devTunnelProblems, networkTableProblems, pdsNeighbours, repository } from "./networks.ts";
+import { devTunnelProblems, edgeAliasProblems, networkTableProblems, pdsNeighbours, repository } from "./networks.ts";
 import type { Inputs } from "./types.ts";
 
 const compose = (yaml: string) => parseCompose(`name: unset-dev\n${yaml}`, "c.yaml");
@@ -79,6 +79,16 @@ describe("the dev edge's tunnel (P1.36i; ADR 0031 Decision 3)", () => {
     // Local keeps both aliases for its own stack; prod is not this check's.
     expect(tunnel("local", stack(ALIASED))).toEqual([]);
     expect(tunnel("prod", stack(ALIASED))).toEqual([]);
+  });
+
+  test("outside_dev_the_edge_carries_its_aliases", () => {
+    // P1.37 follow-up: the parser refuses an edge aliased on one of edge and app but not the other; a fully bare edge
+    // passes it, so outside dev this refuses that case. Local web and the PDS reach both hosts only by these aliases.
+    const bare = ["the edge carries no alias on its networks"];
+    expect(edgeAliasProblems({ env: "local", compose: stack(BARE) })).toEqual(bare);
+    expect(edgeAliasProblems({ env: "prod", compose: stack(BARE) })).toEqual(bare);
+    expect(edgeAliasProblems({ env: "local", compose: stack(ALIASED) })).toEqual([]);
+    expect(edgeAliasProblems({ env: "dev", compose: stack(BARE) })).toEqual([]);
   });
 
   test("dev_names_no_internal_host", () => {

@@ -13,10 +13,9 @@ const lock = JSON.parse(
   readFileSync(join(import.meta.dirname, "../../deployment/images/bases.lock.json"), "utf8"),
 ) as Record<string, LockEntry>;
 const NODE = `${lock.node?.ref}:${lock.node?.tag}@${lock.node?.digest}`;
-// The PDS image the dev stack runs, by tag and digest.
-const PDS = /^ {4}image: (ghcr\.io\/bluesky-social\/pds:\S+@sha256:[0-9a-f]{64})$/m.exec(
-  readFileSync(join(import.meta.dirname, "../../deployment/compose.dev.yaml"), "utf8"),
-)?.[1];
+// The PDS image the dev stack runs, by tag and digest: the base lock's entry, which compose.dev.yaml runs from its
+// mirror at the same digest since P2.26b (compose_dev_images_by_digest), and compose.local.yaml by this spelling.
+const PDS = lock.pds === undefined ? undefined : `${lock.pds.ref}:${lock.pds.tag}@${lock.pds.digest}`;
 // The image installs its service with pnpm under /app (bluesky-social/pds Dockerfile, WORKDIR /app, COPY ./service);
 // the package link resolves into pnpm's store.
 const PDS_DIST = "/app/node_modules/@atproto/pds/dist";

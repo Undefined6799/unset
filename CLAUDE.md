@@ -61,6 +61,7 @@ Every change:
 - **Blobs.** Never send raw `getBlob` URLs to browsers; use the media proxy.
 - **GDPR.** New personal data needs a purpose, a lawful basis, erasure (`eraseDid`) and export.
 - **Ship it.** Typecheck, lint, guards and tests green. Land via PR; Alex approves every PR.
+  Exception: `scripts/guards/docs-only-paths.ts` paths, `kind/docs`, green CI: `docs-auto-merge.yml` squash-merges it, outside D4.
 
 ## UI
 - All UI follows the unset.sh design sheet (plan §11 Q11): its `tokens.json` is the token source for the CSS Modules;
@@ -86,8 +87,8 @@ Every change:
 - **D3 PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests, lockfile, generated
   code and lexicon JSON excluded); CI fails above 800 without a `large-pr` label and a reason. Refactoring and
   behaviour change go in separate commits. Fill the one PR template and self-review against it before asking Alex.
-- **D4 Queue:** at most three agent PRs may wait for Alex at once (severity-1 and -2 fixes excepted). Run `gh pr list
-  --state open` before starting a step; if three are waiting, pick up review feedback instead.
+- **D4 Queue:** at most three agent PRs may wait for Alex at once (severity-1 and -2 fixes excepted). A docs-only PR (the Ship it exception) does not count; `docs-auto-merge.yml` squash-merges it with no Alex approval.
+  Run `gh pr list --state open` before starting a step; if three are waiting, pick up review feedback instead.
 - **D8 Decisions:** anything expensive to reverse (data model, external or lexicon contract, process, role or network
   boundary, runtime dependency, new pattern or top-level folder, security mechanism) gets its own ADR in
   `docs/human/decisions/`, in the first PR that depends on it. Never edit an accepted ADR except to mark it
@@ -103,7 +104,6 @@ merged and that has no open PR. Stop at `[ALEX]`, `[STOP]` and `[SPIKE]` exits a
 titled as in Delivery.
 
 ## Parallel agents and branches
-Several agents may work here at once.
 - Never commit on `main`, a shared branch or a detached HEAD. `git branch --show-current` must print a branch that is
   yours (`claude/<task>`, `cursor/<task>`).
 - Branch from a freshly fetched `origin/main`, in your own worktree: `git fetch origin main && git worktree add
