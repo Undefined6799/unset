@@ -1,7 +1,9 @@
 # Development stack secrets
 
 **Never run `docker compose down -v` on this stack.** It deletes the Postgres and PDS data volumes, and from P1.35 on
-the dev PDS holds the lexicon authority's account; recovery is P1.34's restore runbook. `npm run dev:down` never passes `-v`.
+the dev PDS holds the lexicon authority's account. No restore runbook exists yet. The step book plans a restore-drill
+runbook (P5.08c, `docs/ai/book/phase-5.md:2256` and `:2271-2272`) and names `docs/human/runbooks/restore.md` (P6.19,
+`docs/ai/book/phase-6.md:3004`). Until then a `down -v` loses that data. `npm run dev:down` never passes `-v`.
 
 `deployment/compose.dev.yaml` mounts each file below at `/run/secrets/<name>` in the services listed, and nothing else
 reads them.
