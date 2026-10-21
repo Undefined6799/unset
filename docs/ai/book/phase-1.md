@@ -9926,8 +9926,11 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
     `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
     2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
-    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
-    key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
+    P1.34v); and `pds-token-reader` and `seed`, local-only services. As changed (ADRs 0022, 0023, 2026-10-16): the
+    local PDS uses `https://plc.directory`, and P1.34v and P1.34z are dropped, so the `local` value, the
+    `init-local/` mount and `seed` never arrive. `pds-token-reader` stays. Anything else, in either direction, fails
+    with the key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit
+    2026-10-14-p134d-split,
     "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
     where only the named keys may differ, on the services named; `env_file` per service as an ordered list of entries,
     each directly in `../../unset-dev-env/` in both files (that folder exactly: a sub-folder or any other folder fails),
@@ -10624,6 +10627,8 @@ checks only warn, so this is a new failing assertion.)
 
 ### P1.34u — Give the local PLC its own role and database
 Tags: [SEC] trusted            Depends on: P1.34t, P1.34d, P1.33m
+**Superseded (ADRs 0022, 0023, 2026-10-16).** Built, now dead: we host no PLC, and nothing mounts
+`init-local/`. #1042 / #1043 remove it. The historical spec below is kept so the id holds.
 Slice 1, issue #781, trusted base (`deployment/postgres/init-local/`, owned in CODEOWNERS by P1.33m), lane the third
 thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 6 of 2026-10-13-local-plc, S4, and
 book edit 2026-10-13-local-plc-a6-steps.
@@ -10693,6 +10698,8 @@ Done when the local PDS creates an account against the local PLC, the local-only
 
 ### P1.34y — Add an inert local PLC policy to net-guard
 Tags: [SEC] trusted            Depends on: P1.34t
+**Superseded (ADRs 0022, 0023, 2026-10-16).** Built, now dead: we host no PLC, and `localPlc` is used only by its
+own test. #1041 removes it. The historical spec below is kept so the id holds.
 Slice 1, issue #783, trusted base (`infrastructure/net-guard/` only), lane the third thread; book edit
 2026-10-13-local-plc-steps, retitled by step-book note 2 of 2026-10-13-local-plc-a4-steps, from architecture's P1.34y /
 P1.34z note (Option A).
