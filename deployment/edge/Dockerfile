@@ -5,16 +5,16 @@
 
 # Upstream base until P1.27s mirrors it (book edits 2026-10-06-p127-upstream-base-by-digest, 2026-10-07-p128-edge-bases-and-ratelimit-adr); removed by P1.27s.
 # hadolint ignore=DL3026
-FROM docker.io/library/caddy:2.11.7-builder-alpine@sha256:aa705b1e8e4bce41a7a30de934c1e00f6821667c1d1206424465065c92cb7674 AS build
+FROM docker.io/library/caddy:2.11.7-builder-alpine@sha256:d718a1d1431403c4a46698f33ad1c0f9dd5dd7fe2bae654d1027d275b6fb5fd7 AS build
 # Module downloads go through the default proxy (proxy.golang.org) and are checked against the checksum database
 # (sum.golang.org); none of GONOSUMDB, GONOSUMCHECK, GOINSECURE, GOPRIVATE or an insecure flag is set. With
 # -mod=readonly the final `go build` fails if go.mod would change after xcaddy's `go get` and `go mod tidy` (Go 1.27:
 # cmd/go/internal/modload/init.go setDefaultBuildMod; `go get` omits the -mod flag, modget/get.go:270).
 ENV GOFLAGS=-mod=readonly
-# Builder index aa705b1e (tag 2.11.7-builder-alpine, Docker Hub last_updated 2026-10-08T20:53:10Z)
-# sets GOLANG_VERSION=1.27.2. Rebuilding with it drops the fixed stdlib HIGH findings
-# CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031. The index is under 7 days old; the base-digest
-# bump procedure allows that when the PR names those CVEs. Caddy v2.11.7 go.mod still requires
+# Builder index d718a1d1 (tag 2.11.7-builder-alpine, Docker Hub last_updated 2026-10-20T08:52:39Z)
+# sets GOLANG_VERSION=1.27.3. Rebuilding with it drops the fixed stdlib HIGH finding
+# CVE-2026-111943 (crypto/x509, fixed in 1.27.3). The index is under 7 days old; the base-digest
+# bump procedure allows that when the PR names the CVE. Caddy v2.11.7 go.mod still requires
 # golang.org/x/net v0.59.0, so --replace pins v0.60.0 (proxy.golang.org, 2026-10-08T17:22:58Z),
 # the fixed module for CVE-2026-78669. xcaddy v0.4.7 writes it as `go mod edit -replace`
 # (github.com/caddyserver/xcaddy blob/v0.4.7/environment.go) and does not add an import.
