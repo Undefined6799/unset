@@ -36,7 +36,7 @@
     "@capsizecss/metrics": "4.3.0",
     "@capsizecss/unpack": "4.0.1",
     "@playwright/test": "1.64.0",
-    "@swc/core": "1.16.13",
+    "@swc/core": "1.16.18",
     "@types/node": "26.6.5",
     "dependency-cruiser": "18.5.0",
     "fast-check": "4.10.2",
