@@ -70,6 +70,16 @@ test("slash_ignored_while_typing_in_a_field", async () => {
   expect(input.value).toBe("");
 });
 
+test("slash_ignored_in_contenteditable", async () => {
+  const { input } = await mount();
+  const editor = document.createElement("div");
+  editor.setAttribute("contenteditable", "true");
+  document.body.append(editor);
+  editor.focus();
+  await key(editor, { key: "/" });
+  expect(document.activeElement).not.toBe(input);
+});
+
 test("slash_off_when_shortcut_false", async () => {
   const { input } = await mount(false);
   await key(document.body, { key: "/" });
@@ -99,4 +109,5 @@ test("search_island_props_schema", () => {
   expect(isSearchKeysProps({ form: "f", web: "https://evil.example/", shortcut: true })).toBe(false);
   expect(isSearchKeysProps({ form: "f", web: "/search" })).toBe(false);
   expect(search.propsSchema({ form: "f", web: "//evil.example", shortcut: true })).toBe(false);
+  expect(search.propsSchema({ form: "f", web: "javascript:alert(1)", shortcut: true })).toBe(false);
 });

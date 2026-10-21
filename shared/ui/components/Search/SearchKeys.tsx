@@ -28,6 +28,8 @@ export const isSearchKeysProps = (value: unknown): value is SearchKeysProps => {
 const typing = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable ||
+    // jsdom has no isContentEditable; the attribute check also covers an editor's descendants.
+    target.closest('[contenteditable]:not([contenteditable="false"])') !== null ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
     (target instanceof HTMLInputElement && !["checkbox", "radio", "button", "submit", "reset"].includes(target.type)));
