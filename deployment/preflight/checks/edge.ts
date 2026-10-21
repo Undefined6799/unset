@@ -87,6 +87,40 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
 }
 
 /**
+ * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three: dev/app.caddy and
+ * dev/pds.caddy, each one read-only file bind at /etc/caddy/sites/enabled/<its name>, and dev/tls.caddy at
+ * /etc/caddy/snippets/tls.caddy (P1.38e). No directory is mounted at the enabled sites, and the edge binds nothing
+ * else; the reader's dev mode then requires each site from dev/ by its own name.
+ */
+export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | Outcome {
+  const edge = compose.services.find((service) => service.name === "edge");
+  if (edge === undefined) return missing("the edge service");
+  const sites: SiteMount[] = [];
+  const tls: Mount[] = [];
+  for (const mount of edge.mounts) {
+    const target = mountTarget(mount);
+    if (target === SITES_TARGET) return fail(`the dev edge mounts a directory at ${SITES_TARGET}`);
+    if (siteFileTarget(target)) {
+      const site = siteMount(mount, posix.basename(target));
+      if (!("source" in site)) return site;
+      sites.push(site);
+    } else if (DEV_MOUNTS[target] !== undefined) tls.push(mount);
+    else if (overCaddyConfig(target)) return fail(`the edge mounts over ${target}`);
+    else if (mount.type === "bind") return fail("the edge binds more than the dev sites and the dev (tls)");
+  }
+  // ADR 0032 Decision 1: the dev (tls) over the shipped one, exactly once, from deployment/edge/dev/tls.caddy.
+  const [snippet, ...again] = tls;
+  const allowed = DEV_MOUNTS[`${CADDY_ROOT}/snippets/tls.caddy`] as { file: string; what: string };
+  if (snippet === undefined) return fail(`${allowed.what} is not mounted`);
+  if (again.length > 0) return fail(`the edge mounts ${CADDY_ROOT}/snippets/tls.caddy more than once`);
+  const problem = editFileMount(snippet, allowed, EDGE_FILES.realpath(join(edgeDir, "dev")), "dev");
+  if (problem !== null) return problem;
+  const absent = sites.find((site) => !sourceExists(site.source));
+  if (absent !== undefined) return missing(absent.source);
+  return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
+}
+
+/**
  * The sites mount's source: a read-only bind of a non-empty directory inside the repository's deployment/edge/. A
  * writable mount would let the running edge change which sites it serves (P1.30w, architecture ruling B2b).
  */
@@ -115,13 +149,59 @@ export function edgeZones(
   edgeDir: string,
   env: SecretMap | undefined,
   edgeRef: string | undefined,
+  mode: "shipped" | "dev" = "shipped",
 ): Outcome {
   const image = edgeImage(compose, edgeRef);
   if (image !== null) return image;
-  const sites = edgeSitesDir(compose, edgeDir);
-  if (!("dir" in sites)) return sites;
+  const shape = mode === "dev" && mountsSitesDir(compose) ? "directory" : mode;
+  if (shape === "directory") {
+    // Transition (book P1.38e): until P1.36c switches compose.dev.yaml to the three file binds and P1.38g drops this
+    // branch, dev may still mount main's sites directory alone, read as before P1.38e.
+    const mixed = devFileTargets(compose);
+    if (mixed !== undefined) return fail(`the dev edge mounts both the sites directory and ${mixed}`);
+    const shipped = edgeSitesDir(compose, edgeDir);
+    if ("dir" in shipped && shipped.dir !== EDGE_FILES.realpath(join(edgeDir, "sites"))) {
+      return fail(`${SITES_TARGET} is not mounted from deployment/edge/sites`);
+    }
+  }
+  const sites = shape === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
+  if (!Array.isArray(sites) && !("dir" in sites)) return sites;
+  if (shape === "dev") {
+    const problem = devEdgeProblem(compose);
+    if (problem !== null) return problem;
+  }
   if (env === undefined) return missing("the edge service's environment");
-  return readZones(edgeDir, sites.dir, env);
+  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, shape === "dev" ? "dev" : "shipped");
+}
+
+/** Whether the edge mounts anything at the enabled sites directory itself: the transition's shape (a). */
+function mountsSitesDir(compose: Compose): boolean {
+  const edge = compose.services.find((service) => service.name === "edge");
+  return edge?.mounts.some((mount) => mountTarget(mount) === SITES_TARGET) ?? false;
+}
+
+/** The first of shape (b)'s targets the edge also mounts: a site file under the enabled sites, or the (tls) file. */
+function devFileTargets(compose: Compose): string | undefined {
+  const edge = compose.services.find((service) => service.name === "edge");
+  return edge?.mounts.map(mountTarget).find((target) => siteFileTarget(target) || DEV_MOUNTS[target] !== undefined);
+}
+
+/** The dev leaf's certificate and key (P1.36c; ADR 0032), the only secrets a dev edge reads, both required. */
+const DEV_EDGE_SECRETS = ["dev_tls_cert", "dev_tls_key"];
+
+/**
+ * Why the dev edge is not the shape ADR 0032 Decisions 3 and 4 allow, or null: it publishes no port, since Pangolin
+ * reaches it only through Newt (ADR 0030 Decision 2), and it reads exactly the dev leaf's two secrets.
+ */
+function devEdgeProblem(compose: Compose): Outcome | null {
+  const edge = compose.services.find((service) => service.name === "edge");
+  if (edge === undefined) return missing("the edge service");
+  if (edge.ports.length > 0) return fail("the edge publishes a port under dev");
+  if (edge.secrets.some((name) => !DEV_EDGE_SECRETS.includes(name))) {
+    return fail("the edge reads a secret other than the dev leaf's");
+  }
+  if (DEV_EDGE_SECRETS.some((name) => !edge.secrets.includes(name))) return fail("the edge does not read the dev leaf");
+  return null;
 }
 
 /**
@@ -150,7 +230,7 @@ function readZones(
   let problems: string[];
   try {
     const config = readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES, mode);
-    problems = [...edgeSiteProblems(config), ...certificateProblems(config, edgeDir, values, mode)];
+    problems = [...edgeSiteProblems(config, mode), ...certificateProblems(config, edgeDir, values, mode)];
   } catch (error) {
     if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
     throw error;
@@ -201,8 +281,8 @@ const flatten = (directives: Directive[]): Directive[] =>
  * Why some site could get a certificate other than the env's own (tls) snippet gives it (P1.33t; architecture's
  * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but the image's health site
  * imports tls, and no tls directive in it comes from anywhere else; the (tls) served reads the same as the one the
- * env's own file defines (snippets/tls.caddy, or local/tls.caddy under local); a (tls) from any other file fails. This
- * closes Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
+ * env's own file defines (snippets/tls.caddy, local/tls.caddy under local, dev/tls.caddy under dev from P1.38e); a
+ * (tls) from any other file fails. This closes Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
  * (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global allowlist.
  */
 function certificateProblems(
@@ -225,7 +305,7 @@ function certificateProblems(
     const tls = flatten(site.directives).filter((directive) => directive.name === "tls");
     if (tls.some((directive) => directive.via !== "tls")) found.push(`${name}: has its own tls directive`);
   }
-  const own = mode === "local" ? "local/tls.caddy" : "snippets/tls.caddy";
+  const own = mode === "local" ? "local/tls.caddy" : mode === "dev" ? "dev/tls.caddy" : "snippets/tls.caddy";
   if (!sameDirectives(config.snippet("tls"), ownTls(join(edgeDir, own), env))) {
     found.push(`the (tls) snippet served is not ${own}`);
   }
@@ -258,6 +338,10 @@ const shape = (directives: Directive[]): unknown =>
  * the reader judges with the enabled sites (localSiteMounts, P1.33y).
  */
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
+  [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
+};
+/** The one file a dev edge mounts from deployment/edge/dev/ beside its two sites (P1.36c, P1.38e; ADR 0032). */
+const DEV_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
 };
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
@@ -356,7 +440,7 @@ function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
     }
     if (seen.has(target)) return fail(`the edge mounts ${target} more than once`);
     seen.add(target);
-    const problem = localFileMount(mount, allowed, local);
+    const problem = editFileMount(mount, allowed, local, "local");
     if (problem !== null) return problem;
   }
   // Each is required, not only allowed: without the TLS snippet's mount Caddy serves snippets/tls.caddy, while C18
@@ -365,12 +449,20 @@ function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
   return absent === undefined ? null : fail(`${LOCAL_MOUNTS[absent]?.what} is not mounted`);
 }
 
-/** Why one LOCAL_MOUNTS entry is not a read-only bind of exactly its file in `local`, the realpathed local/. */
-function localFileMount(mount: Mount, allowed: { file: string; what: string }, local: string | null): Outcome | null {
+/**
+ * Why one LOCAL_MOUNTS or DEV_MOUNTS entry is not a read-only bind of exactly its file in `dir`, the realpathed
+ * deployment/edge/`folder`/.
+ */
+function editFileMount(
+  mount: Mount,
+  allowed: { file: string; what: string },
+  dir: string | null,
+  folder: "local" | "dev",
+): Outcome | null {
   if (mount.type !== "bind" || mount.source === null) return fail(`${allowed.what} is not a bind mount`);
   if (!mount.readOnly) return fail(`${allowed.what} is not mounted read-only`);
-  const named = `deployment/edge/local/${allowed.file}`;
-  if (local === null || EDGE_FILES.realpath(mount.source) !== join(local, allowed.file)) {
+  const named = `deployment/edge/${folder}/${allowed.file}`;
+  if (dir === null || EDGE_FILES.realpath(mount.source) !== join(dir, allowed.file)) {
     return fail(`${allowed.what} is not ${named}`);
   }
   if (EDGE_FILES.kind(mount.source).type !== "file") return fail(`${allowed.what} is not a regular file: ${named}`);
@@ -388,7 +480,9 @@ function deployedEdgeZones(inputs: Inputs): Outcome {
   );
   if (pds !== null) return pds;
   const ref = lock.edge?.ref;
-  return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined);
+  // Under dev the edge serves the dev sites with the self-signed leaf (P1.38e; ADR 0032 Decision 3); prod is unchanged.
+  const mode = inputs.env === "dev" ? "dev" : "shipped";
+  return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined, mode);
 }
 
 export const c18: Check = {
