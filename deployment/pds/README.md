@@ -9,3 +9,32 @@ The Dockerfile builds only the UI and its supporting TypeScript projects with No
 Upstream's pinned `rolldown-plugin-bundle-manifest` hashes intermediate chunks in `generateBundle`; six native manifest hashes do not match the final Vite output. After Vite succeeds, this recipe recomputes each manifest item's `sha256` from its final named file, preserves every other field and asset byte, and writes deterministic two-space JSON. The provider continues to consume its native manifest format. Source evidence: `packages/internal/rolldown-plugin-bundle-manifest/src/index.ts` and `packages/oauth/oauth-provider/src/router/assets/assets-manifest.ts` at the locked revision; see the [checker contract](../../scripts/ci/pds-ui/README.md) for the observed Vite 8.3.1 behavior.
 
 This recipe creates a candidate for strict verification. Image admission, publication and deployment remain separate gates; native amd64 CI and the vulnerability scan must pass before release.
+
+P2.24u consumes only v's selected scratch context, with repository-relative paths
+and builder-only `UNSET_INPUTS_SHA256`. `build-inputs.json` names the fixed checker
+policy; the empty canonical patch manifest is bootstrap only. A separately reviewed
+check promotion must require the complete Devices cohort before styled admission.
+No checkout, local dependencies, tests or docs are sent to the builder.
+
+The builtins-only helper runs as `node build-ui.mjs -- prepare|configure|verify
+INPUTS DIGEST SOURCE STATE [CONFIG]`. It observes every copied file before source
+preparation and after build. It records original paths/types/modes/links/hashes,
+plans every exact pinned patch before any write, and conserves all originals.
+New outputs are limited to the seven locale catalogs, nine supporting TypeScript
+output trees/buildinfo files, native dist assets, and bounded internal dependency
+trees. Original routeTree.gen.ts and hydration-data.d.ts symlink remain unchanged.
+
+Supplemental config and caches stay outside source. It retains upstream plugins,
+four entries, base and native manifest, using the existing upstream UI tsconfig for
+local compiler/resolver lookup. Exact public aliases and actual React/DOM19.3.0
+module identities share the frozen upstream installation. The staged canonical
+CSS scope helper retains repository paths; foundations load only when the exact
+app entry is consumed. Only the two fixed source font URLs change in memory to
+`/_unset/fonts/`; disk source bytes and every other token stay unchanged.
+
+Global shared base CSS can affect retained native and portaled controls because
+the provider serves every manifest stylesheet on every page. Native browser/cascade,
+font/CSP and complete styled CSS acceptance remain pending. Cached host diagnostics
+prove repeated bootstrap artifacts and a separate local-entry closure; they do not
+prove frozen installation, Linux images, backend/Config equality or deployment.
+Measured native CSS remains over the unchanged caps; no pruning or waiver applies.

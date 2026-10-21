@@ -1,0 +1,34 @@
+{
+  "roots": [
+    "apps/pds/src",
+    "shared/ui/components/Avatar",
+    "shared/ui/components/Button",
+    "shared/ui/components/Icon",
+    "shared/ui/components/Input",
+    "shared/ui/components/Mark",
+    "shared/ui/components/Navigation",
+    "shared/ui/components/Tag"
+  ],
+  "files": [
+    "apps/pds/index.ts",
+    "apps/pds/package.json",
+    "apps/pds/tsconfig.json",
+    "shared/ui/package.json",
+    "shared/ui/presentation.ts",
+    "shared/ui/safe-href.ts",
+    "shared/ui/src/class-names.ts",
+    "shared/ui/src/layers.css",
+    "shared/ui/src/tokens.css",
+    "shared/ui/src/base.css",
+    "shared/ui/icons/icons.json",
+    "shared/ui/components/Header/BrandHeader.tsx",
+    "shared/ui/components/Header/Header.module.css",
+    "shared/ui/components/Link/Link.module.css",
+    "scripts/ui/css-scope.ts",
+    "deployment/pds/Dockerfile",
+    "deployment/pds/source.lock.json",
+    "deployment/pds/build-ui.mjs",
+    "deployment/pds/build-inputs.json",
+    "deployment/pds/patches/ui/manifest.json"
+  ]
+}
