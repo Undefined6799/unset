@@ -26,13 +26,12 @@
     width: 48px;
     height: 48px;
     padding: 0;
-    --base-fill: transparent;
   }
   .panel {
     color: var(--color-ink);
     background: var(--color-ground);
     outline: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     box-shadow: var(--shadow-menu);
     inset: auto var(--space-4) calc(var(--space-12) + var(--space-3) + var(--space-4) + var(--safe));
     margin: 0;

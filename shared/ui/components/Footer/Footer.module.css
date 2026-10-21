@@ -1,8 +1,11 @@
-/* Footer (P1.24k; sheet components/Footer/README.md, v45): links in the `label` style in `ink`, titles `ink-muted`. */
+/* Footer (P1.24k; sheet components/Footer/README.md, v81): links in the `label` style in `ink`, titles `ink-muted`, on
+   `surface-sunken`, one step darker than the page (Alex 2026-10-21). */
 @layer components {
   .root {
+    --surface: var(--color-surface-sunken);
     padding: var(--space-8) var(--space-6);
     border-top: 1px solid var(--color-line);
+    background-color: var(--color-surface-sunken);
   }
 
   .top,

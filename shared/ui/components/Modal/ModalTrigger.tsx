@@ -39,6 +39,7 @@ export function ModalTrigger({ label, href, dialog }: ModalTriggerProps) {
   };
   return (
     <a className={buttonStyles.root} href={href} onClick={open}>
+      <span className={buttonStyles.fill} aria-hidden="true" />
       {label}
     </a>
   );

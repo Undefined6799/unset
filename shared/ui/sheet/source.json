@@ -1,17 +1,17 @@
 {
   "sheetUrl": "https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt",
-  "sheetVersion": "1792616975-11d7",
+  "sheetVersion": "1792621080-00d4",
   "copiedAt": "2026-10-21",
   "files": [
     {
       "path": "sheet/tokens.json",
       "from": "project/tokens.json",
-      "sha256": "6948b1e22e1b664e61b90e550cbb300ec7e370e544871a947d94d937453cc683"
+      "sha256": "0cf5a7ece362fa431d0fad26892bf1b03f2ae3d264b42fd714c8905750717607"
     },
     {
       "path": "sheet/components-index.d.ts.txt",
       "from": "project/components/index.d.ts",
-      "sha256": "cc6f8f2e4a99fcc421fc4ce0e904cf594085af67f025f634a9d3acaea253abab"
+      "sha256": "0478fd08b8b379d4c8f7fbddb4d3ad1b3ff787645f9b0ceada82d6e9b2cd0220"
     },
     {
       "path": "fonts/SpaceGrotesk-Variable.woff2",
@@ -26,7 +26,7 @@
     {
       "path": "sheet/bundle.js.txt",
       "from": "project/components/bundle.js",
-      "sha256": "6dbc72c1e7976f761e89a1c70db45c415af3f4416e25442ccd9f7c62c438dbb5"
+      "sha256": "bbd51a646aa5252053779db83c2776b2c6a5d4388bde30b31216ff6818fcbcab"
     },
     {
       "path": "sheet/components/AsciiBackground/README.md",
@@ -41,7 +41,7 @@
     {
       "path": "sheet/components/Button/README.md",
       "from": "project/components/Button/README.md",
-      "sha256": "4174670469d7468d133c3a9546c56a4e3e158c038f7977e1c8a73388aefd1620"
+      "sha256": "23f8a1a60d2e7bdd001e9acd545d64b3f1657d929e6a188093b453483f80b440"
     },
     {
       "path": "sheet/components/Callout/README.md",
@@ -56,7 +56,7 @@
     {
       "path": "sheet/components/Checkbox/README.md",
       "from": "project/components/Checkbox/README.md",
-      "sha256": "d923b1c7a895e92c21b02cb23681b6e64858c48411e393fa8e968606afa60dba"
+      "sha256": "ea6318a47b56fcbaf0138ff86704c1a5cbdb858eae678e876152c6aa3c3fe2ec"
     },
     {
       "path": "sheet/components/CodeBlock/README.md",
@@ -81,7 +81,7 @@
     {
       "path": "sheet/components/Footer/README.md",
       "from": "project/components/Footer/README.md",
-      "sha256": "488688b6f7018bf7fb2437673d216f48d7ecc27d4e05db7bbc38134b62256fe5"
+      "sha256": "1942f2a4fba3c9d5a9a5e80eb411af96f92e5566e094b87e78b05e8f0c8868f1"
     },
     {
       "path": "sheet/components/Header/README.md",
@@ -96,7 +96,7 @@
     {
       "path": "sheet/components/Input/README.md",
       "from": "project/components/Input/README.md",
-      "sha256": "be5142a5a0c24b9ae417a5378f0df82a6f30ec6f648bf8f2b7f43e93477e8c58"
+      "sha256": "a22d7cb0d15c4e7e98558d26cba2c5b4d6d0cb97ba395fb10dfd630791943f16"
     },
     {
       "path": "sheet/components/Kbd/README.md",
@@ -121,7 +121,7 @@
     {
       "path": "sheet/components/Modal/README.md",
       "from": "project/components/Modal/README.md",
-      "sha256": "6312b931d23af94708582d25cb04fa6991cfee570f7bffa602b8e872abcfc8d2"
+      "sha256": "916a5935cf357b38a30288a15aa3eebd67c339b46a9bcb6e83b3db39ec07c2d0"
     },
     {
       "path": "sheet/components/NewPosts/README.md",
@@ -151,7 +151,7 @@
     {
       "path": "sheet/components/Select/README.md",
       "from": "project/components/Select/README.md",
-      "sha256": "76d96c8f235223c70e6d92d87c2e7a6c8de549213be3e78ea8703072511d074f"
+      "sha256": "8881d3a82138f77908023b5fd004f23067a9e0680c09a0dd9737c9da62cee68a"
     },
     {
       "path": "sheet/components/SkipLink/README.md",
@@ -181,12 +181,12 @@
     {
       "path": "sheet/components/Tag/README.md",
       "from": "project/components/Tag/README.md",
-      "sha256": "43677686d1f336a26fd3b6d50ef059429e56ee2169fd108878be08fe5e55487a"
+      "sha256": "d29d5376477f1eca0f6c66f67e2c6d3a23a7d4fb40790f4de880741e61727c85"
     },
     {
       "path": "sheet/components/Textarea/README.md",
       "from": "project/components/Textarea/README.md",
-      "sha256": "375232284cbcc781b8a62baa72049735f13eab007d4baf1d8184a39269714a9f"
+      "sha256": "340b284a18c55a054488628493224d816b4bccf799200dbbf0412b97a9cedc15"
     },
     {
       "path": "sheet/components/Toast/README.md",

@@ -112,10 +112,17 @@ describe("buildTokens", () => {
     expect(block(css, ":root")).toContain("--color-focus: var(--color-ink);");
   });
 
+  // The sheet's Button README: `--surface` is the surface a control sits on; Card, Callout, CodeBlock, NewPosts and
+  // Footer set it, and the page root starts it at `ground`. It is not themed: it follows `--color-ground`.
+  test("tokens_surface_context_defaults_to_ground", () => {
+    expect(block(css, ":root")).toContain("--surface: var(--color-ground);");
+    expect(block(css, ':root[data-theme="light"]')).not.toContain("--surface");
+  });
+
   test("tokens_theme_blocks", () => {
     const dark = block(css, ":root");
     expect(dark).toContain("color-scheme: dark;");
-    expect(dark).toContain("--color-ground: #0a090c;");
+    expect(dark).toContain("--color-ground: #17161b;");
     expect(dark).toContain("--space-4: 16px;");
     const light = block(css, ':root[data-theme="light"]');
     expect(light).toContain("color-scheme: light;");

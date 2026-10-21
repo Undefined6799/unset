@@ -1,6 +1,6 @@
 # Checkbox
 
-A checkbox drawn as text: `[x]` in `success` when on, `[ ]` in `ink-muted` when off, then the label, all in `mono` 14px. A real checkbox sits underneath for keyboards and screen readers.
+A checkbox drawn as text: `[×]` (U+00D7, the multiplication sign, which sits centred between the brackets where a letter x sits low; Alex 2026-10-21) in `success` when on, `[ ]` in `ink-muted` when off, then the label, all in `mono` 14px. A real checkbox sits underneath for keyboards and screen readers.
 
 ## Provide
 

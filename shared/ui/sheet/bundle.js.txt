@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Unset","components":[{"name":"Button"},{"name":"CommandBlock"},{"name":"Input"},{"name":"Link"},{"name":"Tag"},{"name":"Callout"},{"name":"Card"},{"name":"Header"},{"name":"SectionHeading"},{"name":"Tabs"},{"name":"CodeBlock"},{"name":"Table"},{"name":"Checkbox"},{"name":"RadioGroup"},{"name":"Textarea"},{"name":"Select"},{"name":"Kbd"},{"name":"Progress"},{"name":"Spinner"},{"name":"AsciiBackground"},{"name":"Footer"},{"name":"Modal"},{"name":"Mark"},{"name":"Icon"},{"name":"Avatar"},{"name":"Switch"},{"name":"Toast"},{"name":"SkipLink"},{"name":"MediaFrame"},{"name":"Pagination"},{"name":"DescriptionList"},{"name":"NewPosts"},{"name":"FeedMore"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Unset","components":[{"name":"Button"},{"name":"CommandBlock"},{"name":"Input"},{"name":"Link"},{"name":"Tag"},{"name":"Callout"},{"name":"Card"},{"name":"Header"},{"name":"SectionHeading"},{"name":"Tabs"},{"name":"CodeBlock"},{"name":"Table"},{"name":"Checkbox"},{"name":"RadioGroup"},{"name":"Textarea"},{"name":"Select"},{"name":"Kbd"},{"name":"Progress"},{"name":"Spinner"},{"name":"AsciiBackground"},{"name":"Footer"},{"name":"Modal"},{"name":"Mark"},{"name":"Icon"},{"name":"Avatar"},{"name":"Switch"},{"name":"Toast"},{"name":"SkipLink"},{"name":"MediaFrame"},{"name":"Pagination"},{"name":"DescriptionList"},{"name":"NewPosts"},{"name":"FeedMore"},{"name":"Search"}]} */
 (function () {
   var R = window.React;
   var h = R.createElement;
@@ -26,11 +26,14 @@
       }
       delete rest.disabled;
       rest.className = cls;
-      return h("a", rest, props.children);
+      return h("a", rest, fill(), props.children);
     }
     rest.type = props.type || "button";
     rest.className = cls;
-    return h("button", rest, props.children);
+    return h("button", rest, fill(), props.children);
+  }
+  function fill() {
+    return h("span", { className: "us-button__fill", "aria-hidden": "true" });
   }
 
   var MARK_D = "M126 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM152 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM182 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0ZM430 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM456 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM486 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0ZM734 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM760 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM790 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0Z";
@@ -114,7 +117,7 @@
       ),
       lines.length ? h("pre", { className: "us-command__output" }, lines.map(function (l, i) {
         var m = /^\[(ok|err|info)\]\s?(.*)$/.exec(l);
-        if (m) return h("div", { key: i }, h("span", { className: "us-tag us-tag--" + m[1] }, "[" + m[1] + "]"), " " + m[2]);
+        if (m) return h("div", { key: i }, h(Tag, { status: m[1] }), " " + m[2]);
         if (/^#/.test(l)) return h("div", { key: i, className: "us-command__comment" }, l);
         return h("div", { key: i }, l);
       })) : null
@@ -133,7 +136,7 @@
     return h("div", { className: cx("us-input", props.className) },
       props.label ? h("label", { className: "us-input__label", htmlFor: id }, props.label) : null,
       h("input", rest),
-      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h("span", { className: "us-tag us-tag--err" }, "[err]"), " " + props.error)
+      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h(Tag, { status: "err" }), " " + props.error)
         : props.hint ? h("div", { id: id + "-msg", className: "us-input__msg" }, props.hint) : null
     );
   }
@@ -148,7 +151,9 @@
   function Tag(props) {
     var status = TAG[props.status] ? props.status : "plain";
     var text = props.children != null ? props.children : status;
-    return h("span", { className: cx("us-tag", "us-tag--" + status, props.className) }, "[", text, "]");
+    // Quiet brackets: the brackets stay ink-muted, only the word takes the status colour (Alex 2026-10-21).
+    return h("span", { className: cx("us-tag", "us-tag--" + status, props.className) },
+      h("span", { className: "us-tag__bracket" }, "[ "), h("span", { className: "us-tag__word" }, text), h("span", { className: "us-tag__bracket" }, " ]"));
   }
 
   var GLYPH = { info: "i", danger: "!", success: "+", note: "*" };
@@ -298,7 +303,7 @@
     return h("label", { className: cx("us-check", props.disabled && "is-disabled", props.className) },
       h("input", { type: "checkbox", className: "us-visually-hidden", name: props.name, value: props.value, checked: on, disabled: props.disabled,
         onChange: function (e) { if (props.checked == null) setOwn(e.target.checked); if (props.onChange) props.onChange(e); } }),
-      h("span", { className: cx("us-check__box", on && "is-on"), "aria-hidden": "true" }, on ? "[x]" : "[ ]"),
+      h("span", { className: cx("us-check__box", on && "is-on"), "aria-hidden": "true" }, on ? "[\u00d7]" : "[ ]"),
       h("span", { className: "us-check__label" }, props.label));
   }
 
@@ -323,7 +328,7 @@
     return h("div", { className: cx("us-input", props.className) },
       props.label ? h("label", { className: "us-input__label", htmlFor: id }, props.label) : null,
       control,
-      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h("span", { className: "us-tag us-tag--err" }, "[err]"), " " + props.error)
+      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h(Tag, { status: "err" }), " " + props.error)
         : props.hint ? h("div", { id: id + "-msg", className: "us-input__msg" }, props.hint) : null);
   }
   function Textarea(props) {
@@ -698,5 +703,113 @@
     return h("div", { className: cx("us-feedmore", props.className), "aria-live": "polite" }, body);
   }
 
-  window.Unset = { Button: Button, CommandBlock: CommandBlock, Input: Input, Link: Link, Tag: Tag, Callout: Callout, Card: Card, Header: Header, Mark: Mark, SectionHeading: SectionHeading, Tabs: Tabs, CodeBlock: CodeBlock, Table: Table, Checkbox: Checkbox, RadioGroup: RadioGroup, Textarea: Textarea, Select: Select, Kbd: Kbd, Progress: Progress, Spinner: Spinner, AsciiBackground: AsciiBackground, Footer: Footer, Modal: Modal, Icon: Icon, Avatar: Avatar, Switch: Switch, Toast: Toast, SkipLink: SkipLink, MediaFrame: MediaFrame, Pagination: Pagination, DescriptionList: DescriptionList, NewPosts: NewPosts, FeedMore: FeedMore };
+  // Approved by Alex 2026-10-21. A combobox (WAI-ARIA APG "Combobox with listbox popup"):
+  // the input keeps focus, arrows move aria-activedescendant through every row, Esc closes then clears.
+  // Enter searches unset (or picks the arrowed row); Ctrl+Enter, or Cmd+Enter on a Mac, searches the web (Alex 2026-10-21).
+  // Results come from the caller; the server runs the SearXNG web search, never the browser.
+  function Search(props) {
+    var id = R.useRef(props.id || "us-search-" + (++uid)).current;
+    var st = R.useState(props.defaultValue || ""), own = st[0], setOwn = st[1];
+    var q = props.value != null ? props.value : own;
+    var o = R.useState(!!props.defaultOpen), open = o[0], setOpen = o[1];
+    var a = R.useState(-1), active = a[0], setActive = a[1];
+    var root = R.useRef(null), field = R.useRef(null);
+    var mac = R.useMemo(function () { return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || ""); }, []);
+    var rows = [];
+    var groups = (props.groups || []).map(function (g, gi) {
+      var items = (g.items || []).map(function (it) { var i = rows.length; rows.push(it); return { it: it, i: i }; });
+      var more = g.more ? { it: g.more, i: rows.push(g.more) - 1 } : null;
+      return { g: g, gi: gi, items: items, more: more };
+    });
+    var web = q && props.onSearchWeb ? { i: rows.push({ web: true }) - 1 } : null;
+    var shown = open && q !== "" && rows.length > 0;
+    R.useEffect(function () {
+      if (props.shortcut === false) return undefined;
+      function slash(e) {
+        var t = e.target, tag = t && t.tagName;
+        if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
+        e.preventDefault();
+        if (field.current) field.current.focus();
+      }
+      document.addEventListener("keydown", slash);
+      return function () { document.removeEventListener("keydown", slash); };
+    }, [props.shortcut]);
+    R.useEffect(function () {
+      if (!open) return undefined;
+      function away(e) { if (root.current && !root.current.contains(e.target)) setOpen(false); }
+      document.addEventListener("mousedown", away);
+      return function () { document.removeEventListener("mousedown", away); };
+    }, [open]);
+    function set(v) {
+      if (props.value == null) setOwn(v);
+      if (props.onChange) props.onChange(v);
+      setActive(-1);
+      setOpen(v !== "");
+    }
+    function pick(i) {
+      var r = rows[i];
+      setOpen(false);
+      if (r.web) { if (props.onSearchWeb) props.onSearchWeb(q); }
+      else if (r.search) { if (props.onSearch) props.onSearch(q); }
+      else if (props.onPick) props.onPick(r);
+    }
+    function key(e) {
+      var k = e.key;
+      if (k === "Escape") {
+        e.preventDefault();
+        if (shown) setOpen(false); else set("");
+      } else if (k === "ArrowDown" && rows.length) {
+        e.preventDefault();
+        if (!shown) { setOpen(q !== ""); return; }
+        setActive(Math.min(rows.length - 1, active + 1));
+      } else if (k === "ArrowUp" && shown) {
+        e.preventDefault();
+        setActive(Math.max(-1, active - 1));
+      } else if (k === "Enter") {
+        e.preventDefault();
+        if (!q) return;
+        setOpen(false);
+        if (e.ctrlKey || e.metaKey) { if (props.onSearchWeb) props.onSearchWeb(q); }
+        else if (shown && active >= 0) pick(active);
+        else if (props.onSearch) props.onSearch(q);
+      }
+    }
+    var listId = id + "-list";
+    function optId(i) { return listId + "-" + i; }
+    function option(r, i, cls, kids) {
+      return h("li", { key: i, id: optId(i), role: "option", "aria-selected": i === active ? "true" : "false",
+        className: cx("us-search__option", cls, i === active && "is-active"),
+        onMouseEnter: function () { setActive(i); }, onMouseDown: function (e) { e.preventDefault(); }, onClick: function () { pick(i); } }, kids);
+    }
+    return h("div", { ref: root, className: cx("us-search", props.className) },
+      h("label", { className: "us-search__bar", htmlFor: id },
+        h(Icon, { name: "search", size: 16 }),
+        h("input", { ref: field, id: id, className: "us-search__field", type: "search", value: q, autoComplete: "off", spellCheck: false,
+          placeholder: props.placeholder || "search people, posts and the web", "aria-label": props.label || "search",
+          role: "combobox", "aria-autocomplete": "list", "aria-expanded": shown ? "true" : "false", "aria-controls": listId,
+          "aria-activedescendant": shown ? optId(active) : undefined,
+          onChange: function (e) { set(e.target.value); }, onFocus: function () { if (q) setOpen(true); }, onKeyDown: key }),
+        q ? h("button", { type: "button", className: "us-search__clear", "aria-label": "clear search",
+          onClick: function () { set(""); if (field.current) field.current.focus(); } }, h(Icon, { name: "close", size: 16 }))
+          : props.shortcut === false ? null : h(Kbd, { className: "us-search__key" }, "/")),
+      h("ul", { id: listId, role: "listbox", "aria-label": "results", className: "us-search__list", hidden: !shown },
+        groups.map(function (G) {
+          return h("li", { key: "g" + G.gi, role: "presentation", className: "us-search__group" },
+            h("div", { className: "us-search__head", "aria-hidden": "true" }, G.g.label),
+            h("ul", { role: "group", "aria-label": G.g.label, className: "us-search__rows" },
+              G.items.map(function (x) {
+                return option(x.it, x.i, null, [h("span", { key: "l", className: "us-search__label" }, x.it.label),
+                  x.it.meta ? h("span", { key: "m", className: "us-search__meta" }, x.it.meta) : null]);
+              }),
+              G.more ? option(G.more.it, G.more.i, "us-search__more", [h(Icon, { key: "i", name: "next", size: 16 }),
+                h("span", { key: "l", className: "us-search__label" }, G.more.it.label),
+                G.more.it.search ? h("span", { key: "k", className: "us-search__hint" }, h(Kbd, null, "\u21b5")) : null]) : null));
+        }),
+        web ? option(rows[web.i], web.i, "us-search__more us-search__all", [h(Icon, { key: "i", name: "external", size: 16 }),
+          h("span", { key: "l", className: "us-search__label" }, (props.webLabel || "search the web for") + " \u201c" + q + "\u201d"),
+          h("span", { key: "k", className: "us-search__hint" }, h(Kbd, null, mac ? "\u2318" : "ctrl"), h(Kbd, null, "\u21b5"))]) : null));
+  }
+
+  window.Unset = { Search: Search, Button: Button, CommandBlock: CommandBlock, Input: Input, Link: Link, Tag: Tag, Callout: Callout, Card: Card, Header: Header, Mark: Mark, SectionHeading: SectionHeading, Tabs: Tabs, CodeBlock: CodeBlock, Table: Table, Checkbox: Checkbox, RadioGroup: RadioGroup, Textarea: Textarea, Select: Select, Kbd: Kbd, Progress: Progress, Spinner: Spinner, AsciiBackground: AsciiBackground, Footer: Footer, Modal: Modal, Icon: Icon, Avatar: Avatar, Switch: Switch, Toast: Toast, SkipLink: SkipLink, MediaFrame: MediaFrame, Pagination: Pagination, DescriptionList: DescriptionList, NewPosts: NewPosts, FeedMore: FeedMore };
 })();

@@ -1,12 +1,12 @@
 # Input
 
-A single-line text field with a 1px `line-strong` border and the button's 2px corner (`radius-xs`), text in `mono` 14px.
+A single-line text field with a 1px `line-strong` border and the button's 4px corner (`radius-sm`), text in `mono` 14px.
 
 ## Provide
 
 - `label`: shown above the field in `label` style, `ink-muted`, uppercased.
 - `hint` (optional): helper text under the field in `ink-muted`.
-- `error` (optional): turns the border `danger` and prints `[err] <error>` under the field. Write the error lowercase, without a full stop.
+- `error` (optional): turns the border `danger` and prints `[ ERR ] <error>` under the field. Write the error lowercase, without a full stop.
 - Any native input props (`type`, `name`, `placeholder`, `value`, `onChange`, `disabled`…).
 
 ## Use

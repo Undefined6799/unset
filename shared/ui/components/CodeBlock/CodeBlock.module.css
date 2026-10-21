@@ -1,6 +1,7 @@
 /* CodeBlock (P1.24a; sheet components/CodeBlock/README.md, v45): level 1, bar and code padded space-3 × space-4. */
 @layer components {
   .root {
+    --surface: var(--color-surface-raised);
     background-color: var(--color-surface-raised);
     box-shadow: var(--shadow-1);
     border-radius: var(--radius-xs);

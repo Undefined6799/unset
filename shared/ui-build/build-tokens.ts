@@ -263,6 +263,10 @@ function rule(selector: string, lines: string[], depth: number): string {
   return [`${pad}${selector} {`, ...lines.map((l) => declaration(`${pad}  `, l)), `${pad}}`].join("\n");
 }
 
+/** The surface a control sits on (sheet components/Button/README.md): surfaces such as Card set `--surface`, and the
+    page root starts it at `ground`. Not themed, since it follows `--color-ground`. */
+const SURFACE_CONTEXT: Decl = { name: "--surface", values: ["var(--color-ground)"], perTheme: false };
+
 /** Step 8: the tokens.css text and the set of custom property names it declares. */
 export function buildTokens(
   tokens: Record<string, unknown>,
@@ -271,7 +275,12 @@ export function buildTokens(
   checkFamilies(tokens);
   const themes = themesOf(tokens);
   const type = typeOf(tokens);
-  const decls = [...colorDecls(tokens, themes), ...typeDecls(type, metrics, themes), ...otherDecls(tokens, themes)];
+  const decls = [
+    ...colorDecls(tokens, themes),
+    SURFACE_CONTEXT,
+    ...typeDecls(type, metrics, themes),
+    ...otherDecls(tokens, themes),
+  ];
   const light = themes.indexOf("light");
   const dark = ["color-scheme: dark;", ...decls.map((d) => `${d.name}: ${d.values[0]};`)];
   const lights = [

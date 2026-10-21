@@ -7,6 +7,8 @@
     { "fg": "ink-muted", "bg": "ground", "min": 4.5 },
     { "fg": "ink-muted", "bg": "surface-raised", "min": 4.5 },
     { "fg": "ink-muted", "bg": "surface-card", "min": 4.5 },
+    { "fg": "ink", "bg": "surface-sunken", "min": 4.5 },
+    { "fg": "ink-muted", "bg": "surface-sunken", "min": 4.5 },
     { "fg": "plum", "bg": "ground", "min": 4.5 },
     { "fg": "plum", "bg": "surface-raised", "min": 4.5 },
     { "fg": "plum", "bg": "surface-card", "min": 4.5 },

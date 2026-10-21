@@ -2,6 +2,7 @@
    glyph and 1.5px dashes become the 12px label size and a 1px line, since this CSS takes only tokens and 1-3px lines. */
 @layer components {
   .root {
+    --surface: var(--color-surface-raised);
     display: flex;
     align-items: flex-start;
     gap: var(--space-3);

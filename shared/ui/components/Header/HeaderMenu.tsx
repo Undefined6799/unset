@@ -52,6 +52,7 @@ export function NavLinks({ nav, action }: { nav: readonly NavItem[]; action: Nav
       ))}
       {action === undefined ? null : (
         <a className={buttonStyles.root} href={action.href}>
+          <span className={buttonStyles.fill} aria-hidden="true" />
           {action.label}
         </a>
       )}

@@ -1,10 +1,25 @@
-/* Button (P1.24; sheet components/Button/README.md, v45). base.css styles a bare <button> the same way; this class
-   carries the look to <a> too and adds the hover lift. The fill and the hard shadow are painted on ::before and
-   ::after, so the corner cut never clips the focus outline. */
+/* Button (P1.24; sheet components/Button/README.md, outline style approved by Alex 2026-10-21): a 1px `line-strong`
+   edge around the surface it sits on, an `ink` label, `radius-sm` corners and the bottom-right corner cut off at
+   `cut`. The edge is ::before, the fill is the `.fill` span 1px inside it, and the hard shadow is ::after, so the cut
+   never clips the focus outline. The fill paints `--surface` (set by the surface the button sits on; tokens.css starts it at `ground`),
+   so the hover shadow never shows through. */
 @layer components {
   .root {
     --button-cut: var(--radius-cut);
-    --button-fill: var(--color-ink);
+    --button-radius: var(--radius-sm);
+    --button-edge: var(--color-line-strong);
+    --button-fill: var(--surface);
+    /* The edge's width, and the fill's cut moved in by 1px measured across the diagonal: 1 - 1/sqrt(2) = 0.41px along
+       each side, so the diagonal edge is as thick as the straight ones. */
+    --button-hairline: 1px;
+    --button-cut-inner: calc(var(--button-cut) - 0.41px);
+    --button-clip: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--button-cut)),
+      calc(100% - var(--button-cut)) 100%,
+      0 100%
+    );
     box-sizing: border-box;
     position: relative;
     isolation: isolate;
@@ -12,13 +27,13 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-height: 40px;
+    min-height: 32px;
     margin: 0;
-    padding: var(--space-3) var(--space-6);
+    padding: var(--space-2) var(--space-4);
     border: 0;
-    border-radius: var(--radius-xs);
+    border-radius: var(--button-radius);
     background-color: transparent;
-    color: var(--color-on-ink);
+    color: var(--color-ink);
     font-family: var(--font-mono);
     font-size: var(--type-label-size);
     line-height: var(--type-label-line);
@@ -37,26 +52,44 @@
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: var(--radius-xs);
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--button-cut)), calc(100% - var(--button-cut)) 100%, 0 100%);
+    border-radius: var(--button-radius);
+    clip-path: var(--button-clip);
   }
 
+  /* The edge: the whole shape in the edge colour. */
   .root::before {
     z-index: calc(var(--z-base) - 1);
-    background-color: var(--button-fill);
+    background-color: var(--button-edge);
   }
 
-  /* The hard shadow: a copy of the shape 6px down-right of the lifted button, shown only on hover. */
+  /* The fill, one hairline inside the edge. */
+  .fill {
+    position: absolute;
+    inset: var(--button-hairline);
+    z-index: calc(var(--z-base) - 1);
+    border-radius: calc(var(--button-radius) - var(--button-hairline));
+    background-color: var(--button-fill);
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--button-cut-inner)),
+      calc(100% - var(--button-cut-inner)) 100%,
+      0 100%
+    );
+    pointer-events: none;
+  }
+
+  /* The hard shadow: a copy of the shape 4px down-right of the lifted button, shown only on hover. */
   .root::after {
     z-index: calc(var(--z-base) - 2);
     background-color: var(--color-shadow-hard);
     opacity: 0;
-    translate: 6px 6px;
+    translate: 4px 4px;
     transition: opacity 120ms ease-out;
   }
 
   .root:hover:not(:disabled) {
-    translate: -3px -3px;
+    translate: -2px -2px;
   }
 
   .root:hover:not(:disabled)::after {
@@ -72,7 +105,7 @@
   }
 
   .root:disabled {
-    --button-fill: var(--color-line);
+    --button-edge: var(--color-line);
     color: var(--color-ink-muted);
     cursor: not-allowed;
   }
