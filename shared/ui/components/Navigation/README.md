@@ -15,19 +15,21 @@ label visible while moving onto it; Escape dismisses it until blur or leaving th
 retains the existing native `title` tooltip and meaningful focus name; React event/effect handlers do not run there.
 The optional `inline` mode keeps both bars in document flow for the kit showcase, so they cannot cover other samples.
 
-Phone (up to 767px): Menu, primary destination, account avatar in a centered 200px by 60px floating dock:
-three 48px columns, 16px gaps, 12px side padding and 6px vertical padding. The dock sits at least 20px above
-the bottom (`max(20px, env(safe-area-inset-bottom))`), with radius-xs, line outline and shadow-menu.
+Phone (up to 767px): Menu, primary destination, account avatar in equal thirds of a 48px-tall floating dock.
+Its left, right and bottom gaps match (`max(20px, env(safe-area-inset-bottom))`); it has no padding,
+with radius-xs, line outline and shadow-menu.
 The page provides its own 56px header and bottom content clearance. The popup
 sits 16px above the bar, inset 16px from each viewport edge, with 8px padding, a 44px title header, 4px gap and
-48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Phone current artwork lifts 6px (`space-3 / 2`) inside its stationary 48px target and focus outline; there is no current/open-menu underline. Menu is current only when an item is current; primary/account retain `aria-current`. Opening the popup does not select a destination or lift another icon. The static displacement also applies with reduced motion and forced colors.
+48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Phone current artwork lifts 16px (`space-4`) while its 48px target and focus outline stay stationary: a 24px glyph extends 4px above the dock, a 40px avatar 12px. There is no current/open-menu underline. Menu is current only when an item is current; primary/account retain `aria-current`. Opening the popup does not select a destination or lift another icon. The static displacement also applies with reduced motion and forced colors.
 
 `NavigationProps` accepts branded SafeHref destinations and already-checked identity data. It does not read
 cookies, resolve identity or fetch images. Omitted account name uses an anonymous Icon inside Avatar, never
 fabricated initials. An account image must be a media-proxy URL, as required by Avatar.
 
 Alex approved the phone revision above in the working browser preview on 2026-10-21, including removal of the
-redundant popup Close control, and a compact floating rectangle around the phone controls. The popup keeps its title and ordinary links. `closeLabel` is optional/deprecated
+redundant popup Close control and a floating rectangle around the phone controls. His subsequent feedback widens
+and thins the dock with matching side/bottom gaps and raises selected artwork above its top edge.
+The popup keeps its title and ordinary links. `closeLabel` is optional/deprecated
 for existing callers; it no longer renders a control. Desktop labels/current treatment and popup rows are unchanged.
 
 The phone popup uses native `popover="auto"` and its `popovertarget` toggle. The browser owns toggle, Escape,

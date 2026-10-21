@@ -68,7 +68,7 @@
     box-sizing: border-box;
     border-radius: var(--radius-xs);
     box-shadow: var(--shadow-menu);
-    inset: auto var(--space-4) calc(var(--space-12) + var(--space-3) + var(--space-4) + var(--safe));
+    inset: auto var(--space-4) calc(var(--space-12) + var(--space-4) + var(--safe));
     margin: 0;
     width: auto;
     border: 1px solid var(--color-line-strong);
@@ -118,16 +118,15 @@
       display: none;
     }
     .phone .control:is([aria-current], [data-current]) > :first-child {
-      transform: translateY(calc(var(--space-3) / -2));
+      transform: translateY(calc(var(--space-4) * -1));
     }
     .phone {
-      inset: auto 0 var(--safe);
+      inset: auto var(--safe) var(--safe);
       display: grid;
-      grid-template-columns: repeat(3, 48px);
-      gap: var(--space-4);
-      width: max-content;
-      margin-inline: auto;
-      padding: calc(var(--space-3) / 2) var(--space-3);
+      grid-template-columns: repeat(3, 1fr);
+      justify-items: center;
+      width: auto;
+      padding: 0;
       border-radius: var(--radius-xs);
       box-shadow: var(--shadow-menu);
     }
