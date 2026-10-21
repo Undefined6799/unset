@@ -56,6 +56,8 @@ describe("workflows", () => {
     // A `"` inside a value is CSV quoting to buildx, so a quoted field can carry a comma and hide the image from it.
     expect(problems(builder(`--driver-opt '"env.X=a,image=${pinned}"'`))).toHaveLength(1);
     expect(problems(builder(`--driver-opt "\\"env.X=a,image=${pinned}\\""`))).toHaveLength(1);
+    // An escaped quote with no single quote on the line: the image ends at a `"`, so only the `\\"` rule refuses it.
+    expect(problems(builder(`--driver-opt "\\"env.X=a,image=${pinned}"\\"`))).toHaveLength(1);
     expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
       1,

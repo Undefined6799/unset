@@ -160,6 +160,7 @@ describe(".github/trivyignore.pds.yaml", () => {
       { ...newt, paths: [""] },
       { ...newt, purls: ["pkg:golang/stdlib"] },
       { ...newt, purls: ["pkg:golang/stdlib@"] },
+      { ...newt, purls: ["pkg:golang/stdlib?x=@v1"] },
     ]) {
       expect(pdsOverlaps([entry], [goat]), JSON.stringify(entry)).toEqual(["CVE-1"]);
     }
@@ -185,7 +186,7 @@ function pdsOverlaps(shared: readonly IgnoreEntry[], pds: readonly IgnoreEntry[]
         paths.length === 0 ||
         purls.length === 0 ||
         paths.some((path) => path === "" || /[*?[\]{}\\]/.test(path)) ||
-        purls.some((purl) => !/@[^@?#]+(?:[?#].*)?$/.test(purl)) ||
+        purls.some((purl) => !/^[^?#]*@[^@?#]+(?:[?#].*)?$/.test(purl)) ||
         [...paths, ...purls].some((scope) => twinScope.has(scope))
       );
     })
