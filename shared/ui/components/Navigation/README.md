@@ -20,7 +20,7 @@ Its left, right and bottom gaps match (`max(20px, env(safe-area-inset-bottom))`)
 with radius-xs, line outline and shadow-menu.
 The page provides its own 56px header and bottom content clearance. The popup
 sits 16px above the bar, inset 16px from each viewport edge, with 8px padding, a 44px title header, 4px gap and
-48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Phone current artwork lifts 8px (`space-2`) while its 48px target and focus outline stay stationary: a 28px glyph sits 2px inside the dock's top edge, a 40px avatar extends 4px above it. Phone Menu/primary icons are 28px; anonymous profile artwork is 24px inside the existing 40px avatar. Desktop icon sizes remain unchanged. A zero-blur `shadow-hard` copy of selected artwork stays at its resting position, 8px below the raised artwork. There is no current/open-menu underline. Menu is current only when an item is current; primary/account retain `aria-current`. Opening the popup does not select a destination or lift another icon. The static displacement also applies with reduced motion and forced colors.
+48px link rows. Rail and bar use surface-raised. Popup: ground, 1px line-strong, radius-xs, shadow-menu. Phone current artwork lifts 8px (`space-2`) while its 48px target and focus outline stay stationary: a 28px glyph sits 2px inside the dock's top edge, a 40px avatar extends 4px above it. Phone Menu/primary icons are 28px; anonymous profile artwork is 24px inside the existing 40px avatar. Desktop icon sizes remain unchanged. A `shadow-hard` copy of selected artwork with a subtle 1px blur stays at its resting position, 8px below the raised artwork. There is no current/open-menu underline. Menu is current only when an item is current; primary/account retain `aria-current`. Opening the popup does not select a destination or lift another icon. The static displacement also applies with reduced motion and forced colors.
 
 `NavigationProps` accepts branded SafeHref destinations and already-checked identity data. It does not read
 cookies, resolve identity or fetch images. Omitted account name uses an anonymous Icon inside Avatar, never
@@ -37,7 +37,8 @@ colour as the design sheet's hard button shadow. The sheet's displayed `project/
 https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt on that date and synced exactly, with its token hash recorded
 in `sheet/source.json`. Dark `shadow-hard` is Onyx, darker than the updated page; Light aliases `line-strong`.
 The source's new radius token is registered without changing existing component corners.
-His latest feedback sets the selected artwork's lift and matching shadow offset to 8px.
+His latest feedback sets the selected artwork's lift and matching shadow offset to 8px and adds a 1px shadow blur,
+explicitly overriding the sheet's hard-shadow default for selected phone artwork only.
 
 The phone popup uses native `popover="auto"` and its `popovertarget` toggle. The browser owns toggle, Escape,
 outside dismissal, focus restoration and the top layer; no island or script is needed. Items are ordinary links,

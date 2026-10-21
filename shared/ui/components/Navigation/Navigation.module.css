@@ -69,7 +69,6 @@
     padding: var(--space-2);
     max-height: calc(100dvh - 168px);
     & > div {
-      justify-content: space-between;
       margin-bottom: var(--space-1);
       padding-left: var(--space-3);
       height: 44px;
@@ -113,7 +112,7 @@
     }
     .phone .control:is([aria-current], [data-current]) > :first-child {
       transform: translateY(calc(var(--space-2) * -1));
-      filter: drop-shadow(0 var(--space-2) var(--color-shadow-hard));
+      filter: drop-shadow(0 var(--space-2) 1px var(--color-shadow-hard));
     }
     .phone .control svg {
       width: 24px;
