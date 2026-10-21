@@ -31,6 +31,7 @@ import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
+import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
@@ -1418,10 +1419,10 @@ describe("preflight", () => {
     const names = (list: string[]) => `${list.map((k) => `${k}=x`).join("\n")}\n`;
     const only = (newtEnvFile: string) => expectOnly("C31", { ...dev, newtEnvFile }, "dev");
     expect(await only(names([...NEWT_ENV_NAMES, "LOG_LEVEL"]))).toBe(
-      "FAIL C31 a name is in the newt env file, which holds only its three names",
+      "FAIL C31 LOG_LEVEL is in the newt env file, which holds only its three names",
     );
     expect(await only(names([...NEWT_ENV_NAMES, "NEWT_ADMIN_ADDR"]))).toBe(
-      "FAIL C31 NEWT_ADMIN_ADDR is in the newt env file, which holds only its three names",
+      "FAIL C31 a name is in the newt env file, which holds only its three names",
     );
     expect(await only(names([...NEWT_ENV_NAMES, `${CANARY.replaceAll("-", "_")}`]))).toBe(
       "FAIL C31 a name is in the newt env file, which holds only its three names",
@@ -1482,7 +1483,20 @@ describe("preflight", () => {
       );
     }
     expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      NEWT_ADMIN_ADDR: 0.0.0.0:2022\n"))).toBe(
-      "FAIL C31 NEWT_ADMIN_ADDR is not a newt setting the preflight allows",
+      "FAIL C31 a name is not a newt setting the preflight allows",
+    );
+    // In Compose's list form a repeated name's last value wins, so a second spelling of a setting is refused.
+    const listed = DEV.replace(
+      /    environment:\n      CONFIG_FILE[\s\S]*?      LOG_LEVEL: WARN\n/,
+      "    environment:\n" +
+        ["CONFIG_FILE=/tmp/newt.json", "DISABLE_SSH=true", "DISABLE_CLIENTS=true"]
+          .concat(["NEWT_METRICS_PROMETHEUS_ENABLED=false", "NEWT_PPROF_ENABLED=false", "LOG_LEVEL=WARN"])
+          .map((entry) => `      - ${entry}\n`)
+          .join(""),
+    );
+    expect((await check({ ...dev, compose: listed }, "dev")).lines).toContain("PASS C31 ok");
+    expect(await only(listed.replace("      - LOG_LEVEL=WARN\n", "$&      - DISABLE_SSH=false\n"))).toBe(
+      "FAIL C31 DISABLE_SSH is set twice in the newt service",
     );
     // A name every object inherits is not an allowed setting either.
     expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      constructor: x\n"))).toBe(
@@ -1509,14 +1523,30 @@ describe("preflight", () => {
     );
     expect(
       await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://other.unset.sh")),
-    ).toBe("FAIL C18 web's PUBLIC_ORIGIN does not name the dev app host");
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
     // The exact names, no port: the dev sites listen on PDS_HOST and Pangolin reaches them on 443.
     expect(await c18(DEV.replaceAll("staging.unset.ac", "staging.unset.ac:2583"))).toBe(
       "FAIL C18 PDS_HOST is not a hostname",
     );
     expect(
       await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://staging.unset.sh:8443")),
-    ).toBe("FAIL C18 web's PUBLIC_ORIGIN does not name the dev app host");
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
+    // The origin exactly, as web's config parser takes it: no path, userinfo or other spelling.
+    for (const origin of [
+      "https://staging.unset.sh/path",
+      "https://user@staging.unset.sh",
+      "https://STAGING.unset.sh",
+      "https://:pw@staging.unset.sh",
+      "https://staging.unset.sh?x=1",
+      "https://staging.unset.sh#x",
+      "https://staging.unset.sh:443",
+      "https://ſtaging.unset.sh",
+    ]) {
+      expect(
+        await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", `PUBLIC_ORIGIN: ${origin}`)),
+        origin,
+      ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
+    }
     expect(await c18(DEV.replace("      PUBLIC_ORIGIN: https://staging.unset.sh\n", ""))).toBe(
       "FAIL C18 web's PUBLIC_ORIGIN is missing",
     );
@@ -1541,14 +1571,24 @@ describe("preflight", () => {
       `https://user:${CANARY}@pangolin.example.test`,
       `https://${CANARY}@pangolin.example.test`,
       CANARY,
+      // Newt appends its API path to the endpoint, so only a bare base address works.
+      `https://${CANARY}.example.test/?x`,
+      `https://${CANARY}.example.test/base`,
+      // An empty fragment delimiter normalises away (url.hash is ""), but Newt's API path would land after it. The
+      // strict env form allows `#` only inside single quotes.
+      `'https://${CANARY}.example.test#'`,
+      `'https://${CANARY}.example.test/#x'`,
     ]) {
       const outcome = await only(env(endpoint));
-      expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not an https address without credentials");
+      expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not a bare https address without credentials");
     }
     // Newt applies a setting only when it is non-empty (newtconfig.go:191-196), so an empty one is never set.
     expect(await only(env(""))).toBe("FAIL C31 PANGOLIN_ENDPOINT is empty");
     expect(await only(env(good, ""))).toBe("FAIL C31 NEWT_ID is empty");
     expect(await only(env(good, CANARY, ""))).toBe("FAIL C31 NEWT_SECRET is empty");
+    // Blank is no better (the env file admits it only quoted): Newt would set it, and it names no usable site.
+    expect(await only(env(good, "'   '"))).toBe("FAIL C31 NEWT_ID is empty");
+    expect(await only(env(good, CANARY, "'\t'"))).toBe("FAIL C31 NEWT_SECRET is empty");
     expect(await check({ ...dev, newtEnvFile: env(`${good}/`) }, "dev").then((r) => r.lines)).toContain("PASS C31 ok");
   });
 
@@ -2290,7 +2330,8 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     // 0x40 account carries over): no report, a half report and any hostname all pass with the one fixed line, which
     // names the waiver and no value. Prod and local keep the 0x40.space rule below.
     const waived = `PASS C21 ${C21_DEV_WAIVER}`;
-    expect(C21_DEV_WAIVER).toMatch(/^skipped: C21 waived under --env dev/);
+    expect(C21_DEV_WAIVER).toMatch(/^skipped: waived for staging/);
+    expect(C21_DEV_WAIVER).not.toMatch(/[0-9]|dev/);
     expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines).toContain(waived);
     const half = '{"retirement_part_a_complete": false}';
     expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev")).lines).toContain(waived);
@@ -2301,6 +2342,25 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       expect(lines, name).toContain(waived);
     }
     expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
+  });
+
+  test("c21_waiver_line_is_never_withheld", async () => {
+    // The runner withholds a whole reason holding any configured value (P1.30m), and the real dev compose configures
+    // `dev` (UNSET_ENV), `5` (PG_POOL_MAX) and more (Codex review on #1174): the fixed line holds none of the real
+    // file's literals, and a dev fixture carrying those two literals still prints it.
+    const file = join(import.meta.dirname, "../compose.dev.yaml");
+    const real = parseCompose(readFileSync(file, "utf8"), file);
+    const literals = real.services.flatMap((s) =>
+      s.environment.flatMap(([, v]) => ("literal" in v ? [v.literal] : [])),
+    );
+    expect(literals).toContain("dev");
+    for (const literal of literals.filter((v) => v !== "")) expect(C21_DEV_WAIVER, literal).not.toContain(literal);
+    const compose = DEV.replace(
+      "      FINGERPRINT_CHECK: arachnid\n",
+      '      FINGERPRINT_CHECK: arachnid\n      UNSET_ENV: dev\n      PG_POOL_MAX: "5"\n',
+    );
+    const { lines } = await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev");
+    expect(lines.filter((line) => line.includes(" C21 "))).toEqual([`PASS C21 ${C21_DEV_WAIVER}`]);
   });
 
   test("c21_prod_and_local_still_need_the_report_on_the_old_host", () => {
@@ -2679,6 +2739,22 @@ describe("preflight C17 (P1.30t)", () => {
     expect(await expectOnly("C17", { ...dev, compose: hosts(DEV), networks: table }, "dev")).toBe(
       "FAIL C17 a service names an internal host for net-guard",
     );
+  });
+
+  test("c17_outside_dev_refuses_a_bare_edge", async () => {
+    // The P1.36i follow-up through the check itself, so C17 dropping edgeAliasProblems fails here (the coordinator's
+    // review of 8cfc5ab): under prod an edge on the edge network with no alias fails C17 alone; with them it passes.
+    const onEdge = (aliases: string) =>
+      COMPOSE.replace(
+        "      ACME_EMAIL: edge@example.test\n",
+        `$&    networks:\n      default:\n      edge:${aliases}\n`,
+      ).replace("  back: {}\n", "$&  edge: {}\n");
+    const networks = { ...TABLE, edge: { internal: false, members: ["edge"] } };
+    expect(await expectOnly("C17", { compose: onEdge(""), networks })).toBe(
+      "FAIL C17 the edge carries no alias on its networks",
+    );
+    const aliased = onEdge('\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]');
+    expect(failed((await check({ compose: aliased, networks })).lines)).not.toContain("C17");
   });
 
   test("c17_table_duplicate_key_refused", async () => {
@@ -3158,6 +3234,11 @@ describe("preflight C32 (P1.38d)", () => {
       const keys = '      sk_live_9f: "[to fill: x]"\n      JBSWY3DPEHPK3PXP: "[to fill: x]"\n';
       expect(await expectOnly("C32", withWeb(env, keys + PLACEHOLDERS), env), env).toBe(
         "FAIL C32 service=web still a placeholder to fill: a name, a name, SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      );
+      // The third legal setting is printed by name too.
+      const contact = '      PRIVACY_OFFICER_CONTACT: "[to fill: x]"';
+      expect(await expectOnly("C32", withWeb(env, contact), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: PRIVACY_OFFICER_CONTACT",
       );
     }
   });

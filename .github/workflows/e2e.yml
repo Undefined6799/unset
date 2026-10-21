@@ -1,7 +1,14 @@
 # Accessibility and browser harness (P1.26). Drafts run nothing; marking the PR ready runs it.
 # pa11y-ci 5.0.0 and @lhci/cli 0.15.1 are installed here, not in the lockfile: their trees fail
 # npm audit --audit-level=high. Lighthouse upload is filesystem only (lighthouserc.json).
-# Browser download is this job; a blocked download fails it.
+# Browser download is each job's own; a blocked download fails it.
+#
+# P0.07b: the suite runs as parallel jobs, one per Playwright project and one for pa11y and Lighthouse, so the
+# critical path is the slowest part rather than their sum. Each job starts its own servers on its own runner, so each
+# keeps its own rate-limit bucket and the one worker tests/e2e/playwright.config.ts asks for. `--project` and
+# `install [browser...]` are from the CLI help of the pinned Playwright 1.64.0 (npx playwright test --help, npx
+# playwright install --help). The e2e job is the gate: it fails unless every part succeeded, then runs assert-tests-ran
+# over the three reports, so a spec no browser ran, or a missing, duplicated or empty browser report, still fails.
 
 name: e2e
 
@@ -18,10 +25,60 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  e2e:
+  browser:
+    name: browser ${{ matrix.project }}
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    # fail-fast off, so one browser does not hide another (workflow-syntax, jobs.<job_id>.strategy.fail-fast).
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    env:
+      PROJECT: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps "$PROJECT"
+      - name: Build the web app
+        run: npm run build -w @unset/apps-web
+      - name: Run Playwright
+        run: |
+          node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
+          prod_pid=$!
+          node tests/e2e/fixtures/servers.ts test > e2e-test.log 2>&1 &
+          test_pid=$!
+          cleanup() {
+            kill "$prod_pid" "$test_pid" || true
+          }
+          trap cleanup EXIT
+          node tests/e2e/fixtures/servers.ts wait
+          npx playwright test --config tests/e2e/playwright.config.ts --project "$PROJECT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: e2e-${{ matrix.project }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            tests/e2e/report.json
+            playwright-report/
+            e2e-prod.log
+            e2e-test.log
+
+  a11y:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -33,14 +90,14 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright install --with-deps chromium
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Install pa11y and Lighthouse outside the lockfile
         run: npm install --ignore-scripts --prefix /tmp/a11y-tools pa11y-ci@5.0.0 @lhci/cli@0.15.1
       - name: Point pa11y and Lighthouse at Playwright's Chromium
         run: node tests/e2e/fixtures/chrome-path.ts
-      - name: Run Playwright, pa11y and Lighthouse
+      - name: Run pa11y and Lighthouse
         run: |
           export PATH="/tmp/a11y-tools/node_modules/.bin:$PATH"
           node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
@@ -52,20 +109,58 @@ jobs:
           }
           trap cleanup EXIT
           node tests/e2e/fixtures/servers.ts wait
-          npx playwright test --config tests/e2e/playwright.config.ts
-          node scripts/test/assert-tests-ran.ts tests/e2e/report.json
           pa11y-ci --config .pa11yci.json > pa11y-results.json
           lhci autorun --config ./lighthouserc.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: e2e-reports
+          name: e2e-a11y
           retention-days: 14
           if-no-files-found: warn
           path: |
-            tests/e2e/report.json
-            playwright-report/
             .lighthouseci/
             pa11y-results.json
             e2e-prod.log
             e2e-test.log
+
+  # The gate under the required name `e2e`. always() runs it whatever the parts did (expressions, "Status check
+  # functions"), so a failed, cancelled or skipped part turns it red: without always() it would be skipped, and a
+  # skipped required check reads as passing. needs.<job_id>.result is success, failure, cancelled or skipped
+  # (contexts reference); anything but success fails, as in images.yml's scan gate. download-artifact v8.0.2 puts
+  # each matched artifact in a folder named after it under path when merge-multiple is false, its default
+  # (action.yml and README.md at that tag). assert-tests-ran then wants exactly one report per project.
+  e2e:
+    needs: [browser, a11y]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require every browser job and a11y to have succeeded
+        env:
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          A11Y_RESULT: ${{ needs.a11y.result }}
+        run: |
+          if [ "$BROWSER_RESULT" != success ] || [ "$A11Y_RESULT" != success ]; then
+            echo "browser=$BROWSER_RESULT a11y=$A11Y_RESULT"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-*
+          path: ${{ runner.temp }}/e2e
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Every discovered spec ran in some browser, each browser exactly once
+        env:
+          REPORTS: ${{ runner.temp }}/e2e
+        run: >-
+          node scripts/test/assert-tests-ran.ts
+          "chromium=$REPORTS/e2e-chromium/tests/e2e/report.json"
+          "firefox=$REPORTS/e2e-firefox/tests/e2e/report.json"
+          "webkit=$REPORTS/e2e-webkit/tests/e2e/report.json"

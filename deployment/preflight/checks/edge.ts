@@ -503,8 +503,10 @@ function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
   }
   const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
   if (origin === undefined) return fail("web's PUBLIC_ORIGIN is missing");
-  if (URL.canParse(origin) && new URL(origin).host !== DEV_APP.APP_HOST) {
-    return fail("web's PUBLIC_ORIGIN does not name the dev app host");
+  // Exactly the bare origin, as shared/config's origin() parser takes it, so web starts with the value C18 passed. A
+  // value that is not an https URL at all is C29's to name.
+  if (URL.canParse(origin) && new URL(origin).protocol === "https:" && origin !== `https://${DEV_APP.APP_HOST}`) {
+    return fail("web's PUBLIC_ORIGIN is not the dev app origin");
   }
   return null;
 }

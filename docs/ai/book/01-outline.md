@@ -1463,7 +1463,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
 | P1.36i | Pin the dev edge aliases and public paths (slice 2, after P1.37v) | [SEC] | P1.36b, P1.37v | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
@@ -1502,7 +1502,6 @@ flowchart TD
   P1_38f --> P1_34
   P1_38g --> P1_34
   P1_36j --> P1_34
-  P1_33a --> P1_34
   P1_33d --> P1_34
   P1_27s --> P2_26e
   P2_26e --> P2_26b
