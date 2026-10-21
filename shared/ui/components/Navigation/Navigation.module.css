@@ -113,6 +113,15 @@
     }
     .phone .control:is([aria-current], [data-current]) > :first-child {
       transform: translateY(calc(var(--space-4) * -1));
+      filter: drop-shadow(0 var(--space-4) var(--color-shadow-hard));
+    }
+    .phone .control svg {
+      width: 24px;
+      height: 24px;
+    }
+    .phone .control > svg {
+      width: 28px;
+      height: 28px;
     }
     .phone {
       inset: auto var(--safe) var(--safe);

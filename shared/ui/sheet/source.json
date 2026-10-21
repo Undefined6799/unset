@@ -2,11 +2,13 @@
   "sheetUrl": "https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt",
   "sheetVersion": "1791232530-a028",
   "copiedAt": "2026-10-06",
+  "tokensUpdatedAt": "2026-10-21",
+  "tokensSource": "Displayed project/tokens.json from sheetUrl; other imported sheet files retain the recorded base snapshot",
   "files": [
     {
       "path": "sheet/tokens.json",
       "from": "project/tokens.json",
-      "sha256": "6948b1e22e1b664e61b90e550cbb300ec7e370e544871a947d94d937453cc683"
+      "sha256": "0cf5a7ece362fa431d0fad26892bf1b03f2ae3d264b42fd714c8905750717607"
     },
     {
       "path": "sheet/components-index.d.ts.txt",
