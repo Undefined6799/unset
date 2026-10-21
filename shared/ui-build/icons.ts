@@ -19,6 +19,7 @@ export type IconsIo = {
   writeText(path: string, text: string): void;
 };
 export type IconsCode =
+  | "icons.registration"
   | "icons.parse"
   | "icons.source_mismatch"
   | "icons.list_mismatch"
@@ -148,22 +149,234 @@ function checkSource(io: IconsIo): string {
   return source.sheetVersion;
 }
 
-/** Checks the copied files against the sheet, then returns icons.json's text. */
+const EXTENSION = "approved-extensions.json";
+// P2.24t: the single approved ADR 0027 / Task 3 registration. This is a closed contract, not a registry.
+// Immutable Iconoir 7.12.1 sources and exact Figma nodes are recorded here alongside their approval evidence.
+const APPROVED_EXTENSION = {
+  schemaVersion: 1,
+  baseSheet: {
+    version: "1791232530-a028",
+    iconReadmeSha256: "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
+    bundleSha256: "7f80673daba1ffec8d81df6ac2d6a8228b2b97883728234e275d48cda2cf3716",
+  },
+  designApproval: {
+    by: "Alex",
+    date: "2026-10-18",
+    record: "docs/human/decisions/0027-pds-frontend-distribution.md",
+    scope:
+      "Existing approved PDS screens and named components; API entries below implement their recorded requirements.",
+  },
+  registeredOn: "2026-10-21",
+  components: {
+    Navigation: {
+      figmaUrls: [
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395",
+      ],
+      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
+    },
+    Header: {
+      figmaUrls: ["https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=32-2086"],
+      requirements: ["docs/ai/plans/2026-10-18-pds-ui-design.md#ownership-and-dependency-boundaries"],
+    },
+    Button: {
+      figmaUrls: [
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=17-456",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
+      ],
+      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
+    },
+  },
+  iconoir: {
+    version: "7.12.1",
+    commit: "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e",
+  },
+  icons: {
+    devices: {
+      iconoirName: "computer",
+      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1906",
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/computer.svg",
+      sourceSha256: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M2 21L17 21",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M21 21L22 21",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+      ],
+    },
+    apps: {
+      iconoirName: "view-grid",
+      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1911",
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/view-grid.svg",
+      sourceSha256: "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+      ],
+    },
+  },
+} as const;
+
+/** Exact JSON structure and values, independent of object key order; unknown or missing fields fail. */
+function sameRegistration(actual: unknown, expected: unknown): boolean {
+  if (actual === expected) return true;
+  if (actual === null || expected === null || typeof actual !== "object" || typeof expected !== "object") return false;
+  if (Array.isArray(actual) !== Array.isArray(expected)) return false;
+  const entries = Object.entries(expected);
+  return (
+    Object.keys(actual).length === entries.length &&
+    entries.every(
+      ([key, value]) => Object.hasOwn(actual, key) && sameRegistration((actual as Record<string, unknown>)[key], value),
+    )
+  );
+}
+
+/** Component prose may evolve during review; its schema and all source/evidence identities stay closed. */
+function approvedRegistration(record: unknown): boolean {
+  const components = (record as { components?: Record<string, { api?: unknown; behavior?: unknown }> } | null)
+    ?.components;
+  const prose = (value: unknown) =>
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((text) => typeof text === "string" && text.trim().length > 0);
+  const expected = Object.fromEntries(
+    Object.entries(APPROVED_EXTENSION.components).map(([name, proof]) => {
+      const entry = components?.[name];
+      return [name, { ...proof, api: entry?.api, behavior: entry?.behavior }];
+    }),
+  );
+  return (
+    Object.values(expected).every((entry) => prose(entry.api) && prose(entry.behavior)) &&
+    sameRegistration(record, { ...APPROVED_EXTENSION, components: expected })
+  );
+}
+
+/** Parse JSON without silently losing duplicate keys (including duplicate icon aliases). */
+function registrationJson(text: string): unknown {
+  const value: unknown = JSON.parse(text);
+  // JSON.parse already proved the grammar. Canonicalize string/number tokens and remove only outside whitespace;
+  // a duplicate key is the only information this round trip can lose in this closed, nonnumeric-keyed schema.
+  const compact = text.replace(/"(?:[^"\\]|\\.)*"|\s+|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (token) =>
+    /^\s/.test(token) ? "" : JSON.stringify(JSON.parse(token)),
+  );
+  if (compact !== JSON.stringify(value)) throw new Error("duplicate registration keys");
+  return value;
+}
+
+/** Only the fixed, hash-pinned optional Icon pointer may extend the immutable 36-icon sheet. */
+function registeredIcons(io: IconsIo, sheetVersion: string) {
+  try {
+    const inventory = registrationJson(io.readText("inventory.json")) as { Icon?: { extensions?: unknown } } | null;
+    const icon = inventory?.Icon;
+    if (!icon || typeof icon !== "object" || Array.isArray(icon)) throw new Error("missing Icon inventory");
+    if (!Object.hasOwn(icon, "extensions")) return undefined;
+    const pointer = icon.extensions as { path?: unknown; sha256?: unknown }[];
+    const sha256 = Array.isArray(pointer) ? pointer[0]?.sha256 : undefined;
+    if (
+      typeof sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(sha256) ||
+      !sameRegistration(pointer, [{ path: EXTENSION, sha256 }])
+    )
+      throw new Error("invalid Icon pointer");
+    // Never resolve a path supplied by the record, even before its proof has been checked.
+    if (io.sha256(EXTENSION) !== sha256) throw new Error("registration hash mismatch");
+    const record = registrationJson(io.readText(EXTENSION));
+    if (!approvedRegistration(record)) throw new Error("unapproved registration");
+    const base = APPROVED_EXTENSION.baseSheet;
+    if (
+      sheetVersion !== base.version ||
+      io.sha256(README) !== base.iconReadmeSha256 ||
+      io.sha256(BUNDLE) !== base.bundleSha256
+    )
+      throw new IconsError("icons.source_mismatch", "registration does not match the immutable base sheet");
+    return { record: APPROVED_EXTENSION, sha256 };
+  } catch (error) {
+    if (error instanceof IconsError) throw error;
+    throw new IconsError("icons.registration", `invalid or unreadable ${EXTENSION}: ${String(error)}`);
+  }
+}
+
+/** Checks the copied files against the sheet and any fixed registration, then returns icons.json's text. */
 export function buildIcons(io: IconsIo): string {
   const sheetVersion = checkSource(io);
   const list = sheetList(io.readText(README));
   const drawings = sheetDrawings(io.readText(BUNDLE));
+  const sheetNames = [...list.keys()].sort();
+  if (JSON.stringify(Object.keys(drawings).sort()) !== JSON.stringify(sheetNames))
+    throw new IconsError("icons.list_mismatch", "the sheet's ICONS must hold exactly the README's list");
+  const extension = registeredIcons(io, sheetVersion);
+  const additions: Readonly<Record<string, (typeof APPROVED_EXTENSION.icons)[keyof typeof APPROVED_EXTENSION.icons]>> =
+    extension?.record.icons ?? {};
+  for (const [name, registered] of Object.entries(additions)) {
+    if (list.has(name) || [...list.values()].includes(registered.iconoirName))
+      throw new IconsError("icons.list_mismatch", `${name} collides with the imported sheet`);
+    list.set(name, registered.iconoirName);
+    drawings[name] = [...registered.drawings];
+  }
   const files = io.list(SVG_DIR).sort();
-  const names = [...list.keys()].sort();
-  const expected = names.map((n) => `${n}.svg.txt`);
-  if (
-    JSON.stringify(files) !== JSON.stringify(expected) ||
-    JSON.stringify(Object.keys(drawings).sort()) !== JSON.stringify(names)
-  )
-    throw new IconsError(
-      "icons.list_mismatch",
-      `${SVG_DIR}/ and the sheet's ICONS must hold exactly the README's list`,
-    );
+  const expected = [...list.keys()].sort().map((n) => `${n}.svg.txt`);
+  if (JSON.stringify(files) !== JSON.stringify(expected))
+    throw new IconsError("icons.list_mismatch", `${SVG_DIR}/ must hold exactly the sheet and registered icon list`);
+  for (const [name, registered] of Object.entries(additions)) {
+    if (io.sha256(`${SVG_DIR}/${name}.svg.txt`) !== registered.sourceSha256)
+      throw new IconsError("icons.source_mismatch", `${name}.svg differs from its immutable Iconoir source`);
+  }
   const icons: Record<string, string> = {};
   const drawn: Record<string, Readonly<Record<string, string>>[]> = {};
   for (const [name, iconoir] of list) {
@@ -175,7 +388,24 @@ export function buildIcons(io: IconsIo): string {
     drawn[name] = elements.map(([, attributes]) => attributes);
   }
   const iconoir = Object.fromEntries(list);
-  const out = { iconoirVersion: ICONOIR_VERSION, sheetVersion, iconoir, icons, drawings: drawn };
+  const out = {
+    iconoirVersion: ICONOIR_VERSION,
+    sheetVersion,
+    iconoir,
+    icons,
+    drawings: drawn,
+    ...(extension === undefined
+      ? {}
+      : {
+          extensionProvenance: {
+            path: EXTENSION,
+            sha256: extension.sha256,
+            designApproval: extension.record.designApproval,
+            registeredOn: extension.record.registeredOn,
+            iconoirCommit: extension.record.iconoir.commit,
+          },
+        }),
+  };
   return `${JSON.stringify(out, null, 2)}\n`;
 }
 
