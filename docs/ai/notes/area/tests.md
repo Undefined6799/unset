@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-19
+checked: 2026-10-21
 ---
 # tests
 
@@ -30,9 +30,11 @@ in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.
 375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
-`scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
-covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
-only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
+`scripts/test/assert-tests-ran.ts` reads Playwright's JSON reports (the checks list already
+covers `scripts/test/`). Since P0.07b, `e2e.yml` runs one `browser` job per Playwright project and an `a11y` job
+(pa11y and Lighthouse) in parallel; the `e2e` gate job takes all three browser reports, so a spec counts as run when
+any browser ran it, and a browser report with no specs fails. pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in
+the `a11y` job only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
 mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is
 `::before`. Lighthouse's upload target is `filesystem`. P2.13 put `/login` and

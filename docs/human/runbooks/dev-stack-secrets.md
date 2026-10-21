@@ -28,8 +28,14 @@ The preflight also checks each bind-mounted path (such as `deployment/postgres/i
 above each secret file: each must be owned by root or by you, and writable by no group and no other user. Keep the
 checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder. A checkout that
 others can write to fails every bind inside it, so clone under `umask 022`, or run `chmod -R go-w` on an existing
-checkout (Amendment 6 of the same record). Database data is a named volume (`pgdata`), which Docker keeps under its own
-root-owned folder, so it needs nothing from you (Amendment 1 of the same record).
+checkout (Amendment 6 of the same record). The deploy user's shell needs `umask 022` before the clone and before every
+`git pull`, or the next fetched file is group-writable again. A C9 line that reads `FAIL C9 reason withheld (it
+contained a configured value)` names no path, and it is not one failure: C9 checks each env and secret file's owner,
+mode and hard links, the secrets folder and its parents, and every bind path's walk, and the preflight withholds any
+reason that holds a configured value (a service name, for one). Work through that list in order; on the first staging
+run on VM 315 (2026-10-21) the cause was a group-writable checkout, fixed with `chmod -R go-w` on the checkout.
+Database data is a named volume (`pgdata`), which Docker keeps under its own root-owned folder, so it needs nothing
+from you (Amendment 1 of the same record).
 
 `unset-dev-env/` holds the live env files, apart from the secrets so that folder holds only mounted secrets. Make it
 yours with mode 0700, and each file yours, mode 0600, with a single hard link; any symbolic link on the way must also be

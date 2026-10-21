@@ -20,9 +20,10 @@
 # so hadolint, the SBOM and the health checks are unchanged. Values from the matrix reach run: only through env
 # (scripts/guards/workflows.ts refuses an expression inside run:).
 #
-# P1.33s adds scan-export beside scan-image, for those same images. It creates a container without starting it,
-# exports the filesystem, and runs trivy rootfs --scanners secret. P1.33u puts scan-export on scan's needs, so
-# scan is green only when discover, scan-image and scan-export all succeeded. Making scan a required check
+# P1.33s adds the export scan for those same images. It creates a container without starting it, exports the
+# filesystem, and runs trivy rootfs --scanners secret. P1.33u made scan green only when it succeeded too. P0.07c
+# moved it from its own scan-export job into scan-image, on the same build, so scan is green only when discover,
+# scan-image (both scans) and pds-ui succeeded. Making scan a required check
 # stays P1.27r.
 
 name: images
@@ -266,6 +267,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Build
+        id: build
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
@@ -285,51 +287,24 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
             image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$IGNOREFILE" \
             --timeout 10m "$APP_IMAGE"
-
-  # P1.33s (Alex's typed line "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml",
-  # 2026-10-14). Trivy 0.75.0 skips secret analysis on layers guessBaseLayers treats as the base
-  # (pkg/fanal/artifact/image/image.go:401-405). docker create does not start the container; docker export writes
-  # the flattened filesystem, which `trivy rootfs` scans (docs/guide/references/configuration/cli/trivy_rootfs.md,
-  # tag v0.75.0, the export example). --scanners secret leaves vulnerabilities to the image steps. --ignorefile
-  # /dev/null, so no repo ignore file is read (trivy_rootfs.md, --ignorefile). No --skip-dirs or --skip-files.
-  # --timeout 10m because the parent default is 5m0s. Same TRIVY_IMAGE pin. fail-fast is off, as in scan-image,
-  # so one image cannot hide another. P1.33u (Alex's typed line "yes P1.33u .github/workflows/images.yml
-  # .github/workflows/mirror.yml scripts/ci secret scan gate", 2026-10-14): an export with no files, or without
-  # /etc/os-release or the ENTRYPOINT's first element, fails before Trivy, and "0 files scanned" is not green.
-  # scan's needs are discover, scan-image and scan-export.
-  scan-export:
-    name: scan-export ${{ matrix.name }}
-    needs: discover
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.discover.outputs.images) }}
-    env:
-      TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build
-        env:
-          DOCKERFILE: ${{ matrix.dockerfile }}
-        run: |
-          case "$DOCKERFILE" in
-            */Dockerfile) CONTEXT="${DOCKERFILE%/*}" ;;
-            *) CONTEXT="." ;;
-          esac
-          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
-          export SOURCE_DATE_EPOCH
-          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
-            --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" "$CONTEXT"
+      # P1.33s (Alex's typed line "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml",
+      # 2026-10-14). Trivy 0.75.0 skips secret analysis on layers guessBaseLayers treats as the base
+      # (pkg/fanal/artifact/image/image.go:401-405). docker create does not start the container; docker export writes
+      # the flattened filesystem, which `trivy rootfs` scans (docs/guide/references/configuration/cli/trivy_rootfs.md,
+      # tag v0.75.0, the export example). --scanners secret leaves vulnerabilities to the image steps. --ignorefile
+      # /dev/null, so no repo ignore file is read (trivy_rootfs.md, --ignorefile). No --skip-dirs or --skip-files.
+      # --timeout 10m because the parent default is 5m0s. Same TRIVY_IMAGE pin. fail-fast is off, as in scan-image,
+      # so one image cannot hide another. P1.33u (Alex's typed line "yes P1.33u .github/workflows/images.yml
+      # .github/workflows/mirror.yml scripts/ci secret scan gate", 2026-10-14): an export with no files, or without
+      # /etc/os-release or the ENTRYPOINT's first element, fails before Trivy, and "0 files scanned" is not green.
+      # P0.07c: this scan is a step of scan-image, on the image that job built, so each image is built once there
+      # instead of twice. It runs after a failed vulnerability scan too (!cancelled(), expressions "Status check
+      # functions"), so one finding cannot hide the other, and never when the build failed (steps.<id>.outcome,
+      # contexts reference).
       # `bash -e` (Actions' default when shell is unset) does not enable pipefail, so the export sets it
       # (docs.github.com workflow syntax, "jobs.<job_id>.steps[*].shell"; mirror.yml's scan step).
       - name: Scan exported filesystem for secrets
+        if: "!cancelled() && steps.build.outcome == 'success'"
         run: |
           set -o pipefail
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
@@ -422,12 +397,12 @@ jobs:
       - run: node scripts/ci/pds-ui/build-check.ts
 
   # The one stable name (P1.27r requires `scan`, not the per-image names). always() runs this job when
-  # discover, scan-image or scan-export failed, was skipped or was cancelled (workflow-syntax,
+  # discover, scan-image (which holds the export scan since P0.07c) or pds-ui failed, was skipped or was cancelled (workflow-syntax,
   # jobs.<job_id>.needs; expressions, always()). needs.<job_id>.result is success, failure, cancelled or
   # skipped (contexts reference). Anything but success is red, so a skipped export cannot read as green
   # (P1.33u). Drafts stay skipped, same as the other jobs. Making `scan` a required check stays P1.27r.
   scan:
-    needs: [discover, scan-image, scan-export, pds-ui]
+    needs: [discover, scan-image, pds-ui]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -438,11 +413,10 @@ jobs:
         env:
           DISCOVER: ${{ needs.discover.result }}
           SCAN_RESULT: ${{ needs.scan-image.result }}
-          EXPORT_RESULT: ${{ needs.scan-export.result }}
           PDS_RESULT: ${{ needs.pds-ui.result }}
         run: |
-          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$EXPORT_RESULT" != success ] || [ "$PDS_RESULT" != success ]; then
-            echo "discover=$DISCOVER scan-image=$SCAN_RESULT scan-export=$EXPORT_RESULT pds-ui=$PDS_RESULT"
+          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$PDS_RESULT" != success ]; then
+            echo "discover=$DISCOVER scan-image=$SCAN_RESULT pds-ui=$PDS_RESULT"
             exit 1
           fi
 

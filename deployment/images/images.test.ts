@@ -48,8 +48,22 @@ const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPA
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
-/** The image each FROM names, with stage names left out (a FROM may build on an earlier stage). */
-function fromImages(dockerfile: string): string[] {
+/** Our GHCR mirror of an upstream base, by digest only (mirror.yml copies each source by digest, ADR 0033). */
+const MIRROR_PIN = /^(ghcr\.io\/undefined6799\/mirror\/[a-z0-9._-]+)@(sha256:[0-9a-f]{64})$/;
+const MIRRORS = JSON.parse(read("mirror.list.json")) as MirrorEntry[];
+
+/**
+ * The upstream source a mirror spelling stands for (P2.26b): the mirror.list.json entry with that mirror and digest,
+ * so the lock rules below judge the bytes, not the registry. Any other image is returned as written.
+ */
+function canonical(image: string): string {
+  const [, mirror, digest] = MIRROR_PIN.exec(image) ?? [];
+  if (mirror === undefined) return image;
+  return MIRRORS.find((entry) => entry.mirror === mirror && entry.source.endsWith(`@${digest}`))?.source ?? image;
+}
+
+/** The image each FROM names as written, with stage names left out (a FROM may build on an earlier stage). */
+function rawFroms(dockerfile: string): string[] {
   const stages = new Set<string>();
   const images: string[] = [];
   for (const line of dockerfile.split("\n")) {
@@ -61,6 +75,9 @@ function fromImages(dockerfile: string): string[] {
   }
   return images;
 }
+
+/** The base each FROM names, a mirror spelling read as its upstream source. */
+const fromImages = (dockerfile: string): string[] => rawFroms(dockerfile).map(canonical);
 
 /** Every problem with the Dockerfile's bases against the lock, empty when each FROM is pinned, allowed and locked. */
 function baseProblems(dockerfile: string, lock: Lock): string[] {
@@ -99,7 +116,7 @@ function finalFrom(dockerfile: string): string | undefined {
     const match = FROM.exec(line.trim());
     if (match === null) continue;
     const [, image = "", stage] = match;
-    last = stageBase.get(image) ?? image;
+    last = stageBase.get(image) ?? canonical(image);
     if (stage !== undefined) stageBase.set(stage, last);
   }
   return last;
@@ -125,7 +142,7 @@ function buildStageEntries(dockerfile: string, lock: Lock): string[] {
     const match = FROM.exec(line.trim());
     if (match === null) continue;
     const [, image = "", stage] = match;
-    const base = stageBase.get(image) ?? image;
+    const base = stageBase.get(image) ?? canonical(image);
     bases.push(base);
     if (stage !== undefined) stageBase.set(stage, base);
   }
@@ -379,7 +396,7 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
   const lines = dockerfile.split("\n").map((line) => line.trim());
   const ignores = lines.flatMap((line, at) => (/hadolint\b.*ignore/i.test(line) ? [at] : []));
   const upstream = Object.values(lock).filter((base) => base.source === "upstream");
-  const upstreamFroms = fromImages(dockerfile).filter((image) =>
+  const upstreamFroms = rawFroms(dockerfile).filter((image) =>
     upstream.some((base) => PINNED.exec(image)?.[1] === base.ref),
   );
   const problems =
@@ -694,7 +711,7 @@ const PLAIN_PATH = /^\/[A-Za-z0-9._/-]+$/;
 const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
-  ["postgres", []], // postgres.Dockerfile copies nothing
+  ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -1837,6 +1854,25 @@ describe("base images", () => {
     }
   });
 
+  test("bases_from_mirror", () => {
+    // P2.26b: the app images build FROM our GHCR mirror by digest (ADR 0033), never a public registry; the edge follows
+    // in its own trusted-base change (P2.26c). The mirror spelling names its lock entry through mirror.list.json.
+    for (const file of dockerfiles.filter((name) => name.startsWith("images/"))) {
+      for (const image of rawFroms(read(file))) expect(image, file).toMatch(MIRROR_PIN);
+      expect(read(file), file).not.toMatch(/hadolint\b.*ignore/i);
+    }
+    const mirrored = `ghcr.io/undefined6799/mirror/node@${NODE.digest}`;
+    expect(fromImages(`FROM ${mirrored} AS build`)).toEqual([pinnedNode]);
+    expect(baseProblems(`FROM ${mirrored} AS build`, lock)).toEqual([]);
+    // A mirror digest the list does not name for that mirror resolves to nothing.
+    for (const image of [
+      `ghcr.io/undefined6799/mirror/node@sha256:${"1".repeat(64)}`,
+      `ghcr.io/undefined6799/mirror/caddy@${NODE.digest}`,
+    ]) {
+      expect(baseProblems(`FROM ${image} AS build`, lock)).toEqual([`FROM ${image} has no lock entry`]);
+    }
+  });
+
   test("dl3026_ignore_only_on_upstream_base", () => {
     for (const file of dockerfiles) expect(dl3026Problems(read(file), lock), file).toEqual([]);
   });
@@ -2163,8 +2199,12 @@ describe("postgres image", () => {
     const postgres = runtimeStage(read(POSTGRES_DOCKERFILE));
     const base = lock.postgres as Base;
     expect(fromImages(read(POSTGRES_DOCKERFILE))).toEqual([`${base.ref}:${base.tag}@${base.digest}`]);
-    // Nothing is copied in and the official docker-entrypoint.sh and its CMD are inherited unchanged.
-    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
+    // The official docker-entrypoint.sh is inherited unchanged. Only our pg_hba.conf is copied in, and the CMD points the
+    // server at it (P1.11y): the entrypoint passes the CMD's arguments to initdb's temporary server and to the real one.
+    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([
+      "COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
+      'CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]',
+    ]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
   });
 
