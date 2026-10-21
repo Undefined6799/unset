@@ -1584,13 +1584,13 @@ describe("preflight", () => {
     const pdsMount = "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
     const unreadable = "FAIL C18 the edge config is unreadable: ";
     cases.push(
-      // The book's transition: main's sites directory or the three binds, never a mix of the two.
+      // P1.38g: no directory at the enabled sites under dev, alone or beside the binds.
       [
-        "FAIL C18 the dev edge mounts both the sites directory and /etc/caddy/sites/enabled/app.caddy",
+        "FAIL C18 the dev edge mounts a directory at /etc/caddy/sites/enabled",
         (t) => t.replace(pdsMount, `${pdsMount}      - ./edge/sites:/etc/caddy/sites/enabled:ro\n`),
       ],
       [
-        "FAIL C18 the dev edge mounts both the sites directory and /etc/caddy/snippets/tls.caddy",
+        "FAIL C18 the dev edge mounts a directory at /etc/caddy/sites/enabled",
         (t) => t.replace(appMount, "").replace(pdsMount, "      - ./edge/dev:/etc/caddy/sites/enabled/:ro\n"),
       ],
       [`${unreadable}pds.caddy: not mounted`, (t) => t.replace(pdsMount, "")],
@@ -1610,8 +1610,8 @@ describe("preflight", () => {
       ],
     );
     for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
-    // Shape (a), main's compose.dev.yaml today: the shipped sites folder alone, read as before P1.38e, from nowhere
-    // else; P1.38g removes it once P1.36c has moved compose to the three binds.
+    // Main's old shape, the shipped sites folder alone, which P1.38e allowed until P1.36c moved compose to the three
+    // binds: refused under dev since P1.38g, from any folder.
     const folder = (t: string) =>
       t
         .replace(appMount, "")
@@ -1621,9 +1621,9 @@ describe("preflight", () => {
       (await check({ compose: edit(DEV), pdsEnv: DEV_ENV, shippedSitesOnly: true }, "dev")).lines.find((line) =>
         / C18 /.test(line),
       );
-    expect(await onMain(folder)).toBe("PASS C18 ok");
+    expect(await onMain(folder)).toBe("FAIL C18 the dev edge mounts a directory at /etc/caddy/sites/enabled");
     expect(await onMain((t) => folder(t).replace("./edge/sites:", "./edge/dev:"))).toBe(
-      "FAIL C18 /etc/caddy/sites/enabled is not mounted from deployment/edge/sites",
+      "FAIL C18 the dev edge mounts a directory at /etc/caddy/sites/enabled",
     );
     // Shape (b): a directory, or a file from outside deployment/edge/dev/, at a site's own path fails by its name.
     const app = (source: string) => (t: string) =>
