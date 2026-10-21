@@ -36,10 +36,9 @@ const KNOWN_FIELDS = new Set([
   "middleware",
   "deadlineMs",
 ]);
-const NOTE_FIELDS = new Set(["why", "input", "output", "errors", "auth", "planned"]);
+const NOTE_FIELDS = new Set(["why", "input", "output", "errors", "auth"]);
 const PROSE_FIELDS = ["why", "input", "output", "errors", "auth"] as const;
 const PROSE = /^[^\n|]{0,500}$/;
-const PHASE = /^Phase [0-9]+$/;
 const SCOPES = new Set(["ip", "did", "global"]);
 /**
  * Meanings taken from shared/http/server.ts middlewareOf and the checks it names. A name that is not
@@ -63,8 +62,6 @@ export type Bucket = { readonly scope: string; readonly capacity: number; readon
 export type RouteRecord = {
   readonly method: string;
   readonly path: string;
-  /** null when the route is in the manifest. "" or "Phase N" when it is only in the data file. */
-  readonly planned: string | null;
   readonly group: string | null;
   readonly requiresSession: true | null;
   readonly middleware: readonly string[] | null;
@@ -80,14 +77,13 @@ export type RouteRecord = {
   readonly auth: string;
 };
 
-type HandNote = Pick<RouteRecord, "why" | "input" | "output" | "errors" | "auth" | "planned">;
-type Draft = Omit<RouteRecord, "why" | "input" | "output" | "errors" | "auth" | "planned">;
+type HandNote = Pick<RouteRecord, "why" | "input" | "output" | "errors" | "auth">;
+type Draft = Omit<RouteRecord, "why" | "input" | "output" | "errors" | "auth">;
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export type ProcessModel = {
   readonly name: string;
   readonly routes: readonly RouteRecord[];
-  readonly planned: readonly RouteRecord[];
   readonly policies: ReadonlyMap<string, readonly Bucket[]> | null;
 };
 
@@ -96,17 +92,7 @@ export type LoadResult =
   | { readonly ok: true; readonly model: EndpointModel }
   | { readonly ok: false; readonly problems: readonly string[] };
 
-const EMPTY_NOTE: HandNote = { why: "", input: "", output: "", errors: "", auth: "", planned: null };
-const OPEN_ROUTE = {
-  group: null,
-  requiresSession: null,
-  middleware: null,
-  rateLimit: null,
-  accepts: null,
-  bodyLimit: null,
-  mutates: null,
-  deadlineMs: null,
-} as const;
+const EMPTY_NOTE: HandNote = { why: "", input: "", output: "", errors: "", auth: "" };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -245,7 +231,7 @@ function readNote(file: string, key: string, value: unknown): { note: HandNote; 
   for (const field of Object.keys(value)) {
     if (!NOTE_FIELDS.has(field)) problems.push(`${file}: "${key}" has unknown field ${field}`);
   }
-  const note: Mutable<HandNote> = { ...EMPTY_NOTE, planned: plannedValue(value, file, key, problems) };
+  const note: Mutable<HandNote> = { ...EMPTY_NOTE };
   for (const field of PROSE_FIELDS) {
     if (!Object.hasOwn(value, field)) continue;
     const text = value[field];
@@ -254,15 +240,6 @@ function readNote(file: string, key: string, value: unknown): { note: HandNote; 
     } else note[field] = text;
   }
   return { note, problems };
-}
-
-function plannedValue(value: Record<string, unknown>, file: string, key: string, problems: string[]): string | null {
-  if (!Object.hasOwn(value, "planned")) return null;
-  const planned = value.planned;
-  if (planned === true) return "";
-  if (typeof planned === "string" && PHASE.test(planned)) return planned;
-  problems.push(`${file}: "${key}" planned must be true or "Phase N"`);
-  return null;
 }
 
 function readNotes(root: string, name: string): { notes: Map<string, HandNote>; problems: string[] } {
@@ -352,25 +329,15 @@ function policyProblem(name: string, draft: Draft, policies: ProcessModel["polic
   return null;
 }
 
-function plannedOnly(
-  file: string,
-  notes: ReadonlyMap<string, HandNote>,
-  seen: ReadonlySet<string>,
-): {
-  planned: RouteRecord[];
-  problems: string[];
-} {
-  const planned: RouteRecord[] = [];
+/** A data-file key with no manifest route. A key that already failed the key pattern is not also an orphan. */
+function orphanProblems(file: string, notes: ReadonlyMap<string, HandNote>, seen: ReadonlySet<string>): string[] {
   const problems: string[] = [];
-  for (const [key, note] of notes) {
+  for (const key of notes.keys()) {
     if (seen.has(key)) continue;
-    const match = /^([A-Z]+) (\/\S*)$/.exec(key);
-    if (match === null) continue;
-    if (note.planned === null) problems.push(`${file}: orphan key "${key}"`);
-    else planned.push({ ...OPEN_ROUTE, ...note, method: match[1] ?? "", path: match[2] ?? "" });
+    if (!/^[A-Z]+ \/\S*$/.test(key)) continue;
+    problems.push(`${file}: orphan key "${key}"`);
   }
-  planned.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
-  return { planned, problems };
+  return problems;
 }
 
 function assemble(
@@ -388,13 +355,11 @@ function assemble(
     seen.add(key);
     const noted = notes.get(key);
     if (noted === undefined) problems.push(`${file}: missing key "${key}"`);
-    else if (noted.planned !== null) problems.push(`${file}: "${key}" is in the manifest and marked planned`);
     const limit = policyProblem(name, draft, policies);
     if (limit !== null) problems.push(limit);
     routes.push({ ...draft, ...(noted ?? EMPTY_NOTE) });
   }
-  const extra = plannedOnly(file, notes, seen);
-  return { process: { name, routes, planned: extra.planned, policies }, problems: [...problems, ...extra.problems] };
+  return { process: { name, routes, policies }, problems: [...problems, ...orphanProblems(file, notes, seen)] };
 }
 
 /** The pages the committed tree must match, or the problems that stop a write. */
@@ -442,18 +407,13 @@ function acceptsCell(route: RouteRecord): string {
   return route.accepts.length === 0 ? "none" : route.accepts.join(", ");
 }
 
-const statusCell = (route: RouteRecord): string => {
-  if (route.planned === null) return "built";
-  return route.planned === "" ? "planned" : `planned (${route.planned})`;
-};
-
 const yn = (value: boolean | null): string => (value === null ? NOT_RECORDED : value ? "yes" : "no");
 
 function row(route: RouteRecord, policies: ProcessModel["policies"], deadline: boolean): string {
   const cells = [
     route.method,
     `\`${route.path}\``,
-    statusCell(route),
+    "built",
     route.group ?? NOT_RECORDED,
     sessionCell(route),
     csrfCell(route),
@@ -481,7 +441,7 @@ function pageWeight(name: string, names: readonly string[]): number {
 }
 
 function processPage(process: ProcessModel, names: readonly string[]): string {
-  const rows = [...process.routes, ...process.planned];
+  const rows = process.routes;
   const deadline = rows.some((route) => route.deadlineMs !== null);
   const headers = [
     "Method",
@@ -560,7 +520,7 @@ function indexPage(model: EndpointModel): string {
     "- **Auth** is the data file, from the handler, not the manifest. `gate: openApp` when the handler calls `openApp`. `reads session` when it calls `readSession`. `none` otherwise.",
     "- **CSRF** is `yes` when `middleware` includes `csrf`, and `no` when the array is present and does not include it. A missing array is `not recorded`.",
     "- **Rate limit** is the manifest `rateLimit` string. **Buckets** are that name's entries in `interfaces/<process>/limits.ts`. `exempt` is not a key of that table, so its buckets cell is `not recorded`.",
-    "- **Status** is `built` for a manifest route. A data-file key with `planned: true` or `planned: Phase N` and no manifest entry is `planned`, and its generated cells are `not recorded`.",
+    "- **Status** is `built` for a manifest route.",
     "- **Why, input, output, errors** are the data file. They are prose, not a second copy of the security columns.",
     "",
     "## Groups",

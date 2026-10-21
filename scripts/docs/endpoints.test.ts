@@ -24,7 +24,6 @@ afterEach(() => {
 
 function route(over: Pick<RouteRecord, "method" | "path"> & Partial<RouteRecord>): RouteRecord {
   return {
-    planned: null,
     group: "app",
     requiresSession: null,
     middleware: ["requestId", "methodCheck"],
@@ -106,7 +105,6 @@ describe("endpoint cells", () => {
           mutates: null,
         }),
       ],
-      planned: [],
     });
     const open = rowFor(page, "GET", "/open");
     expect(open).toContain(`| ${NOT_RECORDED} | no | default | ip: capacity 60, refillPerSec 5 |`);
@@ -115,36 +113,6 @@ describe("endpoint cells", () => {
     expect(rowFor(page, "POST", "/save")).toContain("| 2048 | yes |");
     const bare = rowFor(page, "GET", "/bare");
     expect(bare).toContain(`| ${NOT_RECORDED} | ${NOT_RECORDED} | ${NOT_RECORDED} | ${NOT_RECORDED} |`);
-  });
-
-  test("planned_route_is_marked_and_not_filled_in", () => {
-    const page = pageOf({
-      name: "api",
-      policies: null,
-      routes: [
-        route({ method: "GET", path: "/health", group: "static", rateLimit: "exempt", middleware: ["requestId"] }),
-      ],
-      planned: [
-        route({
-          method: "POST",
-          path: "/later",
-          planned: "Phase 4",
-          group: null,
-          requiresSession: null,
-          middleware: null,
-          rateLimit: null,
-          accepts: null,
-          mutates: null,
-          why: "A later route.",
-        }),
-      ],
-    });
-    expect(page).toContain("This manifest records only `GET /health`.");
-    expect(page).toContain("This process has no `interfaces/api/limits.ts`.");
-    const planned = rowFor(page, "POST", "/later");
-    expect(planned).toContain("| planned (Phase 4) |");
-    expect(planned).toContain(`| ${NOT_RECORDED} | ${NOT_RECORDED} | ${NOT_RECORDED} |`);
-    expect(planned).toContain("A later route.");
   });
 });
 
@@ -178,20 +146,6 @@ describe("endpoint inputs", () => {
       'docs/site/data/endpoints/demo.yaml: missing key "GET /health"',
       'docs/site/data/endpoints/demo.yaml: orphan key "POST /extra"',
     ]);
-  });
-
-  test("a_planned_key_is_not_an_orphan", async () => {
-    const root = tempRepo();
-    writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([HEALTH]));
-    writeFileSync(
-      join(root, "docs/site/data/endpoints/demo.yaml"),
-      '"GET /health":\n  why: "probe"\n"POST /later":\n  planned: "Phase 3"\n  why: "later"\n',
-    );
-    const loaded = await loadEndpointModel(root);
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const text = renderEndpointFiles(loaded.model).get("docs/site/content/endpoints/demo.md") ?? "";
-    expect(rowFor(text, "POST", "/later")).toContain("| planned (Phase 3) |");
   });
 
   test("check_fails_when_a_page_is_edited", async () => {
