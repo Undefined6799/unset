@@ -4656,7 +4656,8 @@ Done when the test shows the file parses as a trusted root and names a Fulcio an
 Tags: [SEC]            Depends on: P1.27s, P2.26e, P1.34t
 Pulled forward (Q3 B), issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its
 Amendment 1, which puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph.
-P1.34t is a dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
+P1.34t is a dependency for C28, which the real-file test must meet (C21 is waived under dev since #1174, so the
+real-file test needs no retirement-report fixture).
 
 Where:
 - `deployment/images/{node-app,postgres,migrate}.Dockerfile`;
@@ -4700,8 +4701,9 @@ Done when (tests, red first):
   pattern, and only at the lock digest;
 - `compose_dev_images_by_digest` (moved from P1.27s);
 - a cosign binary whose hash does not match the constants is refused;
-- the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture and
-  an empty-list `.github/trivyignore.pds.yaml` fixture, plus a one-entry fixture on the same real `compose.dev.yaml`
+- the preflight on the real `compose.dev.yaml` under `--env dev` passes, with no retirement-report fixture (C21 is
+  waived under dev, #1174) and an empty-list `.github/trivyignore.pds.yaml` fixture, plus a one-entry fixture on the
+  same real `compose.dev.yaml`
   that must refuse (P1.33e; book edit 2026-10-14-verify-834-fixes, S3)
   (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
   2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable:
