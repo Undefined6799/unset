@@ -15573,9 +15573,10 @@ service (a holder who migrated away).
 ```
 
 **Edge cases and failures:**
-- **The old PDS was already replaced on `0x40.space`** before this step (P1.33p ran first, or the old host died). Steps
-  5 and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain. - Notice is still
-  sent. - The record says "deleted: impossible, PDS gone".
+- **The old PDS was already replaced on `0x40.space`** before this step (P1.33p ran first, or the old host died).
+  Steps 5 and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain.
+  - Notice is still sent.
+  - The record says "deleted: impossible, PDS gone".
 - **The old rotation key is lost** → no tombstone is possible. The DIDs stay pointing at a dead host and their handles
   cannot verify once `*.0x40.me` points at the new PDS. Alex accepts this in the ADR.
 - **A holder objects after the notice** → they may migrate their identity to another PDS within the window (step 3);
