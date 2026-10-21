@@ -15702,7 +15702,7 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
 - P1.33a's part A report no longer gates this move for staging: under `--env dev`, C21 is waived (Alex, 2026-10-21
   02:41:25Z, alex-answers `c21-dev-waiver`, #1174; it supersedes architecture's Amendment 6 of 2026-10-13-local-plc, Q1,
   and Amendment 7, Q1, for staging). P1.33a still runs before prod and before the `0x40.space` hostname, which belongs
-  to the public opening (P1.33p); P1.34 depends on P1.33a for that opening, not for the staging PDS.
+  to the public opening (P1.33p); P1.33p depends on P1.33a, and P1.34 does not.
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `staging.unset.ac`** (ADR 0025's name; the `0x40.space`
