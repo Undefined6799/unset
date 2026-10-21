@@ -1,9 +1,9 @@
 // P2.26b (moved from P1.34d item 12): the whole preflight on the real compose.dev.yaml under --env dev, with the real
 // deploy lock and Sigstore trusted root path, must pass. The checkout is this one, read as the deploy user's; its
 // sibling folders are virtual and hold what the runbook puts there (docs/human/runbooks/dev-stack-secrets.md), with the
-// staging names (ADR 0031), a self-signed leaf for both made by openssl as ADR 0032 has it, and a complete retirement
-// report. The network checks answer through a fake runner: the pinned cosign, verify-images passing, OCI indexes and a
-// synchronised clock.
+// staging names (ADR 0031) and a self-signed leaf for both made by openssl as ADR 0032 has it. There is no retirement
+// report: C21 is waived under --env dev (P1.30s); preflight.test.ts keeps prod and local requiring it. The network
+// checks answer through a fake runner: the pinned cosign, verify-images passing, OCI indexes and a synchronised clock.
 import { execFileSync } from "node:child_process";
 import {
   lstatSync,
@@ -25,8 +25,6 @@ import { type Deps, preflight, type Run } from "./index.ts";
 const DEPLOYMENT = resolve(import.meta.dirname, "..");
 const CHECKOUT = resolve(DEPLOYMENT, "..");
 const COMPOSE = join(DEPLOYMENT, "compose.dev.yaml");
-const TRUSTED_ROOT = join(DEPLOYMENT, "sigstore/trusted_root.json");
-const REPORT = join(CHECKOUT, "docs/human/retirement/retirement-check.json");
 const beside = (name: string) => join(dirname(CHECKOUT), name);
 const APP = "staging.unset.sh";
 const PDS = "staging.unset.ac";
@@ -153,17 +151,10 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     }
     return { code: 0, stdout: "", stderr: "" };
   };
-  /** The trusted root's text until P2.26e lands it, and the retirement report this test makes complete. */
-  const given = new Map<string, string>([
-    [TRUSTED_ROOT, "{}\n"],
-    [REPORT, "retirement_part_a_complete: true\n"],
-  ]);
-  const deps = (report = given.get(REPORT)): Deps => ({
+  const deps: Deps = {
     root: CHECKOUT,
     run,
-    readText: (path) =>
-      files.get(path)?.text ??
-      (path === REPORT ? (report ?? null) : (real(path, () => readFileSync(path, "utf8")) ?? given.get(path) ?? null)),
+    readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readEnv: (path) => {
       const entry = files.get(path);
@@ -183,22 +174,16 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     statfs: () => ({ type: 0xef53 }),
     uid: DEPLOY_UID,
     environment: {},
-  });
+  };
   const args = ["--env", "dev", "--compose", COMPOSE, "--interpolation-env", beside("unset-dev-env/dev-public.env")];
 
   test("preflight_passes_the_real_dev_file", async () => {
-    const result = await preflight(args, deps());
+    const result = await preflight(args, deps);
     expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([]);
     expect(result.lines).toContain("PASS C3 4 first-party images verified");
     expect(result.lines).toContain("PASS C4 2 upstream images verified");
+    // Waived under --env dev without a retirement report; only the verdict is pinned, not the reason text.
+    expect(result.lines.filter((line) => line.startsWith("PASS C21"))).toHaveLength(1);
     expect(result.code).toBe(0);
-  });
-
-  test("preflight_refuses_the_real_dev_file_without_part_a", async () => {
-    const result = await preflight(args, deps("retirement_part_a_complete: false\n"));
-    expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([
-      "FAIL C21 the retirement report does not mark part A complete",
-    ]);
-    expect(result.code).toBe(1);
   });
 });
