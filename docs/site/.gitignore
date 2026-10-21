@@ -1,0 +1,5 @@
+# Hugo build output. Not published; CI uploads public/ as an artifact.
+/public/
+/resources/
+# Written while a build is running so two builds cannot share one project.
+/.hugo_build.lock
