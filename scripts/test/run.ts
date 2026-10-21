@@ -43,8 +43,9 @@ export type Outcome = {
   skippedCases: string[];
   stray: string[];
 };
-/** Which projects run: all of them (CI), all but images (local), or images only (`npm run test:images`). */
-export type Mode = "ci" | "local" | "images";
+/** Which projects run: all of them (CI), all but images (local), images only (`npm run test:images`), or all but
+ * images under CI's rules (`--units`, ci.yml's code job, beside its image-tests job; P0.07d). */
+export type Mode = "ci" | "local" | "images" | "units";
 /** `quiet` keeps Vitest's own output off the terminal, and `dockerReady` replaces the Docker probe (the end-to-end
  * tests of this file). `env` is where GITHUB_ACTIONS and GITHUB_STEP_SUMMARY are read; only the command line passes
  * process.env, so a test's planted failures never reach a real CI annotation or summary. */
@@ -123,24 +124,27 @@ export function compare(
 }
 
 /**
- * The mode the command line and environment ask for; `--images` is the only argument. An earlier CI step can rewrite
+ * The mode the command line and environment ask for; `--images` and `--units` are the only arguments, one at a time. An earlier CI step can rewrite
  * CI through $GITHUB_ENV but not GITHUB_ACTIONS, so either one means CI, and GITHUB_ACTIONS without CI=true is
  * refused rather than read as a local run (architecture amendment 2, 2026-10-07).
  */
 export function modeFor(env: Record<string, string | undefined>, args: readonly string[]): Mode {
-  const unknown = args.find((arg) => arg !== "--images");
+  const unknown = args.find((arg) => arg !== "--images" && arg !== "--units");
   if (unknown !== undefined) throw new Error(`unknown argument ${unknown}`);
+  if (args.includes("--images") && args.includes("--units")) throw new Error("--units and --images are exclusive");
   if (env.GITHUB_ACTIONS !== undefined && env.CI !== "true") {
     throw new Error("CI environment is inconsistent: GITHUB_ACTIONS is set and CI is not true");
   }
   if (args.includes("--images")) return "images";
+  if (args.includes("--units")) return "units";
   return env.CI === "true" || env.GITHUB_ACTIONS === "true" ? "ci" : "local";
 }
 
-/** The listed files whose run is checked: in CI every listed file, so one the glob missed still fails; otherwise
- * only the files this mode starts. */
+/** The listed files whose run is checked: in CI every listed file, so one the glob missed still fails, and with
+ * `--units` every listed file outside the images project; otherwise only the files this mode starts. */
 export function filesToRun(mode: Mode, listed: string[], expected: string[]): string[] {
   if (mode === "ci") return listed;
+  if (mode === "units") return listed.filter((f) => !IMAGE_TEST_FILE.test(f));
   const starts = new Set(expected);
   return listed.filter((f) => starts.has(f));
 }
@@ -151,6 +155,9 @@ export function imagesPlan(mode: Mode, glob: string[]): ImagesPlan {
   const images = glob.filter((f) => IMAGE_TEST_FILE.test(f));
   const units = [`--project=!${IMAGES_PROJECT}`];
   const imageRun = [`--project=${IMAGES_PROJECT}`];
+  if (mode === "units") {
+    return { runs: [units], expected: glob.filter((f) => !IMAGE_TEST_FILE.test(f)), notRun: null, problem: null };
+  }
   if (mode === "local") {
     const count = `${images.length} file${images.length === 1 ? "" : "s"}`;
     const notRun = `images project: not run locally (${count}; CI runs them; npm run test:images to run)`;
