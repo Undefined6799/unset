@@ -71,7 +71,7 @@ apps/web  →  interfaces/http  →  domains/identity  →  infrastructure/pds  
 | `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `http`, `config`, `errors`, `log` |
 | `deployment/`, `tests/` | Compose, edge, backup and preflight; integration and end-to-end tests |
 | `docs/` | `human/` for guides, decisions and the engineering guidelines; `ai/` for the plan and step book |
-| `scripts/` | Repository tooling: CI guards, budgets, the dev seed |
+| `scripts/` | Repository tooling: CI guards, budgets, docs tests, the dev-stack precheck |
 
 Folders appear with their first code. Where something belongs and why is in
 [`docs/human/architecture.md`](docs/human/architecture.md); every decision that is expensive to reverse has an ADR in

@@ -62,8 +62,8 @@ const NODE_BASE = "docker.io/library/node";
  * The images a local stack may run unbuilt, as `ref:tag@digest`. `runOnly` holds the vendor images we run as shipped,
  * each a runtime lock entry no Dockerfile builds on, as compose.dev.yaml may (record
  * 2026-10-07-p129-migrate-image-and-run-only-images, point 2); a builder, a base our own Dockerfiles harden (caddy,
- * postgres), or the dev-only Newt is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
- * 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
+ * postgres), or the dev-only Newt is never one. `readerOnly` holds the node runtime base, which only the token reader
+ * may run (record 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
  */
 function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
   const bases = readBases(inputs);

@@ -39,6 +39,18 @@ describe("workflows", () => {
     expect(problems(builder('--driver-opt "image=moby/buildkit:v0.34.0"'))).toHaveLength(1);
     expect(problems(builder(`--driver-opt "image=moby/buildkit:v0.34.0@sha256:${"a".repeat(64)}"`))).toEqual([]);
     expect(problems(builder('--driver-opt "image=$BUILDKIT_IMAGE"'))).toEqual([]);
+    // The last image= wins in buildx's driver options, so exactly one may appear, and a digest cannot ride a CSV tail.
+    const pinned = `moby/buildkit:v0.34.0@sha256:${"a".repeat(64)}`;
+    expect(
+      problems(builder(`--driver-opt "image=moby/buildkit:latest,env.PIN=x@sha256:${"a".repeat(64)}"`)),
+    ).toHaveLength(1);
+    expect(
+      problems(builder(`--driver-opt "image=$BUILDKIT_IMAGE" --driver-opt "image=moby/buildkit:latest"`)),
+    ).toHaveLength(1);
+    expect(problems(builder(`--driver-opt "image=${pinned},image=moby/buildkit:latest"`))).toHaveLength(1);
+    // The documented equals form passes, but an env option's value that merely starts with image= names no image.
+    expect(problems(builder(`--driver-opt=image=${pinned}`))).toEqual([]);
+    expect(problems(builder(`--driver-opt "env.X=image=${pinned}"`))).toHaveLength(1);
     expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
       1,
