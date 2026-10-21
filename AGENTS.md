@@ -15,7 +15,7 @@ the protocol-first rule and the branch rules apply to every tool, not only Claud
   17 seconds against about 30 milliseconds unsigned (measured 2026-10-11), past Vitest
   5.0.3's default 5 second `testTimeout` (`testTimeout ??= 5e3`; no config here overrides
   it). `scripts/ci/secrets-fixtures.ts` still commits with the caller's config, but it
-  runs only in CI's `secrets` job (`.github/workflows/ci.yml:132-134`), and P1.23h (#596)
+  runs only in CI's `secrets` job (`.github/workflows/ci.yml:136-137`), and P1.23h (#596)
   moves it to `fixtureGitEnv()` too.
 - The web process is `node interfaces/http/main.ts` after `npm run build -w @unset/apps-web`.
   `interfaces/http/main.ts` boots through `bootOrExit(config)`. Beside the kit keys,
