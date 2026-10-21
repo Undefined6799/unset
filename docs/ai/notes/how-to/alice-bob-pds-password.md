@@ -24,6 +24,8 @@ checked: 2026-10-21
    from the app database.
 4. Do not invent the password, DID, or email.
 
+The runbook's legal-values paragraph (P1.38d) is about the legal pages and changes nothing here.
+
 **Check.** The PDS login accepts the password you typed. The app still has no password, DID, or mailbox
 store for them.
 
