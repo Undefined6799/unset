@@ -28,7 +28,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  # P0.07d: the code checks and the image tests (*.image.test.ts, which build images) run as two parallel jobs.
+  # `check`, the required name, is the gate that needs both (at the end of this file).
+  code:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -37,7 +39,7 @@ jobs:
     env:
       # The notes guard's code-moved rule diffs BASE_SHA...HEAD; a missing base fails it (P0.09d).
       BASE_SHA: ${{ github.event.before }}
-      RENOVATE_IMAGE: renovate/renovate:44.155.9@sha256:1b1d9d1137dc0f71e06d8ca830f783af5138113b57e684693a47a37be578ff04
+      RENOVATE_IMAGE: renovate/renovate:44.156.2@sha256:c005b34cf030efeffbfcf037a0f4c35c64d05b3bc797236982fa2879b2daecee
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,7 +56,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: echo "BASE_SHA=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"
       - run: npm run guards
-      - run: npm test
+      # Every listed test file outside the images project; image-tests runs the rest (scripts/test/run.ts).
+      - run: npm test -- --units
       - run: npm run budgets
       # P1.23r: the island gates read the production build, so CI builds the web app first.
       - name: Build the web app
@@ -254,3 +257,45 @@ jobs:
         run: |
           npx jscpd --config .github/.jscpd.json . || true
           cat jscpd-report/jscpd-report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  # P0.07d: the images project, beside code. `npm run test:images` is scripts/test/run.ts --images: CI's rules (no
+  # skips, every image test file ran, at least one) and a Docker check. The checkout matches code's.
+  image-tests:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:images
+
+  # The required name (.github/required-checks.json). always() runs it whatever code and image-tests did
+  # (expressions, "Status check functions"): without it a failed need would skip this job, and a skipped required
+  # check reads as passing. needs.<job_id>.result is success, failure, cancelled or skipped (contexts reference);
+  # anything but success fails, as in images.yml's scan gate.
+  check:
+    needs: [code, image-tests]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require code and image-tests to have succeeded
+        env:
+          CODE_RESULT: ${{ needs.code.result }}
+          IMAGES_RESULT: ${{ needs.image-tests.result }}
+        run: |
+          if [ "$CODE_RESULT" != success ] || [ "$IMAGES_RESULT" != success ]; then
+            echo "code=$CODE_RESULT image-tests=$IMAGES_RESULT"
+            exit 1
+          fi

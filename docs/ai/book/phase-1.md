@@ -756,7 +756,6 @@ flowchart LR
   P1_28p --> P1_28z
   P1_30u --> P1_34
   P1_33 --> P1_34
-  P1_33a --> P1_34
   P1_36b --> P1_34
   P1_36c --> P1_34
   P1_36i --> P1_34
@@ -10583,22 +10582,26 @@ env must set `PDS_DID_PLC_URL`, by env:
   default port (@did-plc/server 0.0.1 `src/bin.ts:18`; step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by
   architecture 19:31Z). Unset, `https://plc.directory` and any other value are refused. Seeds and probes (P1.29s,
   P1.29t) run only under local, so test identities never reach the public directory.
-- **dev** (the 0x40.space stack, decision 20): exactly `https://plc.directory`, and nothing else. C21 (the P1.33a
-  retirement report), C6 (a valid recovery key) and C7 (invites) already gate that stack, so this arm needs no P1.33p
-  dependency. No seed or probe runs under dev; the only intended public operation is Alex's lexicon authority (P1.35).
-- **C21 under dev** (architecture's Amendment 6 of 2026-10-13-local-plc, Q1): no account is created on the dev stack
-  before P1.33p opens it. Under `--env dev`, C21 applies whatever the hostname, because the dev stack is the 0x40.space
-  authority host; until P1.33a's report is complete, dev does not pass. Invites stay required (C7), and issuing one on
-  dev is Alex's runbook step after P1.33p (P1.35 step 1); no agent or script issues one.
+- **dev** (the staging stack, decision 20 and ADR 0025): exactly `https://plc.directory`, and nothing else. C6 (a
+  valid recovery key) and C7 (invites) already gate that stack (C21 is waived under dev since #1174 and gates prod and
+  local on `0x40.space`), so this arm needs no P1.33p dependency. No seed or probe runs under dev; the only intended
+  public operation is Alex's lexicon authority (P1.35).
+- **C21 under dev** (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, superseded for staging by Alex's ruling of
+  2026-10-21 02:41:25Z, alex-answers `c21-dev-waiver`, #1174): the dev stack is the staging PDS on `staging.unset.ac`
+  (ADR 0025), not the 0x40.space authority host, and no 0x40 account carries over, so under `--env dev` C21 is waived
+  with one fixed line and reads nothing. Prod and local on `PDS_HOSTNAME=0x40.space` still require P1.33a's report.
+  Invites stay required (C7), and issuing one on dev is Alex's runbook step after P1.33p (P1.35 step 1); no agent or
+  script issues one.
 - **prod:** exactly `https://plc.directory`, a tightening that follows from P5.02's "No PLC" line (step-book note 1 of
   2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z).
 - The check is C28. No new dependency edge: P1.34t still does not depend on P1.34v.
 
 Done when red fixtures for local (unset, plc.directory, a public look-alike), for dev (unset, the local URL, a
-look-alike) and for prod (unset, the local URL, a look-alike) fail, dev with a non-0x40.space hostname and no complete
-report fails C21, the exact URL for each env passes, and check is green. Every existing `--env dev` pass fixture
-(P2.26b's real `compose.dev.yaml` test, moved from P1.34d item 12, among them) carries a complete retirement-report
-fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
+look-alike) and for prod (unset, the local URL, a look-alike) fail, dev passes C21 with the fixed waiver line whatever
+the hostname and report (#1174; before it, dev with a non-0x40.space hostname and no complete report failed C21), the
+exact URL for each env passes, and check is green. Since #1174 no `--env dev` pass fixture (P2.26b's real
+`compose.dev.yaml` test, moved from P1.34d item 12, among them) needs a retirement-report fixture; architecture's
+Amendment 7 of 2026-10-13-local-plc, Q1, which required one, is superseded for staging by Alex's ruling.
 
 ---
 
@@ -12153,7 +12156,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C18 | edge: the Caddy site for the PDS host (and every site with an upstream) imports `ratelimit.caddy` and carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (read from the config the edge image or mount serves); with C7 and C12 this is plan §5.2's "three settings" |
 | C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit never allowed). Without them the PDS drops every moderation receipt, alert and digest silently |
 | C20 | `PDS_MOD_SERVICE_*` absent (phase-5 F4: only `PDS_REPORT_SERVICE_*` may be set, from Phase 5) |
-| C21 | under `--env dev` whatever the hostname (P1.34t; architecture's Amendment 6 of 2026-10-13-local-plc, Q1), and when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Outside dev, other hostnames skip it (PASS with the fixed reason "skipped: PDS_HOSTNAME is unset or a different host", as built by P1.30j) |
+| C21 | under `--env prod` or `--env local` when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL; other hostnames skip it (PASS with the fixed reason "skipped: PDS_HOSTNAME is unset or a different host", as built by P1.30j). Under `--env dev` waived whatever the hostname (Alex, 2026-10-21 02:41:25Z, alex-answers `c21-dev-waiver`, #1174; supersedes P1.34t's dev rule from architecture's Amendment 6 of 2026-10-13-local-plc, Q1): PASS with the fixed reason `C21_DEV_WAIVER`, which holds no configured value so the runner never withholds it (P1.30m) |
 | C22 | when the env sets `VIDEO_MASTER_MAX_BYTES` (Phase 4 on): `PDS_BLOB_UPLOAD_LIMIT` is set and ≥ it (the PDS default is 5 MB; phase-4-part1 note 10); before Phase 4, PASS with the fixed reason "skipped: VIDEO_MASTER_MAX_BYTES is unset" (as built by P1.30j) |
 | C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS with the fixed reason "skipped: dev stage", as built by P1.30j); the server's own boot refusal (P5.07b) is the second guard |
 | C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack): PASS with the fixed reason "skipped: PDS_HOSTNAME ends in .localhost", as built by P1.30d |
@@ -12271,7 +12274,17 @@ P5.03) depend on P1.30s, P1.30t and P1.30u.
 
 **C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
 holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
-fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file.
+fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file. Under
+`--env dev` C21 is waived (Alex, 2026-10-21 02:41:25Z, alex-answers `c21-dev-waiver`, #1174): staging is a new PDS on
+a new handle domain and no 0x40 account carries over; prod and local keep the report.
+
+Threats (SE-1; the C21 waiver, #1174 and its follow-up): the waiver's whole scope is the `--env` argument, which is
+required, has no default, is read from nowhere else, and is refused when repeated or outside `dev`, `prod`, `local`
+(`inputs.ts:138-152`; `scripts/dev-precheck.ts` forwards only an explicit `--env dev` or `--env local`). What stops
+a 0x40.space PDS from running under dev is not C21 but C18's staging pin: under dev the PDS host must be exactly
+`staging.unset.ac` (`edge.ts:493-501`), the name the dev leaf's SAN and Pangolin's resource carry (ADR 0032). The
+waiver line is a constant that reads no input, and a test checks it against every environment literal in the
+committed `compose.dev.yaml`, because the runner withholds whole any reason that holds a configured value (P1.30m).
 
 **Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
 
@@ -12283,7 +12296,7 @@ fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The ret
   `c16_confirmation_link_required`,
   `c19_moderation_mail_missing_fails`,
   `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
-  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
+  `part_a_complete_required_before_p133p`), `c22_blob_limit_below_master_fails`,
   `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
   `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
 - The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
@@ -13905,7 +13918,7 @@ There is no dev-seed. The createAccount / invite-code / .seeded.json algorithm t
 
 **Edge cases and failures:**
 - Secrets file mode not 0600 → P1.30 C9 refuses.
-- The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.34).
+- The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.33p takes the hostname).
 - Postgres not healthy within 60 s → `migrate` never starts; compose reports unhealthy.
 - A container added to the `edge` network without a review → `compose_dev_networks_match_table` fails.
 - `tap` profile not enabled → nothing depends on it in Phase 1.
@@ -15453,8 +15466,8 @@ every public gate and its evidence lives here.
 - P1.29h's reader (book edit 2026-10-13-p129h-book-lines, Amendment 1): a check refuses the `tools` profile and the
   `pds-token-reader` service on any stack whose `PDS_HOST` is public, with red fixtures.
 - The PLC (architecture's Amendment 4 of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps): this step has
-  no PLC arm. The dev stack it opens already uses exactly `https://plc.directory` under
-  P1.34t's dev arm, gated by C21, C6 and C7, so it gates only the first public exposure (book edit
+  no PLC arm. The dev stack it opens already uses exactly `https://plc.directory` under P1.34t's dev arm, gated by C6
+  and C7 (C21 is waived under dev, #1174), so it gates only the first public exposure (book edit
   2026-10-12-p133-p133a-tailnet-gates). It does not depend on P5.02, so no cycle forms; P1.35 and P1.38 keep their
   dependency on it.
 - Edge cases:
@@ -15467,22 +15480,25 @@ every public gate and its evidence lives here.
   key); `probe_gap_not_counted_as_up`; the outside probe green.
 
 **Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space`. This step runs after
-P1.33a, which runs before P1.34 (book edit 2026-10-13-verify-814-fixes, Amendment 1).
+P1.33a and P1.34 (P1.34 no longer waits for P1.33a since the C21 waiver under dev, #1174; book edit
+2026-10-13-verify-814-fixes, Amendment 1).
 
 ---
 
 ### P1.33a — Retire the 0x40 prototype before going public (Alex; formerly L.01 part A)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.34, and so before P1.33p's public opening (book
-edit 2026-10-12-p133p-public-opening; P1.34 depends on it again: under `--env dev`, C21 applies whatever the hostname
-(architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit 2026-10-13-verify-814-fixes, S2 and Amendment 1);
-P1.30 C21 checks it) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03: retire the old accounts before the
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.33p's public opening, which depends on it and on
+P1.34 (book edit 2026-10-12-p133p-public-opening). It ran before P1.34 too, because under `--env dev` C21 applied
+whatever the hostname (architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit 2026-10-13-verify-814-fixes,
+S2 and Amendment 1), until Alex waived C21 under dev on 2026-10-21 (#1174); P1.34 no longer depends on it, and P1.30
+C21 still checks it under prod and local on `0x40.space` · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03:
+retire the old accounts before the
 development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19
 (settled by decision 24)
 
-**Why here (editor pass, global resolution 8):** P1.34 gives the hostname `0x40.space` to the new development PDS. The
+**Why here (editor pass, global resolution 8):** P1.33p gives the hostname `0x40.space` to the new development PDS. The
 old prototype accounts live on the old PDS at that hostname and use `*.0x40.me` handles, the handle domain the
-production PDS will issue. Once P1.34 runs, the old PDS can no longer delete or export them. So the part of L.01 that
+production PDS will issue. Once P1.33p runs, the old PDS can no longer delete or export them. So the part of L.01 that
 needs the old PDS runs here; the launch gate keeps L.01 part B (the reserved-label placeholders and the final
 `retirement-check`), which reads this step's record.
 
@@ -15493,7 +15509,7 @@ needs the old PDS runs here; the launch gate keeps L.01 part B (the reserved-lab
 
 **Goal:** while the old PDS still answers on `0x40.space`, every prototype account is given notice and an export,
 then deactivated and deleted through that PDS, and its DID is tombstoned with the old rotation key. The old stack is
-shut down and its secrets are retired. Only then does P1.34 take the hostname.
+shut down and its secrets are retired. Only then does P1.33p take the hostname.
 
 **Decided (decision 24; no question to Alex):** every old account is retired: notice and export, then deactivate and
 delete through the old PDS, then a PLC tombstone for each DID with the old rotation key. Old handles become free. A
@@ -15553,13 +15569,13 @@ service (a holder who migrated away).
     pointed at nothing, until L.06.
 9.  Retire the old secrets (retire-0x40-secrets.md, moved here from P5.06): revoke each at its issuer, or record
     that it died with the stack (a key held only inside the destroyed volumes). Each line is dated.
-10. Hand over 0x40.space. Only now may P1.34 point 0x40.space at the new development PDS. retirement-check writes
+10. Hand over 0x40.space. Only now may P1.33p point 0x40.space at the new development PDS. retirement-check writes
     retirement_part_a_complete, which P1.30's C21 requires before any preflight for PDS_HOSTNAME=0x40.space passes.
 ```
 
 **Edge cases and failures:**
-- **The old PDS was already replaced on `0x40.space`** before this step (P1.34 ran first, or the old host died). Steps 5
-  and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain.
+- **The old PDS was already replaced on `0x40.space`** before this step (P1.33p ran first, or the old host died).
+  Steps 5 and 7 are then impossible; only tombstones (step 6, which needs only the rotation key) remain.
   - Notice is still sent.
   - The record says "deleted: impossible, PDS gone".
 - **The old rotation key is lost** → no tombstone is possible. The DIDs stay pointing at a dead host and their handles
@@ -15569,8 +15585,8 @@ service (a holder who migrated away).
 
 **Threats:** the prototype's accounts and DIDs, which stay public identities after the prototype is gone.
   - S A retired DID or handle is reused or still points at a host we no longer control → tombstone or verified
-    migration, checked before P1.34 (`retirement_check_flags_live_did`, `retirement_check_accepts_tombstone`,
-    `part_a_complete_required_by_p134_preflight`).
+    migration, checked before P1.33p (`retirement_check_flags_live_did`, `retirement_check_accepts_tombstone`,
+    `part_a_complete_required_before_p133p`).
   - T A member's identity destroyed while they still use or moved it → tombstone refused for migrated or existing
     accounts (`tombstone_refused_for_migrated_did`, `tombstone_refused_while_account_exists`).
   - I The retirement record leaks addresses or secrets → scanned (`record_has_no_addresses_or_secrets`).
@@ -15580,7 +15596,7 @@ service (a holder who migrated away).
 - `retirement_check_accepts_tombstone`, `retirement_check_unreachable_old_pds_is_unverified`,
   `retirement_check_lists_unrotatable_dids`.
 - `tombstone_refused_for_migrated_did`, `tombstone_refused_while_account_exists`.
-- `part_a_complete_required_by_p134_preflight` (P1.30's `c21_part_a_incomplete_fails`).
+- `part_a_complete_required_before_p133p` (P1.30's `c21_part_a_incomplete_fails`).
 - `record_has_no_addresses_or_secrets` (the secret and PII scan on `0x40-record.md`).
 - Evidence: the ADR; the record, fully dated for part A; the secrets runbook ticked; a `retirement-check` run showing
   every DID retired, migrated away (not ours) or explicitly accepted.
@@ -15606,7 +15622,7 @@ sequenceDiagram
   A->>P: tombstone (old rotation key)
   C->>P: resolve each DID -> tombstoned / not ours
   A->>O: shut down stack, retire secrets
-  Note over O: only now P1.34 takes 0x40.space
+  Note over O: only now P1.33p takes 0x40.space
 ```
 
 ---
@@ -15633,7 +15649,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f, P1.38d, P1.38g (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.37v, P1.38e, P1.38f, P1.38d, P1.38g (the ADR 0031 preconditions; book edit 2026-10-20-adr-0031-no-login), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -15684,9 +15700,10 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
   through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture's section
   labelled 04:05Z, S4).
-- P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
-  (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
-  the public opening (P1.33p).
+- P1.33a's part A report no longer gates this move for staging: under `--env dev`, C21 is waived (Alex, 2026-10-21
+  02:41:25Z, alex-answers `c21-dev-waiver`, #1174; it supersedes architecture's Amendment 6 of 2026-10-13-local-plc, Q1,
+  and Amendment 7, Q1, for staging). P1.33a still runs before prod and before the `0x40.space` hostname, which belongs
+  to the public opening (P1.33p); P1.33p depends on P1.33a, and P1.34 does not.
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `staging.unset.ac`** (ADR 0025's name; the `0x40.space`
@@ -15756,7 +15773,8 @@ A. unset.ac
  4. Send the agent the registrar name and that DNSSEC and the lock are on.
 B. 0x40.space: moved to P1.33p (book edit 2026-10-13-batch-47-after-771, G-1); steps 5 and 6 belong to P1.33p.
 C. Prerequisites on the old prototype (P1.33a, formerly L.01 part A)
- 7. P1.33a part A complete (C21 under dev; see Target; architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
+ 7. P1.33a part A complete before prod and before `0x40.space` (C21 under prod and local); not required for the
+    staging PDS since the C21 waiver (Alex, 2026-10-21 02:41:25Z, #1174; formerly Amendment 7 of 2026-10-13-local-plc).
 D. Dev PDS fit for the authority
  8. Generate the dev PDS recovery key on the offline machine with the P0.12 runbook (a key separate from the
     authority's own offline keys; recorded as its own P0.12 inventory row); put only its did:key in PDS_RECOVERY_DID_KEY, BEFORE any account that matters

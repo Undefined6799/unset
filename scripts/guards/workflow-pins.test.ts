@@ -147,10 +147,13 @@ describe("workflows", () => {
 
   test("main_push_unchanged", () => {
     expect(ci).toMatch(/^ {2}push:\n {4}branches: \[main\]$/m);
-    // Every ci.yml job runs on any event that is not a pull request, so a push to main still runs everything.
+    // Every ci.yml job runs on any event that is not a pull request, so a push to main still runs everything. The
+    // check gate (P0.07d) adds always() in front, so it also runs when a need failed.
     for (const [id, lines] of jobs(code(ci))) {
       const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
-      expect(condition, `ci.yml job ${id}`).toMatch(/^ {4}if: github\.event_name != 'pull_request' \|\| /);
+      const gate =
+        id === "check" ? /^ {4}if: always\(\) && \(github\.event_name != 'pull_request' \|\| [^)]*\)$/ : null;
+      expect(condition, `ci.yml job ${id}`).toMatch(gate ?? /^ {4}if: github\.event_name != 'pull_request' \|\| /);
     }
   });
 
