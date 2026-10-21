@@ -32,3 +32,7 @@ Versions are the root `devDependencies`.
 A local run prints that the images project was left for CI. `npm run test:images` exits when `docker info` fails.
 
 Postgres tests are part of the local and CI runs. They start the pinned image themselves. [Setup](../setup/) names that path. Image tests (`*.image.test.ts`) are the project the table leaves out locally.
+
+## Endpoint pages
+
+`endpoint_pages_match_manifests` in [`scripts/docs/endpoints.test.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.test.ts) fails when `docs/site/content/endpoints/` is stale. `npm test` runs the file, and `npm run check` runs `npm test`. CI job `code` runs it with `npm test -- --units`. The rewrite command and the yaml inputs are on [Docs rules](../docs-rules/).
