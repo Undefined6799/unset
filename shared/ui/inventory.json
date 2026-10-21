@@ -18,7 +18,13 @@
     "sheetSha256": "4174670469d7468d133c3a9546c56a4e3e158c038f7977e1c8a73388aefd1620",
     "props": "ButtonProps",
     "variants": ["type=button", "type=submit", "type=reset"],
-    "status": "built"
+    "status": "built",
+    "extensions": [
+      {
+        "path": "approved-extensions.json",
+        "sha256": "d4e90afe9aa162caf1ffc383e2653ebdbcf024e6d2bde73d0c32bf899311f0a8"
+      }
+    ]
   },
   "Callout": {
     "sheet": "sheet/components/Callout/README.md",
@@ -81,14 +87,26 @@
     "sheetSha256": "b0e61c678fbab72bc1331c456084fc0158b9fd90282625e475627cd81e933c3c",
     "props": "HeaderProps",
     "variants": [],
-    "status": "built"
+    "status": "built",
+    "extensions": [
+      {
+        "path": "approved-extensions.json",
+        "sha256": "d4e90afe9aa162caf1ffc383e2653ebdbcf024e6d2bde73d0c32bf899311f0a8"
+      }
+    ]
   },
   "Icon": {
     "sheet": "sheet/components/Icon/README.md",
     "sheetSha256": "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
     "props": "IconProps",
     "variants": ["size=16", "size=20", "size=24"],
-    "status": "built"
+    "status": "built",
+    "extensions": [
+      {
+        "path": "approved-extensions.json",
+        "sha256": "d4e90afe9aa162caf1ffc383e2653ebdbcf024e6d2bde73d0c32bf899311f0a8"
+      }
+    ]
   },
   "Input": {
     "sheet": "sheet/components/Input/README.md",
@@ -137,7 +155,13 @@
     "sheetSha256": "48bd2e90974787eca83d47eae4c3ebadc86d87d4c7962b895d3bf5c88901ca24",
     "props": "NavigationProps",
     "variants": ["desktop rail", "phone bar and popup"],
-    "status": "built"
+    "status": "built",
+    "extensions": [
+      {
+        "path": "approved-extensions.json",
+        "sha256": "d4e90afe9aa162caf1ffc383e2653ebdbcf024e6d2bde73d0c32bf899311f0a8"
+      }
+    ]
   },
   "NewPosts": {
     "sheet": "sheet/components/NewPosts/README.md",

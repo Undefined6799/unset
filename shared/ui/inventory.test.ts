@@ -9,7 +9,14 @@ import { expect, test } from "vitest";
 
 const UI = import.meta.dirname;
 const STOP_ITEMS = join(UI, "..", "..", "docs", "human", "ui", "stop-items.md");
-type Entry = { sheet: string; sheetSha256: string; props: string; variants: string[]; status: string };
+type Entry = {
+  sheet: string;
+  sheetSha256: string;
+  props: string;
+  variants: string[];
+  status: string;
+  extensions?: { path: string; sha256: string }[];
+};
 const inventory = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8")) as Record<string, Entry>;
 const STATUSES = ["built", "p1.24", "p1.24s", "p1.24a", "p1.24k", "p1.24f", "stop"];
 
@@ -81,6 +88,14 @@ test("inventory_registers_the_approved_navigation_extension", () => {
     props: "NavigationProps",
     variants: ["desktop rail", "phone bar and popup"],
     status: "built",
+    extensions: [
+      {
+        path: "approved-extensions.json",
+        sha256: createHash("sha256")
+          .update(readFileSync(join(UI, "approved-extensions.json")))
+          .digest("hex"),
+      },
+    ],
   });
   expect(readFileSync(join(UI, "components/Navigation/Navigation.tsx"), "utf8")).toContain(
     "export type NavigationProps =",
@@ -119,4 +134,14 @@ test("inventory_all_built", () => {
   const statuses = Object.values(inventory).map((entry) => entry.status);
   expect(statuses.filter((status) => status !== "built" && status !== "stop")).toEqual([]);
   expect(statuses.filter((status) => status === "built")).toHaveLength(34);
+});
+
+test("approved_extension_pointers_preserve_the_imported_inventory", () => {
+  const registered = Object.entries(inventory).filter(([, entry]) => entry.extensions !== undefined);
+  expect(registered.map(([name]) => name).sort()).toEqual(["Button", "Header", "Icon", "Navigation"]);
+  const sha256 = createHash("sha256")
+    .update(readFileSync(join(UI, "approved-extensions.json")))
+    .digest("hex");
+  for (const [, entry] of registered) expect(entry.extensions).toEqual([{ path: "approved-extensions.json", sha256 }]);
+  expect(Object.keys(inventory)).toHaveLength(34);
 });

@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "baseSheet": {
+    "version": "1791232530-a028",
+    "iconReadmeSha256": "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
+    "bundleSha256": "7f80673daba1ffec8d81df6ac2d6a8228b2b97883728234e275d48cda2cf3716"
+  },
+  "designApproval": {
+    "by": "Alex",
+    "date": "2026-10-18",
+    "record": "docs/human/decisions/0027-pds-frontend-distribution.md",
+    "scope": "Existing approved PDS screens and named components; API entries below implement their recorded requirements."
+  },
+  "registeredOn": "2026-10-21",
+  "components": {
+    "Navigation": {
+      "figmaUrls": [
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395"
+      ],
+      "requirements": ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
+      "api": [
+        "itemsPlacement?: \"end\" | \"start\" = \"end\"",
+        "renderLink?: NavigationLinkRenderer",
+        "navigationKey?: string | number"
+      ],
+      "behavior": [
+        "Vertical start stack with existing 16px gaps",
+        "Labels visible on hover and keyboard focus",
+        "Native auto popover; close after caller-confirmed committed navigation",
+        "Pure ./presentation package entry exports Navigation/Button/Input/Icon/Avatar/safeHref and needed types without Header or island runtime"
+      ]
+    },
+    "Header": {
+      "figmaUrls": ["https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=32-2086"],
+      "requirements": ["docs/ai/plans/2026-10-18-pds-ui-design.md#ownership-and-dependency-boundaries"],
+      "api": [
+        "HeaderProps.homeLabel?: string = \"unset.sh home\"",
+        "BrandHeader and BrandHeaderProps, extracted existing brandOnly composition"
+      ],
+      "behavior": [
+        "64px desktop and 56px phone",
+        "Translated brand accessible name",
+        "Pure ./brand-header package entry imports no app island runtime"
+      ]
+    },
+    "Button": {
+      "figmaUrls": [
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=17-456",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978"
+      ],
+      "requirements": ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
+      "api": [
+        "variant?: \"solid\" | \"standalone\" = \"solid\"",
+        "title?: string",
+        "aria-label?: string",
+        "aria-busy?: boolean | \"true\" | \"false\"",
+        "button branch: onClick?: MouseEventHandler<HTMLButtonElement>",
+        "button branch: ref?: Ref<HTMLButtonElement>"
+      ],
+      "behavior": [
+        "Standalone Link appearance with native button semantics",
+        "Existing disabled/current/pending behavior remains caller-owned",
+        "SafeHref anchor branch and refused/disabled-link fallback remain intact"
+      ]
+    }
+  },
+  "iconoir": {
+    "version": "7.12.1",
+    "commit": "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e"
+  },
+  "icons": {
+    "devices": {
+      "iconoirName": "computer",
+      "figmaUrl": "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1906",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/computer.svg",
+      "sourceSha256": "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M2 21L17 21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M21 21L22 21",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
+            "stroke": "currentColor",
+            "strokeWidth": "1.5"
+          }
+        ]
+      ]
+    },
+    "apps": {
+      "iconoirName": "view-grid",
+      "figmaUrl": "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1911",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/view-grid.svg",
+      "sourceSha256": "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z",
+            "stroke": "currentColor",
+            "strokeWidth": "1.5"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z",
+            "stroke": "currentColor",
+            "strokeWidth": "1.5"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z",
+            "stroke": "currentColor",
+            "strokeWidth": "1.5"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z",
+            "stroke": "currentColor",
+            "strokeWidth": "1.5"
+          }
+        ]
+      ]
+    }
+  }
+}
