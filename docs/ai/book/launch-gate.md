@@ -43,7 +43,8 @@ stays here as L.01.
 ```mermaid
 flowchart TD
   subgraph PH1[Phase 1]
-    L01A([P1.33a retire the 0x40 prototype<br/>formerly L.01 part A]) --> P134([P1.34 dev PDS on 0x40.space])
+    L01A([P1.33a retire the 0x40 prototype<br/>formerly L.01 part A]) --> P133P([P1.33p public opening])
+    %% P1.34 no longer depends on P1.33a: C21 is waived under dev (#1174, 2026-10-21)
   end
   SEV([early step: docs/human/severity.md, labels, bug template]) -.-> L02
   P620([P6.20 Phase 6 exit]) --> L00[L.00 refine the launch gate STOP]
@@ -619,8 +620,9 @@ Diagram: none.
 
 **Outline changes** (for `01-outline.md`; this file does not edit it):
 - Add **L.00 "Refine the launch gate"**. L.02, L.03, L.04 and L.01 part B depend on it.
-- **L.01 part A is P1.33a in Phase 1, before P1.34** (done in the editor pass). **P1.34 depends on it.** L.01 at the gate
-  keeps part B: the placeholders and the final `retirement-check`. L.01 depends on L.00, P5.13 and P1.33a.
+- **L.01 part A is P1.33a in Phase 1, before P1.33p's public opening** (done in the editor pass; before P1.34 too
+  until the C21 waiver under dev, #1174, 2026-10-21). **P1.33p depends on it; P1.34 no longer does.** L.01 at the
+  gate keeps part B: the placeholders and the final `retirement-check`. L.01 depends on L.00, P5.13 and P1.33a.
 - **Add L.03a "Retro-scan of every test-period upload"** (editor pass; phase-2 E27, decision 23): depends on L.00 and
   P5.07b; L.06 and P2.25's wipe depend on its record.
 - **Severity definitions, labels and the bug template move to an early step** (Phase 0 or 1, beside the issue
