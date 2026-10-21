@@ -144,7 +144,7 @@ ADR 0028 and the Phase 5 records.
   mounted file secrets: mode 0400, owned by the edge's uid (65532), inside a 0700 folder owned by the deploy user
   (`deployment/preflight/checks/secrets.ts:4-8`, :266, :276-279), which C9 checks. Under dev nothing in preflight
   reads a PEM body (`local-leaf.ts` reads one under local only). A private key committed by mistake is caught by
-  gitleaks in CI (gitleaks 8.30.1's PEM rule matches `BEGIN ... PRIVATE KEY` only, `config/gitleaks.toml:2634-2637`,
+  gitleaks in CI (gitleaks 8.30.1's PEM rule matches `BEGIN ... PRIVATE KEY` only, `config/gitleaks.toml:2785-2787`,
   and `.github/.gitleaks.toml` extends the defaults); a committed certificate is caught by nothing, since it is
   not a secret, and C9 reads only the declared secret paths, so keeping the certificate out of the checkout is a
   runbook rule, not an enforced one. C9 refuses a secret file anywhere inside `deployment/`.
