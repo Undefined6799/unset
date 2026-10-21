@@ -25,10 +25,21 @@ Versions are the root `devDependencies`.
 
 | Mode | How it starts | What runs |
 | --- | --- | --- |
-| local | `npm test`, when `CI` is not `true` | Every project except `images` |
-| ci | `CI=true` or `GITHUB_ACTIONS=true` | Those projects, then `images` |
+| local | `npm test`, when `CI` is not `true` and `GITHUB_ACTIONS` is unset | Every project except `images` |
+| units | `npm test -- --units` | Every project except `images`, under CI's rules: every listed non-image test file must run, and nothing is skipped |
+| ci | `CI=true` or `GITHUB_ACTIONS=true`, neither flag | Non-image projects, then `images` |
 | images | `npm run test:images` | The `images` project only |
 
-A local run prints that the images project was left for CI. `npm run test:images` exits when `docker info` fails.
+`--units` and `--images` are exclusive. `GITHUB_ACTIONS` set while `CI` is not `true` is refused. A local run prints that the images project was left for CI. `npm run test:images` exits when `docker info` fails.
 
-Postgres tests are part of the local and CI runs. They start the pinned image themselves. [Setup](../setup/) names that path. Image tests (`*.image.test.ts`) are the project the table leaves out locally.
+## CI
+
+[`.github/workflows/ci.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/ci.yml) runs `code` and `image-tests` in parallel. `check` is the required name in [`.github/required-checks.json`](https://github.com/Undefined6799/unset/blob/main/.github/required-checks.json). It needs both and fails unless both succeeded.
+
+| Job | What it runs |
+| --- | --- |
+| `code` | Includes typecheck, lint, guards, then `npm test -- --units` |
+| `image-tests` | `npm run test:images` |
+| `check` | No tests. Fails unless `code` and `image-tests` both succeeded |
+
+Postgres tests run with the non-image projects. They start the pinned image themselves. [Setup](../setup/) names that path. Image tests (`*.image.test.ts`) are the `images` project. Local and units leave them out.
