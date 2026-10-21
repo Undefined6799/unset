@@ -1,7 +1,7 @@
 {
   "sheetUrl": "https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt",
-  "sheetVersion": "1791232530-a028",
-  "copiedAt": "2026-10-06",
+  "sheetVersion": "1792616975-11d7",
+  "copiedAt": "2026-10-21",
   "files": [
     {
       "path": "sheet/tokens.json",
@@ -11,7 +11,7 @@
     {
       "path": "sheet/components-index.d.ts.txt",
       "from": "project/components/index.d.ts",
-      "sha256": "cc767cdb98c71b3251a501feafc905d6ec5a1119e097a0f3882270e97d7bdd2b"
+      "sha256": "cc6f8f2e4a99fcc421fc4ce0e904cf594085af67f025f634a9d3acaea253abab"
     },
     {
       "path": "fonts/SpaceGrotesk-Variable.woff2",
@@ -26,7 +26,7 @@
     {
       "path": "sheet/bundle.js.txt",
       "from": "project/components/bundle.js",
-      "sha256": "7f80673daba1ffec8d81df6ac2d6a8228b2b97883728234e275d48cda2cf3716"
+      "sha256": "6dbc72c1e7976f761e89a1c70db45c415af3f4416e25442ccd9f7c62c438dbb5"
     },
     {
       "path": "sheet/components/AsciiBackground/README.md",
@@ -166,7 +166,7 @@
     {
       "path": "sheet/components/Switch/README.md",
       "from": "project/components/Switch/README.md",
-      "sha256": "27922fb253951cb32fa480959a60558d66fed300ff2fc84994af486f56275929"
+      "sha256": "a0889cc6a85f8af77cefccfa7dfcc67c92033597dd615ef2d0b55925bd0965ea"
     },
     {
       "path": "sheet/components/Table/README.md",

@@ -12,8 +12,8 @@ describe("Switch", () => {
     expect(html).toBe(
       `<label class="${styles.root}" for="email"><span>show my email</span>` +
         `<input id="email" class="${styles.input}" type="checkbox" role="switch" name="showEmail" checked=""/>` +
-        `<span class="${styles.track}" aria-hidden="true"><span class="${styles.on}">[──◉] on</span>` +
-        `<span class="${styles.off}">[○──] off</span></span></label>`,
+        `<span class="${styles.track}" aria-hidden="true"><span class="${styles.on}">[  ◉] on</span>` +
+        `<span class="${styles.off}">[○  ] off</span></span></label>`,
     );
     expect(html).not.toMatch(/aria-checked|<script/);
   });

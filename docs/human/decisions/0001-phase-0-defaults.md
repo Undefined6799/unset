@@ -517,3 +517,10 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   never checks out pull request code. Forks are refused. ADR 0019 is not edited: this class is the
   only narrowing of "all other merges stay with Alex", and a verifier still must not merge the pull
   request that adds this record. Proposed, awaiting Alex.
+- **Web search through our own SearXNG (P3.14s; own record: [0035](0035-web-search-searxng.md)):** the app's
+  search bar also searches the web (Alex, 2026-10-21 22:05:56Z). One `searxng` service of our own in the stack, no
+  published port and no edge site, on an internal `search` network with `web` and its own `search_egress`; `web`
+  asks it through a net-guard `internal` policy with one origin, never from the browser; the query is content and
+  never a log, audit or metric field (SE-7), the instance gets no client address, result links carry no referrer;
+  our `search` and a global `web_search` limit, the engine's limiter off; a failed or slow engine leaves the page
+  up with the directory results. No public instance and no search API vendor. Proposed, awaiting Alex.

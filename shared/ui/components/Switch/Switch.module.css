@@ -1,4 +1,4 @@
-/* Switch (P1.24s; sheet components/Switch/README.md, v45): a 40px row; the words always show, so the state never
+/* Switch (P1.24s; sheet components/Switch/README.md, v54): a 40px row; the words always show, so the state never
    rests on colour. The input stays in the tab order and the accessibility tree, out of sight. */
 @layer components {
   .root {
