@@ -26,6 +26,7 @@ import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
+import { C21_DEV_WAIVER, c21 } from "./checks/host.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
@@ -396,7 +397,7 @@ const as4242 =
     const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
-/** A complete retirement report: every dev stack needs one, whatever its hostname (C21; local-plc Amendments 6-7). */
+/** A complete retirement report (C21): prod and local on the old host need one; dev is waived (Alex, 2026-10-21). */
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   // A dev pass fixture carries the complete report unless the test names its own (`report: undefined` for none).
@@ -2223,21 +2224,43 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     );
   });
 
-  test("c21_dev_needs_the_report_whatever_the_hostname", async () => {
-    // Under --env dev C21 applies to any PDS hostname, so no dev account exists before P1.33a (local-plc Amendment 6,
-    // Q1); prod and local keep the 0x40.space rule.
-    expect(await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).toMatch(
-      /input missing: .*retirement-check\.json$/,
-    );
+  test("c21_dev_is_waived_whatever_the_report", async () => {
+    // Under --env dev C21 is waived for staging (Alex, 2026-10-21 02:41:25Z: a new PDS and a new handle domain, no
+    // 0x40 account carries over): no report, a half report and any hostname all pass with the one fixed line, which
+    // names the waiver and no value. Prod and local keep the 0x40.space rule below.
+    const waived = `PASS C21 ${C21_DEV_WAIVER}`;
+    expect(C21_DEV_WAIVER).toMatch(/^skipped: C21 waived under --env dev/);
+    expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines).toContain(waived);
     const half = '{"retirement_part_a_complete": false}';
-    await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev");
+    expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev")).lines).toContain(waived);
     for (const name of ["pds.localhost", "dev.example.test", "0x40.space"]) {
       const compose = host(name).replace("name: unset-prod", "name: unset-dev");
-      expect(failed((await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines), name).toContain(
-        "C21",
-      );
+      const { lines } = await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev");
+      expect(failed(lines), name).not.toContain("C21");
+      expect(lines, name).toContain(waived);
     }
     expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
+  });
+
+  test("c21_prod_and_local_still_need_the_report_on_the_old_host", () => {
+    // The waiver is dev's alone: on 0x40.space, prod and local read the report and fail without it or with part A
+    // incomplete, exactly as before.
+    const signal = new AbortController().signal;
+    const inputs = (env: string, report: string | null) =>
+      ({
+        env,
+        serviceEnv: new Map([["pds", new SecretMap([["PDS_HOSTNAME", "0x40.space"]])]]),
+        retirementReportPath: "docs/human/retirement/retirement-check.json",
+        readText: () => report,
+      }) as unknown as Inputs;
+    for (const env of ["prod", "local"]) {
+      expect(c21.run(inputs(env, null), signal), env).toEqual(missing("docs/human/retirement/retirement-check.json"));
+      expect(c21.run(inputs(env, '{"retirement_part_a_complete": false}'), signal), env).toEqual(
+        fail("the retirement report does not mark part A complete"),
+      );
+      expect(c21.run(inputs(env, PART_A_DONE), signal), env).toEqual(pass());
+    }
+    expect(c21.run(inputs("dev", null), signal)).toEqual(pass(C21_DEV_WAIVER));
   });
 
   test("c28_dev_and_prod_use_exactly_the_public_plc", async () => {
