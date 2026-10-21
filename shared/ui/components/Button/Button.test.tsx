@@ -1,11 +1,15 @@
 // Button (P1.24): the sheet's Button (components/Button/README.md, index.d.ts) as built. Differences from the sheet's
 // d.ts: `as="a"` with `href: SafeHref | null` replaces `href?: string`; `next` adds the trailing icon; no `onClick`
 // (the kit renders on the server with no JS); `name`, `value` and `form` pass through for form posts.
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { safeHref } from "../../safe-href.ts";
 import styles from "./Button.module.css";
 import { Button } from "./Button.tsx";
+
+// The outline's fill (approved 2026-10-21): decoration only, so empty and hidden from assistive tech.
+const FILL = `<span class="${styles.fill}" aria-hidden="true"></span>`;
 
 describe("Button", () => {
   it("button_renders_single_style", () => {
@@ -17,12 +21,12 @@ describe("Button", () => {
       </Button>,
     );
     for (const html of [plain, submit, link]) expect(html).toMatch(new RegExp(`^<(button|a) class="${styles.root}"`));
-    expect(link).toBe(`<a class="${styles.root}" href="/settings">Settings</a>`);
+    expect(link).toBe(`<a class="${styles.root}" href="/settings">${FILL}Settings</a>`);
   });
 
   it("button_type_default_button", () => {
     expect(renderToStaticMarkup(<Button>Save</Button>)).toBe(
-      `<button class="${styles.root}" type="button">Save</button>`,
+      `<button class="${styles.root}" type="button">${FILL}Save</button>`,
     );
     expect(renderToStaticMarkup(<Button type="submit">Save</Button>)).toMatch(/ type="submit"/);
   });
@@ -34,7 +38,7 @@ describe("Button", () => {
         Open
       </Button>,
     );
-    expect(html).toBe(`<button class="${styles.root}" type="button" disabled="">Open</button>`);
+    expect(html).toBe(`<button class="${styles.root}" type="button" disabled="">${FILL}Open</button>`);
     expect(html).not.toMatch(/href|javascript/);
   });
 
@@ -49,10 +53,18 @@ describe("Button", () => {
     expect(link).toMatch(/^<button [^>]*disabled=""/);
   });
 
+  it("button_outline_edge_and_fill", () => {
+    const css = readFileSync(new URL("./Button.module.css", import.meta.url), "utf8");
+    expect(css).toMatch(/--button-edge:\s*var\(--color-line-strong\)/);
+    expect(css).toMatch(/--button-radius:\s*var\(--radius-sm\)/);
+    expect(css).toMatch(/--button-fill:\s*var\(--surface\);/);
+    expect(css).toMatch(/color:\s*var\(--color-ink\);/);
+  });
+
   it("next_icon_on_button", () => {
     const html = renderToStaticMarkup(<Button next>Continue</Button>);
     expect(html).toMatch(
-      /^<button [^>]*>Continue<svg width="16" height="16" [^>]*aria-hidden="true" focusable="false">/,
+      /^<button [^>]*><span [^>]*><\/span>Continue<svg width="16" height="16" [^>]*aria-hidden="true" focusable="false">/,
     );
     expect(html).not.toContain("→");
   });

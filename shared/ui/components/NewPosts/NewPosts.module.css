@@ -3,6 +3,7 @@
    slides up 160ms when hidden, with no slide under reduced motion. */
 @layer components {
   .root {
+    --surface: var(--color-surface-raised);
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);

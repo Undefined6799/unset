@@ -1,5 +1,5 @@
 /* Input and the shared field parts (P1.24; sheet components/Input/README.md, v45). base.css draws the bare control:
-   40px, 1px `line-strong` border, `radius-xs`, mono 14px, hover and disabled; this adds the label, the messages and
+   40px, 1px `line-strong` border, `radius-sm`, mono 14px, hover and disabled; this adds the label, the messages and
    the error border. Textarea and Select use these classes too. */
 @layer components {
   .field {

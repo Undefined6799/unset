@@ -130,7 +130,7 @@
     font-family: var(--font-mono);
   }
 
-  /* The sheet's Input: 40px, 1px `line-strong` border, the button's 2px corner, mono 14px. */
+  /* The sheet's Input: 40px, 1px `line-strong` border, the button's 4px corner (`radius-sm`), mono 14px. */
   input:not([type="checkbox"], [type="radio"], [type="submit"], [type="button"], [type="reset"], [type="hidden"]),
   textarea,
   select {
@@ -140,7 +140,7 @@
     margin: 0;
     padding: 0 var(--space-3);
     border: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     background-color: var(--color-ground);
     color: var(--color-ink);
     font-family: var(--font-mono);
@@ -166,12 +166,18 @@
     border-color: var(--color-ink-muted);
   }
 
-  /* The sheet's Button: `ink` fill, `on-ink` label, bottom-right corner cut off at `cut`. The fill is painted on
-     ::before so the clip never clips the focus outline. */
+  /* The sheet's outline Button (approved 2026-10-21): an `ink` label, a 1px `line-strong` edge around the ground,
+     `radius-sm` corners, bottom-right corner cut off at `cut`. The edge is ::before and the fill ::after, 1px inside
+     it, so the clip never clips the focus outline. Components that sit on another surface set --surface. The edge
+     and fill paint only a bare <button>: a component's button (it carries a class) draws its own look, or none. */
   button,
   input[type="submit"] {
     --base-cut: var(--radius-cut);
-    --base-fill: var(--color-ink);
+    --base-edge: var(--color-line-strong);
+    --base-fill: var(--surface);
+    /* The edge's width, and the fill's cut moved in by 1 - 1/sqrt(2) (0.41px) so the diagonal edge is 1px too. */
+    --base-hairline: 1px;
+    --base-cut-inner: calc(var(--base-cut) - 0.41px);
     box-sizing: border-box;
     position: relative;
     isolation: isolate;
@@ -179,13 +185,13 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-height: 40px;
+    min-height: 32px;
     margin: 0;
-    padding: var(--space-3) var(--space-6);
+    padding: var(--space-2) var(--space-4);
     border: 0;
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     background-color: transparent;
-    color: var(--color-on-ink);
+    color: var(--color-ink);
     font-family: var(--font-mono);
     font-size: var(--type-label-size);
     line-height: var(--type-label-line);
@@ -197,18 +203,36 @@
     appearance: none;
   }
 
-  button::before {
+  button:not([class])::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: calc(var(--z-base) - 1);
-    border-radius: var(--radius-xs);
-    background-color: var(--base-fill);
+    border-radius: var(--radius-sm);
+    background-color: var(--base-edge);
     clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--base-cut)), calc(100% - var(--base-cut)) 100%, 0 100%);
   }
 
-  /* An <input> has no ::before, so a submit input takes the plain ink fill without the cut. */
+  /* The fill, one hairline inside the edge. */
+  button:not([class])::after {
+    content: "";
+    position: absolute;
+    inset: var(--base-hairline);
+    z-index: calc(var(--z-base) - 1);
+    border-radius: calc(var(--radius-sm) - var(--base-hairline));
+    background-color: var(--base-fill);
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--base-cut-inner)),
+      calc(100% - var(--base-cut-inner)) 100%,
+      0 100%
+    );
+  }
+
+  /* An <input> has no ::before, so a submit input takes a plain edge without the cut. */
   input[type="submit"] {
+    border: 1px solid var(--base-edge);
     background-color: var(--base-fill);
   }
 
@@ -255,7 +279,7 @@
   }
 
   input[type="checkbox"]:checked::before {
-    content: "[x]";
+    content: "[\D7]";
   }
 
   input[type="radio"]::before {
@@ -297,7 +321,7 @@
 
   button[disabled],
   input[type="submit"][disabled] {
-    --base-fill: var(--color-line);
+    --base-edge: var(--color-line);
     color: var(--color-ink-muted);
   }
 

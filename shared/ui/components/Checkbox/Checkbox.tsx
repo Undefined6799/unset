@@ -1,4 +1,4 @@
-// Checkbox (P1.24; sheet components/Checkbox/README.md, v45): a real checkbox drawn as text, `[x]` in `success` or
+// Checkbox (P1.24; sheet components/Checkbox/README.md, v81): a real checkbox drawn as text, `[×]` in `success` or
 // `[ ]` in `ink-muted` (base.css draws the brackets on the input itself, so the focus outline goes around them),
 // then the label. Server-rendered with no JS: `defaultChecked` sets its first state and it posts with its form.
 import { type ReactNode, useId } from "react";

@@ -1,6 +1,6 @@
 # Footer
 
-The site footer: the mark with "U+25C9" beneath it on the left, link columns on the right, and a small `mono` line at the bottom, over a 1px `line` rule.
+The site footer: the mark with "U+25C9" beneath it on the left, link columns on the right, and a small `mono` line at the bottom, on `surface-sunken` (one step darker than the page, Alex 2026-10-21) under a 1px `line` rule.
 
 ## Provide
 

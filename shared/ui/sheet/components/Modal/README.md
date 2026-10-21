@@ -1,6 +1,6 @@
 # Modal
 
-Level 4: a dialog on `ground` with a 1px `ink` border, over the `scrim`. No shadow: the tinted backdrop is what lifts it.
+Level 4: a dialog on `ground` with a 1px `ink` border and 4px corners (`radius-sm`), over the `scrim`. No shadow: the tinted backdrop is what lifts it.
 
 ## Provide
 

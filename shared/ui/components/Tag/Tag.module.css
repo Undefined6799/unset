@@ -1,7 +1,22 @@
-/* Tag (P1.24; sheet components/Tag/README.md, v45): no fill, no border. */
+/* Tag (P1.24; sheet components/Tag/README.md, quiet brackets approved by Alex 2026-10-21): no fill, no border. The
+   word takes the status colour and is uppercased; the brackets stay `ink-muted`; one space inside each bracket. Set in
+   the `label` size and tracking (12px): the sheet's 0.86em is 12px in the 14px text tags sit in, and token-only CSS
+   takes the token rather than a relative size. */
 @layer components {
   .root {
     font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    white-space: pre;
+  }
+
+  .bracket {
+    color: var(--color-ink-muted);
+  }
+
+  .word {
+    text-transform: uppercase;
   }
 
   .ok {

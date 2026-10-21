@@ -39,26 +39,28 @@
   }
   :root {
     color-scheme: dark;
-    --color-ground: #0a090c;
-    --color-surface-raised: #131216;
-    --color-surface-card: #161519;
+    --color-ground: #17161b;
+    --color-surface-raised: #201f24;
+    --color-surface-card: #232227;
+    --color-surface-sunken: #0f0e12;
     --color-ink: #f0edee;
     --color-on-ink: #0a090c;
     --color-ink-muted: #a19ea2;
-    --color-line: #242228;
-    --color-line-strong: #6f6c71;
+    --color-line: #312f36;
+    --color-line-strong: #757278;
     --color-focus: var(--color-ink);
-    --color-shadow-hard: var(--color-line-strong);
-    --color-scrim: rgba(10, 9, 12, 0.75);
-    --color-plum: #d7469b;
+    --color-shadow-hard: #0a090c;
+    --color-scrim: rgba(23, 22, 27, 0.75);
+    --color-plum: #dc5ca7;
     --color-on-plum: #0a090c;
-    --color-cyan: #048ba8;
+    --color-cyan: #1d97b1;
     --color-on-cyan: #0a090c;
     --color-emerald: #16db93;
     --color-on-emerald: #0a090c;
     --color-link: var(--color-cyan);
     --color-success: var(--color-emerald);
     --color-danger: var(--color-plum);
+    --surface: var(--color-ground);
     --font-display:
       "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Android", ui-sans-serif, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -104,6 +106,7 @@
     --space-24: 96px;
     --radius-0: 0;
     --radius-xs: 2px;
+    --radius-sm: 4px;
     --radius-full: 9999px;
     --radius-cut: 10px;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -126,11 +129,13 @@
     --color-ground: #f0edee;
     --color-surface-raised: #f7f5f6;
     --color-surface-card: #fbfafa;
+    --color-surface-sunken: #e2dee0;
     --color-ink: #0a090c;
     --color-on-ink: #f0edee;
     --color-ink-muted: #5a575b;
     --color-line: #d6d2d4;
     --color-line-strong: #7e7b80;
+    --color-shadow-hard: var(--color-line-strong);
     --color-scrim: rgba(240, 237, 238, 0.75);
     --color-plum: #a4036f;
     --color-on-plum: #f0edee;
@@ -148,11 +153,13 @@
       --color-ground: #f0edee;
       --color-surface-raised: #f7f5f6;
       --color-surface-card: #fbfafa;
+      --color-surface-sunken: #e2dee0;
       --color-ink: #0a090c;
       --color-on-ink: #f0edee;
       --color-ink-muted: #5a575b;
       --color-line: #d6d2d4;
       --color-line-strong: #7e7b80;
+      --color-shadow-hard: var(--color-line-strong);
       --color-scrim: rgba(240, 237, 238, 0.75);
       --color-plum: #a4036f;
       --color-on-plum: #f0edee;

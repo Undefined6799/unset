@@ -17,7 +17,9 @@ describe("Input", () => {
       /<input aria-describedby="handle-hint handle-error" aria-invalid="true" id="handle" [^>]*name="handle"/,
     );
     expect(html).toContain('<p id="handle-hint"');
-    expect(html).toMatch(/<p id="handle-error" class="[^"]+"><span class="[^"]+">\[err\]<\/span> taken<\/p>/);
+    expect(html).toMatch(
+      /<p id="handle-error" class="[^"]+"><span class="[^"]+"><span class="[^"]+">\[ <\/span><span class="[^"]+">err<\/span><span class="[^"]+"> \]<\/span><\/span> taken<\/p>/,
+    );
   });
 
   it("field_without_messages_has_no_aria", () => {

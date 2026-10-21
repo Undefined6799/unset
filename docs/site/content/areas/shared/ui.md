@@ -7,7 +7,7 @@ Generic UI: the design sheet copy, tokens, icons, kit components and `safeHref`.
 
 ## Owns
 
-`shared/ui/sheet/` is a pinned copy of the unset.sh design sheet. `sheet/source.json` records version `1791232530-a028`, copied 2026-10-06, and a sha256 per file. Tokens change on the sheet. The copy is updated in a PR that updates `source.json` and the generated CSS together (ADR 0016).
+`shared/ui/sheet/` is a pinned copy of the unset.sh design sheet. `sheet/source.json` records version `1792621080-00d4`, copied 2026-10-21, and a sha256 per file. Tokens change on the sheet. The copy is updated in a PR that updates `source.json` and the generated CSS together (ADR 0016).
 
 Generated styles, which `apps/web/src/styles.ts` globs:
 

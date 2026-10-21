@@ -13,7 +13,7 @@ export interface ButtonProps {
   className?: string;
 }
 
-/** Solid `ink` button, no border, square with the bottom-right corner cut off at `cut`. */
+/** Outline button (approved 2026-10-21): a 1px `line-strong` edge, `ink` label, 4px corners (`radius-sm`) with the bottom-right corner cut off at `cut`; colours stay on hover. */
 export declare function Button(props: ButtonProps): JSX.Element;
 
 export interface MarkProps {
@@ -45,11 +45,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   label?: string;
   /** Helper text under the field. */
   hint?: string;
-  /** Error text; turns the border `danger` and prints "[err] <error>" under the field. */
+  /** Error text; turns the border `danger` and prints "[ ERR ] <error>" under the field. */
   error?: string;
   className?: string;
 }
-/** Single-line text field with the button's 2px corner. */
+/** Single-line text field with the button's 4px corner (`radius-sm`). */
 export declare function Input(props: InputProps): JSX.Element;
 
 export interface LinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "className"> {
@@ -63,11 +63,11 @@ export declare function Link(props: LinkProps): JSX.Element;
 export interface TagProps {
   /** ok: `success`. err: `danger`. info: `link`. plain: `ink-muted` (default). */
   status?: "ok" | "err" | "info" | "plain";
-  /** The word inside the brackets; defaults to the status name. */
+  /** The word inside the brackets, shown uppercase; defaults to the status name. */
   children?: ReactNode;
   className?: string;
 }
-/** Bracketed mono text, "[err]"; no fill, no border. */
+/** Bracketed mono text, "[ ERR ]": word uppercased in the status colour, brackets ink-muted; no fill, no border. */
 export declare function Tag(props: TagProps): JSX.Element;
 
 export interface CalloutProps {
@@ -141,7 +141,7 @@ export interface CheckboxProps {
   disabled?: boolean;
   className?: string;
 }
-/** Text checkbox: [x] / [ ]. */
+/** Text checkbox: [×] / [ ]. */
 export declare function Checkbox(props: CheckboxProps): JSX.Element;
 
 export interface RadioGroupProps {
@@ -224,7 +224,7 @@ export interface ModalProps {
   dismissable?: boolean;
   className?: string;
 }
-/** Level 4: a dialog on `ground` with a 1px `ink` border over the `scrim`; no shadow. */
+/** Level 4: a dialog on `ground` with a 1px `ink` border and 4px corners over the `scrim`; no shadow. */
 export declare function Modal(props: ModalProps): JSX.Element | null;
 
 /* Added 2026-10-03 and 2026-10-04, each approved by Alex. */
@@ -354,3 +354,36 @@ export interface FeedMoreProps {
 }
 /** Approved 2026-10-04. The bottom of an endless feed: an "older posts" link that loads by itself as you scroll near it. */
 export declare function FeedMore(props: FeedMoreProps): JSX.Element;
+
+export interface SearchRow { label: string; meta?: string; href?: string }
+export interface SearchGroup {
+  /** Section heading, e.g. "on unset" or "web" (shown uppercase). */
+  label: string;
+  items: SearchRow[];
+  /** Optional last row of the section. With `search: true` it runs `onSearch` and shows the ↵ key. */
+  more?: SearchRow & { search?: boolean };
+}
+export interface SearchProps {
+  value?: string;
+  defaultValue?: string;
+  onChange?: (query: string) => void;
+  /** Results to show while typing; the caller fetches them. Web results come from our server (SearXNG), never the browser. */
+  groups?: SearchGroup[];
+  /** Called with a picked row (an item or a section's "more" row). */
+  onPick?: (row: SearchRow) => void;
+  /** Enter: full search on unset (unless a row is arrowed to). */
+  onSearch?: (query: string) => void;
+  /** Ctrl+Enter, or Cmd+Enter on a Mac: web search. Also adds the closing "search the web for …" row. */
+  onSearchWeb?: (query: string) => void;
+  webLabel?: string;
+  placeholder?: string;
+  /** Accessible name; defaults to "search". */
+  label?: string;
+  /** Press / anywhere to focus the bar (default true). */
+  shortcut?: boolean;
+  defaultOpen?: boolean;
+  id?: string;
+  className?: string;
+}
+/** Approved 2026-10-21. Search bar: filled at rest with a / key hint, results open below as a combobox list. */
+export declare function Search(props: SearchProps): JSX.Element;

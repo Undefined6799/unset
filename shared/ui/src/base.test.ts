@@ -33,9 +33,28 @@ describe("base.css", () => {
   test("checkbox_drawn_as_text", () => {
     expect(declarations('input[type="checkbox"],\n  input[type="radio"]')).toMatch(/appearance:\s*none/);
     expect(declarations('input[type="checkbox"]::before')).toMatch(/content:\s*"\[ \]"/);
-    expect(declarations('input[type="checkbox"]:checked::before')).toMatch(/content:\s*"\[x\]"/);
+    // U+00D7 sits centred between the brackets where a letter x sits low (Alex 2026-10-21, sheet Checkbox).
+    expect(declarations('input[type="checkbox"]:checked::before')).toMatch(/content:\s*"\[\\D7\]"/);
     expect(declarations('input[type="radio"]::before')).toMatch(/content:\s*"\( \)"/);
     expect(declarations('input[type="radio"]:checked::before')).toMatch(/content:\s*"\(•\)"/);
+  });
+
+  test("button_drawn_as_outline", () => {
+    // The sheet's outline Button (approved 2026-10-21): an `ink` label, a `line-strong` edge (::before) and the page's
+    // ground inside it (::after, 1px in), with `radius-sm` corners.
+    const button = declarations('button,\n  input[type="submit"]');
+    expect(button).toMatch(/color:\s*var\(--color-ink\)/);
+    expect(button).toMatch(/border-radius:\s*var\(--radius-sm\)/);
+    expect(declarations("button:not([class])::before")).toMatch(/background-color:\s*var\(--base-edge\)/);
+    expect(declarations("button:not([class])::after")).toMatch(/inset:\s*var\(--base-hairline\)/);
+    expect(declarations("button:not([class])::after")).toMatch(/background-color:\s*var\(--base-fill\)/);
+    expect(button).toMatch(/--base-fill:\s*var\(--surface\);/);
+  });
+
+  test("fields_take_radius_sm", () => {
+    const fields =
+      'input:not([type="checkbox"], [type="radio"], [type="submit"], [type="button"], [type="reset"], [type="hidden"]),\n  textarea,\n  select';
+    expect(declarations(fields)).toMatch(/border-radius:\s*var\(--radius-sm\)/);
   });
 
   test("forced_colors_restores_native_controls", () => {

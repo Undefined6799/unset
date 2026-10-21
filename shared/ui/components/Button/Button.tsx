@@ -1,5 +1,5 @@
-// Button (P1.24; sheet components/Button/README.md, v45): one style, the solid `ink` shape with its bottom-right
-// corner cut. A link that looks like a button takes a `SafeHref`; a refused link (`null`) renders a disabled button
+// Button (P1.24; sheet components/Button/README.md, outline style approved 2026-10-21): one style, a `line-strong`
+// edge around the surface it sits on, with its bottom-right corner cut. A link that looks like a button takes a `SafeHref`; a refused link (`null`) renders a disabled button
 // with no `href` at all, so an unsafe link never reaches the page.
 import type { ReactNode } from "react";
 import type { SafeHref } from "../../safe-href.ts";
@@ -24,8 +24,10 @@ export type ButtonProps = ButtonCommon &
 
 export function Button(props: ButtonProps) {
   const className = classNames(styles.root, props.className);
+  // The fill span paints the inside; it is decoration, so it carries no text and is hidden from assistive tech.
   const label = (
     <>
+      <span className={styles.fill} aria-hidden="true" />
       {props.children}
       {props.next === true ? <Icon name="next" size={16} /> : null}
     </>
