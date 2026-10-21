@@ -357,14 +357,19 @@ is never run. Our images are built for linux/amd64 only, so the deploy host is a
 again for each cosign bump:
 
 ```sh
-curl -fsSLo /tmp/cosign https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64
-echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  /tmp/cosign" | sha256sum -c -
-sudo install -o root -g root -m 0755 /tmp/cosign /usr/local/bin/cosign
-rm /tmp/cosign
+(
+  set -euo pipefail
+  dir="$(mktemp -d)"
+  trap 'rm -rf -- "$dir"' EXIT
+  curl -fsSLo "$dir/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64
+  echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  $dir/cosign" | sha256sum -c -
+  sudo install -o root -g root -m 0755 "$dir/cosign" /usr/local/bin/cosign
+)
 ```
 
-The sum is the one in v3.1.3's `cosign_checksums.txt` and in the workflows. If `sha256sum -c` does not print `OK`,
-stop: install nothing and report it.
+The sum is the one in v3.1.3's `cosign_checksums.txt` and in the workflows. The subshell stops at the first failing
+command, so a failed download or a sum that does not match installs nothing; the private temporary folder is removed
+either way. If it stops, report it.
 
 ## Starting and stopping
 
