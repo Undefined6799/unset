@@ -24,3 +24,13 @@
 	}
 	respond @xrpc_basic 401
 }
+
+# Blob routes stay shut on the dev PDS site until P5.07b's real scan exists (P1.38f; ADR 0031 Decision 4): a public
+# getBlob would be an unscanned public image host. Matched on the decoded path (Caddy path_regexp runs on the
+# URI-decoded path, caddyserver/website 1957519 src/docs/markdown/caddyfile/matchers.md:707) in any letter case, with
+# any run of slashes and a trailing slash, so no spelling of the three methods reaches the PDS. 404, as the admin
+# namespaces get.
+(blob-deny) {
+	@blob path_regexp (?i)^/+xrpc/+com\.atproto\.(?:repo\.uploadblob|sync\.getblob|repo\.importrepo)/*$
+	respond @blob 404
+}
