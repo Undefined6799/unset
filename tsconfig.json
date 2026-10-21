@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "apps/web" },
+    { "path": "apps/pds" },
     { "path": "scripts" },
     { "path": "scripts/ui" },
     { "path": "deployment" },

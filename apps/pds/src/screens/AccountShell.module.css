@@ -1,0 +1,47 @@
+@layer screens {
+  .root {
+    height: 100dvh;
+    --pds-safe: max(calc(var(--space-4) + var(--space-1)), env(safe-area-inset-bottom));
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-display);
+  }
+  .header {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: var(--z-menu);
+  }
+  .main {
+    position: absolute;
+    inset: calc(var(--space-8) * 2) 0 0 calc(var(--space-12) + var(--space-6));
+    overflow: auto;
+    padding: var(--space-12);
+    overflow-wrap: anywhere;
+  }
+  .content {
+    max-width: 960px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+  .skip {
+    position: fixed;
+    z-index: var(--z-toast);
+    top: var(--space-2);
+    left: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-ground);
+    color: var(--color-ink);
+    transform: translateY(-200%);
+    &:focus {
+      transform: none;
+    }
+  }
+  @media (max-width: 767px) {
+    .main {
+      inset: calc(var(--space-12) + var(--space-2)) 0 calc(var(--space-12) + var(--space-3) + var(--pds-safe));
+      padding: var(--space-4);
+    }
+  }
+}

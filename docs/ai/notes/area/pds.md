@@ -4,13 +4,13 @@ type: area
 status: current
 areas: ["[[pds]]"]
 summary: "Hub for infrastructure/pds: the atproto network adapter: identity's DID and handle lookups, and the OAuth client."
-code: [infrastructure/pds/index.ts]
+code: [infrastructure/pds/index.ts, apps/pds/index.ts]
 sources: []
 importance: normal
 related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, pds]
-checked: 2026-10-17
+checked: 2026-10-21
 ---
 # pds
 
@@ -56,3 +56,10 @@ handshake, a 429 or an outage does not. `pdsCall.dev_pds_nonce_rotation` needs t
 in the unit tests.
 
 **Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].
+
+**Build-only account presentation (ADR 0027).** `apps/pds` exports AccountShell, Devices and DeviceRow;
+resolved links, translated labels (including row Last seen), formatted metadata and native action nodes come
+from upstream adapters. Import only the explicit shared presentation/brand-header entries. Load canonical
+layers/tokens/base before component CSS; native Input bottom margin is consumed by the page's filter slot.
+One responsive table/action tree retains labeled IP metadata. This is not native source integration or proof
+of integrated CSS coverage: the stock provider serves every manifest stylesheet and exceeds fixed caps.

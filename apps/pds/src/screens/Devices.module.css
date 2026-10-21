@@ -1,0 +1,113 @@
+@layer screens {
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
+    & h1,
+    & p {
+      margin: 0;
+    }
+  }
+  .eyebrow,
+  .status,
+  .table th {
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+  .description {
+    color: var(--color-ink-muted);
+  }
+  .filter {
+    width: min(400px, 100%);
+    & > * {
+      margin: 0;
+    }
+  }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 160px) minmax(0, 120px);
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .table {
+    display: block;
+    border-collapse: collapse;
+    font-family: var(--font-display);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-line);
+    width: 100%;
+    & thead,
+    & tbody {
+      display: block;
+    }
+    & th,
+    & td {
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      text-align: start;
+    }
+    & td {
+      font-family: inherit;
+    }
+    & tbody .row {
+      padding-block: var(--space-4);
+      border-bottom: 1px solid var(--color-line);
+    }
+  }
+  .information {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .seen,
+  .ip {
+    color: var(--color-ink-muted);
+    font-size: var(--type-body-small-size);
+    line-height: var(--type-body-small-line);
+  }
+  .ip {
+    margin: 0;
+    & dt,
+    & dd {
+      display: inline;
+      margin: 0;
+    }
+    & dt::after {
+      content: ": ";
+    }
+  }
+  .action {
+    display: flex;
+    align-items: start;
+    & > * {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+  .mobileLabel {
+    display: none;
+  }
+  @media (max-width: 767px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .mobileLabel {
+      display: inline;
+    }
+  }
+}
