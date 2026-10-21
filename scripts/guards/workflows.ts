@@ -57,6 +57,10 @@ function runValues(lines: string[]): string[] {
   return values;
 }
 
+/** The one accepted `buildx create` line: plain `--flag value` options around a single quoted, pinned driver option. */
+const FIXED_BUILDER =
+  /^\s*(?:- )?(?:run:\s*)?docker buildx create(?: --[a-z-]+(?: [\w.-]+)?)* --driver-opt "image=(?:\$\w+_IMAGE|[\w.\/:-]+@sha256:[0-9a-f]{64})"(?: --[a-z-]+(?: [\w.-]+)?)*\s*$/;
+
 /** Pinning, trigger and permission problems visible on one line. */
 function lineProblems(line: string): string[] {
   const found: string[] = [];
@@ -71,18 +75,11 @@ function lineProblems(line: string): string[] {
   if (/\b(?:docker|podman)\s+(?:container\s+|image\s+)?(?:run|create|pull)\b/.test(line)) {
     if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
   }
-  // A BuildKit container builder runs an image too (P1.27s): it names one by digest, or through a pinned variable.
-  // buildx keeps the last `image=` among its driver options, so the line carries exactly one, ending at its value.
-  // The equals form counts only as a whole word, so `--driver-opt=` inside another option's value names no image.
-  const builderImage =
-    /(?:^|[\s",]|(?:^|\s)--driver-opt=)image=(?:\$\w+_IMAGE"|[^\s",]+@sha256:[0-9a-f]{64}(?=["\s]|$))/;
-  // A `"` inside an option's value is CSV quoting to buildx (csvvalue.Fields), which can hide a comma and so the image;
-  // a single quote or an escaped `"` is the only way to put one there, so neither may appear on the line.
-  const quotedValue = /'|\\"/.test(line);
-  if (
-    /\bbuildx\s+create\b/.test(line) &&
-    (line.split("image=").length !== 2 || !builderImage.test(line) || quotedValue)
-  ) {
+  // A BuildKit container builder runs an image too (P1.27s). buildx reads driver options as CSV (csvvalue.Fields) and
+  // keeps the last `image=`, and the shell can build quotes at run time, so no list of spellings is complete: the line
+  // has one fixed shape, with exactly one driver option naming the image by digest or through a pinned variable, and
+  // nothing else on it that the shell expands or quotes (verify-1150, Codex on #1206).
+  if (/\bbuildx\s+create\b/.test(line) && !FIXED_BUILDER.test(line)) {
     found.push("BuildKit builder without a digest-pinned image");
   }
   // An image variable may only come from the workflow text, where the digest check above can see it.
@@ -130,7 +127,7 @@ function jobSigningProblems(file: string, id: string, body: string[]): string[] 
   if (!signing) return found;
   if (!body.some((l) => l === "    environment: signing")) found.push("a signing job not in the signing environment");
   if (body.some((l) => CACHE.test(l))) found.push("a cache in a signing job");
-  if (setupNodeSteps(body).some((step) => !step.includes("          package-manager-cache: false")))
+  if (setupNodeSteps(body).some((step) => !cacheOffInWith(step)))
     found.push("setup-node without package-manager-cache: false in a signing job");
   return found;
 }
@@ -141,11 +138,22 @@ function jobSigningProblems(file: string, id: string, body: string[]): string[] 
  * turns it off by name (verify-1150 S3).
  */
 function setupNodeSteps(body: string[]): string[][] {
-  return body.flatMap((line, i) => {
-    if (!/^ {6}- uses: actions\/setup-node@/.test(line)) return [];
-    const end = body.findIndex((l, j) => j > i && l.trim() !== "" && indent(l) <= 6);
-    return [body.slice(i, end < 0 ? body.length : end)];
-  });
+  const starts = body.flatMap((line, i) => (/^ {6}- /.test(line) ? [i] : []));
+  return starts
+    .map((start, k) => {
+      const next = starts[k + 1] ?? body.length;
+      const end = body.findIndex((l, j) => j > start && l.trim() !== "" && indent(l) <= 6);
+      return body.slice(start, end < 0 ? next : Math.min(end, next));
+    })
+    .filter((step) => step.some((l) => /\buses["']?\s*:\s*["']?actions\/setup-node@/.test(l)));
+}
+
+/** Whether a setup-node step turns the cache off as an action input: under its own `with:` map, not `env:` or elsewhere. */
+function cacheOffInWith(step: string[]): boolean {
+  const start = step.findIndex((l) => /^ {8}with:\s*$/.test(l));
+  if (start < 0) return false;
+  const end = step.findIndex((l, j) => j > start && l.trim() !== "" && indent(l) <= 8);
+  return step.slice(start + 1, end < 0 ? step.length : end).includes("          package-manager-cache: false");
 }
 
 /** The signing rules over one file: per job, plus publish-images.yml's own shape (no pull request, one job). */
