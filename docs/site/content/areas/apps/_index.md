@@ -11,7 +11,7 @@ Screens, islands and styles. UI only: no product rules and no database access. D
 
 ## Owns
 
-[web](web/) is the public site, and it is the only app folder on the tree. `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names `apps/web/render.tsx` for `interfaces/http` and `apps/admin/render.tsx` for `interfaces/admin`. `SDK_ADAPTERS` names `matrix-js-sdk` in `apps/chat/matrix/`.
+[web](web/) is the public site, and it is the only app folder on the tree. `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names the path `apps/web/render.tsx` for `interfaces/http` and the path `apps/admin/render.tsx` for `interfaces/admin`. `SDK_ADAPTERS` names the path `apps/chat/matrix/` for `matrix-js-sdk`.
 
 ## May import
 
@@ -35,14 +35,14 @@ Rules that refuse an edge the row would otherwise allow:
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. An app does not import one. |
 | `island-import-boundary` | A `*.island.tsx` may import `shared/ui/`, `shared/islands/`, `react/jsx-runtime`, and type-only modules. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. The Vite config row above is the exception the cruiser states. |
-| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only in its adapter folder. The `apps/` entry in that list is `matrix-js-sdk` in `apps/chat/matrix/`. |
+| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only on the adapter path that list names. The `apps/` entry names the path `apps/chat/matrix/` for `matrix-js-sdk`. |
 | `web-not-admin` | `apps/web` imports nothing whose path is `admin/…` or contains `/admin/`. |
 
 ## Entry points
 
-An app has no `main.ts`. The serving interface may import that app's render file and nothing else under `apps/` (`app-render-entry-only`, `RENDER_ENTRIES`).
+An app has no `main.ts`. `app-render-entry-only` allows an interface to import only the path `RENDER_ENTRIES` names for it, and nothing else under `apps/`.
 
-| Interface | Render file | On this tree |
+| Interface | Path `RENDER_ENTRIES` names | On this tree |
 | --- | --- | --- |
 | `interfaces/http` | `apps/web/render.tsx` | [web](web/) |
 | `interfaces/admin` | `apps/admin/render.tsx` | `interfaces/admin` does not import an app. |
