@@ -27,11 +27,13 @@ import { afterAll, describe, expect, test } from "vitest";
 import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
+import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
+import { SecretMap } from "./secret-map.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
@@ -163,6 +165,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C29",
   "C30",
   "C31",
+  "C32",
 ]);
 
 type Stack = {
@@ -2905,6 +2908,52 @@ describe("preflight C29 (P1.36k)", () => {
         env,
       ).toBe("PASS C29 ok");
     }
+  });
+});
+
+// P1.38d (ADR 0031 Decision 1): a public stack never serves a legal placeholder, so under dev and prod any environment
+// value that still starts with "[to fill:" fails, naming the service and the keys, never the value.
+describe("preflight C32 (P1.38d)", () => {
+  const withWeb = (env: "dev" | "prod", lines: string): Stack => ({
+    compose: (env === "dev" ? DEV : COMPOSE).replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`),
+    ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
+  });
+  const PLACEHOLDERS = '      SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"\n      PRIVACY_OFFICER_TITLE: "[to fill: x]"';
+
+  test("c32_placeholder_fails_under_dev_and_prod", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      expect(await expectOnly("C32", withWeb(env, PLACEHOLDERS), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      );
+      // In any service.
+      const edge = (env === "dev" ? DEV : COMPOSE).replace(
+        "      ACME_EMAIL: edge@example.test",
+        '$&\n      CONTACT: "[to fill: CONTACT]"',
+      );
+      expect(await expectOnly("C32", { compose: edge, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
+        "FAIL C32 service=edge still a placeholder to fill: CONTACT",
+      );
+    }
+  });
+
+  test("c32_filled_values_pass", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      // Only a value that starts with the marker is one; the same words elsewhere in a value are the value's own.
+      const filled = '      SUPPORT_EMAIL: "help@example.test"\n      PRIVACY_OFFICER_TITLE: "Officer [to fill: no]"';
+      const result = await check(withWeb(env, filled), env);
+      expect(
+        result.lines.find((l) => / C32 /.test(l)),
+        env,
+      ).toBe("PASS C32 ok");
+    }
+  });
+
+  test("c32_local_skips", () => {
+    const serviceEnv = new Map([["web", new SecretMap([["SUPPORT_EMAIL", "[to fill: SUPPORT_EMAIL]"]])]]);
+    expect(c32.run({ env: "local", serviceEnv } as unknown as Inputs, new AbortController().signal)).toEqual({
+      pass: true,
+      reason: "skipped: local stack",
+    });
   });
 });
 
