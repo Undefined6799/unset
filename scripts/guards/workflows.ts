@@ -73,11 +73,10 @@ function lineProblems(line: string): string[] {
   }
   // An image variable may only come from the workflow text, where the digest check above can see it.
   if (/_IMAGE=/.test(line) && /\bGITHUB_ENV\b/.test(line)) found.push("image variable written at run time");
-  if (/\b(pull_request_target|workflow_run)\b/.test(line)) found.push("banned trigger");
-  // id-token and packages are judged per job by signingProblems; every other write scope is refused here.
-  for (const m of line.matchAll(/([\w-]+)["']?\s*:\s*["']?write\b/g)) {
-    if (m[1] !== "id-token" && m[1] !== "packages") found.push(`write permission: ${line.trim()}`);
-  }
+  if (/\bpull_request_target\b/.test(line) || /\bworkflow_run\b/.test(line)) found.push("banned trigger");
+  // id-token and packages are judged per job by signingProblems. contents and pull-requests writes are
+  // judged by docsAutoMergeProblems, and only docs-auto-merge.yml may hold them (P0.07e).
+  found.push(...otherWriteProblems(line));
   return found;
 }
 
@@ -138,15 +137,97 @@ function signingProblems(file: string, lines: string[]): string[] {
   return found;
 }
 
+/**
+ * The one workflow that may use workflow_run and a merge token (P0.07e; ADR 0034). It runs from the
+ * default branch and must not check out pull request code. Every other file keeps the P0.07 bans.
+ */
+const AUTO_MERGE_FILE = "docs-auto-merge.yml";
+const AUTO_MERGE_RUN = "node scripts/guards/docs-auto-merge.ts";
+// biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a JS template.
+const CHECKOUT_REF = "ref: ${{ github.sha }}";
+
+const SCOPES_JUDGED_ELSEWHERE = new Set(["id-token", "packages", "contents", "pull-requests"]);
+
+function otherWriteProblems(line: string): string[] {
+  const found: string[] = [];
+  for (const match of line.matchAll(/([\w-]+)["']?\s*:\s*["']?write\b/g)) {
+    if (!SCOPES_JUDGED_ELSEWHERE.has(match[1] ?? "")) found.push(`write permission: ${line.trim()}`);
+  }
+  return found;
+}
+
+function keepProblem(file: string, line: string, problem: string): boolean {
+  return !(
+    file === AUTO_MERGE_FILE &&
+    problem === "banned trigger" &&
+    /\bworkflow_run\b/.test(line) &&
+    !/\bpull_request_target\b/.test(line)
+  );
+}
+
+function isMergeWrite(line: string): boolean {
+  return /^\s*(?:contents|pull-requests):\s*write\s*$/.test(line);
+}
+
+/** contents: write and pull-requests: write exist only on the auto-merge job, in the shape below. */
+function docsAutoMergeProblems(file: string, lines: string[]): string[] {
+  const writes = lines.filter(isMergeWrite);
+  if (file !== AUTO_MERGE_FILE) return writes.map((line) => `write permission: ${line.trim()}`);
+  const found: string[] = [];
+  const contents = writes.filter((line) => line.trim() === "contents: write").length;
+  const pulls = writes.filter((line) => line.trim() === "pull-requests: write").length;
+  if (contents !== 1 || pulls !== 1) found.push("docs auto-merge writes are not exactly contents and pull-requests");
+  if (lines.filter((line) => line.trim() === "checks: read").length !== 1) {
+    found.push("docs auto-merge job lacks checks: read");
+  }
+  if ([...jobs(lines).keys()].join() !== "auto-merge") found.push("docs auto-merge workflow has another job");
+  if (!lines.some((line) => line.trim() === "workflow_run:")) found.push("docs auto-merge workflow lacks workflow_run");
+  if (lines.filter((line) => line.trim() === 'workflows: ["docs-only.yml"]').length !== 1) {
+    found.push("docs auto-merge workflow_run is not limited to docs-only.yml");
+  }
+  if (lines.filter((line) => line.trim() === "types: [completed]").length !== 1) {
+    found.push("docs auto-merge workflow_run is not limited to completed");
+  }
+  if (lines.some((line) => /^ {2}pull_request(_target)?:\s*$/.test(line))) {
+    found.push("docs auto-merge workflow has a pull request trigger");
+  }
+  const runs = runValues(lines).map((value) => value.trim());
+  if (runs.length !== 1 || runs[0] !== AUTO_MERGE_RUN)
+    found.push("docs auto-merge runs something other than its script");
+  const checkoutAt = lines.flatMap((line, index) => (/uses:\s*actions\/checkout@/.test(line) ? [index] : []));
+  if (checkoutAt.length !== 1) found.push("docs auto-merge checkout count is not 1");
+  const at = checkoutAt[0];
+  if (at !== undefined) {
+    const block: string[] = [];
+    for (const line of lines.slice(at + 1)) {
+      if (line.trim() !== "" && indent(line) <= indent(lines[at] ?? "")) break;
+      block.push(line.trim());
+    }
+    if (!block.includes("persist-credentials: false")) found.push("docs auto-merge checkout keeps credentials");
+    if (!block.includes(CHECKOUT_REF)) found.push("docs auto-merge checkout ref is not github.sha");
+  }
+  for (const line of lines) {
+    if (/download-artifact|upload-artifact|github\.event\.pull_request|refs\/pull\/|head\.sha/.test(line)) {
+      found.push(`docs auto-merge workflow touches untrusted input: ${line.trim()}`);
+    }
+  }
+  return found;
+}
+
 /** Every rule violation in one workflow file (`file` is its name under .github/workflows/), as readable strings. */
 export function problems(text: string, file = ""): string[] {
   const lines = code(text);
-  const found = lines.flatMap((line, i) => lineProblems(line).map((p) => `line ${i + 1}: ${p}`));
+  const found = lines.flatMap((line, i) =>
+    lineProblems(line)
+      .filter((problem) => keepProblem(file, line, problem))
+      .map((problem) => `line ${i + 1}: ${problem}`),
+  );
   if (!lines.some((l) => /^permissions:\s*\{\s*\}\s*$/.test(l))) found.push("top-level permissions is not {}");
   for (const value of runValues(lines)) if (value.includes("${{")) found.push(`expression inside run: ${value.trim()}`);
   for (const [id, body] of jobs(lines)) {
     if (ungated(body)) found.push(`job ${id}: secret or OIDC outside an environment-bound main-only job`);
   }
+  found.push(...docsAutoMergeProblems(file, lines));
   found.push(...signingProblems(file, lines));
   return found;
 }

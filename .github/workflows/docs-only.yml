@@ -1,0 +1,38 @@
+# Docs-only classification (P0.07e; ADR 0034). Read-only: the job checks out the
+# pull request and runs scripts/guards/docs-only.ts. It has no write token. A
+# green docs-only check is necessary for auto-merge and not sufficient.
+# docs-auto-merge.yml re-checks the file list with the default-branch allowlist.
+# labeled and unlabeled re-run this workflow so removing kind/docs starts that
+# re-check. Drafts are skipped, as in ci.yml (P0.09l).
+
+name: docs-only
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions: {}
+
+concurrency:
+  group: docs-only-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docs-only:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/guards/docs-only.ts

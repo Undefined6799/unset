@@ -257,3 +257,32 @@ describe("audit scope override", () => {
     expect(lines.slice(0, at).findLast((line) => /^ {2}[\w-]+:$/.test(line))).toBe("  audit:");
   });
 });
+
+// P0.07e: workflow_run and the two merge writes exist only in docs-auto-merge.yml, which checks out
+// the default branch (github.sha) and runs one script. A pull_request trigger there would execute the
+// pull request's copy of the workflow with the write token.
+describe("docs auto-merge (P0.07e)", () => {
+  const file = "docs-auto-merge.yml";
+  const text = readFileSync(join(WORKFLOWS, file), "utf8");
+
+  test("auto_merge_workflow_is_the_only_privileged_shape", () => {
+    expect(problems(text, file)).toEqual([]);
+    const elsewhere = problems(text, "ci.yml");
+    expect(elsewhere.some((problem) => problem.endsWith("banned trigger"))).toBe(true);
+    expect(elsewhere).toContain("write permission: contents: write");
+    expect(elsewhere).toContain("write permission: pull-requests: write");
+  });
+
+  test("auto_merge_rejects_pull_request_code", () => {
+    const pullRequest = text.replace("  workflow_run:\n", "  workflow_run:\n  pull_request:\n");
+    expect(problems(pullRequest, file)).toContain("docs auto-merge workflow has a pull request trigger");
+    const target = text.replace("  workflow_run:\n", "  pull_request_target:\n");
+    expect(problems(target, file).some((problem) => problem.endsWith("banned trigger"))).toBe(true);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
+    const head = text.replace("ref: ${{ github.sha }}", "ref: ${{ github.event.workflow_run.head_sha }}");
+    expect(problems(head, file)).toContain("docs auto-merge checkout ref is not github.sha");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
+    const unsafe = text.replace("ref: ${{ github.sha }}", "ref: ${{ github.event.pull_request.head.sha }}");
+    expect(problems(unsafe, file).some((problem) => problem.includes("untrusted input"))).toBe(true);
+  });
+});
