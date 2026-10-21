@@ -1,6 +1,6 @@
 # Engineering rules: Top 15
 
-An excerpt of [`engineering-rules.md`](engineering-rules.md) (decision 35, adopted by Alex 2026-10-04): the rules that matter most for the first slice. CLAUDE.md imports this page only; the full file holds all 48 rules with their sources, checks and triggers. Keep this page identical to the "Top 15" section of the full file; the P0.09 docs test compares them. Where a rule and the plan disagree, the plan wins; where a rule and the Architecture and Development Guideline disagree on structure, that guideline wins.
+An excerpt of [`engineering-rules.md`](engineering-rules.md) (decision 35, adopted by Alex 2026-10-04): the rules that matter most for the first slice. CLAUDE.md imports this page only; the full file holds all 49 rules with their sources, checks and triggers. Keep this page identical to the "Top 15" section of the full file; the P0.09 docs test compares them. Where a rule and the plan disagree, the plan wins; where a rule and the Architecture and Development Guideline disagree on structure, that guideline wins.
 
 ## Top 15
 
