@@ -149,11 +149,14 @@ function verifies(id: "C3" | "C4", origin: "first-party" | "upstream"): Check {
       const names = Object.entries(lock).flatMap(([name, entry]) => (entry.origin === origin ? [name] : []));
       const result = await verdict(inputs, signal);
       if (result.ok) return pass(`${names.length} ${origin} images verified`);
-      // A failure names its entry; one that names no entry (a spawn error, an empty lock) fails both checks.
+      // A failure names its entry; one that names no entry (a spawn error, an empty lock) or an entry of neither origin
+      // fails both checks, so no failure is left to neither.
       const owner = (line: string) => Object.keys(lock).find((name) => line.startsWith(`${name}:`));
       const [first] = result.failures.filter((line) => {
         const name = owner(line);
-        return name === undefined || names.includes(name);
+        if (name === undefined || names.includes(name)) return true;
+        const other = lock[name]?.origin;
+        return other !== "first-party" && other !== "upstream";
       });
       return first === undefined ? pass(`${names.length} ${origin} images verified`) : fail(first);
     },

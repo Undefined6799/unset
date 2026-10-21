@@ -352,6 +352,29 @@ rerunning the leaf commands and the install lines; an expired or nearly expired 
 stale copy is caught after start: `local:up` compares the leaf the edge serves with the copy and takes the stack down
 on a mismatch.
 
+## Installing cosign (P2.26b, dev and prod)
+
+C3 and C4 verify every image in `deployment/images.lock.json` with cosign v3.1.3 at `/usr/local/bin/cosign`, offline
+against the committed `deployment/sigstore/trusted_root.json`. The preflight hashes that file first and fails both
+checks unless it is the pinned linux amd64 binary (`deployment/preflight/cosign.ts`); a cosign anywhere else on `PATH`
+is never run. Our images are built for linux/amd64 only, so the deploy host is amd64. Install it once per host, and
+again for each cosign bump:
+
+```sh
+(
+  set -euo pipefail
+  dir="$(mktemp -d)"
+  trap 'rm -rf -- "$dir"' EXIT
+  curl -fsSLo "$dir/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64
+  echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  $dir/cosign" | sha256sum -c -
+  sudo install -o root -g root -m 0755 "$dir/cosign" /usr/local/bin/cosign
+)
+```
+
+The sum is the one in v3.1.3's `cosign_checksums.txt` and in the workflows. The subshell stops at the first failing
+command, so a failed download or a sum that does not match installs nothing; the private temporary folder is removed
+either way. If it stops, report it.
+
 ## Starting and stopping
 
 Docker Desktop is not supported; use the native Docker Engine on Linux. The wrapper talks only to a Docker socket on
