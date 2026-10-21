@@ -1,7 +1,7 @@
 # 0033 — Image signing: keyless cosign with our exact workflow identity
 
-Status: Proposed (awaiting Alex). Accepted only by his typed line; from then on the record changes only to be marked
-superseded.
+Status: Accepted by Alex, 2026-10-20 23:27:26Z, against 55c626d (the line below, typed in the project chat in
+answer to the coordinator's request). From here the record changes only to be marked superseded.
 
 ## Context
 PLAN.md (§8, SLSA row and CI shape) chose cosign with a key pair and no transparency-log upload, because the repository
@@ -77,3 +77,7 @@ missing bundle and a missing tlog entry (Decisions 2 and 3), and `image-workflow
 pinned verify (Decisions 4 and 8). `/deployment/sigstore/` joins CODEOWNERS' last section in P1.27s. Acceptance of this
 record is Alex's line "yes accept ADR 0033 keyless image signing docs/human/decisions/0033-image-signing-keyless.md";
 ADR 0001 gains its one-paragraph entry then.
+- Accepted by Alex on 2026-10-20 at 23:27:26Z with the line "es accept ADR 0033 keyless image signing
+  docs/human/decisions/0033-image-signing-keyless.md at 55c626d." ("es" for "yes"), typed in the project chat in
+  answer to the coordinator's request, against 55c626d, the revision #1149 squashed onto main as e6982ef with this
+  text unchanged.
