@@ -1511,6 +1511,10 @@ describe("preflight", () => {
       // Newt appends its API path to the endpoint, so only a bare base address works.
       `https://${CANARY}.example.test/?x`,
       `https://${CANARY}.example.test/base`,
+      // An empty fragment delimiter normalises away (url.hash is ""), but Newt's API path would land after it. The
+      // strict env form allows `#` only inside single quotes.
+      `'https://${CANARY}.example.test#'`,
+      `'https://${CANARY}.example.test/#x'`,
     ]) {
       const outcome = await only(env(endpoint));
       expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not a bare https address without credentials");

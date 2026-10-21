@@ -106,8 +106,9 @@ function valuesProblem(env: SecretMap | undefined): Outcome | null {
   const https = env.use("PANGOLIN_ENDPOINT", (value) => {
     if (value === undefined || !URL.canParse(value)) return false;
     const url = new URL(value);
-    // Newt appends its API path to the endpoint, so it is a bare base address: no path, query or fragment.
-    const bare = url.pathname === "/" && url.search === "" && url.hash === "" && !value.includes("?");
+    // Newt appends its API path to the endpoint, so it is a bare base address: no path, query or fragment. The URL
+    // parser drops an empty `?` or `#` (search and hash read ""), so the raw value is checked for both.
+    const bare = url.pathname === "/" && url.search === "" && url.hash === "" && !/[?#]/.test(value);
     return url.protocol === "https:" && url.username === "" && url.password === "" && url.hostname !== "" && bare;
   });
   return https ? null : fail("PANGOLIN_ENDPOINT is not a bare https address without credentials");
