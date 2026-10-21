@@ -186,13 +186,14 @@ name it takes the certificate the edge serves for that name as SNI and checks th
 exactly the two staging names, at most 825 days of validity and more than 30 days left (`-checkend`: this failure is the
 only expiry guard, ADR 0032 Decision 1), and that `:80` answers only an empty `308` to its https URL (caddy v2.11.7
 modules/caddyhttp/autohttps.go:229-268). Then it asks the PDS's health route at the edge, and makes one request through
-Pangolin to each name.
+Pangolin to each name. Every network call gives up after 10 seconds (`timeout 10`, `--max-time 10`), so a stalled edge or
+Pangolin fails the check instead of hanging the deploy.
 
 ```sh
 edge=10.250.37.3 failed=0 tmp=$(mktemp -d)
 fail() { echo "FAIL $*"; failed=1; }
 for name in staging.unset.sh staging.unset.ac; do
-  openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
+  timeout 10 openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
     || { fail "$name: no certificate over TLS"; continue; }
   leaf="$tmp/$name.pem"
   openssl verify -check_ss_sig -CAfile "$leaf" "$leaf" >/dev/null 2>&1 || fail "$name: not a validly self-signed leaf"
@@ -204,14 +205,14 @@ for name in staging.unset.sh staging.unset.ac; do
   end=$(date -d "$(openssl x509 -in "$leaf" -noout -enddate | cut -d= -f2)" +%s)
   [ $((end - start)) -le $((825 * 86400)) ] || fail "$name: valid for more than 825 days"
   openssl x509 -in "$leaf" -noout -checkend 2592000 >/dev/null || fail "$name: expires within 30 days; remake the leaf"
-  [ "$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
+  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
     = "308 https://$name/ 0" ] || fail "$name: :80 is not only an empty 308 to https"
 done
 cmp -s "$tmp/staging.unset.sh.pem" "$tmp/staging.unset.ac.pem" || fail "the two names are not served one leaf"
-[ "$(curl -sS -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
+[ "$(curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
   || fail "staging.unset.ac: the PDS health route does not answer 200 at the edge"
 for url in https://staging.unset.sh/ https://staging.unset.ac/xrpc/_health; do
-  [ "$(curl -sS -o /dev/null -w '%{http_code}' "$url")" = 200 ] || fail "$url: no 200 through Pangolin"
+  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$url")" = 200 ] || fail "$url: no 200 through Pangolin"
 done
 rm -r "$tmp"
 [ "$failed" = 0 ] && echo "PASS the staging edge"
