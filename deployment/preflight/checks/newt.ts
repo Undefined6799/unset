@@ -1,17 +1,43 @@
 // C31 (P1.37v; ADR 0030 Decision 2): Newt's env file holds exactly its three names, as C30 holds pds.env, so no
 // unreviewed setting rides in beside its credentials; every other Newt setting is a compose literal. Under dev Newt is
 // the edge's only way in, so the stack must run it; local runs none, and prod has no ruling yet, so either may leave it
-// out. Names only; a value is never read.
-import { type Check, fail, pass } from "./types.ts";
+// out. Where Newt runs (P1.37 follow-up): outside local it runs the lock's newt image exactly, as C18 holds the edge;
+// its compose settings are exactly NEWT_SETTINGS, so SSH, client access, metrics and pprof stay off; it mounts nothing
+// and reads no secret; newt.env's values are not the example's replace-me, and Pangolin's endpoint is an https address
+// with no credentials. A reason names a variable, never its value, and is fixed words: the runner withholds any reason
+// that contains a configured value (P1.30m).
+
+import type { EnvValue } from "../compose-parse.ts";
+import type { SecretMap } from "../secret-map.ts";
+import { readLock } from "./lock.ts";
+import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** What newt.env holds: Pangolin's address and the site's two credentials (newt 1.18.1 newtconfig/newtconfig.go). */
 const NEWT_ENV = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
 /** A name C31 may print: one of ours. Anything else in a key slot might be a pasted value, so it is not named. */
 const PRINTABLE = /^(?:NEWT|PANGOLIN)_[A-Z0-9_]+$/;
+/**
+ * The newt service's compose settings, each a literal of exactly this value (compose.dev.yaml; newt 1.18.1
+ * newtconfig/newtconfig.go:452-503 reads each from the environment, and DISABLE_SSH and DISABLE_CLIENTS default to
+ * false). Any other name is refused: a Newt feature flag set here would be unreviewed.
+ */
+const NEWT_SETTINGS: Readonly<Record<string, string>> = {
+  CONFIG_FILE: "/tmp/newt.json",
+  DISABLE_SSH: "true",
+  DISABLE_CLIENTS: "true",
+  NEWT_METRICS_PROMETHEUS_ENABLED: "false",
+  NEWT_PPROF_ENABLED: "false",
+  LOG_LEVEL: "WARN",
+};
+/** deployment/env/newt.example.env's value for each of the three names. */
+const EXAMPLE_VALUE = "replace-me";
+
+const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
 
 export const c31: Check = {
   id: "C31",
-  run: ({ env: stage, envFileNames, compose }) => {
+  run: (inputs) => {
+    const { env: stage, envFileNames, compose } = inputs;
     const newt = compose.services.find((s) => s.name === "newt");
     if (newt === undefined)
       return stage === "dev" ? fail("no newt service; under dev it is the edge's only way in") : pass();
@@ -23,12 +49,59 @@ export const c31: Check = {
     const inCompose = newt.environment.find(([name]) => NEWT_ENV.includes(name));
     if (inCompose !== undefined) return fail(`${inCompose[0]} is set in the newt service's environment, not newt.env`);
     const names = envFileNames.get("newt") ?? [];
-    const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
     const repeated = names.find((name, i) => names.indexOf(name) !== i);
     if (repeated !== undefined) return fail(`${label(repeated)} is repeated in the newt env file`);
     const extra = names.find((name) => !NEWT_ENV.includes(name));
     if (extra !== undefined) return fail(`${label(extra)} is in the newt env file, which holds only its three names`);
-    const missing = NEWT_ENV.find((name) => !names.includes(name));
-    return missing === undefined ? pass() : fail(`${missing} is missing from the newt env file`);
+    const absent = NEWT_ENV.find((name) => !names.includes(name));
+    if (absent !== undefined) return fail(`${absent} is missing from the newt env file`);
+    return (
+      lockedImage(inputs, newt.image) ??
+      settingsProblem(newt.environment) ??
+      (newt.mounts.length > 0 ? fail("the newt service mounts a file or volume") : null) ??
+      (newt.secrets.length > 0 ? fail("the newt service reads a secret") : null) ??
+      valuesProblem(inputs.serviceEnv.get("newt")) ??
+      pass()
+    );
   },
 };
+
+/** Outside local, the newt service runs the lock's newt entry exactly, as C18 holds the edge to the lock's edge. */
+function lockedImage(inputs: Inputs, image: string | null): Outcome | null {
+  if (inputs.env === "local") return null;
+  const lock = readLock(inputs);
+  if (lock === null) return missing(inputs.lockPath);
+  const ref = lock.newt?.ref;
+  if (typeof ref !== "string") return missing("the lock's newt entry");
+  return image === ref ? null : fail("the newt service does not run the lock's newt image");
+}
+
+/** The newt service's compose environment is NEWT_SETTINGS exactly, every value a literal. */
+function settingsProblem(environment: readonly [string, EnvValue][]): Outcome | null {
+  const extra = environment.find(([name]) => !Object.hasOwn(NEWT_SETTINGS, name));
+  if (extra !== undefined) return fail(`${label(extra[0])} is not a newt setting the preflight allows`);
+  for (const [name, expected] of Object.entries(NEWT_SETTINGS)) {
+    const value = environment.find(([key]) => key === name)?.[1];
+    if (value === undefined) return fail(`${name} is not set in the newt service`);
+    if (!("literal" in value) || value.literal !== expected) {
+      return fail(`${name} is not its reviewed literal in the newt service`);
+    }
+  }
+  return null;
+}
+
+/** newt.env's values: none is the example's or empty, and the endpoint is https with no userinfo. No value is ever printed. */
+function valuesProblem(env: SecretMap | undefined): Outcome | null {
+  if (env === undefined) return null;
+  const example = NEWT_ENV.find((name) => env.use(name, (value) => value === EXAMPLE_VALUE));
+  if (example !== undefined) return fail(`${example} is still the example file's placeholder`);
+  // Newt 1.18.1 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr).
+  const empty = NEWT_ENV.find((name) => env.use(name, (value) => value === ""));
+  if (empty !== undefined) return fail(`${empty} is empty`);
+  const https = env.use("PANGOLIN_ENDPOINT", (value) => {
+    if (value === undefined || !URL.canParse(value)) return false;
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "" && url.hostname !== "";
+  });
+  return https ? null : fail("PANGOLIN_ENDPOINT is not an https address without credentials");
+}

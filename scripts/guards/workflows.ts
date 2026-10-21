@@ -72,7 +72,9 @@ function lineProblems(line: string): string[] {
     if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
   }
   // A BuildKit container builder runs an image too (P1.27s): it names one by digest, or through a pinned variable.
-  if (/\bbuildx\s+create\b/.test(line) && !/image=(?:\$\w+_IMAGE"|\S+@sha256:[0-9a-f]{64})/.test(line)) {
+  // buildx keeps the last `image=` among its driver options, so the line carries exactly one, ending at its value.
+  const builderImage = /(?:^|[\s",]|--driver-opt=)image=(?:\$\w+_IMAGE"|[^\s",]+@sha256:[0-9a-f]{64}(?=["\s]|$))/;
+  if (/\bbuildx\s+create\b/.test(line) && (line.split("image=").length !== 2 || !builderImage.test(line))) {
     found.push("BuildKit builder without a digest-pinned image");
   }
   // An image variable may only come from the workflow text, where the digest check above can see it.
