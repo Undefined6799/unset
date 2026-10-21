@@ -37,7 +37,9 @@
     "show": "eye",
     "hide": "eye-closed",
     "private": "lock",
-    "signout": "log-out"
+    "signout": "log-out",
+    "devices": "computer",
+    "apps": "view-grid"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -75,7 +77,9 @@
     "show": "7afa1efa3b4c294a2dd10fc4f8979ed2b40d61b40719e73db50456ad55111e53",
     "hide": "7f70ab3a80698c4fe24c2217e35e6527c6d652e5a121f56c833cf8a5a304a166",
     "private": "e5cb326521f8f4964b27b5ef119f44b7497b20c423dc4647d1cf62177d0679a5",
-    "signout": "a02e98288d4cd8cf9fe5982d270dc35eb18017021fd117c3516bb0de9774354a"
+    "signout": "a02e98288d4cd8cf9fe5982d270dc35eb18017021fd117c3516bb0de9774354a",
+    "devices": "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
+    "apps": "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd"
   },
   "drawings": {
     "next": [
@@ -555,6 +559,59 @@
         "strokeLinecap": "round",
         "strokeLinejoin": "round"
       }
+    ],
+    "devices": [
+      {
+        "d": "M2 21L17 21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M21 21L22 21",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      }
+    ],
+    "apps": [
+      {
+        "d": "M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      },
+      {
+        "d": "M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      },
+      {
+        "d": "M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      },
+      {
+        "d": "M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      }
     ]
+  },
+  "extensionProvenance": {
+    "path": "approved-extensions.json",
+    "sha256": "266613c08626dba950b4957ecd0fd59f1601175e9ea9f345abde0a1f319063da",
+    "designApproval": {
+      "by": "Alex",
+      "date": "2026-10-18",
+      "record": "docs/human/decisions/0027-pds-frontend-distribution.md",
+      "scope": "Existing approved PDS screens and named components; API entries below implement their recorded requirements."
+    },
+    "registeredOn": "2026-10-21",
+    "iconoirCommit": "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e"
   }
 }

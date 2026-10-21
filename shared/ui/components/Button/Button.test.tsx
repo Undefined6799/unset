@@ -1,6 +1,6 @@
 // Button (P1.24): the sheet's Button (components/Button/README.md, index.d.ts) as built. Differences from the sheet's
-// d.ts: `as="a"` with `href: SafeHref | null` replaces `href?: string`; `next` adds the trailing icon; no `onClick`
-// (the kit renders on the server with no JS); `name`, `value` and `form` pass through for form posts.
+// d.ts: `as="a"` with `href: SafeHref | null` replaces `href?: string`; `next` adds the trailing icon;
+// required native callback/ref/ARIA fields support hydrated consumers; form fields support server posts.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { safeHref } from "../../safe-href.ts";

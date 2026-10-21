@@ -1,10 +1,11 @@
-// Button (P1.24; sheet components/Button/README.md, v45): one style, the solid `ink` shape with its bottom-right
+// Button (P1.24; sheet components/Button/README.md, v45): the solid `ink` shape with its bottom-right
 // corner cut. A link that looks like a button takes a `SafeHref`; a refused link (`null`) renders a disabled button
 // with no `href` at all, so an unsafe link never reaches the page.
-import type { ReactNode } from "react";
+import type { MouseEventHandler, ReactNode, Ref } from "react";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import link from "../Link/Link.module.css";
 import styles from "./Button.module.css";
 
 type ButtonCommon = {
@@ -13,17 +14,33 @@ type ButtonCommon = {
   /** Ends the label in the 16px `next` icon, where the sheet shows it (sheet v34), never a typed arrow. */
   next?: boolean;
   disabled?: boolean;
+  variant?: "solid" | "standalone";
+  title?: string;
+  "aria-label"?: string;
+  "aria-busy"?: boolean | "true" | "false";
   className?: string;
 };
 
 export type ButtonProps = ButtonCommon &
   (
-    | { as?: "button"; type?: "button" | "submit" | "reset"; name?: string; value?: string; form?: string }
+    | {
+        as?: "button";
+        type?: "button" | "submit" | "reset";
+        name?: string;
+        value?: string;
+        form?: string;
+        onClick?: MouseEventHandler<HTMLButtonElement>;
+        ref?: Ref<HTMLButtonElement>;
+      }
     | { as: "a"; href: SafeHref | null }
   );
 
 export function Button(props: ButtonProps) {
-  const className = classNames(styles.root, props.className);
+  const className = classNames(
+    props.variant === "standalone" ? `${link.standalone} ${styles.standalone}` : styles.root,
+    props.className,
+  );
+  const common = { className, title: props.title, "aria-label": props["aria-label"], "aria-busy": props["aria-busy"] };
   const label = (
     <>
       {props.children}
@@ -35,20 +52,22 @@ export function Button(props: ButtonProps) {
       // A refused or disabled link has nowhere to go, so it is a disabled button: announced as unavailable, never
       // focusable, and carrying no href.
       return (
-        <button className={className} type="button" disabled>
+        <button {...common} type="button" disabled>
           {label}
         </button>
       );
     }
     return (
-      <a className={className} href={props.href}>
+      <a {...common} href={props.href}>
         {label}
       </a>
     );
   }
   return (
     <button
-      className={className}
+      {...common}
+      onClick={props.onClick}
+      ref={props.ref}
       type={props.type ?? "button"}
       name={props.name}
       value={props.value}

@@ -8,9 +8,11 @@ that remains visible in forced colors. The panel reuses Header's current-link un
 the scoped rules compact.
 
 Desktop: 72px rail below a 64px header, with 16px vertical padding and gaps. A 40px account avatar occupies the first
-48px target, followed by the primary destination. Remaining destinations sit at the bottom. Native `title` hover
-labels replace custom tooltips. Every link retains an explicit `aria-label` for its accessible keyboard name;
-native hover labels are supplemental and do not appear consistently on keyboard focus.
+48px target, followed by the primary destination. Remaining destinations default to the bottom; `itemsPlacement="start"` keeps their 16px stack after the primary.
+Every link retains an explicit `aria-label`. After hydration, the approved ink/on-ink label appears on hover or
+keyboard focus at left60/top4, with mono12/16, 0.72 tracking, px16/py12 and radius2. The hover bridge keeps the
+label visible while moving onto it; Escape dismisses it until blur or leaving the rail. Unhydrated/no-JS output
+retains the existing native `title` tooltip and meaningful focus name; React event/effect handlers do not run there.
 The optional `inline` mode keeps both bars in document flow for the kit showcase, so they cannot cover other samples.
 
 Phone (up to 767px): Menu, primary destination, account avatar in equal thirds. The bar reserves 60px for controls
@@ -26,3 +28,16 @@ The phone popup uses native `popover="auto"` and `popovertarget` buttons. The br
 outside dismissal, focus restoration and the top layer; no island or script is needed. Items are ordinary links,
 not ARIA menu widgets. Source: HTML Living Standard, 2026-10-16,
 https://html.spec.whatwg.org/multipage/popover.html (read 2026-10-17).
+
+`renderLink` receives `NavigationAnchorProps`: validated SafeHref, className, children, aria-label, optional
+aria-current/title/ref. It must return one real anchor forwarding all supplied attributes and children. It applies
+to every account, primary and item placement. The default remains ordinary anchors. `navigationKey` is an explicit
+caller-confirmed committed-selection signal, including same-target selection and history traversal; only a changed
+key hides an open native popover. Mount/unchanged keys preserve focus and open state. A prevented click is not a
+navigation result. Caller owns routing and focus on new content; native hidePopover preserves its normal focus rules.
+
+The exact P2.24f sources/APIs are recorded in `approved-extensions.json`, pinned from the existing inventory rows.
+`@unset/shared-ui/presentation` exports only Navigation, Button, Input, Icon, Avatar and safeHref plus needed types;
+`@unset/shared-ui/brand-header` exports the pure existing brand composition. Neither entry imports full Header or
+an island runtime. HTML source read: https://html.spec.whatwg.org/multipage/popover.html, 2026-10-20 Standard,
+checked 2026-10-21; actual native interaction/focus evidence is in the P2.24f task report.

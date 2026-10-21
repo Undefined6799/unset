@@ -67,6 +67,7 @@ describe("Navigation", () => {
       "Settings",
       "Home",
       "Your profile",
+      "Settings",
     ]);
     expect([...doc.querySelectorAll("a[title]")].map((link) => link.getAttribute("title"))).toEqual([
       "Your profile",
@@ -81,7 +82,7 @@ describe("Navigation", () => {
     expect(account?.querySelector("svg")).not.toBeNull();
     expect(account?.querySelector("img")).toBeNull();
     expect(account?.textContent).toBe("Sign in");
-    expect(account?.querySelector(".visually-hidden")?.textContent).toBe("Sign in");
+    expect(account?.getAttribute("aria-label")).toBe("Sign in");
   });
 
   it("marks the phone menu current only when it contains the current destination", () => {
@@ -93,5 +94,47 @@ describe("Navigation", () => {
         items: [{ href: path("/settings/profile"), label: "Settings", icon: "settings" }],
       })?.hasAttribute("data-current"),
     ).toBe(false);
+  });
+});
+
+describe("Navigation presentation adapter", () => {
+  it("forwards safe destinations and accessible attributes in every placement", () => {
+    const received: import("./Navigation.tsx").NavigationAnchorProps[] = [];
+    const doc = documentFor({
+      ...props,
+      renderLink: (anchor) => {
+        received.push(anchor);
+        return <a {...anchor} data-adapted="true" />;
+      },
+    });
+    expect(doc.querySelectorAll('a[data-adapted="true"]')).toHaveLength(6);
+    expect(
+      [...doc.querySelectorAll("a")].map((a) => [
+        a.getAttribute("href"),
+        a.getAttribute("aria-label"),
+        a.getAttribute("aria-current") ?? undefined,
+      ]),
+    ).toEqual([
+      ["/me", "Your profile", undefined],
+      ["/", "Home", undefined],
+      ["/settings/profile", "Settings", "page"],
+      ["/", "Home", undefined],
+      ["/me", "Your profile", undefined],
+      ["/settings/profile", "Settings", "page"],
+    ]);
+    expect(received.every((anchor) => anchor.className.length > 0 && anchor.children !== undefined)).toBe(true);
+    for (const link of doc.querySelectorAll("a")) expect(link.textContent).not.toBe("");
+  });
+
+  it("keeps remaining destinations at the end unless start placement is requested", () => {
+    const end = documentFor().querySelector("nav > div");
+    const start = documentFor({ ...props, itemsPlacement: "start" }).querySelector("nav > div");
+    expect(end?.className).not.toContain("start");
+    expect(start?.className).toContain("start");
+    expect(
+      [...documentFor({ ...props, itemsPlacement: "start" }).querySelectorAll("nav:first-child a")].map((a) =>
+        a.getAttribute("href"),
+      ),
+    ).toEqual(["/me", "/", "/settings/profile"]);
   });
 });

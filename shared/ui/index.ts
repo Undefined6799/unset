@@ -12,7 +12,12 @@ export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHea
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
-export { Navigation, type NavigationProps } from "./components/Navigation/Navigation.tsx";
+export {
+  Navigation,
+  type NavigationAnchorProps,
+  type NavigationLinkRenderer,
+  type NavigationProps,
+} from "./components/Navigation/Navigation.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.

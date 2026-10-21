@@ -22,7 +22,7 @@ then fail `npm run lint` on style rules we cannot fix without changing the bytes
 `shared/ui/icons/svg/<name>.svg.txt`, and the design sheet's `bundle.js.txt` and `*.d.ts.txt`. These files are
 provenance only: never served by the assets route and never imported. `shared/ui-build/icons.ts` reads them, checks
 them against the sheet's ICONS data (or P2.24t's fixed, hash-pinned two-icon registration), and generates
-`icons.json` and the per-icon `drawings/` modules, which are what the Icon component and `IconDrawing` use.
+`icons.json` (36 imported plus the two registered names) and the per-icon `drawings/` modules, which are what the Icon component and `IconDrawing` use.
 
 **Do not** fix it by excluding the folder in `biome.json`: that is a check-path change and weakens lint for any real
 SVG added later.

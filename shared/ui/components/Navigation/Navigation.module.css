@@ -17,7 +17,41 @@
     position: static;
   }
   .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
     margin-top: auto;
+  }
+  .start {
+    margin-top: 0;
+  }
+  .label {
+    visibility: hidden;
+    position: absolute;
+    left: calc(var(--space-12) + var(--space-3));
+    top: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-xs);
+    background: var(--color-ink);
+    color: var(--color-on-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .label::before {
+    content: "";
+    position: absolute;
+    left: calc(-1 * var(--space-3));
+    top: calc(-1 * var(--space-1));
+    width: var(--space-3);
+    height: 48px;
+  }
+  .enhanced:not(.labelsDismissed) .control:is(:hover, :focus-visible) .label {
+    visibility: visible;
   }
   .control {
     position: relative;
@@ -31,19 +65,21 @@
   .panel {
     color: var(--color-ink);
     background: var(--color-ground);
-    outline: 1px solid var(--color-line-strong);
+    box-sizing: border-box;
     border-radius: var(--radius-xs);
     box-shadow: var(--shadow-menu);
     inset: auto var(--space-4) calc(var(--space-12) + var(--space-3) + var(--space-4) + var(--safe));
     margin: 0;
     width: auto;
-    border: 0;
+    border: 1px solid var(--color-line-strong);
     padding: var(--space-2);
     max-height: calc(100dvh - 168px);
     & > div {
       justify-content: space-between;
       margin-bottom: var(--space-1);
       padding-left: var(--space-3);
+      height: 44px;
+      color: var(--color-ink-muted);
     }
     & button {
       width: 44px;
@@ -54,6 +90,12 @@
       height: 48px;
       padding-inline: var(--space-3);
       color: inherit;
+    }
+  }
+  .row {
+    display: block;
+    & + .row {
+      margin-top: var(--space-1);
     }
   }
   .control:is([aria-current], [data-current])::after,

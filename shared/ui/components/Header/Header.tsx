@@ -19,6 +19,7 @@ export type HeaderProps = {
   action?: NavLink;
   /** Where the mark links; default "/". */
   homeHref?: SafeHref;
+  homeLabel?: string;
   /** The folded menu's toggle word; default "menu". */
   menuLabel?: string;
   /** Compact brand header when navigation is supplied separately by the app shell. */
@@ -26,10 +27,19 @@ export type HeaderProps = {
   className?: string;
 };
 
-export function Header({ nav = [], action, homeHref, menuLabel = "menu", brandOnly = false, className }: HeaderProps) {
+export function Header({
+  nav = [],
+  action,
+  homeHref,
+  homeLabel = "unset.sh home",
+  menuLabel = "menu",
+  brandOnly = false,
+  className,
+}: HeaderProps) {
   if (brandOnly)
     return (
       <BrandHeader
+        homeLabel={homeLabel}
         {...(homeHref === undefined ? {} : { homeHref })}
         {...(className === undefined ? {} : { className })}
       />
@@ -40,7 +50,7 @@ export function Header({ nav = [], action, homeHref, menuLabel = "menu", brandOn
     <header className={classNames(styles.root, className)}>
       <div className={styles.bar}>
         <a className={styles.home} href={homeHref ?? "/"}>
-          <Mark width={72} title="unset.sh home" />
+          <Mark width={72} title={homeLabel} />
         </a>
         <IslandSlot name="header-menu" island={headerMenu} props={menu} />
         <div className={styles.wide}>
