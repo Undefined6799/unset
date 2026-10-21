@@ -57,9 +57,13 @@ function runValues(lines: string[]): string[] {
   return values;
 }
 
-/** The one accepted `buildx create` line: plain `--flag value` options around a single quoted, pinned driver option. */
+/**
+ * The one accepted `buildx create` line: plain `--flag value` options and `--use` around a single quoted, pinned
+ * driver option. Every other flag takes a value that never starts with `-`, so no option can pose as another's value
+ * (pflag would take it as one), and the option groups are bounded so a refused line cannot backtrack far.
+ */
 const FIXED_BUILDER =
-  /^\s*(?:- )?(?:run:\s*)?docker buildx create(?: --[a-z-]+(?: [\w.-]+)?)* --driver-opt "image=(?:\$\w+_IMAGE|[\w.\/:-]+@sha256:[0-9a-f]{64})"(?: --[a-z-]+(?: [\w.-]+)?)*\s*$/;
+  /^\s*(?:- )?(?:run:\s*)?docker buildx create(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8} --driver-opt "image=(?:\$\w+_IMAGE|[\w./:-]+@sha256:[0-9a-f]{64})"(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8}\s*$/;
 
 /** Pinning, trigger and permission problems visible on one line. */
 function lineProblems(line: string): string[] {
