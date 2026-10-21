@@ -199,6 +199,7 @@ const MATRIX = [
       CORE,
     ],
   },
+  { name: "pds-builder", from: { path: "^deployment/pds/build-ui\\.mjs$" }, to: [CORE] },
   { name: "tooling", from: { path: TOOLING, pathNot: PDS_PRODUCTION }, to: [{}] },
 ];
 
@@ -208,6 +209,12 @@ module.exports = {
   allowedSeverity: "error",
   allowed: MATRIX.flatMap((row) => row.to.map((to) => ({ comment: `MATRIX row ${row.name}`, from: row.from, to }))),
   forbidden: [
+    forbidden(
+      "pds-builder-not-runtime",
+      "The build-only PDS helper is not imported by product/runtime code.",
+      { pathNot: TOOLING },
+      { path: "^deployment/pds/build-ui\\.mjs$" },
+    ),
     forbidden(
       "no-app-to-app",
       "An app imports nothing from another app (guideline §2).",

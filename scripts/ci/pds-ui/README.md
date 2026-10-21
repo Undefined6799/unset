@@ -85,7 +85,7 @@ intentionally omits `--platform`: Docker 29.5.2's filtered export drops the auth
 save preserves that index; the strict verifier authenticates it and selects the locked platform from its descriptors.
 Missing/mismatching indices or platform descriptors remain failures. The Linux runner must match the declared native platform;
 it does not silently emulate arm64 on amd64. Current local evidence is linux/arm64; amd64 is a P2.24c CI gate.
-Build-only product scripts require no deployment import exception: this interface is Dockerfile-only.
+The stock builder stays Dockerfile-only. Local wiring may use only the separately registered Node-builtins-only `deployment/pds/build-ui.mjs` leaf; product/runtime importers and tooling imports remain forbidden.
 
 ## CLI and generated proof
 
@@ -127,3 +127,48 @@ tar-stream 3.2.2 README/extract.js/headers.js and its own declarations in node_m
 atproto a7c8604d876a200a1e4fa4aec83d4189ac4f1c12
 `packages/internal/rolldown-plugin-bundle-manifest/src/index.ts` and
 `packages/oauth/oauth-provider/src/router/assets/assets-manifest.ts` from the retained source archive.
+
+## Local inputs and source patches (P2.24v)
+
+Threats: omitted/extra sources, forged inventories, changed HEAD/lock, target
+injection and policy removal fail before proof. `local-inputs.ts` independently
+registers exact files/whole source roots; selection never comes from a builder.
+Policy `deployment/pds/build-inputs.json` is exactly schema1 and
+selection `pds-presentation-v1`. JSON recursively sorts object keys by code units,
+uses two-space indentation and one LF; array order is preserved. Alternative key
+order/duplicate keys/BOM/CRLF fail. Generated inventory is canonical sorted
+`[[path,sha256],...]`, covering every selected raw byte, including helper/policy,
+recipe/lock/package metadata and patch inputs. No changing app hashes are committed.
+Roots permit TS/TSX/CSS only; explicit test files and Navigation README are excluded.
+Limits: 1MiB/file, 8MiB total,512 selected files,1024 visited entries,depth16.
+Symlinks/hardlinks/nonregular files, unsafe names and unexpected package/dependency
+or browser-alias metadata fail. Actual selected files must equal regular clean HEAD.
+
+Only the separately pinned original stock recipe may omit the policy; local helper
+or patches cannot fall back. Local COPY accepts single plain paths and only known
+internal stages, never root/glob/JSON/continuation copies. Both builds use the same
+selected scratch context preserving repository-relative paths and the same
+`UNSET_INPUTS_SHA256` builder arg. The entire selected context is re-read around
+each build; checkout/HEAD/lock/inventory are reobserved before receipt. Receipt
+adds buildMode,policySha256,patchManifestSha256,localInventorySha256; stock has null
+local hashes. Existing source/image/artifact proof fields and CLI arguments remain.
+
+Patch manifest is exactly schema1 plus patches rows containing patch,target,
+inputSha256,outputSha256,patchSha256; target-sorted, unique, exact registry only.
+Directory contents exactly match manifest plus simple lowercase `.patch` basenames.
+Manifest64KiB, patch/original/output1MiB,128hunks/file. Restricted unified diff has
+exact a/b headers and explicit positive old/new coordinates/counts. Reconstruction
+compares exact source lines at those coordinates; no offset/search/fuzz or writes.
+The authenticated archive target must itself be regular and match its registered
+original SHA256. All outputs/hashes are planned before any helper source write.
+Test fixture originals are MIT upstream UI0.10.5 at revision a7c8604d876a200a1e4fa4aec83d4189ac4f1c12.
+
+u owns the initial canonical empty manifest and actual helper conformance through
+subprocess tests; j supplies all three Devices patches. A separate check-only v
+promotion retires empty acceptance before styled admission. Later exact targets or
+locale catalogs require prior check-only registration. Hashes do not prove native
+auth semantics. u must separately prove exhaustive original/patched tree equality,
+immutable package/lock/workspace bytes and exact pinned-tool generated outputs;
+no new generated-source exemptions are registered here. Native CSS132420raw/
+17660min-gzip remains over unchanged53248/12288; this is not native CSS acceptance,
+image reproduction, browser/native-flow proof or release approval.

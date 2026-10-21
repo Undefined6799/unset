@@ -11,7 +11,7 @@ export const PACKAGES = {
   "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
 } as const;
 export type SourceLock = { revision: string; archiveSha256: string; lockSha256: string };
-export async function verifySource(bytes: Buffer, lock: SourceLock): Promise<void> {
+export async function verifySource(bytes: Buffer, lock: SourceLock): Promise<Map<string, Entry>> {
   requireThat(
     /^[0-9a-f]{40}$/.test(lock.revision) && bytes.length <= 512 * 1024 * 1024 && sha256(bytes) === lock.archiveSha256,
     "source archive/revision drift",
@@ -28,6 +28,7 @@ export async function verifySource(bytes: Buffer, lock: SourceLock): Promise<voi
     const pkg = JSON.parse(entry.data.toString());
     requireThat(pkg.name === name && pkg.version === version, "source package version drift");
   }
+  return files;
 }
 function sourceHardlink(files: Map<string, Entry>, path: string, root: string): void {
   let entry = files.get(path);

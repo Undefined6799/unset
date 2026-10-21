@@ -30,7 +30,7 @@ describe("source archive root and link containment", () => {
         { name: `${root}/hard`, type: "link", linkname: `${root}/plain` },
         { name: `${root}/hard-chain`, type: "link", linkname: `${root}/hard` },
       ]),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeInstanceOf(Map);
   });
   test.each([
     ["absolute symlink", [{ name: `${root}/escape`, type: "symlink", linkname: "/etc" }]],

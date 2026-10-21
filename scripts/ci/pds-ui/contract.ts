@@ -1,6 +1,7 @@
 // Exact, checks-only recipe registration. No Compose/vendor admission or deploy import exception.
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { localInputs } from "./local-inputs.ts";
 export const UI_DIRECTORY =
   "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist";
 export type Lock = {
@@ -67,5 +68,6 @@ export function recipeContract(root: string): Lock | null {
   ];
   if (JSON.stringify(final) !== JSON.stringify(expected))
     throw new Error("PDS runtime recipe exceeds exact distribution replacement");
+  localInputs(root);
   return lock;
 }

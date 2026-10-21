@@ -102,3 +102,19 @@ test("pds_public_package_subpaths_resolve_to_reviewed_files", async () => {
       .sort(),
   ).toEqual(["shared/ui/components/Header/BrandHeader.tsx", "shared/ui/presentation.ts"]);
 });
+
+test("pds_builder_leaf_allows_only_builtins_and_no_runtime_importers", async () => {
+  for (const spec of ["node:fs", "node:path", "node:crypto"])
+    expect(await check([edge("deployment/pds/build-ui.mjs", spec)])).toEqual({ exitCode: 0, rules: [] });
+  for (const spec of ["../../scripts/ui/css-scope.ts", "./other.mjs", "react", "tar-stream"])
+    expect((await check([edge("deployment/pds/build-ui.mjs", spec)])).exitCode).toBe(1);
+  for (const from of [
+    "deployment/pds/other.mjs",
+    "apps/web/loader.ts",
+    "interfaces/http/loader.ts",
+    "shared/ui/loader.ts",
+  ]) {
+    expect((await check([edge(from, "../../deployment/pds/build-ui.mjs")])).exitCode).toBe(1);
+  }
+  expect((await check([edge("deployment/pds/build-other.mjs", "node:fs")])).exitCode).toBe(1);
+});

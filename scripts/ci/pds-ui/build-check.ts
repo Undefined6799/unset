@@ -1,20 +1,23 @@
-// CI-only orchestration. Product recipe is Dockerfile-only; no deployment import exception.
+// CI-only orchestration; the separately registered builder leaf is never imported.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archive, requireThat, sha256 } from "./archive.ts";
-import { cleanRevision, ROOT, readArtifact, readBounded, verifyInputs } from "./cli.ts";
-import { recipeContract } from "./contract.ts";
+import { archive, requireThat } from "./archive.ts";
+import { buildCommands, inputProof, observeInputs, sameInputs, stageInputs, verifyContext } from "./build-inputs.ts";
+import { ROOT, readArtifact, readBounded, verifyInputs } from "./cli.ts";
+import { parseLock, recipeContract } from "./contract.ts";
+import { planPatches } from "./source-patches.ts";
 import { verifySource } from "./verify.ts";
 
 async function main(): Promise<void> {
-  const lock = recipeContract(ROOT);
-  if (lock === null) {
+  const registered = recipeContract(ROOT);
+  if (registered === null) {
     console.log("pds-ui: no candidate recipe or source lock");
     return;
   }
-  const revision = cleanRevision(ROOT);
+  const observed = observeInputs(ROOT);
+  const lock = parseLock((observed.files.get("deployment/pds/source.lock.json") as Buffer).toString());
   requireThat(
     process.platform === "linux" && lock.base.platform === `linux/${process.arch === "x64" ? "amd64" : process.arch}`,
     "PDS CI verification requires its declared native Linux platform",
@@ -39,19 +42,18 @@ async function main(): Promise<void> {
       source,
       `https://codeload.github.com/bluesky-social/atproto/tar.gz/${lock.source.revision}`,
     ]);
-    await verifySource(readBounded(source), lock.source);
-    const common = ["--platform", lock.base.platform, "--file", "deployment/pds/Dockerfile"];
-    run("docker", [
-      "buildx",
-      "build",
-      ...common,
-      "--target",
-      "ui-artifact",
-      "--output",
-      `type=local,dest=${join(scratch, "artifact")}`,
-      "deployment/pds",
-    ]);
-    run("docker", ["buildx", "build", ...common, "--load", "--iidfile", join(scratch, "iid"), "deployment/pds"]);
+    const sourceFiles = await verifySource(readBounded(source), lock.source);
+    if (observed.mode === "local") {
+      planPatches(sourceFiles, lock.source.revision, observed.files);
+      mkdirSync(join(scratch, "context"));
+      stageInputs(observed, join(scratch, "context"));
+    }
+    sameInputs(observed, observeInputs(ROOT));
+    for (const args of buildCommands(observed, lock.base.platform, scratch)) {
+      if (observed.mode === "local") verifyContext(observed, join(scratch, "context"));
+      run("docker", args);
+      if (observed.mode === "local") verifyContext(observed, join(scratch, "context"));
+    }
     const iid = readFileSync(join(scratch, "iid"), "utf8").trim();
     requireThat(/^sha256:[0-9a-f]{64}$/.test(iid), "invalid candidate content id");
     run("docker", ["image", "save", "--output", join(scratch, "candidate.tar"), iid]);
@@ -69,11 +71,10 @@ async function main(): Promise<void> {
       index.manifests[0].digest,
       readArtifact(join(scratch, "artifact/dist")),
     );
-    requireThat(cleanRevision(ROOT) === revision, "checkout changed during build");
+    sameInputs(observed, observeInputs(ROOT));
     const receipt = {
       schema: 1,
-      unsetRevision: revision,
-      sourceLockSha256: sha256(readBounded(join(ROOT, "deployment/pds/source.lock.json"))),
+      ...inputProof(observed),
       ...proof,
     };
     const serialized = JSON.stringify(receipt);

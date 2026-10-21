@@ -125,9 +125,9 @@ describe("source and installed artifact coupling", () => {
     const native = Buffer.concat([global, source]);
     await expect(
       verifySource(native, { revision, archiveSha256: sha(native), lockSha256: sha("frozen") }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeInstanceOf(Map);
     const lock = { revision, archiveSha256: sha(source), lockSha256: sha("frozen") };
-    await expect(verifySource(source, lock)).resolves.toBeUndefined();
+    await expect(verifySource(source, lock)).resolves.toBeInstanceOf(Map);
     const badSource = await tar([
       { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
       ...Object.entries(packages).map(([path, [name, version]]) => ({

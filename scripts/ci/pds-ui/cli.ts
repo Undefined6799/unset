@@ -1,9 +1,13 @@
-import { execFileSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { requireThat, sha256 } from "./archive.ts";
-import { type Lock, parseLock } from "./contract.ts";
+import { inputProof, observeInputs, sameInputs } from "./build-inputs.ts";
+import { type Lock, parseLock, recipeContract } from "./contract.ts";
+import { planPatches } from "./source-patches.ts";
+
+export { cleanRevision } from "./build-inputs.ts";
+
 import { compareImages, PACKAGES, verifyArtifact, verifySource } from "./verify.ts";
 export const ROOT = resolve(import.meta.dirname, "../../..");
 export function readBounded(path: string): Buffer {
@@ -33,13 +37,6 @@ export function readArtifact(dir: string): Map<string, Buffer> {
   };
   visit(dir, "", 0);
   return files;
-}
-export function cleanRevision(root: string): string {
-  const git = (args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8", timeout: 30_000 }).trim();
-  requireThat(git(["status", "--porcelain", "--untracked-files=all"]) === "", "build checkout must be clean");
-  const revision = git(["rev-parse", "HEAD"]);
-  requireThat(/^[0-9a-f]{40}$/.test(revision), "invalid Unset revision");
-  return revision;
 }
 export async function verifyInputs(
   lock: Lock,
@@ -111,12 +108,21 @@ async function main(): Promise<void> {
       extra.length === 0,
     "usage: cli.ts -- LOCK SOURCE BASE CANDIDATE CANDIDATE_DIGEST ARTIFACT UNSET_REVISION LOCK_SHA256",
   );
-  const revision = cleanRevision(ROOT);
+  recipeContract(ROOT);
+  const observed = observeInputs(ROOT);
+  const revision = observed.revision;
   const rawLock = readBounded(lockPath);
   requireThat(
     revision === expectedRevision && sha256(rawLock) === expectedLockHash,
     "Unset revision/source lock drift",
   );
+  requireThat(observed.sourceLockSha256 === expectedLockHash, "source lock path differs from checkout");
+  if (observed.mode === "local")
+    planPatches(
+      await verifySource(readBounded(sourcePath), parseLock(rawLock.toString()).source),
+      parseLock(rawLock.toString()).source.revision,
+      observed.files,
+    );
   const proof = await verifyInputs(
     parseLock(rawLock.toString()),
     readBounded(sourcePath),
@@ -125,8 +131,8 @@ async function main(): Promise<void> {
     digest,
     readArtifact(artifactPath),
   );
-  requireThat(cleanRevision(ROOT) === revision, "checkout changed during verification");
-  console.log(JSON.stringify({ schema: 1, unsetRevision: revision, sourceLockSha256: expectedLockHash, ...proof }));
+  sameInputs(observed, observeInputs(ROOT));
+  console.log(JSON.stringify({ schema: 1, ...inputProof(observed), ...proof }));
 }
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {

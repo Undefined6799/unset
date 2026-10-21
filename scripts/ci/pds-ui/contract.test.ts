@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -22,7 +22,7 @@ const locked = {
   },
   uiDirectory: UI_DIRECTORY,
 };
-const recipe = `FROM ${locked.builder.ref} AS ui-build\nADD --checksum=sha256:${locked.source.archiveSha256} https://codeload.github.com/bluesky-social/atproto/tar.gz/${locked.source.revision} /tmp/atproto.tar.gz\nFROM scratch AS ui-artifact\nCOPY --from=ui-build /build/dist/ /dist/\nFROM ${locked.base.ref}\nRUN rm -rf /${UI_DIRECTORY}\nCOPY --from=ui-artifact /dist/ /${UI_DIRECTORY}/\n`;
+const recipe = readFileSync(new URL("../../../deployment/pds/Dockerfile", import.meta.url), "utf8");
 function root() {
   const dir = mkdtempSync(join(tmpdir(), "pds-contract-"));
   mkdirSync(join(dir, "deployment/pds"), { recursive: true });
