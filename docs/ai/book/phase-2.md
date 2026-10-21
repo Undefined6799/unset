@@ -4506,8 +4506,20 @@ Where: `apps/pds/` (one ownership path, its tests/docs)
 Goal: Task 4 presentation: build-only package using shared tokens/components; translated labels, resolved links/current state, avatar data, children and upstream-owned action slots.
 Done when: Presentation/keyboard/theme/viewport checks pass with no fetch/auth logic; keep native upstream context/hooks and current-device protections available to the integration. Notes updated or none needed.
 
+### P2.24v — Validate frontend build inputs
+Tags: [SEC]            Depends on: P2.24g            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
+Goal: Task 4 build prerequisite: closed local-input and exact UI source-patch contracts, complete clean-checkout input hashes, matching artifact/candidate contexts, proof binding and a narrow builder-helper import allowance. Keep this independently reviewable from P2.24g's presentation/fixture-discovery checks; no product changes ride.
+Done when: Missing/extra/changed inputs, traversal, duplicate/non-UI patch targets, before/after drift, unpinned dependencies and unverified digests fail. Preserve source-lock, all four manifest entries, artifact policy and backend/full Config equality. Notes updated or none needed.
+
+### P2.24u — Wire build-only presentation inputs
+Tags: [SEC]            Depends on: P2.24i, P2.24v            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/` build recipe/input assembly only, with adjacent tests/docs; excludes source patches, edge, admission/Compose and check paths.
+Goal: Task 4 builder: consume independently hash-checked local presentation/shared sources and exact frontend source patches with the frozen upstream lock and one compatible React closure. Use shared CSS and the proved fixed edge font URLs; no compiled-code rewrite, runtime reinstall or native behavior change.
+Done when: Input/patch mismatch fails before build; all four native entries, asset URLs and final-byte hashes pass; repeated identical inputs reproduce the artifact and backend tree/full Config stay equal. P2.24j owns native source patches; no partial rollout. Notes updated or none needed.
+
 ### P2.24j — Integrate the native Devices pilot
-Tags: [SEC]            Depends on: P2.24i            Plan: §5.3; §9; ADR 0027
+Tags: [SEC]            Depends on: P2.24u            Plan: §5.3; §9; ADR 0027
 Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
 Goal: Task 4 integration: small presentation-only patches to upstream account shell/session list. Keep upstream routes, providers, device ordering/filtering and revoke mutation.
 Done when: Real two-session revocation, current device, account switch, avatar/home, settings, direct reload/back/forward pass; both themes match Figma 49:1912/49:1978 at desktop/phone/320px/short viewports. No partial rollout. Notes updated or none needed.
