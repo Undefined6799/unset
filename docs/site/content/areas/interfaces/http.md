@@ -28,11 +28,15 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings profile page. |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
-| `interfaces/http/app-gate.ts` | Turns the identity domain's onboarding and email decision into a redirect. |
+| `interfaces/http/app-gate.ts` | Page gate `openApp`: session, then onboarding, then a confirmed email. |
 | `interfaces/http/web/page.ts` | Page responses and the kit error-page hook. |
 | `interfaces/http/web/render-entry.ts` | Loads `@unset/apps-web/server`. |
 | `interfaces/http/routes/test-routes.ts` | Test-only pages. `compose.ts` imports this module only when `TEST_ROUTES` is on. `config.ts` allows that only when `UNSET_ENV` is `test`. |
 | `interfaces/http/limits.ts` | Rate-limit policy names `default`, `login`, `search`, `report`, `follow`, `like`, `upload`. Which route uses which name is on [Endpoints](/endpoints/). |
+
+Every route in this process sets `session: "none"`. `defineRoute` writes `requiresSession` only for `"required"`, so `interfaces/http/routes.manifest.json` has no session field (`shared/http/routes.ts`). That is not "no auth". Page gating is `openApp` (`interfaces/http/app-gate.ts`). `interfaces/http/routes/welcome.ts`, `interfaces/http/routes/verify-email.ts` and `interfaces/http/routes/logout.ts` read the session in the handler. `GET /login` reads it to send a signed-in visitor to `/did` (`interfaces/http/routes/login.ts`).
+
+The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS. The maximum is 900 in `interfaces/http/config.ts`.
 
 `compose.ts` keeps `meRoutes` last so the one-segment DID route does not shadow the explicit paths.
 
