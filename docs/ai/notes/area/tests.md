@@ -36,6 +36,9 @@ so a same-basename spec elsewhere cannot satisfy execution. The standalone PDS n
 `*.image.test.ts`: the images project runs after units, with one worker, and avoids the ordinary
 integration project's Postgres setup. Pure PDS helper unit tests can sit beside browser fixtures
 under `tests/e2e/pds/`; do not make a plain integration test just to share its folder.
+P2.24h's native provider driver keeps both development/SSRF-disable flags false; the backend requires
+an HTTPS resource issuer even for an internal HTTP listener. Its manually carried Secure cookies prove
+API/store behavior only; browser TLS/cookie confinement and real expiry stay separate gates.
 pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
 only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
