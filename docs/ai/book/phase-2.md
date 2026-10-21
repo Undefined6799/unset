@@ -4514,15 +4514,15 @@ Done when: Presentation/keyboard/theme/viewport checks pass with no fetch/auth l
 
 ### P2.24v — Validate frontend build inputs
 Tags: [SEC]            Depends on: P2.24g            Plan: §5.3; §9; ADR 0027
-Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
-Goal: Task 4 build prerequisite: closed local-input and exact UI source-patch contracts, complete clean-checkout input hashes, matching artifact/candidate contexts, proof binding and a narrow builder-helper import allowance. Keep this independently reviewable from P2.24g's presentation/fixture-discovery checks; no product changes ride.
-Done when: Missing/extra/changed inputs, traversal, duplicate/non-UI patch targets, before/after drift, unpinned dependencies and unverified digests fail. Preserve source-lock, all four manifest entries, artifact policy and backend/full Config equality. Notes updated or none needed.
+Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs, including narrow ASVS evidence)
+Goal: Task 4 build prerequisite: closed local-input and exact UI source-patch contracts, complete clean-checkout input hashes, matching artifact/candidate contexts, proof binding and a narrow builder-helper import allowance. Stage only exact registered files under scratch, preserving repository-relative paths; never transmit the entire checkout. Keep this independently reviewable from P2.24g's presentation/fixture-discovery checks; no product changes ride.
+Done when: Missing/extra/changed inputs, traversal, duplicate/non-UI patch targets, before/after drift, unpinned dependencies and unverified digests fail. Preserve source-lock, all four manifest entries, artifact policy and backend/full Config equality. Initial local-policy validation permits only u's canonical empty bootstrap manifest or the complete registered Devices cohort; a separate check-only v continuation must make that cohort mandatory and retire empty-bootstrap acceptance before complete styled candidate admission. j cannot authorize that promotion by changing its product manifest. Notes updated or none needed.
 
 ### P2.24u — Wire build-only presentation inputs
 Tags: [SEC]            Depends on: P2.24i, P2.24v            Plan: §5.3; §9; ADR 0027
-Where: `deployment/pds/` build recipe/input assembly only, with adjacent tests/docs; excludes source patches, edge, admission/Compose and check paths.
+Where: `deployment/pds/` build recipe/input assembly only, with adjacent tests/docs; includes only the initial canonical empty `deployment/pds/patches/ui/manifest.json` for v local-policy validation, excludes actual source patch payloads, edge, admission/Compose and check paths.
 Goal: Task 4 builder: consume independently hash-checked local presentation/shared sources and exact frontend source patches with the frozen upstream lock and one compatible React closure. Use shared CSS and the proved fixed edge font URLs; no compiled-code rewrite, runtime reinstall or native behavior change.
-Done when: Input/patch mismatch fails before build; all four native entries, asset URLs and final-byte hashes pass; repeated identical inputs reproduce the artifact and backend tree/full Config stay equal. P2.24j owns native source patches; no partial rollout. Notes updated or none needed.
+Done when: Input/patch mismatch fails before build; all four native entries, asset URLs and final-byte hashes pass; repeated identical inputs reproduce the artifact and backend tree/full Config stay equal. u creates only the canonical empty bootstrap manifest; P2.24j supplies native patch bytes and the complete Devices cohort. No partial rollout. Notes updated or none needed.
 
 ### P2.24w — Register native browser verification
 Tags: [SEC]            Depends on: P2.24g, P2.24h            Plan: §5.3; §9; ADR 0027
@@ -4533,7 +4533,7 @@ Done when: Missing/stale/invalid/wrong-root reports, skipped/unexecuted nested s
 ### P2.24j — Integrate the native Devices pilot
 Tags: [SEC]            Depends on: P2.24u, P2.24w            Plan: §5.3; §9; ADR 0027
 Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
-Goal: Task 4 integration: small presentation-only patches to upstream account shell/session list. Keep upstream routes, providers, device ordering/filtering and revoke mutation.
+Goal: Task 4 integration: small presentation-only patches to the registered upstream account shell/session-list/Devices targets, supplying patch bytes and the complete Devices cohort in the manifest. Keep upstream routes, providers, device ordering/filtering and revoke mutation. The separate check-only v continuation owns mandatory-cohort promotion; this product manifest cannot self-authorize it.
 Done when: Real two-session revocation, current device, account switch, avatar/home, settings, direct reload/back/forward pass; both themes match Figma 49:1912/49:1978 at desktop/phone/320px/short viewports. No partial rollout. Notes updated or none needed.
 
 ### P2.24k — Build native account-page presentation
