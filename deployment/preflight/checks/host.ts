@@ -7,9 +7,13 @@
 import { parseStrictData } from "../compose-parse.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
-/** The one fixed line C21 prints under --env dev; it names the waiver and carries no value from the inputs. */
-export const C21_DEV_WAIVER =
-  "skipped: C21 waived under --env dev for staging (Alex, 2026-10-21 02:41:25Z); prod and local keep P1.33a";
+/**
+ * The one fixed line C21 prints under --env dev; it names the waiver and carries no value from the inputs. The runner
+ * withholds a whole reason that holds any configured value (P1.30m), and the dev compose configures `dev`, `unset`,
+ * `web`, `pds`, `true` and `5` among others, so the text names neither the environment nor any digit;
+ * preflight.test.ts checks it against the real compose.dev.yaml (Codex review on #1174, verify-1174).
+ */
+export const C21_DEV_WAIVER = "skipped: waived for staging by Alex's ruling; prod and local keep the retirement report";
 const MAX_OFFSET_SECONDS = 1;
 // chronyc tracking: "System time     : 0.000006523 seconds slow of NTP time" (chrony 4.6 manual, chronyc
 // "tracking"); fast or slow, the number is the offset's size.

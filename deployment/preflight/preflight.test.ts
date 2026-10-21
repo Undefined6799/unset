@@ -31,6 +31,7 @@ import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
+import { parseCompose } from "./compose-parse.ts";
 import { COSIGN } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
@@ -2275,7 +2276,8 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     // 0x40 account carries over): no report, a half report and any hostname all pass with the one fixed line, which
     // names the waiver and no value. Prod and local keep the 0x40.space rule below.
     const waived = `PASS C21 ${C21_DEV_WAIVER}`;
-    expect(C21_DEV_WAIVER).toMatch(/^skipped: C21 waived under --env dev/);
+    expect(C21_DEV_WAIVER).toMatch(/^skipped: waived for staging/);
+    expect(C21_DEV_WAIVER).not.toMatch(/[0-9]|dev/);
     expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines).toContain(waived);
     const half = '{"retirement_part_a_complete": false}';
     expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev")).lines).toContain(waived);
@@ -2286,6 +2288,25 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       expect(lines, name).toContain(waived);
     }
     expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
+  });
+
+  test("c21_waiver_line_is_never_withheld", async () => {
+    // The runner withholds a whole reason holding any configured value (P1.30m), and the real dev compose configures
+    // `dev` (UNSET_ENV), `5` (PG_POOL_MAX) and more (Codex review on #1174): the fixed line holds none of the real
+    // file's literals, and a dev fixture carrying those two literals still prints it.
+    const file = join(import.meta.dirname, "../compose.dev.yaml");
+    const real = parseCompose(readFileSync(file, "utf8"), file);
+    const literals = real.services.flatMap((s) =>
+      s.environment.flatMap(([, v]) => ("literal" in v ? [v.literal] : [])),
+    );
+    expect(literals).toContain("dev");
+    for (const literal of literals.filter((v) => v !== "")) expect(C21_DEV_WAIVER, literal).not.toContain(literal);
+    const compose = DEV.replace(
+      "      FINGERPRINT_CHECK: arachnid\n",
+      '      FINGERPRINT_CHECK: arachnid\n      UNSET_ENV: dev\n      PG_POOL_MAX: "5"\n',
+    );
+    const { lines } = await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev");
+    expect(lines.filter((line) => line.includes(" C21 "))).toEqual([`PASS C21 ${C21_DEV_WAIVER}`]);
   });
 
   test("c21_prod_and_local_still_need_the_report_on_the_old_host", () => {
