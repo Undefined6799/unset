@@ -404,6 +404,8 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
  * The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&`. A RUN joined by
  * anything else (`;`, `||`, `|`, a lone `&`, or a `#` comment, SEPARATOR below) could let a removal fail or vanish
  * unseen, so it is refused, by the line it starts on, and none of its removals count (P1.29u, P1.29c).
+ * P1.37w: a shell-form COPY whose destination is exactly the path also counts, because the copied file replaces the
+ * base's in the image's file system (the edge's own Caddy build over the base's /usr/bin/caddy).
  */
 function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: number[] } {
   const all = instructions(dockerfile);
@@ -411,6 +413,7 @@ function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused
   const removed = new Set<string>();
   const refused: number[] = [];
   for (const { line, text } of all.slice(finalFromAt + 1)) {
+    if (/^COPY\s/i.test(text) && !/^COPY\s+\[/i.test(text)) removed.add(text.split(/\s+/).at(-1) ?? "");
     if (!/^RUN\s/i.test(text)) continue;
     const script = text.replace(/^RUN\s+/i, "");
     if (SEPARATOR.test(script.replaceAll("&&", ""))) {
@@ -691,7 +694,7 @@ const PLAIN_PATH = /^\/[A-Za-z0-9._/-]+$/;
 const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
-  ["postgres", []], // postgres.Dockerfile copies nothing
+  ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -1027,7 +1030,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1040,9 +1043,10 @@ describe("base images", () => {
     });
     // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
     // The builder only builds the edge binary; the runtime image is what ships.
-    for (const [name, tag, stage, buildStage] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true],
-      ["caddy", /^2\.11\.7-alpine$/, "runtime", false],
+    // P1.37w: the runtime image's own /usr/bin/caddy never ships, because the edge copies its build over it.
+    for (const [name, tag, stage, buildStage, stripped] of [
+      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true, {}],
+      ["caddy", /^2\.11\.7-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
@@ -1051,6 +1055,7 @@ describe("base images", () => {
         source: "upstream",
         stage,
         buildStage,
+        ...stripped,
       });
     }
     // The postgres image's base (P1.29d): the official Debian trixie image; every image on it deletes gosu.
@@ -1072,6 +1077,15 @@ describe("base images", () => {
     expect(lock.pds).toStrictEqual({
       ref: "ghcr.io/bluesky-social/pds",
       tag: expect.stringMatching(/^0\.4\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // Fossorial's Newt (P1.37v, ADR 0030 Decision 2), the dev edge's tunnel to Pangolin, run as shipped likewise.
+    expect(lock.newt).toStrictEqual({
+      ref: "docker.io/fosrl/newt",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
@@ -1151,6 +1165,30 @@ describe("base images", () => {
     ]);
     expect(strippedProblems({}, declared)).toEqual([
       "lock entry node declares stripped paths but no final stage builds on it",
+    ]);
+    // P1.37w: a final-stage COPY onto exactly the path replaces the base's file; one into its folder, in exec form or
+    // in an earlier stage does not.
+    const caddyBase = lock.caddy as Base;
+    const pinnedCaddy = `${caddyBase.ref}:${caddyBase.tag}@${caddyBase.digest}`;
+    const binary: Lock = { caddy: { ...caddyBase, stripped: ["/usr/bin/caddy"] } };
+    const replaced = `FROM ${pinnedNode} AS build\nFROM ${pinnedCaddy}\nCOPY --from=build /out/caddy /usr/bin/caddy\n`;
+    expect(strippedProblems({ ok: replaced }, binary)).toEqual([]);
+    expect(
+      strippedProblems(
+        {
+          "folder.Dockerfile": replaced.replace("/usr/bin/caddy\n", "/usr/bin/\n"),
+          "exec.Dockerfile": replaced.replace(
+            "COPY --from=build /out/caddy /usr/bin/caddy",
+            'COPY ["/out/caddy", "/usr/bin/caddy"]',
+          ),
+          "early.Dockerfile": `FROM ${pinnedCaddy} AS build\nCOPY x /usr/bin/caddy\nFROM build\n`,
+        },
+        binary,
+      ),
+    ).toEqual([
+      "early.Dockerfile keeps /usr/bin/caddy, which lock entry caddy declares stripped",
+      "exec.Dockerfile keeps /usr/bin/caddy, which lock entry caddy declares stripped",
+      "folder.Dockerfile keeps /usr/bin/caddy, which lock entry caddy declares stripped",
     ]);
     expect(
       strippedProblems(
@@ -2125,8 +2163,12 @@ describe("postgres image", () => {
     const postgres = runtimeStage(read(POSTGRES_DOCKERFILE));
     const base = lock.postgres as Base;
     expect(fromImages(read(POSTGRES_DOCKERFILE))).toEqual([`${base.ref}:${base.tag}@${base.digest}`]);
-    // Nothing is copied in and the official docker-entrypoint.sh and its CMD are inherited unchanged.
-    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
+    // The official docker-entrypoint.sh is inherited unchanged. Only our pg_hba.conf is copied in, and the CMD points the
+    // server at it (P1.11y): the entrypoint passes the CMD's arguments to initdb's temporary server and to the real one.
+    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([
+      "COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
+      'CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]',
+    ]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
   });
 

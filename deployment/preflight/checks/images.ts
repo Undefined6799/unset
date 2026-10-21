@@ -1,6 +1,7 @@
 // C2 to C5 (P1.30; plan section 2 rule 23, section 6.1 SLSA row): a deploy runs only images from our registry, by
-// digest, listed in deployment/images.lock.json, signed with our key, with provenance for our own builds, and every
-// lock digest names a multi-arch index. The lock and cosign.pub arrive with P1.27s; until then these checks fail.
+// digest, listed in deployment/images.lock.json, signed keyless by the workflow that made them, with provenance for our
+// own builds, and every lock digest names a multi-arch index. C3 and C4 verify offline against the committed Sigstore
+// trusted root with the pinned cosign (P2.26b; ADR 0033).
 //
 // Under --env local (P1.27l; architecture record 2026-10-12-p129-local-build-preflight, item 2; Alex, "Yes, local
 // only", 2026-10-12T16:44:52Z) a stack built from the checkout has no registry hop for these checks to guard. C2 then
@@ -47,10 +48,13 @@ export const c2: Check = {
 
 /**
  * deployment/images/vendor.ts's VENDOR_IMAGES, which the preflight may not import (dependency-cruiser row
- * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z). compose.dev.test.ts
- * preflight_vendor_images_match keeps the two equal.
+ * deployment-preflight): Bluesky's PDS (Alex, "Allow pinned", 2026-10-07T13:00:19Z) and Newt (ADR 0030 Decision 2,
+ * P1.37v). compose.dev.test.ts preflight_vendor_images_match keeps the two equal.
  */
-export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds"]);
+export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds", "docker.io/fosrl/newt"]);
+
+/** Newt runs only under dev (P1.37v): a local stack has no tunnel, so its image may not stand in for any service. */
+const DEV_ONLY_VENDOR = "docker.io/fosrl/newt";
 
 /** The node runtime base, which the local token reader runs unbuilt (P1.29h). */
 const NODE_BASE = "docker.io/library/node";
@@ -58,9 +62,9 @@ const NODE_BASE = "docker.io/library/node";
 /**
  * The images a local stack may run unbuilt, as `ref:tag@digest`. `runOnly` holds the vendor images we run as shipped,
  * each a runtime lock entry no Dockerfile builds on, as compose.dev.yaml may (record
- * 2026-10-07-p129-migrate-image-and-run-only-images, point 2); a builder, or a base our own Dockerfiles harden (caddy,
- * postgres), is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
- * 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
+ * 2026-10-07-p129-migrate-image-and-run-only-images, point 2); a builder, a base our own Dockerfiles harden (caddy,
+ * postgres), or the dev-only Newt is never one. `readerOnly` holds the node runtime base, which only the token reader
+ * may run (record 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
  */
 function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
   const bases = readBases(inputs);
@@ -68,7 +72,9 @@ function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<
   const entries = Object.values(bases);
   return {
     runOnly: new Set(
-      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exactImage),
+      entries
+        .filter((b) => VENDOR_IMAGES.has(b.ref) && b.ref !== DEV_ONLY_VENDOR && b.stage === "runtime" && !b.buildStage)
+        .map(exactImage),
     ),
     readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exactImage)),
   };
@@ -139,15 +145,18 @@ function verifies(id: "C3" | "C4", origin: "first-party" | "upstream"): Check {
       if (inputs.env === "local") return unsigned(LOCAL_UNSIGNED);
       const lock = readLock(inputs);
       if (lock === null) return missing(inputs.lockPath);
-      if (inputs.readText(inputs.cosignKeyPath) === null) return missing(inputs.cosignKeyPath);
+      if (inputs.readText(inputs.trustedRootPath) === null) return missing(inputs.trustedRootPath);
       const names = Object.entries(lock).flatMap(([name, entry]) => (entry.origin === origin ? [name] : []));
       const result = await verdict(inputs, signal);
       if (result.ok) return pass(`${names.length} ${origin} images verified`);
-      // A failure names its entry; one that names no entry (a spawn error, an empty lock) fails both checks.
+      // A failure names its entry; one that names no entry (a spawn error, an empty lock) or an entry of neither origin
+      // fails both checks, so no failure is left to neither.
       const owner = (line: string) => Object.keys(lock).find((name) => line.startsWith(`${name}:`));
       const [first] = result.failures.filter((line) => {
         const name = owner(line);
-        return name === undefined || names.includes(name);
+        if (name === undefined || names.includes(name)) return true;
+        const other = lock[name]?.origin;
+        return other !== "first-party" && other !== "upstream";
       });
       return first === undefined ? pass(`${names.length} ${origin} images verified`) : fail(first);
     },

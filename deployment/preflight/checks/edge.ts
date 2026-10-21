@@ -13,6 +13,7 @@ import { join, posix } from "node:path";
 import {
   type Caddyfile,
   CaddyfileError,
+  DEV_APP,
   type Directive,
   type EdgeMode,
   ENV_NAMES,
@@ -153,37 +154,14 @@ export function edgeZones(
 ): Outcome {
   const image = edgeImage(compose, edgeRef);
   if (image !== null) return image;
-  const shape = mode === "dev" && mountsSitesDir(compose) ? "directory" : mode;
-  if (shape === "directory") {
-    // Transition (book P1.38e): until P1.36c switches compose.dev.yaml to the three file binds and P1.38g drops this
-    // branch, dev may still mount main's sites directory alone, read as before P1.38e.
-    const mixed = devFileTargets(compose);
-    if (mixed !== undefined) return fail(`the dev edge mounts both the sites directory and ${mixed}`);
-    const shipped = edgeSitesDir(compose, edgeDir);
-    if ("dir" in shipped && shipped.dir !== EDGE_FILES.realpath(join(edgeDir, "sites"))) {
-      return fail(`${SITES_TARGET} is not mounted from deployment/edge/sites`);
-    }
-  }
-  const sites = shape === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
+  const sites = mode === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
   if (!Array.isArray(sites) && !("dir" in sites)) return sites;
-  if (shape === "dev") {
+  if (mode === "dev") {
     const problem = devEdgeProblem(compose);
     if (problem !== null) return problem;
   }
   if (env === undefined) return missing("the edge service's environment");
-  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, shape === "dev" ? "dev" : "shipped");
-}
-
-/** Whether the edge mounts anything at the enabled sites directory itself: the transition's shape (a). */
-function mountsSitesDir(compose: Compose): boolean {
-  const edge = compose.services.find((service) => service.name === "edge");
-  return edge?.mounts.some((mount) => mountTarget(mount) === SITES_TARGET) ?? false;
-}
-
-/** The first of shape (b)'s targets the edge also mounts: a site file under the enabled sites, or the (tls) file. */
-function devFileTargets(compose: Compose): string | undefined {
-  const edge = compose.services.find((service) => service.name === "edge");
-  return edge?.mounts.map(mountTarget).find((target) => siteFileTarget(target) || DEV_MOUNTS[target] !== undefined);
+  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, mode);
 }
 
 /** The dev leaf's certificate and key (P1.36c; ADR 0032), the only secrets a dev edge reads, both required. */
@@ -201,7 +179,26 @@ function devEdgeProblem(compose: Compose): Outcome | null {
     return fail("the edge reads a secret other than the dev leaf's");
   }
   if (DEV_EDGE_SECRETS.some((name) => !edge.secrets.includes(name))) return fail("the edge does not read the dev leaf");
-  return null;
+  return leafReaders(compose).some((service) => service !== "edge")
+    ? fail("a service other than the edge reads the dev leaf")
+    : null;
+}
+
+/**
+ * Every service that can read the dev leaf's files: by a secret whose file resolves to one of them, under any name, or
+ * by a bind of that file or a folder above it. The leaf's key signs for both staging names (ADR 0032 Decision 3).
+ */
+function leafReaders(compose: Compose): string[] {
+  const leaf = DEV_EDGE_SECRETS.flatMap((name) => compose.secretFileByName.get(name) ?? []);
+  const isLeaf = (path: string) =>
+    leaf.some((file) => file === path || file.startsWith(`${path.replace(/\/+$/, "")}/`));
+  return compose.services
+    .filter(
+      (service) =>
+        service.secrets.some((name) => isLeaf(compose.secretFileByName.get(name) ?? "")) ||
+        service.mounts.some((mount) => mount.type === "bind" && mount.source !== null && isLeaf(mount.source)),
+    )
+    .map((service) => service.name);
 }
 
 /**
@@ -479,10 +476,39 @@ function deployedEdgeZones(inputs: Inputs): Outcome {
     env?.use("PDS_HOST", (value) => value),
   );
   if (pds !== null) return pds;
+  if (inputs.env === "dev") {
+    const staging = devHostsProblem(inputs, env?.use("PDS_HOST", (value) => value) ?? "");
+    if (staging !== null) return staging;
+  }
   const ref = lock.edge?.ref;
   // Under dev the edge serves the dev sites with the self-signed leaf (P1.38e; ADR 0032 Decision 3); prod is unchanged.
   const mode = inputs.env === "dev" ? "dev" : "shipped";
   return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined, mode);
+}
+
+/**
+ * The dev stack's PDS host, exactly (ADR 0025's staging PDS name, P1.37 follow-up): the name the dev leaf's SAN and
+ * Pangolin's resource carry (ADR 0032), so a dev PDS under any other name could not complete TLS or routing.
+ */
+const DEV_PDS_HOST = "staging.unset.ac";
+
+/**
+ * Under dev both hosts are the ruled staging names (P1.37 follow-up): the PDS is DEV_PDS_HOST, and web's PUBLIC_ORIGIN
+ * names DEV_APP's host, the one the dev app site serves, so its OAuth metadata, redirects and CSRF origin match it.
+ * Whether that origin is https is C29's. Reasons are fixed words.
+ */
+function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
+  if (pdsHost.toLowerCase() !== DEV_PDS_HOST) {
+    return fail("PDS_HOST is not the staging PDS name");
+  }
+  const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
+  if (origin === undefined) return fail("web's PUBLIC_ORIGIN is missing");
+  // Exactly the bare origin, as shared/config's origin() parser takes it, so web starts with the value C18 passed. A
+  // value that is not an https URL at all is C29's to name.
+  if (URL.canParse(origin) && new URL(origin).protocol === "https:" && origin !== `https://${DEV_APP.APP_HOST}`) {
+    return fail("web's PUBLIC_ORIGIN is not the dev app origin");
+  }
+  return null;
 }
 
 export const c18: Check = {

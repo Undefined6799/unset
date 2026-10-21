@@ -42,6 +42,8 @@ jobs:
       COSIGN_SHA256: 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71
       TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
       SYFT_IMAGE: anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
+      # BuildKit v0.34.0 (2026-10-07; v0.34.1 of 2026-10-20 is inside the seven-day rule), by its index digest.
+      BUILDKIT_IMAGE: moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,6 +60,13 @@ jobs:
           install -m 0755 "$RUNNER_TEMP/cosign" /usr/local/bin/cosign
       - name: Log in to GHCR
         run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      # The default docker driver refuses push-by-digest ("push-by-digest is currently not implemented for docker
+      # driver", run 39520078609), so the images build on a docker-container builder running the pinned BuildKit
+      # (docs.docker.com/build/builders/drivers/docker-container, driver-opt image). Its pushes carry BuildKit's default
+      # mode=min provenance as a manifest in the image index (docs.docker.com/build/metadata/attestations), so each
+      # locked digest names an index; cosign's own provenance and SBOM attestations below are unchanged.
+      - name: Create the BuildKit builder
+        run: docker buildx create --use --name publish --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE"
       # One digest: each image is pushed by digest, and that digest alone is scanned, signed, attested and locked.
       - name: Build, push, scan, sign and attest
         shell: bash

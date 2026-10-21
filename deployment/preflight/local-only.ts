@@ -13,6 +13,14 @@ export const LOCAL_ONLY_SERVICES: ReadonlySet<string> = new Set([TOKEN_READER]);
  */
 export const LOCAL_ONLY_NETWORKS: ReadonlyMap<string, { internal: boolean; members: readonly string[] }> = new Map();
 
+/**
+ * The other way round (P1.37v; ADR 0030 Decision 2): what only the dev file has, since a local stack has no Pangolin.
+ * Newt and its two networks; under local, C17 leaves these rows of networks.dev.json out, and the drift test
+ * (compose.local.test.ts) lets the dev file alone hold them.
+ */
+export const DEV_ONLY_SERVICES: ReadonlySet<string> = new Set(["newt"]);
+export const DEV_ONLY_NETWORKS: ReadonlySet<string> = new Set(["newt_edge", "newt_egress"]);
+
 /** Whether a network belongs to the local stack alone: on the list, or named like the PLC's. */
 export const isLocalOnlyNetwork = (name: string): boolean => LOCAL_ONLY_NETWORKS.has(name) || name.startsWith("plc_");
 

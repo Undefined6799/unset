@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[identity]]"]
 replaced_by: null
 tags: [how-to, pds, identity]
-checked: 2026-10-20
+checked: 2026-10-21
 ---
 # Where the operator types the Alice and Bob PDS password
 
@@ -23,6 +23,9 @@ checked: 2026-10-20
    local stack secrets env (`unset-dev-secrets` / `docs/human/runbooks/dev-stack-secrets.md`), never
    from the app database.
 4. Do not invent the password, DID, or email.
+
+The runbook's legal-values paragraph (P1.38d) is about the legal pages, and its cosign install step (P2.26b) is about
+image verification; neither changes anything here.
 
 **Check.** The PDS login accepts the password you typed. The app still has no password, DID, or mailbox
 store for them.

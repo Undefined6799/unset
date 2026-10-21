@@ -5,14 +5,16 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
-import { edgeSitesDir } from "./preflight/checks/edge.ts";
+import { edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
+import { c32 } from "./preflight/checks/placeholders.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import { switchesProtectionOff } from "./preflight/checks/settings.ts";
-import type { Outcome } from "./preflight/checks/types.ts";
+import { fail, type Outcome, pass } from "./preflight/checks/types.ts";
 import {
   type Compose,
   type Hardening,
@@ -22,12 +24,17 @@ import {
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
+import { SecretMap } from "./preflight/secret-map.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const FILE = "compose.dev.yaml";
 const dev = (): Compose => parseCompose(read(FILE), FILE);
 /** The local stack's file, which alone carries the token reader (P1.34d item 11). */
+/** newt_edge's fixed subnet and the two addresses on it (ADR 0030 Decision 2, P1.37v); .1 is the bridge's gateway. */
+const NEWT_SUBNET = "10.250.37.0/29";
+const NEWT_ADDRESS = "10.250.37.2";
+const EDGE_ADDRESS = "10.250.37.3";
 const LOCAL = "compose.local.yaml";
 const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
 const service = (compose: Compose, name: string): Service => {
@@ -61,8 +68,11 @@ function limitProblems(s: Service, nodeBuilt: boolean): string[] {
 const nodeBuilt = (s: Service): boolean =>
   s.build !== null &&
   NODE_DOCKERFILES.has(join("deployment", s.build.context, s.build.dockerfile).replace(/^\.\.\//, ""));
-/** A Node service: one built from our Node image, or the PDS, which runs Node too (findings F-32 covers both). */
-const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
+/** The published images built from those Dockerfiles, as the deploy lock names them (P2.26b). */
+const nodePublished = (s: Service): boolean =>
+  s.image !== null && ["web", "migrate"].some((name) => readDeployLock()[name]?.ref === s.image);
+/** A Node service: one built from our Node image or running it, or the PDS, which runs Node too (findings F-32). */
+const runsNode = (s: Service): boolean => nodeBuilt(s) || nodePublished(s) || s.name === "pds";
 
 /** A service's limits, by their Compose keys, as both compose files write them. */
 type LimitRow = { mem_limit: string; cpus: number; pids_limit: number };
@@ -87,6 +97,11 @@ const limited = (compose: Compose, name: string, change: Partial<Hardening>): Co
   ...compose,
   services: compose.services.map((s) => (s.name === name ? { ...s, hardening: { ...s.hardening, ...change } } : s)),
 });
+
+/** One deploy-lock entry (deployment/images.lock.json; scripts/ci/verify-images.ts LockEntry). */
+type DeployEntry = { ref: string; origin: "first-party" | "upstream"; upstreamSource?: string; verify: string };
+const readDeployLock = (): Record<string, DeployEntry> =>
+  JSON.parse(read("images.lock.json")) as Record<string, DeployEntry>;
 
 type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
 const readLock = (): Record<string, LockEntry> =>
@@ -135,17 +150,39 @@ describe("compose.dev.yaml (P1.29)", () => {
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
     );
     expect(files).toContain(FILE);
-    for (const file of files) {
+    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here.
+    for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
-        // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile, except a
-        // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
+        // Every service is built here from a scanned Dockerfile, except a run-only image, named exactly as its lock
+        // entry, which the mirror workflow scans (P1.29a).
         if (s.build === null) {
           expect(runOnly.has(s.image ?? "") || (file === LOCAL && isTokenReaderNode(s)), `${file} ${s.name}`).toBe(
             true,
           );
         }
       }
+    }
+  });
+
+  test("compose_dev_images_by_digest", () => {
+    // P2.26b: the dev stack builds nothing; each service runs exactly the deploy lock's entry of its name, by digest,
+    // and the lock names nothing the stack does not run.
+    const deploy = readDeployLock();
+    for (const s of dev().services) {
+      expect([s.build, s.image], s.name).toEqual([null, deploy[s.name]?.ref]);
+      expect(s.image, s.name).toMatch(/^ghcr\.io\/undefined6799\/(?:unset|mirror)\/[a-z0-9-]+@sha256:[0-9a-f]{64}$/);
+    }
+    expect(Object.keys(deploy).sort()).toEqual(
+      dev()
+        .services.map((s) => s.name)
+        .sort(),
+    );
+    // A mirror entry keeps its upstream digest (mirror.yml copies by digest) and names the base lock's upstream image.
+    const bases = new Set(Object.values(readLock()).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
+    for (const [name, entry] of Object.entries(deploy).filter(([, e]) => e.origin === "upstream")) {
+      expect(bases.has(entry.upstreamSource ?? ""), name).toBe(true);
+      expect(entry.ref.split("@")[1], name).toBe(entry.upstreamSource?.split("@")[1]);
     }
   });
 
@@ -355,16 +392,10 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(web.ports).toEqual([]);
   });
 
-  test("compose_dev_only_edge_publishes", () => {
-    // Only the edge publishes, 80 and 443 on loopback (P1.29a); the homelab's own address is P1.34's.
-    for (const s of dev().services) {
-      if (s.name === "edge") continue;
-      expect(s.ports, s.name).toEqual([]);
-    }
-    expect(service(dev(), "edge").ports).toEqual([
-      { hostIp: "127.0.0.1", published: "80", target: "80" },
-      { hostIp: "127.0.0.1", published: "443", target: "443" },
-    ]);
+  test("compose_dev_publishes_nothing", () => {
+    // ADR 0030 Decision 2 and ADR 0031 Decision 2 (P1.37v): under dev no service publishes, the edge included; Newt
+    // reaches the edge on newt_edge. compose.local.yaml keeps the edge's loopback publish (compose.local.test.ts).
+    for (const s of dev().services) expect(s.ports, s.name).toEqual([]);
   });
 
   test("compose_dev_secrets_have_one_reader_uid", () => {
@@ -495,10 +526,12 @@ function mailLogProblems(env: Map<string, string>): string[] {
 
 describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   test("pds_runs_the_locked_image", () => {
-    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest.
+    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest, run from
+    // its mirror at that digest since P2.26b.
     const pds = readLock().pds;
     expect(pds).toBeDefined();
-    expect(service(dev(), "pds").image).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    expect(readDeployLock().pds?.upstreamSource).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    expect(service(dev(), "pds").image).toBe(`ghcr.io/undefined6799/mirror/pds@${pds?.digest}`);
     expect(service(dev(), "pds").build).toBeNull();
   });
 
@@ -643,42 +676,144 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const [name, value] of on) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(false);
   });
 
-  test("edge_answers_for_the_app_and_pds_hosts", () => {
-    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1: the PDS reaches both hosts (it fetches
-    // the app's client metadata) through the edge's aliases on the network they share, never extra_hosts or a fixed
-    // address; web reaches them the same way on the app network, which the PDS is never on (architecture 2026-10-15
-    // 02:05Z, option C). compose-parse refuses aliases anywhere else or with other values
-    // (aliases_only_on_the_edges_edge_and_app_networks_with_its_two_hosts).
+  test("no_service_answers_for_the_app_or_pds_host", () => {
+    // ADR 0031 Decision 3 (P1.37v): under dev the edge carries no aliases, so the PDS and web resolve both staging names
+    // through public DNS to Pangolin; and web has no internal host for net-guard, so every host it fetches must resolve
+    // to public unicast addresses. The PDS is still never on the app network (architecture 2026-10-15 02:05Z, option C).
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
-    const hosts = { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] };
-    expect(raw.services.edge?.networks).toEqual({ edge: hosts, app: hosts });
-    expect(service(dev(), "pds").networks).toContain("edge");
-    expect(service(dev(), "pds").networks).not.toContain("app");
+    expect(raw.services.edge?.networks).toEqual({ edge: null, app: null, newt_edge: { ipv4_address: EDGE_ADDRESS } });
+    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
-    expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
+    expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
   });
 
-  test("edge_serves_the_repository_sites", () => {
-    // C18's own reading of the mount: a read-only bind of deployment/edge/sites at the directory the image imports.
-    const compose = dev();
-    const resolved: Compose = {
-      ...compose,
-      services: compose.services.map((s) => ({
-        ...s,
-        mounts: s.mounts.map((m) =>
-          m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
-        ),
-      })),
-    };
-    expect(edgeSitesDir(resolved, join(DEPLOYMENT, "edge"))).toEqual({
-      dir: realpathSync.native(join(DEPLOYMENT, "edge", "sites")),
-    });
-    const edge = envOf(service(compose, "edge"));
-    expect(Object.fromEntries(edge)).toEqual({
+  test("no_dev_service_trusts_a_dev_root", () => {
+    // ADR 0031 Decision 3: no NODE_EXTRA_CA_CERTS anywhere on staging, so no staging service trusts a root of ours.
+    for (const s of dev().services) {
+      expect(
+        s.environment.map(([key]) => key),
+        s.name,
+      ).not.toContain("NODE_EXTRA_CA_CERTS");
+      expect(
+        s.mounts.map((m) => m.target),
+        s.name,
+      ).not.toContain("/etc/unset-dev-trust");
+    }
+  });
+
+  test("edge_serves_the_dev_sites_and_leaf", () => {
+    // P1.36c (ADR 0032 Decisions 1 and 3; book P1.38e shape (b)): three read-only file binds, dev/app.caddy and
+    // dev/pds.caddy by name where the image imports sites and dev/tls.caddy over the shipped (tls).
+    const edge = service(dev(), "edge");
+    expect(edge.mounts.filter((m) => m.type === "bind")).toEqual([
+      { type: "bind", source: "./edge/dev/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
+      { type: "bind", source: "./edge/dev/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
+      { type: "bind", source: "./edge/dev/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
+    ]);
+    expect(Object.fromEntries(envOf(edge))).toEqual({
       PDS_HOST: "${PDS_HOSTNAME}",
       PDS_UPSTREAM: "pds:3000",
       ACME_EMAIL: "${EDGE_ACME_EMAIL}",
+      APP_HOST: "${APP_HOST}",
+      APP_UPSTREAM: "web:8080",
     });
+  });
+
+  test("c18_reads_this_files_dev_edge", () => {
+    // C18's own reading of this file under dev, as the deploy runs it: the lock's edge image in place of the build, the
+    // binds resolved from deployment/, and the edge's env with the ruled staging names. It passes since P1.37v dropped
+    // the ports, and a loopback publish put back fails.
+    const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
+    const compose = dev();
+    const deployed = (ports: Compose["services"][number]["ports"] = []): Compose => ({
+      ...compose,
+      services: compose.services.map((s) =>
+        s.name !== "edge"
+          ? s
+          : {
+              ...s,
+              image: ref,
+              ports: [...s.ports, ...ports],
+              mounts: s.mounts.map((m) =>
+                m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
+              ),
+            },
+      ),
+    });
+    const env = new SecretMap([
+      ["PDS_HOST", "staging.unset.ac"],
+      ["PDS_UPSTREAM", "pds:3000"],
+      ["ACME_EMAIL", "edge@example.test"],
+      ["APP_HOST", "staging.unset.sh"],
+      ["APP_UPSTREAM", "web:8080"],
+    ]);
+    const edgeDir = join(DEPLOYMENT, "edge");
+    expect(edgeZones(deployed(), edgeDir, env, ref, "dev")).toEqual(pass());
+    const loopback = [{ hostIp: "127.0.0.1", published: "443", target: "443" }];
+    expect(edgeZones(deployed(loopback), edgeDir, env, ref, "dev")).toEqual(
+      fail("the edge publishes a port under dev"),
+    );
+  });
+
+  test("dev_leaf_and_key_reach_only_the_edge", () => {
+    // ADR 0032 Decision 1: the leaf's key is a C9 file secret beside the checkout, and only the edge mounts it.
+    const compose = dev();
+    for (const s of compose.services) {
+      const leaf = s.secrets.filter((name) => name.startsWith("dev_tls_"));
+      expect(leaf, s.name).toEqual(s.name === "edge" ? ["dev_tls_cert", "dev_tls_key"] : []);
+    }
+    const raw = parseStrictData(read(FILE), FILE) as { secrets: Record<string, { file: string }> };
+    expect(raw.secrets.dev_tls_cert).toEqual({ file: "../../unset-dev-secrets/dev_tls_cert" });
+    expect(raw.secrets.dev_tls_key).toEqual({ file: "../../unset-dev-secrets/dev_tls_key" });
+  });
+
+  test("scheme_comes_from_configuration", () => {
+    // ADR 0031 Decision 2, kept by ADR 0032 Decision 2: web never takes its scheme or host from a request. Its public
+    // URLs are https from configuration (C29 refuses plain http outside local), its cookies are Secure, and no server
+    // code reads a forwarded scheme or host; the edge sets X-Forwarded-Proto https itself (snippets/upstream.caddy).
+    const web = new Map(envOf(service(dev(), "web")));
+    expect([web.get("PUBLIC_ORIGIN"), web.get("MEDIA_ORIGIN")]).toEqual([
+      "${WEB_PUBLIC_ORIGIN}",
+      "${WEB_MEDIA_ORIGIN}",
+    ]);
+    const example = read("env/dev-public.example.env");
+    for (const key of ["WEB_PUBLIC_ORIGIN", "WEB_MEDIA_ORIGIN"])
+      expect(example).toMatch(new RegExp(`^${key}=https://`, "m"));
+    const sources = ["shared/http", "interfaces/http"].flatMap((dir) =>
+      readdirSync(join(DEPLOYMENT, "..", dir), { recursive: true, encoding: "utf8" })
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.endsWith("test-env.ts"))
+        .map((f) => [`${dir}/${f}`, readFileSync(join(DEPLOYMENT, "..", dir, f), "utf8")] as const),
+    );
+    expect(sources.length).toBeGreaterThan(10);
+    for (const [file, text] of sources) {
+      expect(text, file).not.toMatch(/x-forwarded-(?:proto|host|scheme)|["'`]forwarded["'`]|\.encrypted\b/i);
+    }
+    // Every cookie attribute string web writes, wherever it lives (the session, the theme, and sign-in-state.ts's
+    // nonce, signed-out, target and issuer cookies), is Secure and HttpOnly.
+    const attributes = sources.flatMap(([file, text]) =>
+      [...text.matchAll(/"(Path=[^"]*)"/g)].map((match) => [file, match[1] as string] as const),
+    );
+    expect(attributes.map(([file]) => file)).toEqual(
+      expect.arrayContaining([
+        "interfaces/http/session-cookie.ts",
+        "interfaces/http/prefs/theme.ts",
+        "interfaces/http/routes/sign-in-state.ts",
+      ]),
+    );
+    expect(attributes.length).toBeGreaterThanOrEqual(5);
+    for (const [file, text] of attributes) {
+      expect(text.split("; "), `${file}: ${text}`).toEqual(expect.arrayContaining(["Secure", "HttpOnly"]));
+    }
+    // The PDS half: @atproto/pds 0.5.37 makes its public URL `https://${hostname}` unless the hostname is localhost
+    // (dist/config/config.js:10-13), and it trusts X-Forwarded-Proto from private addresses (dist/index.js:178), which
+    // the edge sets to https itself. So its hostname comes from configuration, is never localhost, and nothing in its
+    // env names a plain-http URL.
+    const pds = new Map(envOf(service(dev(), "pds")));
+    expect(pds.get("PDS_HOSTNAME")).toBe("${PDS_HOSTNAME}");
+    expect(example).toMatch(/^PDS_HOSTNAME=(?!localhost$)\S+$/m);
+    const pdsEnv = [...pds.values(), read("env/pds.example.env")].join("\n");
+    expect(pdsEnv).not.toMatch(/http:\/\//i);
+    expect(read("edge/snippets/upstream.caddy")).toMatch(/^\t\theader_up X-Forwarded-Proto https$/m);
   });
 });
 
@@ -706,6 +841,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_indexer_password: 65532,
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
+    dev_tls_cert: 65532,
+    dev_tls_key: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -722,6 +859,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     [ENV, made("dir", 0o700, DEPLOY_UID, 2)],
     [ENV_FILE, made("file", 0o600, DEPLOY_UID, 3)],
     [join(ENV, "pds.env"), made("file", 0o600, DEPLOY_UID, 4)],
+    [join(ENV, "newt.env"), made("file", 0o600, DEPLOY_UID, 5)],
     ...Object.entries(SECRET_OWNERS).map(([name, uid], at): [string, Stats] => [
       join(SECRETS, name),
       made("file", 0o400, uid, 10 + at),
@@ -752,19 +890,23 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
   };
 
   const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
-  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base lock and no deploy lock. */
+  const DEPLOY_LOCK = join(CHECKOUT, "deployment/images.lock.json");
+  const lockFile = (path: string) => (path === BASES || path === DEPLOY_LOCK ? readFileSync(path, "utf8") : null);
+  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base and deploy locks. */
   const devInputs = (edit: (text: string) => string = (text) => text) => {
     const file = join(DEPLOYMENT, FILE);
     const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : path === BASES ? readFileSync(BASES, "utf8") : null),
+      readText: (path) => (path === file ? edit(read(FILE)) : lockFile(path)),
       readEnv: (path) =>
         path === ENV_FILE
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
           : path === join(ENV, "pds.env")
             ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
-            : null,
+            : path === join(ENV, "newt.env")
+              ? { text: read("env/newt.example.env"), id: `${DEV}:5` }
+              : null,
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,
@@ -795,9 +937,19 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
   });
 
+  test("c32_passes_on_the_dev_stack", async () => {
+    // P1.38d on this file: Alex's legal values (P1.36c) leave no "[to fill:" value for staging to serve, and a token
+    // put back fails.
+    const signal = new AbortController().signal;
+    expect(await c32.run(devInputs(), signal)).toEqual({ pass: true, reason: "ok" });
+    const token = (text: string) =>
+      text.replace("SUPPORT_EMAIL: support@staging.unset.sh", 'SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"');
+    expect((await c32.run(devInputs(token), signal)).pass).toBe(false);
+  });
+
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "2 files, 9 mounted secrets" },
+      { pass: true, reason: "3 files, 11 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
@@ -816,10 +968,90 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       pass: false,
       reason: "postgres binds a path that reaches an env file or the env folder",
     });
-    const context = (text: string) => text.replace("      context: ..\n", "      context: .\n");
+    // The dev stack builds nothing since P2.26b, so a build put back from the wrong context is the case.
+    const postgres = `    image: ${readDeployLock().postgres?.ref}\n`;
+    const context = (text: string) =>
+      text.replace(postgres, "    build:\n      context: .\n      dockerfile: deployment/images/postgres.Dockerfile\n");
     expect((await outcomes(context))[1]).toEqual({
       pass: false,
       reason: "postgres builds from a Dockerfile the images workflow does not scan",
+    });
+  });
+});
+
+describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", () => {
+  type RawNetworks = Record<string, { ipv4_address?: string } | null>;
+  const raw = () => parseStrictData(read(FILE), FILE) as { services: Record<string, { networks?: RawNetworks }> };
+
+  test("newt_edge_is_internal_with_only_newt_and_the_edge", () => {
+    const network = dev().networks.find((n) => n.name === "newt_edge");
+    expect(network).toEqual({ name: "newt_edge", internal: true, subnet: NEWT_SUBNET });
+    const members = dev().services.filter((s) => s.networks.includes("newt_edge"));
+    expect(members.map((s) => s.name).sort()).toEqual(["edge", "newt"]);
+    expect(service(dev(), "newt").networks).toEqual(["newt_egress", "newt_edge"]);
+  });
+
+  test("compose_addresses_are_the_edge_configs", () => {
+    // The cross reds (P1.37v): the address the edge's dev sites bind and its one trusted proxy, both in
+    // deployment/edge (P1.36b, P1.36j), are exactly the addresses this file gives the edge and Newt on newt_edge; the
+    // trusted listener is the dev sites' https listener; every zone keys on the client address behind Newt.
+    expect([DEV_EDGE_ADDRESS, DEV_PROXY_ADDRESS]).toEqual([EDGE_ADDRESS, NEWT_ADDRESS]);
+    expect(DEV_LISTENER).toBe(`${EDGE_ADDRESS}:443`);
+    const caddyfile = read("edge/Caddyfile");
+    expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);
+    for (const site of ["app.caddy", "pds.caddy"]) {
+      expect(read(`edge/dev/${site}`).match(/^\tbind .*$/gm), site).toEqual([`\tbind ${EDGE_ADDRESS}`]);
+    }
+    const limits = read("edge/snippets/ratelimit.caddy");
+    expect(limits.match(/^\t+key .*$/gm)?.every((line) => line.trim() === "key {client_ip}")).toBe(true);
+  });
+
+  test("newt_and_the_edge_have_fixed_addresses_inside_the_subnet", () => {
+    // The edge binds its own address (P1.36b) and trusts Newt's alone as a proxy (P1.36j), so both are fixed, distinct,
+    // inside the subnet, and neither the network, gateway nor broadcast address.
+    const networks = raw().services;
+    expect(networks.newt?.networks?.newt_edge).toEqual({ ipv4_address: NEWT_ADDRESS });
+    expect(networks.edge?.networks?.newt_edge).toEqual({ ipv4_address: EDGE_ADDRESS });
+    const [base = "", bits = ""] = NEWT_SUBNET.split("/");
+    const toInt = (ip: string) => ip.split(".").reduce((n, octet) => n * 256 + Number(octet), 0);
+    const first = toInt(base);
+    const last = first + 2 ** (32 - Number(bits)) - 1;
+    for (const address of [NEWT_ADDRESS, EDGE_ADDRESS]) {
+      expect(toInt(address), address).toBeGreaterThan(first + 1);
+      expect(toInt(address), address).toBeLessThan(last);
+    }
+    expect(NEWT_ADDRESS).not.toBe(EDGE_ADDRESS);
+    // No other service names a fixed address on any network.
+    for (const [name, spec] of Object.entries(networks)) {
+      if (name === "newt" || name === "edge") continue;
+      const attachments = spec.networks !== undefined && !Array.isArray(spec.networks) ? spec.networks : {};
+      for (const attachment of Object.values(attachments)) expect(attachment?.ipv4_address, name).toBeUndefined();
+    }
+  });
+
+  test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
+    const newt = service(dev(), "newt");
+    expect(newt.image).toBe(`ghcr.io/undefined6799/mirror/newt@${readLock().newt?.digest}`);
+    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
+    expect(newt.build).toBeNull();
+    expect(newt.hardening).toMatchObject({
+      readOnly: true,
+      capDrop: ["ALL"],
+      capAdd: [],
+      securityOpt: ["no-new-privileges:true"],
+      user: "65532:65532",
+    });
+    expect([newt.ports, newt.mounts, newt.secrets]).toEqual([[], [], []]);
+    expect(newt.envFiles).toEqual(["../../unset-dev-env/newt.env"]);
+    // Every setting a literal: no SSH, no client access, no Docker socket, no metrics or pprof listener, and its saved
+    // credentials on its tmpfs (newt 1.18.1 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
+    expect(Object.fromEntries(newt.environment)).toEqual({
+      CONFIG_FILE: { literal: "/tmp/newt.json" },
+      DISABLE_SSH: { literal: "true" },
+      DISABLE_CLIENTS: { literal: "true" },
+      NEWT_METRICS_PROMETHEUS_ENABLED: { literal: "false" },
+      NEWT_PPROF_ENABLED: { literal: "false" },
+      LOG_LEVEL: { literal: "WARN" },
     });
   });
 });
