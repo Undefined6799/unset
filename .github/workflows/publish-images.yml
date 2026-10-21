@@ -1,9 +1,9 @@
-# Publish, sign and attest our first-party images (P1.27s; ADR 0033, keyless). On a push to main, or by hand, one job
-# builds each image under deployment/ from the checked-out commit, pushes it by digest, scans that digest, signs it and
-# attests its SLSA provenance and SPDX SBOM with keyless cosign (a Fulcio certificate for exactly this workflow on
-# refs/heads/main, recorded in public Rekor), then verifies the lock it just wrote with scripts/ci/verify-images.ts. It
-# never touches a pull request: it has no pull_request trigger (the workflow guard refuses one), and images.yml stays
-# the unprivileged PR check.
+# Publish, sign and attest our first-party images (P1.27s; ADR 0033, keyless). On a push to main, one job builds each
+# image under deployment/ from the checked-out commit, pushes it by digest, scans that digest, signs it and attests its
+# SLSA provenance and SPDX SBOM with keyless cosign (a Fulcio certificate for exactly this workflow on refs/heads/main,
+# recorded in public Rekor), then verifies the lock it just wrote with scripts/ci/verify-images.ts. It never touches a
+# pull request: it has no pull_request trigger (the workflow guard refuses one), and images.yml stays the unprivileged
+# PR check. It has no manual trigger either, since the job's `if:` would skip a dispatched run; a new publish is a push.
 #
 # The gate (scripts/guards/workflows.ts): the job runs in the `signing` environment (main only, Alex as required
 # reviewer, so each run waits for his approval) and its `if:` is exactly the push-to-main condition. Only this job
@@ -18,7 +18,6 @@ name: publish-images
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions: {}
 
@@ -52,6 +51,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - name: Install cosign by checksum
         run: |
           curl -sSfL -o "$RUNNER_TEMP/cosign" \
