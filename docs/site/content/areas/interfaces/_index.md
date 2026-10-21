@@ -29,7 +29,7 @@ The six folders under `interfaces/` on this tree. Each one is its own package an
 
 Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
 
-The `interface` row applies to every folder here except `pds-admin` and `chat-admin` (`ADMIN_SERVICES`).
+The `interface` row matches `interfaces/<name>/` except the paths `ADMIN_SERVICES` names (`interfaces/pds-admin/` and `interfaces/chat-admin/`). Those paths are strings in `scripts/lint/.dependency-cruiser.cjs`.
 
 | From | May reach |
 | --- | --- |
@@ -41,10 +41,10 @@ Extra rows, and the rules that refuse an edge the row would otherwise allow:
 | --- | --- |
 | `interface-http-render` | `interfaces/http/` may also import the file `apps/web/render.tsx`. |
 | `interface-http-render-build` | `interfaces/http/web/render-entry.ts` may import `@unset/apps-web/server` when that specifier does not resolve. |
-| `interface-admin-render` | `interfaces/admin/` may also import the file `apps/admin/render.tsx` (`RENDER_ENTRIES`). |
-| `admin-service` | `interfaces/pds-admin/` and `interfaces/chat-admin/` may import `node:*`, their own folder, and `ZERO_DEP_ALLOWLIST` (`shared/admin-envelope/`). No npm. `admin-services-zero-deps` states the same bound. |
+| `interface-admin-render` | `interfaces/admin/` may also import the path `RENDER_ENTRIES.admin` names (`apps/admin/render.tsx`). |
+| `admin-service` | `ADMIN_SERVICES` names `interfaces/pds-admin/` and `interfaces/chat-admin/`. The row allows `node:*`, that path, and `ZERO_DEP_ALLOWLIST` (`shared/admin-envelope/`). No npm. `admin-services-zero-deps` states the same bound. |
 | `no-interface-to-interface` | An interface does not import another interface. |
-| `app-render-entry-only` | From outside `apps/`, only `interfaces/http` and `interfaces/admin` import an app, and only the render file in the two rows above. |
+| `app-render-entry-only` | From outside `apps/`, only `interfaces/http` and `interfaces/admin` import an app, and only the path `RENDER_ENTRIES` names in the two rows above. |
 | `web-not-admin` | `interfaces/http/` imports nothing whose path is `admin/…` or contains `/admin/`. |
 | `infra-shared-via-index` | From outside, `infrastructure/<name>/` and `shared/<name>/` are reached through `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported only by tests and by `interfaces/<name>/compose.ts`, and only with a dynamic `import()` after the `UNSET_ENV` check. |

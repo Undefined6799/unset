@@ -21,7 +21,7 @@ This process does not import an app.
 
 ## May import
 
-The [`interface` row](../), plus `interface-admin-render`: the file `apps/admin/render.tsx` only (`RENDER_ENTRIES`). `no-interface-to-interface` still applies.
+The [`interface` row](../), plus `interface-admin-render`: `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names the path `apps/admin/render.tsx`. `no-interface-to-interface` still applies.
 
 Declared in `interfaces/admin/package.json`: `@unset/shared-config`, `@unset/shared-http`, `@unset/shared-log`, all workspace.
 

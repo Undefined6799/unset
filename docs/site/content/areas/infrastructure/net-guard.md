@@ -3,7 +3,7 @@ title: net-guard
 weight: 2
 ---
 
-The egress classifier. Package `@unset/infrastructure-net-guard`. Plan §2 rule 13, as the folder comment states it: caller-influenced outbound HTTP goes through here. `scripts/guards/egress.ts` scans product trees for a dynamic `fetch`, the raw-client specifiers in `RAW_CLIENT`, and `new WebSocket` / `new EventSource`. `exempt` skips `infrastructure/net-guard/`, test files, and `interfaces/pds-admin/pds.mjs` (`EGRESS_FILE_EXEMPTIONS`). The file says the scan is lexical.
+The egress classifier. Package `@unset/infrastructure-net-guard`. Plan §2 rule 13, as the folder comment states it: caller-influenced outbound HTTP goes through here. `scripts/guards/egress.ts` scans product trees for a dynamic `fetch`, the raw-client specifiers in `RAW_CLIENT`, and `new WebSocket` / `new EventSource`. `exempt` skips `infrastructure/net-guard/` and test files. `EGRESS_FILE_EXEMPTIONS` names the path `interfaces/pds-admin/pds.mjs`. The file says the scan is lexical.
 
 ## Owns
 
