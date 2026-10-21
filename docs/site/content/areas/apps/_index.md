@@ -8,7 +8,7 @@ Screens, islands and styles. UI only: no product rules and no database access. D
 | App | Path | Status |
 | --- | --- | --- |
 | web | `apps/web` | [web](web/) |
-| admin | `apps/admin` | (planned). The folder is not on the tree. The step book names admin screens from P3.20. |
+| admin | `apps/admin` | (planned, Phase 3). The folder is not on the tree. The step book names admin screens from P3.20. |
 | chat | `apps/chat` | (planned, Phase 6). The folder is not on the tree. |
 
 ## Owns
@@ -47,7 +47,7 @@ An app has no `main.ts`. The serving interface may import that app's render file
 | Interface | Render file | On this tree |
 | --- | --- | --- |
 | `interfaces/http` | `apps/web/render.tsx` | [web](web/) |
-| `interfaces/admin` | `apps/admin/render.tsx` | (planned). `interfaces/admin` does not import an app. |
+| `interfaces/admin` | `apps/admin/render.tsx` | (planned, Phase 3). `interfaces/admin` does not import an app. |
 
 `interfaces/http/web/render-entry.ts` and `tests/e2e/fixtures/servers.ts` are the two files allowed to import the unresolved specifier `@unset/apps-web/server` (`RENDER_BUILD_MODULE`). Tests and `scripts/` are the tooling row, which `app-render-entry-only` excludes.
 
