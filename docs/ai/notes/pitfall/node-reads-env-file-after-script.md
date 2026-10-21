@@ -10,7 +10,7 @@ importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-20
+checked: 2026-10-21
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -58,3 +58,6 @@ Re-checked at P1.37n, which swaps `--build` for `--no-build` in the docker child
 its argv form and the child environment are unchanged.
 Re-checked at P1.36g, which makes `inputs.ts` also record each service's env-file names for C30; the files are read
 by the same reader, and no flag, argv form or child environment changed.
+Re-checked at P2.26b, which runs verify-images as `/usr/bin/env PATH=<cosign's folder> node <script> <lock>
+--trusted-root <file>`: every argument is a fixed path under the checkout, none is `--env-file`, and the child's PATH
+narrows to the pinned cosign's folder, so the rules above still hold.

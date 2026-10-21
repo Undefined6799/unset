@@ -149,8 +149,9 @@ describe("workflows", () => {
 
   test("required_checks_listed", () => {
     const required: string[] = JSON.parse(readFileSync(join(ROOT, ".github", "required-checks.json"), "utf8"));
-    // The P0.07 gate set, P0.09c's pr-shape, and P1.26's e2e job. Alex updates the ruleset to match.
-    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape", "e2e"]);
+    // The P0.07 gate set, P0.09c's pr-shape, P1.26's e2e job, and P0.09's docs-site job.
+    // Alex updates the ruleset to match.
+    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape", "e2e", "docs-site"]);
     const ids = workflowFiles.flatMap((f) => [...jobs(code(readFileSync(join(WORKFLOWS, f), "utf8"))).keys()]);
     for (const name of required) expect(ids).toContain(name);
   });
@@ -273,5 +274,51 @@ describe("audit scope override", () => {
     const at = hits[0] ?? -1;
     expect(lines[at]).toMatch(/^ {6}- run: npm audit signatures --@unset:registry=https:\/\/registry\.npmjs\.org\/$/);
     expect(lines.slice(0, at).findLast((line) => /^ {2}[\w-]+:$/.test(line))).toBe("  audit:");
+  });
+});
+
+// P0.07e: workflow_run and the two merge writes exist only in docs-auto-merge.yml, which checks out
+// the default branch (github.sha) and runs one script. A pull_request trigger there would execute the
+// pull request's copy of the workflow with the write token.
+describe("docs auto-merge (P0.07e)", () => {
+  const file = "docs-auto-merge.yml";
+  const text = readFileSync(join(WORKFLOWS, file), "utf8");
+
+  test("auto_merge_workflow_is_the_only_privileged_shape", () => {
+    expect(problems(text, file)).toEqual([]);
+    const elsewhere = problems(text, "ci.yml");
+    expect(elsewhere.some((problem) => problem.endsWith("banned trigger"))).toBe(true);
+    expect(elsewhere).toContain("write permission: contents: write");
+    expect(elsewhere).toContain("write permission: pull-requests: write");
+  });
+
+  test("docs_only_runs_only_with_kind_docs", () => {
+    const docsOnly = readFileSync(join(WORKFLOWS, "docs-only.yml"), "utf8");
+    const types = docsOnly.match(/^ {4}types: \[([^\]]+)\]$/m)?.[1] ?? "";
+    for (const type of ["opened", "synchronize", "reopened", "ready_for_review", "labeled", "unlabeled"]) {
+      expect(
+        types.split(",").map((part) => part.trim()),
+        type,
+      ).toContain(type);
+    }
+    const condition =
+      jobs(code(docsOnly))
+        .get("docs-only")
+        ?.find((line) => /^ {4}if: /.test(line)) ?? "";
+    expect(condition).toContain("github.event.pull_request.draft == false");
+    expect(condition).toContain("contains(github.event.pull_request.labels.*.name, 'kind/docs')");
+  });
+
+  test("auto_merge_rejects_pull_request_code", () => {
+    const pullRequest = text.replace("  workflow_run:\n", "  workflow_run:\n  pull_request:\n");
+    expect(problems(pullRequest, file)).toContain("docs auto-merge workflow has a pull request trigger");
+    const target = text.replace("  workflow_run:\n", "  pull_request_target:\n");
+    expect(problems(target, file).some((problem) => problem.endsWith("banned trigger"))).toBe(true);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
+    const head = text.replace("ref: ${{ github.sha }}", "ref: ${{ github.event.workflow_run.head_sha }}");
+    expect(problems(head, file)).toContain("docs auto-merge checkout ref is not github.sha");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
+    const unsafe = text.replace("ref: ${{ github.sha }}", "ref: ${{ github.event.pull_request.head.sha }}");
+    expect(problems(unsafe, file).some((problem) => problem.includes("untrusted input"))).toBe(true);
   });
 });

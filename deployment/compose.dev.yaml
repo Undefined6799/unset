@@ -2,20 +2,20 @@
 # migrate, the PDS, the edge in front of it, web, and Newt in front of the edge (P1.37v), for the homelab, through the
 # wrapper (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose
 # alike.
-# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every
-# image is built here from a Dockerfile images.yml scans; none is pulled, so the preflight's signed-image checks (C2 to
-# C5) refuse this stack until P1.27s publishes signed images (architecture record
-# 2026-10-12-p129-local-build-preflight). The exceptions are the PDS, Bluesky's own image run as shipped (Alex, "Allow
-# pinned", 2026-10-07T13:00:19Z), and Newt (ADR 0030 Decision 2): each named here exactly as its run-only lock entry,
-# which the mirror workflow scans (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
+# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts, and
+# builds its images from the checkout. This stack builds nothing (P2.26b): every service runs exactly its
+# deployment/images.lock.json ref, by digest, which the preflight verifies keyless and offline (C2 to C5; ADR 0033).
+# postgres, migrate, the edge and web are publish-images.yml's builds; the PDS, Bluesky's own image run as shipped
+# (Alex, "Allow pinned", 2026-10-07T13:00:19Z), and Newt (ADR 0030 Decision 2) are mirror.yml's copies of their
+# upstream images, at the upstream digest.
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
 # capability, cannot gain privileges, runs as its image's non-root user on a read-only root, and has memory, CPU and
 # process limits; a Node service's heap cap is at most 75 % of its memory limit (findings F-32).
 #
-# The secret files live in unset-dev-secrets/, a sibling of the repository checkout, never inside it: postgres builds
-# from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
+# The secret files live in unset-dev-secrets/, a sibling of the repository checkout, never inside it: compose.local.yaml
+# builds from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
 # 2026-10-12-p127u-bind-ancestors-and-build-context (b); a .dockerignore entry does not count). `file:` paths resolve
 # from this file's folder, so ../../ is the checkout's parent. The interpolation file lives the same way in
 # unset-dev-env/, beside the checkout, and the checkout keeps only its template, deployment/env/dev-public.example.env
@@ -24,9 +24,7 @@ name: unset-dev
 
 services:
   postgres:
-    build:
-      context: ..
-      dockerfile: deployment/images/postgres.Dockerfile
+    image: ghcr.io/undefined6799/unset/postgres@sha256:b3edf8ad1e957df39124de7249fbff4af26c37d128811493ef2722161d6f5c59
     user: "999:999"
     read_only: true
     cap_drop: [ALL]
@@ -49,9 +47,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    build:
-      context: ..
-      dockerfile: deployment/images/migrate.Dockerfile
+    image: ghcr.io/undefined6799/unset/migrate@sha256:a5409bc1556f8df34550442933a0e3d08a517902998757352ad61dda5829ccfd
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -91,7 +87,7 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    image: ghcr.io/undefined6799/mirror/pds@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
@@ -131,10 +127,7 @@ services:
   # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
   # 0700 (P1.27o).
   edge:
-    # A file named Dockerfile builds from its own folder, as images.yml builds it (C26).
-    build:
-      context: ./edge
-      dockerfile: Dockerfile
+    image: ghcr.io/undefined6799/unset/edge@sha256:c94bcd8c27cc037edfdd7dd49635fbf0c2fe7b96ff5ebd6f97ba99068255e330
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -174,9 +167,7 @@ services:
     restart: unless-stopped
 
   web:
-    build:
-      context: ..
-      dockerfile: deployment/images/node-app.Dockerfile
+    image: ghcr.io/undefined6799/unset/web@sha256:3338eea418322b989509716758821c89088e0f9bc18b6d91d3fbbfda0e61a73e
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -234,11 +225,11 @@ services:
   # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
   # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
-  # Upstream image run as shipped, pinned as its run-only lock entry. Its credentials are newt.env's three names; it
+  # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
   # listener (newt 1.18.1 newtconfig/newtconfig.go:452-503).
   newt:
-    image: docker.io/fosrl/newt:1.18.1@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f
+    image: ghcr.io/undefined6799/mirror/newt@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
