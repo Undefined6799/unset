@@ -1345,6 +1345,19 @@ Not in this step: the callback (P2.06); sign-up entry (`/signup`, P2.10, reuses 
   `startAuth` with `prompt: 'consent'`).
 Diagram: see "Sequence: login and callback".
 
+### P2.05r — Sign in with one button to our PDS
+Tags: (none)            Depends on: P2.05, P1.36v
+Alex, 2026-10-21 03:34Z, on staging's `/login?next=/did`: "this page should have been a redirect to the pds login page
+on unset.ac". A redirect on GET would reverse this step's "no state change on GET" and needs its own ADR plus the edge
+sign-in limit counting `GET /login` (verify of #1192 at 4a4a5d3, 2026-10-21); Alex chose "One button, one click" on the
+decision card at 2026-10-22 12:11:40Z, and the PR quotes the card.
+
+**What:** `GET /login` shows one POST button, "Sign in with {pdsHost}" (`intent=chooser`), and the hidden `next`; the
+handle field and its `?handle=` prefill go, since only accounts on our PDS sign in (P1.36v). `POST /login` and the
+continue page are unchanged, so one click reaches the PDS's sign-in page.
+
+Done when `login_form_posts_only_the_chooser` and `login_get_renders_no_state` pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`
