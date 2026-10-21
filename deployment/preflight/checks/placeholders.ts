@@ -5,6 +5,9 @@
 import { type Check, fail, pass } from "./types.ts";
 
 const PLACEHOLDER = "[to fill:";
+/** An env file's key is caller input, so only an upper-case setting name is printed (as C31 does). */
+const PRINTABLE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
+const label = (name: string) => (PRINTABLE.test(name) && name.length <= 64 ? name : "a name");
 
 export const c32: Check = {
   id: "C32",
@@ -12,7 +15,7 @@ export const c32: Check = {
     if (stage === "local") return pass("skipped: local stack");
     for (const [service, env] of serviceEnv) {
       const keys = env.names().filter((name) => env.use(name, (raw) => raw?.startsWith(PLACEHOLDER) === true));
-      if (keys.length > 0) return { ...fail(`still a placeholder to fill: ${keys.join(", ")}`), service };
+      if (keys.length > 0) return { ...fail(`still a placeholder to fill: ${keys.map(label).join(", ")}`), service };
     }
     return pass();
   },

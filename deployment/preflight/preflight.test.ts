@@ -3053,6 +3053,15 @@ describe("preflight C32 (P1.38d)", () => {
     }
   });
 
+  test("c32_names_only_printable_keys", async () => {
+    // A key name is caller input (an env file can hold any): only an upper-case setting name is printed (P1.37 follow-up).
+    for (const env of ["dev", "prod"] as const) {
+      expect(await expectOnly("C32", withWeb(env, '      sk_live_9f: "[to fill: x]"\n' + PLACEHOLDERS), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: a name, SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      );
+    }
+  });
+
   test("c32_filled_values_pass", async () => {
     for (const env of ["dev", "prod"] as const) {
       // Only a value that starts with the marker is one; the same words elsewhere in a value are the value's own.
