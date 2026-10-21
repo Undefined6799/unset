@@ -1787,11 +1787,15 @@ Outputs (contract):
     `cap_drop: ALL`, `no-new-privileges`, limits, no published port, no edge site); networks `search` (internal;
     `web`, `searxng`) and `search_egress` (not internal; `searxng`); `networks.dev.json` gains both rows;
     `searxng.env` holds `SEARXNG_SECRET` only, with an exact-name-set preflight check like C30.
-  - `deployment/searxng/settings.yml`, committed: `search.formats: [html, json]`, `server.limiter: false`,
-    `server.image_proxy: false`, request log off, no result cache, a fixed engine list, `outgoing.request_timeout`
-    under our 3 s cap; the builder confirms every key against the pinned image's documented settings and cites
-    the file and version in the PR (the names above are from SearXNG's settings reference as read on 2026-10-21
-    and may have moved).
+  - `deployment/searxng/settings.yml`, committed: the JSON result format enabled, the engine's own limiter off,
+    its image proxy off, a fixed engine list, and its outgoing request timeout under our 3 s cap. The key names
+    the planner had in mind (`search.formats`, `server.limiter`, `server.image_proxy`, `outgoing.request_timeout`)
+    are unconfirmed: they were written from memory, not read from the pinned image's documentation, and the
+    builder checks each one against that image's settings reference and cites the file and version in the PR.
+    SearXNG documents no setting that turns a request log off or disables a result cache (checked against
+    docs.searxng.org on 2026-10-21), so the builder finds the real mechanism for each (the process's own log
+    level and output, the image's uwsgi or granian log settings, whether any cache exists in the pinned version)
+    or records that the property does not hold and how `search_query_never_logged` still passes on our side.
   - Response headers on `/search`: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`; every result link
     `rel="noopener noreferrer"`.
 
