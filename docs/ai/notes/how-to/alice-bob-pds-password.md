@@ -24,8 +24,8 @@ checked: 2026-10-21
    from the app database.
 4. Do not invent the password, DID, or email.
 
-The runbook's legal-values paragraph (P1.38d) is about the legal pages, and its cosign install step (P2.26b) is about
-image verification; neither changes anything here.
+The runbook's legal-values paragraph (P1.38d) is about the legal pages, and its cosign install step (P2.26b, run in bash since
+P2.26v) is about image verification; neither changes anything here.
 
 **Check.** The PDS login accepts the password you typed. The app still has no password, DID, or mailbox
 store for them.

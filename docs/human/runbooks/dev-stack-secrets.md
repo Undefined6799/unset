@@ -354,7 +354,7 @@ C3 and C4 verify every image in `deployment/images.lock.json` with cosign v3.1.3
 against the committed `deployment/sigstore/trusted_root.json`. The preflight hashes that file first and fails both
 checks unless it is the pinned linux amd64 binary (`deployment/preflight/cosign.ts`); a cosign anywhere else on `PATH`
 is never run. Our images are built for linux/amd64 only, so the deploy host is amd64. Install it once per host, and
-again for each cosign bump:
+again for each cosign bump. Run it in bash, since dash, the `sh` on Debian and Ubuntu, has no `pipefail`:
 
 ```sh
 (
