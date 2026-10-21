@@ -1422,6 +1422,10 @@ describe("preflight", () => {
     expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      NEWT_ADMIN_ADDR: 0.0.0.0:2022\n"))).toBe(
       "FAIL C31 NEWT_ADMIN_ADDR is not a newt setting the preflight allows",
     );
+    // A name every object inherits is not an allowed setting either.
+    expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      constructor: x\n"))).toBe(
+      "FAIL C31 a name is not a newt setting the preflight allows",
+    );
     // A socket bind and a second reader of a secret also fail C9; C31 names the Newt rule itself.
     const lines = async (compose: string) => (await check({ ...dev, compose }, "dev")).lines;
     const socket = "$&    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]\n";
@@ -1443,6 +1447,13 @@ describe("preflight", () => {
     );
     expect(
       await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://other.unset.sh")),
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN does not name the dev app host");
+    // The exact names, no port: the dev sites listen on PDS_HOST and Pangolin reaches them on 443.
+    expect(await c18(DEV.replaceAll("staging.unset.ac", "staging.unset.ac:2583"))).toBe(
+      "FAIL C18 PDS_HOST is not a hostname",
+    );
+    expect(
+      await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://staging.unset.sh:8443")),
     ).toBe("FAIL C18 web's PUBLIC_ORIGIN does not name the dev app host");
     expect(await c18(DEV.replace("      PUBLIC_ORIGIN: https://staging.unset.sh\n", ""))).toBe(
       "FAIL C18 web's PUBLIC_ORIGIN is missing",
@@ -1468,11 +1479,14 @@ describe("preflight", () => {
       `https://user:${CANARY}@pangolin.example.test`,
       `https://${CANARY}@pangolin.example.test`,
       CANARY,
-      "",
     ]) {
       const outcome = await only(env(endpoint));
       expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not an https address without credentials");
     }
+    // Newt applies a setting only when it is non-empty (newtconfig.go:191-196), so an empty one is never set.
+    expect(await only(env(""))).toBe("FAIL C31 PANGOLIN_ENDPOINT is empty");
+    expect(await only(env(good, ""))).toBe("FAIL C31 NEWT_ID is empty");
+    expect(await only(env(good, CANARY, ""))).toBe("FAIL C31 NEWT_SECRET is empty");
     expect(await check({ ...dev, newtEnvFile: env(`${good}/`) }, "dev").then((r) => r.lines)).toContain("PASS C31 ok");
   });
 

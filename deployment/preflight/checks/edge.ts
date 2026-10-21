@@ -498,12 +498,12 @@ const DEV_PDS_HOST = "staging.unset.ac";
  * Whether that origin is https is C29's. Reasons are fixed words.
  */
 function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
-  if (pdsHost.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "") !== DEV_PDS_HOST) {
+  if (pdsHost.toLowerCase() !== DEV_PDS_HOST) {
     return fail("PDS_HOST is not the staging PDS name");
   }
   const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
   if (origin === undefined) return fail("web's PUBLIC_ORIGIN is missing");
-  if (URL.canParse(origin) && new URL(origin).hostname !== DEV_APP.APP_HOST) {
+  if (URL.canParse(origin) && new URL(origin).host !== DEV_APP.APP_HOST) {
     return fail("web's PUBLIC_ORIGIN does not name the dev app host");
   }
   return null;

@@ -78,7 +78,7 @@ function lockedImage(inputs: Inputs, image: string | null): Outcome | null {
 
 /** The newt service's compose environment is NEWT_SETTINGS exactly, every value a literal. */
 function settingsProblem(environment: readonly [string, EnvValue][]): Outcome | null {
-  const extra = environment.find(([name]) => !(name in NEWT_SETTINGS));
+  const extra = environment.find(([name]) => !Object.hasOwn(NEWT_SETTINGS, name));
   if (extra !== undefined) return fail(`${label(extra[0])} is not a newt setting the preflight allows`);
   for (const [name, expected] of Object.entries(NEWT_SETTINGS)) {
     const value = environment.find(([key]) => key === name)?.[1];
@@ -90,11 +90,14 @@ function settingsProblem(environment: readonly [string, EnvValue][]): Outcome | 
   return null;
 }
 
-/** newt.env's values: none is the example's, and the endpoint is https with no userinfo. No value is ever printed. */
+/** newt.env's values: none is the example's or empty, and the endpoint is https with no userinfo. No value is ever printed. */
 function valuesProblem(env: SecretMap | undefined): Outcome | null {
   if (env === undefined) return null;
   const example = NEWT_ENV.find((name) => env.use(name, (value) => value === EXAMPLE_VALUE));
   if (example !== undefined) return fail(`${example} is still the example file's placeholder`);
+  // Newt 1.18.1 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr).
+  const empty = NEWT_ENV.find((name) => env.use(name, (value) => value === ""));
+  if (empty !== undefined) return fail(`${empty} is empty`);
   const https = env.use("PANGOLIN_ENDPOINT", (value) => {
     if (value === undefined || !URL.canParse(value)) return false;
     const url = new URL(value);
