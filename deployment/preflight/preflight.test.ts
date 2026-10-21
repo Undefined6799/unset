@@ -3062,16 +3062,18 @@ describe("preflight C32 (P1.38d)", () => {
         '$&\n      CONTACT: "[to fill: CONTACT]"',
       );
       expect(await expectOnly("C32", { compose: edge, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
-        "FAIL C32 service=edge still a placeholder to fill: CONTACT",
+        "FAIL C32 service=edge still a placeholder to fill: a name",
       );
     }
   });
 
   test("c32_names_only_printable_keys", async () => {
-    // A key name is caller input (an env file can hold any): only an upper-case setting name is printed (P1.37 follow-up).
+    // A key name is caller input (an env file can hold any, even a pasted token): only the legal pages' three
+    // settings are printed (P1.37 follow-up).
     for (const env of ["dev", "prod"] as const) {
-      expect(await expectOnly("C32", withWeb(env, '      sk_live_9f: "[to fill: x]"\n' + PLACEHOLDERS), env), env).toBe(
-        "FAIL C32 service=web still a placeholder to fill: a name, SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      const keys = '      sk_live_9f: "[to fill: x]"\n      JBSWY3DPEHPK3PXP: "[to fill: x]"\n';
+      expect(await expectOnly("C32", withWeb(env, keys + PLACEHOLDERS), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: a name, a name, SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
       );
     }
   });

@@ -5,9 +5,12 @@
 import { type Check, fail, pass } from "./types.ts";
 
 const PLACEHOLDER = "[to fill:";
-/** An env file's key is caller input, so only an upper-case setting name is printed (as C31 does). */
-const PRINTABLE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
-const label = (name: string) => (PRINTABLE.test(name) && name.length <= 64 ? name : "a name");
+/**
+ * An env file's key is caller input, even a pasted token, so only the legal pages' three settings
+ * (interfaces/http/legal-placeholders.ts) are printed by name.
+ */
+const PRINTABLE = new Set(["PRIVACY_OFFICER_TITLE", "PRIVACY_OFFICER_CONTACT", "SUPPORT_EMAIL"]);
+const label = (name: string) => (PRINTABLE.has(name) ? name : "a name");
 
 export const c32: Check = {
   id: "C32",
