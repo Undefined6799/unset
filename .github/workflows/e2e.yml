@@ -7,8 +7,8 @@
 # critical path is the slowest part rather than their sum. Each job starts its own servers on its own runner, so each
 # keeps its own rate-limit bucket and the one worker tests/e2e/playwright.config.ts asks for. `--project` and
 # `install [browser...]` are from the CLI help of the pinned Playwright 1.64.0 (npx playwright test --help, npx
-# playwright install --help). The e2e job is the gate: it needs every part and runs assert-tests-ran over all three
-# reports, so a spec no browser ran, or a browser job that ran nothing, still fails.
+# playwright install --help). The e2e job is the gate: it fails unless every part succeeded, then runs assert-tests-ran
+# over the three reports, so a spec no browser ran, or a missing, duplicated or empty browser report, still fails.
 
 name: e2e
 
@@ -123,18 +123,29 @@ jobs:
             e2e-prod.log
             e2e-test.log
 
-  # A custom if without a status function still requires success() of every need (expressions, "Status check
-  # functions"), so this gate runs only when all three browsers and a11y passed, and a skipped or failed part leaves it
-  # unsuccessful. download-artifact v8.0.2 puts each matched artifact in a folder named after it under path when
-  # merge-multiple is false, its default (action.yml and README.md at that tag).
+  # The gate under the required name `e2e`. always() runs it whatever the parts did (expressions, "Status check
+  # functions"), so a failed, cancelled or skipped part turns it red: without always() it would be skipped, and a
+  # skipped required check reads as passing. needs.<job_id>.result is success, failure, cancelled or skipped
+  # (contexts reference); anything but success fails, as in images.yml's scan gate. download-artifact v8.0.2 puts
+  # each matched artifact in a folder named after it under path when merge-multiple is false, its default
+  # (action.yml and README.md at that tag). assert-tests-ran then wants exactly one report per project.
   e2e:
     needs: [browser, a11y]
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
     steps:
+      - name: Require every browser job and a11y to have succeeded
+        env:
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          A11Y_RESULT: ${{ needs.a11y.result }}
+        run: |
+          if [ "$BROWSER_RESULT" != success ] || [ "$A11Y_RESULT" != success ]; then
+            echo "browser=$BROWSER_RESULT a11y=$A11Y_RESULT"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -145,11 +156,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      - name: Every discovered spec ran in some browser, and every browser ran tests
+      - name: Every discovered spec ran in some browser, each browser exactly once
         env:
           REPORTS: ${{ runner.temp }}/e2e
         run: >-
           node scripts/test/assert-tests-ran.ts
-          "$REPORTS/e2e-chromium/tests/e2e/report.json"
-          "$REPORTS/e2e-firefox/tests/e2e/report.json"
-          "$REPORTS/e2e-webkit/tests/e2e/report.json"
+          "chromium=$REPORTS/e2e-chromium/tests/e2e/report.json"
+          "firefox=$REPORTS/e2e-firefox/tests/e2e/report.json"
+          "webkit=$REPORTS/e2e-webkit/tests/e2e/report.json"
