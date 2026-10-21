@@ -197,7 +197,7 @@
   },
   "Switch": {
     "sheet": "sheet/components/Switch/README.md",
-    "sheetSha256": "27922fb253951cb32fa480959a60558d66fed300ff2fc84994af486f56275929",
+    "sheetSha256": "a0889cc6a85f8af77cefccfa7dfcc67c92033597dd615ef2d0b55925bd0965ea",
     "props": "SwitchProps",
     "variants": [],
     "status": "built"
