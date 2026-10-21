@@ -1,58 +1,62 @@
 // ADR0027 diagnostic transport only: fixed owned helper/native routes; no public endpoint.
-import { spawn } from "node:child_process";
 import { createServer } from "node:http"; // guard-allow: egress ADR0027 test-only loopback relay/sentinel
+import type { FixtureLifetime } from "./fixture-lifetime.ts";
 import type { Reply } from "./helper.ts";
 
 const CALL_MS = 10_000;
-export function rpc(container: string, input: object): Promise<Reply> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("docker", ["exec", "-i", container, "node", "/runtime/helper.ts", "rpc"], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let output = "",
-      failed = false;
-    const timer = setTimeout(() => {
-      failed = true;
-      child.kill("SIGKILL");
-    }, CALL_MS);
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (part: string) => {
-      output += part;
-      if (output.length > 2_200_000) {
-        failed = true;
-        child.kill("SIGKILL");
-      }
-    });
-    child.stderr.resume(); // Never retain native inputs/errors/mail/credentials.
-    child.once("error", () => {
-      clearTimeout(timer);
-      reject(new Error("fixture transport unavailable"));
-    });
-    child.once("close", (code) => {
-      clearTimeout(timer);
-      if (code !== 0 || failed) {
-        reject(new Error("fixture transport failed"));
-        return;
-      }
-      try {
-        resolve(JSON.parse(output) as Reply);
-      } catch {
-        reject(new Error("fixture transport invalid"));
-      }
-    });
-    child.stdin.on("error", () => child.kill("SIGKILL"));
-    child.stdin.end(JSON.stringify(input));
-  });
+export async function rpc(
+  lifetime: FixtureLifetime,
+  container: string,
+  input: object,
+  signal = lifetime.signal,
+): Promise<Reply> {
+  const result = await lifetime.command(
+    "docker",
+    ["exec", "-i", container, "node", "/runtime/helper.ts", "rpc"],
+    CALL_MS,
+    JSON.stringify(input),
+    signal,
+  );
+  if (result.code !== 0 || result.out.length > 2_200_000) throw new Error("fixture transport failed");
+  try {
+    return JSON.parse(result.out) as Reply;
+  } catch {
+    throw new Error("fixture transport invalid");
+  }
 }
-export async function startTransport(helper: string) {
+export async function startTransport(helper: string, lifetime: FixtureLifetime) {
+  lifetime.check();
   const relay = createServer();
-  await new Promise<void>((resolve, reject) => {
-    relay.once("error", reject);
-    relay.listen(0, "127.0.0.1", resolve);
-  });
+  lifetime.defer(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        relay.closeAllConnections();
+        relay.close((error: NodeJS.ErrnoException | undefined) => {
+          if (error && error.code !== "ERR_SERVER_NOT_RUNNING") reject(new Error("fixture relay cleanup failed"));
+          else resolve();
+        });
+      }),
+  );
+  await lifetime.track(
+    (signal) =>
+      new Promise<void>((resolve, reject) => {
+        const abort = () => reject(new Error("fixture relay canceled"));
+        signal.addEventListener("abort", abort, { once: true });
+        relay.once("error", reject);
+        relay.listen({ port: 0, host: "127.0.0.1", signal }, () => {
+          signal.removeEventListener("abort", abort);
+          resolve();
+        });
+      }),
+  );
   const port = (relay.address() as { port: number }).port;
-  const send = (path: string, method: string, headers: Record<string, string>, body: string) =>
-    rpc(helper, { kind: "native", port, path, method, headers, body });
+  const send = (
+    path: string,
+    method: string,
+    headers: Record<string, string>,
+    body: string,
+    signal = lifetime.signal,
+  ) => rpc(lifetime, helper, { kind: "native", port, path, method, headers, body }, signal);
   relay.on("request", (req, res) => {
     let body = "";
     req.setTimeout(CALL_MS, () => req.destroy());
@@ -90,12 +94,5 @@ export async function startTransport(helper: string) {
         });
     });
   });
-  return {
-    port,
-    send,
-    close() {
-      relay.closeAllConnections();
-      relay.close();
-    },
-  };
+  return { port, send };
 }

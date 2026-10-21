@@ -87,22 +87,26 @@ export async function executeRpc(input: Rpc): Promise<Reply> {
       dns.send("fixture-probe", 1053, input.path);
     });
     const resolver = new Resolver({ timeout: 500, tries: 1 });
-    let forwardingDenied = false;
+    let reservedNameUnresolved = false;
     try {
       await resolver.resolve4("blocked.fixture.test");
     } catch {
-      forwardingDenied = true;
+      reservedNameUnresolved = true;
     }
     const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
     const noDefaultRoute = routes.every((line) => line.trim().split(/\s+/)[1] !== "00000000");
     const denied =
       dnsDenied &&
-      forwardingDenied &&
+      reservedNameUnresolved &&
       noDefaultRoute &&
       (await refusesTcp(input.path, 2590)) &&
       (await refusesTcp(input.path, 1025)) &&
       (await refusesTcp("host.docker.internal", input.port));
-    return { status: 200, headers: {}, body: JSON.stringify({ denied, dnsDenied, forwardingDenied, noDefaultRoute }) };
+    return {
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ denied, dnsDenied, reservedNameUnresolved, noDefaultRoute }),
+    };
   }
   throw new Error("fixture target refused");
 }

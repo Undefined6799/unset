@@ -1,55 +1,66 @@
 import { createECDH, randomBytes } from "node:crypto";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { cleanUpAll, docker, failAfterCleanup } from "../../support/docker.ts";
 import { nativeClient } from "./client.ts";
+import { type FixtureContext, FixtureLifetime } from "./fixture-lifetime.ts";
+import { fixtureProcess, missingFixtureResource } from "./fixture-process.ts";
 import { sha256, stageInputs } from "./inputs.ts";
 import { rpc, startTransport } from "./transport.ts";
 
 const LABEL = "sh.unset.pds-ui-fixture";
 const CALL_MS = 10_000;
-const checked = (args: string[], input?: string) => {
-  const result = docker(args, { timeoutMs: CALL_MS, ...(input === undefined ? {} : { input }) });
-  if (result.code !== 0)
-    throw new Error(
-      `fixture docker ${args[0]} failed (${result.err.includes("mount") ? "mount refused" : result.err.includes("No space") ? "VM space" : "runtime refused"})`,
-    );
-  return result.out.trim();
-};
-/** Max two serving containers/two internal networks during sentinel check, <=384MiB PDS data and 5min whole lifecycle. */
-export async function startPdsUiFixture() {
+/** One cancellation/deadline covers staging, startup and native work; finished hooks independently await cleanup. */
+export async function startPdsUiFixture(ctx: FixtureContext) {
+  const lifetime = new FixtureLifetime(ctx);
   const owner = `unset-pds-h-${randomBytes(8).toString("hex")}`;
+  lifetime.check();
   const dir = mkdtempSync(join(import.meta.dirname, "../../../node_modules/.pds-h-"));
-  const containers = new Set<string>(),
-    networks = new Set<string>();
-  let transport: Awaited<ReturnType<typeof startTransport>> | undefined;
-  const closeResources = () =>
-    cleanUpAll(
-      ...[...containers].map((name) => () => removeOwned("container", name)),
-      ...[...networks].map((name) => () => removeOwned("network", name)),
-      () => rmSync(dir, { recursive: true, force: true }),
-    );
-  function removeOwned(kind: "container" | "network", name: string) {
-    const field = kind === "container" ? ".Config.Labels" : ".Labels";
-    const found = docker([kind, "inspect", "--format", `{{index ${field} "${LABEL}"}}`, name], { timeoutMs: CALL_MS });
-    if (found.code !== 0) {
-      if (found.err.includes("No such")) return;
-      throw new Error("fixture cleanup inspection failed");
-    }
-    if (found.out.trim() !== owner) throw new Error("fixture cleanup owner mismatch");
-    checked(kind === "container" ? ["rm", "-f", "-v", name] : ["network", "rm", name]);
-  }
-  let watchdog: ReturnType<typeof setTimeout> | undefined;
-  const close = async () => {
-    clearTimeout(watchdog);
-    transport?.close();
-    closeResources();
-    containers.clear();
-    networks.clear();
+  lifetime.defer(() => rmSync(dir, { recursive: true, force: true }));
+  const checked = async (args: string[], input?: string, signal = lifetime.signal) => {
+    const result = await lifetime.command("docker", args, CALL_MS, input, signal);
+    if (result.code !== 0) throw new Error(`fixture docker ${args[0]} failed`);
+    return result.out.trim();
   };
+  async function cleanupCommand(args: string[], signal: AbortSignal) {
+    const result = await fixtureProcess("docker", args, signal, 5_000);
+    if (result.code !== 0) throw new Error("fixture cleanup command failed");
+    return result.out.trim();
+  }
+  function own(kind: "container" | "network", name: string) {
+    const field = kind === "container" ? ".Config.Labels" : ".Labels";
+    const removal = kind === "container" ? ["rm", "-f", "-v", name] : ["network", "rm", name];
+    lifetime.defer(async (signal) => {
+      const found = await fixtureProcess(
+        "docker",
+        [kind, "inspect", "--format", `{{index ${field} "${LABEL}"}}`, name],
+        signal,
+        5_000,
+      );
+      if (found.code !== 0) {
+        if (missingFixtureResource(found)) return;
+        throw new Error("fixture cleanup inspection failed");
+      }
+      if (found.out.trim() !== owner) throw new Error("fixture cleanup owner mismatch");
+      await cleanupCommand(removal, signal);
+    });
+  }
+  const resourcesRemain = async (signal = AbortSignal.timeout(10_000)) => {
+    return (
+      (await cleanupCommand(["ps", "-a", "--filter", `label=${LABEL}=${owner}`, "--format", "{{.ID}}"], signal)) !==
+        "" ||
+      (await cleanupCommand(
+        ["network", "ls", "--filter", `label=${LABEL}=${owner}`, "--format", "{{.ID}}"],
+        signal,
+      )) !== ""
+    );
+  };
+  // Registered before every resource callback, so reverse-order cleanup checks inventory last.
+  lifetime.defer(async (signal) => {
+    if (await resourcesRemain(signal)) throw new Error("fixture owned resources remain");
+  });
   try {
-    const inputs = await stageInputs(dir);
+    const inputs = await stageInputs(dir, lifetime);
+    lifetime.check();
     for (const file of ["helper.ts", "mail.ts"]) copyFileSync(join(import.meta.dirname, file), join(dir, file));
     const helperHash = sha256(readFileSync(join(dir, "helper.ts")));
     const hardening = [
@@ -63,8 +74,8 @@ export async function startPdsUiFixture() {
       "--cpus=0.5",
     ];
     const network = owner;
-    networks.add(network);
-    checked([
+    own("network", network);
+    await checked([
       "network",
       "create",
       "--internal",
@@ -74,8 +85,8 @@ export async function startPdsUiFixture() {
       network,
     ]);
     async function startHelper(name: string, privateNetwork: string) {
-      containers.add(name);
-      checked([
+      own("container", name);
+      await checked([
         "run",
         "-d",
         `--name=${name}`,
@@ -90,8 +101,9 @@ export async function startPdsUiFixture() {
         "/runtime/helper.ts",
         "serve",
       ]);
-      for (let n = 0; ; n++) {
-        const ready = docker(
+      await lifetime.poll("helper readiness", async (signal) => {
+        const ready = await lifetime.command(
+          "docker",
           [
             "exec",
             name,
@@ -99,24 +111,24 @@ export async function startPdsUiFixture() {
             "-e",
             'fetch("http://127.0.0.1:2590/ready").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
           ],
-          { timeoutMs: CALL_MS },
+          CALL_MS,
+          undefined,
+          signal,
         );
-        if (ready.code === 0) return;
-        if (n >= 20) throw new Error("fixture helper readiness timeout");
-        await delay(100);
-      }
+        return ready.code === 0 ? true : null;
+      });
     }
     const helper = `${owner}-helper`;
     await startHelper(helper, network);
-    transport = await startTransport(helper);
+    const transport = await startTransport(helper, lifetime);
     const { port, send } = transport;
     const baseUrl = "https://pds.fixture.test";
     // A live controlled sentinel on another owned internal network, removed before PDS starts.
     // Max two simultaneous containers; no probe contacts public/operated services.
     const deniedNetwork = `${owner}-denied`,
       sentinel = `${owner}-sentinel`;
-    networks.add(deniedNetwork);
-    checked([
+    own("network", deniedNetwork);
+    await checked([
       "network",
       "create",
       "--internal",
@@ -126,20 +138,27 @@ export async function startPdsUiFixture() {
       deniedNetwork,
     ]);
     await startHelper(sentinel, deniedNetwork);
-    const sentinelIp = JSON.parse(checked(["inspect", sentinel]))[0].NetworkSettings.Networks[deniedNetwork]
+    const sentinelIp = JSON.parse(await checked(["inspect", sentinel]))[0].NetworkSettings.Networks[deniedNetwork]
       .IPAddress as string;
-    const denial = await rpc(helper, { kind: "deny", port, path: sentinelIp, method: "GET", headers: {}, body: "" });
+    const denial = await rpc(lifetime, helper, {
+      kind: "deny",
+      port,
+      path: sentinelIp,
+      method: "GET",
+      headers: {},
+      body: "",
+    });
     const refusal = JSON.parse(denial.body) as {
       denied: boolean;
       dnsDenied: boolean;
-      forwardingDenied: boolean;
+      reservedNameUnresolved: boolean;
       noDefaultRoute: boolean;
     };
     if (!refusal.denied) throw new Error("fixture egress probe admitted a target");
-    checked(["rm", "-f", sentinel]);
-    containers.delete(sentinel);
-    checked(["network", "rm", deniedNetwork]);
-    networks.delete(deniedNetwork);
+    await checked(["rm", "-f", sentinel]);
+
+    await checked(["network", "rm", deniedNetwork]);
+
     const pds = `${owner}-pds`;
     const key = createECDH("secp256k1");
     key.generateKeys();
@@ -161,6 +180,7 @@ export async function startPdsUiFixture() {
       PDS_CRAWLERS: "",
       LOG_ENABLED: "false",
     };
+    lifetime.check();
     writeFileSync(
       join(dir, "fixture.env"),
       Object.entries(fixtureEnv)
@@ -168,8 +188,8 @@ export async function startPdsUiFixture() {
         .join("\n"),
       { mode: 0o600 },
     );
-    containers.add(pds);
-    checked([
+    own("container", pds);
+    await checked([
       "run",
       "-d",
       `--name=${pds}`,
@@ -185,34 +205,30 @@ export async function startPdsUiFixture() {
     ]);
     rmSync(join(dir, "fixture.env"));
     // Only read-only startup probes retry; native mutations are never retried.
-    for (let n = 0; ; n++) {
+    await lifetime.poll("native readiness", async (signal) => {
       const response = await send(
         "/account/sign-in",
         "GET",
         { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
         "",
+        signal,
       ).catch(() => null);
-      if (response?.status === 200) break;
-      if (n >= 20)
-        throw new Error(
-          `fixture native readiness timeout (${checked(["inspect", "--format", "{{.State.Status}}/{{.State.ExitCode}}", pds])})`,
-        );
-      await delay(100);
-    }
-    const inspected = JSON.parse(checked(["inspect", pds]))[0];
-    const image = JSON.parse(checked(["image", "inspect", inputs.pds]))[0];
+      return response?.status === 200 ? true : null;
+    });
+    const inspected = JSON.parse(await checked(["inspect", pds]))[0];
+    const image = JSON.parse(await checked(["image", "inspect", inputs.pds]))[0];
     const nativeCommand = ["Entrypoint", "Cmd", "WorkingDir"].every(
       (field) => JSON.stringify(inspected.Config[field]) === JSON.stringify(image.Config[field]),
     );
     // Docker gateway mode isolated removes the host bridge address (port-publishing/#gateway-modes).
-    const inspectedNetwork = JSON.parse(checked(["network", "inspect", network]))[0];
+    const inspectedNetwork = JSON.parse(await checked(["network", "inspect", network]))[0];
     const internal =
       inspectedNetwork.Internal === true &&
       inspectedNetwork.EnableIPv6 === false &&
       inspectedNetwork.Options["com.docker.network.bridge.gateway_mode_ipv4"] === "isolated";
     const flags = inspected.Config.Env as string[];
     const ssrfProtection = flags.includes("PDS_DEV_MODE=false") && flags.includes("PDS_DISABLE_SSRF_PROTECTION=false");
-    const helperInspected = JSON.parse(checked(["inspect", helper]))[0];
+    const helperInspected = JSON.parse(await checked(["inspect", helper]))[0];
     const attachmentSafe = [inspected, helperInspected].every(
       (container) =>
         JSON.stringify(Object.keys(container.NetworkSettings.Networks)) === JSON.stringify([network]) &&
@@ -234,12 +250,6 @@ export async function startPdsUiFixture() {
       throw new Error(
         `fixture isolation mismatch (command=${nativeCommand}, internal=${internal}, protection=${ssrfProtection}, networks=${attached.length})`,
       );
-    watchdog = setTimeout(() => {
-      void close().catch(() => {
-        process.exitCode = 1;
-      });
-    }, 300_000);
-    watchdog.unref();
     return {
       baseUrl,
       evidence: {
@@ -256,36 +266,41 @@ export async function startPdsUiFixture() {
       client: () => nativeClient(baseUrl, send),
       mailbox: {
         async code(recipient: string, purpose: string): Promise<string> {
-          for (let n = 0; n < 30; n++) {
-            const reply = await rpc(helper, {
-              kind: "mail",
-              port,
-              path: "/mail",
-              method: "POST",
-              headers: {},
-              body: JSON.stringify({ recipient, purpose }),
-            });
+          return lifetime.poll("native mail", async (signal) => {
+            const reply = await rpc(
+              lifetime,
+              helper,
+              {
+                kind: "mail",
+                port,
+                path: "/mail",
+                method: "POST",
+                headers: {},
+                body: JSON.stringify({ recipient, purpose }),
+              },
+              signal,
+            );
             if (reply.status !== 200) throw new Error("fixture mailbox refused");
-            const code = (JSON.parse(reply.body) as { code: string | null }).code;
-            if (code) return code;
-            await delay(100);
-          }
-          throw new Error("fixture native mail timeout");
+            return (JSON.parse(reply.body) as { code: string | null }).code;
+          });
         },
       },
       async plcContains(did: string) {
-        const reply = await rpc(helper, { kind: "plc", port, path: `/${did}`, method: "GET", headers: {}, body: "" });
+        const reply = await rpc(lifetime, helper, {
+          kind: "plc",
+          port,
+          path: `/${did}`,
+          method: "GET",
+          headers: {},
+          body: "",
+        });
         const document = JSON.parse(reply.body) as { id: string };
         return reply.status === 200 && document.id === did;
       },
-      resourcesRemain: () =>
-        checked(["ps", "-a", "--filter", `label=${LABEL}=${owner}`, "--format", "{{.ID}}"]) !== "" ||
-        checked(["network", "ls", "--filter", `label=${LABEL}=${owner}`, "--format", "{{.ID}}"]) !== "",
-      close,
+      resourcesRemain,
+      close: () => lifetime.close(),
     };
   } catch (failure) {
-    clearTimeout(watchdog);
-    transport?.close();
-    failAfterCleanup(failure, closeResources);
+    return lifetime.fail(failure);
   }
 }
