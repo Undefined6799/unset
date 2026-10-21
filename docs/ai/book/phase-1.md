@@ -8923,7 +8923,10 @@ red that the app's and the PDS's scheme never comes from the request, cookies `S
 from configuration, ADR 0031 decision 2):** the certificate and its key are C9 file secrets, mounted only into
 the edge, under the C9 owner and mode rules; a test asserts that no other service mounts them. The compose wiring
 adds the app site's binds as P1.36b reads them, and the two dev allowlist entries if that allowlist lives in
-`deployment/preflight/`. Prod is unchanged. No DNS token, validation zone, challenge CNAME or provider token
+`deployment/preflight/`. It also replaces the three `[to fill: …]` legal and `security.txt` literals in
+`deployment/compose.dev.yaml:208-212` with Alex's staging values (`alex-answers.md`, `staging-legal-values`:
+Privacy Officer, contact@staging.unset.sh, support@staging.unset.sh); P1.38d adds only the check that refuses a
+placeholder. Prod is unchanged. No DNS token, validation zone, challenge CNAME or provider token
 belongs to this step: that is production work in P1.36e (ADR 0028), and P1.33p's CAA step lists no challenge
 CNAME for staging. Alex's only runbook step here is the OpenSSL command that writes the leaf and key (P1.38e).
 
@@ -15351,9 +15354,10 @@ VerifyEmail.tsx:34 link our PDS for every user, which is correct while P1.36v li
   refuses a handshake without one).
 - The dev-preflight resolution check (P1.36u) passes before opening.
 - Before either resource is created: P1.37v, P1.36j and P1.36b are merged and deployed (the per-client keys, Newt
-  as the only trusted proxy, and the three app zones; ADR 0031, decisions 1 and 3), and Alex has replaced every
-  `[to fill: …]` legal and `security.txt` value in `deployment/compose.dev.yaml:208-212`; P1.38d's preflight red
-  under dev refuses a `[to fill:` value (a tightening, third lane). P1.38e's C18 change (Alex's line, after ADR
+  as the only trusted proxy, and the three app zones; ADR 0031, decisions 1 and 3), and P1.36c has replaced every
+  `[to fill: …]` legal and `security.txt` value in `deployment/compose.dev.yaml:208-212` with Alex's staging
+  values; P1.38d's preflight red under dev refuses a `[to fill:` value (a tightening, third lane). P1.38e's C18 change
+  (Alex's line, after ADR
   0032's acceptance) comes first too, or `dev:up` refuses the dev edge.
 The 80/443 forwards, DDNS, TLS-ALPN and CGNAT text moved verbatim to P5.02b, which applies only if production is
 exposed directly.
@@ -15640,9 +15644,9 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   this deploy is reachable from the internet from its first minute, ADR 0031's preconditions sit here, not only in
   P1.33p: P1.37v, P1.36j, P1.36b, P1.38e and P1.38f (client-address keys, Newt the only trusted proxy, the three app
   zones, the `405` rule, the noindex header, C18 accepting the dev file certificate, the blob denies) are merged and
-  deployed, and P1.38d has replaced every
-  `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` with Alex's values (its preflight red refuses a
-  placeholder under dev), before either Pangolin resource is created. The public opening is this step's
+  deployed, and P1.36c has replaced every
+  `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` with Alex's values (P1.38d's preflight red refuses
+  a placeholder under dev), before either Pangolin resource is created. The public opening is this step's
   precondition, not P1.33p's: before the first deploy Alex sets the A/AAAA records for both staging names to
   Pangolin and the CAA records (P1.33p's steps 6 and 9, done here), creates the two Pangolin resources (public, no
   login, no rules, `https` to the edge, TLS Server Name set to each name), and sets up inbound forwarding for
@@ -16139,9 +16143,10 @@ the scope a builder follows.
 **What:**
 1. Newt pinned by digest as a run-only vendor entry (`bases.lock.json`, the images test's vendor allowlist; ADR
    0030 decision 2), under
-   the seven-day age rule. Mirror order: Newt is named in `mirror.list.json` by P1.27s (its first run on main
-   mirrors and signs it) and locked in `images.lock.json` by P2.26b, both before this step in the slice-2 order,
-   so C2 takes the `newt` service from our mirror like every other dev image; this step pins from that lock. The
+   the seven-day age rule. Mirror order: this step adds Newt to `mirror.list.json` itself (P1.27s is check-only and
+   edits no list); P1.27s's next run on main then mirrors and signs it, and P2.26b flips Newt's entry in
+   `images.lock.json` to the mirror after this step lands, so C2 takes the `newt` service from our mirror like
+   every other dev image. The
    `newt` service: digest-pinned, non-root, read-only root, `cap_drop: ALL`,
    `no-new-privileges`, limits; from Newt's own config source: SSH and clients disabled, no Docker socket, no
    admin, metrics or pprof address. Its secrets (`NEWT_ID`, `NEWT_SECRET`, `PANGOLIN_ENDPOINT`) come from `newt.env`
@@ -16184,9 +16189,10 @@ Slice 2, product (`deployment/preflight/`), lane the third thread; ADR 0031 deci
 
 **What:** under `--env dev` (and prod) preflight fails any environment value that starts with `[to fill:`, naming
 the service and key only, never the value. The legal pages and `security.txt` ship such placeholders as literals in
-`deployment/compose.dev.yaml:208-212`; this step also replaces the three literals with Alex's staging values
-(`alex-answers.md`, `staging-legal-values`: Privacy Officer, contact@staging.unset.sh, support@staging.unset.sh),
-so the check is green on main after it. Reds: a placeholder under dev fails; under prod fails; local passes.
+`deployment/compose.dev.yaml:208-212`; P1.36c replaces the three literals with Alex's staging values
+(`alex-answers.md`, `staging-legal-values`: Privacy Officer, contact@staging.unset.sh, support@staging.unset.sh)
+before this step, so the check is green on main after it. Alex's own task is only the mail forwarding (P1.34). Reds: a
+placeholder under dev fails; under prod fails; local passes.
 
 ---
 
@@ -16238,11 +16244,11 @@ dev rendering passing C18's mount rule and failing its `(tls)` rule. It merges b
 C18 until this rule exists, so P1.36c depends on this step; its own PR stays green because the directory shape is
 still accepted. `--env dev` fails on main today and keeps failing after this step: C2 refuses the four
 services `compose.dev.yaml` builds (postgres, migrate, edge, web; `images.ts:39`) and takes the PDS and Newt images
-only from our mirror (P1.27s's list names both; P2.26b pins them) until P2.26b pins them from the
+only from our mirror (P1.37v adds Newt to the list; P2.26b pins both) until P2.26b pins them from the
 lock, C3 and C4 need P2.26e's trusted root, C18 refuses an edge not run from the lock's image (`edge.ts:132-137`)
 until P2.26b, C21 needs P1.33a's retirement report (`host.ts:18-40`), and P1.38d refuses every `[to fill:` value
-until Alex replaces them. It first passes once P1.36b, P1.38e, P1.36c, P1.38g, P1.37v, P1.27s, P2.26e and P2.26b
-have merged, P1.33a's report is committed and the `[to fill:` values are replaced; P2.26b's lock needs the
+until P1.36c replaces them. It first passes once P1.36b, P1.38e, P1.36c, P1.38g, P1.37v, P1.27s, P2.26e and P2.26b
+have merged, P1.33a's report is committed and P1.36c's values are in; P2.26b's lock needs the
 digests from P1.27s's first run on main, so those two are a second sitting after the rest. The runbook gains the
 OpenSSL command that writes the leaf and key as C9 mounted file secrets (P-256, both staging names as SANs, no CA
 flag, at most 825 days; mode 0400, owned by the edge's uid 65532, in a 0700 folder owned by the deploy user,
