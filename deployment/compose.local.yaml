@@ -97,6 +97,10 @@ services:
       PDS_CRAWLERS: ""
       PDS_RATE_LIMITS_ENABLED: "false"
       PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
+      # compose.dev.yaml's interim branding, without its staging links.
+      PDS_SERVICE_NAME: unset.sh sign-in
+      PDS_PRIMARY_COLOR: "#048ba8"
+      PDS_ERROR_COLOR: "#d7469b"
       LOG_ENABLED: "false"
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=768

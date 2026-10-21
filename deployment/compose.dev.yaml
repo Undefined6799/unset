@@ -113,6 +113,16 @@ services:
       PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
       PDS_EMAIL_FROM_ADDRESS: noreply@staging.unset.sh
       PDS_MODERATION_EMAIL_ADDRESS: moderation@staging.unset.sh
+      # Interim branding of the stock sign-in and account pages until ADR 0027's frontend replaces them (P2.24 item
+      # 5). The names are @atproto/pds 0.5.37 dist/config/env.js:8-33; one colour serves both themes
+      # (@atproto/oauth-provider 0.23.1 dist/customization/colors.js), so each is the sheet token that reads on a
+      # dark ground. The links are staging's own legal pages (P2.15), so the local stack leaves them out.
+      PDS_SERVICE_NAME: unset.sh sign-in
+      PDS_PRIMARY_COLOR: "#048ba8"
+      PDS_ERROR_COLOR: "#d7469b"
+      PDS_HOME_URL: https://staging.unset.sh
+      PDS_TERMS_OF_SERVICE_URL: https://staging.unset.sh/legal/terms
+      PDS_PRIVACY_POLICY_URL: https://staging.unset.sh/legal/privacy
       LOG_ENABLED: "false"
       NODE_OPTIONS: --max-old-space-size=768
     networks: [edge, pds_egress]

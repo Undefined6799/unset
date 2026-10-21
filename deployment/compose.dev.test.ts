@@ -27,6 +27,7 @@ import { loadInputs } from "./preflight/inputs.ts";
 import { SecretMap } from "./preflight/secret-map.ts";
 
 const DEPLOYMENT = import.meta.dirname;
+type SheetTokens = { color: { tokens: { name: string; value: unknown }[] } };
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const FILE = "compose.dev.yaml";
 const dev = (): Compose => parseCompose(read(FILE), FILE);
@@ -552,21 +553,44 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
       PDS_EMAIL_FROM_ADDRESS: "noreply@staging.unset.sh",
       PDS_MODERATION_EMAIL_ADDRESS: "moderation@staging.unset.sh",
+      PDS_SERVICE_NAME: "unset.sh sign-in",
+      PDS_PRIMARY_COLOR: "#048ba8",
+      PDS_ERROR_COLOR: "#d7469b",
+      PDS_HOME_URL: "https://staging.unset.sh",
+      PDS_TERMS_OF_SERVICE_URL: "https://staging.unset.sh/legal/terms",
+      PDS_PRIVACY_POLICY_URL: "https://staging.unset.sh/legal/privacy",
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
-    // The local PDS differs only by the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1) and by sending no
-    // mail, so it has no from addresses (P1.36g; C11 and C19 refuse them under local). Both publish to plc.directory
-    // (ADR 0023).
+    // The local PDS differs only by the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1), by sending no
+    // mail, so it has no from addresses (P1.36g; C11 and C19 refuse them under local), and by linking to no staging
+    // page. Both publish to plc.directory (ADR 0023).
     const {
       PDS_EMAIL_FROM_ADDRESS: _from,
       PDS_MODERATION_EMAIL_ADDRESS: _moderation,
+      PDS_HOME_URL: _home,
+      PDS_TERMS_OF_SERVICE_URL: _terms,
+      PDS_PRIVACY_POLICY_URL: _privacy,
       ...shared
     } = Object.fromEntries(env);
     expect(Object.fromEntries(envOf(service(local(), "pds")))).toEqual({
       ...shared,
       NODE_EXTRA_CA_CERTS: "/etc/unset-dev-trust/root.pem",
     });
+  });
+
+  test("pds_branding_colours_come_from_the_sheet", () => {
+    // Interim branding until ADR 0027's frontend lands (P2.24 item 5). @atproto/oauth-provider 0.23.1
+    // dist/customization/colors.js takes one RGB value per colour for both themes, so each is the sheet token's
+    // variant that reads on a dark ground: Pacific Cyan's source for primary, Raspberry Plum's dark variant for errors.
+    const colours = new Map(
+      (
+        JSON.parse(readFileSync(join(DEPLOYMENT, "../shared/ui/sheet/tokens.json"), "utf8")) as SheetTokens
+      ).color.tokens.map((token) => [token.name, token.value]),
+    );
+    const env = envOf(service(dev(), "pds"));
+    expect(env.get("PDS_PRIMARY_COLOR")).toBe((colours.get("cyan") as { dark: string }).dark);
+    expect(env.get("PDS_ERROR_COLOR")).toBe((colours.get("plum") as { dark: string }).dark);
   });
 
   test("pds_env_file_holds_only_its_secrets", () => {

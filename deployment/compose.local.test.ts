@@ -80,8 +80,19 @@ const DEV_SECRETS: Record<string, string[]> = { edge: ["dev_tls_cert", "dev_tls_
 const LEGAL_KEYS: Record<string, string[]> = {
   web: ["PRIVACY_OFFICER_TITLE", "PRIVACY_OFFICER_CONTACT", "SUPPORT_EMAIL"],
 };
-/** The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g). */
-const DEV_ONLY: Record<string, string[]> = { pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"] };
+/**
+ * The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g), and
+ * the PDS's links to staging's pages (interim branding, P2.24 item 5).
+ */
+const DEV_ONLY: Record<string, string[]> = {
+  pds: [
+    "PDS_EMAIL_FROM_ADDRESS",
+    "PDS_MODERATION_EMAIL_ADDRESS",
+    "PDS_HOME_URL",
+    "PDS_TERMS_OF_SERVICE_URL",
+    "PDS_PRIVACY_POLICY_URL",
+  ],
+};
 /**
  * The keys only the local file sets, by service, with their one value: web's internal host for net-guard, which the
  * local stack reaches through the edge's alias, where dev reaches its PDS through Pangolin (ADR 0031 Decision 3).
