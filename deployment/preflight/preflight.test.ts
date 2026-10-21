@@ -4022,6 +4022,8 @@ networks:
       exact("caddy-builder"),
       exact("postgres"),
       exact("caddy"),
+      // Newt runs only under dev (P1.37v); a local stack has no tunnel, so its image may not stand in for a service.
+      exact("newt"),
       pds.ref,
       `${pds.ref}:${pds.tag}`,
       `${pds.ref}@${pds.digest}`,
