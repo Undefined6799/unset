@@ -9,8 +9,9 @@ without JavaScript.
 On screen, the main region scrolls inside the space between the header and navigation. This keeps keyboard-focused
 controls visible even in short or zoomed phone viewports; padding below a fixed bar alone does not provide that
 guarantee. Print keeps normal document flow. To check it, open the account page at 390×320 and 320×400 and traverse
-the controls with Tab and Shift+Tab: the confirmation checkbox and both sign-out buttons must remain clear of the
-header and bottom bar. The skip link must focus the main region with its heading visible.
+the controls with Tab and Shift+Tab: the privacy-notice link when the banner shows it, the sign-in server link when
+the page shows it, and the one sign-out button must remain clear of the header and bottom bar. The skip link must
+focus the main region with its heading visible.
 
 `apps/web/src/shell/AppShell.tsx` chooses destinations and composes the layout. `shared/ui/components/Navigation/`
 owns reusable navigation, using the existing Avatar, Icon, tokens and native browser popover controls. The existing
