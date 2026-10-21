@@ -1,0 +1,30 @@
+# 0034 — Docs-only pull requests auto-merge when CI is green
+
+Status: Proposed (awaiting Alex)
+
+## Context
+Alex decided that a pull request which changes only an allowlist of documentation, carries `kind/docs` and passes every CI check may squash-merge without his approval, and that it does not count toward the D4 queue of three. ADR 0019 leaves every other merge with Alex, and says a verifier must not merge a pull request that loosens a guard or adds an ADR. This record is that loosening, for this class only. ADR 0019 is not edited.
+
+The main ruleset, re-read on 2026-10-21 (`gh api repos/Undefined6799/unset/rulesets/24613527`), requires no approving review (`required_approving_review_count` 0), no code-owner review and no last-push approval, and allows only squash. `require_extra_approval_for_unattributed_changes` is true and has no effect at zero approvals (GitHub, available rules for rulesets, "Additional approval for unattributed Copilot pull requests"). Repository `allow_auto_merge` was false on that read. The live ruleset's conditions are `ref_name` only. There is no label condition.
+
+## Decision
+1. **One allowlist.** `scripts/guards/docs-only-paths.ts` allows `docs/human/**` except `docs/human/decisions/**` (that prefix compared case-insensitively, because the parent is allowed), `docs/site/**`, `docs/ai/notes/**` and `README.md`. Any other path fails, including `CLAUDE.md`, `AGENTS.md`, the plan, the step book, ADRs, `.github/**`, `scripts/**`, manifests, lockfiles and the lexicon generator. A rename needs both paths. A deletion needs the deleted path. An empty list, an odd path or an unreadable status fails closed.
+2. **A read-only check.** `.github/workflows/docs-only.yml` is a `pull_request` workflow. Its `docs-only` job has `contents: read`, checks out the pull request and runs `scripts/guards/docs-only.ts`. It is not a required status check: a code change fails it on purpose. Drafts skip it.
+3. **Auto-merge from the default branch.** `.github/workflows/docs-auto-merge.yml` uses `workflow_run` on that workflow's `completed` event only. `GITHUB_SHA` is the default branch. The job checks out `github.sha` and runs `scripts/guards/docs-auto-merge.ts` from that branch. It never checks out pull request code and never downloads an artifact. It re-lists files with the API and re-applies the allowlist, so a pull request that edits the check to always pass still fails. It enables squash auto-merge only when the head repository is this one, the pull request is open and not a draft, the head SHA still matches, the GitHub Actions app (id 15368, slug `github-actions`) reports `docs-only` as success, `kind/docs` is present and every path is allowed. Otherwise it disables auto-merge, unless auto-merge is already off or the head has moved. A fork never gets it. GraphQL `mergeMethod` defaults to `MERGE`, so the script passes `SQUASH` (schema read 2026-10-21).
+4. **The guard.** `workflow_run`, `contents: write` and `pull-requests: write` are allowed only in that one file, in that shape. `pull_request_target` stays banned. GitHub's default policy for public repositories blocks `pull_request_target` (evaluate mode now; enforcement on 2026-11-02 for repositories already on that default policy).
+5. **The queue.** CLAUDE.md's Ship it line and D4 queue state the exception and name the workflow and the allowlist. Author threads still never merge. The workflow does, and only for this class.
+6. **This pull request.** It is not docs-only. Alex's normal approval applies, and a verifier must not merge it (ADR 0019).
+
+## Alternatives
+- **Leave every merge with Alex or the verifier.** No write token and no exception to the `workflow_run` ban. Rejected: Alex asked for this class to merge itself once CI is green, and not to occupy the three-PR queue.
+- **`pull_request_target` with a write token.** Checking out the pull request head and running it would execute untrusted code with that token (secure use, "Mitigating the risks of untrusted code checkout"). The public-repository default policy is also moving to block the event. Rejected.
+- **Require the `docs-only` check, or add a bypass actor.** Requiring the check would fail every code change. A bypass actor can skip the required checks as well as any approval rule. A second ruleset cannot select by label or by path: conditions are `ref_name`, `required_reviewers` file patterns can only add team reviews (this user-owned repository has no teams), and "Restrict file paths" blocks pushes. Rejected. Approvals are already zero, so dropping them is not a change.
+
+## Consequences
+- Once Allow auto-merge is on, a same-repository docs-only pull request with `kind/docs` and green required checks squash-merges with no human approval. Until that setting is on, the enable call fails, the job goes red and the pull request stays open.
+- Removing `kind/docs`, or a later push that leaves the allowlist, disables auto-merge. A run for an older head SHA leaves the pull request alone. The `docs-only` job is red on ordinary code pull requests and must not be added to the ruleset.
+- The auto-merge job's token can call the merge mutation. The ruleset's bypass list is empty, so the token cannot push to `main`. The script does not push. Actions workflow permissions were not readable (403). If the repository caps `GITHUB_TOKEN` at read, the job's write scopes are ignored and enable fails until that ceiling allows them.
+- The omitted commit headline uses "a default message" (schema). Whether that equals `squash_merge_commit_title` `COMMIT_OR_PR_TITLE` is unverified.
+
+## Compliance
+`scripts/guards/docs-only-paths.test.ts`, `scripts/guards/docs-auto-merge.test.ts` and `scripts/guards/workflow-pins.test.ts` hold the allowlist, the fail-closed decision and the rule that only `docs-auto-merge.yml` may use `workflow_run` and the two write scopes. Acceptance is Alex's line on the pull request that adds this record. ADR 0001 notes the proposal at its end; the acceptance paragraph is appended when he accepts. The status line stays Proposed until then.
