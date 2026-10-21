@@ -1,15 +1,22 @@
-// The image workflows' own rules (P1.27q), on top of the repository-wide workflow guard (scripts/guards/workflows.ts).
-import { readFileSync } from "node:fs";
+// The image workflows' own rules (P1.27q; keyless signing since P1.27s, ADR 0033), on top of the repository-wide
+// workflow guard (scripts/guards/workflows.ts).
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
 
 const ROOT = join(import.meta.dirname, "..", "..");
-const FILES = ["images.yml", "mirror.yml"] as const;
+const FILES = ["images.yml", "mirror.yml", "publish-images.yml", "sigstore-root.yml"] as const;
+/** The jobs that sign, and the permissions each holds: exactly these. */
+const SIGNING: Record<string, Record<string, Record<string, string>>> = {
+  "publish-images.yml": { publish: { contents: "read", packages: "write", "id-token": "write" } },
+  "mirror.yml": { "copy-and-sign": { contents: "read", packages: "write", "id-token": "write" } },
+};
 const text = (file: string): string => readFileSync(join(ROOT, ".github", "workflows", file), "utf8");
 
-type Step = { name?: string; id?: string; if?: string; run?: string };
+type Step = { name?: string; id?: string; if?: string; run?: string; uses?: string };
 type Job = {
+  if?: string;
   permissions?: Record<string, string> | string;
   environment?: unknown;
   env?: Record<string, string>;
@@ -19,18 +26,17 @@ type Workflow = { on: Record<string, unknown>; permissions: unknown; jobs: Recor
 const workflow = (file: string): Workflow => parse(text(file));
 
 /**
- * Every cosign call that would talk to the public Rekor log or verify without our key. cosign v3.0.5 uploads to
- * Rekor by default and reads the TUF signing config unless told not to (cmd/cosign/cli/options/sign.go,
- * attest.go), so a sign or attest call must carry both opt-outs; a verify call must name our key.
+ * Every cosign call that would skip the transparency log, sign or verify with a key, or match an identity by pattern
+ * (ADR 0033, Decisions 2 and 3). cosign v3.1.3 uploads to Rekor and writes the bundle by default
+ * (cmd/cosign/cli/options/sign.go and attest.go at the tag), so the rule is that no call turns either off.
  */
 function cosignProblems(workflowText: string): string[] {
+  const banned =
+    /--tlog-upload=false|--insecure-ignore-tlog|--private-infrastructure|--use-signing-config=false|--key\b|-regexp\b|--offline\b/;
   return workflowText.split("\n").flatMap((line, i) => {
-    const call = /\bcosign\s+(sign|attest|verify[\w-]*)\b/.exec(line)?.[1];
-    if (call === undefined) return [];
-    const missing = call.startsWith("verify")
-      ? ["--key"].filter((flag) => !new RegExp(`${flag}[ =]`).test(line))
-      : ["--tlog-upload=false", "--use-signing-config=false"].filter((flag) => !line.includes(flag));
-    return missing.map((flag) => `line ${i + 1}: cosign ${call} without ${flag}`);
+    const call = /\bcosign\s+([\w-]+)/.exec(line)?.[1];
+    const flag = banned.exec(line)?.[0];
+    return call !== undefined && flag !== undefined ? [`line ${i + 1}: cosign ${call} with ${flag}`] : [];
   });
 }
 
@@ -41,8 +47,15 @@ describe("image workflows", () => {
     for (const [id, job] of Object.entries(wf.jobs)) {
       expect(job.permissions, `${file} job ${id}`).not.toBe("write-all");
       const signs = (job.steps ?? []).some((step) => /\bcosign\s+(sign|attest)\b/.test(step.run ?? ""));
-      // Only a job that signs may use the `signing` environment; until the sign job lands, none may write.
-      if (job.environment !== undefined) expect(signs && job.environment === "signing", `${file} job ${id}`).toBe(true);
+      const signing = SIGNING[file]?.[id];
+      // Only the two signing jobs sign, use the `signing` environment, and hold exactly their write scopes.
+      expect(signs, `${file} job ${id}`).toBe(signing !== undefined);
+      if (job.environment !== undefined)
+        expect(signing !== undefined && job.environment === "signing", `${file} job ${id}`).toBe(true);
+      if (signing !== undefined) {
+        expect(job.environment, `${file} job ${id}`).toBe("signing");
+        expect(job.permissions, `${file} job ${id}`).toEqual(signing);
+      }
       // P1.34m: images.yml's pins job alone also reads packages, for the GHCR push time of a newly pinned base.
       const reads =
         file === "images.yml" && id === "pins" ? { contents: "read", packages: "read" } : { contents: "read" };
@@ -50,23 +63,73 @@ describe("image workflows", () => {
     }
   });
 
-  // Every cosign sign and attest call carries --tlog-upload=false and --use-signing-config=false, so nothing about
-  // this private repository reaches the public transparency log; every cosign verify call carries --key.
-  test("no_tlog_upload_flag_present", () => {
-    for (const file of FILES) expect(cosignProblems(text(file)), file).toEqual([]);
-    const ok = 'cosign sign --key env://COSIGN_PRIVATE_KEY --use-signing-config=false --tlog-upload=false "$REF"';
-    expect(cosignProblems(ok)).toEqual([]);
-    expect(cosignProblems('cosign sign --key env://K "$REF"')).toEqual([
-      "line 1: cosign sign without --tlog-upload=false",
-      "line 1: cosign sign without --use-signing-config=false",
+  // No cosign call in any workflow skips Rekor, uses a key or matches an identity by pattern (it replaces P1.27q's
+  // no_tlog_upload_flag_present, which held the private-repository key design).
+  test("tlog_upload_never_disabled", () => {
+    const all = readdirSync(join(ROOT, ".github", "workflows"));
+    for (const file of all) expect(cosignProblems(text(file)), file).toEqual([]);
+    expect(cosignProblems('cosign sign --yes "$ref"')).toEqual([]);
+    for (const [line, flag] of [
+      ['cosign sign --yes --tlog-upload=false "$ref"', "--tlog-upload=false"],
+      ["cosign attest --use-signing-config=false x", "--use-signing-config=false"],
+      ["cosign verify --insecure-ignore-tlog=true x", "--insecure-ignore-tlog"],
+      ["cosign verify --certificate-identity-regexp '.*' x", "-regexp"],
+      ["cosign sign --key env://K x", "--key"],
+    ] as const) {
+      expect(cosignProblems(line)).toEqual([`line 1: cosign ${line.split(" ")[1]} with ${flag}`]);
+    }
+  });
+
+  // One digest (book edit 2026-10-15-verify-863-866-followups, N7): publish pushes by digest, then scans, signs,
+  // attests and locks that same ref, and verifies the lock it wrote; it never signs a tag.
+  test("publish_signs_the_digest_it_pushed", () => {
+    const steps = workflow("publish-images.yml").jobs.publish?.steps ?? [];
+    const run = steps.map((step) => step.run ?? "").join("\n");
+    expect(run).toContain("push-by-digest=true");
+    expect(run).toContain('ref="$REGISTRY/$name@$(jq -r \'."containerimage.digest"\' "$RUNNER_TEMP/meta.json")"');
+    for (const use of ['--ignore-unfixed --ignorefile /dev/null --timeout 10m "$ref"', 'cosign sign --yes "$ref"']) {
+      expect(run).toContain(use);
+    }
+    expect(run).toMatch(
+      /cosign attest --yes --type slsaprovenance1 --predicate "\$RUNNER_TEMP\/provenance.json" "\$ref"/,
+    );
+    expect(run).toMatch(/cosign attest --yes --type spdxjson --predicate "\$RUNNER_TEMP\/sbom.json" "\$ref"/);
+    expect(run).not.toMatch(/cosign (sign|attest)[^\n]*:\$|--tag|-t "/);
+    expect(steps.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"');
+    // cosign is installed from its release by checksum, before anything signs.
+    expect(run).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
+  });
+
+  // The mirror copy keeps the source's digest: the copy names it, the job reads it back, and the lock holds it.
+  test("mirrored_digest_equals_lock", () => {
+    const job = workflow("mirror.yml").jobs["copy-and-sign"];
+    expect(job?.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    const run = (job?.steps ?? []).map((step) => step.run ?? "").join("\n");
+    expect(run).toContain('digest="${source##*@}"');
+    expect(run).toContain('crane copy "$source" "$mirror@$digest"');
+    expect(run).toContain('test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"');
+    expect(run).toContain('cosign sign --yes "$mirror@$digest"');
+    expect(run).toContain('--arg ref "$mirror@$digest"');
+    expect(job?.steps?.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"');
+  });
+
+  // The trusted-root fetch (ADR 0033, Decision 4): by hand only, read-only, no secret or environment, and no way to
+  // write to the repository.
+  test("sigstore_root_fetch_reads_only", () => {
+    const wf = workflow("sigstore-root.yml");
+    expect(wf.on).toEqual({ workflow_dispatch: null });
+    expect(wf.permissions).toEqual({});
+    expect(Object.keys(wf.jobs)).toEqual(["fetch"]);
+    const job = wf.jobs.fetch;
+    expect(job?.permissions).toEqual({ contents: "read" });
+    expect(job?.environment).toBeUndefined();
+    const raw = text("sigstore-root.yml");
+    expect(raw).not.toMatch(/\bsecrets\b|github\.token|GITHUB_TOKEN/);
+    expect(raw).not.toMatch(/git (commit|push)|gh pr|create-pull-request|peter-evans|contents: write/);
+    expect((job?.steps ?? []).map((step) => step.uses?.replace(/@.*/, "")).filter(Boolean)).toEqual([
+      "actions/upload-artifact",
     ]);
-    expect(cosignProblems("cosign attest --tlog-upload=true --use-signing-config=false x")).toEqual([
-      "line 1: cosign attest without --tlog-upload=false",
-    ]);
-    expect(cosignProblems("cosign verify --insecure-ignore-tlog=true x")).toEqual([
-      "line 1: cosign verify without --key",
-    ]);
-    expect(cosignProblems("cosign verify-attestation --key k.pub x")).toEqual([]);
+    expect(raw).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
   });
 
   test("images_skip_only_without_dockerfile", () => {
