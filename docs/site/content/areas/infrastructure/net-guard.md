@@ -24,10 +24,9 @@ Policies `policies.ts` exports:
 | --- | --- |
 | `plc` | `kind: "fixed"`, host `plc.directory` |
 | `atproto` | `kind: "public"` |
-| `localPlc` | `internalPolicy("plc", ["http://plc:2582"])` |
 | `internalPolicy` | Builds a `kind: "internal"` policy from exact http(s) origins |
 
-[ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md) says the local PLC pieces, this policy included, are dead and removed in their own cleanup. The export and `infrastructure/net-guard/src/request.test.ts` are still on the tree. `infrastructure/pds/identity-network.ts` calls `guard.request` with `plc` or `atproto`, not `localPlc`.
+`localPlc` is a dead export, [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md), decided (0001 log), acceptance pending.
 
 `request.ts` refuses status 301, 302, 303, 307 and 308 with `egress.redirect`. `resolveVetted` classifies every answer (`classifyAddress`) and `pinnedLookup` returns only the addresses it was given. `infrastructure/postgres/config.ts` calls `classifyAddress` for `PG_SSLMODE=disable`.
 

@@ -3,7 +3,7 @@ title: pds
 weight: 3
 ---
 
-The atproto network adapter. Package `@unset/infrastructure-pds`. Identity lookups are [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md). The OAuth client is [ADR 0021](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0021-atproto-oauth-client.md). PDS calls are [ADR 0024](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0024-atproto-api-agent.md). Web egress is [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md).
+The atproto network adapter. Package `@unset/infrastructure-pds`. Identity lookups are [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md). The OAuth client is [ADR 0021](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0021-atproto-oauth-client.md). PDS calls are [ADR 0024](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0024-atproto-api-agent.md). Web egress is [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending.
 
 ## Owns
 
