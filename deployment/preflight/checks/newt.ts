@@ -14,8 +14,6 @@ import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./ty
 
 /** What newt.env holds: Pangolin's address and the site's two credentials (newt 1.18.1 newtconfig/newtconfig.go). */
 const NEWT_ENV = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
-/** A name C31 may print: one of ours. Anything else in a key slot might be a pasted value, so it is not named. */
-const PRINTABLE = /^(?:NEWT|PANGOLIN)_[A-Z0-9_]+$/;
 /**
  * The newt service's compose settings, each a literal of exactly this value (compose.dev.yaml; newt 1.18.1
  * newtconfig/newtconfig.go:452-503 reads each from the environment, and DISABLE_SSH and DISABLE_CLIENTS default to
@@ -32,7 +30,9 @@ const NEWT_SETTINGS: Readonly<Record<string, string>> = {
 /** deployment/env/newt.example.env's value for each of the three names. */
 const EXAMPLE_VALUE = "replace-me";
 
-const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
+/** A name C31 may print: a setting it knows. Anything else in a key slot might be a pasted value, so it is not named. */
+const PRINTABLE: ReadonlySet<string> = new Set([...NEWT_ENV, ...Object.keys(NEWT_SETTINGS)]);
+const label = (name: string) => (PRINTABLE.has(name) ? name : "a name");
 
 export const c31: Check = {
   id: "C31",
@@ -80,6 +80,9 @@ function lockedImage(inputs: Inputs, image: string | null): Outcome | null {
 function settingsProblem(environment: readonly [string, EnvValue][]): Outcome | null {
   const extra = environment.find(([name]) => !Object.hasOwn(NEWT_SETTINGS, name));
   if (extra !== undefined) return fail(`${label(extra[0])} is not a newt setting the preflight allows`);
+  // In Compose's list form a repeated name's last value wins, so each setting is written once.
+  const repeated = environment.find(([name], i) => environment.findIndex(([key]) => key === name) !== i);
+  if (repeated !== undefined) return fail(`${label(repeated[0])} is set twice in the newt service`);
   for (const [name, expected] of Object.entries(NEWT_SETTINGS)) {
     const value = environment.find(([key]) => key === name)?.[1];
     if (value === undefined) return fail(`${name} is not set in the newt service`);
@@ -95,13 +98,17 @@ function valuesProblem(env: SecretMap | undefined): Outcome | null {
   if (env === undefined) return null;
   const example = NEWT_ENV.find((name) => env.use(name, (value) => value === EXAMPLE_VALUE));
   if (example !== undefined) return fail(`${example} is still the example file's placeholder`);
-  // Newt 1.18.1 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr).
-  const empty = NEWT_ENV.find((name) => env.use(name, (value) => value === ""));
+  // Newt 1.18.1 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr),
+  // and for NEWT_ID and NEWT_SECRET then falls back to SITE_ID and SITE_SECRET (:207-217, applyEnvStrAlias), which no
+  // file here may set; blank is as unusable as empty, so both are refused.
+  const empty = NEWT_ENV.find((name) => env.use(name, (value) => value?.trim() === ""));
   if (empty !== undefined) return fail(`${empty} is empty`);
   const https = env.use("PANGOLIN_ENDPOINT", (value) => {
     if (value === undefined || !URL.canParse(value)) return false;
     const url = new URL(value);
-    return url.protocol === "https:" && url.username === "" && url.password === "" && url.hostname !== "";
+    // Newt appends its API path to the endpoint, so it is a bare base address: no path, query or fragment.
+    const bare = url.pathname === "/" && url.search === "" && url.hash === "" && !value.includes("?");
+    return url.protocol === "https:" && url.username === "" && url.password === "" && url.hostname !== "" && bare;
   });
-  return https ? null : fail("PANGOLIN_ENDPOINT is not an https address without credentials");
+  return https ? null : fail("PANGOLIN_ENDPOINT is not a bare https address without credentials");
 }
