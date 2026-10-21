@@ -17,7 +17,15 @@ const GH_OPEN = `$${"{{"}`;
 const PIN = "aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa";
 const gh = (inner: string): string => `$${"{{"} ${inner} }}`;
 
-type Step = { id?: string; name?: string; if?: string; run?: string; shell?: string };
+type Step = {
+  id?: string;
+  name?: string;
+  if?: string;
+  run?: string;
+  shell?: string;
+  env?: Record<string, string>;
+  "continue-on-error"?: boolean;
+};
 type Job = {
   needs?: string[] | string;
   if?: string;
@@ -250,6 +258,28 @@ describe("scan-export gates the secret scan", () => {
     const ran = scanExport({ zeroScan: true });
     expect(ran.code, ran.out).not.toBe(0);
     expect(ran.out).toContain("0 files scanned");
+  });
+
+  // The gate reads each need's result through env only, and nothing on it or on the export step can turn a failure
+  // into a pass: no step if, no continue-on-error, and the job if keeps always() (P0.07c).
+  test("scan_gate_and_export_step_pinned", () => {
+    const scan = wf.jobs.scan;
+    expect(scan?.if).toBe(
+      "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)",
+    );
+    expect(scan?.["continue-on-error"] ?? false).toBe(false);
+    expect(scan?.steps).toHaveLength(1);
+    const gate = scan?.steps?.[0];
+    expect(gate?.env).toEqual({
+      DISCOVER: gh("needs.discover.result"),
+      SCAN_RESULT: gh("needs.scan-image.result"),
+      PDS_RESULT: gh("needs.pds-ui.result"),
+    });
+    expect(gate?.if).toBeUndefined();
+    expect(gate?.["continue-on-error"]).toBeUndefined();
+    for (const step of wf.jobs["scan-image"]?.steps ?? []) {
+      expect(step["continue-on-error"], step.name).toBeUndefined();
+    }
   });
 
   test("scan_fails_when_scan_image_is_skipped_or_cancelled", () => {
