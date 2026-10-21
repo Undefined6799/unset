@@ -31,7 +31,8 @@ forbids them in any log. The plan already has one way out of the stack for calle
    lane, a metric label or an error message. The instance's image proxy is off, and it receives no forwarded client
    address (`web` sends no `X-Forwarded-For`, `Forwarded` or `X-Real-IP` header). SearXNG documents no switch for
    its request log or a result cache (docs.searxng.org, 2026-10-21), so P3.14s makes the builder find the real
-   mechanism in the pinned image or record that the property does not hold; our own side holds either way. Upstream engines see our instance's egress address and nothing about the visitor. The results
+   mechanism in the pinned image or record that the property does not hold; our own side holds either way.
+   Upstream engines see our instance's egress address and nothing about the visitor. The results
    page sends `Referrer-Policy: no-referrer` and every result link carries `rel="noopener noreferrer"`, so the query
    and our page do not travel with a click. No search history is stored for anyone, signed in or not.
 4. **Our limits, not the engine's.** The route uses `interfaces/http/limits.ts`'s `search` policy (60 per minute per
