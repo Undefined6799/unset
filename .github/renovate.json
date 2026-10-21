@@ -37,15 +37,6 @@
         "_IMAGE:\\s*(?<depName>[a-z0-9.\\/-]+):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
       ],
       "datasourceTemplate": "docker"
-    },
-    {
-      "description": "Upstream bases the GHCR mirror copies (P2.26b): the Dockerfiles name them by mirror digest only, so their tag lives here",
-      "customType": "regex",
-      "managerFilePatterns": ["/^deployment/mirror\\.list\\.json$/"],
-      "matchStrings": [
-        "\"source\":\\s*\"(?<depName>[a-z0-9.\\/-]+):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
-      ],
-      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
