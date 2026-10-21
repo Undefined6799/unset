@@ -32,7 +32,7 @@ import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
-import { type Deps, preflight, type Run } from "./index.ts";
+import { type Deps, preflight as runPreflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
 import { SecretMap } from "./secret-map.ts";
@@ -356,8 +356,8 @@ function fakeRun(answers: Answers = {}) {
     calls.push([file, ...args]);
     if (file === "timedatectl") return answers.ntp ?? SYNCED;
     if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
-    // The pinned cosign for this machine (P2.26b), unless a test hands another sum.
-    if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256[process.arch]}  ${COSIGN.path}\n`);
+    // The pinned x64 cosign (P2.26b), unless a test hands another sum.
+    if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256.x64}  ${COSIGN.path}\n`);
     if (file === "docker") {
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
@@ -366,6 +366,9 @@ function fakeRun(answers: Answers = {}) {
   };
   return { run, calls };
 }
+
+/** The preflight on an x64 host, the cosign fakeRun answers for, so the suite passes on any host (P2.26v). */
+const preflight = (args: string[], deps: Deps) => runPreflight(args, { arch: "x64", ...deps });
 
 /** web's uid in the all-good compose, which owns its mounted secret (P1.30o). */
 const WEB_UID = 65532;
@@ -594,6 +597,15 @@ describe("preflight", () => {
     const { run, calls } = fakeRun();
     expect(await cosignProblem(run, "arm64", new AbortController().signal)).toBe("no cosign is pinned for arm64");
     expect(calls).toEqual([]);
+  });
+
+  test("c3_c4_fail_on_an_arm64_host", async () => {
+    // The host's architecture reaches the verifier through the preflight's deps (P2.26v), so this refusal holds there.
+    const { run, calls } = fakeRun();
+    const result = await check({}, "prod", { run, arch: "arm64" });
+    expect(result.lines).toContain("FAIL C3 no cosign is pinned for arm64");
+    expect(result.lines).toContain("FAIL C4 no cosign is pinned for arm64");
+    expect(calls.filter(([file]) => file === "sha256sum")).toEqual([]);
   });
 
   test("c5_platform_manifest_fails", async () => {

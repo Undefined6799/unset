@@ -141,8 +141,7 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
 
   /** The pinned cosign, verify-images passing, an OCI index for every ref, and a synchronised clock. */
   const run: Run = async (file) => {
-    if (file === "sha256sum")
-      return { code: 0, stdout: `${COSIGN.sha256[process.arch]}  ${COSIGN.path}\n`, stderr: "" };
+    if (file === "sha256sum") return { code: 0, stdout: `${COSIGN.sha256.x64}  ${COSIGN.path}\n`, stderr: "" };
     if (file === "timedatectl") return { code: 0, stdout: "yes\n", stderr: "" };
     if (file === "chronyc")
       return { code: 0, stdout: "System time     : 0.000006523 seconds fast of NTP time\n", stderr: "" };
@@ -154,6 +153,8 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   const deps: Deps = {
     root: CHECKOUT,
     run,
+    // The x64 cosign the run double answers for, whatever host runs the test (P2.26v).
+    arch: "x64",
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readEnv: (path) => {
