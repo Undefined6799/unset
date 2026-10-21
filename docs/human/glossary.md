@@ -82,7 +82,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **takedown** | A PDS-level action that stops an account or record being served. |
 | **seal** | Our envelope encryption (`seal`/`unseal`, AES-256-GCM with a key-encryption key and key id, bound to a column context; P1.14), with one chunked form `sealStream`/`unsealStream` (format `s1c`) for data over 1 MiB. |
 | **`sealTo`** | Encrypt-only sealing to the offline legal-hold public key (age X25519, P1.14a), called `sealTo(recipients, plaintext, context)`, with the streaming form `sealToStream` for held media of any size; no server can open it. |
-| **net-guard** | Our one egress module (`guardedFetch`, `guardedRequest`): resolve, vet, pin, no redirects, caps; a proxy mode for processes that are not ours. |
+| **net-guard** | Our one egress module (`guardedFetch`, and `createNetGuard(settings).request`): each request resolves, vets and pins, follows no redirect, and is capped in time and bytes; a forward-proxy mode for processes that are not ours is planned (P1.18b, `docs/ai/book/phase-1.md`). |
 | **`pds-admin`** | The only holder of the PDS admin password; acts only on a moderator's hardware-key signature. |
 | **`admin`** | The internal console over Tailscale. |
 | **roster** | The owner-signed list of moderator keys `pds-admin` trusts. |
