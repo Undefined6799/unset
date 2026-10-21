@@ -1,8 +1,8 @@
 # Switch
 
-An on/off setting drawn as text, like the Checkbox: `[──◉] on` in `success` when on, `[○──] off` in `ink-muted` when off, with the label on the left; a real checkbox with `role="switch"` sits underneath.
+An on/off setting drawn as text, like the Checkbox: `[  ◉] on` in `success` when on, `[○  ] off` in `ink-muted` when off: the knob sits at the left of the brackets when off and slides to the right when on, with the label on the left; a real checkbox with `role="switch"` sits underneath.
 
-**Approved by Alex 2026-10-03.**
+**Approved by Alex 2026-10-03; bracket track `[○  ]` / `[  ◉]` approved 2026-10-21.**
 
 ## Provide
 

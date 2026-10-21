@@ -263,7 +263,7 @@ export interface SwitchProps {
   disabled?: boolean;
   className?: string;
 }
-/** Approved 2026-10-03. On/off drawn as text, "[──◉] on" / "[○──] off", over a real checkbox with role="switch". */
+/** Approved 2026-10-03; bracket track approved 2026-10-21. On/off drawn as text, "[  ◉] on" / "[○  ] off", over a real checkbox with role="switch". */
 export declare function Switch(props: SwitchProps): JSX.Element;
 
 export interface ToastProps {

@@ -598,8 +598,8 @@
       h("input", { type: "checkbox", role: "switch", className: "us-visually-hidden", name: props.name, value: props.value, checked: on, disabled: props.disabled,
         onChange: function (e) { if (props.checked == null) setOwn(e.target.checked); if (props.onChange) props.onChange(e); } }),
       h("span", { className: "us-switch__track", "aria-hidden": "true" },
-        h("span", { className: "is-on" }, "[──◉] on "),
-        h("span", { className: "is-off" }, "[○──] off")));
+        h("span", { className: "is-on" }, "[  ◉] on "),
+        h("span", { className: "is-off" }, "[○  ] off")));
   }
 
   function Toast(props) {
