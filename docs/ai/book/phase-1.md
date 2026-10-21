@@ -74,8 +74,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h,
   P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
-  P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
-  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v,
+  P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36b, P1.36g,
+  P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v,
   P1.37n, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
   P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
   23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and
@@ -97,8 +97,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
 - **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode),
   P1.33q, P1.33 (server baseline, Tailscale), P1.33a, P1.27s, P2.26e, P2.26b, P2.26c, P2.26d (pulled forward, Q3 B),
-  P1.33d, then P1.37v, P1.38d, P1.38e, P1.38g and P1.38f (ADR 0031 and 0032 preconditions of P1.34; P1.36b, P1.36j,
-  P1.36c and P1.36i are slice 1), P1.34, P1.33p, P1.35q, P1.35 (lexicon authority), P1.27v (Renovate managers for the
+  P1.33d, then P1.37v, P1.38d, P1.38e, P1.36c, P1.38g, P1.38f and P1.36i (ADR 0031 and 0032 preconditions of P1.34;
+  P1.36b and P1.36j are slice 1; P1.36c and P1.36i moved here because they depend on P1.38e and P1.37v, and P1.36e
+  and P1.36o are production work after P1.38, ADR 0031 and 0032), P1.34, P1.33p, P1.35q, P1.35 (lexicon authority),
+  P1.27v (Renovate managers for the
   image locks), P1.37a,
   then the Phase 1 exit P1.38 (book edit 2026-10-14-verify-834-fixes, S4).
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
@@ -8803,7 +8805,11 @@ TLS edge. Answered by one pinned source, a signed digest, and an image test that
 
 ### P1.36e — Add the edge dev mode with one DNS-01 issuer
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36d
-Slice 1, issue #1002, trusted base (`deployment/edge/caddyfile.ts`, `deployment/edge/dev/tls.caddy`, their tests),
+**Production work, after P1.38; not on the staging path** (ADR 0031 and 0032, book edit
+2026-10-20-adr-0031-no-login): staging's edge serves a self-signed leaf from files (P1.36b, P1.36c) and gets no
+DNS-01 issuer, no validation zone and no token; nothing below runs before production's certificate is designed
+(ADR 0028). Its reader `dev` mode is taken over by P1.36b. Formerly slice 1, issue #1002, trusted base
+(`deployment/edge/caddyfile.ts`, `deployment/edge/dev/tls.caddy`, their tests),
 lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 7", restated by book edit
 2026-10-19-alex-cards-and-edge-dev-mode, M2 (architecture's section labelled 04:10Z and 04:35Z). The edge reader's
 grammar is trusted base and C18 imports it (deployment/preflight/checks/edge.ts:1-4), so the widening is a trusted step.
@@ -8899,7 +8905,8 @@ with a host or upstream that isn't the ruled one. Answered by exact values and p
 
 ### P1.36c — Wire the dev edge's app site and mounts
 Tags: [SEC]            Depends on: P1.36b, P1.38e
-Slice 1, issue #1000, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread; book
+Slice 2 (after P1.38e; moved from slice 1 by book edit 2026-10-20-adr-0031-no-login), issue #1000, product
+(`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread; book
 edit 2026-10-19-staging-path-steps, "Item 7".
 
 **What (the DNS-token parts move to production with P1.36e under ADR 0031, book edit 2026-10-20-adr-0031-no-login;
@@ -8978,7 +8985,8 @@ predicate, and the runbook's four conditions (book edit 2026-10-19-verify-1013-f
 
 ### P1.36i — Pin the dev edge aliases and public paths
 Tags: [SEC]            Depends on: P1.36b, P1.37v
-Slice 1, issue #1018, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, the app's route tests), lane the
+Slice 2 (after P1.37v; moved from slice 1 by book edit 2026-10-20-adr-0031-no-login), issue #1018, product
+(`deployment/compose.dev.yaml`, `deployment/preflight/`, the app's route tests), lane the
 third thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling" and the
 03:58Z `.ac` mapping. A tightening, so nothing is needed from Alex.
 
@@ -9234,7 +9242,10 @@ docs/human/decisions/0028", quoted with its time.
 
 ### P1.36o — Mount the edge dev snippet and map it in C18
 Tags: [SEC]            Depends on: P1.36e
-Slice 1, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread, right after P1.36e
+**Production work, after P1.38; not on the staging path** (ADR 0031 and 0032, book edit
+2026-10-20-adr-0031-no-login): staging mounts three pinned files (P1.36c) and C18's dev mapping is P1.38e; a
+`dev/` directory mount is refused there (P1.38g). Formerly slice 1, product (`deployment/compose.dev.yaml`,
+`deployment/preflight/`), lane the third thread, right after P1.36e
 with nothing that touches the edge or C18 between them (architecture's section labelled 04:35Z); book edit
 2026-10-19-alex-cards-and-edge-dev-mode, M2. Issue #1029. Tightenings only, so no typed line.
 
@@ -15355,7 +15366,9 @@ own Depends and target (P1.37v, P1.36j, P1.36b, P1.38e, P1.38f, the `[to fill:` 
 steps, the probe
 and the verifies, and still comes after P1.34.
 
-Alex's steps (P1.34's former steps 5, 6 and 9):
+Alex's steps (P1.34's former steps 5, 6 and 9). Under ADR 0031 steps 6 and 9 and the two Pangolin resources are
+preconditions of P1.34's first deploy, done before it (P1.34's target bullet; the readiness plan's Alex list), and
+this step only records them as done and verifies them; step 5 stays here:
 
 ```text
  5. Confirm registrar lock and DNSSEC on unset.sh and unset.ac (enable them if off).
@@ -15386,7 +15399,8 @@ Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
   the public name. There is no tailnet path for the PDS (Alex, 02:50:36Z). No Pangolin credential is ever stored in
   the repo or in CI, and the PDS never gets a Pangolin exemption (architecture 04:33Z; book edit
   2026-10-19-codex-1063-batch66).
-- V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
+- V7: probe green for 24 h before P1.35 starts; the hairpin check passed through public DNS, Pangolin and Newt with
+  zero edge aliases (P1.36i; P1.34's target), never through P1.29a's aliases.
 
 **Moved from P1.34, public gates** (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5): P1.34's Done-when
 is the private names and dev-root certificates, the read-only dev-stack check (describeServer, health) and the C-checks;
@@ -15626,9 +15640,15 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   this deploy is reachable from the internet from its first minute, ADR 0031's preconditions sit here, not only in
   P1.33p: P1.37v, P1.36j, P1.36b, P1.38e and P1.38f (client-address keys, Newt the only trusted proxy, the three app
   zones, the `405` rule, the noindex header, C18 accepting the dev file certificate, the blob denies) are merged and
-  deployed, and Alex has replaced every
-  `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` (P1.38d's preflight red refuses them under dev),
-  before either Pangolin resource is created. It moves the
+  deployed, and P1.38d has replaced every
+  `[to fill: …]` value in `deployment/compose.dev.yaml:208-212` with Alex's values (its preflight red refuses a
+  placeholder under dev), before either Pangolin resource is created. The public opening is this step's
+  precondition, not P1.33p's: before the first deploy Alex sets the A/AAAA records for both staging names to
+  Pangolin and the CAA records (P1.33p's steps 6 and 9, done here), creates the two Pangolin resources (public, no
+  login, no rules, `https` to the edge, TLS Server Name set to each name), and sets up inbound forwarding for
+  contact@staging.unset.sh and support@staging.unset.sh at the registrar, since Resend on that name only sends
+  (`alex-answers.md`, `staging-legal-values`); one test message received at each address is in the Done-when. It moves
+  the
   same compose stack used for local sign-in there, right after P2.13a's scenario passes locally and its Depends merge:
   the pulled-forward signing steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d).
   The paused P1.34f, P1.34r (#735) and P1.34l (#754) resume first (refocus order, section 8).
@@ -15664,8 +15684,9 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   the public opening (P1.33p).
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
-domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until
-P5.02a migrates it to production.
+domain) with no PDS behind it; the **development PDS on `staging.unset.ac`** (ADR 0025's name; the `0x40.space`
+prototype is retired by P1.33a)
+hosts the lexicon authority account until P5.02a migrates it to production.
 
 **The risk, stated precisely (corrected in round 1):** the permission set `sh.unset.authApp` is on the login
 path. Every user's authorization server — on any PDS — resolves it when our client asks for
@@ -15775,7 +15796,8 @@ D. Dev PDS fit for the authority
   The secrets bundle is **not** in this archive; it is a separate, separately encrypted bundle (vault note
   `pds-key-custody-and-disaster-recovery`).
 - `restore-test.sh` (monthly, on a scratch machine **with no public DNS name and no inbound ports**, never serving
-  `0x40.space` publicly): decrypt, restore, start the PDS with the secrets bundle on a private network, then
+  `0x40.space` or either staging name publicly): decrypt, restore, start the PDS with the secrets bundle on a private
+  network, then
   `describeServer` and `sync.getRecord` of the authority record with proof → CID equals the lock.
 - Logs: the edge writes no addresses (P1.28); the PDS logs nothing (`LOG_ENABLED=false`, C12); the PDS `device`
   table holds only the edge's internal address (P1b-A1 default, P1.28; test `pds_device_row_has_no_client_ip`).
@@ -15804,10 +15826,12 @@ probe re-tests them afterwards.
   - D Data loss on the only copy → every actor store backed up (`backup_covers_every_sqlite_file`).
 
 **Done when (tests):** both public staging names answer from our edge through Pangolin with ADR 0032's leaf behind
-Pangolin's certificate (P1.37v's deploy check green); the read-only dev-stack check (describeServer, health; no
+Pangolin's certificate (P1.37v's deploy check green); one test message received at contact@staging.unset.sh and
+one at support@staging.unset.sh (Alex confirms); the read-only dev-stack check (describeServer, health; no
 account, no probe) green from outside; P1.30's C-checks all PASS;
 `backup_script_encrypts_and_leaves_no_plaintext`; `backup_covers_every_sqlite_file` (fixture data dir with three actor
-stores); `restore_test_has_no_public_name` (script refuses when the scratch host resolves as `0x40.space`); V1, V5, V6
+stores); `restore_test_has_no_public_name` (script refuses when the scratch host resolves as `0x40.space`,
+`staging.unset.ac`, `staging.unset.sh` or any publicly resolving name); V1, V5, V6
 and V8 recorded in `dev-pds-on-login-path.md` (V2, V3, V4 and V7 are P1.33p's).
 
 **Reuse** (all provisional — for reuse review): vault note `pds-key-custody-and-disaster-recovery` → LESSON;
@@ -16115,7 +16139,10 @@ the scope a builder follows.
 **What:**
 1. Newt pinned by digest as a run-only vendor entry (`bases.lock.json`, the images test's vendor allowlist; ADR
    0030 decision 2), under
-   the seven-day age rule. The `newt` service: digest-pinned, non-root, read-only root, `cap_drop: ALL`,
+   the seven-day age rule. Mirror order: Newt is named in `mirror.list.json` by P1.27s (its first run on main
+   mirrors and signs it) and locked in `images.lock.json` by P2.26b, both before this step in the slice-2 order,
+   so C2 takes the `newt` service from our mirror like every other dev image; this step pins from that lock. The
+   `newt` service: digest-pinned, non-root, read-only root, `cap_drop: ALL`,
    `no-new-privileges`, limits; from Newt's own config source: SSH and clients disabled, no Docker socket, no
    admin, metrics or pprof address. Its secrets (`NEWT_ID`, `NEWT_SECRET`, `PANGOLIN_ENDPOINT`) come from `newt.env`
    beside `pds.env`, with an exact-name-set preflight check like C30.
@@ -16157,8 +16184,9 @@ Slice 2, product (`deployment/preflight/`), lane the third thread; ADR 0031 deci
 
 **What:** under `--env dev` (and prod) preflight fails any environment value that starts with `[to fill:`, naming
 the service and key only, never the value. The legal pages and `security.txt` ship such placeholders as literals in
-`deployment/compose.dev.yaml:208-212`, so `--env dev` is red on main until Alex fills them (his values, before the
-first Pangolin resource is created). Reds: a placeholder under dev fails; under prod fails; local passes.
+`deployment/compose.dev.yaml:208-212`; this step also replaces the three literals with Alex's staging values
+(`alex-answers.md`, `staging-legal-values`: Privacy Officer, contact@staging.unset.sh, support@staging.unset.sh),
+so the check is green on main after it. Reds: a placeholder under dev fails; under prod fails; local passes.
 
 ---
 

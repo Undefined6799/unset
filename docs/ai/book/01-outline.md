@@ -463,11 +463,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35z | Accept ADR 0026, the local email-gate exception | [ALEX] | — | `phase-1.md` |
 | P1.35x | Pin the dev hosts to the staging names | [SEC] | P1.35y | `phase-1.md` |
 | P1.36d | Build the edge image with one DNS module (trusted) | [SEC] trusted | P1.36n | `phase-1.md` |
-| P1.36e | Add the edge dev mode with one DNS-01 issuer (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36d | `phase-1.md` |
+| P1.36e | Add the edge dev mode with one DNS-01 issuer (trusted; production, after P1.38) | [SEC] trusted [ALEX] (typed line) | P1.36d | `phase-1.md` |
 | P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.35x, P1.35y | `phase-1.md` |
-| P1.36c | Wire the dev edge's app site and mounts | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.36g | Fix dev mail and the first-invite runbook | [SEC] | — | `phase-1.md` |
-| P1.36i | Pin the dev edge aliases and public paths | [SEC] | P1.36b, P1.37v | `phase-1.md` |
 | P1.36j | Trust only Newt's address at the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.36k | Refuse dev-only runtime keys outside local | [SEC] | — | `phase-1.md` |
 | P1.36l | Refuse the zero commit under dev | [SEC] | P1.27s | `phase-1.md` |
@@ -480,7 +478,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.37n | Refuse build keys under dev and prod | [SEC] | P1.36r | `phase-1.md` |
 | P1.36m | Draft ADR 0028 for the edge DNS module | [SEC] | — | `phase-1.md` |
 | P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
-| P1.36o | Mount the edge dev snippet and map it in C18 | [SEC] | P1.36e | `phase-1.md` |
+| P1.36o | Mount the edge dev snippet and map it in C18 (production, after P1.38) | [SEC] | P1.36e | `phase-1.md` |
 | P1.36p | Cap the PDS /tmp and pin blob limits | [SEC] | P1.36h | `phase-1.md` |
 | P1.37g | Check whether the PDS sweeps temporary blobs | [SEC] | P1.36p | `phase-1.md` |
 | P1.36q | Require the exact secret set in pds.env | [SEC] | P1.36g | `phase-1.md` |
@@ -1462,7 +1460,9 @@ Arachnid application, and the Phase 1 exit.
 | P1.38d | Refuse `[to fill:` values under dev | [SEC] | — | `phase-1.md` |
 | P1.38e | Let C18 accept the dev file certificate | [SEC] [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
+| P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
+| P1.36i | Pin the dev edge aliases and public paths (slice 2, after P1.37v) | [SEC] | P1.36b, P1.37v | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
