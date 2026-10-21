@@ -26,12 +26,16 @@ import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
+import { C21_DEV_WAIVER, c21 } from "./checks/host.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
+import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
+import { COSIGN, cosignProblem } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
+import { SecretMap } from "./secret-map.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
@@ -100,14 +104,30 @@ secrets:
 networks:
   back: {}
 `;
+const NEWT = `ghcr.io/undefined6799/mirror/newt@${digest("e")}`;
 const LOCK = {
-  edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
-  pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-key" },
-  web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
+  edge: { ref: EDGE, origin: "first-party", verify: "cosign-keyless" },
+  pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-keyless" },
+  web: { ref: WEB, origin: "first-party", verify: "cosign-keyless" },
+  newt: { ref: NEWT, origin: "upstream", upstreamSource: "docker.io/fosrl/newt", verify: "cosign-keyless" },
 };
+/** Newt under dev (P1.37v): the edge's only way in, so the edge publishes nothing (C10) and Newt reads newt.env (C31). */
+const NEWT_SERVICE = `  newt:
+    image: ${NEWT}
+    env_file: ../../unset-dev-env/newt.env
+    environment:
+      CONFIG_FILE: /tmp/newt.json
+      DISABLE_SSH: "true"
+      DISABLE_CLIENTS: "true"
+      NEWT_METRICS_PROMETHEUS_ENABLED: "false"
+      NEWT_PPROF_ENABLED: "false"
+      LOG_LEVEL: WARN
+    networks: [tunnel]
+`;
 /**
  * The dev stack (P1.38e; ADR 0032): the edge runs the lock's image with the dev sites and the dev (tls) over the
- * shipped one, reads the self-signed leaf's two secrets, publishes nothing, and has the dev app site's two keys.
+ * shipped one, reads the self-signed leaf's two secrets, publishes nothing, and has the dev app site's two keys;
+ * Newt beside it (P1.37v).
  */
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
   .replace('    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n', '    user: "65532:65532"\n')
@@ -126,7 +146,12 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
     "    file: ../../unset-dev-secrets/db_password\n",
     "$&  dev_tls_cert:\n    file: ../../unset-dev-secrets/dev_tls_cert\n" +
       "  dev_tls_key:\n    file: ../../unset-dev-secrets/dev_tls_key\n",
-  );
+  )
+  .replace("secrets:\n  db_password:", `${NEWT_SERVICE}$&`)
+  .replace("networks:\n  back: {}\n", "$&  tunnel: {}\n")
+  // The ruled staging names (P1.37 follow-up): the PDS at staging.unset.ac, web's origin on the dev app host.
+  .replaceAll("pds.example.test", "staging.unset.ac")
+  .replace("      FINGERPRINT_CHECK: arachnid\n", "$&      PUBLIC_ORIGIN: https://staging.unset.sh\n");
 // The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
 /** A from address of 254 or 255 characters, every part within its own cap, so only the length decides. */
@@ -151,6 +176,8 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C28",
   "C29",
   "C30",
+  "C31",
+  "C32",
 ]);
 
 type Stack = {
@@ -158,6 +185,8 @@ type Stack = {
   pdsEnv?: Record<string, string | null>;
   /** Raw lines appended to pds.env, after the ones pdsEnv writes there (C30). */
   pdsEnvFile?: string;
+  /** newt.env's whole text, where the compose reads it (C31); its three names by default. */
+  newtEnvFile?: string;
   lock?: object | null;
   dotEnv?: string;
   /** The retirement report's text; `undefined` writes none, even under --env dev (see `check`). */
@@ -179,6 +208,8 @@ const TABLE = {
   default: { internal: false, members: ["edge", "pds"] },
   back: { internal: false, members: ["web"] },
 };
+/** The dev stack's table: TABLE plus Newt's own network. */
+const DEV_TABLE = { ...TABLE, tunnel: { internal: false, members: ["newt"] } };
 const dirs: string[] = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -201,11 +232,15 @@ const PDS_ENV_FILE_NAMES = new Set([
   "PDS_MODERATION_EMAIL_SMTP_URL",
 ]);
 
+/** The names newt.env holds (C31). */
+const NEWT_ENV_NAMES = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
+
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
   compose = COMPOSE,
   pdsEnv = {},
   pdsEnvFile = "",
+  newtEnvFile,
   lock = LOCK,
   dotEnv,
   report,
@@ -246,6 +281,13 @@ function stack({
   // The env files Compose reads (P1.27u): beside the checkout too, in their own 0700 folder, never in a build context.
   writeFileSync(join(envOf(root), "pds.env"), env.join("") + pdsEnvFile);
   chmodSync(join(envOf(root), "pds.env"), 0o600);
+  if (compose.includes("unset-dev-env/newt.env")) {
+    writeFileSync(
+      join(envOf(root), "newt.env"),
+      newtEnvFile ?? `PANGOLIN_ENDPOINT=https://${CANARY}.example.test\nNEWT_ID=${CANARY}\nNEWT_SECRET=${CANARY}\n`,
+    );
+    chmodSync(join(envOf(root), "newt.env"), 0o600);
+  }
   // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; fakeFs reads it as owned by web's uid.
   writeFileSync(join(secretsOf(root), "db_password"), `${CANARY}\n`);
   chmodSync(join(secretsOf(root), "db_password"), 0o400);
@@ -262,7 +304,8 @@ function stack({
   for (const dir of [root, join(root, "deployment")]) chmodSync(dir, 0o755);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
-  writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
+  mkdirSync(join(root, "deployment/sigstore"));
+  writeFileSync(join(root, "deployment/sigstore/trusted_root.json"), "{}\n");
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
   // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
   const edge = join(root, "deployment/edge");
@@ -293,7 +336,13 @@ function stack({
 }
 
 type Answer = { code: number; stdout: string; stderr: string; missing?: boolean };
-type Answers = { verify?: { code: number; stderr: string }; mediaType?: string; ntp?: Answer; chrony?: Answer };
+type Answers = {
+  verify?: { code: number; stderr: string };
+  mediaType?: string;
+  ntp?: Answer;
+  chrony?: Answer;
+  cosign?: Answer;
+};
 const ok = (stdout: string): Answer => ({ code: 0, stdout, stderr: "" });
 const notInstalled: Answer = { code: 1, stdout: "", stderr: "run failed", missing: true };
 const SYNCED = ok("yes\n");
@@ -307,6 +356,8 @@ function fakeRun(answers: Answers = {}) {
     calls.push([file, ...args]);
     if (file === "timedatectl") return answers.ntp ?? SYNCED;
     if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
+    // The pinned cosign for this machine (P2.26b), unless a test hands another sum.
+    if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256[process.arch]}  ${COSIGN.path}\n`);
     if (file === "docker") {
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
@@ -356,11 +407,14 @@ const as4242 =
     const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
-/** A complete retirement report: every dev stack needs one, whatever its hostname (C21; local-plc Amendments 6-7). */
+/** A complete retirement report (C21): prod and local on the old host need one; dev is waived (Alex, 2026-10-21). */
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   // A dev pass fixture carries the complete report unless the test names its own (`report: undefined` for none).
-  const { root, file } = stack(env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s);
+  const withReport = env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s;
+  const { root, file } = stack(
+    env === "dev" && !("networks" in s) ? { ...withReport, networks: DEV_TABLE } : withReport,
+  );
   return preflight(["--env", env, "--compose", file], {
     root,
     run: fakeRun().run,
@@ -427,7 +481,7 @@ describe("preflight", () => {
   test("c2_dev_migrate_built_from_checkout_fails", async () => {
     // P1.36r (architecture's section labelled 04:20Z): migrate runs schema changes with migration privileges, so under
     // dev it is digest-pinned like every other image, and C3 verifies its signature. A build from the checkout, as
-    // compose.dev.yaml has until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
+    // compose.dev.yaml had until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
     const migrate = [
       "  migrate:",
       "    build:",
@@ -443,7 +497,7 @@ describe("preflight", () => {
       const stack: Stack = {
         compose,
         ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
-        networks: { ...TABLE, db: { internal: false, members: ["migrate"] } },
+        networks: { ...(env === "dev" ? DEV_TABLE : TABLE), db: { internal: false, members: ["migrate"] } },
         files: { "deployment/images/migrate.Dockerfile": "FROM scratch\n" },
       };
       expect(await expectOnly("C2", stack, env), env).toBe(
@@ -489,6 +543,57 @@ describe("preflight", () => {
     // A failure that names no entry (a spawn error) fails both.
     const both = await check({}, "prod", { run: fakeRun({ verify: { code: 1, stderr: "" } }).run });
     expect(failed(both.lines)).toEqual(["C3", "C4"]);
+  });
+
+  test("c3_c4_unknown_origin_fails_both", async () => {
+    // verify-images fails an entry of neither origin by name; it belongs to neither check, so it fails both.
+    const lock = { ...LOCK, web: { ...LOCK.web, origin: "third-party" } };
+    const stderr = "web: ref is not ours by digest, signed keyless\n";
+    const result = await check({ lock }, "prod", { run: fakeRun({ verify: { code: 1, stderr } }).run });
+    expect(failed(result.lines)).toEqual(["C3", "C4"]);
+    expect(result.lines).toContain("FAIL C4 web: ref is not ours by digest, signed keyless");
+  });
+
+  test("cosign_hash_mismatch_refused", async () => {
+    // P2.26b: before C3 and C4 verify anything, the preflight hashes the cosign it is about to run; another binary, an
+    // unreadable one or sha256sum's failure refuses both, and verify-images never runs.
+    const other = ok(`${"0".repeat(64)}  ${COSIGN.path}\n`);
+    // v3.1.3's own arm64 binary, which no deploy host runs (the images are amd64 only).
+    const otherArch = ok(`c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a  ${COSIGN.path}\n`);
+    for (const cosign of [other, otherArch, ok(""), { code: 1, stdout: "", stderr: "No such file" }]) {
+      const { run, calls } = fakeRun({ cosign });
+      const result = await check({}, "prod", { run });
+      expect(failed(result.lines)).toEqual(["C3", "C4"]);
+      expect(result.lines).toContain(`FAIL C3 cosign at ${COSIGN.path} is not the pinned v3.1.3 binary`);
+      expect(calls.some(([file]) => file === "/usr/bin/env")).toBe(false);
+    }
+    // The pinned binary passes, and verify-images then runs offline with only cosign's folder on PATH.
+    const { run, calls } = fakeRun();
+    expect(failed((await check({}, "prod", { run })).lines)).toEqual([]);
+    expect(calls).toContainEqual(["sha256sum", "--", "/usr/local/bin/cosign"]);
+    const verify = calls.find(([file]) => file === "/usr/bin/env") ?? [];
+    expect(verify.slice(0, 3)).toEqual(["/usr/bin/env", "PATH=/usr/local/bin", process.execPath]);
+    expect(verify.slice(-2)).toEqual([
+      "--trusted-root",
+      expect.stringMatching(/\/deployment\/sigstore\/trusted_root\.json$/),
+    ]);
+  });
+
+  test("cosign_pins_are_v3_1_3", () => {
+    // sigstore/cosign v3.1.3 cosign_checksums.txt; the workflows install the same amd64 binary.
+    expect(COSIGN).toEqual({
+      path: "/usr/local/bin/cosign",
+      version: "v3.1.3",
+      sha256: { x64: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71" },
+    });
+  });
+
+  test("cosign_arm64_host_refused", async () => {
+    // publish-images.yml builds linux/amd64 only, so an arm64 host could pass C3 to C5 and then fail at compose up; it
+    // fails C3 and C4 first, without hashing anything.
+    const { run, calls } = fakeRun();
+    expect(await cosignProblem(run, "arm64", new AbortController().signal)).toBe("no cosign is pinned for arm64");
+    expect(calls).toEqual([]);
   });
 
   test("c5_platform_manifest_fails", async () => {
@@ -550,7 +655,9 @@ describe("preflight", () => {
   // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
   test("c9_compose_read_file_fails", async () => {
     for (const env of ["dev", "prod"]) {
-      const { root, file } = stack(env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV, report: PART_A_DONE } : {});
+      const { root, file } = stack(
+        env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV, report: PART_A_DONE, networks: DEV_TABLE } : {},
+      );
       const run = (deps: Partial<Deps> = {}) =>
         preflight(["--env", env, "--compose", file], {
           root,
@@ -1284,6 +1391,206 @@ describe("preflight", () => {
     await expectOnly("C10", { compose: range });
   });
 
+  test("c10_dev_publishes_nothing", async () => {
+    // P1.37v (ADR 0030 Decision 2, ADR 0031 Decision 2): under dev Newt alone reaches the edge, so no service publishes,
+    // not even the edge on loopback; prod keeps the edge's 80 and 443.
+    const dev = { pdsEnv: DEV_ENV };
+    expect(failed((await check({ ...dev, compose: DEV }, "dev")).lines)).toEqual([]);
+    const edgePort = (port: string) => DEV.replace("    cap_add: [NET_BIND_SERVICE]\n", `$&    ports: ["${port}"]\n`);
+    // C18 refuses a published edge port under dev too (P1.38e).
+    for (const port of ["80:80", "127.0.0.1:443:443", "127.0.0.1:2019:2019"]) {
+      const { lines } = await check({ ...dev, compose: edgePort(port) }, "dev");
+      expect(failed(lines), port).toEqual(["C10", "C18"]);
+      expect(lines, port).toContain("FAIL C10 edge publishes a port under dev");
+      expect(lines, port).toContain("FAIL C18 the edge publishes a port under dev");
+    }
+    const newtPort = DEV.replace("    networks: [tunnel]\n", '$&    ports: ["127.0.0.1:2112:2112"]\n');
+    expect(await expectOnly("C10", { ...dev, compose: newtPort }, "dev")).toBe(
+      "FAIL C10 newt publishes a port under dev",
+    );
+    expect(failed((await check({})).lines)).toEqual([]);
+  });
+
+  test("c31_newt_env_holds_exactly_its_three_names", async () => {
+    // P1.37v: newt.env holds PANGOLIN_ENDPOINT, NEWT_ID and NEWT_SECRET and nothing else, in one file, none of them
+    // shadowed by compose; under dev the stack must run Newt, under prod and local it may not.
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const names = (list: string[]) => `${list.map((k) => `${k}=x`).join("\n")}\n`;
+    const only = (newtEnvFile: string) => expectOnly("C31", { ...dev, newtEnvFile }, "dev");
+    expect(await only(names([...NEWT_ENV_NAMES, "LOG_LEVEL"]))).toBe(
+      "FAIL C31 LOG_LEVEL is in the newt env file, which holds only its three names",
+    );
+    expect(await only(names([...NEWT_ENV_NAMES, "NEWT_ADMIN_ADDR"]))).toBe(
+      "FAIL C31 a name is in the newt env file, which holds only its three names",
+    );
+    expect(await only(names([...NEWT_ENV_NAMES, `${CANARY.replaceAll("-", "_")}`]))).toBe(
+      "FAIL C31 a name is in the newt env file, which holds only its three names",
+    );
+    expect(await only(names([...NEWT_ENV_NAMES, "NEWT_SECRET"]))).toBe(
+      "FAIL C31 NEWT_SECRET is repeated in the newt env file",
+    );
+    for (const name of NEWT_ENV_NAMES) {
+      expect(await only(names(NEWT_ENV_NAMES.filter((k) => k !== name))), name).toBe(
+        `FAIL C31 ${name} is missing from the newt env file`,
+      );
+      const compose = DEV.replace("      LOG_LEVEL: WARN\n", `$&      ${name}: shadow\n`);
+      expect(await expectOnly("C31", { ...dev, compose }, "dev"), name).toBe(
+        `FAIL C31 ${name} is set in the newt service's environment, not newt.env`,
+      );
+    }
+    const twoFiles = DEV.replace(
+      "    env_file: ../../unset-dev-env/newt.env\n",
+      "    env_file: [../../unset-dev-env/newt.env, ../../unset-dev-env/pds.env]\n",
+    );
+    expect(failed((await check({ ...dev, compose: twoFiles }, "dev")).lines)).toContain("C31");
+    expect((await check({ ...dev, compose: twoFiles }, "dev")).lines).toContain(
+      "FAIL C31 the newt service reads 2 env files, not exactly one",
+    );
+    // No Newt: dev fails, prod passes.
+    const withoutNewt = {
+      ...dev,
+      compose: DEV.replace(NEWT_SERVICE, "").replace("  tunnel: {}\n", ""),
+      networks: TABLE,
+    };
+    expect(await expectOnly("C31", withoutNewt, "dev")).toBe(
+      "FAIL C31 no newt service; under dev it is the edge's only way in",
+    );
+    expect((await check({})).lines).toContain("PASS C31 ok");
+  });
+
+  test("c31_newt_runs_the_locked_image_with_its_features_off", async () => {
+    // P1.37 follow-up: the dev Newt runs exactly the lock's newt image, with SSH, client access, metrics and pprof off
+    // as compose literals and no other setting, no mount and no secret.
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const only = (compose: string) => expectOnly("C31", { ...dev, compose }, "dev");
+    expect(await only(DEV.replace(`    image: ${NEWT}\n    env_file`, `    image: ${WEB}\n    env_file`))).toBe(
+      "FAIL C31 the newt service does not run the lock's newt image",
+    );
+    for (const [name, value] of [
+      ["DISABLE_SSH", '"true"'],
+      ["DISABLE_CLIENTS", '"true"'],
+      ["NEWT_METRICS_PROMETHEUS_ENABLED", '"false"'],
+      ["NEWT_PPROF_ENABLED", '"false"'],
+    ]) {
+      const line = `      ${name}: ${value}\n`;
+      expect(await only(DEV.replace(line, "")), name).toBe(`FAIL C31 ${name} is not set in the newt service`);
+      expect(await only(DEV.replace(line, `      ${name}: "1"\n`)), name).toBe(
+        `FAIL C31 ${name} is not its reviewed literal in the newt service`,
+      );
+      expect(await only(DEV.replace(line, `      ${name}: \${FLAG}\n`)), name).toBe(
+        `FAIL C31 ${name} is not its reviewed literal in the newt service`,
+      );
+    }
+    expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      NEWT_ADMIN_ADDR: 0.0.0.0:2022\n"))).toBe(
+      "FAIL C31 a name is not a newt setting the preflight allows",
+    );
+    // In Compose's list form a repeated name's last value wins, so a second spelling of a setting is refused.
+    const listed = DEV.replace(
+      /    environment:\n      CONFIG_FILE[\s\S]*?      LOG_LEVEL: WARN\n/,
+      "    environment:\n" +
+        ["CONFIG_FILE=/tmp/newt.json", "DISABLE_SSH=true", "DISABLE_CLIENTS=true"]
+          .concat(["NEWT_METRICS_PROMETHEUS_ENABLED=false", "NEWT_PPROF_ENABLED=false", "LOG_LEVEL=WARN"])
+          .map((entry) => `      - ${entry}\n`)
+          .join(""),
+    );
+    expect((await check({ ...dev, compose: listed }, "dev")).lines).toContain("PASS C31 ok");
+    expect(await only(listed.replace("      - LOG_LEVEL=WARN\n", "$&      - DISABLE_SSH=false\n"))).toBe(
+      "FAIL C31 DISABLE_SSH is set twice in the newt service",
+    );
+    // A name every object inherits is not an allowed setting either.
+    expect(await only(DEV.replace("      LOG_LEVEL: WARN\n", "$&      constructor: x\n"))).toBe(
+      "FAIL C31 a name is not a newt setting the preflight allows",
+    );
+    // A socket bind and a second reader of a secret also fail C9; C31 names the Newt rule itself.
+    const lines = async (compose: string) => (await check({ ...dev, compose }, "dev")).lines;
+    const socket = "$&    volumes: [/var/run/docker.sock:/var/run/docker.sock:ro]\n";
+    expect(await lines(DEV.replace("    networks: [tunnel]\n", socket))).toContain(
+      "FAIL C31 the newt service mounts a file or volume",
+    );
+    expect(await lines(DEV.replace("    networks: [tunnel]\n", "$&    secrets: [db_password]\n"))).toContain(
+      "FAIL C31 the newt service reads a secret",
+    );
+  });
+
+  test("c18_dev_hosts_are_the_staging_names", async () => {
+    // P1.37 follow-up: under dev the PDS is the ruled staging.unset.ac (the dev leaf's SAN and Pangolin's resource),
+    // and web's PUBLIC_ORIGIN names the dev app host the edge serves.
+    const dev = { pdsEnv: DEV_ENV };
+    const c18 = (compose: string) => expectOnly("C18", { ...dev, compose }, "dev");
+    expect(await c18(DEV.replaceAll("staging.unset.ac", "pds.other.test"))).toBe(
+      "FAIL C18 PDS_HOST is not the staging PDS name",
+    );
+    expect(
+      await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://other.unset.sh")),
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
+    // The exact names, no port: the dev sites listen on PDS_HOST and Pangolin reaches them on 443.
+    expect(await c18(DEV.replaceAll("staging.unset.ac", "staging.unset.ac:2583"))).toBe(
+      "FAIL C18 PDS_HOST is not a hostname",
+    );
+    expect(
+      await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", "PUBLIC_ORIGIN: https://staging.unset.sh:8443")),
+    ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
+    // The origin exactly, as web's config parser takes it: no path, userinfo or other spelling.
+    for (const origin of [
+      "https://staging.unset.sh/path",
+      "https://user@staging.unset.sh",
+      "https://STAGING.unset.sh",
+      "https://:pw@staging.unset.sh",
+      "https://staging.unset.sh?x=1",
+      "https://staging.unset.sh#x",
+      "https://staging.unset.sh:443",
+      "https://ſtaging.unset.sh",
+    ]) {
+      expect(
+        await c18(DEV.replace("PUBLIC_ORIGIN: https://staging.unset.sh", `PUBLIC_ORIGIN: ${origin}`)),
+        origin,
+      ).toBe("FAIL C18 web's PUBLIC_ORIGIN is not the dev app origin");
+    }
+    expect(await c18(DEV.replace("      PUBLIC_ORIGIN: https://staging.unset.sh\n", ""))).toBe(
+      "FAIL C18 web's PUBLIC_ORIGIN is missing",
+    );
+    expect((await check({ ...dev, compose: DEV }, "dev")).lines).toContain("PASS C18 ok");
+  });
+
+  test("c31_newt_env_values_are_real_and_the_endpoint_is_https", async () => {
+    // P1.37 follow-up: newt.env's values are not the example's replace-me, and Pangolin's endpoint is an https address
+    // with no credentials in it. No value is ever printed.
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const only = (newtEnvFile: string) => expectOnly("C31", { ...dev, newtEnvFile }, "dev");
+    const env = (endpoint: string, id = CANARY, secret = CANARY) =>
+      `PANGOLIN_ENDPOINT=${endpoint}\nNEWT_ID=${id}\nNEWT_SECRET=${secret}\n`;
+    const good = `https://${CANARY}.example.test`;
+    expect(await only(env("replace-me"))).toBe("FAIL C31 PANGOLIN_ENDPOINT is still the example file's placeholder");
+    expect(await only(env(good, "replace-me"))).toBe("FAIL C31 NEWT_ID is still the example file's placeholder");
+    expect(await only(env(good, CANARY, "replace-me"))).toBe(
+      "FAIL C31 NEWT_SECRET is still the example file's placeholder",
+    );
+    for (const endpoint of [
+      `http://${CANARY}.example.test`,
+      `https://user:${CANARY}@pangolin.example.test`,
+      `https://${CANARY}@pangolin.example.test`,
+      CANARY,
+      // Newt appends its API path to the endpoint, so only a bare base address works.
+      `https://${CANARY}.example.test/?x`,
+      `https://${CANARY}.example.test/base`,
+      // An empty fragment delimiter normalises away (url.hash is ""), but Newt's API path would land after it. The
+      // strict env form allows `#` only inside single quotes.
+      `'https://${CANARY}.example.test#'`,
+      `'https://${CANARY}.example.test/#x'`,
+    ]) {
+      const outcome = await only(env(endpoint));
+      expect(outcome, endpoint).toBe("FAIL C31 PANGOLIN_ENDPOINT is not a bare https address without credentials");
+    }
+    // Newt applies a setting only when it is non-empty (newtconfig.go:191-196), so an empty one is never set.
+    expect(await only(env(""))).toBe("FAIL C31 PANGOLIN_ENDPOINT is empty");
+    expect(await only(env(good, ""))).toBe("FAIL C31 NEWT_ID is empty");
+    expect(await only(env(good, CANARY, ""))).toBe("FAIL C31 NEWT_SECRET is empty");
+    // Blank is no better (the env file admits it only quoted): Newt would set it, and it names no usable site.
+    expect(await only(env(good, "'   '"))).toBe("FAIL C31 NEWT_ID is empty");
+    expect(await only(env(good, CANARY, "'\t'"))).toBe("FAIL C31 NEWT_SECRET is empty");
+    expect(await check({ ...dev, newtEnvFile: env(`${good}/`) }, "dev").then((r) => r.lines)).toContain("PASS C31 ok");
+  });
+
   test("c11_smtp_fails", async () => {
     await expectWithC30("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: null } });
     await expectOnly("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mail.example.test:587" } });
@@ -1568,6 +1875,27 @@ describe("preflight", () => {
         (t) => t.replace(leaf, "    secrets: [dev_tls_cert, dev_tls_key, db_password]\n"),
       ],
       ["FAIL C18 the edge does not read the dev leaf", (t) => t.replace(leaf, "    secrets: [dev_tls_cert]\n")],
+      // The leaf's files stay with the edge: by its name, under another name or bound from disk (P1.37 follow-up).
+      ...[
+        (t: string) => t.replace("    secrets: [db_password]\n", "    secrets: [db_password, dev_tls_key]\n"),
+        (t: string) =>
+          t
+            .replace("    secrets: [db_password]\n", "    secrets: [db_password, leaf_key]\n")
+            .replace(
+              "secrets:\n  db_password:",
+              "secrets:\n  leaf_key:\n    file: ../../unset-dev-secrets/dev_tls_key\n  db_password:",
+            ),
+        (t: string) =>
+          t.replace(
+            "    secrets: [db_password]\n",
+            "$&    volumes:\n      - ../../unset-dev-secrets/dev_tls_cert:/c:ro\n",
+          ),
+        (t: string) =>
+          t.replace("    secrets: [db_password]\n", "$&    volumes:\n      - ../../unset-dev-secrets:/s:ro\n"),
+      ].map((edit): [string, (text: string) => string] => [
+        "FAIL C18 a service other than the edge reads the dev leaf",
+        edit,
+      ]),
       ["FAIL C18 the TLS snippet is not mounted", (t) => t.replace(tlsMount, "")],
       ["FAIL C18 the TLS snippet is not mounted read-only", (t) => t.replace(tlsMount, tlsMount.replace(":ro", ""))],
       [
@@ -1705,12 +2033,14 @@ describe("preflight", () => {
       [mismatch, named("pds.example.test..")],
       [mismatch, named('" pds.example.test"')],
     ];
-    for (const [env, compose, pdsEnv] of [
-      ["prod", COMPOSE, {}],
-      ["dev", DEV, DEV_ENV],
+    // Dev's PDS is the ruled staging name (P1.37 follow-up), so there the cases run on it in place of pds.example.test.
+    const staging = (text: string) => text.replace(/pds\.example\.test/gi, "staging.unset.ac");
+    for (const [env, compose, pdsEnv, names] of [
+      ["prod", COMPOSE, {}, (text: string) => text],
+      ["dev", DEV.replaceAll("staging.unset.ac", "pds.example.test"), DEV_ENV, staging],
     ] as const) {
       const c18 = async (edit: (text: string) => string) =>
-        (await check({ compose: edit(compose), pdsEnv }, env)).lines.find((line) => / C18 /.test(line));
+        (await check({ compose: names(edit(compose)), pdsEnv }, env)).lines.find((line) => / C18 /.test(line));
       expect(await c18((text) => text), env).toBe("PASS C18 ok");
       for (const value of [
         "PDS.Example.Test",
@@ -1994,21 +2324,43 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     );
   });
 
-  test("c21_dev_needs_the_report_whatever_the_hostname", async () => {
-    // Under --env dev C21 applies to any PDS hostname, so no dev account exists before P1.33a (local-plc Amendment 6,
-    // Q1); prod and local keep the 0x40.space rule.
-    expect(await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).toMatch(
-      /input missing: .*retirement-check\.json$/,
-    );
+  test("c21_dev_is_waived_whatever_the_report", async () => {
+    // Under --env dev C21 is waived for staging (Alex, 2026-10-21 02:41:25Z: a new PDS and a new handle domain, no
+    // 0x40 account carries over): no report, a half report and any hostname all pass with the one fixed line, which
+    // names the waiver and no value. Prod and local keep the 0x40.space rule below.
+    const waived = `PASS C21 ${C21_DEV_WAIVER}`;
+    expect(C21_DEV_WAIVER).toMatch(/^skipped: C21 waived under --env dev/);
+    expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines).toContain(waived);
     const half = '{"retirement_part_a_complete": false}';
-    await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev");
+    expect((await check({ compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev")).lines).toContain(waived);
     for (const name of ["pds.localhost", "dev.example.test", "0x40.space"]) {
       const compose = host(name).replace("name: unset-prod", "name: unset-dev");
-      expect(failed((await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines), name).toContain(
-        "C21",
-      );
+      const { lines } = await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev");
+      expect(failed(lines), name).not.toContain("C21");
+      expect(lines, name).toContain(waived);
     }
     expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
+  });
+
+  test("c21_prod_and_local_still_need_the_report_on_the_old_host", () => {
+    // The waiver is dev's alone: on 0x40.space, prod and local read the report and fail without it or with part A
+    // incomplete, exactly as before.
+    const signal = new AbortController().signal;
+    const inputs = (env: string, report: string | null) =>
+      ({
+        env,
+        serviceEnv: new Map([["pds", new SecretMap([["PDS_HOSTNAME", "0x40.space"]])]]),
+        retirementReportPath: "docs/human/retirement/retirement-check.json",
+        readText: () => report,
+      }) as unknown as Inputs;
+    for (const env of ["prod", "local"]) {
+      expect(c21.run(inputs(env, null), signal), env).toEqual(missing("docs/human/retirement/retirement-check.json"));
+      expect(c21.run(inputs(env, '{"retirement_part_a_complete": false}'), signal), env).toEqual(
+        fail("the retirement report does not mark part A complete"),
+      );
+      expect(c21.run(inputs(env, PART_A_DONE), signal), env).toEqual(pass());
+    }
+    expect(c21.run(inputs("dev", null), signal)).toEqual(pass(C21_DEV_WAIVER));
   });
 
   test("c28_dev_and_prod_use_exactly_the_public_plc", async () => {
@@ -2336,6 +2688,52 @@ describe("preflight C17 (P1.30t)", () => {
     );
     const dev = await check({ compose: plc(DEV), pdsEnv: DEV_ENV, networks: table }, "dev");
     expect(dev.lines).toContain("FAIL C17 network plc_web is local only");
+  });
+
+  test("c17_dev_refuses_edge_aliases_and_internal_hosts", async () => {
+    // P1.36i (ADR 0031 Decision 3), through the check (verify-1145 B2): under dev an aliased edge or a net-guard
+    // internal host fails C17 alone, in fixed words, so no configured value withholds the reason; local is not refused.
+    const dev = { pdsEnv: DEV_ENV };
+    const table = { ...TABLE, tunnel: { internal: false, members: ["newt"] } };
+    // The edge leaves the default network for edge and app, where it carries the aliases.
+    const aliasTable = {
+      ...table,
+      default: { ...TABLE.default, members: TABLE.default.members.filter((member) => member !== "edge") },
+      edge: { internal: false, members: ["edge"] },
+      app: { internal: false, members: ["edge"] },
+    };
+    const aliased = (text: string) =>
+      text
+        .replace(
+          "    secrets: [dev_tls_cert, dev_tls_key]\n",
+          '$&    networks:\n      edge:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n      app:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n',
+        )
+        .replace("  tunnel: {}\n", "$&  edge: {}\n  app: {}\n");
+    const hosts = (text: string) =>
+      text.replace("      FINGERPRINT_CHECK: arachnid\n", "$&      NETGUARD_INTERNAL_HOSTS: pds.example.test\n");
+    expect(failed((await check({ ...dev, compose: DEV, networks: table }, "dev")).lines)).not.toContain("C17");
+    expect(await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable }, "dev")).toBe(
+      "FAIL C17 the edge carries a network alias",
+    );
+    expect(await expectOnly("C17", { ...dev, compose: hosts(DEV), networks: table }, "dev")).toBe(
+      "FAIL C17 a service names an internal host for net-guard",
+    );
+  });
+
+  test("c17_outside_dev_refuses_a_bare_edge", async () => {
+    // The P1.36i follow-up through the check itself, so C17 dropping edgeAliasProblems fails here (the coordinator's
+    // review of 8cfc5ab): under prod an edge on the edge network with no alias fails C17 alone; with them it passes.
+    const onEdge = (aliases: string) =>
+      COMPOSE.replace(
+        "      ACME_EMAIL: edge@example.test\n",
+        `$&    networks:\n      default:\n      edge:${aliases}\n`,
+      ).replace("  back: {}\n", "$&  edge: {}\n");
+    const networks = { ...TABLE, edge: { internal: false, members: ["edge"] } };
+    expect(await expectOnly("C17", { compose: onEdge(""), networks })).toBe(
+      "FAIL C17 the edge carries no alias on its networks",
+    );
+    const aliased = onEdge('\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]');
+    expect(failed((await check({ compose: aliased, networks })).lines)).not.toContain("C17");
   });
 
   test("c17_table_duplicate_key_refused", async () => {
@@ -2711,10 +3109,14 @@ describe("preflight C26 and C27 (P1.30y)", () => {
 // run UNSET_ENV=dev, so the runtime allowances meant for local alone are refused by key and by origin scheme here.
 describe("preflight C29 (P1.36k)", () => {
   /** The all-good stack under `env` with `lines` added to web's environment. */
-  const withWeb = (env: "dev" | "prod", lines: string): Stack => ({
-    compose: (env === "dev" ? DEV : COMPOSE).replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`),
-    ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
-  });
+  // Under dev web's origin is on the dev app host (C18, P1.37 follow-up), so a case's own origin replaces DEV's there.
+  const withWeb = (env: "dev" | "prod", lines: string): Stack => {
+    if (env === "prod") return { compose: COMPOSE.replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`) };
+    const own = lines.includes("PUBLIC_ORIGIN:") ? "      PUBLIC_ORIGIN: https://staging.unset.sh\n" : "";
+    const staged = lines.replaceAll("app.example.test", "staging.unset.sh");
+    const compose = DEV.replace(own, "").replace("      FINGERPRINT_CHECK: arachnid", `$&\n${staged}`);
+    return { compose, pdsEnv: DEV_ENV };
+  };
 
   test("c29_local_only_key_fails_under_dev_and_prod", async () => {
     for (const env of ["dev", "prod"] as const) {
@@ -2776,6 +3178,68 @@ describe("preflight C29 (P1.36k)", () => {
         env,
       ).toBe("PASS C29 ok");
     }
+  });
+});
+
+// P1.38d (ADR 0031 Decision 1): a public stack never serves a legal placeholder, so under dev and prod any environment
+// value that still starts with "[to fill:" fails, naming the service and the keys, never the value.
+describe("preflight C32 (P1.38d)", () => {
+  const withWeb = (env: "dev" | "prod", lines: string): Stack => ({
+    compose: (env === "dev" ? DEV : COMPOSE).replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`),
+    ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
+  });
+  const PLACEHOLDERS = '      SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"\n      PRIVACY_OFFICER_TITLE: "[to fill: x]"';
+
+  test("c32_placeholder_fails_under_dev_and_prod", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      expect(await expectOnly("C32", withWeb(env, PLACEHOLDERS), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      );
+      // In any service.
+      const edge = (env === "dev" ? DEV : COMPOSE).replace(
+        "      ACME_EMAIL: edge@example.test",
+        '$&\n      CONTACT: "[to fill: CONTACT]"',
+      );
+      expect(await expectOnly("C32", { compose: edge, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
+        "FAIL C32 service=edge still a placeholder to fill: a name",
+      );
+    }
+  });
+
+  test("c32_names_only_printable_keys", async () => {
+    // A key name is caller input (an env file can hold any, even a pasted token): only the legal pages' three
+    // settings are printed (P1.37 follow-up).
+    for (const env of ["dev", "prod"] as const) {
+      const keys = '      sk_live_9f: "[to fill: x]"\n      JBSWY3DPEHPK3PXP: "[to fill: x]"\n';
+      expect(await expectOnly("C32", withWeb(env, keys + PLACEHOLDERS), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: a name, a name, SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
+      );
+      // The third legal setting is printed by name too.
+      const contact = '      PRIVACY_OFFICER_CONTACT: "[to fill: x]"';
+      expect(await expectOnly("C32", withWeb(env, contact), env), env).toBe(
+        "FAIL C32 service=web still a placeholder to fill: PRIVACY_OFFICER_CONTACT",
+      );
+    }
+  });
+
+  test("c32_filled_values_pass", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      // Only a value that starts with the marker is one; the same words elsewhere in a value are the value's own.
+      const filled = '      SUPPORT_EMAIL: "help@example.test"\n      PRIVACY_OFFICER_TITLE: "Officer [to fill: no]"';
+      const result = await check(withWeb(env, filled), env);
+      expect(
+        result.lines.find((l) => / C32 /.test(l)),
+        env,
+      ).toBe("PASS C32 ok");
+    }
+  });
+
+  test("c32_local_skips", () => {
+    const serviceEnv = new Map([["web", new SecretMap([["SUPPORT_EMAIL", "[to fill: SUPPORT_EMAIL]"]])]]);
+    expect(c32.run({ env: "local", serviceEnv } as unknown as Inputs, new AbortController().signal)).toEqual({
+      pass: true,
+      reason: "skipped: local stack",
+    });
   });
 });
 
@@ -3057,7 +3521,7 @@ describe("preflight --env local (P1.27l)", () => {
   /** C2 to C5's lines, with the stack's temporary root named as <root>. */
   async function imageLines(s: Stack, env: string, deps: Partial<Deps> = {}, noKey = false): Promise<string[]> {
     const { root, file } = stack(s);
-    if (noKey) rmSync(join(root, "deployment/cosign.pub"));
+    if (noKey) rmSync(join(root, "deployment/sigstore/trusted_root.json"));
     const { lines } = await preflight(["--env", env, "--compose", file], {
       root,
       run: fakeRun().run,
@@ -3070,7 +3534,7 @@ describe("preflight --env local (P1.27l)", () => {
   // Architecture record 2026-10-12-p129-local-build-preflight, item 2: --env dev and --env prod never take the local
   // path. Each expected line was printed by main 5961375, before this step, for the same stack.
   test("c2_to_c5_unchanged_under_dev_and_prod", async () => {
-    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const dev = { compose: DEV, pdsEnv: DEV_ENV, networks: DEV_TABLE };
     const verifyFails = { run: fakeRun({ verify: { code: 1, stderr: "edge: signature does not verify: bad\n" } }).run };
     const platform = { run: fakeRun({ mediaType: "application/vnd.oci.image.manifest.v1+json" }).run };
     const cases: [string, Stack, string, Partial<Deps>, boolean?][] = [
@@ -3088,7 +3552,7 @@ describe("preflight --env local (P1.27l)", () => {
         "dev",
         {},
       ],
-      // The verifier on #789: a mutant dropping dev's cosign.pub requirement survived nine samples. Both stages, and
+      // The verifier on #789: a mutant dropping dev's trust material requirement survived nine samples. Both stages, and
       // the failing paths under dev as under prod.
       ["no key", {}, "prod", {}, true],
       ["dev no key", dev, "dev", {}, true],
@@ -3099,7 +3563,8 @@ describe("preflight --env local (P1.27l)", () => {
     const PASSED = [
       "PASS C2 ok",
       "PASS C3 2 first-party images verified",
-      "PASS C4 1 upstream images verified",
+      // The fixture lock's upstream images: the PDS, and Newt since P1.37v.
+      "PASS C4 2 upstream images verified",
       "PASS C5 ok",
     ];
     const NO_LOCK = ["C2", "C3", "C4", "C5"].map(
@@ -3107,7 +3572,7 @@ describe("preflight --env local (P1.27l)", () => {
     );
     const seen: Record<string, string[]> = {};
     for (const [name, s, env, deps, noKey] of cases) seen[name] = await imageLines(s, env, deps, noKey);
-    const NO_KEY = ["C3", "C4"].map((id) => `FAIL ${id} input missing: <root>/deployment/cosign.pub`);
+    const NO_KEY = ["C3", "C4"].map((id) => `FAIL ${id} input missing: <root>/deployment/sigstore/trusted_root.json`);
     expect(seen).toEqual({
       prod: PASSED,
       dev: PASSED,
@@ -3892,6 +4357,8 @@ networks:
       exact("caddy-builder"),
       exact("postgres"),
       exact("caddy"),
+      // Newt runs only under dev (P1.37v); a local stack has no tunnel, so its image may not stand in for a service.
+      exact("newt"),
       pds.ref,
       `${pds.ref}:${pds.tag}`,
       `${pds.ref}@${pds.digest}`,

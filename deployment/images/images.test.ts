@@ -694,7 +694,7 @@ const PLAIN_PATH = /^\/[A-Za-z0-9._/-]+$/;
 const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
-  ["postgres", []], // postgres.Dockerfile copies nothing
+  ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -1030,7 +1030,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1077,6 +1077,15 @@ describe("base images", () => {
     expect(lock.pds).toStrictEqual({
       ref: "ghcr.io/bluesky-social/pds",
       tag: expect.stringMatching(/^0\.4\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+    // Fossorial's Newt (P1.37v, ADR 0030 Decision 2), the dev edge's tunnel to Pangolin, run as shipped likewise.
+    expect(lock.newt).toStrictEqual({
+      ref: "docker.io/fosrl/newt",
+      tag: expect.stringMatching(/^1\.\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
@@ -2154,8 +2163,12 @@ describe("postgres image", () => {
     const postgres = runtimeStage(read(POSTGRES_DOCKERFILE));
     const base = lock.postgres as Base;
     expect(fromImages(read(POSTGRES_DOCKERFILE))).toEqual([`${base.ref}:${base.tag}@${base.digest}`]);
-    // Nothing is copied in and the official docker-entrypoint.sh and its CMD are inherited unchanged.
-    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
+    // The official docker-entrypoint.sh is inherited unchanged. Only our pg_hba.conf is copied in, and the CMD points the
+    // server at it (P1.11y): the entrypoint passes the CMD's arguments to initdb's temporary server and to the real one.
+    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([
+      "COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
+      'CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]',
+    ]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
   });
 

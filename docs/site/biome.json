@@ -1,0 +1,11 @@
+{
+  "root": false,
+  "extends": "//",
+  "overrides": [
+    {
+      "includes": ["assets/js/vendor/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    }
+  ]
+}
