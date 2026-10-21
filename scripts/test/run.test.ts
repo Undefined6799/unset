@@ -263,11 +263,15 @@ describe("images project", { timeout: 60_000 }, () => {
     const toRun = filesToRun("ci", listed, glob);
     expect(toRun).toEqual(listed);
     expect(compare(glob, listed, new Set(glob), none, [], [], toRun).notExecuted).toEqual(["vendor/x/b.test.ts"]);
-    // Locally and in the opt-in, only the files the run starts are checked.
+    // Locally only the files the run starts are checked; the images mode checks every listed image test.
     expect(filesToRun("local", listed, glob)).toEqual(glob);
     expect(filesToRun("images", ["d/a.image.test.ts", ...listed], ["d/a.image.test.ts"])).toEqual([
       "d/a.image.test.ts",
     ]);
+    // In the images mode as in --units, a listed image test the glob missed (a symlink, say) is still checked.
+    expect(
+      filesToRun("images", ["d/a.image.test.ts", "vendor/b.image.test.ts", ...listed], ["d/a.image.test.ts"]),
+    ).toEqual(["d/a.image.test.ts", "vendor/b.image.test.ts"]);
   });
 
   // P0.07d: CI runs the unit projects and the images project in two parallel jobs, `--units` and `--images`;

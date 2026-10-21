@@ -140,11 +140,13 @@ export function modeFor(env: Record<string, string | undefined>, args: readonly 
   return env.CI === "true" || env.GITHUB_ACTIONS === "true" ? "ci" : "local";
 }
 
-/** The listed files whose run is checked: in CI every listed file, so one the glob missed still fails, and with
- * `--units` every listed file outside the images project; otherwise only the files this mode starts. */
+/** The listed files whose run is checked: in CI every listed file, so one the glob missed still fails; with `--units`
+ * every listed file outside the images project and with `--images` every listed image test, so the two CI jobs
+ * together check what ci mode checks; locally only the files the run starts. */
 export function filesToRun(mode: Mode, listed: string[], expected: string[]): string[] {
   if (mode === "ci") return listed;
   if (mode === "units") return listed.filter((f) => !IMAGE_TEST_FILE.test(f));
+  if (mode === "images") return listed.filter((f) => IMAGE_TEST_FILE.test(f));
   const starts = new Set(expected);
   return listed.filter((f) => starts.has(f));
 }
