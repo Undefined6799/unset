@@ -61,3 +61,5 @@ by the same reader, and no flag, argv form or child environment changed.
 Re-checked at P2.26b, which runs verify-images as `/usr/bin/env PATH=<cosign's folder> node <script> <lock>
 --trusted-root <file>`: every argument is a fixed path under the checkout, none is `--env-file`, and the child's PATH
 narrows to the pinned cosign's folder, so the rules above still hold.
+Re-checked at P2.26v, which adds an optional `arch` dep to `inputs.ts` for picking the pinned cosign; no flag
+changed, and the rules above still hold.

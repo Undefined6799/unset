@@ -34,6 +34,8 @@ export type Deps = {
   /** The repository root: the lock, the Sigstore trusted root and the verify-images CLI are read below it. */
   root: string;
   run: Run;
+  /** The host's architecture, picking the pinned cosign (P2.26v); `process.arch` unless a test passes one. */
+  arch?: string;
   readText?: (path: string) => string | null;
   /** How an env file Compose reads values from is read; `readEnvOrNull` unless a test passes one. */
   readEnv?: (path: string) => EnvRead | null;
@@ -378,7 +380,7 @@ const TRUSTED_ROOT = "deployment/sigstore/trusted_root.json";
  */
 function verifier(deps: Deps): Verifier {
   return async (lockPath, signal) => {
-    const problem = await cosignProblem(deps.run, process.arch, signal);
+    const problem = await cosignProblem(deps.run, deps.arch ?? process.arch, signal);
     if (problem !== null) return { ok: false, failures: [problem] };
     const script = join(deps.root, "scripts/ci/verify-images.ts");
     const trustedRoot = join(deps.root, TRUSTED_ROOT);
