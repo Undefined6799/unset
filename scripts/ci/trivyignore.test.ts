@@ -134,22 +134,64 @@ describe(".github/trivyignore.pds.yaml", () => {
   test("shared_ignorefile_never_names_pds", () => {
     const shared = readFileSync(SHARED_FILE, "utf8");
     const sharedDoc = parse(shared) as { vulnerabilities?: IgnoreEntry[] };
-    // An id both files name is accepted in the shared file only for another binary: its paths and PURLs share
-    // nothing with the PDS entry's (P1.37x, Newt's Go stdlib carries three of the goat binary's ids).
-    const pds = new Map(pdsEntries().map((item) => [item.id, item]));
-    const overlapping = (sharedDoc.vulnerabilities ?? []).filter((item) => {
-      const twin = pds.get(item.id);
-      if (twin === undefined) return false;
-      const scope = [...(item.paths ?? []), ...(item.purls ?? [])];
-      const twinScope = new Set([...(twin.paths ?? []), ...(twin.purls ?? [])]);
-      return (item.paths ?? []).length === 0 || (item.purls ?? []).length === 0 || scope.some((s) => twinScope.has(s));
-    });
-    expect(overlapping.map((item) => item.id)).toEqual([]);
+    expect(pdsOverlaps(sharedDoc.vulnerabilities ?? [], pdsEntries())).toEqual([]);
     expect(shared).not.toContain("ghcr.io/bluesky-social/pds");
     expect(shared).not.toContain("3a8feb34");
     expect(shared).not.toContain("trivyignore.pds.yaml");
   });
+
+  test("pds_overlap_needs_literal_paths_and_versioned_purls", () => {
+    // verify-1153 F1: Trivy matches paths as globs and a PURL without a version as any version, so a glob path or a
+    // bare PURL could reach goat's target while naming none of its strings. Each such entry is refused on its own.
+    const goat = { id: "CVE-1", paths: ["usr/local/bin/goat"], purls: ["pkg:golang/stdlib@v1.25.10"] };
+    const newt = { id: "CVE-1", paths: ["usr/local/bin/newt"], purls: ["pkg:golang/stdlib@v1.26.8"] };
+    expect(pdsOverlaps([newt], [goat])).toEqual([]);
+    for (const entry of [
+      { ...newt, paths: [] },
+      { ...newt, purls: [] },
+      { id: "CVE-1", purls: newt.purls },
+      { ...newt, paths: goat.paths },
+      { ...newt, purls: goat.purls },
+      { ...newt, paths: ["**"], purls: ["pkg:golang/stdlib"] },
+      { ...newt, paths: ["usr/local/bin/[g]oat"] },
+      { ...newt, paths: ["usr/local/bin/go?t"] },
+      { ...newt, paths: ["usr/local/bin/{goat,newt}"] },
+      { ...newt, paths: ["usr/local/bin/go\\at"] },
+      { ...newt, paths: [""] },
+      { ...newt, purls: ["pkg:golang/stdlib"] },
+      { ...newt, purls: ["pkg:golang/stdlib@"] },
+      { ...newt, purls: ["pkg:golang/stdlib?x=@v1"] },
+    ]) {
+      expect(pdsOverlaps([entry], [goat]), JSON.stringify(entry)).toEqual(["CVE-1"]);
+    }
+  });
 });
+
+/**
+ * The ids the shared file names that the PDS file also names, where the shared entry could reach the PDS entry's target
+ * (P1.37x, verify-1153 F1). An id both files name is accepted in the shared file only for another binary: literal
+ * paths (Trivy reads paths as globs), PURLs with a non-empty version (an empty one matches any, Trivy v0.75.0
+ * pkg/purl/purl.go:281), and no path or PURL string the PDS entry uses.
+ */
+function pdsOverlaps(shared: readonly IgnoreEntry[], pds: readonly IgnoreEntry[]): string[] {
+  const twins = new Map(pds.map((item) => [item.id, item]));
+  return shared
+    .filter((item) => {
+      const twin = twins.get(item.id);
+      if (twin === undefined) return false;
+      const paths = item.paths ?? [];
+      const purls = item.purls ?? [];
+      const twinScope = new Set([...(twin.paths ?? []), ...(twin.purls ?? [])]);
+      return (
+        paths.length === 0 ||
+        purls.length === 0 ||
+        paths.some((path) => path === "" || /[*?[\]{}\\]/.test(path)) ||
+        purls.some((purl) => !/^[^?#]*@[^@?#]+(?:[?#].*)?$/.test(purl)) ||
+        [...paths, ...purls].some((scope) => twinScope.has(scope))
+      );
+    })
+    .map((item) => item.id ?? "");
+}
 
 /** P1.37x: Alex's typed line 2026-10-21T00:17:36Z, "yes waive CVE-2026-78667 CVE-2026-78669 CVE-2026-97031 for
  * fosrl/newt 1.18.1 until 2026-10-28 in .github/trivyignore.yaml". Nothing else, nowhere else, no later. */

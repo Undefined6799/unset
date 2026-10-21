@@ -73,8 +73,16 @@ function lineProblems(line: string): string[] {
   }
   // A BuildKit container builder runs an image too (P1.27s): it names one by digest, or through a pinned variable.
   // buildx keeps the last `image=` among its driver options, so the line carries exactly one, ending at its value.
-  const builderImage = /(?:^|[\s",]|--driver-opt=)image=(?:\$\w+_IMAGE"|[^\s",]+@sha256:[0-9a-f]{64}(?=["\s]|$))/;
-  if (/\bbuildx\s+create\b/.test(line) && (line.split("image=").length !== 2 || !builderImage.test(line))) {
+  // The equals form counts only as a whole word, so `--driver-opt=` inside another option's value names no image.
+  const builderImage =
+    /(?:^|[\s",]|(?:^|\s)--driver-opt=)image=(?:\$\w+_IMAGE"|[^\s",]+@sha256:[0-9a-f]{64}(?=["\s]|$))/;
+  // A `"` inside an option's value is CSV quoting to buildx (csvvalue.Fields), which can hide a comma and so the image;
+  // a single quote or an escaped `"` is the only way to put one there, so neither may appear on the line.
+  const quotedValue = /'|\\"/.test(line);
+  if (
+    /\bbuildx\s+create\b/.test(line) &&
+    (line.split("image=").length !== 2 || !builderImage.test(line) || quotedValue)
+  ) {
     found.push("BuildKit builder without a digest-pinned image");
   }
   // An image variable may only come from the workflow text, where the digest check above can see it.
@@ -122,10 +130,25 @@ function jobSigningProblems(file: string, id: string, body: string[]): string[] 
   if (!signing) return found;
   if (!body.some((l) => l === "    environment: signing")) found.push("a signing job not in the signing environment");
   if (body.some((l) => CACHE.test(l))) found.push("a cache in a signing job");
+  if (setupNodeSteps(body).some((step) => !step.includes("          package-manager-cache: false")))
+    found.push("setup-node without package-manager-cache: false in a signing job");
   return found;
 }
 
-/** The signing rules over one file: per job, plus publish-images.yml's own shape (push or dispatch, one job). */
+/**
+ * Each setup-node step's lines. setup-node v7 caches npm on its own when package.json names a package manager
+ * (action.yml `package-manager-cache`, default true, at 8207627), which the CACHE pattern cannot see, so a signing job
+ * turns it off by name (verify-1150 S3).
+ */
+function setupNodeSteps(body: string[]): string[][] {
+  return body.flatMap((line, i) => {
+    if (!/^ {6}- uses: actions\/setup-node@/.test(line)) return [];
+    const end = body.findIndex((l, j) => j > i && l.trim() !== "" && indent(l) <= 6);
+    return [body.slice(i, end < 0 ? body.length : end)];
+  });
+}
+
+/** The signing rules over one file: per job, plus publish-images.yml's own shape (no pull request, one job). */
 function signingProblems(file: string, lines: string[]): string[] {
   const all = jobs(lines);
   const found = [...all].flatMap(([id, body]) => jobSigningProblems(file, id, body).map((p) => `job ${id}: ${p}`));

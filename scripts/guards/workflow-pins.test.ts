@@ -51,6 +51,13 @@ describe("workflows", () => {
     // The documented equals form passes, but an env option's value that merely starts with image= names no image.
     expect(problems(builder(`--driver-opt=image=${pinned}`))).toEqual([]);
     expect(problems(builder(`--driver-opt "env.X=image=${pinned}"`))).toHaveLength(1);
+    // The equals form is a whole option, never the tail of another option's value.
+    expect(problems(builder(`--driver-opt "env.X--driver-opt=image=${pinned}"`))).toHaveLength(1);
+    // A `"` inside a value is CSV quoting to buildx, so a quoted field can carry a comma and hide the image from it.
+    expect(problems(builder(`--driver-opt '"env.X=a,image=${pinned}"'`))).toHaveLength(1);
+    expect(problems(builder(`--driver-opt "\\"env.X=a,image=${pinned}\\""`))).toHaveLength(1);
+    // An escaped quote with no single quote on the line: the image ends at a `"`, so only the `\\"` rule refuses it.
+    expect(problems(builder(`--driver-opt "\\"env.X=a,image=${pinned}"\\"`))).toHaveLength(1);
     expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
       1,
@@ -244,7 +251,7 @@ describe("signing jobs (P1.27s)", () => {
 
   test("publish_images_pull_request_trigger_fails", () => {
     for (const trigger of ["  pull_request:\n", "  pull_request:\n    types: [opened]\n"]) {
-      const text = publish.replace("  workflow_dispatch:\n", `  workflow_dispatch:\n${trigger}`);
+      const text = publish.replace("    branches: [main]\n", `    branches: [main]\n${trigger}`);
       expect(problems(text, "publish-images.yml")).toEqual(["publish-images.yml has a pull_request trigger"]);
     }
     expect(problems(publish.replace("on:\n", "on: [pull_request]\nx:\n"), "publish-images.yml")).toContain(
@@ -264,6 +271,31 @@ describe("signing jobs (P1.27s)", () => {
     }
     const from = publish.replace("--metadata-file", "--cache-from type=gha --metadata-file");
     expect(problems(from, "publish-images.yml")).toContain("job publish: a cache in a signing job");
+  });
+
+  test("signing_job_setup_node_cache_off", () => {
+    // setup-node v7 caches npm on its own unless told not to (verify-1150 S3), so both signing jobs say so by name.
+    const off = "          package-manager-cache: false\n";
+    for (const [file, text, id] of [
+      ["publish-images.yml", publish, "publish"],
+      ["mirror.yml", mirror, "copy-and-sign"],
+    ] as const) {
+      expect(text).toContain(off);
+      for (const changed of [text.replace(off, ""), text.replace(off, "          package-manager-cache: true\n")]) {
+        expect(problems(changed, file)).toContain(
+          `job ${id}: setup-node without package-manager-cache: false in a signing job`,
+        );
+      }
+    }
+    // Every setup-node step needs it inside its own lines: a bare step after the real one, and a bare step before it
+    // (whose lines must stop at the next step, not run on into the real one's), each fail.
+    const step = "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n";
+    const second = `${step}        with:\n          node-version-file: .nvmrc\n`;
+    for (const twice of [publish.replace(off, `${off}${second}`), publish.replace(step, `${second}${step}`)]) {
+      expect(problems(twice, "publish-images.yml")).toContain(
+        "job publish: setup-node without package-manager-cache: false in a signing job",
+      );
+    }
   });
 });
 
