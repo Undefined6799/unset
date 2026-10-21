@@ -4500,8 +4500,14 @@ Where: `tests/integration/pds-ui/ and tests/e2e/pds/` (one ownership path, its t
 Goal: Task 4/6 harness: pinned upstream TestPlc/TestNetworkNoAppView/mail patterns, real PDS and ephemeral state, blocked external egress, no public PLC or real mail. Exercise actual image entrypoint.
 Done when: Native signup/sign-in/recovery/2FA smoke flows pass; fixtures cannot reach public PLC/mail or operated local/dev accounts. No operated topology/config changes. Notes updated or none needed.
 
+### P2.24x — Revise mobile navigation
+Tags: —            Depends on: P2.24f            Plan: §5.3; §9; ADR 0027
+Where: `shared/ui/` plus its tests, design registration and docs (one ownership path, its tests/docs)
+Goal: Apply Alex's 2026-10-21 browser feedback: remove the redundant popup Close menu control; replace phone current/open underlines with a raised current-page glyph/avatar. Lift only the active destination glyph/avatar 6px using existing tokens; keep its 48px target and focus outline anchored. This separately reviewed revision follows f's accepted 759-source-line scope; the local preview's temporary rules are not implementation evidence.
+Done when: Phone Menu/primary/account current states, native toggle/outside/Escape/committed-navigation dismissal and no-JS behavior pass; opening Menu alone does not select a second destination. Desktop rail/current labels and popup rows remain unchanged; focus, forced colors and accessibility pass. Design registration records Alex's feedback without changing imported sheet/tokens/icons. Notes updated or none needed.
+
 ### P2.24i — Build the account shell and Devices presentation
-Tags: —            Depends on: P2.24h            Plan: §5.3; §9; ADR 0027
+Tags: —            Depends on: P2.24h, P2.24x            Plan: §5.3; §9; ADR 0027
 Where: `apps/pds/` (one ownership path, its tests/docs)
 Goal: Task 4 presentation: build-only package using shared tokens/components; translated labels, resolved links/current state, avatar data, children and upstream-owned action slots.
 Done when: Presentation/keyboard/theme/viewport checks pass with no fetch/auth logic; keep native upstream context/hooks and current-device protections available to the integration. Notes updated or none needed.
@@ -4518,8 +4524,14 @@ Where: `deployment/pds/` build recipe/input assembly only, with adjacent tests/d
 Goal: Task 4 builder: consume independently hash-checked local presentation/shared sources and exact frontend source patches with the frozen upstream lock and one compatible React closure. Use shared CSS and the proved fixed edge font URLs; no compiled-code rewrite, runtime reinstall or native behavior change.
 Done when: Input/patch mismatch fails before build; all four native entries, asset URLs and final-byte hashes pass; repeated identical inputs reproduce the artifact and backend tree/full Config stay equal. P2.24j owns native source patches; no partial rollout. Notes updated or none needed.
 
+### P2.24w — Register native browser verification
+Tags: [SEC]            Depends on: P2.24g, P2.24h            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ and .github/ check paths` plus existing `tests/e2e/playwright.config.ts` harness configuration, tests and evidence; excludes native test bodies, app and deployment implementation.
+Goal: Register a separate mandatory native browser invocation before ordinary app-server startup, safe artifact output and aggregate exact-root/recursive-path report accounting, preserving ordinary browser/a11y coverage. Deliver registration coherently with the first real native browser smoke in h's separate continuation: no absent-suite skip/pass loophole. Keep exactly one genuine expiry test in Chromium with a 20-minute timeout, outside the 600-second Vitest budget; no global timeout widening.
+Done when: Missing/stale/invalid/wrong-root reports, skipped/unexecuted nested specs and credential-canary artifacts fail; normal CI invokes both suites and aggregate assertion. Prove artifact safety for wrong OTP, filled-form timeout, startup and cleanup failures. h's separate native browser continuation must prove browser confinement and faithful TLS/cookies before j acceptance; config, routing and HTTP/API smoke alone are not proof. Preserve final q's whole-matrix/release checks and all manual/security gates. Notes updated or none needed.
+
 ### P2.24j — Integrate the native Devices pilot
-Tags: [SEC]            Depends on: P2.24u            Plan: §5.3; §9; ADR 0027
+Tags: [SEC]            Depends on: P2.24u, P2.24w            Plan: §5.3; §9; ADR 0027
 Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
 Goal: Task 4 integration: small presentation-only patches to upstream account shell/session list. Keep upstream routes, providers, device ordering/filtering and revoke mutation.
 Done when: Real two-session revocation, current device, account switch, avatar/home, settings, direct reload/back/forward pass; both themes match Figma 49:1912/49:1978 at desktop/phone/320px/short viewports. No partial rollout. Notes updated or none needed.

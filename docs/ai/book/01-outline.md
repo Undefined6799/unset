@@ -1526,7 +1526,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 42 steps here (including the 19 P2.24 frontend slices approved 2026-10-18 and their icon-generator and build-wiring prerequisites); P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
+Depth: **build-ready**. 44 steps here (including the 19 P2.24 frontend slices approved 2026-10-18 and their allocated prerequisites and navigation revision); P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1555,10 +1555,12 @@ Depth: **build-ready**. 42 steps here (including the 19 P2.24 frontend slices ap
 | P2.24f | Extend generic shared UI for the PDS | — | P2.24t | `phase-2.md` |
 | P2.24g | Register build-only presentation boundaries | [SEC] | P2.24f | `phase-2.md` |
 | P2.24h | Add isolated native PDS test fixtures | — | P2.24g, P2.24c | `phase-2.md` |
-| P2.24i | Build the account shell and Devices presentation | — | P2.24h | `phase-2.md` |
+| P2.24x | Revise mobile navigation | — | P2.24f | `phase-2.md` |
+| P2.24i | Build the account shell and Devices presentation | — | P2.24h, P2.24x | `phase-2.md` |
 | P2.24v | Validate frontend build inputs | [SEC] | P2.24g | `phase-2.md` |
 | P2.24u | Wire build-only presentation inputs | [SEC] | P2.24i, P2.24v | `phase-2.md` |
-| P2.24j | Integrate the native Devices pilot | [SEC] | P2.24u | `phase-2.md` |
+| P2.24w | Register native browser verification | [SEC] | P2.24g, P2.24h | `phase-2.md` |
+| P2.24j | Integrate the native Devices pilot | [SEC] | P2.24u, P2.24w | `phase-2.md` |
 | P2.24k | Build native account-page presentation | — | P2.24j | `phase-2.md` |
 | P2.24l | Integrate native account pages | [SEC] | P2.24k | `phase-2.md` |
 | P2.24m | Build account-dialog presentation | — | P2.24l | `phase-2.md` |
