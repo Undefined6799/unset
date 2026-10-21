@@ -15497,7 +15497,7 @@ development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` 
 
 **Why here (editor pass, global resolution 8):** P1.33p gives the hostname `0x40.space` to the new development PDS. The
 old prototype accounts live on the old PDS at that hostname and use `*.0x40.me` handles, the handle domain the
-production PDS will issue. Once P1.34 runs, the old PDS can no longer delete or export them. So the part of L.01 that
+production PDS will issue. Once P1.33p runs, the old PDS can no longer delete or export them. So the part of L.01 that
 needs the old PDS runs here; the launch gate keeps L.01 part B (the reserved-label placeholders and the final
 `retirement-check`), which reads this step's record.
 
