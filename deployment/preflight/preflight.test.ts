@@ -31,7 +31,7 @@ import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
-import { COSIGN } from "./cosign.ts";
+import { COSIGN, cosignProblem } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -545,11 +545,21 @@ describe("preflight", () => {
     expect(failed(both.lines)).toEqual(["C3", "C4"]);
   });
 
+  test("c3_c4_unknown_origin_fails_both", async () => {
+    // verify-images fails an entry of neither origin by name; it belongs to neither check, so it fails both.
+    const lock = { ...LOCK, web: { ...LOCK.web, origin: "third-party" } };
+    const stderr = "web: ref is not ours by digest, signed keyless\n";
+    const result = await check({ lock }, "prod", { run: fakeRun({ verify: { code: 1, stderr } }).run });
+    expect(failed(result.lines)).toEqual(["C3", "C4"]);
+    expect(result.lines).toContain("FAIL C4 web: ref is not ours by digest, signed keyless");
+  });
+
   test("cosign_hash_mismatch_refused", async () => {
     // P2.26b: before C3 and C4 verify anything, the preflight hashes the cosign it is about to run; another binary, an
     // unreadable one or sha256sum's failure refuses both, and verify-images never runs.
     const other = ok(`${"0".repeat(64)}  ${COSIGN.path}\n`);
-    const otherArch = ok(`${COSIGN.sha256[process.arch === "arm64" ? "x64" : "arm64"]}  ${COSIGN.path}\n`);
+    // v3.1.3's own arm64 binary, which no deploy host runs (the images are amd64 only).
+    const otherArch = ok(`c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a  ${COSIGN.path}\n`);
     for (const cosign of [other, otherArch, ok(""), { code: 1, stdout: "", stderr: "No such file" }]) {
       const { run, calls } = fakeRun({ cosign });
       const result = await check({}, "prod", { run });
@@ -574,11 +584,16 @@ describe("preflight", () => {
     expect(COSIGN).toEqual({
       path: "/usr/local/bin/cosign",
       version: "v3.1.3",
-      sha256: {
-        x64: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
-        arm64: "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a",
-      },
+      sha256: { x64: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71" },
     });
+  });
+
+  test("cosign_arm64_host_refused", async () => {
+    // publish-images.yml builds linux/amd64 only, so an arm64 host could pass C3 to C5 and then fail at compose up; it
+    // fails C3 and C4 first, without hashing anything.
+    const { run, calls } = fakeRun();
+    expect(await cosignProblem(run, "arm64", new AbortController().signal)).toBe("no cosign is pinned for arm64");
+    expect(calls).toEqual([]);
   });
 
   test("c5_platform_manifest_fails", async () => {
