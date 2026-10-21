@@ -159,6 +159,7 @@ describe(".github/trivyignore.pds.yaml", () => {
       { ...newt, paths: ["usr/local/bin/go\\at"] },
       { ...newt, paths: [""] },
       { ...newt, purls: ["pkg:golang/stdlib"] },
+      { ...newt, purls: ["pkg:golang/stdlib@"] },
     ]) {
       expect(pdsOverlaps([entry], [goat]), JSON.stringify(entry)).toEqual(["CVE-1"]);
     }
@@ -168,8 +169,8 @@ describe(".github/trivyignore.pds.yaml", () => {
 /**
  * The ids the shared file names that the PDS file also names, where the shared entry could reach the PDS entry's target
  * (P1.37x, verify-1153 F1). An id both files name is accepted in the shared file only for another binary: literal
- * paths (Trivy reads paths as globs), fully versioned PURLs (an empty version matches any), and no path or PURL string
- * the PDS entry uses.
+ * paths (Trivy reads paths as globs), PURLs with a non-empty version (an empty one matches any, Trivy v0.75.0
+ * pkg/purl/purl.go:281), and no path or PURL string the PDS entry uses.
  */
 function pdsOverlaps(shared: readonly IgnoreEntry[], pds: readonly IgnoreEntry[]): string[] {
   const twins = new Map(pds.map((item) => [item.id, item]));
@@ -184,7 +185,7 @@ function pdsOverlaps(shared: readonly IgnoreEntry[], pds: readonly IgnoreEntry[]
         paths.length === 0 ||
         purls.length === 0 ||
         paths.some((path) => path === "" || /[*?[\]{}\\]/.test(path)) ||
-        purls.some((purl) => !purl.includes("@")) ||
+        purls.some((purl) => !/@[^@?#]+(?:[?#].*)?$/.test(purl)) ||
         [...paths, ...purls].some((scope) => twinScope.has(scope))
       );
     })

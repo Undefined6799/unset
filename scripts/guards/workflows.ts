@@ -76,7 +76,13 @@ function lineProblems(line: string): string[] {
   // The equals form counts only as a whole word, so `--driver-opt=` inside another option's value names no image.
   const builderImage =
     /(?:^|[\s",]|(?:^|\s)--driver-opt=)image=(?:\$\w+_IMAGE"|[^\s",]+@sha256:[0-9a-f]{64}(?=["\s]|$))/;
-  if (/\bbuildx\s+create\b/.test(line) && (line.split("image=").length !== 2 || !builderImage.test(line))) {
+  // A `"` inside an option's value is CSV quoting to buildx (csvvalue.Fields), which can hide a comma and so the image;
+  // a single quote or an escaped `"` is the only way to put one there, so neither may appear on the line.
+  const quotedValue = /'|\\"/.test(line);
+  if (
+    /\bbuildx\s+create\b/.test(line) &&
+    (line.split("image=").length !== 2 || !builderImage.test(line) || quotedValue)
+  ) {
     found.push("BuildKit builder without a digest-pinned image");
   }
   // An image variable may only come from the workflow text, where the digest check above can see it.

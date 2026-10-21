@@ -11179,9 +11179,10 @@ signature from our exact workflow is refused):
     workflow, then P2.26e.
 
 Shape (architecture ruling 2026-10-06-p127q-packages-write-shape, amended 03:15Z for the separate file):
-  - `publish-images.yml` is triggered by `push` to `main` and `workflow_dispatch` only, and has one job, `publish`. A
-    `pull_request` trigger anywhere in that file fails the guard. It is not a required check, since it never runs on a
-    PR. `images.yml` stays the unprivileged required check `images` on PRs.
+  - `publish-images.yml` is triggered by `push` to `main` only (its `workflow_dispatch` was dropped in #1206, since the
+    job's `if:` skipped every dispatched run), and has one job, `publish`. A `pull_request` trigger anywhere in that
+    file fails the guard. It is not a required check, since it never runs on a PR. `images.yml` stays the unprivileged
+    required check `images` on PRs.
   - The gate: `publish` declares `environment: signing` (main-only deployment branches; required reviewer: Alex, prevent
     self-review off) and its job-level `if:` is exactly `GATE_IF` (push to `refs/heads/main`). `packages: write` joins
     `id-token: write` in `ungated()`'s privileged test. The required reviewer (architecture Amendment 22:20Z, available
