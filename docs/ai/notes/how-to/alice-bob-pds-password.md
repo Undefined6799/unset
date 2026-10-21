@@ -25,6 +25,8 @@ checked: 2026-10-21
 4. Do not invent the password, DID, or email.
 
 The runbook's legal-values paragraph (P1.38d) is about the legal pages and changes nothing here.
+The runbook's `umask 022` paragraph (the C21 follow-up, #1187) is about the checkout's file modes and changes
+nothing here either.
 
 **Check.** The PDS login accepts the password you typed. The app still has no password, DID, or mailbox
 store for them.

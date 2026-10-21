@@ -10583,9 +10583,10 @@ env must set `PDS_DID_PLC_URL`, by env:
   default port (@did-plc/server 0.0.1 `src/bin.ts:18`; step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by
   architecture 19:31Z). Unset, `https://plc.directory` and any other value are refused. Seeds and probes (P1.29s,
   P1.29t) run only under local, so test identities never reach the public directory.
-- **dev** (the 0x40.space stack, decision 20): exactly `https://plc.directory`, and nothing else. C21 (the P1.33a
-  retirement report), C6 (a valid recovery key) and C7 (invites) already gate that stack, so this arm needs no P1.33p
-  dependency. No seed or probe runs under dev; the only intended public operation is Alex's lexicon authority (P1.35).
+- **dev** (the staging stack, decision 20 and ADR 0025): exactly `https://plc.directory`, and nothing else. C6 (a
+  valid recovery key) and C7 (invites) already gate that stack (C21 is waived under dev since #1174 and gates prod and
+  local on `0x40.space`), so this arm needs no P1.33p dependency. No seed or probe runs under dev; the only intended
+  public operation is Alex's lexicon authority (P1.35).
 - **C21 under dev** (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, superseded for staging by Alex's ruling of
   2026-10-21 02:41:25Z, alex-answers `c21-dev-waiver`, #1174): the dev stack is the staging PDS on `staging.unset.ac`
   (ADR 0025), not the 0x40.space authority host, and no 0x40 account carries over, so under `--env dev` C21 is waived
@@ -10597,10 +10598,11 @@ env must set `PDS_DID_PLC_URL`, by env:
 - The check is C28. No new dependency edge: P1.34t still does not depend on P1.34v.
 
 Done when red fixtures for local (unset, plc.directory, a public look-alike), for dev (unset, the local URL, a
-look-alike) and for prod (unset, the local URL, a look-alike) fail, dev with a non-0x40.space hostname and no complete
-report fails C21, the exact URL for each env passes, and check is green. Every existing `--env dev` pass fixture
-(P2.26b's real `compose.dev.yaml` test, moved from P1.34d item 12, among them) carries a complete retirement-report
-fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
+look-alike) and for prod (unset, the local URL, a look-alike) fail, dev passes C21 with the fixed waiver line whatever
+the hostname and report (#1174; before it, dev with a non-0x40.space hostname and no complete report failed C21), the
+exact URL for each env passes, and check is green. Since #1174 no `--env dev` pass fixture (P2.26b's real
+`compose.dev.yaml` test, moved from P1.34d item 12, among them) needs a retirement-report fixture; architecture's
+Amendment 7 of 2026-10-13-local-plc, Q1, which required one, is superseded for staging by Alex's ruling.
 
 ---
 
@@ -15464,8 +15466,8 @@ every public gate and its evidence lives here.
 - P1.29h's reader (book edit 2026-10-13-p129h-book-lines, Amendment 1): a check refuses the `tools` profile and the
   `pds-token-reader` service on any stack whose `PDS_HOST` is public, with red fixtures.
 - The PLC (architecture's Amendment 4 of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps): this step has
-  no PLC arm. The dev stack it opens already uses exactly `https://plc.directory` under
-  P1.34t's dev arm, gated by C21, C6 and C7, so it gates only the first public exposure (book edit
+  no PLC arm. The dev stack it opens already uses exactly `https://plc.directory` under P1.34t's dev arm, gated by C6
+  and C7 (C21 is waived under dev, #1174), so it gates only the first public exposure (book edit
   2026-10-12-p133-p133a-tailnet-gates). It does not depend on P5.02, so no cycle forms; P1.35 and P1.38 keep their
   dependency on it.
 - Edge cases:
@@ -15485,9 +15487,11 @@ P1.33a, which runs before P1.34 (book edit 2026-10-13-verify-814-fixes, Amendmen
 ### P1.33a — Retire the 0x40 prototype before going public (Alex; formerly L.01 part A)
 
 **Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.34, and so before P1.33p's public opening (book
-edit 2026-10-12-p133p-public-opening; P1.34 depends on it again: under `--env dev`, C21 applies whatever the hostname
-(architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit 2026-10-13-verify-814-fixes, S2 and Amendment 1);
-P1.30 C21 checks it) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03: retire the old accounts before the
+edit 2026-10-12-p133p-public-opening; P1.34 depended on it for the staging PDS too, because under `--env dev` C21
+applied whatever the hostname (architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit
+2026-10-13-verify-814-fixes, S2 and Amendment 1), until Alex waived C21 under dev on 2026-10-21 (#1174); P1.30 C21
+still checks it under prod and local on `0x40.space`) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03:
+retire the old accounts before the
 development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19
 (settled by decision 24)
 
