@@ -11,14 +11,14 @@ From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reac
 
 | Layer | Present | Named, no folder |
 | --- | --- | --- |
-| `apps/` | `web` | `admin`, `chat` **(planned, phase 6)**; `pds` **(planned, [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md))** |
+| `apps/` | `web` | `admin` **(planned, phase 3)**; `chat` **(planned, phase 6)**; `pds` **(planned, [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md))** |
 | `interfaces/` | `http`, `admin`, `api`, `indexer`, `media`, `review` | `pds-admin`, `chat-admin` **(planned)** |
 | `domains/` | `identity` | `content`, `social`, `feed`, `messaging`, `moderation`, `privacy` **(planned)** |
 | `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session` | `tap`, `matrix`, `storage`, `arachnid`, `email` **(planned)** |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` | `admin-envelope` **(planned)** |
 | `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, the two compose files | `pds` **(planned, ADR 0027)** |
 
-Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` is the UI in the tree. It holds no product rules and no database access (`app-only-shared`). `interfaces/admin` passes an empty route list (`interfaces/admin/compose.ts`), so the kit serves `GET /health` only (`shared/http/server.ts`). `interfaces/http` is the only interface with routes beyond that. `apps/admin` and `apps/chat` are **(planned, phase 6)** (PLAN.md lists both; `apps/chat` is the phase 6 client). `shared/admin-envelope` is **(planned)** (PLAN.md). `apps/pds` and `deployment/pds` are **(planned, [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md))**. `domains/identity` is the only product-rule package. `infrastructure/session` holds the browser session store and does not import the Postgres driver; `interfaces/http/compose.ts` passes the pool in.
+Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` is the UI in the tree. It holds no product rules and no database access (`app-only-shared`). `interfaces/admin` passes an empty route list (`interfaces/admin/compose.ts`), so the kit serves `GET /health` only (`shared/http/server.ts`). `interfaces/http` is the only interface with routes beyond that. `apps/admin` is **(planned, phase 3)**: [PLAN.md](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md#L663) names Admin v1 (§5.7) in that phase, [phase-3.md](https://github.com/Undefined6799/unset/blob/main/docs/ai/book/phase-3.md#L2487) first uses it at P3.18, and [P3.20](https://github.com/Undefined6799/unset/blob/main/docs/ai/book/phase-3.md#L2667) adds the screens. `apps/chat` is **(planned, phase 6)** ([PLAN.md](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md#L565)). `shared/admin-envelope` is **(planned)** (PLAN.md). `apps/pds` and `deployment/pds` are **(planned, [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md))**. `domains/identity` is the only product-rule package. `infrastructure/session` holds the browser session store and does not import the Postgres driver; `interfaces/http/compose.ts` passes the pool in.
 
 ## Allowlist
 
@@ -30,7 +30,7 @@ Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/mai
 | interface | `interfaces/<name>/` except the two admin services | itself, `domains/`, `infrastructure/`, `shared/`, Node, npm | `no-interface-to-interface` |
 | interface-http-render | `interfaces/http/` | `apps/web/render.tsx` | `app-render-entry-only` |
 | interface-http-render-build | `interfaces/http/web/render-entry.ts` | `@unset/apps-web/server` | the one unresolved import, until that build exists |
-| interface-admin-render | `interfaces/admin/` | `apps/admin/render.tsx` | `apps/admin` is **(planned, phase 6)** |
+| interface-admin-render | `interfaces/admin/` | `apps/admin/render.tsx` | `apps/admin` is **(planned, phase 3)** |
 | admin-service | `interfaces/pds-admin/`, `interfaces/chat-admin/` | itself, `shared/admin-envelope/`, Node built-ins | both folders **(planned)**; `admin-services-zero-deps` |
 | domain | `domains/<name>/` | itself, another domain's `index.ts`, `shared/errors/`, `shared/lexicons/`, type-only `shared/config/` | `domain-pure`, `domain-no-io-builtins` (no `fs`, `net`, `http`, `https`, `http2`, `dgram`, `dns`, `tls`, `child_process`, `worker_threads`) |
 | infrastructure | `infrastructure/<name>/` except net-guard | itself, `net-guard/`, `seal/`, `domains/`, `shared/`, Node, npm | `infrastructure-not-entry` |
