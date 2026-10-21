@@ -275,6 +275,19 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(user?.split(":").some((part) => part === "0" || part === "root")).toBe(false);
   });
 
+  test("compose_postgres_keeps_the_default_superuser", () => {
+    // P1.11y: pg_hba.conf lets only the OS user postgres in over the socket, by peer, and the entrypoint's init psql
+    // connects as POSTGRES_USER (docker-entrypoint.sh, pinned 18-trixie), so any other superuser name would stop the
+    // first init after initdb (Codex on #1189). Each stack sets only the password file, and reads no env file.
+    for (const compose of [dev(), local()]) {
+      const postgres = service(compose, "postgres");
+      expect(postgres.envFiles).toEqual([]);
+      expect(postgres.environment).toEqual([
+        ["POSTGRES_PASSWORD_FILE", { literal: "/run/secrets/pg_superuser_password" }],
+      ]);
+    }
+  });
+
   test("compose_postgres_tmpfs_for_socket", () => {
     const tmpfs = service(dev(), "postgres").tmpfs;
     expect(tmpfs.map((t) => t.target).sort()).toEqual(["/tmp", "/var/run/postgresql"]);

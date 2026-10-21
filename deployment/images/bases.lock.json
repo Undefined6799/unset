@@ -11,7 +11,7 @@
   "caddy-builder": {
     "ref": "docker.io/library/caddy",
     "tag": "2.11.7-builder-alpine",
-    "digest": "sha256:aa705b1e8e4bce41a7a30de934c1e00f6821667c1d1206424465065c92cb7674",
+    "digest": "sha256:d718a1d1431403c4a46698f33ad1c0f9dd5dd7fe2bae654d1027d275b6fb5fd7",
     "source": "upstream",
     "stage": "build",
     "buildStage": true

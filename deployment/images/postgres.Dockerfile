@@ -1,5 +1,6 @@
-# The Postgres image (P1.29d): the official image (deployment/images/bases.lock.json), one stage, run as its own
-# postgres user (999:999, which already owns its data directories) with the official docker-entrypoint.sh unchanged.
+# The Postgres image (P1.29d): the official image (deployment/images/bases.lock.json), pulled from our GHCR mirror by
+# its digest (P2.26b), one stage, run as its own postgres user (999:999, which already owns its data directories)
+# with the official docker-entrypoint.sh unchanged.
 # gosu exists only to drop root, so a server that never starts as root has no use for it; and if anything ever starts
 # this image as root, the entrypoint's gosu call fails instead of running Postgres as root
 # (docker-library/postgres 18/trixie/docker-entrypoint.sh, `exec gosu postgres`). The package managers go as in
@@ -11,9 +12,7 @@
 # so the pair goes, and the subject-hash link to the certificate with it; bases.lock.json lists the two files as
 # stripped, and the mirror scan skips them (the link is not a secret, so it is not listed).
 
-# Upstream base until P1.27s mirrors it (book edit 2026-10-06-p127-upstream-base-by-digest); removed by P1.27s.
-# hadolint ignore=DL3026
-FROM docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+FROM ghcr.io/undefined6799/mirror/postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND PostgreSQL"
 RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \

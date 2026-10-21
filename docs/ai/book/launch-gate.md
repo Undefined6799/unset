@@ -36,14 +36,15 @@ actually built before any gate step runs.
 runs on `0x40.space`, the hostname the new development PDS takes at the public opening (P1.33p); P1.34 moves the dev PDS
 to the home server on non-public tailnet names only. Once P1.33p replaces it, the old accounts can no longer be
 deactivated or deleted through their PDS. So the retirement (formerly L.01 part A) is now **P1.33a** in `phase-1.md`.
-Since 2026-10-13 it runs before P1.34's tailnet move and the public opening (P1.33p; architecture's Amendment 7 of
-2026-10-13-local-plc, Q1; book edits 2026-10-12-p133p-public-opening and 2026-10-13-verify-814-fixes, S2). Only part B
-stays here as L.01.
+Since 2026-10-13 it runs before the public opening (P1.33p), and before P1.34's tailnet move too until Alex waived C21
+under dev on 2026-10-21 (#1174; architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edits
+2026-10-12-p133p-public-opening and 2026-10-13-verify-814-fixes, S2). Only part B stays here as L.01.
 
 ```mermaid
 flowchart TD
   subgraph PH1[Phase 1]
-    L01A([P1.33a retire the 0x40 prototype<br/>formerly L.01 part A]) --> P134([P1.34 dev PDS on 0x40.space])
+    L01A([P1.33a retire the 0x40 prototype<br/>formerly L.01 part A]) --> P133P([P1.33p public opening])
+    %% P1.34 no longer depends on P1.33a: C21 is waived under dev (#1174, 2026-10-21)
   end
   SEV([early step: docs/human/severity.md, labels, bug template]) -.-> L02
   P620([P6.20 Phase 6 exit]) --> L00[L.00 refine the launch gate STOP]
@@ -126,8 +127,8 @@ Where: `deployment/bin/retirement-check` (built by P1.33a), the runbook `deploym
 `docs/human/retirement/0x40-record.md`, `docs/human/decisions/` (decision 24)
 Size: ~30 source lines (the placeholder call), ~40 runbook lines, ~60 test lines
 
-**Part A moved (global resolution 8).** Retiring the prototype is **P1.33a** in `phase-1.md`, before P1.34: the
-notice and export window, deactivation and deletion through the old PDS,
+**Part A moved (global resolution 8).** Retiring the prototype is **P1.33a** in `phase-1.md`, before P1.33p's public
+opening: the notice and export window, deactivation and deletion through the old PDS,
 the tombstones, the shutdown, `retire-0x40-secrets.md`, the dated record and the `retirement-check` script. Its
 "old PDS already replaced" and "rotation key lost" branches live there too. This step keeps only what must happen at the
 gate.
@@ -619,8 +620,9 @@ Diagram: none.
 
 **Outline changes** (for `01-outline.md`; this file does not edit it):
 - Add **L.00 "Refine the launch gate"**. L.02, L.03, L.04 and L.01 part B depend on it.
-- **L.01 part A is P1.33a in Phase 1, before P1.34** (done in the editor pass). **P1.34 depends on it.** L.01 at the gate
-  keeps part B: the placeholders and the final `retirement-check`. L.01 depends on L.00, P5.13 and P1.33a.
+- **L.01 part A is P1.33a in Phase 1, before P1.33p's public opening** (done in the editor pass; before P1.34 too
+  until the C21 waiver under dev, #1174, 2026-10-21). **P1.33p depends on it; P1.34 no longer does.** L.01 at the
+  gate keeps part B: the placeholders and the final `retirement-check`. L.01 depends on L.00, P5.13 and P1.33a.
 - **Add L.03a "Retro-scan of every test-period upload"** (editor pass; phase-2 E27, decision 23): depends on L.00 and
   P5.07b; L.06 and P2.25's wipe depend on its record.
 - **Severity definitions, labels and the bug template move to an early step** (Phase 0 or 1, beside the issue

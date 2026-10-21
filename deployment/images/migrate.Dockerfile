@@ -1,19 +1,16 @@
 # The migrate image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1): the
 # one-shot Compose `migrate` service, `node infrastructure/postgres/migrate-cli.ts`, holding the migrator credentials
-# only. Two stages on the locked Node base (deployment/images/bases.lock.json), the same digest as the web image:
-# install production dependencies, then copy only what the CLI loads into a runtime stage that runs as 65532. Node
-# runs the TypeScript sources directly, so there is no build stage. The stages install no OS packages.
+# only. Two stages on the locked Node base (deployment/images/bases.lock.json), the same digest and GHCR mirror as the
+# web image (P2.26b): install production dependencies, then copy only what the CLI loads into a runtime stage that
+# runs as 65532. Node runs the TypeScript sources directly, so there is no build stage. The stages install no OS
+# packages.
 
-# Upstream base until P1.27s mirrors it (book edit 2026-10-06-p127-upstream-base-by-digest); removed by P1.27s.
-# hadolint ignore=DL3026
-FROM docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
+FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
 WORKDIR /app
 COPY . .
 RUN npm ci --ignore-scripts --omit=dev
 
-# Upstream base until P1.27s mirrors it (book edit 2026-10-06-p127-upstream-base-by-digest); removed by P1.27s.
-# hadolint ignore=DL3026
-FROM docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
+FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production

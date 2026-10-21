@@ -21,15 +21,16 @@ What puts the system on machines: Compose, the edge, backup and the preflight. D
 | preflight | `deployment/preflight/` | [preflight](preflight/) |
 | env templates | `deployment/env/` | [compose](compose/) |
 | reserved labels | `deployment/reserved-labels.txt` | this page |
-| backup | — | (planned). Guideline §1 names backup scripts. No folder on the tree. |
-| terraform, ansible | `deployment/terraform/`, `deployment/ansible/` | (planned, Phase 5). ADR 0001 and guideline §1 add them at P5.00, when hosting is chosen. |
-| PDS presentation patches | `deployment/pds/` | (planned). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) names the folder. It is not on the tree. The ADR status line says implementation and release gates are pending. `apps/pds/` is also not on the tree. |
+| backup | — | (planned). [Guideline §1](https://github.com/Undefined6799/unset/blob/main/docs/human/engineering/architecture-and-development-guideline.md) names backup scripts. No folder on the tree. |
+| terraform, ansible | `deployment/terraform/`, `deployment/ansible/` | (planned, Phase 5). [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md) and guideline §1 add them at P5.00, when hosting is chosen. Not on the tree. |
+| PDS presentation patches | `deployment/pds/` | (planned). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) decision 3 names the folder. Not on the tree. The ADR status line says implementation and release gates are pending. |
+| PDS presentation package | `apps/pds/` | (planned). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) decision 3 names the folder. Not on the tree. |
 | prod compose | `compose.prod.yaml` | Not on the tree. |
 | prod network table | `deployment/networks.prod.json` | Not on the tree. `--env prod` reads that path (`networkTable` in `deployment/preflight/inputs.ts`). |
 
 ## Owns
 
-The pieces in the table. `CLAUDE.md` and guideline §1 name compose, edge, backup and preflight. The tree also has images, postgres init, env templates, the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. These pages follow the tree.
+The pieces in the table. `CLAUDE.md` and guideline §1 name compose, edge, backup and preflight. The tree also has images, postgres init, env templates, the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. These pages follow the tree. Rows marked planned are not folders yet. `deployment/postgres/init-local/` is on the tree and is superseded; see [postgres init](postgres-init/).
 
 `.github/CODEOWNERS` (supply chain, then the trusted-base section):
 
@@ -40,6 +41,8 @@ The pieces in the table. `CLAUDE.md` and guideline §1 name compose, edge, backu
 | `/deployment/postgres/init/` | Trusted base |
 | `/deployment/postgres/init-local/` | Trusted base |
 | `/deployment/sigstore/` | Trusted base |
+
+`/deployment/postgres/init-local/` is on the tree and in that trusted-base section. It is superseded by [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md). See [postgres init](postgres-init/).
 
 The preflight is product. The edge is trusted base. [architecture.md](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md) records that split as `edge-not-preflight`.
 
@@ -74,7 +77,7 @@ No `main.ts`. The commands and the workflows are on [compose](compose/), [prefli
 | `sigstore-root` | `.github/workflows/sigstore-root.yml` | `fetch` (`workflow_dispatch` only) |
 | `local-stack` | `.github/workflows/local-stack.yml` | `green`, `red` |
 
-`pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. That script is under `scripts/`, not `deployment/pds/`.
+`pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. That script is under `scripts/`. `deployment/pds/` and `apps/pds/` are planned; this job is not a build of those folders.
 
 ## Data
 

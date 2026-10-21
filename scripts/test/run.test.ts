@@ -263,11 +263,38 @@ describe("images project", { timeout: 60_000 }, () => {
     const toRun = filesToRun("ci", listed, glob);
     expect(toRun).toEqual(listed);
     expect(compare(glob, listed, new Set(glob), none, [], [], toRun).notExecuted).toEqual(["vendor/x/b.test.ts"]);
-    // Locally and in the opt-in, only the files the run starts are checked.
+    // Locally only the files the run starts are checked; the images mode checks every listed image test.
     expect(filesToRun("local", listed, glob)).toEqual(glob);
     expect(filesToRun("images", ["d/a.image.test.ts", ...listed], ["d/a.image.test.ts"])).toEqual([
       "d/a.image.test.ts",
     ]);
+    // In the images mode as in --units, a listed image test the glob missed (a symlink, say) is still checked.
+    expect(
+      filesToRun("images", ["d/a.image.test.ts", "vendor/b.image.test.ts", ...listed], ["d/a.image.test.ts"]),
+    ).toEqual(["d/a.image.test.ts", "vendor/b.image.test.ts"]);
+  });
+
+  // P0.07d: CI runs the unit projects and the images project in two parallel jobs, `--units` and `--images`;
+  // ci.yml's check gate needs both. `--units` checks every listed file outside the images project, so a listed file
+  // the glob missed still fails, as in ci mode.
+  test("units_mode_runs_every_unit_file", async () => {
+    expect(modeFor({}, ["--units"])).toBe("units");
+    expect(modeFor({ GITHUB_ACTIONS: "true", CI: "true" }, ["--units"])).toBe("units");
+    expect(() => modeFor({}, ["--units", "--images"])).toThrow("--units and --images are exclusive");
+    const plan = imagesPlan("units", glob);
+    expect(plan).toEqual({
+      runs: [["--project=!images"]],
+      expected: ["domains/x/a.test.ts"],
+      notRun: null,
+      problem: null,
+    });
+    const listed = ["d/a.image.test.ts", "domains/x/a.test.ts", "vendor/x/b.test.ts"];
+    expect(filesToRun("units", listed, plan.expected)).toEqual(["domains/x/a.test.ts", "vendor/x/b.test.ts"]);
+    const root = fixture({ "domains/x/a.test.ts": PASSING, "domains/x/b.image.test.ts": FAILING }, true);
+    const { code, err } = await runMain(root, "units");
+    expect(code).toBe(0);
+    expect(err).not.toContain("images project: not run locally");
+    expect((await runMain(fixture({ "domains/x/a.test.ts": FAILING }, true), "units")).code).toBe(1);
   });
 
   test("empty_images_project_fails_in_ci", async () => {
