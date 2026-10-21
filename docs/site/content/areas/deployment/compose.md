@@ -39,11 +39,11 @@ Networks, from `deployment/networks.dev.json`. Under local, C17 leaves the two d
 | `pds_egress` | false | `pds` |
 | `web_egress` | false | `web` |
 
-Both compose files set `PDS_DID_PLC_URL` and web's `PLC_URL` to `https://plc.directory`. The comments cite [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md). Both records' status lines say Proposed.
+Both compose files set `PDS_DID_PLC_URL` and web's `PLC_URL` to `https://plc.directory`. The comments cite [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md). Those records supersede a local PLC. The pages follow these files.
 
 Named volumes in both files: `pgdata`, `pdsdata`, `edgedata`, `edgeconfig`. Secret names are file secrets whose sources sit outside the checkout (`../../unset-dev-secrets/` in the compose files). The runbook is [dev-stack-secrets](https://github.com/Undefined6799/unset/blob/main/docs/human/runbooks/dev-stack-secrets.md).
 
-Postgres mounts `./postgres/init` at `/docker-entrypoint-initdb.d` in both files. Neither file mounts `deployment/postgres/init-local/`. See [postgres init](../postgres-init/).
+Postgres mounts `./postgres/init` at `/docker-entrypoint-initdb.d` in both files. `deployment/postgres/init-local/` is not mounted. It is superseded by the same ADRs. See [postgres init](../postgres-init/).
 
 ## May import
 
