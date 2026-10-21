@@ -26,10 +26,15 @@ The browser cookie is host-only. The database stores a hash.
 | --- | --- | --- |
 | Cookie | [`interfaces/http/session-cookie.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/http/session-cookie.ts) | Name `__Host-sid`. Attributes are `Path=/; Secure; HttpOnly; SameSite=Lax` and `Max-Age`. Two cookies of that name are ignored. |
 | Store | [`infrastructure/session/store.ts`](https://github.com/Undefined6799/unset/blob/main/infrastructure/session/store.ts) | 32 random bytes in the cookie; `app.session.id_hash` is their sha256. Expiry uses the database clock. A session lasts only while `app.oauth_session` has a row for the DID. |
-| App pages | [`interfaces/http/app-gate.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/http/app-gate.ts) | `openApp` reads the session, then onboarding, then the email gate. Legal, logout, welcome and signed-out pages do not use it. |
+| App pages | [`interfaces/http/app-gate.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/http/app-gate.ts) | `openApp` reads the session, then onboarding, then the email gate. A missing session redirects to `/login`. |
+| Welcome, verify-email, logout | `interfaces/http/routes/welcome.ts`, `verify-email.ts`, `logout.ts` | These handlers read the session themselves. They do not call `openApp`. |
 | Domain attribute | [`scripts/guards/cookie-domain.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/cookie-domain.ts) | A `Domain` attribute on a cookie fails CI. The guard has no allow. |
 
-`defineRoute` records `session: "required"` or `"none"` with no default (`shared/http/routes.ts`). Every route under `interfaces/http/routes/` passes `"none"`. The kit therefore does not run its session middleware on those routes; the handler calls the store. `GET /health` is `session: "none"` and skips the host check and the trusted-proxy step.
+Two layers. The manifest value is not the page gate, and this is not fully enforced: unset master is having the checker file the gap.
+
+`defineRoute` records `session: "required"` or `"none"` with no default (`shared/http/routes.ts`). `requiresSession` is set only when the value is `"required"`. `shared/http/server.ts` `admit` returns before reading a session when that flag is absent, and `interfaces/http/compose.ts` does not pass a session reader to `createServer`. Every route under `interfaces/http/routes/` passes `"none"`. `"none"` does not mean no auth. No current route sets `"required"`, so the kit does not run its session middleware. `GET /health` is `session: "none"` and skips the host check and the trusted-proxy step.
+
+The handlers are the second layer. `openApp` (`interfaces/http/app-gate.ts`) is the gate on an app page: session, then onboarding, then the email gate. `interfaces/http/routes/me.ts` calls `deps.open` for `/did`, `/me` and `/:did`, and `compose.ts` binds `open` to `openApp`. `interfaces/http/routes/settings.ts` calls `openApp` for `/settings/profile`. Welcome, verify-email and logout do not call `openApp`. `welcome.ts` reads the session in `located` and on `GET /welcome/blocked`. `verify-email.ts` reads it on `GET /verify-email` and `POST /verify-email/reconsent`. `logout.ts` reads it on `POST /logout` and `GET /signed-out`. Legal pages pass `"none"` and do not read the session.
 
 ## CSRF gate
 

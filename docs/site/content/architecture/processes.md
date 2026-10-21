@@ -20,9 +20,19 @@ Every service drops all capabilities, sets `no-new-privileges`, uses a read-only
 | web | `deployment/images/node-app.Dockerfile` | 65532:65532 | db, app, web_egress | `web` |
 | newt | `docker.io/fosrl/newt:1.18.1` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
 
-Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md)). `NETGUARD_INTERNAL_HOSTS` is absent on the dev web service, so the config default applies: an empty list (`shared/config/netGuard.ts`). Prod refuses an empty list. There is no prod compose file.
+Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending). There is no prod compose file.
 
 `deployment/compose.local.yaml` is the throwaway stack on one machine. `deployment/compose.local.test.ts` holds it to the dev file. Differences that change this picture: no Newt; the edge publishes `127.0.0.1:80` and `127.0.0.1:443`; web sets `NETGUARD_INTERNAL_HOSTS` from `PDS_HOSTNAME`; `pds-token-reader` is a `tools` profile service and `up` does not start it. The file header lists the rest.
+
+## Internal hosts
+
+`NETGUARD_INTERNAL_HOSTS` names hosts inside the stack that must resolve only to private addresses (`shared/config/netGuard.ts`). [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) Decision 3 names our PDS as that one entry (decided (0001 log), acceptance pending). [ADR 0031](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0031-public-staging-pds.md) Decision 3 drops the exception on staging: web reaches the PDS through public DNS, Pangolin, Newt and the edge. The two do not conflict. 0022 is the egress rule. 0031 is the accepted staging path, and local still sets the one entry.
+
+| Environment | `NETGUARD_INTERNAL_HOSTS` |
+| --- | --- |
+| local | Set to our PDS (`deployment/compose.local.yaml`, `${PDS_HOSTNAME}`) |
+| dev/staging | Must be absent. `devTunnelProblems` (`deployment/preflight/checks/networks.ts`) fails a service that names one. The dev compose file does not set the key. ADR 0031 Decision 3 drops the exception. |
+| prod | Required and non-empty. The field rule fails when `UNSET_ENV` is `prod` and the list is empty (`shared/config/netGuard.ts`). |
 
 ## Networks
 
@@ -40,7 +50,7 @@ Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/
 
 ## Database roles
 
-`deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates `migrator` (login, owns database `unset`) and `tap` (login, owns database `tap`). Those two are not in `roles.json`. `deployment/postgres/init-local/10-local-plc.sh` creates a `plc` role; neither compose file mounts `init-local/`.
+`deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates `migrator` (login, owns database `unset`) and `tap` (login, owns database `tap`). Those two are not in `roles.json`. `deployment/compose.local.yaml` mounts `./postgres/init` on postgres and nothing else there, the same init directory `deployment/compose.dev.yaml` mounts. The phase-1 book still describes a local read-only `init-local/` mount (`docs/ai/book/phase-1.md`, the P1.34d difference list and P1.34u). That passage is superseded by [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md) (no PLC of our own; both decided (0001 log), acceptance pending). `deployment/postgres/init-local/10-local-plc.sh` still creates a `plc` role. Neither compose file mounts it.
 
 Migration `infrastructure/postgres/migrations/0003_roles_and_grants.sql` creates every `roles.json` role with no table privileges. `infrastructure/postgres/roles.ts` sets a password only when `passwordFrom` is a file name. A login role with `passwordFrom: null` gets no password from that sync.
 
