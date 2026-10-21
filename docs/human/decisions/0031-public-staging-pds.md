@@ -1,6 +1,7 @@
 # 0031 — Staging public through Pangolin, no login, no certificate at our edge
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-10-20 21:04:02Z (the acceptance line below, typed in the project chat in answer
+to the coordinator's request). From here the record changes only to be marked superseded.
 
 ## Context
 Accepted ADR 0025 (2026-10-19 04:17:55Z) puts `staging.unset.ac` behind Alex's Pangolin with the same tester login
@@ -247,3 +248,6 @@ production name is a Phase 5 decision.
   Decision 1's app zones and `X-Robots-Tag` in P1.36b, land before either name is created at Pangolin.
 - Acceptance line: "yes accept ADR 0031 staging public through Pangolin no login no certificate at our edge
   docs/human/decisions/0031-public-staging-pds.md".
+- Accepted by Alex on 2026-10-20 at 21:04:02Z with exactly that line, typed in the project chat in answer to
+  the coordinator's request, after #1132 put this text on main. P1.37v (#1115) unblocks, and P1.36b's scope gains
+  Decision 1's zones and header.
