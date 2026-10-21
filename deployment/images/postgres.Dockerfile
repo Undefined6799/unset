@@ -24,7 +24,13 @@ RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/c
     /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config \
   && rm -f /usr/bin/chage /usr/bin/chfn /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
     /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd
+# Client authentication from our file alone (P1.11y; deployment/postgres/pg_hba.conf): the superuser by peer on the
+# socket, every other role by SCRAM over TCP, no trust line. The official entrypoint passes the CMD's arguments to
+# initdb's temporary server and to the real one (docker-entrypoint.sh in this base, `docker_temp_server_start "$@"` at
+# line 360 and `exec "$@"`), so a new data directory and one initialised before both read it.
+COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf
 USER 999:999
+CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]
 # Ready once the server accepts connections on its own socket (P1.29; Compose's `depends_on: service_healthy` waits on
 # it). Exec form, with the timings the other images use; pg_isready ships in the base (PostgreSQL 18 docs, pg_isready).
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
