@@ -2,7 +2,7 @@
 // 20:10Z): the committed Iconoir files equal the sheet's ICONS data, the sheet's bundle is parsed and never run, and
 // nothing outside the element and attribute allowlist gets through.
 import { createHash } from "node:crypto";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
@@ -19,6 +19,8 @@ function copy(): string {
   const root = mkdtempSync(join(tmpdir(), "icons-"));
   temps.push(root);
   for (const dir of ["sheet", "icons", "inventory.json"]) cpSync(join(UI, dir), join(root, dir), { recursive: true });
+  if (existsSync(join(UI, "approved-extensions.json")))
+    cpSync(join(UI, "approved-extensions.json"), join(root, "approved-extensions.json"));
   return root;
 }
 /** node:fs bound to one shared/ui root, as scripts/ui/icons.ts binds it. */
@@ -54,7 +56,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(36);
+  expect(Object.keys(json.icons)).toHaveLength(38);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -167,7 +169,7 @@ test("icon_svg_allowlist_enforced", () => {
     expect(() => sheetDrawings(`var ICONS = ${icons};\n`), icons).toThrow(/icons\.parse/);
 });
 
-// Prospective P2.24f inputs: the approved record and exact official Iconoir 7.12.1 source bytes.
+// Independent P2.24f fixture inputs: the approved record and exact official Iconoir 7.12.1 source bytes.
 const REGISTRATION = {
   schemaVersion: 1,
   baseSheet: {
@@ -326,40 +328,71 @@ const ADDITIONS: Record<string, string> = {
   apps: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
 };
 
-function registered() {
-  const files = new Map<string, string>(
-    Object.entries(ADDITIONS).map(([name, text]) => [`icons/svg/${name}.svg.txt`, text]),
-  );
-  const inventory = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8"));
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+// Recorded from the last absent-pointer commit, 18291e6; never derived with the generator under test.
+const LEGACY_JSON_SHA256 = "98b8e36e4bd78158ff0ba9c16c792fe244800a56b5fc3f5663017d7b9c9032da";
+const LEGACY_MODULES_SHA256 = "419a9455e85d2135b72ab5ed1c1bb765761ecd33bef5602e385a6de839278476";
+
+/** Explicit imported-sheet fixture: remove the two additions from today's product snapshot, never from the sheet. */
+function baseFiles(): Map<string, string> {
+  const paths = [
+    "sheet/source.json",
+    "sheet/components/Icon/README.md",
+    "sheet/bundle.js.txt",
+    "inventory.json",
+    "icons/icons.json",
+    ...["icons/svg", "icons/drawings"].flatMap((dir) => readdirSync(join(UI, dir)).map((name) => `${dir}/${name}`)),
+  ];
+  const files = new Map(paths.map((path) => [path, readFileSync(join(UI, path), "utf8")]));
+  const inventory = JSON.parse(files.get("inventory.json") as string);
+  delete inventory.Icon.extensions;
+  files.set("inventory.json", JSON.stringify(inventory));
+  const json = JSON.parse(files.get("icons/icons.json") as string);
+  delete json.extensionProvenance;
+  for (const alias of ["devices", "apps"]) {
+    files.delete(`icons/svg/${alias}.svg.txt`);
+    files.delete(`icons/drawings/${alias}.generated.ts`);
+    for (const field of ["icons", "iconoir", "drawings"]) delete json[field][alias];
+  }
+  files.set("icons/icons.json", `${JSON.stringify(json, null, 2)}\n`);
+  return files;
+}
+
+/** Reads, listing, writes and deletions all use this closed snapshot; missing files never fall back to live data. */
+function virtual(files: Map<string, string>) {
   const reads: string[] = [];
-  const base = fileIo(UI);
   const io: IconsIo = {
     readText: (path) => {
       reads.push(path);
-      return files.get(path) ?? base.readText(path);
+      const text = files.get(path);
+      if (text === undefined) throw new Error(`Missing fixture file: ${path}`);
+      return text;
     },
-    sha256: (path) => createHash("sha256").update(io.readText(path)).digest("hex"),
-    list: (dir) => [
-      ...new Set([
-        ...base.list(dir),
-        ...[...files.keys()].filter((path) => dirname(path) === dir).map((path) => path.slice(dir.length + 1)),
-      ]),
-    ],
+    sha256: (path) => sha256(io.readText(path)),
+    list: (dir) => [...files.keys()].filter((path) => dirname(path) === dir).map((path) => path.slice(dir.length + 1)),
     writeText: (path, text) => {
       files.set(path, text);
     },
   };
+  const run = (args: string[] = []) => {
+    const lines: string[] = [];
+    return { code: runIcons(args, io, (line) => lines.push(line)), lines };
+  };
+  return { io, files, reads, run };
+}
+
+function registered() {
+  const fixture = virtual(baseFiles());
+  const { files, io } = fixture;
+  for (const [name, text] of Object.entries(ADDITIONS)) files.set(`icons/svg/${name}.svg.txt`, text);
+  const inventory = JSON.parse(files.get("inventory.json") as string);
   const pin = (record: unknown = REGISTRATION) => {
     files.set("approved-extensions.json", JSON.stringify(record));
     inventory.Icon.extensions = [{ path: "approved-extensions.json", sha256: io.sha256("approved-extensions.json") }];
     files.set("inventory.json", JSON.stringify(inventory));
   };
   pin();
-  const run = (args: string[] = []) => {
-    const lines: string[] = [];
-    return { code: runIcons(args, io, (line) => lines.push(line)), lines };
-  };
-  return { io, files, inventory, reads, pin, run };
+  return { ...fixture, inventory, pin };
 }
 
 function editRecord(path: string, value: unknown): unknown {
@@ -374,15 +407,22 @@ function editRecord(path: string, value: unknown): unknown {
 }
 
 test("icon_absent_extension_preserves_every_output_byte", () => {
-  const root = copy();
+  const fixture = virtual(baseFiles());
+  const json = fixture.io.readText("icons/icons.json");
+  const modules = [...fixture.files]
+    .filter(([path]) => path.startsWith("icons/drawings/"))
+    .sort(([a], [b]) => a.localeCompare(b));
+  expect(sha256(json)).toBe(LEGACY_JSON_SHA256);
+  expect(sha256(JSON.stringify(modules))).toBe(LEGACY_MODULES_SHA256);
+  expect(Object.keys(JSON.parse(json).icons)).toHaveLength(36);
+  expect(JSON.parse(json)).not.toHaveProperty("extensionProvenance");
+  expect(JSON.parse(fixture.io.readText("inventory.json")).Icon).not.toHaveProperty("extensions");
+  expect(fixture.io.list("icons/svg")).toHaveLength(36);
+  expect(modules).toHaveLength(36);
   const writes: string[] = [];
-  const io = {
-    ...fileIo(root),
-    writeText: (path: string) => {
-      writes.push(path);
-    },
-  };
-  expect(runIcons([], io, () => undefined)).toBe(0);
+  fixture.io.writeText = (path) => writes.push(path);
+  expect(fixture.run()).toEqual({ code: 0, lines: [] });
+  expect(fixture.run(["--check"])).toEqual({ code: 0, lines: [] });
   expect(writes).toEqual([]);
 });
 
@@ -390,7 +430,9 @@ test("icon_approved_extension_generates_only_the_38_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
-  const base = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
+  const baseText = baseFiles().get("icons/icons.json") as string;
+  expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
+  const base = JSON.parse(baseText);
   expect(Object.keys(json.icons)).toHaveLength(38);
   expect(json.icons).toEqual({
     ...base.icons,
