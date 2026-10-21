@@ -41,6 +41,18 @@ import {
 const DEPLOYMENT = import.meta.dirname;
 const parse = (file: string): Compose => parseCompose(readFileSync(join(DEPLOYMENT, file), "utf8"), file);
 
+/**
+ * The upstream image a dev mirror ref copies (P2.26b): mirror.yml copies each source to the same digest, so a local
+ * stack runs the upstream spelling of the bytes dev runs from the mirror. Any other image is itself.
+ */
+const DEPLOY_LOCK = JSON.parse(readFileSync(join(DEPLOYMENT, "images.lock.json"), "utf8")) as Record<
+  string,
+  { ref: string; origin: string; upstreamSource?: string }
+>;
+const upstreamOf = (image: string | null): string | null =>
+  Object.values(DEPLOY_LOCK).find((entry) => entry.origin === "upstream" && entry.ref === image)?.upstreamSource ??
+  image;
+
 /** The dev root's public folder, bound read-only into pds and web only (item 5). */
 const TRUST: Mount = { type: "bind", source: "../../unset-dev-trust", target: "/etc/unset-dev-trust", readOnly: true };
 /** What the local file may add to a service, beyond dev's: mounts, secrets and networks, by service. */
@@ -201,8 +213,9 @@ function serviceDrift(dev: Service, local: Service): string[] {
         .filter((key) => !same(dev.hardening[key as keyof Hardening], local.hardening[key as keyof Hardening]))
         .map((key) => `${dev.name}: ${key} differs`),
     // A pulled image may be built locally instead (judged by C2 to C5, C18, C25 and C27 under the card), never the
-    // other way round.
-    image: () => (same(dev.image, built ? dev.image : local.image) ? [] : [`${dev.name}: image differs`]),
+    // other way round; a mirrored one runs locally as its upstream source.
+    image: () =>
+      same(upstreamOf(dev.image), built ? upstreamOf(dev.image) : local.image) ? [] : [`${dev.name}: image differs`],
     build: () => (same(dev.build, built ? null : local.build) ? [] : [`${dev.name}: build differs`]),
     networks: () =>
       same(

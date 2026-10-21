@@ -26,11 +26,12 @@ import {
   parseEnvFile,
   type Service,
 } from "./compose-parse.ts";
+import { COSIGN, cosignProblem } from "./cosign.ts";
 import { NOT_REGULAR, readRegular, UnreadableFile } from "./regular-file.ts";
 import { ConfiguredValues, SecretMap } from "./secret-map.ts";
 
 export type Deps = {
-  /** The repository root: the lock, the cosign key and the verify-images CLI are read below it. */
+  /** The repository root: the lock, the Sigstore trusted root and the verify-images CLI are read below it. */
   root: string;
   run: Run;
   readText?: (path: string) => string | null;
@@ -347,7 +348,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     envReads: envFiles.ids,
     mountedSecrets,
     lockPath: join(deps.root, "deployment/images.lock.json"),
-    cosignKeyPath: join(deps.root, "deployment/cosign.pub"),
+    trustedRootPath: join(deps.root, TRUSTED_ROOT),
     verify: verifier(deps),
     manifestKind: manifestKind(deps),
     run: deps.run,
@@ -367,11 +368,22 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
   return { inputs, configured: new ConfiguredValues(values) };
 }
 
-/** The verify-images CLI (P1.27q) by fixed path and arguments; its stderr holds one failure per line. */
+/** The committed Sigstore trusted root (P2.26e) C3 and C4 verify against, offline. */
+const TRUSTED_ROOT = "deployment/sigstore/trusted_root.json";
+
+/**
+ * The verify-images CLI (P1.27q) by fixed path and arguments, offline against the committed trusted root; its stderr
+ * holds one failure per line. It runs only once the pinned cosign checks out (P2.26b), and with PATH holding only that
+ * cosign's folder, so the `cosign` it runs is the binary just hashed.
+ */
 function verifier(deps: Deps): Verifier {
   return async (lockPath, signal) => {
+    const problem = await cosignProblem(deps.run, process.arch, signal);
+    if (problem !== null) return { ok: false, failures: [problem] };
     const script = join(deps.root, "scripts/ci/verify-images.ts");
-    const { code, stderr } = await deps.run(process.execPath, [script, lockPath], signal);
+    const trustedRoot = join(deps.root, TRUSTED_ROOT);
+    const args = [`PATH=${dirname(COSIGN.path)}`, process.execPath, script, lockPath, "--trusted-root", trustedRoot];
+    const { code, stderr } = await deps.run("/usr/bin/env", args, signal);
     if (code === 0) return { ok: true };
     const failures = stderr.split("\n").filter((line) => line.trim() !== "");
     return { ok: false, failures: failures.length > 0 ? failures : ["verify-images failed"] };
