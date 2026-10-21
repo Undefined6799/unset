@@ -20,7 +20,7 @@ One page per interface process that has a `routes.manifest.json`.
 - **Auth** is the data file, from the handler, not the manifest. `gate: openApp` when the handler calls `openApp`. `reads session` when it calls `readSession`. `none` otherwise.
 - **CSRF** is `yes` when `middleware` includes `csrf`, and `no` when the array is present and does not include it. A missing array is `not recorded`.
 - **Rate limit** is the manifest `rateLimit` string. **Buckets** are that name's entries in `interfaces/<process>/limits.ts`. `exempt` is not a key of that table, so its buckets cell is `not recorded`.
-- **Status** is `built` for a manifest route. A data-file key with `planned: true` or `planned: Phase N` and no manifest entry is `planned`, and its generated cells are `not recorded`.
+- **Status** is `built` for a manifest route.
 - **Why, input, output, errors** are the data file. They are prose, not a second copy of the security columns.
 
 ## Groups
