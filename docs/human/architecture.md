@@ -21,21 +21,23 @@ for every change. Each would add moving parts before the closed test shows a nee
 
 ## The shape in one paragraph
 
-People use three apps (`apps/web`, `apps/admin`, `apps/chat`). Each request enters through one
-process in `interfaces/`, which checks who is asking, calls a product rule in `domains/`, and reaches
-outside systems (Postgres, the PDS, Tap, Matrix, storage, Arachnid, email) only through
+People will use three apps. Today only `apps/web` exists. `apps/admin` and `apps/chat` are
+planned, phase 6. Folders appear with their first code. Each request enters through one
+process in `interfaces/`, which checks who is asking, calls a product rule in `domains/`, and
+reaches outside systems (Postgres, the PDS, Tap, Matrix, storage, Arachnid, email) only through
 `infrastructure/`. Every running process has its own folder, container, database role and network,
-so a fault or a compromise in one does not reach the others. `pds-admin` and `chat-admin`, which
-hold the admin credentials, import nothing but their own folder, Node built-ins and
-`shared/admin-envelope/`.
+so a fault or a compromise in one does not reach the others. `pds-admin` (planned, P2.09) and
+`chat-admin` (planned, phase 6) hold the admin credentials. They import nothing but their own
+folder, Node built-ins and `shared/admin-envelope/` (planned).
 
 ## PDS presentation boundary (ADR 0027)
 
-The approved PDS customization is a build-only `apps/pds/` presentation package, not another running app or
-account server. It consumes generic `shared/ui` and its declared UI runtime, with no app/domain/infrastructure/PDS
-SDK imports, data hooks or authentication logic. The exact upstream frontend owns routing, guards, hydration,
-validation, actions, translations and account state; its reviewed presentation patches live in `deployment/pds/`.
-Shared UI remains independent of upstream router/auth types; generic extensions follow design-sheet registration.
+The approved PDS customization will be a build-only `apps/pds/` presentation package (planned, ADR 0027), not
+another running app or account server. It will consume generic `shared/ui` and its declared UI runtime, with no
+app/domain/infrastructure/PDS SDK imports, data hooks or authentication logic. The exact upstream frontend owns
+routing, guards, hydration, validation, actions, translations and account state; its reviewed presentation
+patches will live in `deployment/pds/` (planned, ADR 0027). Shared UI remains independent of upstream
+router/auth types; generic extensions follow design-sheet registration.
 
 Only the resolved installed `@atproto/oauth-provider-ui/dist` directory and manifest may differ from the pinned
 official image. All other contents, modes, paths, symlinks and runtime image configuration remain equal. Provider
