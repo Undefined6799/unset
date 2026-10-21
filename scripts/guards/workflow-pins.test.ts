@@ -273,6 +273,23 @@ describe("docs auto-merge (P0.07e)", () => {
     expect(elsewhere).toContain("write permission: pull-requests: write");
   });
 
+  test("docs_only_runs_only_with_kind_docs", () => {
+    const docsOnly = readFileSync(join(WORKFLOWS, "docs-only.yml"), "utf8");
+    const types = docsOnly.match(/^ {4}types: \[([^\]]+)\]$/m)?.[1] ?? "";
+    for (const type of ["opened", "synchronize", "reopened", "ready_for_review", "labeled", "unlabeled"]) {
+      expect(
+        types.split(",").map((part) => part.trim()),
+        type,
+      ).toContain(type);
+    }
+    const condition =
+      jobs(code(docsOnly))
+        .get("docs-only")
+        ?.find((line) => /^ {4}if: /.test(line)) ?? "";
+    expect(condition).toContain("github.event.pull_request.draft == false");
+    expect(condition).toContain("contains(github.event.pull_request.labels.*.name, 'kind/docs')");
+  });
+
   test("auto_merge_rejects_pull_request_code", () => {
     const pullRequest = text.replace("  workflow_run:\n", "  workflow_run:\n  pull_request:\n");
     expect(problems(pullRequest, file)).toContain("docs auto-merge workflow has a pull request trigger");

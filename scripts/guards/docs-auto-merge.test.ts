@@ -33,6 +33,7 @@ test("enables_only_when_every_gate_holds", () => {
   expect(decide({ ...ok, draft: true, autoMerge: "squash" })).toBe("disable");
   expect(decide({ ...ok, check: "failure" })).toBe("leave");
   expect(decide({ ...ok, check: "skipped" })).toBe("leave");
+  expect(decide({ ...ok, check: "skipped", autoMerge: "squash" })).toBe("disable");
   expect(decide({ ...ok, check: "pending", autoMerge: "squash" })).toBe("disable");
   expect(decide({ ...ok, check: "missing" })).toBe("leave");
   expect(decide({ ...ok, check: "error", autoMerge: "off" })).toBe("leave");

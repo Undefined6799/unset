@@ -3,7 +3,9 @@
 # green docs-only check is necessary for auto-merge and not sufficient.
 # docs-auto-merge.yml re-checks the file list with the default-branch allowlist.
 # labeled and unlabeled re-run this workflow so removing kind/docs starts that
-# re-check. Drafts are skipped, as in ci.yml (P0.09l).
+# re-check. Without kind/docs the job is skipped, not failed (workflow syntax,
+# jobs.<job_id>.if: a false condition is marked skipped). Drafts are skipped
+# too, as in ci.yml (P0.09l).
 
 name: docs-only
 
@@ -19,7 +21,7 @@ concurrency:
 
 jobs:
   docs-only:
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'kind/docs')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
