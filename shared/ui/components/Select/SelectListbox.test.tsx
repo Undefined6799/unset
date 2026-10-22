@@ -213,6 +213,37 @@ test("select_disabled_fill_matches_native", () => {
     expect(combobox).toMatch(property);
   }
   expect(combobox).toMatch(/cursor:\s*not-allowed/);
+  // No script: a select inside a disabled fieldset has no disabled attribute, so the native
+  // control uses :disabled for the same fill and text.
+  const fallback = rule(sheet, ".control:disabled");
+  for (const property of [/background-color:\s*var\(--color-surface-raised\)/, /color:\s*var\(--color-ink-muted\)/]) {
+    expect(fallback).toMatch(property);
+  }
+  expect(fallback).toMatch(/cursor:\s*not-allowed/);
+  expect(fallback).toMatch(/border-color:\s*var\(--color-line-strong\)/);
+});
+
+test("select_disabled_after_mount_stays_closed", async () => {
+  const { native, box } = await mount();
+  native.disabled = true;
+  await press(box, "ArrowDown");
+  expect(box.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => box.click());
+  expect(box.getAttribute("aria-expanded")).toBe("false");
+});
+
+test("select_fieldset_disabled_after_mount_stays_closed", async () => {
+  const { form, native, box } = await mount();
+  const fieldset = document.createElement("fieldset");
+  fieldset.disabled = true;
+  fieldset.append(...form.childNodes);
+  form.append(fieldset);
+  expect(native.disabled).toBe(false);
+  expect(native.matches(":disabled")).toBe(true);
+  await press(box, "ArrowDown");
+  expect(box.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => box.click());
+  expect(box.getAttribute("aria-expanded")).toBe("false");
 });
 
 test("select_island_leaves_required_native", async () => {

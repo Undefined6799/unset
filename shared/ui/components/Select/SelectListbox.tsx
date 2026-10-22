@@ -88,6 +88,10 @@ export function SelectListbox({ select }: SelectListboxProps) {
   const last = options.length - 1;
 
   const pick = (index: number) => {
+    if (selectDisabled(element)) {
+      setOpen(false);
+      return;
+    }
     const option = options[index];
     setOpen(false);
     if (option === undefined || index === chosen) return;
@@ -126,8 +130,10 @@ export function SelectListbox({ select }: SelectListboxProps) {
     " ": () => (open ? pick(active) : show(chosen)),
     Escape: () => setOpen(false),
   };
+  // Read disabled at the event. A later attribute or fieldset change does not render again, and a
+  // boolean captured at render would keep the old state (the label listener already reads it live).
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (disabled) return;
+    if (selectDisabled(element)) return;
     if (event.key === "Tab") return open ? pick(active) : undefined;
     if (event.altKey && event.key === "ArrowUp" && open) {
       event.preventDefault();
@@ -157,7 +163,7 @@ export function SelectListbox({ select }: SelectListboxProps) {
         aria-invalid={element.getAttribute("aria-invalid") === "true" || undefined}
         className={styles.combobox}
         onKeyDown={onKeyDown}
-        onClick={() => (disabled ? undefined : open ? setOpen(false) : show(chosen))}
+        onClick={() => (selectDisabled(element) ? undefined : open ? setOpen(false) : show(chosen))}
         onBlur={() => setOpen(false)}
       >
         {element.options[element.selectedIndex]?.text}
