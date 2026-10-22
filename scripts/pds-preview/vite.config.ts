@@ -6,7 +6,9 @@ import { scopedName } from "../ui/css-scope.ts";
 export default defineConfig({
   root: import.meta.dirname,
   appType: "spa",
-  server: { host: "127.0.0.1", port: 4179, strictPort: true },
+  // Vite 8.3.4 ServerOptions.host `true` listens on 0.0.0.0 and :: (dist/node/index.d.ts).
+  // A loopback-only bind accepts this VM's browser and refuses the port forward.
+  server: { host: true, port: 4179, strictPort: true },
   oxc: { jsx: { runtime: "automatic", importSource: "react", development: false } },
   css: { modules: { generateScopedName: scopedName } },
 });
