@@ -3,6 +3,7 @@
 // the same P1.16 nonce. The library keeps the appState sealed and single-use in app.oauth_state; the authorization
 // server never sees it. P2.08: the `__Host-signed_out` marker, set at sign-out and cleared at the next sign-in, which
 // makes that sign-in ask the server for its password again (`prompt=login`) rather than reuse its own session.
+import { isIP } from "node:net";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { type SafePath, safeReturnPath } from "@unset/shared-http";
 
@@ -96,10 +97,12 @@ export function issuerFromCookies(header: string | null): string | null {
 }
 
 /**
- * The https origin of a recorded issuer, or null for another scheme, a user or password, or a port other than the
- * default (architecture 2026-10-19 04:15Z item 2). The library already refuses a query, fragment or trailing slash
- * (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); the account link uses only the origin (book P2.08
- * `PdsAccountLink`: "<issuer origin>/"). WHATWG URL leaves `port` empty for 443 on https.
+ * The https origin of a recorded issuer, or null when it is not one (P2.08b, narrowed by P2.08h). Refused: another
+ * scheme, a user or password, a port other than the default, an IPv4 or IPv6 literal, `localhost`, a name under
+ * `.localhost`, or a trailing dot. WHATWG `URL` (Node 26.12.0 keeps a trailing dot on `hostname`; checked against
+ * https://url.spec.whatwg.org/#concept-host-parser) and `node:net` `isIP`
+ * (https://nodejs.org/docs/latest-v26.x/api/net.html#netisipinput). The library already refuses a query, fragment
+ * or trailing slash (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js). The account link uses only the origin.
  */
 export function issuerOrigin(issuer: string): string | null {
   let url: URL;
@@ -109,7 +112,16 @@ export function issuerOrigin(issuer: string): string | null {
     return null;
   }
   if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.port !== "") return null;
+  if (!dnsNameHost(url.hostname)) return null;
   return url.origin;
+}
+
+/** A DNS hostname: not an address, not localhost, and not a trailing dot (P2.08h). `hostname` is WHATWG's. */
+function dnsNameHost(hostname: string): boolean {
+  if (hostname.endsWith(".")) return false;
+  const bare = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (isIP(bare) !== 0) return false;
+  return hostname !== "localhost" && !hostname.endsWith(".localhost");
 }
 
 /** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */

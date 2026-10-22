@@ -14,7 +14,7 @@ import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { pageResponse } from "../web/page.ts";
-import { type LogoutDeps, logoutRoutes } from "./logout.ts";
+import { ISSUER_READ_MS, type LogoutDeps, logoutRoutes } from "./logout.ts";
 
 const ORIGIN = "https://unset.test";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
@@ -27,8 +27,8 @@ type World = {
   session?: Session | null;
   destroyFails?: boolean;
   remaining?: number;
-  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
-  issuer?: string | null | Error;
+  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. `"stall"` never settles. */
+  issuer?: string | null | Error | "stall";
   /** The last browser's revocation fails at the PDS (P2.08g). */
   revokeFails?: boolean;
 };
@@ -37,6 +37,7 @@ function setup(world: World = {}) {
   const destroyed: Session[] = [];
   const calls: string[] = [];
   const lines: Record<string, unknown>[] = [];
+  let issuerSignal: AbortSignal | undefined;
   const log = createLogger({
     service: "http",
     commit: "c".repeat(40),
@@ -52,8 +53,10 @@ function setup(world: World = {}) {
       // Another browser still holds a session, so this path must not revoke the shared grant.
       return world.remaining ?? 1;
     },
-    issuerOf: async () => {
+    issuerOf: async (_did, signal?: AbortSignal) => {
       calls.push("issuerOf");
+      issuerSignal = signal;
+      if (world.issuer === "stall") return new Promise(() => undefined);
       const issuer = world.issuer === undefined ? OUR_ISSUER : world.issuer;
       if (issuer instanceof Error) throw issuer;
       return issuer;
@@ -106,7 +109,7 @@ function setup(world: World = {}) {
     headers.set("origin", site === "same-origin" ? ORIGIN : "https://evil.example");
     return server.request(new Request(`${ORIGIN}${path}`, { method, headers, body: init.body ?? "" }), "10.0.0.1");
   };
-  return { send, destroyed, lines, calls };
+  return { send, destroyed, lines, calls, issuerSignal: () => issuerSignal };
 }
 
 const OUR_ISSUER = "https://pds.unset.test";
@@ -210,6 +213,28 @@ describe("POST /logout", () => {
     expect(JSON.stringify(lines)).not.toContain(DID);
   });
 
+  test("logout_stalled_issuer_read_signs_out", async () => {
+    // P2.08h M5: a read that never settles must not hold sign-out open. The fallback link is our PDS, and this
+    // browser's session is still destroyed. ISSUER_READ_MS is well below PG_CONNECT_TIMEOUT_MS (default 2000).
+    const started = Date.now();
+    const { send, destroyed, calls, lines, issuerSignal } = setup({ issuer: "stall" });
+    const response = await send("/logout");
+    expect(Date.now() - started).toBeLessThan(ISSUER_READ_MS + 500);
+    expect(ISSUER_READ_MS).toBeLessThan(500);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
+    expect(destroyed).toEqual([SESSION]);
+    expect(calls).toEqual(["issuerOf", "destroy"]);
+    expect(issuerSignal()?.aborted).toBe(true);
+    expect(lines.filter((line) => line.event === "auth.logout_issuer_unknown")).toEqual([
+      expect.objectContaining({ kind: expect.any(String) }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
+    const page = await (await setup({ session: null }).send("/signed-out", { method: "GET" })).text();
+    expect(page).toContain('href="https://pds.unset.test/account"');
+  }, 1_500);
+
   test("logout_with_an_unreadable_issuer_still_signs_out", async () => {
     const { send, destroyed, lines } = setup({ issuer: new Error("unseal failed") });
     const response = await send("/logout");
@@ -306,6 +331,34 @@ test("signed_out.cookie_rejects_non_origin", async () => {
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).not.toContain("pds.example");
     expect(html).not.toContain("javascript:");
+  }
+});
+
+/** P2.08h: a refused issuer is not carried, and the signed-out page falls back to our PDS. */
+async function refusedIssuerFallsBack(issuer: string, absent: string): Promise<void> {
+  const posted = await setup({ issuer }).send("/logout");
+  expect(posted.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
+  const html = await (
+    await setup({ session: null }).send("/signed-out", { method: "GET", cookie: issuerCookie(issuer) })
+  ).text();
+  expect(html).toContain('href="https://pds.unset.test/account"');
+  expect(html).not.toContain(absent);
+}
+
+test("signed_out.carrier_refuses_ipv4", () => refusedIssuerFallsBack("https://198.51.100.1", "198.51.100.1"));
+test("signed_out.carrier_refuses_ipv6", () => refusedIssuerFallsBack("https://[2001:db8::1]", "2001:db8"));
+test("signed_out.carrier_refuses_localhost", () => refusedIssuerFallsBack("https://localhost", "localhost"));
+test("signed_out.carrier_refuses_localhost_child", () =>
+  refusedIssuerFallsBack("https://app.localhost", "app.localhost"));
+test("signed_out.carrier_refuses_trailing_dot", () => refusedIssuerFallsBack("https://pds.example.", "pds.example"));
+test("signed_out.carrier_refuses_port", () => refusedIssuerFallsBack("https://pds.example:8443", "pds.example"));
+
+test("signed_out.carrier_keeps_a_dns_name", async () => {
+  // A name that merely contains the letters of localhost is still a DNS name. So is one label, and a name
+  // that ends in `.example`. The default port is normalised away (already an origin).
+  for (const issuer of ["https://notlocalhost", "https://localhost.example", "https://notlocalhost.example"]) {
+    const response = await setup({ issuer }).send("/logout");
+    expect(response.headers.getSetCookie(), issuer).toEqual(carries(issuer));
   }
 });
 

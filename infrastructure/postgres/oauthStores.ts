@@ -8,8 +8,12 @@ import type { Logger } from "@unset/shared-log";
 import { type Pool, withClient } from "./pool.ts";
 import { sealedContext } from "./sealedColumns.ts";
 
+/**
+ * `get`'s second argument is `GetOptions` from @atproto-labs/simple-store 0.5.1 (`dist/simple-store.d.ts`):
+ * `{ signal?: AbortSignal }`. `set` and `del` take no options. The signal is the caller's deadline.
+ */
 export type SealedStore<V> = {
-  get(key: string): Promise<V | undefined>;
+  get(key: string, options?: { readonly signal?: AbortSignal }): Promise<V | undefined>;
   set(key: string, value: V): Promise<void>;
   del(key: string): Promise<void>;
 };
@@ -34,14 +38,19 @@ export type OAuthStateStore<V> = SealedStore<V> & { sweep(): Promise<number> };
 
 export function createOAuthStateStore<V>(options: Options): OAuthStateStore<V> {
   const context = (key: string) => sealedContext("app.oauth_state.sealed", key);
-  const run = <T>(fn: Parameters<typeof withClient<T>>[2]) => withClient(options.pool, null, fn);
+  const run = <T>(fn: Parameters<typeof withClient<T>>[2], signal?: AbortSignal) =>
+    withClient(options.pool, signal ?? null, fn);
   const del = async (key: string) => {
     await run((db) => db.query("DELETE FROM app.oauth_state WHERE key = $1", [key]));
   };
   return {
-    async get(key) {
-      const { rows } = await run((db) =>
-        db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_state WHERE key = $1 AND expires_at > now()", [key]),
+    async get(key, read) {
+      const { rows } = await run(
+        (db) =>
+          db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_state WHERE key = $1 AND expires_at > now()", [
+            key,
+          ]),
+        read?.signal,
       );
       const sealed = rows[0]?.sealed;
       if (sealed === undefined) return undefined;
@@ -77,14 +86,16 @@ type BoundToKey = { readonly authMethod: { readonly method: string; readonly kid
 
 export function createOAuthSessionStore<V extends BoundToKey>(options: Options): SealedStore<V> {
   const context = (did: string) => sealedContext("app.oauth_session.sealed", did);
-  const run = <T>(fn: Parameters<typeof withClient<T>>[2]) => withClient(options.pool, null, fn);
+  const run = <T>(fn: Parameters<typeof withClient<T>>[2], signal?: AbortSignal) =>
+    withClient(options.pool, signal ?? null, fn);
   const del = async (did: string) => {
     await run((db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did]));
   };
   return {
-    async get(did) {
-      const { rows } = await run((db) =>
-        db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_session WHERE did = $1", [did]),
+    async get(did, read) {
+      const { rows } = await run(
+        (db) => db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_session WHERE did = $1", [did]),
+        read?.signal,
       );
       const sealed = rows[0]?.sealed;
       if (sealed === undefined) return undefined;
