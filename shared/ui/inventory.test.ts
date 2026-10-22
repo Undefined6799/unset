@@ -53,7 +53,7 @@ test("inventory_covers_sheet", () => {
   const sheet = readdirSync(join(UI, "sheet", "components")).sort();
   const imported = Object.entries(inventory).filter(([name]) => name !== "Navigation");
   expect(imported.map(([name]) => name).sort()).toEqual(sheet);
-  expect(sheet).toHaveLength(33);
+  expect(sheet).toHaveLength(34);
   for (const [name, entry] of imported) {
     expect(entry.sheet).toBe(`sheet/components/${name}/README.md`);
     expect(entry.sheetSha256, name).toBe(source.files.find((f) => f.path === entry.sheet)?.sha256);
@@ -118,5 +118,5 @@ test("inventory_all_built", () => {
   // P1.24f finishes the imported kit; the approved core shell adds Navigation without changing that snapshot.
   const statuses = Object.values(inventory).map((entry) => entry.status);
   expect(statuses.filter((status) => status !== "built" && status !== "stop")).toEqual([]);
-  expect(statuses.filter((status) => status === "built")).toHaveLength(34);
+  expect(statuses.filter((status) => status === "built")).toHaveLength(35);
 });

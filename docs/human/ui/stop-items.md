@@ -20,5 +20,6 @@ No stop item is open.
 - **NewPosts** · needed by P1.24a · sheet draft: https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt · approved by Alex 2026-10-04, sheet v44
 - **FeedMore** · needed by P1.24a · sheet draft: https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt · approved by Alex 2026-10-04, sheet v44
 - **DescriptionList** · needed by P1.24s · sheet draft: https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt · approved by Alex 2026-10-04 22:00Z, sheet v45
+- **Search** · needed by P1.24u · sheet draft: https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt · approved by Alex 2026-10-21 22:18Z, sheet v81
 
 Card's item is the opaque surface: `surface-card` is solid since v40, so there is no solid variant.

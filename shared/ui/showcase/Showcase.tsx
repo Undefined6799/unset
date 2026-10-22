@@ -26,6 +26,7 @@ import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
+import { Search } from "../components/Search/Search.tsx";
 import { SectionHeading } from "../components/SectionHeading/SectionHeading.tsx";
 import { Select } from "../components/Select/Select.tsx";
 import { SkipLink } from "../components/SkipLink/SkipLink.tsx";
@@ -80,6 +81,13 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   ),
   Mark: <Mark />,
   SectionHeading: <SectionHeading index="01" title="Profile" />,
+  Search: (
+    <Search
+      action={safeHref("/people", ["path"]) as SafeHref}
+      webAction={safeHref("/search", ["path"]) as SafeHref}
+      shortcut={false}
+    />
+  ),
   Kbd: (
     <p>
       <Kbd>⌘</Kbd> <Kbd>K</Kbd>
