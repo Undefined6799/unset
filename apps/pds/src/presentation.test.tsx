@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AccountShell, DeviceRow, Devices } from "../index.ts";
+import { AccountFacts, AccountPage, AccountRows, AccountShell, AuthPanel, DeviceRow, Devices } from "../index.ts";
 
 const path = (value: string) => safeHref(value, ["path"]) as SafeHref;
 const navigation: NavigationProps = {
@@ -154,5 +154,33 @@ describe("PDS presentation", () => {
       await act(async () => root.unmount());
       host.remove();
     }
+  });
+  it("renders settings, apps and sign-in copy with their actions", () => {
+    const doc = new DOMParser().parseFromString(
+      renderToStaticMarkup(
+        <>
+          <AccountPage eyebrow="Account" title="Settings" description="Manage the account">
+            <AccountRows
+              rows={[{ label: "Email", value: "ada@example.com", action: <button type="button">Change</button> }]}
+            />
+            <AccountFacts facts={[{ label: "DID", value: "did:example:preview" }]} />
+          </AccountPage>
+          <AuthPanel
+            homeHref={path("/")}
+            homeLabel="Home"
+            title="Sign in"
+            links={<a href="/sign-up">Create account</a>}
+          >
+            <button type="submit">Sign in</button>
+          </AuthPanel>
+        </>,
+      ),
+      "text/html",
+    );
+    expect(doc.querySelector("h1")?.textContent).toBe("Settings");
+    expect(doc.querySelector("button")?.textContent).toBe("Change");
+    expect(doc.querySelector("dd")?.textContent).toBe("did:example:preview");
+    expect(doc.querySelectorAll("h1")[1]?.textContent).toBe("Sign in");
+    expect(doc.querySelector('a[href="/sign-up"]')?.textContent).toBe("Create account");
   });
 });

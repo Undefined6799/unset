@@ -1,0 +1,39 @@
+@layer screens {
+  .root {
+    min-height: 100dvh;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-display);
+  }
+  .main {
+    box-sizing: border-box;
+    width: min(28rem, 100%);
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-4) var(--space-12);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    & h1,
+    & p {
+      margin: 0;
+    }
+  }
+  .description,
+  .links {
+    color: var(--color-ink-muted);
+  }
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+  .error {
+    margin: 0;
+    color: var(--color-ink);
+  }
+}
