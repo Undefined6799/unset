@@ -8,7 +8,8 @@ ADD --checksum=sha256:706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c080
 # See https://docs.docker.com/reference/dockerfile/#run---mounttypetmpfs.
 # Exact pnpm and frozen upstream lock; dependency lifecycle scripts never run. pnpm 11.11.0 has no dependencies, so
 # its one tarball is checked against the registry's published integrity (npm view pnpm@11.11.0 dist.integrity,
-# read 2026-10-22) and installed offline from that file.
+# read 2026-10-22) and installed offline from that file. It is packed from /build, outside the upstream checkout,
+# whose devEngines names pnpm and makes npm refuse to run there (EBADDEVENGINES, npm 11.19.1).
 ENV PNPM_INTEGRITY=sha512-RGP2X9gO2A1pvB1L8WPulPYFxzgPwxi7Wy6+FfjNEtScUaTVnpUbQB52TTtsp1HL9RvFDtcAGmvLSTXmhMNIgg==
 # hadolint ignore=DL3016
 RUN --mount=type=tmpfs,target=/build,size=4294967296 \
@@ -17,7 +18,7 @@ RUN --mount=type=tmpfs,target=/build,size=4294967296 \
     && cd /build/atproto-a7c8604d876a200a1e4fa4aec83d4189ac4f1c12 \
     && node -e 'const fs=require("node:fs"),c=require("node:crypto"),a=require("node:assert/strict"),l=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));a.equal(l.source.revision,"a7c8604d876a200a1e4fa4aec83d4189ac4f1c12");a.equal(c.createHash("sha256").update(fs.readFileSync("pnpm-lock.yaml")).digest("hex"),l.source.lockSha256);a.equal(process.versions.node,l.builder.node);a.equal(require("./package.json").packageManager,"pnpm@"+l.builder.pnpm);for(const [p,n,v] of [["packages/pds","@atproto/pds","0.5.37"],["packages/oauth/oauth-provider","@atproto/oauth-provider","0.23.1"],["packages/oauth/oauth-provider-ui","@atproto/oauth-provider-ui","0.10.5"]]){const j=require("./"+p+"/package.json");a.equal(j.name,n);a.equal(j.version,v);}' /source.lock.json \
     && find . -type f -exec sha256sum {} + > /build/source.sha256 \
-    && npm pack --pack-destination /build --cache /build/npm-cache pnpm@11.11.0 \
+    && (cd /build && npm pack --cache /build/npm-cache pnpm@11.11.0) \
     && node -e 'const c=require("node:crypto"),fs=require("node:fs"),a=require("node:assert/strict");a.equal("sha512-"+c.createHash("sha512").update(fs.readFileSync("/build/pnpm-11.11.0.tgz")).digest("base64"),process.argv[1]);' "$PNPM_INTEGRITY" \
     && npm install --prefix /build/tool --cache /build/npm-cache --offline --ignore-scripts --no-audit --no-fund /build/pnpm-11.11.0.tgz \
     && test "$(/build/tool/node_modules/.bin/pnpm --version)" = "11.11.0" \
