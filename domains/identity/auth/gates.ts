@@ -26,13 +26,14 @@ export function cachedRecheckCapS(recheckS: number): number {
 }
 
 /**
- * Whether a transient recheck may still serve this cache. Age is an upper bound: a clock-ahead timestamp is not older
- * than the cap. A missing timestamp is not served.
+ * Whether a transient recheck may still serve this cache. The age must sit in `[0, cap]`, the same non-negative bound
+ * `emailGate` uses. A missing or future timestamp is not served: a clock-ahead `email_checked_at` would otherwise
+ * pass for the whole skew.
  */
 export function withinCachedRecheckCap(cache: EmailCache, nowMs: number, recheckS: number): boolean {
   if (cache.checkedAt === null) return false;
   const ageS = (nowMs - cache.checkedAt.getTime()) / 1000;
-  return ageS <= cachedRecheckCapS(recheckS);
+  return ageS >= 0 && ageS <= cachedRecheckCapS(recheckS);
 }
 
 /**

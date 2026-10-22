@@ -35,8 +35,10 @@ describe("email gate", () => {
     expect(verifiedAfterRefresh("transient", cacheAt(capMs + 1), NOW, RECHECK_S)).toBe("unavailable");
     expect(verifiedAfterRefresh("transient", cacheAt(241_000), NOW, 60)).toBe("unavailable");
     expect(verifiedAfterRefresh("transient", cacheAt(240_000), NOW, 60)).toBe("pass");
-    // No timestamp: the age is unknown, so the cache is not served.
+    // No timestamp: the age is unknown, so the cache is not served. A future timestamp (negative age) is not served
+    // either: emailGate already requires ageS >= 0, and a clock-ahead check would otherwise pass for the whole skew.
     expect(verifiedAfterRefresh("transient", { confirmed: true, checkedAt: null }, NOW, RECHECK_S)).toBe("unavailable");
+    expect(verifiedAfterRefresh("transient", cacheAt(-1_000), NOW, RECHECK_S)).toBe("unavailable");
   });
 
   test("gate.requireVerified_past_cap_keeps_auth_dead_and_unconfirmed", () => {
