@@ -228,11 +228,16 @@ function Preview() {
               },
               {
                 label: "Email two-factor",
-                value: account.twoFactor ? "On" : "Off",
+                value: null,
                 action: (
-                  <Button variant="standalone" onClick={() => open("two-factor")}>
-                    {account.twoFactor ? "Turn off" : "Turn on"}
-                  </Button>
+                  <Switch
+                    label={<span className="visually-hidden">Email two-factor</span>}
+                    checked={account.twoFactor}
+                    onChange={(event) => {
+                      if (event.currentTarget.checked) open("two-factor");
+                      else setAccount({ ...account, twoFactor: false });
+                    }}
+                  />
                 ),
               },
               {
