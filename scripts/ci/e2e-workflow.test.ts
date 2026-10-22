@@ -78,7 +78,9 @@ describe("browser install (P0.07f, P0.07g)", () => {
     stub("timeout", 'shift 2; exec "$@"');
     stub("npx", `n=$(grep -c '^npx ' "${log}"); [ "$n" -gt ${failures} ]`);
     stub("sudo", "cat > /dev/null; exit 0");
-    stub("pgrep", "exit 1");
+    // apt-get is still alive for the first two checks after it is signalled, as it is while it shuts down.
+    stub("pgrep", `[ "$(grep -c '^pgrep ' "${log}")" -le 2 ]`);
+    stub("sleep", "exit 0");
     const status = spawnSync("bash", ["-e", "-c", script], {
       env: { PATH: `${bin}:${process.env.PATH}`, PROJECT: "webkit" },
       encoding: "utf8",
@@ -120,11 +122,15 @@ describe("browser install (P0.07f, P0.07g)", () => {
       const { status, calls } = runInstall(step.run ?? "", 1);
       expect(status, id).toBe(0);
       const npx = calls.flatMap((call, i) => (call.startsWith("npx ") ? [i] : []));
-      const pkill = calls.indexOf("sudo pkill -x apt-get");
+      const pkill = calls.indexOf("sudo pkill -KILL -x apt-get");
       const dpkg = calls.indexOf("sudo dpkg --configure -a");
+      // Codex on #1287: dpkg is repaired only once the signalled apt-get has gone, or it races apt-get for the lock.
+      const lastWait = calls.lastIndexOf("pgrep -x apt-get");
       expect(npx, id).toHaveLength(2);
       expect(pkill, id).toBeGreaterThan(npx[0] ?? Infinity);
-      expect(dpkg, id).toBeGreaterThan(pkill);
+      expect(calls.filter((call) => call === "pgrep -x apt-get").length, id).toBe(3);
+      expect(lastWait, id).toBeGreaterThan(pkill);
+      expect(dpkg, id).toBeGreaterThan(lastWait);
       expect(npx[1], id).toBeGreaterThan(dpkg);
     }
   });
