@@ -4,11 +4,28 @@ import { isUtf8 } from "node:buffer";
 import { type Entry, requireThat, sha256 } from "./archive.ts";
 
 export const PATCH_DIRECTORY = "deployment/pds/patches/ui/";
+// Locale pins are messages.po at atproto a7c8604d876a200a1e4fa4aec83d4189ac4f1c12 (UI 0.10.5).
+// https://github.com/bluesky-social/atproto/tree/a7c8604d876a200a1e4fa4aec83d4189ac4f1c12/packages/oauth/oauth-provider-ui/src/locales
+// GitHub contents blob sha1 matched the fixture bytes on 2026-10-22; these are SHA256 of those bytes.
 export const TARGETS: Readonly<Record<string, string>> = {
   "packages/oauth/oauth-provider-ui/src/components/layouts/account-shell.tsx":
     "2660a358e58945d9c399bd24a99170bcdff47f0024e0311a432facf8b91245fb",
   "packages/oauth/oauth-provider-ui/src/components/session-list.tsx":
     "d24f13894ab4cbad910726a7e46ea8f73968785f48fab1e1ead665026e397b2d",
+  "packages/oauth/oauth-provider-ui/src/locales/en/messages.po":
+    "fcc466a6c992c0e8ffca0aed24c6fbb7481b9683cb578354d4908b960ea90c94",
+  "packages/oauth/oauth-provider-ui/src/locales/es/messages.po":
+    "532d5ed1912c368bbced4fe58a2657e0616fc07dbf097c7a01cd84c97c9b50d0",
+  "packages/oauth/oauth-provider-ui/src/locales/fr/messages.po":
+    "a7a4037e16ca259fe3b7020b30a8753a928779d0aaf4b4bfe04ebcb88445cc0c",
+  "packages/oauth/oauth-provider-ui/src/locales/ja/messages.po":
+    "f5a44c49e90c036e0595ef6c1340959c26f8be5800a5639327467b7aea80745b",
+  "packages/oauth/oauth-provider-ui/src/locales/ko/messages.po":
+    "940f40e9b6625c760b687c86c2f2beda2ffbc01c822eeaacbc51460b71f78c55",
+  "packages/oauth/oauth-provider-ui/src/locales/ro/messages.po":
+    "ef521ee7783a418903c9bc44d2ff5ee91f92e64d9a0194901a57ba4e2f53ea7e",
+  "packages/oauth/oauth-provider-ui/src/locales/sv/messages.po":
+    "1bc052c3acb13a71cce700a71741a1c277fc4b398d257619a7291894ba9f4754",
   "packages/oauth/oauth-provider-ui/src/routes/account/u/$accountId/devices.tsx":
     "e08f8848c183779b6c62df7cd4b22d00eebb46ac47273151657975b6b657f8e5",
 };
@@ -51,7 +68,7 @@ export function patchManifest(bytes: Buffer): Patch[] {
   keys(value, ["schema", "patches"]);
   requireThat(value.schema === 1 && Array.isArray(value.patches), "invalid patch manifest");
   const rows = value.patches as Patch[];
-  requireThat(rows.length === 0 || rows.length === 3, "incomplete Devices cohort");
+  requireThat(rows.length === 0 || rows.length === Object.keys(TARGETS).length, "incomplete Devices+catalog cohort");
   const names = new Set<string>();
   let previous = "";
   for (const row of rows) {

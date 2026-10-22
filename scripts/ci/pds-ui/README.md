@@ -163,11 +163,13 @@ The authenticated archive target must itself be regular and match its registered
 original SHA256. All outputs/hashes are planned before any helper source write.
 Test fixture originals are MIT upstream UI0.10.5 at revision a7c8604d876a200a1e4fa4aec83d4189ac4f1c12.
 
-u owns the initial canonical empty manifest and actual helper conformance through
-subprocess tests; j supplies all three Devices patches. A separate check-only v
-promotion retires empty acceptance before styled admission. Later exact targets or
-locale catalogs require prior check-only registration. Hashes do not prove native
-auth semantics. u must separately prove exhaustive original/patched tree equality,
+Registered targets are the three Devices sources plus the seven exact
+`messages.po` catalogs (`en`, `es`, `fr`, `ja`, `ko`, `ro`, `sv`) at the locked
+atproto revision. A non-empty manifest must be that complete cohort, in target
+order; a Devices-only or catalog-only manifest is incomplete. u's canonical empty
+manifest remains the bootstrap until the separate admission promotion retires it.
+u mirrors this registry in its own continuation before j supplies patch bytes.
+Hashes do not prove native auth semantics. u must separately prove exhaustive original/patched tree equality,
 immutable package/lock/workspace bytes and exact pinned-tool generated outputs;
 no new generated-source exemptions are registered here. Native CSS132420raw/
 17660min-gzip remains over unchanged53248/12288; this is not native CSS acceptance,

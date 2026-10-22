@@ -3,13 +3,28 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { archive, sha256 } from "./archive.ts";
 import { tar } from "./fixtures/native.ts";
-import { canonical, exactPatch, patchManifest, planPatches } from "./source-patches.ts";
+import { canonical, exactPatch, patchManifest, planPatches, TARGETS } from "./source-patches.ts";
 
 const revision = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
+const LOCALES = ["en", "es", "fr", "ja", "ko", "ro", "sv"] as const;
 const originals: Record<string, string> = JSON.parse(
   readFileSync(new URL("./fixtures/patch-targets.json", import.meta.url), "utf8"),
 );
+for (const locale of LOCALES) {
+  const path = `packages/oauth/oauth-provider-ui/src/locales/${locale}/messages.po`;
+  const bytes = readFileSync(new URL(`./fixtures/locales/${locale}/messages.po`, import.meta.url));
+  originals[path] = bytes.toString("utf8");
+}
 const prefix = "deployment/pds/patches/ui/";
+
+test("catalog_pins_match_registered_locale_bytes", () => {
+  for (const locale of LOCALES) {
+    const path = `packages/oauth/oauth-provider-ui/src/locales/${locale}/messages.po`;
+    const bytes = readFileSync(new URL(`./fixtures/locales/${locale}/messages.po`, import.meta.url));
+    expect(sha256(bytes)).toBe(TARGETS[path]);
+    expect(bytes.toString("utf8")).toBe(originals[path]);
+  }
+});
 const json = (x: unknown): Buffer => Buffer.from(canonical(x));
 const target = Object.keys(originals).sort()[0] as string;
 const patch = (path: string, body: string) => Buffer.from(`--- a/${path}\n+++ b/${path}\n${body}`);
@@ -84,7 +99,7 @@ test("patch_cohort_uses_exact_archive_bytes_and_never_writes_on_late_failure", a
   const { inputs, rows } = cohort();
   const before = [...files].map(([name, entry]) => [name, Buffer.from(entry.data)] as const);
   const planned = planPatches(files, revision, inputs);
-  expect(planned.size).toBe(3);
+  expect(planned.size).toBe(Object.keys(TARGETS).length);
   for (const bytes of planned.values()) expect(bytes.toString()).toContain("// fixture ");
   inputs.set(
     `${prefix}manifest.json`,
@@ -100,6 +115,8 @@ test("patch_cohort_rejects_partial_unknown_duplicate_and_hash_lies", async () =>
   for (const bad of [
     rows.slice(0, 1),
     rows.slice(0, 2),
+    rows.filter((row) => !row.target.includes("/locales/")),
+    rows.filter((row) => row.target.includes("/locales/")),
     [...rows].reverse(),
     [rows[0], rows[0], rows[2]],
     rows.map((r, i) => (i === 2 ? { ...r, patch: rows[0]?.patch } : r)),

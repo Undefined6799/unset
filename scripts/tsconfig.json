@@ -11,6 +11,6 @@
     "../*.config.cts",
     "../apps/*/vite.config.ts"
   ],
-  "exclude": ["dist", "guards/fixtures", "lint/semgrep/fixtures", "ui"],
+  "exclude": ["dist", "guards/fixtures", "lint/semgrep/fixtures", "ui", "pds-preview"],
   "references": [{ "path": "ui" }]
 }

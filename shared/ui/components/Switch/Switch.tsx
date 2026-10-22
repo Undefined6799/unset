@@ -1,7 +1,7 @@
 // Switch (P1.24s; sheet components/Switch/README.md, v45; approved by Alex 2026-10-03 18:16Z): an on/off setting
 // drawn as text, `[──◉] on` in `success` or `[○──] off` in `ink-muted`, label on the left. A real checkbox with
 // role="switch" sits underneath; the drawing follows it through CSS, so it works and posts with no JS.
-import { type ReactNode, useId } from "react";
+import { type ChangeEventHandler, type ReactNode, useId } from "react";
 import { classNames } from "../../src/class-names.ts";
 import styles from "./Switch.module.css";
 
@@ -10,6 +10,8 @@ export type SwitchProps = {
   name?: string;
   value?: string;
   defaultChecked?: boolean;
+  checked?: boolean;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
   disabled?: boolean;
   id?: string;
   className?: string;
@@ -30,7 +32,8 @@ export function Switch(props: SwitchProps) {
         role="switch"
         name={props.name}
         value={props.value}
-        defaultChecked={props.defaultChecked}
+        {...(props.checked === undefined ? { defaultChecked: props.defaultChecked } : { checked: props.checked })}
+        onChange={props.onChange}
         disabled={props.disabled}
       />
       <span className={styles.track} aria-hidden="true">
