@@ -270,6 +270,7 @@ jobs:
         id: build
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
+          NAME: ${{ matrix.name }}
         run: |
           case "$DOCKERFILE" in
             */Dockerfile) CONTEXT="${DOCKERFILE%/*}" ;;
@@ -277,13 +278,17 @@ jobs:
           esac
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
-          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
+          # A fixed local tag gives Trivy a stable target name (its OS result is "<name> (<os>)"), so an
+          # ignorefile path can name it exactly instead of globbing the per-build image id.
+          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" --tag "unset-scan/$NAME:ci" \
             --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" "$CONTEXT"
       - name: Scan
         env:
           IGNOREFILE: ${{ matrix.ignorefile }}
+          NAME: ${{ matrix.name }}
         run: |
-          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          APP_IMAGE="unset-scan/$NAME:ci"
+          test "$(docker image inspect --format '{{.Id}}' "$APP_IMAGE")" = "$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
             image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$IGNOREFILE" \
             --timeout 10m "$APP_IMAGE"

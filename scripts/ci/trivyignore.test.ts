@@ -131,6 +131,8 @@ describe(".github/trivyignore.pds.yaml", () => {
       expect(dayOf(item.expired_at), item.id).toBe("2026-11-13");
       expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id] ?? STATEMENT);
       expect((item.paths?.length ?? 0) + (item.purls?.length ?? 0), item.id).toBeGreaterThan(0);
+      // Exact names only: a glob would also cover images nobody reviewed.
+      for (const path of item.paths ?? []) expect(path, item.id).not.toMatch(/[*?[{\\]/);
     }
     // The Caddy Alpine binary's HIGH ids are accepted only on the PDS goat binary.
     for (const id of ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"]) {

@@ -82,8 +82,8 @@ vulnerabilities:
   - id: CVE-2026-14456
     paths:
       - "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4 (alpine 3.23.5)"
-      # The pds-ui candidate is scanned by its image id (P2.24t), so its OS target is named by that id instead.
-      - "sha256:* (alpine 3.23.5)"
+      # The pds-ui candidate's scan target (images.yml tags each scanned build unset-scan/<name>:ci).
+      - "unset-scan/pds:ci (alpine 3.23.5)"
     purls:
       - "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64&distro=3.23.5"
       - "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64&distro=3.23.5"
