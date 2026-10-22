@@ -27,4 +27,30 @@ describe("oauth stores", () => {
     await expect(state.get("state-1", { signal })).rejects.toMatchObject({ code: "http.deadline" });
     expect(connects).toBe(0);
   });
+
+  test("get_ends_a_checked_out_query_on_abort", async () => {
+    // The deadline used to stop waiting while the SELECT still held its client (Codex on #1285). end() runs first,
+    // and the rejection is observed only after release, so the next checkout is not behind that query.
+    const order: string[] = [];
+    let rejectQuery: (error: Error) => void = () => undefined;
+    const client = {
+      query: () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectQuery = reject;
+        }),
+      end: () => {
+        order.push("end");
+        rejectQuery(new Error("Connection terminated"));
+        return Promise.resolve();
+      },
+      release: () => {
+        order.push("release");
+      },
+    };
+    const pool = { connect: () => Promise.resolve(client) } as unknown as Pool;
+    const session = createOAuthSessionStore({ pool, sealer, log });
+    const pending = session.get(DID, { signal: AbortSignal.timeout(30) });
+    await expect(pending).rejects.toMatchObject({ code: "http.deadline" });
+    expect(order).toEqual(["end", "release"]);
+  });
 });

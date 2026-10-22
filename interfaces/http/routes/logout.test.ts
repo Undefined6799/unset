@@ -56,7 +56,13 @@ function setup(world: World = {}) {
     issuerOf: async (_did, signal?: AbortSignal) => {
       calls.push("issuerOf");
       issuerSignal = signal;
-      if (world.issuer === "stall") return new Promise(() => undefined);
+      if (world.issuer === "stall") {
+        return new Promise((_resolve, reject) => {
+          const fail = () => reject(signal?.reason ?? new Error("stall"));
+          if (signal === undefined || signal.aborted) fail();
+          else signal.addEventListener("abort", fail, { once: true });
+        });
+      }
       const issuer = world.issuer === undefined ? OUR_ISSUER : world.issuer;
       if (issuer instanceof Error) throw issuer;
       return issuer;
@@ -214,8 +220,8 @@ describe("POST /logout", () => {
   });
 
   test("logout_stalled_issuer_read_signs_out", async () => {
-    // P2.08h M5: a read that never settles must not hold sign-out open. The fallback link is our PDS, and this
-    // browser's session is still destroyed. ISSUER_READ_MS is well below PG_CONNECT_TIMEOUT_MS (default 2000).
+    // P2.08h M5: the issuer read settles when its deadline fires, then the session is destroyed. The fallback link
+    // is our PDS. ISSUER_READ_MS is well below PG_CONNECT_TIMEOUT_MS (default 2000).
     const started = Date.now();
     const { send, destroyed, calls, lines, issuerSignal } = setup({ issuer: "stall" });
     const response = await send("/logout");

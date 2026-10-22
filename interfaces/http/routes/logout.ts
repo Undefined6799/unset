@@ -77,16 +77,6 @@ function finish(location: string, issuer: string | null): Response {
   return new Response(null, { status: 303, headers });
 }
 
-/** Settles with `work`, or rejects with the signal's reason once `deadline` aborts. Does not cancel `work`. */
-function untilAbort<T>(work: Promise<T>, deadline: AbortSignal): Promise<T> {
-  if (deadline.aborted) return Promise.reject(deadline.reason);
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(deadline.reason);
-    deadline.addEventListener("abort", onAbort, { once: true });
-    work.then(resolve, reject).finally(() => deadline.removeEventListener("abort", onAbort));
-  });
-}
-
 function withTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
   if (deadline.aborted) return Promise.reject(new RevokeTimeout());
   return new Promise((resolve, reject) => {
@@ -119,16 +109,14 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
   }
 
   /**
-   * The recorded issuer's origin. The read has its own short deadline and is not the request's: a timeout or any
-   * error drops the link (the page then links ours) and sign-out continues. The read is never awaited past the
-   * deadline, even when it ignores the signal.
+   * The recorded issuer's origin. The read has its own short deadline. The store ends a checked-out query when that
+   * signal fires and rejects only after the client is released, so destroying the session does not queue behind it.
+   * A timeout or any error drops the link (the page then links ours) and sign-out continues.
    */
   async function recordedIssuer(did: Did): Promise<string | null> {
     const deadline = AbortSignal.timeout(ISSUER_READ_MS);
-    const pending = deps.issuerOf(did, deadline);
-    pending.catch(() => undefined);
     try {
-      const issuer = await untilAbort(pending, deadline);
+      const issuer = await deps.issuerOf(did, deadline);
       return issuer === null ? null : issuerOrigin(issuer);
     } catch (cause: unknown) {
       deps.log.warn("auth.logout_issuer_unknown", { kind: className(cause) });

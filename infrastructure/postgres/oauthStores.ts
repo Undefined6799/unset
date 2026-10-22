@@ -4,8 +4,9 @@
 // not open. A row that does not open is deleted and reads as missing: an expired login for state, a new sign-in for a
 // token set. Database errors are thrown; the library surfaces them and P2.07 treats them as transient.
 import { SealError, type Sealer } from "@unset/infrastructure-seal";
+import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
-import { type Pool, withClient } from "./pool.ts";
+import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { sealedContext } from "./sealedColumns.ts";
 
 /**
@@ -93,10 +94,14 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
   };
   return {
     async get(did, read) {
-      const { rows } = await run(
-        (db) => db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_session WHERE did = $1", [did]),
-        read?.signal,
-      );
+      const signal = read?.signal;
+      const { rows } = await run(async (db) => {
+        // pg 8.23.1 Client#end (lib/client.js:822-824) destroys the socket when a query is still active, so the
+        // checked-out client is not held until the role's statement_timeout. `get` rejects only after that, and
+        // `withClient` then releases it, before the caller destroys the session.
+        const query = db.query<{ sealed: string }>("SELECT sealed FROM app.oauth_session WHERE did = $1", [did]);
+        return readUntilAbort(db, signal, query);
+      }, signal);
       const sealed = rows[0]?.sealed;
       if (sealed === undefined) return undefined;
       const value = opened<V>(options.log, "session", () => options.sealer.unsealJson(sealed, context(did)));
@@ -117,4 +122,43 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
     },
     del,
   };
+}
+
+/**
+ * The query, or `http.deadline` once `signal` aborts. Abort ends the client first (pg 8.23.1 `Client#end` drops a
+ * socket that still has a query), and the rejection is delivered only after that, so the pool slot is free.
+ */
+function readUntilAbort<T>(client: PoolClient, signal: AbortSignal | undefined, query: Promise<T>): Promise<T> {
+  if (signal === undefined) return query;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let aborted = false;
+    const finish = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(error);
+    };
+    const onAbort = () => {
+      aborted = true;
+      query.catch(() => undefined);
+      void Promise.resolve(client.end()).then(
+        () => finish(new AppError("http.deadline")),
+        () => finish(new AppError("http.deadline")),
+      );
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+    query.then(
+      (value) => {
+        if (settled || aborted) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (!aborted) finish(error);
+      },
+    );
+  });
 }
