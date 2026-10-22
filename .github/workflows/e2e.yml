@@ -28,7 +28,9 @@
 # "Cache scopes"). A hit skips the browser download. apt installs whatever file sits in /var/cache/apt/archives under
 # the expected name and size without checking its hash (tried on Ubuntu 24.04: a flipped byte reached dpkg), so a cached
 # package is handed over only when its SHA256 equals the one in the signed index for that name, architecture and
-# version; anything else is fetched from the mirror. apt.conf(5) APT::Keep-Downloaded-Packages keeps what it fetched.
+# version, and under the name apt looks for, built from those fields (NAME_VERSION_ARCH.deb, the version's ":" as
+# "%3a", as apt names fonts-beng_2%3a1.3_all.deb), so a signed package cannot stand in under another package's name.
+# Anything else is fetched from the mirror. apt.conf(5) APT::Keep-Downloaded-Packages keeps what it fetched.
 # A failed restore is a miss, so the worst case is today's mirror path.
 
 name: e2e
@@ -92,7 +94,9 @@ jobs:
             version=$(dpkg-deb -f "$deb" Version) || continue
             want=$(apt-cache show "$name:$arch=$version" 2> /dev/null | sed -n 's/^SHA256: //p' | head -n 1)
             have=$(sha256sum < "$deb" | cut -d ' ' -f 1)
-            if [ -n "$want" ] && [ "$have" = "$want" ]; then sudo cp "$deb" /var/cache/apt/archives/; fi
+            if [ -n "$want" ] && [ "$have" = "$want" ]; then
+              sudo cp "$deb" "/var/cache/apt/archives/${name}_${version//:/%3a}_${arch}.deb"
+            fi
           done
       - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9
@@ -174,7 +178,9 @@ jobs:
             version=$(dpkg-deb -f "$deb" Version) || continue
             want=$(apt-cache show "$name:$arch=$version" 2> /dev/null | sed -n 's/^SHA256: //p' | head -n 1)
             have=$(sha256sum < "$deb" | cut -d ' ' -f 1)
-            if [ -n "$want" ] && [ "$have" = "$want" ]; then sudo cp "$deb" /var/cache/apt/archives/; fi
+            if [ -n "$want" ] && [ "$have" = "$want" ]; then
+              sudo cp "$deb" "/var/cache/apt/archives/${name}_${version//:/%3a}_${arch}.deb"
+            fi
           done
       - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9

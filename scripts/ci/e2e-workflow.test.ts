@@ -184,7 +184,8 @@ describe("browser cache (P0.07h)", () => {
   });
 
   // Runs the hand-over as Actions does (`bash -e`) over a cached directory, with stand-ins for sudo, dpkg-deb, apt-cache
-  // and sha256sum: a package's "hash" is its file's text, and the index knows good:amd64=1.
+  // and sha256sum. A package file holds "NAME VERSION ARCH", and its "hash" is that text with "/" for spaces; the index signs good 1 and 1:2 on
+  // amd64. A file whose text starts with "broken" is not an archive.
   function handOver(script: string, debs: Record<string, string>): string[] {
     const root = mkdtempSync(join(tmpdir(), "e2e-apt-"));
     const bin = join(root, "bin");
@@ -194,15 +195,17 @@ describe("browser cache (P0.07h)", () => {
     for (const [file, text] of Object.entries(debs)) writeFileSync(join(cached, file), text);
     const stub = (name: string, body: string) =>
       writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
-    stub("sudo", `[ "$1" = cp ] && exec cp "$2" "${archives}/"; exit 0`);
-    // dpkg-deb -f FILE FIELD: FILE is NAME_VERSION_ARCH.deb; a file whose name starts with "broken" is not an archive.
+    stub("sudo", '[ "$1" = cp ] && exec "$@"; exit 0');
     stub(
       "dpkg-deb",
-      'f=$(basename "$2" .deb); case "$f" in broken*) exit 2;; esac; IFS=_ read -r n v a <<< "$f"; case "$3" in Package) echo "$n";; Version) echo "$v";; Architecture) echo "$a";; esac',
+      'read -r n v a rest < "$2"; [ "$n" = broken ] && exit 2; case "$3" in Package) echo "$n";; Version) echo "$v";; Architecture) echo "$a";; esac',
     );
-    stub("apt-cache", '[ "$2" = "good:amd64=1" ] && echo "SHA256: good-hash"; exit 0');
-    stub("sha256sum", 'echo "$(cat) -"');
-    const status = spawnSync("bash", ["-e", "-c", script.replace("/var/cache/apt/archives/", `${archives}/`)], {
+    stub(
+      "apt-cache",
+      'case "$2" in "good:amd64=1" | "good:amd64=1:2") n=${2%%:*}; v=${2#*=}; echo "SHA256: $n/$v/amd64";; esac; exit 0',
+    );
+    stub("sha256sum", 'echo "$(tr " " /) -"');
+    const status = spawnSync("bash", ["-e", "-c", script.replaceAll("/var/cache/apt/archives/", `${archives}/`)], {
       env: { PATH: `${bin}:${process.env.PATH}`, HOME: join(root, "home") },
       stdio: "ignore",
     }).status;
@@ -216,14 +219,24 @@ describe("browser cache (P0.07h)", () => {
     for (const [id, steps] of jobs) {
       const script = steps.find((step) => step.run?.includes("apt-cache show"))?.run ?? "";
       const handed = handOver(script, {
-        "good_1_amd64.deb": "good-hash",
-        "good_2_amd64.deb": "good-hash",
-        "other_1_amd64.deb": "good-hash",
-        "broken_1_all.deb": "good-hash",
+        "good_1_amd64.deb": "good 1 amd64",
+        "good_3_amd64.deb": "good 3 amd64",
+        "other_1_amd64.deb": "other 1 amd64",
+        "broken_1_all.deb": "broken 1 all",
       });
       expect(handed, id).toEqual(["good_1_amd64.deb"]);
-      expect(handOver(script, { "good_1_amd64.deb": "tampered" }), id).toEqual([]);
+      expect(handOver(script, { "good_1_amd64.deb": "good 1 amd64 tampered" }), id).toEqual([]);
       expect(handOver(script, {}), id).toEqual([]);
+    }
+  });
+
+  // Verify of #1292: a signed package cached under another package's name lands under its own name, and an epoch's
+  // ":" is written "%3a" as apt writes it.
+  test("a_verified_package_is_handed_over_under_its_own_name", () => {
+    for (const [id, steps] of jobs) {
+      const script = steps.find((step) => step.run?.includes("apt-cache show"))?.run ?? "";
+      expect(handOver(script, { "libnss3_9_amd64.deb": "good 1 amd64" }), id).toEqual(["good_1_amd64.deb"]);
+      expect(handOver(script, { "good_1%3a2_amd64.deb": "good 1:2 amd64" }), id).toEqual(["good_1%3a2_amd64.deb"]);
     }
   });
 });
