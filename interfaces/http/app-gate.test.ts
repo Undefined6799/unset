@@ -75,6 +75,21 @@ test("app_gate.transient_keeps_the_cached_pass", async () => {
   expect(await open(gateAnswering("transient"))).toEqual({ session: SESSION, privacyNotice: false });
 });
 
+test("app_gate.transient_ages_past_the_cap_during_the_pds_call", async () => {
+  // Inside the cap when the call starts, past it when the answer arrives. The PDS timeout is 10s.
+  const gate = gateAnswering("transient", cachedRecheckCapS(900) * 1000 - 1_000);
+  let reads = 0;
+  gate.now = () => {
+    reads += 1;
+    return reads === 1 ? NOW : NOW + 2_000;
+  };
+  const response = await open(gate);
+  if (!(response instanceof Response)) throw new Error("the gate served a cache that aged past the cap");
+  expect(response.status).toBe(200);
+  expect(await response.text()).toContain(NOTICE);
+  expect(response.headers.getSetCookie()).toEqual([]);
+});
+
 test("app_gate.transient_past_cap_shows_unavailable_and_keeps_the_cookie", async () => {
   const response = await open(gateAnswering("transient", pastCapMs));
   if (!(response instanceof Response)) throw new Error("the gate served a capped cache");

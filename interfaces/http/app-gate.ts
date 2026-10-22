@@ -106,8 +106,11 @@ export async function openApp(
     case "pass":
       return opened();
     case "refresh": {
-      const answer = verifiedAfterRefresh(await gate.refreshEmail(session, deadline), cache, now, gate.emailRecheckS);
-      switch (answer) {
+      const answer = await gate.refreshEmail(session, deadline);
+      // The cap is the age when the answer arrives. The PDS call can take its 10s timeout (pds-call.ts
+      // PDS_CALL_TIMEOUT_MS), so the time from before the await would still open the page after the bound.
+      const after = verifiedAfterRefresh(answer, cache, gate.now(), gate.emailRecheckS);
+      switch (after) {
         case "pass":
           return opened();
         case "verify":
@@ -119,7 +122,7 @@ export async function openApp(
         case "unavailable":
           return gate.unavailablePage(request);
         default: {
-          const unexpected: never = answer;
+          const unexpected: never = after;
           return unexpected;
         }
       }
