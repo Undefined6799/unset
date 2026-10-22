@@ -58,6 +58,10 @@ The process layer is a token bucket per policy (`shared/http/limits/rateLimit.ts
 
 The edge layer is `deployment/edge/snippets/ratelimit.caddy`: caddy-ratelimit, sliding window, keyed by client address, no `distributed` block and no `storage` ([ADR 0018](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0018-edge-rate-limit-plugin.md)). The app site imports `app-ratelimit`; the PDS site imports `pds-ratelimit`.
 
+## PDS fonts
+
+The app's Content-Security-Policy is the kit ([http](../../areas/shared/http/)). On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` serves `.woff2` files from `/_unset/fonts/` and answers every other `/_unset/` path with 404, inside the route and before the upstream. When the response Content-Type starts with `text/html`, it appends `font-src https://{$PDS_HOST}/_unset/fonts/` to a Content-Security-Policy the response already carries. `deployment/edge/caddyfile.ts` (`fontSnippetProblems`, `fontProblems`, `isFontSrc`) rejects a wider snippet, a `file_server` outside it, a response `match` outside it, and a `{$PDS_HOST}` placeholder except in that one `font-src`. The lines are on [edge](../../areas/deployment/edge/). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) is the PDS frontend record.
+
 ## Logging allowlist
 
 `shared/log/logger.ts` writes one JSON line per call. The event must be in `EVENTS`; any other name is logged as `log.unknown_event`. The fields a line may carry are the `ALLOWED` set: `code`, `route`, `method`, `status`, `ms`, `reqId`, `count`, `bytes`, `key`, `reason`, `phase`, `kind`, `job`, `attempt`, `version`, `sqlstate`, `island`. `route` must be a template. `reason`, `phase`, `job`, `kind`, `key` and `island` must match a fixed word shape. Other strings pass through `shared/log/scrub.ts`, which replaces control characters and redacts JWTs, `Bearer`/`Basic` credentials, email addresses, DIDs, multibase keys, IP addresses and long token-shaped runs. This is SE-7.

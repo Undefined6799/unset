@@ -11,6 +11,8 @@ Under dev the edge publishes nothing. Newt is the only other member of `newt_edg
 
 The PDS's HTTP port is on the `edge` network, which only the edge shares. `web` is not on it.
 
+On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` answers `/_unset/` inside the route, before the upstream (`sites/pds.caddy`, `dev/pds.caddy`). A `.woff2` file whose name is letters, digits and dashes is served from the image. Every other path under that prefix is 404. The edge answers that prefix itself. The lines are on [edge](../../areas/deployment/edge/).
+
 `deployment/edge/` does not import `deployment/preflight/` (`edge-not-preflight` in `scripts/lint/.dependency-cruiser.cjs`). The edge is trusted base; the preflight is product.
 
 ## One process per container
