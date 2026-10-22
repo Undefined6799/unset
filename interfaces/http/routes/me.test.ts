@@ -137,6 +137,20 @@ describe("GET /:did", () => {
     expect(html).not.toContain('href="https://pds.unset.test');
   });
 
+  async function hidesIssuer(issuer: string, absent: string): Promise<void> {
+    const html = await (await setup({ issuer }).get()).text();
+    expect(html, issuer).not.toContain(absent);
+    expect(html, issuer).not.toContain("your sign-in server");
+    expect(html, issuer).not.toContain("Your account on");
+    expect(html, issuer).not.toContain('href="https://pds.unset.test');
+  }
+
+  test("me_hides_an_ipv4_issuer", () => hidesIssuer("https://198.51.100.1", "198.51.100.1"));
+  test("me_hides_an_ipv6_issuer", () => hidesIssuer("https://[2001:db8::1]", "2001:db8"));
+  test("me_hides_a_localhost_issuer", () => hidesIssuer("https://localhost", "localhost"));
+  test("me_hides_a_localhost_child_issuer", () => hidesIssuer("https://app.localhost", "app.localhost"));
+  test("me_hides_a_trailing_dot_issuer", () => hidesIssuer("https://pds.example.", "pds.example"));
+
   test("me_hides_a_non_default_port_issuer", async () => {
     // Only a bare https origin counts (architecture 04:15Z item 2): a port drops the link (P2.08g, verify-1054
     // mutant 13).
