@@ -14,6 +14,13 @@
 # (WebKit; it usually takes under a minute). Each attempt is cut at 4 minutes by coreutils timeout (Ubuntu 24.04,
 # `timeout --kill-after`), tried once more, and the step is capped at 9 minutes (workflow syntax,
 # jobs.<job_id>.steps[*].timeout-minutes), so a stall costs minutes, not the run. A blocked download still fails.
+# P0.07g: the job log named the stall: azure.archive.ubuntu.com served the `--with-deps` packages at a crawl, and the
+# P0.07f retry then failed at once on "Could not get lock /var/lib/dpkg/lock-frontend", held by the first attempt's
+# apt-get, which runs under sudo and outlived the timeout. So apt drops a stalled connection after 20 s and retries a
+# file 3 times (apt-transport-http(1) Acquire::http::Timeout, apt.conf(5) Acquire::Retries, Ubuntu noble), and before
+# the second attempt the orphaned apt-get is killed and waited out (pkill only signals), any dpkg it started is
+# waited for, and dpkg is left configured. SIGKILL cannot be ignored; if it lands mid-install, dpkg keeps running
+# and `dpkg --configure -a` finishes what it began.
 
 name: e2e
 
@@ -53,9 +60,17 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+      - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9
-        run: timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT" || timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"
+        run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\n' | sudo tee /etc/apt/apt.conf.d/80-e2e-install > /dev/null
+          attempt() { timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"; }
+          attempt || {
+            sudo pkill -KILL -x apt-get || true
+            while pgrep -x apt-get > /dev/null || pgrep -x dpkg > /dev/null; do sleep 2; done
+            sudo dpkg --configure -a
+            attempt
+          }
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Run Playwright
@@ -97,9 +112,17 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+      - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9
-        run: timeout --kill-after=10s 240s npx playwright install --with-deps chromium || timeout --kill-after=10s 240s npx playwright install --with-deps chromium
+        run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\n' | sudo tee /etc/apt/apt.conf.d/80-e2e-install > /dev/null
+          attempt() { timeout --kill-after=10s 240s npx playwright install --with-deps chromium; }
+          attempt || {
+            sudo pkill -KILL -x apt-get || true
+            while pgrep -x apt-get > /dev/null || pgrep -x dpkg > /dev/null; do sleep 2; done
+            sudo dpkg --configure -a
+            attempt
+          }
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Install pa11y and Lighthouse outside the lockfile
