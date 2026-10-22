@@ -80,6 +80,11 @@ test("pds_theme_radius_and_fonts_follow_the_sheet", () => {
   // Cards: half the radius, the sheet's radius-xs.
   expect(theme).toContain("border-radius: calc(var(--radius) / 2);");
   expect(`${Number.parseInt(pds.light.get("--radius") ?? "", 10) / 2}px`).toBe(sheet.dark.get("--radius-xs"));
+  // The Button's cut and label type (shared/ui/sheet/components/Button/README.md).
+  expect(pds.light.get("--unset-cut")).toBe(sheet.dark.get("--radius-cut"));
+  for (const part of ["size", "line", "weight", "tracking"]) {
+    expect(pds.light.get(`--unset-label-${part}`), part).toBe(sheet.dark.get(`--type-label-${part}`));
+  }
   expect(pds.light.get("--font-sans")?.startsWith('"Space Grotesk"')).toBe(true);
   expect(pds.light.get("--font-mono")?.startsWith('"JetBrains Mono"')).toBe(true);
 });
