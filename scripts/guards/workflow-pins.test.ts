@@ -33,6 +33,44 @@ describe("workflows", () => {
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker create alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: podman container run alpine:3\n")))).toHaveLength(1);
+    // P2.24c: the pull of `$ref` passes only in publish-images.yml, right after the lines that set and check it.
+    const checked = [
+      'ref="$REGISTRY/$name@$(jq -r \'."containerimage.digest"\' "$RUNNER_TEMP/meta.json")"',
+      `case "$ref" in *@sha256:${"?".repeat(64)}) ;; *) exit 1 ;; esac`,
+    ];
+    // Only the pin problem counts here: the CI fixture breaks publish-images.yml's own trigger and job rules.
+    const pull = (lines: string[], file = "publish-images.yml") =>
+      problems(
+        withJob(job(`    steps:\n      - run: |\n${lines.map((l) => `          ${l}\n`).join("")}`)),
+        file,
+      ).filter((problem) => problem.endsWith("container started without a digest-pinned image"));
+    const exact = 'docker pull --quiet --platform linux/amd64 "$ref" > /dev/null';
+    expect(pull([...checked, exact])).toEqual([]);
+    expect(pull([...checked, "# a comment", exact])).toEqual([]);
+    expect(pull([...checked, exact], "images.yml")).toHaveLength(1);
+    expect(pull(["ref=alpine:latest", exact])).toHaveLength(1);
+    expect(pull([...checked, "ref=alpine:latest", exact])).toHaveLength(1);
+    expect(pull([checked[0] ?? "", exact])).toHaveLength(1);
+    expect(pull([...checked, 'docker pull --quiet --platform linux/amd64 "$other" > /dev/null'])).toHaveLength(1);
+    expect(pull([...checked, 'docker pull "$ref"'])).toHaveLength(1);
+    expect(pull([...checked, 'docker run --rm "$ref"'])).toHaveLength(1);
+    // The set, the check and the pull must share one run block, so one shell (Codex on #1276).
+    const steps = (first: string[], second: string) =>
+      problems(
+        withJob(
+          job(
+            `    env:\n      ref: alpine:latest\n    steps:\n      - run: |\n${first.map((l) => `          ${l}\n`).join("")}      - run: |\n          ${second}\n`,
+          ),
+        ),
+        "publish-images.yml",
+      ).filter((problem) => problem.endsWith("container started without a digest-pinned image"));
+    expect(steps(checked, exact)).toHaveLength(1);
+    expect(steps(checked, `run: ${exact}`)).toHaveLength(1);
+    const oneLine = withJob(
+      job(`    steps:\n      - run: |\n${checked.map((l) => `          ${l}\n`).join("")}      - run: ${exact}\n`),
+    );
+    expect(problems(oneLine, "publish-images.yml").filter((p) => p.endsWith("digest-pinned image"))).toHaveLength(1);
+    expect(pull([...checked.map((l) => `  ${l}`), exact])).toHaveLength(1);
     // A BuildKit container builder pulls its image: unnamed or by tag fails; by digest or a pinned variable passes.
     const builder = (opts: string) => withJob(job(`    steps:\n      - run: docker buildx create --use ${opts}\n`));
     expect(problems(builder("--driver docker-container"))).toHaveLength(1);
@@ -245,6 +283,8 @@ describe("signing jobs (P1.27s)", () => {
   test("packages_write_other_file_fails", () => {
     for (const file of ["images.yml", "ci.yml", "publish-images.yaml", ""]) {
       expect(problems(publish, file), file).toEqual([
+        // The pushed-digest pull is accepted only in publish-images.yml.
+        expect.stringMatching(/^line \d+: container started without a digest-pinned image$/),
         "job publish: id-token: write outside a signing job",
         "job publish: packages: write outside a signing job",
       ]);

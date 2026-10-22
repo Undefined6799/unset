@@ -65,6 +65,32 @@ function runValues(lines: string[]): string[] {
 const FIXED_BUILDER =
   /^\s*(?:- )?(?:run:\s*)?docker buildx create(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8} --driver-opt "image=(?:\$\w+_IMAGE|[\w./:-]+@sha256:[0-9a-f]{64})"(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8}\s*$/;
 
+/**
+ * The one accepted pull of a runtime ref (P2.24c): publish-images.yml pulls the digest it just pushed, `$ref`, so its
+ * scan can name the image as images.yml does. It passes only in that file, only inside a `run: |` block, and only
+ * straight after the two lines of that same block that set `$ref` from the build's own digest and exit unless it ends
+ * in `@sha256:` and 64 characters (Codex on #1276). Equal indentation with nothing but blank or comment lines between
+ * keeps all three in one block scalar, so one shell: a new step needs a `- run:` line, which breaks the chain. Any
+ * other file, spelling, step or preceding line still fails.
+ */
+const PUSHED_DIGEST_PULL = /^(\s*)docker pull --quiet --platform linux\/amd64 "\$ref" > \/dev\/null\s*$/;
+const PUSHED_REF =
+  /^(\s*)ref="\$REGISTRY\/\$name@\$\(jq -r '\."containerimage\.digest"' "\$RUNNER_TEMP\/meta\.json"\)"\s*$/;
+const DIGEST_CHECK = /^(\s*)case "\$ref" in \*@sha256:\?{64}\) ;; \*\) exit 1 ;; esac\s*$/;
+
+/** Whether line `i` is publish-images.yml's pull of the digest set and checked on the two lines before it, in one block. */
+function isPushedDigestPull(file: string, lines: readonly string[], i: number): boolean {
+  const before = lines.slice(0, i).filter((line) => line.trim() !== "");
+  const indents = [
+    PUSHED_REF.exec(before.at(-2) ?? "")?.[1],
+    DIGEST_CHECK.exec(before.at(-1) ?? "")?.[1],
+    PUSHED_DIGEST_PULL.exec(lines[i] ?? "")?.[1],
+  ];
+  return file === "publish-images.yml" && indents.every((indent) => indent !== undefined && indent === indents[2]);
+}
+
+const UNPINNED_RUN = "container started without a digest-pinned image";
+
 /** Pinning, trigger and permission problems visible on one line. */
 function lineProblems(line: string): string[] {
   const found: string[] = [];
@@ -77,7 +103,7 @@ function lineProblems(line: string): string[] {
   const image = /(?:\b\w*_IMAGE|\bimage|\bcontainer):\s*["']?([^\s"'{]+)/.exec(line)?.[1];
   if (image && !/@sha256:[0-9a-f]{64}$/.test(image)) found.push(`image not pinned by digest: ${image}`);
   if (/\b(?:docker|podman)\s+(?:container\s+|image\s+)?(?:run|create|pull)\b/.test(line)) {
-    if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
+    if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push(UNPINNED_RUN);
   }
   // A BuildKit container builder runs an image too (P1.27s). buildx reads driver options as CSV (csvvalue.Fields) and
   // keeps the last `image=`, and the shell can build quotes at run time, so no list of spellings is complete: the line
@@ -261,6 +287,7 @@ export function problems(text: string, file = ""): string[] {
   const found = lines.flatMap((line, i) =>
     lineProblems(line)
       .filter((problem) => keepProblem(file, line, problem))
+      .filter((problem) => problem !== UNPINNED_RUN || !isPushedDigestPull(file, lines, i))
       .map((problem) => `line ${i + 1}: ${problem}`),
   );
   if (!lines.some((l) => /^permissions:\s*\{\s*\}\s*$/.test(l))) found.push("top-level permissions is not {}");
