@@ -85,11 +85,17 @@ jobs:
               --metadata-file "$RUNNER_TEMP/meta.json" "$context" < /dev/null
             ref="$REGISTRY/$name@$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/meta.json")"
             case "$ref" in *@sha256:????????????????????????????????????????????????????????????????) ;; *) exit 1 ;; esac
-            # The same ignore file images.yml scans this image with (list-dockerfiles.ts): /dev/null for every image
-            # but the paired PDS recipe, whose accepted findings are .github/trivyignore.pds.yaml (P2.24t).
-            docker run --rm -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" -v "$PWD:/repo:ro" -w /repo \
-              "$TRIVY_IMAGE" \
-              image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$ignorefile" --timeout 10m "$ref"
+            # Scanned as images.yml scans it (list-dockerfiles.ts): with that image's ignore file, /dev/null for every
+            # image but the paired PDS recipe (.github/trivyignore.pds.yaml, P2.24t), and under the same local name
+            # unset-scan/<name>:ci, because Trivy matches an OS-package entry's paths against the scan target's name
+            # (v0.75.0 pkg/result/filter.go:90-94, ignore.go:81-103). The local image is the pushed digest itself:
+            # it is pulled by that digest and must list it among its RepoDigests before it is scanned.
+            docker pull --quiet --platform linux/amd64 "$ref" > /dev/null
+            docker image inspect --format '{{join .RepoDigests "\n"}}' "$ref" | grep -qxF "$ref"
+            docker tag "$ref" "unset-scan/$name:ci"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
+              image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$ignorefile" --timeout 10m \
+              "unset-scan/$name:ci"
             docker run --rm -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" "$SYFT_IMAGE" \
               "registry:$ref" -o spdx-json > "$RUNNER_TEMP/sbom.json"
             jq -n --arg repo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --arg ref "$GITHUB_REF" --arg sha "$GITHUB_SHA" \

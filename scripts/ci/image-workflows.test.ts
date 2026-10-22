@@ -88,7 +88,7 @@ describe("image workflows", () => {
     expect(run).toContain("push-by-digest=true");
     expect(run).toContain('ref="$REGISTRY/$name@$(jq -r \'."containerimage.digest"\' "$RUNNER_TEMP/meta.json")"');
     for (const use of [
-      '--ignore-unfixed --ignorefile "$ignorefile" --timeout 10m "$ref"',
+      '--ignore-unfixed --ignorefile "$ignorefile" --timeout 10m \\\n    "unset-scan/$name:ci"',
       'cosign sign --yes "$ref"',
     ]) {
       expect(run).toContain(use);
@@ -101,6 +101,10 @@ describe("image workflows", () => {
     // P2.24c: the scan reads the ignore file list-dockerfiles.ts gives each image, the one images.yml uses.
     expect(run).toContain("jq -r '.[] | [.name, .dockerfile, .ignorefile] | @tsv'");
     expect(run).toContain("read -r name dockerfile ignorefile");
+    // The scanned local image is the pushed digest: pulled by it, checked against its RepoDigests, then tagged.
+    expect(run).toContain('docker pull --quiet --platform linux/amd64 "$ref" > /dev/null');
+    expect(run).toContain(`docker image inspect --format '{{join .RepoDigests "\\n"}}' "$ref" | grep -qxF "$ref"`);
+    expect(run).toContain('docker tag "$ref" "unset-scan/$name:ci"');
     expect(steps.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"');
     // cosign is installed from its release by checksum, before anything signs.
     expect(run).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
