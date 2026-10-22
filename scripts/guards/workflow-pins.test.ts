@@ -54,6 +54,23 @@ describe("workflows", () => {
     expect(pull([...checked, 'docker pull --quiet --platform linux/amd64 "$other" > /dev/null'])).toHaveLength(1);
     expect(pull([...checked, 'docker pull "$ref"'])).toHaveLength(1);
     expect(pull([...checked, 'docker run --rm "$ref"'])).toHaveLength(1);
+    // The set, the check and the pull must share one run block, so one shell (Codex on #1276).
+    const steps = (first: string[], second: string) =>
+      problems(
+        withJob(
+          job(
+            `    env:\n      ref: alpine:latest\n    steps:\n      - run: |\n${first.map((l) => `          ${l}\n`).join("")}      - run: |\n          ${second}\n`,
+          ),
+        ),
+        "publish-images.yml",
+      ).filter((problem) => problem.endsWith("container started without a digest-pinned image"));
+    expect(steps(checked, exact)).toHaveLength(1);
+    expect(steps(checked, `run: ${exact}`)).toHaveLength(1);
+    const oneLine = withJob(
+      job(`    steps:\n      - run: |\n${checked.map((l) => `          ${l}\n`).join("")}      - run: ${exact}\n`),
+    );
+    expect(problems(oneLine, "publish-images.yml").filter((p) => p.endsWith("digest-pinned image"))).toHaveLength(1);
+    expect(pull([...checked.map((l) => `  ${l}`), exact])).toHaveLength(1);
     // A BuildKit container builder pulls its image: unnamed or by tag fails; by digest or a pinned variable passes.
     const builder = (opts: string) => withJob(job(`    steps:\n      - run: docker buildx create --use ${opts}\n`));
     expect(problems(builder("--driver docker-container"))).toHaveLength(1);

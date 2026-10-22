@@ -67,25 +67,26 @@ const FIXED_BUILDER =
 
 /**
  * The one accepted pull of a runtime ref (P2.24c): publish-images.yml pulls the digest it just pushed, `$ref`, so its
- * scan can name the image as images.yml does. It passes only in that file and only straight after the two lines that
- * set `$ref` from the build's own digest and exit unless it ends in `@sha256:` and 64 characters (Codex on #1276);
- * any other file, spelling or preceding line still fails.
+ * scan can name the image as images.yml does. It passes only in that file, only inside a `run: |` block, and only
+ * straight after the two lines of that same block that set `$ref` from the build's own digest and exit unless it ends
+ * in `@sha256:` and 64 characters (Codex on #1276). Equal indentation with nothing but blank or comment lines between
+ * keeps all three in one block scalar, so one shell: a new step needs a `- run:` line, which breaks the chain. Any
+ * other file, spelling, step or preceding line still fails.
  */
-const PUSHED_DIGEST_PULL =
-  /^\s*(?:- )?(?:run:\s*)?docker pull --quiet --platform linux\/amd64 "\$ref" > \/dev\/null\s*$/;
+const PUSHED_DIGEST_PULL = /^(\s*)docker pull --quiet --platform linux\/amd64 "\$ref" > \/dev\/null\s*$/;
 const PUSHED_REF =
-  /^\s*ref="\$REGISTRY\/\$name@\$\(jq -r '\."containerimage\.digest"' "\$RUNNER_TEMP\/meta\.json"\)"\s*$/;
-const DIGEST_CHECK = /^\s*case "\$ref" in \*@sha256:\?{64}\) ;; \*\) exit 1 ;; esac\s*$/;
+  /^(\s*)ref="\$REGISTRY\/\$name@\$\(jq -r '\."containerimage\.digest"' "\$RUNNER_TEMP\/meta\.json"\)"\s*$/;
+const DIGEST_CHECK = /^(\s*)case "\$ref" in \*@sha256:\?{64}\) ;; \*\) exit 1 ;; esac\s*$/;
 
-/** Whether line `i` is publish-images.yml's pull of the digest set and checked on the two code lines before it. */
+/** Whether line `i` is publish-images.yml's pull of the digest set and checked on the two lines before it, in one block. */
 function isPushedDigestPull(file: string, lines: readonly string[], i: number): boolean {
   const before = lines.slice(0, i).filter((line) => line.trim() !== "");
-  return (
-    file === "publish-images.yml" &&
-    PUSHED_DIGEST_PULL.test(lines[i] ?? "") &&
-    DIGEST_CHECK.test(before.at(-1) ?? "") &&
-    PUSHED_REF.test(before.at(-2) ?? "")
-  );
+  const indents = [
+    PUSHED_REF.exec(before.at(-2) ?? "")?.[1],
+    DIGEST_CHECK.exec(before.at(-1) ?? "")?.[1],
+    PUSHED_DIGEST_PULL.exec(lines[i] ?? "")?.[1],
+  ];
+  return file === "publish-images.yml" && indents.every((indent) => indent !== undefined && indent === indents[2]);
 }
 
 const UNPINNED_RUN = "container started without a digest-pinned image";
