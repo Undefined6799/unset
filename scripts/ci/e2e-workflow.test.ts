@@ -3,14 +3,23 @@
 // a skipped required check reads as passing (expressions, "Status check functions"), hence always() and the result
 // check, run here as Actions runs a step with no shell key: `bash -e` (workflow syntax, jobs.<job_id>.steps[*].shell).
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
 import { E2E_PROJECTS } from "../test/assert-tests-ran.ts";
 
-type Step = { name?: string; run?: string; env?: Record<string, string>; "timeout-minutes"?: number };
+type Step = {
+  id?: string;
+  if?: string;
+  name?: string;
+  run?: string;
+  uses?: string;
+  with?: Record<string, string>;
+  env?: Record<string, string>;
+  "timeout-minutes"?: number;
+};
 type Job = {
   needs?: string[];
   if?: string;
@@ -143,6 +152,96 @@ describe("browser install (P0.07f, P0.07g)", () => {
         calls.filter((call) => call.startsWith("npx ")),
         id,
       ).toHaveLength(2);
+    }
+  });
+});
+
+// P0.07h: both 4-minute attempts were cut while the mirror served about 50 KB/s, so the browser and the packages apt
+// fetched for it are cached. apt does not check the hash of a file already in its archive directory (a flipped byte
+// reached dpkg on Ubuntu 24.04), so a cached package is handed over only when it matches the signed index.
+describe("browser cache (P0.07h)", () => {
+  const jobs = ["browser", "a11y"].map((id) => [id, wf.jobs[id]?.steps ?? []] as const);
+  const at = (steps: readonly Step[], match: (step: Step) => boolean) => steps.findIndex(match);
+
+  test("each_install_restores_the_cache_before_it_and_keeps_the_packages_after_it", () => {
+    for (const [id, steps] of jobs) {
+      const restore = at(steps, (step) => step.uses?.startsWith("actions/cache@") === true);
+      const handOver = at(steps, (step) => step.run?.includes("apt-cache show") === true);
+      const install = at(steps, (step) => step.run?.includes("playwright install") === true);
+      const keep = at(steps, (step) => step.run?.includes("/var/cache/apt/archives -maxdepth 1") === true);
+      expect(restore, id).toBeGreaterThan(-1);
+      expect(handOver, id).toBeGreaterThan(restore);
+      expect(install, id).toBeGreaterThan(handOver);
+      expect(keep, id).toBeGreaterThan(install);
+      const cache = steps[restore];
+      expect(cache?.with?.path?.trim().split("\n"), id).toEqual(["~/.cache/ms-playwright", "~/apt-archives"]);
+      for (const part of ["runner.os", "steps.cache-name.outputs.image", "steps.cache-name.outputs.playwright"]) {
+        expect(cache?.with?.key, id).toContain(part);
+      }
+      expect(steps[keep]?.if, id).toBe(`steps.${cache?.id}.outputs.cache-hit != 'true'`);
+      expect(steps[install]?.run, id).toContain(`APT::Keep-Downloaded-Packages "true";`);
+      // Codex on #1292: the index refresh before the hand-over must not wait on a stalled mirror past the step.
+      expect(steps[handOver]?.["timeout-minutes"], id).toBe(3);
+      expect(steps[handOver]?.run, id).toContain(
+        "sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3",
+      );
+    }
+  });
+
+  // Runs the hand-over as Actions does (`bash -e`) over a cached directory, with stand-ins for sudo, dpkg-deb, apt-cache
+  // and sha256sum. A package file holds "NAME VERSION ARCH", and its "hash" is that text with "/" for spaces; the index signs good 1 and 1:2 on
+  // amd64. A file whose text starts with "broken" is not an archive.
+  function handOver(script: string, debs: Record<string, string>): string[] {
+    const root = mkdtempSync(join(tmpdir(), "e2e-apt-"));
+    const bin = join(root, "bin");
+    const cached = join(root, "home", "apt-archives");
+    const archives = join(root, "archives");
+    for (const dir of [bin, cached, archives]) mkdirSync(dir, { recursive: true });
+    for (const [file, text] of Object.entries(debs)) writeFileSync(join(cached, file), text);
+    const stub = (name: string, body: string) =>
+      writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+    stub("sudo", '[ "$1" = cp ] && exec "$@"; exit 0');
+    stub(
+      "dpkg-deb",
+      'read -r n v a rest < "$2"; [ "$n" = broken ] && exit 2; case "$3" in Package) echo "$n";; Version) echo "$v";; Architecture) echo "$a";; esac',
+    );
+    stub(
+      "apt-cache",
+      'case "$2" in "good:amd64=1" | "good:amd64=1:2") n=${2%%:*}; v=${2#*=}; echo "SHA256: $n/$v/amd64";; esac; exit 0',
+    );
+    stub("sha256sum", 'echo "$(tr " " /) -"');
+    const status = spawnSync("bash", ["-e", "-c", script.replaceAll("/var/cache/apt/archives/", `${archives}/`)], {
+      env: { PATH: `${bin}:${process.env.PATH}`, HOME: join(root, "home") },
+      stdio: "ignore",
+    }).status;
+    const handed = readdirSync(archives).sort();
+    rmSync(root, { recursive: true });
+    expect(status).toBe(0);
+    return handed;
+  }
+
+  test("only_packages_matching_the_index_reach_apt", () => {
+    for (const [id, steps] of jobs) {
+      const script = steps.find((step) => step.run?.includes("apt-cache show"))?.run ?? "";
+      const handed = handOver(script, {
+        "good_1_amd64.deb": "good 1 amd64",
+        "good_3_amd64.deb": "good 3 amd64",
+        "other_1_amd64.deb": "other 1 amd64",
+        "broken_1_all.deb": "broken 1 all",
+      });
+      expect(handed, id).toEqual(["good_1_amd64.deb"]);
+      expect(handOver(script, { "good_1_amd64.deb": "good 1 amd64 tampered" }), id).toEqual([]);
+      expect(handOver(script, {}), id).toEqual([]);
+    }
+  });
+
+  // Verify of #1292: a signed package cached under another package's name lands under its own name, and an epoch's
+  // ":" is written "%3a" as apt writes it.
+  test("a_verified_package_is_handed_over_under_its_own_name", () => {
+    for (const [id, steps] of jobs) {
+      const script = steps.find((step) => step.run?.includes("apt-cache show"))?.run ?? "";
+      expect(handOver(script, { "libnss3_9_amd64.deb": "good 1 amd64" }), id).toEqual(["good_1_amd64.deb"]);
+      expect(handOver(script, { "good_1%3a2_amd64.deb": "good 1:2 amd64" }), id).toEqual(["good_1%3a2_amd64.deb"]);
     }
   });
 });
