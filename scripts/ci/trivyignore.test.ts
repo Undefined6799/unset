@@ -129,7 +129,7 @@ describe(".github/trivyignore.pds.yaml", () => {
     expect(entries.map((item) => item.id)).toEqual([...PDS_IDS]);
     for (const item of entries) {
       expect(dayOf(item.expired_at), item.id).toBe("2026-11-13");
-      expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id] ?? STATEMENT);
+      expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id ?? ""] ?? STATEMENT);
       expect((item.paths?.length ?? 0) + (item.purls?.length ?? 0), item.id).toBeGreaterThan(0);
       // Exact names only: a glob would also cover images nobody reviewed.
       for (const path of item.paths ?? []) expect(path, item.id).not.toMatch(/[*?[{\\]/);
