@@ -40,7 +40,7 @@ Kit islands on the tree (`shared/ui/islands/`):
 | `tabs.island.tsx` |
 | `toast.island.tsx` |
 
-`index.ts` exports these names:
+`index.ts` exports these names. Each component also exports its props type (`ButtonProps`, and the same `Props` suffix on the others):
 
 | Export |
 | --- |
