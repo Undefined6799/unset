@@ -32,10 +32,8 @@ export function AccountRows({ rows }: { rows: readonly AccountRowProps[] }) {
     <ul className={styles.list}>
       {rows.map((row) => (
         <li key={row.label} className={styles.row}>
-          <div>
-            <div className={styles.label}>{row.label}</div>
-            <div>{row.value}</div>
-          </div>
+          <div className={styles.label}>{row.label}</div>
+          {row.value == null ? null : <div>{row.value}</div>}
           {row.action}
         </li>
       ))}

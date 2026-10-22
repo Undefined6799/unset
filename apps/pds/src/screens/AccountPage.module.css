@@ -33,11 +33,15 @@
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(120px, 160px) minmax(0, 1fr) auto;
     gap: var(--space-4);
     align-items: center;
-    padding-block: var(--space-4);
+    min-height: 40px;
+    padding: var(--space-3) 0;
     border-bottom: 1px solid var(--color-line);
+    &:not(:has(> :nth-child(3))) {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
   }
   .facts {
     margin: 0;
@@ -55,14 +59,16 @@
     }
   }
   .dialog {
-    width: min(32rem, calc(100vw - var(--space-8)));
-    border: 1px solid var(--color-line);
+    box-sizing: border-box;
+    width: min(440px, calc(100% - var(--space-8)));
+    max-width: 440px;
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-0);
     background: var(--color-ground);
     color: var(--color-ink);
     padding: var(--space-6);
     &::backdrop {
-      background: var(--color-ink);
-      opacity: 0.45;
+      background: var(--color-scrim);
     }
   }
   .form {
@@ -74,6 +80,8 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
     gap: var(--space-4);
   }
   .warning {

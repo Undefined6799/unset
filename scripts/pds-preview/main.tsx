@@ -1,11 +1,10 @@
 // Dev-only demo of the PDS pages. It does not call a PDS or change native authentication.
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Switch } from "../../shared/ui/index.ts";
+import { DescriptionList, Switch } from "../../shared/ui/index.ts";
 import {
   AccountActions,
   AccountDialog,
-  AccountFacts,
   AccountForm,
   AccountPage,
   AccountRows,
@@ -198,11 +197,11 @@ function Preview() {
     case "home":
       body = (
         <AccountPage eyebrow="Account" title={account.name} description={`Signed in as ${account.handle}`}>
-          <AccountFacts
-            facts={[
-              { label: "Handle", value: account.handle },
+          <DescriptionList
+            items={[
+              { label: "Handle", value: account.handle, mono: true },
               { label: "Email", value: account.email },
-              { label: "DID", value: account.did },
+              { label: "DID", value: account.did, mono: true },
               { label: "Status", value: account.status },
             ]}
           />
@@ -333,13 +332,13 @@ function Preview() {
     case "about":
       body = (
         <AccountPage eyebrow="Account" title="About" description="Information this account server stores.">
-          <AccountFacts
-            facts={[
+          <DescriptionList
+            items={[
               { label: "Name", value: account.name },
-              { label: "Handle", value: account.handle },
+              { label: "Handle", value: account.handle, mono: true },
               { label: "Email", value: account.email },
-              { label: "DID", value: account.did },
-              { label: "Server", value: "unset.ac" },
+              { label: "DID", value: account.did, mono: true },
+              { label: "Server", value: "unset.ac", mono: true },
               { label: "Status", value: account.status },
             ]}
           />
@@ -612,10 +611,10 @@ function Preview() {
           "Authorize unset.sh",
           "This app is asking to use your account.",
           <>
-            <AccountFacts
-              facts={[
+            <DescriptionList
+              items={[
                 { label: "App", value: "unset.sh" },
-                { label: "Account", value: account.handle },
+                { label: "Account", value: account.handle, mono: true },
                 { label: "Access", value: "Profile and repository" },
               ]}
             />
