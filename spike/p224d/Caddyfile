@@ -1,0 +1,35 @@
+# P2.24d spike only; never merged. Caddy 2.11.7 header directive (modules/caddyhttp/headers/caddyfile.go at
+# v2.11.7): a block `match` sets a response matcher, and `>Field regexp replacement` is a deferred regex replace
+# (Go regexp.ReplaceAllString), applied to the upstream's response header at write time.
+{
+	admin off
+	auto_https disable_redirects
+}
+
+pds.test {
+	tls internal
+	# One fixed same-origin path, woff2 files from shared/ui/fonts only; anything else under it is 404.
+	handle_path /_unset/fonts/* {
+		@woff2 path_regexp ^/[A-Za-z0-9-]+\.woff2$
+		handle @woff2 {
+			root * /srv/fonts
+			header Content-Type font/woff2
+			header X-Content-Type-Options nosniff
+			file_server
+		}
+		handle {
+			respond 404
+		}
+	}
+	handle {
+		# HTML responses only: append one font-src for the exact path. Every upstream directive, hash and nonce
+		# stays as the PDS wrote it; a response without a CSP gets none.
+		header {
+			match {
+				header Content-Type text/html*
+			}
+			>Content-Security-Policy "^(.+)$" "$1; font-src https://pds.test/_unset/fonts/"
+		}
+		reverse_proxy pds:3000
+	}
+}
