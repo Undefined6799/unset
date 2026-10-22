@@ -9,7 +9,10 @@ export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox/Checkbox.tsx";
 export {
   type DescriptionItem,
+  type DescriptionItem,
   DescriptionList,
+  DescriptionList,
+  type DescriptionListProps,
   type DescriptionListProps,
 } from "./components/DescriptionList/DescriptionList.tsx";
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
