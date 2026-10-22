@@ -96,10 +96,12 @@ export function issuerFromCookies(header: string | null): string | null {
 }
 
 /**
- * The https origin of a recorded issuer, or null for another scheme, a user or password, or a port other than the
- * default (architecture 2026-10-19 04:15Z item 2). The library already refuses a query, fragment or trailing slash
- * (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); the account link uses only the origin (book P2.08
- * `PdsAccountLink`: "<issuer origin>/"). WHATWG URL leaves `port` empty for 443 on https.
+ * The https origin of a recorded issuer, or null when it is not one (P2.08b, narrowed by P2.08h). Refused: another
+ * scheme, a user or password, a port other than the default, an IPv4 or IPv6 literal, `localhost`, a name under
+ * `.localhost`, or a trailing dot. WHATWG `URL` on Node 26.12.0 serializes an IPv4 host as dotted decimal and an
+ * IPv6 host in brackets, and it keeps a trailing dot (https://url.spec.whatwg.org/#concept-host-parser). The
+ * carrier matches those shapes. The library already refuses a query, fragment or trailing slash
+ * (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js).
  */
 export function issuerOrigin(issuer: string): string | null {
   let url: URL;
@@ -109,7 +111,17 @@ export function issuerOrigin(issuer: string): string | null {
     return null;
   }
   if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.port !== "") return null;
+  if (!dnsNameHost(url.hostname)) return null;
   return url.origin;
+}
+
+/** Four decimal octets, the form WHATWG gives an IPv4 address (0–255, no leading zero except 0). */
+const IPV4 = /^(?:0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])(?:\.(?:0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])){3}$/;
+
+/** A DNS hostname: not an address, not localhost, and not a trailing dot (P2.08h). `hostname` is WHATWG's. */
+function dnsNameHost(hostname: string): boolean {
+  if (hostname.endsWith(".") || hostname.startsWith("[") || IPV4.test(hostname)) return false;
+  return hostname !== "localhost" && !hostname.endsWith(".localhost");
 }
 
 /** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */
