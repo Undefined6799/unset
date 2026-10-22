@@ -15,12 +15,40 @@ export function emailGate(cache: EmailCache, nowMs: number, recheckS: number): E
 export type EmailRefresh = "transient" | "confirmed" | "unconfirmed" | "ended";
 
 /**
- * The gate after a stale cache. A PDS outage keeps a previously confirmed member in (`transient`). A fresh `false`
- * sends them to confirm. A dead grant signs them out.
+ * How many recheck intervals a cached confirmation may still be served when the PDS answer is transient (P2.11d).
+ * The cap is this multiple of the configured interval, never a fixed number of seconds.
  */
-export function verifiedAfterRefresh(answer: EmailRefresh): "pass" | "verify" | "ended" {
+export const CACHED_RECHECK_CAP_MULTIPLE = 4;
+
+/** `recheckS * 4`. At the config maximum of 900 s the cap is 3,600 s. */
+export function cachedRecheckCapS(recheckS: number): number {
+  return recheckS * CACHED_RECHECK_CAP_MULTIPLE;
+}
+
+/**
+ * Whether a transient recheck may still serve this cache. Age is an upper bound: a clock-ahead timestamp is not older
+ * than the cap. A missing timestamp is not served.
+ */
+export function withinCachedRecheckCap(cache: EmailCache, nowMs: number, recheckS: number): boolean {
+  if (cache.checkedAt === null) return false;
+  const ageS = (nowMs - cache.checkedAt.getTime()) / 1000;
+  return ageS <= cachedRecheckCapS(recheckS);
+}
+
+/**
+ * The gate after a stale cache. A transient answer serves the cached confirmation only while it is inside the cap
+ * (P2.11d); past the cap the caller shows the PDS-unavailable page and ends nothing. A fresh `false` sends them to
+ * confirm. A dead grant signs them out. `auth_dead`, `scope_missing` and `rejected` do not become `unavailable`.
+ */
+export function verifiedAfterRefresh(
+  answer: EmailRefresh,
+  cache: EmailCache,
+  nowMs: number,
+  recheckS: number,
+): "pass" | "verify" | "ended" | "unavailable" {
   switch (answer) {
     case "transient":
+      return withinCachedRecheckCap(cache, nowMs, recheckS) ? "pass" : "unavailable";
     case "confirmed":
       return "pass";
     case "unconfirmed":

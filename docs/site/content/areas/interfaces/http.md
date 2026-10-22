@@ -36,7 +36,7 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 
 Every route in this process sets `session: "none"`. `defineRoute` writes `requiresSession` only for `"required"`, so `interfaces/http/routes.manifest.json` has no session field (`shared/http/routes.ts`). That is not "no auth". Page gating is `openApp` (`interfaces/http/app-gate.ts`). `interfaces/http/routes/welcome.ts`, `interfaces/http/routes/verify-email.ts` and `interfaces/http/routes/logout.ts` read the session in the handler. `GET /login` reads it to send a signed-in visitor to `/did` (`interfaces/http/routes/login.ts`).
 
-The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS. The maximum is 900 in `interfaces/http/config.ts`.
+The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS. The maximum is 900 in `interfaces/http/config.ts`. While the PDS can't be reached, that cached confirmation is served for at most 4 × `EMAIL_RECHECK_S`. After that, the gated page shows the PDS-unavailable page and the session stays.
 
 `compose.ts` keeps `meRoutes` last so the one-segment DID route does not shadow the explicit paths.
 

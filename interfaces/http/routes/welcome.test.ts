@@ -124,6 +124,7 @@ function setup(world: World = {}) {
     refreshEmail: async () => "confirmed",
     now: () => NOW.getTime(),
     emailRecheckS: 900,
+    unavailablePage: () => new Response("unavailable", { status: 200 }),
   };
   const page = (input: Parameters<typeof pageResponse>[1]) =>
     pageResponse(

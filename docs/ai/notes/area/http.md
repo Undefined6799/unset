@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-19
+checked: 2026-10-22
 ---
 # http
 
@@ -94,10 +94,12 @@ and then is the email page itself.
 **A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through
 `pdsSessionInfo`; on `auth_dead`, pdsCall's `authDead` has already ended every session of the DID and its token set,
 so `refreshEmail` answers `ended` and `openApp` sends 303 to `/login?error=login.session_ended` with the cookie
-cleared. `scope_missing` and `rejected` still go to `/verify-email`; a transient answer passes on the cached `true`
-and ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
+cleared. `scope_missing` and `rejected` still go to `/verify-email`. A transient answer passes on the cached `true`
+only while that cache is at most 4 × `EMAIL_RECHECK_S` old, and ends nothing (P2.11d). Past that cap the same
+transient answer, including a 429 and a 401 while the token set is stored, shows the PDS-unavailable page and still
+ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
 successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS call, whichever comes first. While
-the PDS can't be reached, the cached result is kept, and the bound extends until a recheck succeeds. Once P1.36v
+the PDS can't be reached, the cached result is kept, up to that cap. Once P1.36v
 lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth

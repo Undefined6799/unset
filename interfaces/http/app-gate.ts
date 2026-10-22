@@ -15,7 +15,9 @@ import {
 import type { Session, SessionRead } from "@unset/infrastructure-session";
 import { withErrorParam } from "@unset/shared-errors";
 import { safeReturnPath } from "@unset/shared-http";
+import type { ReactNode } from "react";
 import { sessionClearCookie } from "./session-cookie.ts";
+import type { PageSpec } from "./web/page.ts";
 
 export type AppGate = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
@@ -25,6 +27,11 @@ export type AppGate = {
   refreshEmail: (session: Session, deadline: AbortSignal) => Promise<EmailRefresh>;
   now: () => number;
   emailRecheckS: number;
+  /**
+   * The PDS-unavailable page (verify-email's `unavailable` state). A transient recheck past the cache cap returns it
+   * and keeps the session (P2.11d).
+   */
+  unavailablePage: (request: Request) => Response;
 };
 
 export type OpenedApp = { readonly session: Session; readonly privacyNotice: boolean };
@@ -56,7 +63,23 @@ function redirect(location: string, clearCookie: boolean): Response {
 }
 
 /**
+ * The PDS-unavailable page, the same screen verify-email renders for a transient read. Callers pass that screen's
+ * `unavailable` state; this only fixes the page around it.
+ */
+export function pdsUnavailablePage(request: Request, body: ReactNode, page: (spec: PageSpec) => Response): Response {
+  return page({
+    group: "app",
+    request,
+    title: "Confirm your email",
+    body,
+    shell: {},
+  });
+}
+
+/**
  * requireSession, then requireOnboarded, then requireVerified. `next` is a path this route owns, never the request.
+ * A cached confirmation is served on a transient recheck for at most 4 × `emailRecheckS` (P2.11d). Past that, the
+ * unavailable page is shown and the session stays. A dead grant still signs out.
  */
 export async function openApp(
   gate: AppGate,
@@ -70,15 +93,40 @@ export async function openApp(
   const decision = requireOnboarded(account, gate.versions);
   const away = redirectFor(decision, next);
   if (away !== null) return redirect(away, false);
+  const now = gate.now();
   const cache = await gate.emailCache(session, deadline);
-  const email = emailGate(cache, gate.now(), gate.emailRecheckS);
-  if (email === "verify") return redirect("/verify-email", false);
-  if (email === "refresh") {
-    const answer = verifiedAfterRefresh(await gate.refreshEmail(session, deadline));
-    if (answer === "verify") return redirect("/verify-email", false);
-    // P2.11a: the grant was revoked at the PDS, and pdsCall has already ended every session of the DID. This browser
-    // signs in again on the page respondToPdsFailure uses for auth_dead (pds-call.ts:232-234).
-    if (answer === "ended") return redirect(withErrorParam("/login", "login.session_ended"), true);
+  const email = emailGate(cache, now, gate.emailRecheckS);
+  const opened = (): OpenedApp => ({
+    session,
+    privacyNotice: decision.outcome === "pass" && decision.privacyNotice,
+  });
+  switch (email) {
+    case "verify":
+      return redirect("/verify-email", false);
+    case "pass":
+      return opened();
+    case "refresh": {
+      const answer = verifiedAfterRefresh(await gate.refreshEmail(session, deadline), cache, now, gate.emailRecheckS);
+      switch (answer) {
+        case "pass":
+          return opened();
+        case "verify":
+          return redirect("/verify-email", false);
+        case "ended":
+          // P2.11a: the grant was revoked at the PDS, and pdsCall has already ended every session of the DID. This
+          // browser signs in again on the page respondToPdsFailure uses for auth_dead (pds-call.ts:232-234).
+          return redirect(withErrorParam("/login", "login.session_ended"), true);
+        case "unavailable":
+          return gate.unavailablePage(request);
+        default: {
+          const unexpected: never = answer;
+          return unexpected;
+        }
+      }
+    }
+    default: {
+      const unexpected: never = email;
+      return unexpected;
+    }
   }
-  return { session, privacyNotice: decision.outcome === "pass" && decision.privacyNotice };
 }
