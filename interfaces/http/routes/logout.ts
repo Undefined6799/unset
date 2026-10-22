@@ -29,7 +29,7 @@ export type LogoutDeps = {
   /** Destroys this session and returns how many of the DID's sessions remain, in one transaction. */
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
   /** The issuer OAuth recorded at sign-in (the stored token set's `iss`), or null. Never a DID-document field. */
-  issuerOf: (did: Did) => Promise<string | null>;
+  issuerOf: (did: Did, signal: AbortSignal) => Promise<string | null>;
   /**
    * `OAuthClient.revoke` (@atproto/oauth-client 0.8.9, dist/oauth-client.js `revoke`). On success the library has
    * deleted the stored set. A throw means the authorization server was not confirmed; the set may still be there.
@@ -47,6 +47,12 @@ export type LogoutDeps = {
 const FORM = "application/x-www-form-urlencoded";
 /** Book P2.08: the revocation call gets 10 seconds, then we drop the stored set ourselves. */
 const REVOKE_MS = 10_000;
+/**
+ * The issuer read's own deadline (P2.08h). 250 ms is well below `PG_CONNECT_TIMEOUT_MS`'s default of 2000
+ * (`infrastructure/postgres/config.ts`). A hung store must not hold sign-out for the pool's connect wait.
+ * `AbortSignal.timeout`: https://nodejs.org/docs/latest-v26.x/api/globals.html#abortsignaltimeoutdelay (Node 26.12.0).
+ */
+export const ISSUER_READ_MS = 250;
 
 class RevokeTimeout extends Error {
   constructor() {
@@ -102,10 +108,15 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
     return deps.screens.signedOut({ issuer, ours: issuer === deps.pdsIssuer });
   }
 
-  /** The recorded issuer's origin. An unreadable record must not block signing out; the page then links ours. */
+  /**
+   * The recorded issuer's origin. The read has its own short deadline. The store ends a checked-out query when that
+   * signal fires and rejects only after the client is released, so destroying the session does not queue behind it.
+   * A timeout or any error drops the link (the page then links ours) and sign-out continues.
+   */
   async function recordedIssuer(did: Did): Promise<string | null> {
+    const deadline = AbortSignal.timeout(ISSUER_READ_MS);
     try {
-      const issuer = await deps.issuerOf(did);
+      const issuer = await deps.issuerOf(did, deadline);
       return issuer === null ? null : issuerOrigin(issuer);
     } catch (cause: unknown) {
       deps.log.warn("auth.logout_issuer_unknown", { kind: className(cause) });
