@@ -63,8 +63,8 @@ describe("email recheck", () => {
     });
 
   test("email_recheck_capped_at_900", () => {
-    // P2.11a: the recheck is how long another browser keeps rendering after the grant is revoked at the PDS, so its
-    // maximum is the revocation window: 15 minutes.
+    // At most 900 s while rechecks succeed, and while the PDS can't be reached, the cached result is kept, up to
+    // P2.11d's cap (04:29Z ruling).
     expect(recheck({}).EMAIL_RECHECK_S).toBe(900);
     expect(recheck({ EMAIL_RECHECK_S: "900" }).EMAIL_RECHECK_S).toBe(900);
     for (const value of ["901", "86400"]) {

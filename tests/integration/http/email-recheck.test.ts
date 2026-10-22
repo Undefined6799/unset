@@ -1,9 +1,9 @@
 // P2.11a: a grant revoked at the PDS (its connected-apps page) ends our sessions at the next email recheck. Postgres as
 // web with the real session store, token-set store and pdsCall (TE-2); only the OAuth client, the authorization server
-// side, is a stand-in (an unmanaged dependency, TE-1). The bound this pins: other browsers keep rendering for at most
-// EMAIL_RECHECK_S, capped at 900, or until the next PDS call.
+// side, is a stand-in (an unmanaged dependency, TE-1). The bound this pins: at most 900 s while rechecks succeed, and
+// while the PDS can't be reached, the cached result is kept, up to P2.11d's cap (4 × EMAIL_RECHECK_S).
 import { relative } from "node:path";
-import { type Did, parseDid } from "@unset/domains-identity";
+import { cachedRecheckCapS, type Did, parseDid } from "@unset/domains-identity";
 import { createPdsCall, type PdsResult, type SessionInfo } from "@unset/infrastructure-pds";
 import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
@@ -53,7 +53,7 @@ const sql = <T extends Record<string, unknown>>(text: string, values: unknown[] 
 const RECHECK_S = loadConfig(defineConfig({ EMAIL_RECHECK_S: loginConfig.EMAIL_RECHECK_S }), {}).EMAIL_RECHECK_S;
 
 /** What the authorization server says when the client restores the grant. */
-let grant: "revoked" | "pds_down" = "revoked";
+let grant: "revoked" | "pds_down" | "rate_limited" | "unauthorized" | "confirmed" = "revoked";
 let restores = 0;
 /** Set for the scope case only, where the answer comes from the PDS response rather than the restore. */
 let answer: PdsResult<SessionInfo> | undefined;
@@ -63,6 +63,19 @@ beforeEach(() => {
   answer = undefined;
 });
 
+const PDS_HOST = "pds.test";
+/**
+ * @atproto/xrpc 0.8.15 throws XRPCError from a non-success response (dist/xrpc-client.js:53-56). 401 and 429 are
+ * ResponseType members (dist/types.js:18 and :24), so `status` stays that code (types.js:31-33, :88). pds-call.ts:148-154
+ * then classifies a 401 with a stored token set, and a 429, as transient.
+ */
+function xrpcStatus(status: number, error: string): Response {
+  return new Response(JSON.stringify({ error, message: error }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 const pds = createPdsCall({
   client: {
     restore: async () => {
@@ -70,7 +83,20 @@ const pds = createPdsCall({
       // oauth-server-agent.js:127 (@atproto/oauth-client 0.8.9) throws this when the grant no longer resolves to the
       // issuer it was made with; pds-errors.ts maps it to auth_dead without the SDK's own error classes.
       if (grant === "revoked") throw new TypeError("Issuer mismatch");
-      throw Object.assign(new Error("lock"), { name: "LockTimeout" });
+      if (grant === "pds_down") throw Object.assign(new Error("lock"), { name: "LockTimeout" });
+      return {
+        async fetchHandler() {
+          if (grant === "rate_limited") return xrpcStatus(429, "RateLimitExceeded");
+          if (grant === "unauthorized") return xrpcStatus(401, "AuthenticationRequired");
+          // Same getSession body pds-call.test.ts's pdsSessionInfo.memo accepts (@atproto/api 0.27.0).
+          return Response.json({
+            handle: "alice.test",
+            did: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
+            email: "a@example.test",
+            emailConfirmed: true,
+          });
+        },
+      };
     },
   },
   endSessions: (owner) =>
@@ -108,8 +134,16 @@ function gate(afterS: number): AppGate {
     }),
     now: () => Date.now() + afterS * 1000,
     emailRecheckS: RECHECK_S,
+    // The real screen is app-gate.test.ts. Here the gate must return this page and leave the session row.
+    unavailablePage: () =>
+      new Response(`${PDS_HOST} is not answering; your session is kept.`, {
+        status: 200,
+        headers: { "cache-control": "private, no-store" },
+      }),
   };
 }
+
+const pastCapS = cachedRecheckCapS(RECHECK_S) + 1;
 
 const visit = (cookie: string, afterS: number) =>
   openApp(
@@ -176,6 +210,85 @@ test("email_recheck.scope_missing_goes_to_verify_email", async () => {
   answer = { kind: "scope_missing", scope: "account:email" };
   const { owner, first } = await twoBrowsers();
   const response = redirected(await visit(first, RECHECK_S + 1));
+  expect(response.headers.get("location")).toBe("/verify-email");
+  expect(response.headers.getSetCookie()).toEqual([]);
+  expect(await sessionsOf(owner)).toBe(2);
+  expect(await hasToken(owner)).toBe(true);
+});
+
+async function expectUnavailable(owner: Did, result: Awaited<ReturnType<typeof visit>>) {
+  const response = redirected(result);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toContain(`${PDS_HOST} is not answering; your session is kept.`);
+  expect(response.headers.getSetCookie()).toEqual([]);
+  expect(await sessionsOf(owner)).toBe(2);
+  expect(await hasToken(owner)).toBe(true);
+}
+
+test("email_recheck.transient_past_cap_shows_unavailable", async () => {
+  grant = "pds_down";
+  const { owner, first } = await twoBrowsers();
+  await expectUnavailable(owner, await visit(first, pastCapS));
+  expect(restores).toBe(1);
+});
+
+test("email_recheck.transient_inside_cap_serves_the_cache", async () => {
+  // One second inside the cap still serves the cached confirmation and changes no session row.
+  grant = "pds_down";
+  const { owner, first } = await twoBrowsers();
+  const opened = await visit(first, cachedRecheckCapS(RECHECK_S) - 1);
+  expect(opened).toMatchObject({ session: { did: owner }, privacyNotice: false });
+  expect(restores).toBe(1);
+  expect(await sessionsOf(owner)).toBe(2);
+  expect(await hasToken(owner)).toBe(true);
+});
+
+const newestCheck = async (owner: Did) =>
+  (await sql<{ at: Date }>("SELECT max(email_checked_at) AS at FROM app.session WHERE did = $1", [owner]))[0]?.at;
+
+test("email_recheck.success_after_cap_restores_the_page", async () => {
+  grant = "confirmed";
+  const { owner, first } = await twoBrowsers();
+  const prior = await newestCheck(owner);
+  if (prior === undefined) throw new Error("the fixture wrote no email check");
+  const opened = await visit(first, pastCapS);
+  expect(opened).toMatchObject({ session: { did: owner }, privacyNotice: false });
+  expect(restores).toBe(1);
+  expect(await sessionsOf(owner)).toBe(2);
+  expect(await hasToken(owner)).toBe(true);
+  // The successful recheck wrote a new email_checked_at, which is what lets the next fresh view pass.
+  const next = await newestCheck(owner);
+  expect(next).toBeInstanceOf(Date);
+  expect((next ?? prior).getTime()).toBeGreaterThan(prior.getTime());
+});
+
+test("email_recheck.rate_limit_past_cap_shows_unavailable", async () => {
+  grant = "rate_limited";
+  const { owner, first } = await twoBrowsers();
+  await expectUnavailable(owner, await visit(first, pastCapS));
+  expect(await sessionsOf(owner)).toBe(2);
+});
+
+test("email_recheck.unauthorized_with_token_set_past_cap_shows_unavailable", async () => {
+  grant = "unauthorized";
+  const { owner, first } = await twoBrowsers();
+  await expectUnavailable(owner, await visit(first, pastCapS));
+  expect(await hasToken(owner)).toBe(true);
+});
+
+test("email_recheck.revoked_grant_past_the_cap_signs_out", async () => {
+  const { owner, first } = await twoBrowsers();
+  const ended = redirected(await visit(first, pastCapS));
+  expect(ended.headers.get("location")).toBe("/login?error=login.session_ended");
+  expect(ended.headers.getSetCookie()).toEqual([sessionClearCookie()]);
+  expect(await sessionsOf(owner)).toBe(0);
+  expect(await hasToken(owner)).toBe(false);
+});
+
+test("email_recheck.scope_missing_past_the_cap_goes_to_verify_email", async () => {
+  answer = { kind: "scope_missing", scope: "account:email" };
+  const { owner, first } = await twoBrowsers();
+  const response = redirected(await visit(first, pastCapS));
   expect(response.headers.get("location")).toBe("/verify-email");
   expect(response.headers.getSetCookie()).toEqual([]);
   expect(await sessionsOf(owner)).toBe(2);
