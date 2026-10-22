@@ -32,15 +32,15 @@ guideline wins.
 | Kind of code | Folder |
 | --- | --- |
 | Screens, islands, styles | `apps/{web,admin,chat}`: UI only, no product rules, no DB |
-| Entry points, auth, CSRF gate, limits | `interfaces/{http,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
+| Entry points, auth, CSRF gate, limits | `interfaces/{http,admin,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
 | Product rules | `domains/{identity,content,social,feed,messaging,moderation,privacy}` |
-| External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit}` |
-| Generic, no product meaning (MIT) | `shared/{lexicons,ui,config,errors,i18n}` |
+| External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,session,seal,audit}` |
+| Generic, no product meaning (MIT) | `shared/{lexicons,ui,ui-build,islands,http,config,errors,log,host-pin}` |
 | Compose, edge, backup, preflight | `deployment/` |
 | Integration and e2e tests | `tests/`; unit tests sit beside their file |
 
 Boundaries (dependency-cruiser): domains never import infrastructure, interfaces or apps; apps never import each other
-or infrastructure; `pds-admin` and `chat-admin` import only themselves and Node built-ins. No `plugins/`, Redis or
+or infrastructure; `pds-admin` and `chat-admin` import only themselves, Node built-ins and the `ZERO_DEP_ALLOWLIST` folders (today `shared/admin-envelope/`, which imports only Node built-ins; adding a folder needs Alex). No `plugins/`, Redis or
 queue until a real need exists.
 
 ## Non-negotiable: no security shortcuts
@@ -80,10 +80,11 @@ Every change:
   commit.
 
 ## Delivery (decision 35: rules DL-1, DL-2, DL-6, DO-1, DO-2, DC-1)
-- **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, under about 50 characters
-  after the id, completing "if applied, this commit will ..." (`P1.07 Enforce exact Origin match in CSRF gate`); blank
-  line; body wrapped at 72 saying what and why. No Conventional Commits prefix; the kind of change is a PR label.
-  Merges are squash only (title = PR title, body = the commit messages).
+- **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, at most 50 characters
+  after the id and 72 for the whole subject (both checked by `scripts/guards/commit-msg.ts`), completing "if applied,
+  this commit will ..." (`P1.07 Enforce exact Origin match in CSRF gate`); blank line; body wrapped at 72 saying what
+  and why. No Conventional Commits prefix; the kind of change is a PR label. Merges are squash only (title = PR title,
+  body = the commit messages).
 - **D3 PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests, lockfile, generated
   code and lexicon JSON excluded); CI fails above 800 without a `large-pr` label and a reason. Refactoring and
   behaviour change go in separate commits. Fill the one PR template and self-review against it before asking Alex.
