@@ -81,6 +81,8 @@ export async function image(
   const blobs = [configuration, manifest, ...(indexed ? [nested] : []), ...storedLayers];
   return {
     digest: `sha256:${sha(indexed ? nested : manifest)}`,
+    config: `sha256:${sha(configuration)}`,
+    manifest,
     bytes: await tar([
       { name: "index.json", body: index },
       ...[...new Map(blobs.map((b) => [sha(b), b])).entries()].map(([digest, body]) => ({

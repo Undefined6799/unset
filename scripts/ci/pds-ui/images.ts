@@ -21,7 +21,36 @@ type Configuration = {
 function json(bytes: Buffer): unknown {
   return JSON.parse(bytes.toString("utf8"));
 }
-async function load(bytes: Buffer, digest: string, platform: string) {
+// Docker's classic image store keeps only the pulled platform and `docker image save` writes a manifest of its own
+// (moby v28.5.2 image/tarexport/save.go: uncompressed layers, config digest = image ID). Such an archive cannot carry
+// the pinned index digest, so it is tied to the pin through the config digest the pinned index names instead.
+export type ImagePin = { digest: string; config?: string };
+const IMAGE_INDEX = "application/vnd.oci.image.index.v1+json";
+const IMAGE_MANIFEST = "application/vnd.oci.image.manifest.v1+json";
+const DIGEST = /^sha256:[0-9a-f]{64}$/;
+/** The manifest digest a pinned index names for one platform; the index bytes must hash to the pin. */
+export function platformManifest(index: Buffer, pinned: string, platform: string): string {
+  requireThat(DIGEST.test(pinned) && `sha256:${sha256(index)}` === pinned, "pinned index digest drift");
+  const parsed = json(index) as { mediaType?: string; manifests?: Descriptor[] };
+  requireThat(parsed.mediaType === IMAGE_INDEX, "pinned base is not an image index");
+  const matches = (parsed.manifests ?? []).filter((d) => `${d.platform?.os}/${d.platform?.architecture}` === platform);
+  requireThat(
+    matches.length === 1 && matches[0]?.mediaType === IMAGE_MANIFEST && DIGEST.test(matches[0].digest),
+    "missing or ambiguous pinned platform manifest",
+  );
+  return matches[0].digest;
+}
+/** The config digest of a platform manifest; the manifest bytes must hash to the digest the index named. */
+export function manifestConfig(manifest: Buffer, digest: string): string {
+  requireThat(`sha256:${sha256(manifest)}` === digest, "pinned platform manifest digest drift");
+  const parsed = json(manifest) as { mediaType?: string; config?: Descriptor };
+  requireThat(
+    parsed.mediaType === IMAGE_MANIFEST && DIGEST.test(parsed.config?.digest ?? ""),
+    "invalid pinned platform manifest",
+  );
+  return (parsed.config as Descriptor).digest;
+}
+async function load(bytes: Buffer, pin: ImagePin, platform: string) {
   const files = await archive(bytes);
   requireThat(
     [...files.values()].every((entry) => ["file", "directory"].includes(entry.header.type)),
@@ -37,17 +66,23 @@ async function load(bytes: Buffer, digest: string, platform: string) {
     return data;
   };
   const index = json(files.get("index.json")?.data ?? Buffer.alloc(0)) as { manifests: Descriptor[] };
-  requireThat(index.manifests?.length === 1 && index.manifests[0]?.digest === digest, "immutable image digest drift");
-  let descriptor = index.manifests[0];
-  if (descriptor.mediaType === "application/vnd.oci.image.index.v1+json") {
+  const top = index.manifests?.length === 1 ? index.manifests[0] : undefined;
+  const pinned = top?.digest === pin.digest;
+  requireThat(
+    top && (pinned || (pin.config !== undefined && top.mediaType === IMAGE_MANIFEST)),
+    "immutable image digest drift",
+  );
+  let descriptor = top;
+  if (descriptor.mediaType === IMAGE_INDEX) {
     const platforms = (json(blob(descriptor)) as { manifests: Descriptor[] }).manifests.filter(
       (d) => `${d.platform?.os}/${d.platform?.architecture}` === platform,
     );
     requireThat(platforms.length === 1 && platforms[0], "missing or ambiguous image platform");
     descriptor = platforms[0];
   }
-  requireThat(descriptor.mediaType === "application/vnd.oci.image.manifest.v1+json", "unsupported image manifest");
+  requireThat(descriptor.mediaType === IMAGE_MANIFEST, "unsupported image manifest");
   const manifest = json(blob(descriptor)) as Manifest;
+  requireThat(pinned || manifest.config?.digest === pin.config, "immutable image config drift");
   const config = json(blob(manifest.config)) as Configuration;
   requireThat(
     `${config.os}/${config.architecture}` === platform && config.rootfs?.type === "layers",
@@ -142,13 +177,13 @@ function apply(tree: Map<string, Entry>, layer: Map<string, Entry>, added: boole
 }
 export async function compareImages(
   baseArchive: Buffer,
-  baseDigest: string,
+  basePin: string | ImagePin,
   candidateArchive: Buffer,
   candidateDigest: string,
   platform = "linux/arm64",
 ) {
-  const base = await load(baseArchive, baseDigest, platform);
-  const candidate = await load(candidateArchive, candidateDigest, platform);
+  const base = await load(baseArchive, typeof basePin === "string" ? { digest: basePin } : basePin, platform);
+  const candidate = await load(candidateArchive, { digest: candidateDigest }, platform);
   requireThat(isDeepStrictEqual(base.config.config, candidate.config.config), "complete runtime Config drift");
   requireThat(
     base.config.os === candidate.config.os &&
