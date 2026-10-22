@@ -148,3 +148,26 @@ test.each(["none", "package version", "lockfile", "package manager", "source rev
     }
   },
 );
+
+// Run the pnpm tarball check embedded in the Dockerfile, against a stand-in file at its fixed path.
+test("pnpm_tarball_must_match_the_pinned_integrity", () => {
+  const recipe = readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8");
+  const pinned = /^ENV PNPM_INTEGRITY=(sha512-[A-Za-z0-9+/]+=*)$/m.exec(recipe)?.[1];
+  expect(pinned, "pinned pnpm integrity").toBeDefined();
+  expect(recipe).toContain("--offline --ignore-scripts --no-audit --no-fund /build/pnpm-11.11.0.tgz");
+  expect(recipe).not.toMatch(/--no-fund pnpm@/);
+  const program = /node -e '([^']+)' "\$PNPM_INTEGRITY"/.exec(recipe)?.[1];
+  expect(program, "Dockerfile pnpm check").toBeDefined();
+  const dir = mkdtempSync(join(tmpdir(), "pnpm-check-"));
+  try {
+    const tarball = join(dir, "pnpm.tgz");
+    writeFileSync(tarball, "stand-in bytes");
+    const check = (expected: string) =>
+      spawnSync(process.execPath, ["-e", (program as string).replace("/build/pnpm-11.11.0.tgz", tarball), expected])
+        .status;
+    expect(check(`sha512-${createHash("sha512").update("stand-in bytes").digest("base64")}`)).toBe(0);
+    expect(check(pinned as string)).not.toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
