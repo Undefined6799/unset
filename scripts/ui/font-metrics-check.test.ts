@@ -30,10 +30,11 @@ test("font_metrics_check_fails_when_stale", () => {
   const committed = readFileSync(output, "utf8");
   const stale = JSON.parse(committed);
   stale.$comment = `${stale.$comment} (stale)`;
-  writeFileSync(output, `${JSON.stringify(stale, null, 2)}\n`);
+  const staleText = `${JSON.stringify(stale, null, 2)}\n`;
+  writeFileSync(output, staleText);
   const run = check();
   expect(run.status).toBe(1);
   expect(run.stderr).toContain(`font-metrics: ${OUTPUT} is stale`);
-  // --check writes nothing: the stale file is left as it was.
-  expect(readFileSync(output, "utf8")).not.toBe(committed);
+  // --check writes nothing. Byte for byte, so a check that emptied the file fails.
+  expect(readFileSync(output, "utf8")).toBe(staleText);
 });

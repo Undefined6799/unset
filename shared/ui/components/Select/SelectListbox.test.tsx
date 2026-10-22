@@ -3,6 +3,8 @@
 // mounted, keeps that element as the form value, and follows the combobox pattern. Hydrated in jsdom from the server
 // markup; the same tests run in a real browser on the showcase in P1.26's harness (select_island_keyboard,
 // select_island_typeahead, select_island_flip_up).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -26,10 +28,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(extra: { placeholder?: string; required?: boolean; disabled?: boolean } = {}) {
+/** The declarations of the first rule whose selector is exactly `selector`. */
+function rule(text: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[}{\\s])${escaped}\\s*\\{([^}]*)\\}`).exec(text)?.[1] ?? "";
+}
+
+async function mount(
+  extra: { placeholder?: string; required?: boolean; disabled?: boolean } = {},
+  host: { fieldsetDisabled?: boolean } = {},
+) {
   const html = renderToString(<Select id="lang" name="lang" label="Language" options={options} {...extra} />);
   const form = document.createElement("form");
-  form.append(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
+  const parsed = [...new DOMParser().parseFromString(html, "text/html").body.childNodes];
+  if (host.fieldsetDisabled === true) {
+    const fieldset = document.createElement("fieldset");
+    fieldset.disabled = true;
+    fieldset.append(...parsed);
+    form.append(fieldset);
+  } else form.append(...parsed);
   document.body.append(form);
   const native = form.querySelector("select") as HTMLSelectElement;
   const island = document.createElement("div");
@@ -164,6 +181,38 @@ test("select_label_click_disabled_no_focus", async () => {
   await act(async () => (form.querySelector("label") as HTMLLabelElement).click());
   expect(document.activeElement).not.toBe(box);
   expect(document.activeElement).toBe(before);
+  expect(box.getAttribute("aria-disabled")).toBe("true");
+  expect(box.tabIndex).toBe(-1);
+  expect(box.getAttribute("aria-labelledby")).toBe("lang-label");
+});
+
+test("select_fieldset_disabled_no_focus", async () => {
+  // jsdom will not focus any descendant of a disabled fieldset, so the click alone cannot show the
+  // listener. aria-disabled and the key can: both stay inert only when the island uses :disabled.
+  const { form, native, box } = await mount({}, { fieldsetDisabled: true });
+  expect(native.disabled).toBe(false);
+  expect(native.matches(":disabled")).toBe(true);
+  const before = document.activeElement;
+  await act(async () => (form.querySelector("label") as HTMLLabelElement).click());
+  expect(document.activeElement).not.toBe(box);
+  expect(document.activeElement).toBe(before);
+  expect(box.getAttribute("aria-disabled")).toBe("true");
+  expect(box.tabIndex).toBe(-1);
+  expect(box.getAttribute("aria-labelledby")).toBe("lang-label");
+  await press(box, "ArrowDown");
+  expect(box.getAttribute("aria-expanded")).toBe("false");
+});
+
+test("select_disabled_fill_matches_native", () => {
+  const sheet = readFileSync(join(import.meta.dirname, "Select.module.css"), "utf8");
+  const base = readFileSync(join(import.meta.dirname, "../../src/base.css"), "utf8");
+  const native = rule(base, "select[disabled]");
+  const combobox = rule(sheet, '.combobox[aria-disabled="true"]');
+  for (const property of [/background-color:\s*var\(--color-surface-raised\)/, /color:\s*var\(--color-ink-muted\)/]) {
+    expect(native).toMatch(property);
+    expect(combobox).toMatch(property);
+  }
+  expect(combobox).toMatch(/cursor:\s*not-allowed/);
 });
 
 test("select_island_leaves_required_native", async () => {
