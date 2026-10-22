@@ -9,6 +9,11 @@
 # `install [browser...]` are from the CLI help of the pinned Playwright 1.64.0 (npx playwright test --help, npx
 # playwright install --help). The e2e job is the gate: it fails unless every part succeeded, then runs assert-tests-ran
 # over the three reports, so a spec no browser ran, or a missing, duplicated or empty browser report, still fails.
+#
+# P0.07f: `playwright install --with-deps` hung until the 30-minute job timeout in 3 of about 20 runs on 2026-10-22
+# (WebKit; it usually takes under a minute). Each attempt is cut at 4 minutes by coreutils timeout (Ubuntu 24.04,
+# `timeout --kill-after`), tried once more, and the step is capped at 9 minutes (workflow syntax,
+# jobs.<job_id>.steps[*].timeout-minutes), so a stall costs minutes, not the run. A blocked download still fails.
 
 name: e2e
 
@@ -48,7 +53,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps "$PROJECT"
+      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+        timeout-minutes: 9
+        run: timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT" || timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Run Playwright
@@ -90,7 +97,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps chromium
+      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+        timeout-minutes: 9
+        run: timeout --kill-after=10s 240s npx playwright install --with-deps chromium || timeout --kill-after=10s 240s npx playwright install --with-deps chromium
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Install pa11y and Lighthouse outside the lockfile
