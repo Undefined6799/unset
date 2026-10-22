@@ -1193,6 +1193,13 @@ Where: `interfaces/http/routes/{login.ts, login-continue.ts}`, `domains/identity
   LoginFailed.tsx, LoginContinue.tsx}`, migration `NNNN_app_login_continue.sql` (next free number at merge; no DID column, so `web` may be granted whole-table with `wholeTable: true`, explicitly in the migration, since P1.12 has no table defaults), catalogs
 Size: ~250 source lines, ~330 test lines
 
+**Superseded by P2.05r (#1192) where this step describes GET /login's form.** The handle field, the
+"Sign in" button, the "Use {pdsHost} sign-in" button, the `?handle=` prefill and the prefilled
+assertion in `login.get_renders_no_state` below are historical. P2.05r is the current page: one POST
+button, "Sign in with {pdsHost}" (`intent=chooser`), and the hidden `next`. GET reads only
+`next` and `error`, and that test asserts the handle is absent. The historical spec below is
+kept so the id holds.
+
 Goal: Start an OAuth authorization from a handle or from the PDS chooser, bound to this browser by a `__Host-` nonce
 cookie; the expected account and the return path ride in the library's sealed `appState`.
 
