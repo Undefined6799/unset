@@ -81,10 +81,9 @@ Every change:
 
 ## Delivery (decision 35: rules DL-1, DL-2, DL-6, DO-1, DO-2, DC-1)
 - **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, at most 50 characters
-  after the id and 72 for the whole subject (both checked by `scripts/guards/commit-msg.ts`), completing "if applied,
-  this commit will ..." (`P1.07 Enforce exact Origin match in CSRF gate`); blank line; body wrapped at 72 saying what
-  and why. No Conventional Commits prefix; the kind of change is a PR label. Merges are squash only (title = PR title,
-  body = the commit messages).
+  after the id and 72 for the whole subject (both checked by `scripts/guards/commit-msg.ts`), completing
+  "if applied, this commit will ..." (`P1.07 Enforce exact Origin match in CSRF gate`); blank line; body wrapped at 72
+  saying what and why. No Conventional Commits prefix; the kind of change is a PR label. Merges are squash only (title = PR title, body = the commit messages).
 - **D3 PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests, lockfile, generated
   code and lexicon JSON excluded); CI fails above 800 without a `large-pr` label and a reason. Refactoring and
   behaviour change go in separate commits. Fill the one PR template and self-review against it before asking Alex.
