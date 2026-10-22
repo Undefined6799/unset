@@ -141,7 +141,12 @@ describe("caddyfile reader against caddy adapt", () => {
     const handlers = (route?.block ?? []).filter((d) => !d.name.startsWith("@")).map((d) => HANDLER[d.name] ?? d.name);
     const pdsRoute = adaptedPdsRoute(theirs);
     expect(handlers).toEqual(pdsRoute.flatMap((r) => r.handle.map((h) => h.handler)));
-    expect(route?.block?.map((d) => d.via)).toEqual(["pds-ratelimit", ...Array(6).fill("xrpc-guard"), "upstream"]);
+    expect(route?.block?.map((d) => d.via)).toEqual([
+      "pds-ratelimit",
+      ...Array(6).fill("xrpc-guard"),
+      ...Array(5).fill("pds-fonts"),
+      "upstream",
+    ]);
     const zones = route?.block?.find((d) => d.name === "rate_limit")?.block?.filter((d) => d.name === "zone") ?? [];
     const limits = pdsRoute.flatMap((r) => r.handle).find((h) => h.handler === "rate_limit")?.rate_limits ?? {};
     expect(zones.map((zone) => zone.args[0]).sort()).toEqual(Object.keys(limits).sort());
@@ -297,7 +302,7 @@ const modules = (value: unknown): string[] =>
       );
 
 /** The Caddyfile directive each adapted handler comes from, where the names differ. */
-const HANDLER: Record<string, string> = { respond: "static_response" };
+const HANDLER: Record<string, string> = { respond: "static_response", header: "headers" };
 /** Caddyfile placeholder shorthands the zones use, in their adapted long form (Caddy v2.11.7 caddyfile/parse.go). */
 const KEY: Record<string, string> = { "{client_ip}": "{http.vars.client_ip}" };
 

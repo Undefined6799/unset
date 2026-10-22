@@ -27,7 +27,7 @@ RUN xcaddy build v2.11.7 \
 # hadolint ignore=DL3026
 FROM docker.io/library/caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset" \
-      org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
+      org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0 AND OFL-1.1"
 COPY --from=build /out/caddy /usr/bin/caddy
 # The built binary gets cap_net_bind_service only, so it binds 80 and 443 as a non-root user; then setcap's package,
 # curl and the base's sample site go, and apk-tools last, so the image ships no package manager (P1.28o).
@@ -38,6 +38,10 @@ RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY snippets/ /etc/caddy/snippets/
 COPY sites/pds.caddy /etc/caddy/sites/pds.caddy
+# The PDS pages' fonts (P2.24e; snippets/pds-fonts.caddy), byte for byte the ones in shared/ui/fonts (edge.test.ts),
+# with their SIL Open Font License texts beside them. Root-owned and read-only to Caddy, which only reads them.
+COPY fonts/SpaceGrotesk-Variable.woff2 fonts/JetBrainsMono-Variable.woff2 /etc/caddy/static/_unset/fonts/
+COPY fonts/OFL-SpaceGrotesk.txt fonts/OFL-JetBrainsMono.txt /etc/caddy/static/licenses/
 # Caddy keeps its ACME account and certificate keys under /data and its autosave under /config; the base leaves both
 # root-owned with world-writable caddy directories inside. A fresh named volume copies the image's owner and mode, so
 # both trees go to caddy at 0700, the base's sticky bit cleared too (P1.27o; book edit

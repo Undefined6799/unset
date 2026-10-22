@@ -81,8 +81,8 @@ const MATCHERS = ["path", "method", "not", "path_regexp", "header_regexp", "vars
 const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   global: ["admin", "persist_config", "log", "servers"],
   site: ["bind", "respond", "tls", "log", "map", "log_append", "header", "route"],
-  route: ["@", "rate_limit", "respond", "header", "reverse_proxy"],
-  snippet: ["@", "log", "rate_limit", "map", "log_append", "header", "tls", "reverse_proxy", "respond"],
+  route: ["@", "rate_limit", "respond", "header", "reverse_proxy", "file_server"],
+  snippet: ["@", "log", "rate_limit", "map", "log_append", "header", "tls", "reverse_proxy", "respond", "file_server"],
   "@": MATCHERS,
   log: ["output", "level", "exclude", "format"],
   format: ["wrap", "fields"],
@@ -93,6 +93,9 @@ const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   issuer: ["dir", "email"],
   map: "data",
   header: "data",
+  // A `match` block inside `header` is a response matcher (P2.24e, (pds-fonts)): only a response header is read.
+  header_match: ["header"],
+  file_server: ["root"],
   respond: ["close"],
   reverse_proxy: ["header_up", "transport"],
   transport: ["dial_timeout", "response_header_timeout"],
@@ -200,6 +203,13 @@ const HOSTS: readonly EnvName[] = ["PDS_HOST", "APP_HOST"];
  * src/docs/markdown/automatic-https.md:84-89).
  */
 const WHOLE_PLACEHOLDER = /^(http:\/\/)?\{\$([A-Z_]+)\}$/;
+/**
+ * The one word a placeholder may sit inside (P2.24e): the font-src (pds-fonts) appends to the PDS pages' CSP, which
+ * must name the PDS's own origin. Caddy substitutes `{$NAME}` before lexing, in an imported file too (v2.11.7
+ * caddyconfig/caddyfile/parse.go:63-64 and 654); HOST allows no quote, space, brace or slash, so the word reads the
+ * same here as there. Only this exact quoted word is accepted, and PLACEHOLDER_POSITIONS pins where it may be.
+ */
+export const FONT_SRC = "$1; font-src https://{$PDS_HOST}/_unset/fonts/";
 
 /** `{$NAME}` replaced inside one token; an unlisted name, a default, a missing or a mis-shaped value fails. */
 function withEnv(token: Token, env: Env): Token {
@@ -213,6 +223,7 @@ function withEnv(token: Token, env: Env): Token {
   });
   if (text.includes("{$")) fail(token.line, `unsupported placeholder in ${token.text}`);
   if (text === token.text) return token;
+  if (token.quoted && token.text === FONT_SRC) return { ...token, text, env: "PDS_HOST" };
   // A placeholder is a whole word, so where it sits is a fact the edge rules can check (P1.28l).
   const [, scheme, name] = WHOLE_PLACEHOLDER.exec(token.text) ?? [];
   if (name === undefined || (scheme !== undefined && !HOSTS.includes(name as EnvName))) {
@@ -348,13 +359,21 @@ function readBlock(lines: Line[], start: number, expander: Expander, level: stri
     };
     checkDirective(name, args, level);
     if (opens) {
-      const inner = name.text.startsWith("@") ? "@" : level === "site" && name.text === "route" ? "route" : name.text;
+      const inner = blockLevel(name.text, level);
       [directive.block, at] = readBlock(lines, at + 1, expander, inner);
     } else {
       at += 1;
     }
     directives.push(directive);
   }
+}
+
+/** The DIRECTIVES level a block opened by `name` at `level` is read at. */
+function blockLevel(name: string, level: string): string {
+  if (name.startsWith("@")) return "@";
+  if (level === "site" && name === "route") return "route";
+  if (level === "header" && name === "match") return "header_match";
+  return name;
 }
 
 /** Refuses a directive the allowlist does not name at this level, and a placeholder outside where our files use it. */
@@ -770,12 +789,14 @@ export function edgeSiteProblems(config: Caddyfile, mode: EdgeMode = "shipped"):
     ...positionProblems(config.global ?? [], "the global options", null),
     ...(mode === "dev" ? devTlsProblems(config) : []),
     ...proxyProblems(config.global ?? []),
+    ...fontSnippetProblems(config),
   ];
   const proxied = new Set<string>();
   for (const site of config.sites) {
     const zones = mode === "dev" && hostOf(site) === "APP_HOST" ? "app-ratelimit" : "pds-ratelimit";
     found.push(...addressProblems(site), ...siteProblems(site, zones), ...schemeProblems(site, mode));
     found.push(...positionProblems(site.directives, siteName(site), hostOf(site)));
+    found.push(...fontProblems(site));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
     if ([...upstreams].some((upstream) => proxied.has(upstream))) {
@@ -784,6 +805,108 @@ export function edgeSiteProblems(config: Caddyfile, mode: EdgeMode = "shipped"):
     for (const upstream of upstreams) proxied.add(upstream);
   }
   return found;
+}
+
+/**
+ * (pds-fonts) as written (P2.24e; the P2.24d spike): woff2 files by one plain name from the image's /etc/caddy/static, anything
+ * else under /_unset/ a 404, and one deferred CSP append on HTML responses naming the exact origin and path. No remote
+ * source, wildcard, keyword such as 'unsafe-inline', body rewrite or second route to the fonts is accepted.
+ */
+const PDS_FONTS: unknown[] = [
+  ["@pds_font", ["path_regexp", "^/_unset/fonts/[A-Za-z0-9-]+\\.woff2$"], null],
+  ["header", ["@pds_font", "Content-Type", "font/woff2"], null],
+  ["file_server", ["@pds_font"], [["root", ["/etc/caddy/static"], null]]],
+  ["respond", ["/_unset/*", "404"], null],
+  [
+    "header",
+    [],
+    [
+      ["match", [], [["header", ["Content-Type", "text/html*"], null]]],
+      [">Content-Security-Policy", ["^(.+)$", FONT_SRC], null],
+    ],
+  ],
+];
+
+/** (pds-fonts) is exactly PDS_FONTS, its font-src compared as written. */
+function fontSnippetProblems(config: Caddyfile): string[] {
+  let directives: Directive[];
+  try {
+    directives = config.snippet("pds-fonts");
+  } catch (error) {
+    if (error instanceof CaddyfileError) return [`the pds-fonts snippet is unreadable: ${error.message}`];
+    throw error;
+  }
+  return JSON.stringify(writtenText(directives)) === JSON.stringify(PDS_FONTS)
+    ? []
+    : ["the pds-fonts snippet is not the proved font policy"];
+}
+
+/** blockText with each placeholder argument as written: FONT_SRC for the part-word one, `{$NAME}` otherwise. */
+const writtenText = (directives: Directive[]): unknown[] =>
+  directives.map((d) => [
+    d.name,
+    d.args.map((arg, at) => {
+      const env = d.placeholders[at];
+      if (env === null || env === undefined) return arg;
+      return env === "PDS_HOST" && arg.startsWith("$1; ") ? FONT_SRC : `{$${env}}`;
+    }),
+    d.block === null ? null : writtenText(d.block),
+  ]);
+
+/**
+ * The fonts on a site (P2.24e). The `{$PDS_HOST}` site's route imports (pds-fonts) once, before its reverse_proxy, so
+ * the upstream's pages get the append; no other site imports it. Outside (pds-fonts) nothing serves files, opens a
+ * response matcher or touches a Content-Security-Policy, except (strict-csp) setting its own fixed one.
+ */
+function fontProblems(site: Site): string[] {
+  return [...fontImportProblems(site), ...fontBypassProblems(site)];
+}
+
+function fontImportProblems(site: Site): string[] {
+  // The route's shape is siteProblems' to report; with no one plain route, only the bypass rules apply.
+  const routes = named(site.directives, "route");
+  const plain = routes.length === 1 && routes[0]?.args.length === 0;
+  const route = plain ? (routes[0]?.block ?? []) : [];
+  const imports = route.filter((d) => d.via === "pds-fonts");
+  const nested = flatten(site.directives).filter((d) => d.via === "pds-fonts").length - countDeep(imports);
+  if (hostOf(site) !== "PDS_HOST") {
+    return imports.length > 0 || nested > 0 ? [`${siteName(site)}: imports pds-fonts`] : [];
+  }
+  if (!plain) return [];
+  const first = route.findIndex((d) => d.via === "pds-fonts");
+  const proxy = route.findIndex((d) => d.name === "reverse_proxy");
+  return imports.length === PDS_FONTS.length && nested === 0 && first !== -1 && first < proxy
+    ? []
+    : [`${siteName(site)}: the route does not import pds-fonts once before its upstream`];
+}
+
+function fontBypassProblems(site: Site): string[] {
+  const name = siteName(site);
+  return flatten(site.directives)
+    .filter((directive) => directive.via !== "pds-fonts")
+    .flatMap((directive) => [
+      ...(directive.name === "file_server" ? [`${name}: serves files outside pds-fonts`] : []),
+      ...(directive.name === "header" && directive.block?.some((d) => d.name === "match")
+        ? [`${name}: a response matcher outside pds-fonts`]
+        : []),
+      ...(directive.via !== "strict-csp" && touchesCsp(directive)
+        ? [`${name}: changes a Content-Security-Policy outside pds-fonts`]
+        : []),
+    ]);
+}
+
+/** The directives in `directives` and every block below them. */
+const countDeep = (directives: Directive[]): number =>
+  directives.reduce((sum, d) => sum + 1 + countDeep(d.block ?? []), 0);
+
+/** A `header` line, or a field line inside a `header` block, naming Content-Security-Policy in any spelling. */
+function touchesCsp(directive: Directive): boolean {
+  const field = (text: string | undefined) => text?.replace(/^[-+?>]+/, "").toLowerCase() === "content-security-policy";
+  if (directive.name === "header") {
+    const at = directive.args[0]?.startsWith("@") ? 1 : 0;
+    return field(directive.args[at]) || (directive.block ?? []).some((d) => field(d.name));
+  }
+  return false;
 }
 
 /** A site as messages name it: its addresses as written, `{$NAME}` for a placeholder, never the value (P1.28l). */
@@ -950,12 +1073,12 @@ function addressProblems(site: Site): string[] {
  * Where each env placeholder may be written (P1.28l; architecture amendment 9 to
  * 2026-10-07-p130s-networks-and-caddyfile-reader, and the P1.28l record, final 01:55Z, corrected 02:00Z):
  * `{$PDS_UPSTREAM}` as the upstream of a reverse_proxy on the `{$PDS_HOST}` site, `{$ACME_EMAIL}` as the `email` of
- * an `issuer acme` in a `tls` block at the block root (snippets/tls.caddy). `{$PDS_HOST}` is a site address only
- * (addressProblems). Adding a position is a trusted change; widening one loosens. P1.34a mirrors the PDS pair for the
+ * an `issuer acme` in a `tls` block at the block root (snippets/tls.caddy). `{$PDS_HOST}` is a site address
+ * (addressProblems), and otherwise only FONT_SRC in (pds-fonts) on the `{$PDS_HOST}` site (P2.24e). Adding a position is a trusted change; widening one loosens. P1.34a mirrors the PDS pair for the
  * local app site: `{$APP_HOST}` a site address only, `{$APP_UPSTREAM}` the upstream on the `{$APP_HOST}` site.
  */
 const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>> = {
-  PDS_HOST: () => false,
+  PDS_HOST: (at) => at.host === "PDS_HOST" && isFontSrc(at),
   PDS_UPSTREAM: (at) => at.host === "PDS_HOST" && isUpstream(at),
   APP_HOST: () => false,
   APP_UPSTREAM: (at) => at.host === "APP_HOST" && isUpstream(at),
@@ -976,6 +1099,23 @@ const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>
 };
 /** Where a placeholder is: its directive, argument, enclosing directives, and the host of the site it is on. */
 type Position = { directive: Directive; arg: number; parents: Directive[]; host: EnvName | null };
+/**
+ * The placeholder is FONT_SRC (the only part-word one the reader accepts, which starts `$1;`), as the replacement of
+ * the one deferred CSP replace in a plain `header` block of (pds-fonts).
+ */
+const isFontSrc = ({ directive, arg, parents }: Position): boolean => {
+  const header = parents.at(-1);
+  return (
+    directive.via === "pds-fonts" &&
+    directive.name === ">Content-Security-Policy" &&
+    directive.args.length === 2 &&
+    directive.args[0] === "^(.+)$" &&
+    arg === 1 &&
+    directive.args[1]?.startsWith("$1; ") === true &&
+    header?.name === "header" &&
+    header.args.length === 0
+  );
+};
 /** The placeholder is a reverse_proxy's one upstream, its last argument. */
 const isUpstream = ({ directive, arg }: Position): boolean =>
   directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null;
