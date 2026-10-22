@@ -1,6 +1,6 @@
 # Engineering Rules (unset.sh)
 
-Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the recommended option for each of D1-D9). There are 49 rules, and SE-7a and SE-7b are sub-rules of SE-7 (51 headings in total). DO-3 was added 2026-10-05 at Alex's request. SE-7a was written down 2026-10-15 from architecture's ruling on verify-875 F1 (the fixture-identifier rule verifiers already applied). SE-7b was written down 2026-10-19 from architecture's 03:45Z ruling (runtime code never treats `dev` as local). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
+Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the recommended option for each of D1-D9). There are 49 rules, and SE-7a and SE-7b are sub-rules of SE-7 (51 headings in total). DO-3 was added 2026-10-05 at Alex's request. SE-7a was written down 2026-10-15 from architecture's ruling on verify-875 F1 (the fixture-identifier rule verifiers already applied). SE-7b was written down 2026-10-19 from architecture's 03:45Z ruling (runtime code never treats `dev` as local). Rationale, cuts and changelog: `unset-plan/architecture-handoff/engineering-rules-rationale.md` (not in this repository).
 
 These rules sit beside the four guidelines in `engineering/` and never weaken a security or privacy decision in the plan. Where a rule and the plan disagree, the plan wins. Where a rule and the ADG disagree on structure, the ADG wins.
 
@@ -47,7 +47,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Priority: P1
 
 **DC-2. Reach every module under `domains/`, `infrastructure/` and `shared/` only through its `index.ts`, tests included. Give each export a doc comment stating what its signature cannot: units, invariants, errors and security assumptions. Give each domain a README of at most 20 lines.**
-- Enforced by: dependency-cruiser `no-deep-import`, including tests. A doc-comment guard (`/**` before each export in `*/index.ts`). A guard that every `domains/*` folder has a README.
+- Enforced by: dependency-cruiser `domain-cross-via-index` and `infra-shared-via-index`, including tests. A doc-comment guard (`/**` before each export in `*/index.ts`). A guard that every `domains/*` folder has a README.
 - Source: APoSD 2nd ed. — ch. 4–5, 12–13, 15; Effective Java 3rd ed. — Item 15; Practice of Programming — ch. 4; Team Topologies — ch. 3 (team API); Documenting SA 2nd ed. — ch. 7.
 - Status: PARTLY — README rules 2–3, 6–7; ADG §2.
 - Priority: P1 for the import ban. P2 for both guards, when `domains/` gets its second folder.
@@ -77,7 +77,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - only the serving interface imports its app's render entry;
 - `domains/` imports only its own contracts, other domains' `index.ts`, `shared/errors`, `shared/config` types and `shared/lexicons` (the one record validator, called on the write path; its `@atproto/lex` dependency is the single npm exception); no Node I/O built-in and no other npm package;
 - the zero-dependency allowlist changes only with Alex's approval.
-- Enforced by: dependency-cruiser, with one fixture per matrix row, extending P0.05 (`vendor-sdk-only-in-infrastructure`, `depcruise_sdk_adapter`, `depcruise_no_interface_to_interface`, `depcruise_app_render_entry`, `depcruise_allowlist_exact`, `depcruise_allowed_edges`).
+- Enforced by: dependency-cruiser, with one fixture per matrix row, extending P0.05 (`vendor-sdk-one-adapter`, `depcruise_sdk_adapter`, `depcruise_no_interface_to_interface`, `depcruise_app_render_entry`, `depcruise_allowlist_exact`, `depcruise_allowed_edges`).
 - Source: Clean Architecture — ch. 14, ch. 22; FoSA 1st ed. ch. 6 / 2nd ed. ch. 11; Evans DDD — ch. 14 (anticorruption layer); Fairbanks — ch. 10.
 - Status: PARTLY — ADG §1–2, Plan §7, P0.05 (the allowlist and allowed-edges fixtures already exist). NEW: the full matrix and the ban on Node I/O in domains.
 - Priority: P1
@@ -277,9 +277,9 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 
 **SE-7b. Runtime code never treats `dev` as local. Local and staging both run `UNSET_ENV=dev`, so a runtime behaviour that must be local only is switched on by a local-only key: preflight refuses that key under `--env dev` and `--env prod`, only compose.local.yaml sets it, and the runtime reads the key, never infers "local" from `dev`.**
 - Every "local" ruling lives in the deploy layer, keyed on preflight's own profile (`--env local|dev|prod`, deployment/preflight/checks/types.ts `Env`). No `UNSET_ENV=local` value is added: it would touch every allowlist and duplicate what preflight already enforces.
-- Enforced by: a local-only key list in preflight, which refuses those keys under dev and prod. P1.36k (#1021) creates it, with `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` as its first entries; until it merges, nothing enforces the rule. `PDS_DISABLE_SSRF_PROTECTION` is never an entry: it is a blanket bypass of the PDS's guard, forbidden in every env, local included, and P1.36k refuses it everywhere (architecture's section labelled 04:40Z). Verifier review for runtime `UNSET_ENV === "dev"` checks.
+- Enforced by: a local-only key list in preflight, which refuses those keys under dev and prod. P1.36k (#1021) created the check as preflight C29 (`deployment/preflight/checks/local-only-keys.ts`; `LOCAL_ONLY_KEY_NAMES` in `deployment/preflight/local-only.ts`), with `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` as its entries. `PDS_DISABLE_SSRF_PROTECTION` is never an entry: it is a blanket bypass of the PDS's guard, forbidden in every env, local included, and P1.36k refuses it everywhere (architecture's section labelled 04:40Z). Verifier review for runtime `UNSET_ENV === "dev"` checks.
 - Source: architecture ruling 2026-10-19 03:45Z (book edit 2026-10-19-p125c-as-built, last section).
-- Status: NEW — a tightening, not yet enforced. Today six runtime lines key on `UNSET_ENV === "dev"` (oauth-client.ts:128, netGuard.ts:18, shared/http/config.ts:27 and :90, csp/headers.ts:25, schema.ts:183), five of them behind opt-in keys; P1.36k and P1.36l close them in preflight. TEST_ROUTES already boots under `test` only.
+- Status: NEW — enforced by preflight C29. Six runtime lines still key on `UNSET_ENV === "dev"` (oauth-client.ts:128, netGuard.ts:18, shared/http/config.ts:27 and :90, csp/headers.ts:25, schema.ts:183). Four of them sit behind the local-only keys. `shared/http/config.ts:27` allows plain http whenever `UNSET_ENV` is `dev`. `schema.ts:183` still accepts the zero `UNSET_COMMIT` when `UNSET_ENV` is `dev`; P1.36l (#1022) has not landed. TEST_ROUTES already boots under `test` only.
 - Priority: P1
 
 ## 7. Testing
@@ -381,10 +381,10 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - branch age;
 - what I am unsure about.
 
-**The agent self-reviews against the template before asking Alex.**
+**The agent self-reviews against the template before hand-off.**
 - Enforced by: `.github/pull_request_template.md`. A CI check that the headings are present. One exception: a PR whose author login is `renovate[bot]` and whose author type is `Bot` skips the heading check only; every other pr-shape check still runs, and Renovate's own `labels` config sets its kind label (ruling 2026-10-05 12:00Z).
 - Source: SE@Google — ch. 8–9; Code Complete 2nd ed. — ch. 21; Pragmatic Programmer — Topic 38.
-- Status: NEW (no PR template exists yet).
+- Status: NEW. The template is `.github/pull_request_template.md`, checked by `scripts/guards/pr-template.ts` via `scripts/guards/change-shape.ts` in `.github/workflows/pr-shape.yml`.
 - Priority: P1
 
 **DL-4. Keep `main` releasable: every change to a running host goes through PR, CI and the deploy command, and break-glass use is recorded by a PR afterwards. A red `main` or a bad deploy is reverted first. From P5.00 the production host can be rebuilt from the repository plus the secret store.**
