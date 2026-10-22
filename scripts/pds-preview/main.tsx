@@ -242,15 +242,18 @@ function Preview() {
               },
               {
                 label: "Account",
-                value: account.status,
-                action:
-                  account.status === "Active" ? (
-                    <Button variant="standalone" onClick={() => open("deactivate")}>Deactivate</Button>
-                  ) : (
-                    <Button variant="standalone" onClick={() => setAccount({ ...account, status: "Active" })}>
-                      Reactivate
-                    </Button>
-                  ),
+                value: null,
+                action: (
+                  <Switch
+                    label={<span className="visually-hidden">Account active</span>}
+                    checked={account.status === "Active"}
+                    disabled={account.status === "Deleted"}
+                    onChange={(event) => {
+                      if (event.currentTarget.checked) setAccount({ ...account, status: "Active" });
+                      else open("deactivate");
+                    }}
+                  />
+                ),
               },
             ]}
           />
