@@ -1,7 +1,6 @@
 // Dev-only demo of the PDS pages. It does not call a PDS or change native authentication.
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { DescriptionList, Switch } from "../../shared/ui/index.ts";
 import {
   AccountActions,
   AccountDialog,
@@ -17,6 +16,8 @@ import {
   type SafeHref,
   safeHref,
 } from "../../apps/pds/index.ts";
+import { DescriptionList, Switch } from "../../shared/ui/index.ts";
+import { isRestPage, REST_PAGES, type RestPage, RestScreen } from "./rest.tsx";
 
 type Page =
   | "home"
@@ -28,7 +29,8 @@ type Page =
   | "sign-up"
   | "recover"
   | "two-factor"
-  | "consent";
+  | "consent"
+  | RestPage;
 type Dialog = "email" | "password" | "handle" | "two-factor" | "deactivate" | "delete";
 type Account = { name: string; handle: string; email: string; did: string; twoFactor: boolean; status: string };
 type Device = { id: string; name: string; seen: string; ip: string; current: boolean };
@@ -46,6 +48,7 @@ const PAGES: Record<Page, string> = {
   recover: "/recover",
   "two-factor": "/two-factor",
   consent: "/consent",
+  ...REST_PAGES,
 };
 
 function path(value: string): SafeHref {
@@ -180,6 +183,18 @@ function Preview() {
   }
 
   const shown = devices.filter((item) => item.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  if (isRestPage(page)) {
+    return (
+      <RestScreen
+        page={page}
+        go={(next) => go(next as Page)}
+        handle={account.handle}
+        directory={(Object.keys(PAGES) as Page[]).map((id) => ({ id, href: PAGES[id], label: id }))}
+      />
+    );
+  }
+
+  let body: ReactNode;
   const link = (next: Page, label: string) => (
     <a
       href={PAGES[next]}
@@ -192,7 +207,6 @@ function Preview() {
     </a>
   );
 
-  let body: ReactNode;
   switch (page) {
     case "home":
       body = (
@@ -218,12 +232,32 @@ function Preview() {
         >
           <AccountRows
             rows={[
-              { label: "Email", value: account.email, action: <Button variant="standalone" onClick={() => open("email")}>Change</Button> },
-              { label: "Password", value: "Hidden", action: <Button variant="standalone" onClick={() => open("password")}>Change</Button> },
+              {
+                label: "Email",
+                value: account.email,
+                action: (
+                  <Button variant="standalone" onClick={() => open("email")}>
+                    Change
+                  </Button>
+                ),
+              },
+              {
+                label: "Password",
+                value: "Hidden",
+                action: (
+                  <Button variant="standalone" onClick={() => open("password")}>
+                    Change
+                  </Button>
+                ),
+              },
               {
                 label: "Handle",
                 value: account.handle,
-                action: <Button variant="standalone" onClick={() => open("handle")}>Change</Button>,
+                action: (
+                  <Button variant="standalone" onClick={() => open("handle")}>
+                    Change
+                  </Button>
+                ),
               },
               {
                 label: "Email two-factor",
@@ -257,7 +291,9 @@ function Preview() {
             ]}
           />
           <AccountActions>
-            <Button variant="standalone" onClick={() => open("delete")}>Delete account</Button>
+            <Button variant="standalone" onClick={() => open("delete")}>
+              Delete account
+            </Button>
           </AccountActions>
           {notice === "" ? null : <p>{notice}</p>}
         </AccountPage>
@@ -320,9 +356,11 @@ function Preview() {
               rows={grants.map((grant) => ({
                 label: grant.name,
                 value: grant.permissions,
-                action: <Button variant="standalone" onClick={() => setGrants(grants.filter((row) => row.id !== grant.id))}>
+                action: (
+                  <Button variant="standalone" onClick={() => setGrants(grants.filter((row) => row.id !== grant.id))}>
                     Revoke
-                  </Button>,
+                  </Button>
+                ),
               }))}
             />
           )}
@@ -507,7 +545,7 @@ function Preview() {
             {link("sign-up", "Create account")}
             {link("recover", "Forgot password")}
             {link("two-factor", "Email code")}
-            {link("consent", "Consent")}
+            {link("screens", "All screens")}
           </>,
         );
         break;
@@ -527,7 +565,7 @@ function Preview() {
               }
               setAccount({ ...account, name: handle, handle, email, status: "Active" });
               setPassword(next);
-              go("home");
+              go("welcome");
             }}
           >
             <Input name="handle" label="Handle" autoComplete="username" />
@@ -564,7 +602,7 @@ function Preview() {
               setPassword(next);
               setRecoverStep("email");
               setNotice("Password updated.");
-              go("sign-in");
+              go("reset-done");
             }}
           >
             {recoverStep === "email" ? (
@@ -619,7 +657,7 @@ function Preview() {
               ]}
             />
             <AccountActions>
-              <Button onClick={() => go("home")}>Accept</Button>
+              <Button onClick={() => go("handoff")}>Accept</Button>
               <Button variant="standalone" onClick={() => setError("Access was denied. The app stays signed out.")}>
                 Deny
               </Button>
