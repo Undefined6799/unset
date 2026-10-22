@@ -9,7 +9,7 @@ import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
 import { E2E_PROJECTS } from "../test/assert-tests-ran.ts";
 
-type Step = { name?: string; run?: string; env?: Record<string, string> };
+type Step = { name?: string; run?: string; env?: Record<string, string>; "timeout-minutes"?: number };
 type Job = {
   needs?: string[];
   if?: string;
@@ -53,6 +53,26 @@ describe("e2e gate (P0.07b)", () => {
     const run = (gate?.steps ?? []).map((step) => step.run ?? "").join("\n");
     for (const project of E2E_PROJECTS) {
       expect(run).toContain(`"${project}=$REPORTS/e2e-${project}/tests/e2e/report.json"`);
+    }
+  });
+});
+
+// P0.07f: the browser install hung until the 30-minute job timeout in 3 of about 20 runs on 2026-10-22 (WebKit, in
+// `playwright install --with-deps`), while it usually takes under a minute. Each attempt is cut at 4 minutes by
+// coreutils timeout and tried once more, and the step itself is capped, so a stall costs minutes, not the run.
+describe("browser install (P0.07f)", () => {
+  const installs = Object.entries(wf.jobs).flatMap(([id, job]) =>
+    (job.steps ?? []).filter((step) => step.run?.includes("playwright install")).map((step) => [id, step] as const),
+  );
+
+  test("every_browser_install_is_bounded_and_retried_once", () => {
+    expect(installs.map(([id]) => id)).toEqual(["browser", "a11y"]);
+    for (const [id, step] of installs) {
+      const attempts = (step.run ?? "").trim().split(" || ");
+      expect(attempts, id).toHaveLength(2);
+      expect(attempts[0], id).toBe(attempts[1]);
+      expect(attempts[0], id).toMatch(/^timeout --kill-after=10s 240s npx playwright install --with-deps /);
+      expect(step["timeout-minutes"], id).toBe(9);
     }
   });
 });
