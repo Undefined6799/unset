@@ -17,6 +17,7 @@ type Manifest = {
   workspaces?: string[];
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 /** What the check needs from the package.json files: names, and what each one declares. */
 export type Packages = {
@@ -31,6 +32,12 @@ export type Packages = {
 const declared = (manifest: Manifest): Set<string> =>
   new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})]);
 
+/** A workspace's own declarations, peers included: a library that runs inside its host's copy (shared/islands and
+ * react) names it as a peer, and the host's exact pin decides what npm installs. The root holds no product code, so
+ * only workspaces read peers. */
+const workspaceDeclared = (manifest: Manifest): Set<string> =>
+  new Set([...declared(manifest), ...Object.keys(manifest.peerDependencies ?? {})]);
+
 /** A test file, by the tooling set's Vitest part (tooling.ts, P1.28p): the definition the depcruise rule reads too. */
 export const isTestFile = (file: string): boolean => new RegExp(TEST_FILE).test(file);
 
@@ -44,7 +51,7 @@ export function readPackages(root: string, list: (dir: string) => string[]): Pac
     for (const dir of list(pattern.slice(0, -2))) {
       if (!existsSync(join(root, dir, "package.json"))) continue; // npm skips a folder with no manifest too
       const manifest = read(dir);
-      workspaces.set(dir, { name: manifest.name ?? "", declared: declared(manifest) });
+      workspaces.set(dir, { name: manifest.name ?? "", declared: workspaceDeclared(manifest) });
     }
   }
   return { rootName: top.name ?? "", root: declared(top), workspaces, testFile: isTestFile };
