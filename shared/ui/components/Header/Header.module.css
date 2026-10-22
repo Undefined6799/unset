@@ -30,6 +30,10 @@
         padding-inline: var(--space-4);
       }
     }
+    & svg {
+      height: auto;
+      aspect-ratio: 828 / 220;
+    }
     & .home {
       align-items: center;
       height: 48px;

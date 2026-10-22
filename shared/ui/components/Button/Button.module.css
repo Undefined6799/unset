@@ -4,6 +4,27 @@
    never clips the focus outline. The fill paints `--surface` (set by the surface the button sits on; tokens.css starts it at `ground`),
    so the hover shadow never shows through. */
 @layer components {
+  .standalone {
+    --base-fill: transparent;
+    min-height: 40px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--color-ink);
+    appearance: none;
+    cursor: pointer;
+    &::before,
+    &::after {
+      content: none;
+    }
+    &:disabled {
+      color: var(--color-ink-muted);
+      cursor: not-allowed;
+    }
+  }
+
   .root {
     --button-cut: var(--radius-cut);
     --button-radius: var(--radius-sm);

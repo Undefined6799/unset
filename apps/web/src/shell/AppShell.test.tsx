@@ -71,7 +71,10 @@ describe("core shell", () => {
     const document = core("settings");
     const popup = document.querySelector('[popover="auto"]');
     expect(popup).not.toBeNull();
-    expect(document.querySelector('[popovertargetaction="hide"]')?.getAttribute("popovertarget")).toBe(popup?.id);
+    // The popup has no Close control (Alex, 2026-10-21, approved-extensions.json Navigation): the native auto
+    // popover dismisses on Escape and outside press, and its toggle names it.
+    expect(document.querySelector('[popovertargetaction="hide"]')).toBeNull();
+    expect(document.querySelector(`[popovertarget="${popup?.id}"]`)).not.toBeNull();
     expect(popup?.querySelector('[href="/settings/profile"][aria-current="page"]')).not.toBeNull();
   });
 

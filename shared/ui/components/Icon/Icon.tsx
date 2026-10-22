@@ -1,4 +1,4 @@
-// Icon (P1.24i; plan §7, decision 33): one of the sheet's 36 Iconoir 7.12.1 icons, drawn inline on the server from
+// Icon (P1.24i; plan §7, decision 33): one of the sheet/registered Iconoir 7.12.1 icons, drawn inline on the server from
 // icons/icons.json (zero JS, no <img>, no CSP change). The drawing is always aria-hidden; meaning comes from a word
 // beside it or from `label`, a visually hidden span (never role="img"). Sized by the sheet's three sizes.
 // Islands draw with `IconDrawing` and one generated module from icons/drawings/, so they never bundle every drawing

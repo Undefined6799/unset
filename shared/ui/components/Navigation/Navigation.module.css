@@ -12,12 +12,58 @@
     flex-direction: column;
     gap: var(--space-4);
     padding-block: var(--space-4);
+    box-sizing: border-box;
   }
   .inline {
     position: static;
   }
   .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
     margin-top: auto;
+  }
+  .start {
+    margin-top: 0;
+  }
+  .extra {
+    margin-top: auto;
+    width: 100%;
+    flex: none;
+    box-sizing: border-box;
+    padding: var(--space-2) var(--space-1) var(--space-2);
+  }
+  .rail .extra label {
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-1);
+    text-align: center;
+  }
+  .panel .extra {
+    margin-top: var(--space-2);
+    padding: var(--space-3);
+  }
+  .label {
+    visibility: hidden;
+    position: absolute;
+    left: calc(var(--space-12) + var(--space-3));
+    top: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-xs);
+    background: var(--color-ink);
+    color: var(--color-on-ink);
+    white-space: nowrap;
+  }
+  .label::before {
+    content: "";
+    position: absolute;
+    left: calc(-1 * var(--space-3));
+    top: calc(-1 * var(--space-1));
+    width: var(--space-3);
+    height: 48px;
+  }
+  .enhanced:not(.labelsDismissed) .control:is(:hover, :focus-visible) .label {
+    visibility: visible;
   }
   .control {
     position: relative;
@@ -30,23 +76,21 @@
   .panel {
     color: var(--color-ink);
     background: var(--color-ground);
+    box-sizing: border-box;
     outline: 1px solid var(--color-line-strong);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-menu);
-    inset: auto var(--space-4) calc(var(--space-12) + var(--space-3) + var(--space-4) + var(--safe));
+    inset: auto var(--space-4) calc(var(--space-12) + var(--space-4) + var(--safe));
     margin: 0;
     width: auto;
-    border: 0;
+    border: 1px solid var(--color-line-strong);
     padding: var(--space-2);
     max-height: calc(100dvh - 168px);
     & > div {
-      justify-content: space-between;
       margin-bottom: var(--space-1);
       padding-left: var(--space-3);
-    }
-    & button {
-      width: 44px;
       height: 44px;
+      color: var(--color-ink-muted);
     }
     & a {
       gap: var(--space-3);
@@ -55,8 +99,13 @@
       color: inherit;
     }
   }
-  .control:is([aria-current], [data-current])::after,
-  .phone:has(+ .panel:popover-open) button::after {
+  .row {
+    display: block;
+    & + .row {
+      margin-top: var(--space-1);
+    }
+  }
+  .rail .control[aria-current]::after {
     content: "";
     position: absolute;
     bottom: var(--space-1);
@@ -79,12 +128,25 @@
     .rail {
       display: none;
     }
+    .phone .control:is([aria-current], [data-current]) > :first-child {
+      transform: translateY(-2px);
+      filter: drop-shadow(0 2px 1px var(--color-shadow-hard));
+    }
+    .phone .control svg {
+      width: 24px;
+      height: 24px;
+    }
+    .phone .control > svg {
+      width: 28px;
+      height: 28px;
+    }
     .phone {
-      inset: auto 0 0;
+      inset: auto var(--safe) var(--safe);
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       justify-items: center;
-      padding: calc(var(--space-3) / 2) 0 calc(var(--space-3) / 2 + var(--safe));
+      border-radius: var(--radius-xs);
+      box-shadow: var(--shadow-menu);
     }
   }
 }
