@@ -33,6 +33,7 @@ Kit islands on the tree (`shared/ui/islands/`):
 | `copy.island.tsx` |
 | `header-menu.island.tsx` |
 | `modal.island.tsx` |
+| `search.island.tsx` |
 | `select.island.tsx` |
 | `tabs.island.tsx` |
 | `toast.island.tsx` |
