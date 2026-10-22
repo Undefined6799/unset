@@ -33,6 +33,12 @@ describe("workflows", () => {
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker create alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: podman container run alpine:3\n")))).toHaveLength(1);
+    // P2.24c: only the exact pull of the pushed, digest-checked `$ref` passes; any other runtime ref or flag fails.
+    const pull = (cmd: string) => withJob(job(`    steps:\n      - run: ${cmd}\n`));
+    expect(problems(pull('docker pull --quiet --platform linux/amd64 "$ref" > /dev/null'))).toEqual([]);
+    expect(problems(pull('docker pull --quiet --platform linux/amd64 "$other" > /dev/null'))).toHaveLength(1);
+    expect(problems(pull('docker pull "$ref"'))).toHaveLength(1);
+    expect(problems(pull('docker run --rm "$ref"'))).toHaveLength(1);
     // A BuildKit container builder pulls its image: unnamed or by tag fails; by digest or a pinned variable passes.
     const builder = (opts: string) => withJob(job(`    steps:\n      - run: docker buildx create --use ${opts}\n`));
     expect(problems(builder("--driver docker-container"))).toHaveLength(1);

@@ -65,6 +65,14 @@ function runValues(lines: string[]): string[] {
 const FIXED_BUILDER =
   /^\s*(?:- )?(?:run:\s*)?docker buildx create(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8} --driver-opt "image=(?:\$\w+_IMAGE|[\w./:-]+@sha256:[0-9a-f]{64})"(?: (?:--use|--[a-z][a-z-]* [\w.][\w.-]*)){0,8}\s*$/;
 
+/**
+ * The one accepted pull of a runtime ref (P2.24c): publish-images.yml pulls the digest it just pushed, `$ref`, so its
+ * scan can name the image as images.yml does. That loop rejects any `$ref` not ending in `@sha256:` and 64 characters
+ * before this line runs (scripts/ci/image-workflows.test.ts holds the pattern); any other spelling still fails.
+ */
+const PUSHED_DIGEST_PULL =
+  /^\s*(?:- )?(?:run:\s*)?docker pull --quiet --platform linux\/amd64 "\$ref" > \/dev\/null\s*$/;
+
 /** Pinning, trigger and permission problems visible on one line. */
 function lineProblems(line: string): string[] {
   const found: string[] = [];
@@ -77,7 +85,9 @@ function lineProblems(line: string): string[] {
   const image = /(?:\b\w*_IMAGE|\bimage|\bcontainer):\s*["']?([^\s"'{]+)/.exec(line)?.[1];
   if (image && !/@sha256:[0-9a-f]{64}$/.test(image)) found.push(`image not pinned by digest: ${image}`);
   if (/\b(?:docker|podman)\s+(?:container\s+|image\s+)?(?:run|create|pull)\b/.test(line)) {
-    if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
+    if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line) && !PUSHED_DIGEST_PULL.test(line)) {
+      found.push("container started without a digest-pinned image");
+    }
   }
   // A BuildKit container builder runs an image too (P1.27s). buildx reads driver options as CSV (csvvalue.Fields) and
   // keeps the last `image=`, and the shell can build quotes at run time, so no list of spellings is complete: the line

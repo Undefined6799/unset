@@ -101,6 +101,8 @@ describe("image workflows", () => {
     // P2.24c: the scan reads the ignore file list-dockerfiles.ts gives each image, the one images.yml uses.
     expect(run).toContain("jq -r '.[] | [.name, .dockerfile, .ignorefile] | @tsv'");
     expect(run).toContain("read -r name dockerfile ignorefile");
+    // workflows.ts accepts the pull of `$ref` only because this pattern rejects any ref not pinned by digest first.
+    expect(run).toContain(`case "$ref" in *@sha256:${"?".repeat(64)}) ;; *) exit 1 ;; esac`);
     // The scanned local image is the pushed digest: pulled by it, checked against its RepoDigests, then tagged.
     expect(run).toContain('docker pull --quiet --platform linux/amd64 "$ref" > /dev/null');
     expect(run).toContain(`docker image inspect --format '{{join .RepoDigests "\\n"}}' "$ref" | grep -qxF "$ref"`);
