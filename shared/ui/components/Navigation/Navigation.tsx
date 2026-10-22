@@ -37,6 +37,8 @@ export type NavigationProps = {
   renderLink?: NavigationLinkRenderer;
   /** Advance after a committed selection, including same-target navigation and history traversal. */
   navigationKey?: string | number;
+  /** Bottom of the desktop rail and the phone menu. The caller owns the control. */
+  extra?: ReactNode;
 };
 
 const controlClass = `${header.home} ${header.nav} ${styles.control}`;
@@ -78,6 +80,7 @@ export function Navigation({
   itemsPlacement = "end",
   renderLink = anchor,
   navigationKey,
+  extra,
 }: NavigationProps) {
   const panel = useId();
   const panelRef = useRef<HTMLElement>(null);
@@ -131,6 +134,7 @@ export function Navigation({
             </RailLink>
           ))}
         </div>
+        {extra == null ? null : <div className={styles.extra}>{extra}</div>}
       </nav>
       <nav className={classNames(styles.phone, inline && styles.inline)} aria-label={menuLabel}>
         <button
@@ -183,6 +187,7 @@ export function Navigation({
             })}
           </span>
         ))}
+        {extra == null ? null : <div className={styles.extra}>{extra}</div>}
       </nav>
     </>
   );

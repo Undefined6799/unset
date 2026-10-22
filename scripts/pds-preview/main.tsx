@@ -1,6 +1,7 @@
 // Dev-only demo of the PDS pages. It does not call a PDS or change native authentication.
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Switch } from "../../shared/ui/index.ts";
 import {
   AccountActions,
   AccountDialog,
@@ -17,9 +18,6 @@ import {
   type SafeHref,
   safeHref,
 } from "../../apps/pds/index.ts";
-import "../../shared/ui/src/layers.css";
-import "../../shared/ui/src/tokens.css";
-import "../../shared/ui/src/base.css";
 
 type Page =
   | "home"
@@ -221,18 +219,20 @@ function Preview() {
         >
           <AccountRows
             rows={[
-              { label: "Email", value: account.email, action: <Button onClick={() => open("email")}>Change</Button> },
-              { label: "Password", value: "Hidden", action: <Button onClick={() => open("password")}>Change</Button> },
+              { label: "Email", value: account.email, action: <Button variant="standalone" onClick={() => open("email")}>Change</Button> },
+              { label: "Password", value: "Hidden", action: <Button variant="standalone" onClick={() => open("password")}>Change</Button> },
               {
                 label: "Handle",
                 value: account.handle,
-                action: <Button onClick={() => open("handle")}>Change</Button>,
+                action: <Button variant="standalone" onClick={() => open("handle")}>Change</Button>,
               },
               {
                 label: "Email two-factor",
                 value: account.twoFactor ? "On" : "Off",
                 action: (
-                  <Button onClick={() => open("two-factor")}>{account.twoFactor ? "Turn off" : "Turn on"}</Button>
+                  <Button variant="standalone" onClick={() => open("two-factor")}>
+                    {account.twoFactor ? "Turn off" : "Turn on"}
+                  </Button>
                 ),
               },
               {
@@ -240,15 +240,17 @@ function Preview() {
                 value: account.status,
                 action:
                   account.status === "Active" ? (
-                    <Button onClick={() => open("deactivate")}>Deactivate</Button>
+                    <Button variant="standalone" onClick={() => open("deactivate")}>Deactivate</Button>
                   ) : (
-                    <Button onClick={() => setAccount({ ...account, status: "Active" })}>Reactivate</Button>
+                    <Button variant="standalone" onClick={() => setAccount({ ...account, status: "Active" })}>
+                      Reactivate
+                    </Button>
                   ),
               },
             ]}
           />
           <AccountActions>
-            <Button onClick={() => open("delete")}>Delete account</Button>
+            <Button variant="standalone" onClick={() => open("delete")}>Delete account</Button>
           </AccountActions>
           {notice === "" ? null : <p>{notice}</p>}
         </AccountPage>
@@ -288,6 +290,7 @@ function Preview() {
                 ipAddress={item.ip}
                 action={
                   <Button
+                    variant="standalone"
                     disabled={item.current}
                     onClick={() => setDevices(devices.filter((row) => row.id !== item.id))}
                   >
@@ -310,7 +313,9 @@ function Preview() {
               rows={grants.map((grant) => ({
                 label: grant.name,
                 value: grant.permissions,
-                action: <Button onClick={() => setGrants(grants.filter((row) => row.id !== grant.id))}>Revoke</Button>,
+                action: <Button variant="standalone" onClick={() => setGrants(grants.filter((row) => row.id !== grant.id))}>
+                    Revoke
+                  </Button>,
               }))}
             />
           )}
@@ -637,6 +642,13 @@ function Preview() {
         menuLabel: "Menu",
         itemsPlacement: "start",
         navigationKey: page,
+        extra: (
+          <Switch
+            label="Theme"
+            checked={theme === "light"}
+            onChange={(event) => setTheme(event.currentTarget.checked ? "light" : "dark")}
+          />
+        ),
         renderLink: (props) => (
           <a
             {...props}
@@ -654,9 +666,6 @@ function Preview() {
       skipLabel="Skip to content"
       nativeActions={
         <AccountActions>
-          <Button variant="standalone" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? "Light theme" : "Dark theme"}
-          </Button>
           <Button variant="standalone" onClick={() => go("sign-in")}>
             Sign out
           </Button>
