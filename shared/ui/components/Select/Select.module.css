@@ -2,7 +2,8 @@
    `ink-muted` sits over the right edge without catching clicks. The select island (P1.24b) hides the native control
    and draws the combobox and its list: open, the border darkens to `ink-muted` and the caret flips; the list drops
    4px below (or opens above) on `ground` with a 1px `line-strong` border and `shadow-menu` at `z-menu`; options are
-   mono 14px, the active one fills `line`, and the chosen one is marked → in `success`. */
+   mono 14px, the active one fills `line`, and the chosen one is marked → in `success`. Disabled, the fill and text
+   match a native disabled select (`surface-raised`, `ink-muted`), including one disabled by a fieldset. */
 @layer components {
   .wrap {
     position: relative;
@@ -12,6 +13,15 @@
   .control {
     padding-right: var(--space-8);
     appearance: none;
+  }
+
+  /* A disabled fieldset sets no disabled attribute. :disabled is that state, and the border stays
+     the resting line-strong so the base hover rule does not darken it. */
+  .control:disabled {
+    border-color: var(--color-line-strong);
+    background-color: var(--color-surface-raised);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
   }
 
   .caret {
@@ -55,6 +65,8 @@
   }
 
   .combobox[aria-disabled="true"] {
+    background-color: var(--color-surface-raised);
+    color: var(--color-ink-muted);
     cursor: not-allowed;
   }
 

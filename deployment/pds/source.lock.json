@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "base": {
+    "ref": "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "platform": "linux/amd64"
+  },
+  "builder": {
+    "ref": "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
+    "node": "26.10.0",
+    "pnpm": "11.11.0"
+  },
+  "source": {
+    "revision": "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12",
+    "archiveSha256": "706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c0805b0555",
+    "lockSha256": "d56b93f5fe51bbad31919df7039be088e9e61f80f57017a188f02e35f2ca16f8"
+  },
+  "uiDirectory": "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist"
+}

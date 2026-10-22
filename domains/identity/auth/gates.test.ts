@@ -1,9 +1,16 @@
 // P2.11 (auth/gates.ts): the confirmed-email decision, with no database and no PDS.
 import { describe, expect, test } from "vitest";
-import { emailGate, requireOnboarded, verifiedAfterRefresh } from "./gates.ts";
+import {
+  CACHED_RECHECK_CAP_MULTIPLE,
+  cachedRecheckCapS,
+  emailGate,
+  requireOnboarded,
+  verifiedAfterRefresh,
+} from "./gates.ts";
 
 const NOW = Date.parse("2026-10-16T12:00:00Z");
 const RECHECK_S = 900;
+const cacheAt = (ageMs: number) => ({ confirmed: true as const, checkedAt: new Date(NOW - ageMs) });
 
 describe("email gate", () => {
   test("gate.requireVerified_fresh_true", () => {
@@ -14,14 +21,33 @@ describe("email gate", () => {
   test("gate.requireVerified_stale_true_pds_down", () => {
     const checkedAt = new Date(NOW - 20 * 60_000);
     expect(emailGate({ confirmed: true, checkedAt }, NOW, RECHECK_S)).toBe("refresh");
-    expect(verifiedAfterRefresh("transient")).toBe("pass");
+    // 20 minutes is inside 4 × 900 s, so a transient recheck still serves the cache.
+    expect(verifiedAfterRefresh("transient", { confirmed: true, checkedAt }, NOW, RECHECK_S)).toBe("pass");
   });
 
-  test("gate.requireVerified_ended_grant", () => {
-    // P2.11a: a revoked grant is a sign-out, never a request to confirm the email again.
-    expect(verifiedAfterRefresh("ended")).toBe("ended");
-    expect(verifiedAfterRefresh("unconfirmed")).toBe("verify");
-    expect(verifiedAfterRefresh("confirmed")).toBe("pass");
+  test("gate.requireVerified_transient_past_cap_is_unavailable", () => {
+    // The cap is the configured interval times 4, so 60 s caps at 240 s and 900 s caps at 3,600 s.
+    expect(CACHED_RECHECK_CAP_MULTIPLE).toBe(4);
+    expect(cachedRecheckCapS(900)).toBe(3_600);
+    expect(cachedRecheckCapS(60)).toBe(240);
+    const capMs = cachedRecheckCapS(RECHECK_S) * 1000;
+    expect(verifiedAfterRefresh("transient", cacheAt(capMs), NOW, RECHECK_S)).toBe("pass");
+    expect(verifiedAfterRefresh("transient", cacheAt(capMs + 1), NOW, RECHECK_S)).toBe("unavailable");
+    expect(verifiedAfterRefresh("transient", cacheAt(241_000), NOW, 60)).toBe("unavailable");
+    expect(verifiedAfterRefresh("transient", cacheAt(240_000), NOW, 60)).toBe("pass");
+    // No timestamp: the age is unknown, so the cache is not served. A future timestamp (negative age) is not served
+    // either: emailGate already requires ageS >= 0, and a clock-ahead check would otherwise pass for the whole skew.
+    expect(verifiedAfterRefresh("transient", { confirmed: true, checkedAt: null }, NOW, RECHECK_S)).toBe("unavailable");
+    expect(verifiedAfterRefresh("transient", cacheAt(-1_000), NOW, RECHECK_S)).toBe("unavailable");
+  });
+
+  test("gate.requireVerified_past_cap_keeps_auth_dead_and_unconfirmed", () => {
+    const past = cacheAt(cachedRecheckCapS(RECHECK_S) * 1000 + 1);
+    // P2.11a: a revoked grant is a sign-out, never a request to confirm the email again, and the cap does not
+    // turn it into the unavailable page.
+    expect(verifiedAfterRefresh("ended", past, NOW, RECHECK_S)).toBe("ended");
+    expect(verifiedAfterRefresh("unconfirmed", past, NOW, RECHECK_S)).toBe("verify");
+    expect(verifiedAfterRefresh("confirmed", past, NOW, RECHECK_S)).toBe("pass");
   });
 
   test("gate.requireVerified_false", () => {
