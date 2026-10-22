@@ -7,13 +7,25 @@
 export { Button, type ButtonProps } from "./components/Button/Button.tsx";
 export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox/Checkbox.tsx";
+export {
+  type DescriptionItem,
+  DescriptionList,
+  type DescriptionListProps,
+} from "./components/DescriptionList/DescriptionList.tsx";
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
+export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHeader.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
-export { Navigation, type NavigationProps } from "./components/Navigation/Navigation.tsx";
+export {
+  Navigation,
+  type NavigationAnchorProps,
+  type NavigationLinkRenderer,
+  type NavigationProps,
+} from "./components/Navigation/Navigation.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
+export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 // P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.

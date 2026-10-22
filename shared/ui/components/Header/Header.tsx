@@ -8,6 +8,7 @@ import headerMenu from "../../islands/header-menu.island.tsx";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Mark } from "../Mark/Mark.tsx";
+import { BrandHeader } from "./BrandHeader.tsx";
 import styles from "./Header.module.css";
 import { type NavItem, type NavLink, NavLinks } from "./HeaderMenu.tsx";
 
@@ -18,6 +19,7 @@ export type HeaderProps = {
   action?: NavLink;
   /** Where the mark links; default "/". */
   homeHref?: SafeHref;
+  homeLabel?: string;
   /** The folded menu's toggle word; default "menu". */
   menuLabel?: string;
   /** Compact brand header when navigation is supplied separately by the app shell. */
@@ -25,23 +27,35 @@ export type HeaderProps = {
   className?: string;
 };
 
-export function Header({ nav = [], action, homeHref, menuLabel = "menu", brandOnly = false, className }: HeaderProps) {
+export function Header({
+  nav = [],
+  action,
+  homeHref,
+  homeLabel = "unset.sh home",
+  menuLabel = "menu",
+  brandOnly = false,
+  className,
+}: HeaderProps) {
+  if (brandOnly)
+    return (
+      <BrandHeader
+        homeLabel={homeLabel}
+        {...(homeHref === undefined ? {} : { homeHref })}
+        {...(className === undefined ? {} : { className })}
+      />
+    );
   // The menu comes before the inline nav so that, folded or not, the shown one ends the bar.
   const menu = { label: menuLabel, nav: [...nav], ...(action === undefined ? {} : { action }) };
   return (
-    <header className={classNames(styles.root, brandOnly && styles.brand, className)}>
+    <header className={classNames(styles.root, className)}>
       <div className={styles.bar}>
         <a className={styles.home} href={homeHref ?? "/"}>
-          <Mark width={72} title="unset.sh home" />
+          <Mark width={72} title={homeLabel} />
         </a>
-        {brandOnly ? null : (
-          <>
-            <IslandSlot name="header-menu" island={headerMenu} props={menu} />
-            <div className={styles.wide}>
-              <NavLinks nav={nav} action={action} />
-            </div>
-          </>
-        )}
+        <IslandSlot name="header-menu" island={headerMenu} props={menu} />
+        <div className={styles.wide}>
+          <NavLinks nav={nav} action={action} />
+        </div>
       </div>
     </header>
   );
