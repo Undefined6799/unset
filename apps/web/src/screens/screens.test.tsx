@@ -23,7 +23,7 @@ const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
     body,
     islands: "on",
   }).html;
-const LOGIN = { handle: "", next: null, error: null, pdsHost: "pds.example", handleDomain: "pds.example" };
+const LOGIN = { next: null, error: null, pdsHost: "pds.example" };
 
 /** Every start tag named `name`, each as its attribute map (attribute order is the renderer's, not part of the test). */
 function tags(page: string, name: string): Record<string, string>[] {
@@ -33,22 +33,15 @@ function tags(page: string, name: string): Record<string, string>[] {
 }
 
 describe("login screen", () => {
-  test("login_form_posts_handle_and_intent", () => {
-    const page = html(screens.login({ ...LOGIN, handle: "alice", next: "/me" }));
+  // P2.05r: one button to our PDS's sign-in page and no handle field.
+  test("login_form_posts_only_the_chooser", () => {
+    const page = html(screens.login({ ...LOGIN, next: "/me" }));
     expect(tags(page, "form")).toEqual([{ action: "/login", method: "post" }]);
-    const inputs = tags(page, "input");
-    expect(inputs.find((input) => input.name === "handle")).toMatchObject({
-      value: "alice",
-      placeholder: "alice.pds.example",
-    });
-    expect(inputs.find((input) => input.name === "next")).toEqual({ type: "hidden", name: "next", value: "/me" });
+    expect(tags(page, "input")).toEqual([{ type: "hidden", name: "next", value: "/me" }]);
     const buttons = tags(page, "button").map(({ type, name, value }) => ({ type, name, value }));
-    expect(buttons).toEqual([
-      { type: "submit", name: "intent", value: "login" },
-      { type: "submit", name: "intent", value: "chooser" },
-    ]);
-    expect(page).toContain(">Sign in</button>");
-    expect(page).toContain(">Use pds.example sign-in</button>");
+    expect(buttons).toEqual([{ type: "submit", name: "intent", value: "chooser" }]);
+    expect(page).toContain(">Sign in with pds.example</button>");
+    expect(page).toContain("only place you type your password");
     // Zero JavaScript: no island ran, so no script of any kind.
     expect(page).not.toContain("<script");
   });

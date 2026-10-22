@@ -132,9 +132,11 @@ describe("GET /login", () => {
     const response = await send("/login?handle=alice&next=/me");
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toMatch(/name="handle"[^>]*value="alice"|value="alice"[^>]*name="handle"/);
+    // P2.05r: one button to our PDS; an old link's ?handle= is ignored.
+    expect(html).not.toContain('name="handle"');
+    expect(html).not.toContain("alice");
     expect(html).toContain('<input type="hidden" name="next" value="/me"/>');
-    expect(html).toContain(`Use ${PDS} sign-in`);
+    expect(html).toContain(`Sign in with ${PDS}</button>`);
     expect(cookies(response)).toEqual([]);
     expect([nonces(), authorized.length, resolved.length]).toEqual([0, 0, 0]);
   });

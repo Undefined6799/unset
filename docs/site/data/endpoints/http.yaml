@@ -63,7 +63,7 @@
   auth: "none"
 "GET /login":
   why: "Shows the sign-in form (interfaces/http/routes/login.ts)."
-  input: "Optional query handle, next and error."
+  input: "Optional query next and error. A handle query is ignored."
   output: "HTML sign-in page, or 303 to /did when a session is present and error is absent."
   errors: "The page can show a checked error query. The handler names no new error code."
   auth: "reads session"

@@ -1,4 +1,5 @@
-// Signing in (P2.05; plan §2 rules 4, 5, 6; §5.3 "Login and signup"). GET /login shows the form. POST /login works out
+// Signing in (P2.05; plan §2 rules 4, 5, 6; §5.3 "Login and signup"). GET /login shows the form, one button to our PDS
+// since P2.05r. POST /login works out
 // which account and server the browser goes to, issues a single-use nonce (P1.16) bound to this browser by a `__Host-`
 // cookie, starts the authorization with the nonce, the expected DID and the return path in the library's sealed
 // appState, and answers with the continue page. GET /login/continue sends the browser on to the authorization server.
@@ -49,7 +50,6 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-const MAX_PREFILL = 253;
 
 /** The one value of `name` in the form, or null when it is missing or repeated. */
 function single(form: URLSearchParams, name: string): string | null {
@@ -128,12 +128,10 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
         if (session !== null && error === null) return redirect("/did");
         const body = deps.screens.login({
-          handle: (query.get("handle") ?? "").slice(0, MAX_PREFILL),
           next: safeReturnPath(query.get("next")),
           // The shell shows a checked ?error= code. The screen does not repeat it.
           error: null,
           pdsHost: deps.pdsHost,
-          handleDomain: deps.handleDomain,
         });
         const response = deps.page({ group: "app", request, title: "Sign in", body, shell: {} });
         if (clearCookie) response.headers.append("set-cookie", sessionClearCookie());
