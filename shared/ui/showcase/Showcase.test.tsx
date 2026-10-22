@@ -34,6 +34,12 @@ describe("Showcase", () => {
     expect(Object.keys(SAMPLES).sort()).toEqual(built.sort());
   });
 
+  it("showcase_shows_disabled_select", () => {
+    const html = renderToStaticMarkup(SAMPLES.Select);
+    expect(html).toMatch(/<select\b[^>]*name="lang-off"[^>]*disabled=""/);
+    expect(html).toContain(">Unavailable</label>");
+  });
+
   it("showcase_is_zero_js", () => {
     const html = renderToStaticMarkup(<Showcase />);
     expect(html).not.toMatch(/<script|<img|\son[a-z]+=|style=/i);
