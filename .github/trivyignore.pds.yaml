@@ -6,7 +6,8 @@
 # .github/trivyignore.yaml or /dev/null. caddy:2.11.7-alpine is not listed here.
 # Ids are those mirror run 38952734875 reported for this digest, scoped with the
 # paths and PURLs Trivy v0.75.0 reports for the same image. Each entry expires
-# 2026-11-13, 30 days from Alex's tap at 2026-10-14T20:34:16Z.
+# 2026-11-13, 30 days from Alex's tap at 2026-10-14T20:34:16Z. CVE-2026-111943 was published later and accepted by
+# Alex at 2026-10-22T12:25:20Z with the same expiry.
 vulnerabilities:
   - id: CVE-2025-14874
     paths:
@@ -50,6 +51,13 @@ vulnerabilities:
       - "pkg:npm/handlebars@4.7.9"
     statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-11-13
+  - id: CVE-2026-111943
+    paths:
+      - "usr/local/bin/goat"
+    purls:
+      - "pkg:golang/stdlib@v1.25.10"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, goat CLI only, never run by the PDS server, accepted by Alex 2026-10-22T12:25:20Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
   - id: CVE-2026-12151
     paths:
       - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
@@ -74,6 +82,8 @@ vulnerabilities:
   - id: CVE-2026-14456
     paths:
       - "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4 (alpine 3.23.5)"
+      # The pds-ui candidate is scanned by its image id (P2.24t), so its OS target is named by that id instead.
+      - "sha256:* (alpine 3.23.5)"
     purls:
       - "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64&distro=3.23.5"
       - "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64&distro=3.23.5"
