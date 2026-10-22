@@ -288,7 +288,7 @@ rm unset-dev-secrets/.new
 The scratch copy stays inside the locked folder, so no other account can read it while it exists.
 
 Rootless Docker is not supported yet: its container uids map to other host uids, so the owners above would be wrong
-and the preflight fails closed.
+inside the containers. The preflight does not detect rootless Docker, so use the root daemon.
 
 ## The local stack's dev root and leaf (P1.33g)
 
