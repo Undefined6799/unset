@@ -211,6 +211,8 @@
 [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):disabled {
   --unset-edge: var(--border);
   color: var(--muted-foreground);
+  /* Upstream also fades disabled buttons to half opacity; the sheet's muted edge and label already say disabled. */
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -222,6 +224,6 @@
 
 @media (forced-colors: active) {
   [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background) {
-    border-color: currentColor;
+    border: 1px solid currentColor;
   }
 }
