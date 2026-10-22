@@ -634,7 +634,7 @@ function Preview() {
           { href: path("/apps"), label: "Apps", icon: "apps", current: page === "apps" },
           { href: path("/about"), label: "About", icon: "info", current: page === "about" },
         ],
-        menuLabel: "Account",
+        menuLabel: "Menu",
         itemsPlacement: "start",
         navigationKey: page,
         renderLink: (props) => (
