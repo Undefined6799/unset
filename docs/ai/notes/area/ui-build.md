@@ -10,7 +10,7 @@ importance: normal
 related: ["[[ui]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-07
+checked: 2026-10-22
 ---
 # ui-build
 
@@ -35,5 +35,15 @@ may contain the kit's name except that specifier, with named imports only; `requ
 inside this workspace and outside its node_modules (P1.25d, P1.25r, P1.25s). Each check has a fixture only it catches
 (`ui_build_jsx_free_check_pins_each_check`). shared/ui owns the `FontMetrics` and `FallbackFace` shapes and takes no
 dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
+
+**Registered icons (P2.24f).** The optional singleton `inventory.Icon.extensions` pin may name only
+`approved-extensions.json`. Its closed record fixes ADR 0027's dated approval, the immutable base-sheet pins,
+Iconoir 7.12.1 source commit, the two Figma nodes, aliases and exact drawings. The three component proof entries
+keep fixed source/requirement links; their API/behavior prose is a nonempty string array so reviewed packaging
+clarifications do not change the icon contract. Duplicate JSON keys and missing, unknown or altered proof fail.
+Only `devices` → `computer` and `apps` → `view-grid` may join the 36 imported icons; source bytes are hash-checked
+before the unchanged SVG parser compares drawings. Outputs retain the original `sheetVersion` and separately
+record `extensionProvenance` with the registration hash and approval. Without the pointer every committed output
+stays byte-identical.
 
 **Links.** Architecture record `2026-10-07-p125-ui-build-workspace.md`, [[ui]].
