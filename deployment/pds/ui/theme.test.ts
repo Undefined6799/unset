@@ -104,3 +104,34 @@ test("recipe_appends_the_theme_before_the_source_is_hashed", () => {
   expect(append).toBeGreaterThan(0);
   expect(append).toBeLessThan(recipe.indexOf("find . -type f -exec sha256sum"));
 });
+
+// Codex on #1274: upstream's button utilities are layered, so these theme rules win only by being unlayered, and
+// among themselves only by specificity. Every rule that restyles a button state names the themed variants, so a
+// later state rule never loses to an earlier, more specific one.
+const THEMED = '[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background)';
+
+test("pds_theme_button_state_rules_match_the_themed_specificity", () => {
+  const selectors = [...theme.matchAll(/^\s*([^{}@/*\n][^{}\n]*?)\s*\{/gm)].map(([, s]) => s ?? "");
+  // Split selector lists on commas outside parentheses, so `:is(a, b)` stays whole.
+  const buttonRules = selectors
+    .flatMap((s) => s.split(/,\s*(?![^()]*\))/))
+    .filter((s) => s.includes('[data-slot="button"]'));
+  for (const selector of buttonRules) expect(selector).toContain(THEMED);
+  // Hover and active both exclude disabled buttons, so the later active rule beats hover on equal specificity.
+  expect(theme).toContain(`${THEMED}:active:not(:disabled)::after {`);
+});
+
+test("pds_theme_button_focus_is_the_sheet_outline", () => {
+  // shared/ui/sheet/components/Button/README.md: "a solid 2px `focus` outline, offset 2px"; the PDS ring token is
+  // mapped to the sheet's focus colour (ink).
+  const start = theme.indexOf(`${THEMED}:focus-visible {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const body = theme.slice(theme.indexOf("{", start) + 1, theme.indexOf("}", start));
+  const focus = new Map(
+    [...body.matchAll(/([a-z-]+):\s*([^;]+);/g)].map((m): [string, string] => [m[1] ?? "", (m[2] ?? "").trim()]),
+  );
+  expect(focus.get("outline")).toBe("var(--unset-focus-width) solid var(--ring)");
+  expect(focus.get("outline-offset")).toBe("var(--unset-focus-width)");
+  expect(focus.get("box-shadow")).toBe("none");
+  expect(block(theme, ":root").get("--unset-focus-width")).toBe("2px");
+});

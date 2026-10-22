@@ -80,6 +80,7 @@
   --unset-cut-fill: 6.66px;
   --unset-z-edge: -1;
   --unset-z-shadow: -2;
+  --unset-focus-width: 2px;
 }
 
 /* Dark: the sheet's default, ground #17161B with a sunken footer surface. */
@@ -204,8 +205,16 @@
   translate: 0 0;
 }
 
-[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):active::after {
+[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):active:not(:disabled)::after {
   opacity: 0;
+}
+
+/* The sheet's focus: a solid 2px outline in the focus colour (ink, upstream's ring), offset 2px. Upstream's layered
+ * focus border and half-opacity ring would otherwise lose to the transparent border above and show half-styled. */
+[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):focus-visible {
+  outline: var(--unset-focus-width) solid var(--ring);
+  outline-offset: var(--unset-focus-width);
+  box-shadow: none;
 }
 
 [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):disabled {
@@ -216,8 +225,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-slot="button"],
-  [data-slot="button"]::after {
+  [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background),
+  [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background)::after {
     transition: none;
   }
 }
