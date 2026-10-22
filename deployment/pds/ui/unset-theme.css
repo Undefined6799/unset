@@ -1,0 +1,141 @@
+/* biome-ignore-all lint/style/noHexColors: upstream's stylesheet cannot load shared/ui tokens.css, so this file repeats its colours; theme.test.ts holds every one equal to the sheet. */
+/* biome-ignore-all lint/nursery/useLayeredStyles: upstream declares its tokens unlayered, and a layered rule would lose to them. */
+/* unset.sh theme for the official PDS screens (P2.24x, "CSS first": Alex, 2026-10-22). The recipe appends this file
+ * to the upstream src/style.css before the frontend build, so Vite bundles it into the same hashed stylesheet; no
+ * component, route, form or script changes. It only rebinds upstream's own shadcn tokens
+ * (@atproto/oauth-provider-ui 0.10.5, src/style.css at a7c8604d) to the design sheet's values, which
+ * theme.test.ts keeps equal to shared/ui/src/tokens.css. Unlayered, so it outranks Tailwind's theme, base and
+ * utility layers (CSS Cascading 5, "cascade layers": unlayered styles win over layered ones). */
+
+/* Fonts from the edge's one same-origin path (deployment/edge/snippets/pds-fonts.caddy; P2.24e). */
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "Space Grotesk";
+  src: url("/_unset/fonts/SpaceGrotesk-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "JetBrains Mono";
+  src: url("/_unset/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Light: the sheet's light ground. */
+:root {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+
+  /* 4px on buttons, inputs and menus; cards take radius-sm (radius - 2px = 2px). */
+  --radius: 4px;
+
+  --background: #f0edee;
+  --foreground: #0a090c;
+  --card: #fbfafa;
+  --card-foreground: #0a090c;
+  --popover: #f7f5f6;
+  --popover-foreground: #0a090c;
+  --secondary: #f7f5f6;
+  --secondary-foreground: #0a090c;
+  --muted: #e2dee0;
+  --muted-foreground: #5a575b;
+  --accent: #f7f5f6;
+  --accent-foreground: #0a090c;
+  --border: #d6d2d4;
+  --input: #7e7b80;
+
+  --primary: #0a090c;
+  --primary-foreground: #f0edee;
+  --destructive: #a4036f;
+  --ring: #0a090c;
+  --info: #006f8b;
+  --success: #007544;
+
+  --sidebar: #e2dee0;
+  --sidebar-foreground: #0a090c;
+  --sidebar-accent: #f7f5f6;
+  --sidebar-accent-foreground: #0a090c;
+  --sidebar-border: #d6d2d4;
+
+  --unset-shadow-hard: #7e7b80;
+  --unset-lift: 2px 2px 0 0 var(--unset-shadow-hard);
+}
+
+/* Dark: the sheet's default, ground #17161B with a sunken footer surface. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #17161b;
+    --foreground: #f0edee;
+    --card: #232227;
+    --card-foreground: #f0edee;
+    --popover: #201f24;
+    --popover-foreground: #f0edee;
+    --secondary: #201f24;
+    --secondary-foreground: #f0edee;
+    --muted: #0f0e12;
+    --muted-foreground: #a19ea2;
+    --accent: #201f24;
+    --accent-foreground: #f0edee;
+    --border: #312f36;
+    --input: #757278;
+
+    --primary: #f0edee;
+    --primary-foreground: #0a090c;
+    --destructive: #dc5ca7;
+    --ring: #f0edee;
+    --info: #1d97b1;
+    --success: #16db93;
+
+    --sidebar: #0f0e12;
+    --sidebar-foreground: #f0edee;
+    --sidebar-accent: #201f24;
+    --sidebar-accent-foreground: #f0edee;
+    --sidebar-border: #312f36;
+
+    --unset-shadow-hard: #0a090c;
+  }
+}
+
+/* The auth screens paint upstream's muted surface behind the card; the sheet puts pages on the ground. */
+.auth-background {
+  background-color: var(--background);
+}
+
+/* Cards take the sheet's 2px (half the 4px radius); upstream's rounded-xl would be radius + 4px. */
+[data-slot="card"] {
+  border-radius: calc(var(--radius) / 2);
+}
+
+/* Buttons: the sheet's outline style. A line-strong edge on the surface it sits on, and on hover a hard shadow
+ * lift with no colour change (approved 2026-10-21). Filled and outline variants both take it; ghost, link and
+ * destructive keep upstream's look so their meaning stays visible. */
+[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background) {
+  border-color: var(--input);
+  background-color: transparent;
+  color: var(--foreground);
+  border-radius: var(--radius);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out;
+}
+
+[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):hover:not(:disabled) {
+  background-color: transparent;
+  box-shadow: var(--unset-lift);
+  transform: translate(-1px, -1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="button"] {
+    transition: none;
+  }
+}
