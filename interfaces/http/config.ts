@@ -53,7 +53,7 @@ export const identityConfig = {
 };
 
 /**
- * Signing in (P2.05). Our PDS is the authorization server the "Use … sign-in" button opens; the reference PDS's issuer
+ * Signing in (P2.05). Our PDS is the authorization server the "Sign in with …" button opens; the reference PDS's issuer
  * is its public URL, `https://` and this host. A name typed without a dot is completed with HANDLE_SUFFIX, the PDS's
  * own `PDS_SERVICE_HANDLE_DOMAINS` value (one suffix, leading dot: production `.unset.im`, development
  * `.staging.unset.im`; ADR 0025).
