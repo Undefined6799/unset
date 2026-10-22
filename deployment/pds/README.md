@@ -8,4 +8,8 @@ The Dockerfile builds only the UI and its supporting TypeScript projects with No
 
 Upstream's pinned `rolldown-plugin-bundle-manifest` hashes intermediate chunks in `generateBundle`; six native manifest hashes do not match the final Vite output. After Vite succeeds, this recipe recomputes each manifest item's `sha256` from its final named file, preserves every other field and asset byte, and writes deterministic two-space JSON. The provider continues to consume its native manifest format. Source evidence: `packages/internal/rolldown-plugin-bundle-manifest/src/index.ts` and `packages/oauth/oauth-provider/src/router/assets/assets-manifest.ts` at the locked revision; see the [checker contract](../../scripts/ci/pds-ui/README.md) for the observed Vite 8.3.1 behavior.
 
+## Theme (P2.24x)
+
+Before the source is hashed, the recipe appends [`ui/unset-theme.css`](ui/unset-theme.css) to upstream's `packages/oauth/oauth-provider-ui/src/style.css`, so Vite bundles it into the same hashed stylesheet. It rebinds upstream's own shadcn tokens to the design sheet (fonts from the edge path `/_unset/fonts/`, colours for both schemes, 4px radius, outline buttons) and changes no component, route, form or script. Upstream's tokens are unlayered, so the theme is too, and it repeats the sheet's colours as literals; `ui/theme.test.ts` holds each one equal to `shared/ui/src/tokens.css`.
+
 This recipe creates a candidate for strict verification. Image admission, publication and deployment remain separate gates; native amd64 CI and the vulnerability scan must pass before release.

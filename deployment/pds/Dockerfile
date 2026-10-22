@@ -3,6 +3,8 @@
 # hadolint ignore=DL3026
 FROM docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS ui-build
 COPY source.lock.json /source.lock.json
+# P2.24x: the unset.sh theme, appended to upstream's stylesheet before the source is hashed.
+COPY ui/unset-theme.css /unset-theme.css
 ADD --checksum=sha256:706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c0805b0555 https://codeload.github.com/bluesky-social/atproto/tar.gz/a7c8604d876a200a1e4fa4aec83d4189ac4f1c12 /tmp/atproto.tar.gz
 # BuildKit tmpfs keeps source/dependencies out of layers; only /dist survives.
 # See https://docs.docker.com/reference/dockerfile/#run---mounttypetmpfs.
@@ -17,6 +19,7 @@ RUN --mount=type=tmpfs,target=/build,size=4294967296 \
     && tar -xzf /tmp/atproto.tar.gz -C /build \
     && cd /build/atproto-a7c8604d876a200a1e4fa4aec83d4189ac4f1c12 \
     && node -e 'const fs=require("node:fs"),c=require("node:crypto"),a=require("node:assert/strict"),l=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));a.equal(l.source.revision,"a7c8604d876a200a1e4fa4aec83d4189ac4f1c12");a.equal(c.createHash("sha256").update(fs.readFileSync("pnpm-lock.yaml")).digest("hex"),l.source.lockSha256);a.equal(process.versions.node,l.builder.node);a.equal(require("./package.json").packageManager,"pnpm@"+l.builder.pnpm);for(const [p,n,v] of [["packages/pds","@atproto/pds","0.5.37"],["packages/oauth/oauth-provider","@atproto/oauth-provider","0.23.1"],["packages/oauth/oauth-provider-ui","@atproto/oauth-provider-ui","0.10.5"]]){const j=require("./"+p+"/package.json");a.equal(j.name,n);a.equal(j.version,v);}' /source.lock.json \
+    && cat /unset-theme.css >> packages/oauth/oauth-provider-ui/src/style.css \
     && find . -type f -exec sha256sum {} + > /build/source.sha256 \
     && (cd /build && npm pack --cache /build/npm-cache pnpm@11.11.0) \
     && node -e 'const c=require("node:crypto"),fs=require("node:fs"),a=require("node:assert/strict");a.equal("sha512-"+c.createHash("sha512").update(fs.readFileSync("/build/pnpm-11.11.0.tgz")).digest("base64"),process.argv[1]);' "$PNPM_INTEGRITY" \
