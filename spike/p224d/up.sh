@@ -32,10 +32,19 @@ if docker exec pds node -e 'fetch("https://plc.directory").then(()=>process.exit
   exit 1
 fi
 echo "127.0.0.1 pds.test" | sudo tee -a /etc/hosts
-# The upstream policy as the PDS sends it, straight from the internal network, for the comparison test.
+# The upstream policy as the PDS sends it, straight from inside its own container, with the headers a browser sends
+# on a top-level navigation (the provider refuses page requests without them).
 for path in /account "/oauth/authorize?client_id=x"; do
   name="$(echo "$path" | tr -c 'a-z' '_')"
-  docker exec edge wget -S -O /dev/null --header "Host: pds.test" --header "X-Forwarded-Proto: https" \
-    "http://pds:3000$path" 2> "$OUT/upstream-$name.txt" || true
+  docker exec pds node -e '
+    fetch("http://127.0.0.1:3000" + process.argv[1], { headers: {
+      host: "pds.test", "x-forwarded-proto": "https", accept: "text/html",
+      "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "sec-fetch-site": "none", "sec-fetch-user": "?1",
+    } }).then((r) => {
+      console.log(`status: ${r.status}`);
+      console.log(`content-type: ${r.headers.get("content-type")}`);
+      console.log(`content-security-policy: ${r.headers.get("content-security-policy")}`);
+    });' "$path" > "$OUT/upstream-$name.txt"
+  cat "$OUT/upstream-$name.txt"
 done
 ls -l "$OUT"
