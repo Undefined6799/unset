@@ -60,7 +60,7 @@ Every change:
 - **Output.** Escape all user data; `safeHref` for links; keep CSP and security headers intact.
 - **Blobs.** Never send raw `getBlob` URLs to browsers; use the media proxy.
 - **GDPR.** New personal data needs a purpose, a lawful basis, erasure (`eraseDid`) and export.
-- **Ship it.** Typecheck, lint, guards and tests green. Land via PR; Alex approves every PR.
+- **Ship it.** Typecheck, lint, guards and tests green. Land via PR; Delivery's Merging line says who merges.
   Exception: `scripts/guards/docs-only-paths.ts` paths, `kind/docs`, green CI: `docs-auto-merge.yml` squash-merges it, outside D4.
 
 ## UI
@@ -86,8 +86,8 @@ Every change:
   Merges are squash only (title = PR title, body = the commit messages).
 - **D3 PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests, lockfile, generated
   code and lexicon JSON excluded); CI fails above 800 without a `large-pr` label and a reason. Refactoring and
-  behaviour change go in separate commits. Fill the one PR template and self-review against it before asking Alex.
-- **D4 Queue:** at most three agent PRs may wait for Alex at once (severity-1 and -2 fixes excepted). A docs-only PR (the Ship it exception) does not count; `docs-auto-merge.yml` squash-merges it with no Alex approval.
+  behaviour change go in separate commits. Fill the one PR template and self-review against it before hand-off.
+- **D4 Queue:** at most three agent PRs may wait for merge at once (severity-1 and -2 fixes excepted). A docs-only PR (the Ship it exception) does not count; `docs-auto-merge.yml` squash-merges it with no Alex approval.
   Run `gh pr list --state open` before starting a step; if three are waiting, pick up review feedback instead.
 - **D8 Decisions:** anything expensive to reverse (data model, external or lexicon contract, process, role or network
   boundary, runtime dependency, new pattern or top-level folder, security mechanism) gets its own ADR in
