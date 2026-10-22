@@ -44,7 +44,15 @@ const STATEMENT = [
   "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
   "removed on re-pin or before P1.34",
 ].join(" ");
-/** Ids mirror run 38952734875 reported for the pinned PDS image. Nothing else. */
+/** Ids Alex accepted after that run, each with its own statement. */
+const LATER_STATEMENTS: Readonly<Record<string, string>> = {
+  "CVE-2026-111943": [
+    "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
+    "newest upstream release, goat CLI only, never run by the PDS server, accepted by Alex 2026-10-22T12:25:20Z,",
+    "removed on re-pin or before P1.34",
+  ].join(" "),
+};
+/** Ids mirror run 38952734875 reported for the pinned PDS image, plus LATER_STATEMENTS. Nothing else. */
 const PDS_IDS = [
   "CVE-2025-14874",
   "CVE-2025-47913",
@@ -52,6 +60,7 @@ const PDS_IDS = [
   "CVE-2026-102278",
   "CVE-2026-106445",
   "CVE-2026-106446",
+  "CVE-2026-111943",
   "CVE-2026-12151",
   "CVE-2026-13149",
   "CVE-2026-14257",
@@ -120,8 +129,10 @@ describe(".github/trivyignore.pds.yaml", () => {
     expect(entries.map((item) => item.id)).toEqual([...PDS_IDS]);
     for (const item of entries) {
       expect(dayOf(item.expired_at), item.id).toBe("2026-11-13");
-      expect(item.statement, item.id).toBe(STATEMENT);
+      expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id ?? ""] ?? STATEMENT);
       expect((item.paths?.length ?? 0) + (item.purls?.length ?? 0), item.id).toBeGreaterThan(0);
+      // Exact names only: a glob would also cover images nobody reviewed.
+      for (const path of item.paths ?? []) expect(path, item.id).not.toMatch(/[*?[{\\]/);
     }
     // The Caddy Alpine binary's HIGH ids are accepted only on the PDS goat binary.
     for (const id of ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"]) {
