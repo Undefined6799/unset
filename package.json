@@ -35,7 +35,7 @@
     "@biomejs/biome": "2.5.15",
     "@capsizecss/metrics": "4.3.0",
     "@capsizecss/unpack": "4.0.1",
-    "@playwright/test": "1.64.0",
+    "@playwright/test": "1.64.1",
     "@swc/core": "1.16.18",
     "@types/node": "26.6.5",
     "dependency-cruiser": "18.5.0",
