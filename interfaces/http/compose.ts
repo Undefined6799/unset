@@ -213,8 +213,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   });
   // The issuer the OAuth library recorded for a DID at sign-in (its stored token set, read without a refresh). Never a
   // DID-document field (book P2.08 `PdsAccountLink`).
-  const issuerOf = async (did: Did): Promise<string | null> => {
-    const saved = await oauth.sessionStore.get(did);
+  const issuerOf = async (did: Did, signal?: AbortSignal): Promise<string | null> => {
+    const saved = await oauth.sessionStore.get(did, signal === undefined ? undefined : { signal });
     const iss = saved?.tokenSet.iss;
     return typeof iss === "string" ? iss : null;
   };

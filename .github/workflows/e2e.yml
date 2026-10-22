@@ -14,6 +14,27 @@
 # (WebKit; it usually takes under a minute). Each attempt is cut at 4 minutes by coreutils timeout (Ubuntu 24.04,
 # `timeout --kill-after`), tried once more, and the step is capped at 9 minutes (workflow syntax,
 # jobs.<job_id>.steps[*].timeout-minutes), so a stall costs minutes, not the run. A blocked download still fails.
+# P0.07g: the job log named the stall: azure.archive.ubuntu.com served the `--with-deps` packages at a crawl, and the
+# P0.07f retry then failed at once on "Could not get lock /var/lib/dpkg/lock-frontend", held by the first attempt's
+# apt-get, which runs under sudo and outlived the timeout. So apt drops a stalled connection after 20 s and retries a
+# file 3 times (apt-transport-http(1) Acquire::http::Timeout, apt.conf(5) Acquire::Retries, Ubuntu noble), and before
+# the second attempt the orphaned apt-get is killed and waited out (pkill only signals), any dpkg it started is
+# waited for, and dpkg is left configured. SIGKILL cannot be ignored; if it lands mid-install, dpkg keeps running
+# and `dpkg --configure -a` finishes what it began.
+# P0.07h: the mirror still crawled (about 50 KB/s on 2026-10-22, both 4-minute attempts cut), so the browser and the
+# .deb files apt fetched for it are cached (actions/cache v6.1.0, action.yml and README at that tag). The key names the
+# runner image (its ImageVersion variable), the Playwright version and the browser, so a new image or Playwright starts a
+# fresh entry. The default branch's entries are readable from every PR; a PR's own entries only from that PR (README,
+# "Cache scopes"). A hit skips the browser download. apt installs whatever file sits in /var/cache/apt/archives under
+# the expected name and size without checking its hash (tried on Ubuntu 24.04: a flipped byte reached dpkg), so a cached
+# package is handed over only when its SHA256 equals the one in the signed index for that name, architecture and
+# version, and under the name apt looks for, built from those fields (NAME_VERSION_ARCH.deb, the version's ":" as
+# "%3a", as apt names fonts-beng_2%3a1.3_all.deb), so a signed package cannot stand in under another package's name.
+# Anything else is fetched from the mirror. apt.conf(5) APT::Keep-Downloaded-Packages keeps what it fetched.
+# The index refresh before the hand-over is bounded like the install (Codex on #1292): apt's own timeouts, and
+# coreutils timeout run as root so the kill reaches apt-get itself rather than sudo; a refresh that fails or is cut
+# leaves an empty or old index, so nothing is handed over. A failed restore is a miss, so the worst case is today's
+# mirror path.
 
 name: e2e
 
@@ -53,9 +74,50 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+      - name: Name the browser cache (P0.07h)
+        id: cache-name
+        run: |
+          echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      - name: Restore the browser and its apt packages (P0.07h)
+        id: browser-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/apt-archives
+          key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-${{ env.PROJECT }}
+      - name: Hand apt the cached packages that match its signed index (P0.07h)
+        timeout-minutes: 3
+        run: |
+          sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3 > /dev/null || true
+          for deb in "$HOME"/apt-archives/*.deb; do
+            [ -f "$deb" ] || continue
+            name=$(dpkg-deb -f "$deb" Package) || continue
+            arch=$(dpkg-deb -f "$deb" Architecture) || continue
+            version=$(dpkg-deb -f "$deb" Version) || continue
+            want=$(apt-cache show "$name:$arch=$version" 2> /dev/null | sed -n 's/^SHA256: //p' | head -n 1)
+            have=$(sha256sum < "$deb" | cut -d ' ' -f 1)
+            if [ -n "$want" ] && [ "$have" = "$want" ]; then
+              sudo cp "$deb" "/var/cache/apt/archives/${name}_${version//:/%3a}_${arch}.deb"
+            fi
+          done
+      - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9
-        run: timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT" || timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"
+        run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\nAPT::Keep-Downloaded-Packages "true";\n' | sudo tee /etc/apt/apt.conf.d/80-e2e-install > /dev/null
+          attempt() { timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"; }
+          attempt || {
+            sudo pkill -KILL -x apt-get || true
+            while pgrep -x apt-get > /dev/null || pgrep -x dpkg > /dev/null; do sleep 2; done
+            sudo dpkg --configure -a
+            attempt
+          }
+      - name: Keep the packages apt fetched, for the cache (P0.07h)
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/apt-archives"
+          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Run Playwright
@@ -97,9 +159,50 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Install the browser, once more if the first attempt stalls (P0.07f)
+      - name: Name the browser cache (P0.07h)
+        id: cache-name
+        run: |
+          echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      - name: Restore the browser and its apt packages (P0.07h)
+        id: browser-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/apt-archives
+          key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-chromium
+      - name: Hand apt the cached packages that match its signed index (P0.07h)
+        timeout-minutes: 3
+        run: |
+          sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3 > /dev/null || true
+          for deb in "$HOME"/apt-archives/*.deb; do
+            [ -f "$deb" ] || continue
+            name=$(dpkg-deb -f "$deb" Package) || continue
+            arch=$(dpkg-deb -f "$deb" Architecture) || continue
+            version=$(dpkg-deb -f "$deb" Version) || continue
+            want=$(apt-cache show "$name:$arch=$version" 2> /dev/null | sed -n 's/^SHA256: //p' | head -n 1)
+            have=$(sha256sum < "$deb" | cut -d ' ' -f 1)
+            if [ -n "$want" ] && [ "$have" = "$want" ]; then
+              sudo cp "$deb" "/var/cache/apt/archives/${name}_${version//:/%3a}_${arch}.deb"
+            fi
+          done
+      - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
         timeout-minutes: 9
-        run: timeout --kill-after=10s 240s npx playwright install --with-deps chromium || timeout --kill-after=10s 240s npx playwright install --with-deps chromium
+        run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\nAPT::Keep-Downloaded-Packages "true";\n' | sudo tee /etc/apt/apt.conf.d/80-e2e-install > /dev/null
+          attempt() { timeout --kill-after=10s 240s npx playwright install --with-deps chromium; }
+          attempt || {
+            sudo pkill -KILL -x apt-get || true
+            while pgrep -x apt-get > /dev/null || pgrep -x dpkg > /dev/null; do sleep 2; done
+            sudo dpkg --configure -a
+            attempt
+          }
+      - name: Keep the packages apt fetched, for the cache (P0.07h)
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/apt-archives"
+          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
       - name: Build the web app
         run: npm run build -w @unset/apps-web
       - name: Install pa11y and Lighthouse outside the lockfile
