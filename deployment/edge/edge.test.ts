@@ -942,6 +942,8 @@ describe("PDS fonts (P2.24e)", () => {
     const value = '"$1; font-src https://{$PDS_HOST}/_unset/fonts/"';
     expect(siteProblems(snippet(value, '"$1; font-src https://fonts.example/"'))).toEqual([policy]);
     expect(siteProblems(snippet(value, "\"$1; style-src 'unsafe-inline'\""))).toEqual([policy]);
+    // data: fonts, alone or beside the exact path.
+    expect(siteProblems(snippet(value, '"$1; font-src data:"'))).toEqual([policy]);
     expect(siteProblems(snippet("/_unset/fonts/[A-Za-z0-9-]+", "/_unset/fonts/.+"))).toEqual([policy]);
     expect(siteProblems(snippet("root /etc/caddy/static", "root /etc/caddy"))).toEqual([policy]);
     // The placeholder is accepted only inside the exact font-src word, so a wildcard or an extra source never reads.
@@ -949,6 +951,7 @@ describe("PDS fonts (P2.24e)", () => {
       '"$1; font-src https://*.{$PDS_HOST}/_unset/fonts/"',
       "\"$1; font-src https://{$PDS_HOST}/_unset/fonts/ 'unsafe-inline'\"",
       '"$1; font-src https://{$PDS_HOST}/"',
+      '"$1; font-src https://{$PDS_HOST}/_unset/fonts/ data:"',
     ]) {
       expect(() => siteProblems(snippet(value, wider)), wider).toThrow(
         "an environment placeholder must be a whole word",
