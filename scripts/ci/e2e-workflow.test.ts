@@ -180,6 +180,11 @@ describe("browser cache (P0.07h)", () => {
       }
       expect(steps[keep]?.if, id).toBe(`steps.${cache?.id}.outputs.cache-hit != 'true'`);
       expect(steps[install]?.run, id).toContain(`APT::Keep-Downloaded-Packages "true";`);
+      // Codex on #1292: the index refresh before the hand-over must not wait on a stalled mirror past the step.
+      expect(steps[handOver]?.["timeout-minutes"], id).toBe(3);
+      expect(steps[handOver]?.run, id).toContain(
+        "sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3",
+      );
     }
   });
 

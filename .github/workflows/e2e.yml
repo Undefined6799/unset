@@ -31,7 +31,10 @@
 # version, and under the name apt looks for, built from those fields (NAME_VERSION_ARCH.deb, the version's ":" as
 # "%3a", as apt names fonts-beng_2%3a1.3_all.deb), so a signed package cannot stand in under another package's name.
 # Anything else is fetched from the mirror. apt.conf(5) APT::Keep-Downloaded-Packages keeps what it fetched.
-# A failed restore is a miss, so the worst case is today's mirror path.
+# The index refresh before the hand-over is bounded like the install (Codex on #1292): apt's own timeouts, and
+# coreutils timeout run as root so the kill reaches apt-get itself rather than sudo; a refresh that fails or is cut
+# leaves an empty or old index, so nothing is handed over. A failed restore is a miss, so the worst case is today's
+# mirror path.
 
 name: e2e
 
@@ -85,8 +88,9 @@ jobs:
             ~/apt-archives
           key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-${{ env.PROJECT }}
       - name: Hand apt the cached packages that match its signed index (P0.07h)
+        timeout-minutes: 3
         run: |
-          sudo apt-get update -q > /dev/null || true
+          sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3 > /dev/null || true
           for deb in "$HOME"/apt-archives/*.deb; do
             [ -f "$deb" ] || continue
             name=$(dpkg-deb -f "$deb" Package) || continue
@@ -169,8 +173,9 @@ jobs:
             ~/apt-archives
           key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-chromium
       - name: Hand apt the cached packages that match its signed index (P0.07h)
+        timeout-minutes: 3
         run: |
-          sudo apt-get update -q > /dev/null || true
+          sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3 > /dev/null || true
           for deb in "$HOME"/apt-archives/*.deb; do
             [ -f "$deb" ] || continue
             name=$(dpkg-deb -f "$deb" Package) || continue
