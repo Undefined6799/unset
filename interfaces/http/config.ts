@@ -66,7 +66,8 @@ export const loginConfig = {
    * minutes) because it also bounds the revoked-grant window below.
    * On our own PDS, a revoked grant ends every session of the account at the next successful email recheck
    * (EMAIL_RECHECK_S, at most 900 s) or at the next PDS call, whichever comes first. While the PDS can't be reached,
-   * the cached result is kept, and the bound extends until a recheck succeeds. Once P1.36v lands, accounts on other
+   * the cached result is kept for at most 4 × EMAIL_RECHECK_S; past that cap a transient recheck shows the
+   * PDS-unavailable page and ends nothing (P2.11d). Once P1.36v lands, accounts on other
    * PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each recheck; before P1.36v
    * they can sign in, and this bound does not hold for them (P2.11c).
    */

@@ -48,8 +48,7 @@ import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import { createAccountStore } from "./account.ts";
-import type { AppGate } from "./app-gate.ts";
-import { openApp } from "./app-gate.ts";
+import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
 import { policies } from "./limits.ts";
@@ -271,6 +270,12 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     refreshEmail,
     now: () => Date.now(),
     emailRecheckS: cfg.EMAIL_RECHECK_S,
+    unavailablePage: (request) =>
+      pdsUnavailablePage(
+        request,
+        render.screens.verifyEmail({ state: "unavailable", pdsHost: cfg.PDS_HOSTNAME }),
+        page,
+      ),
   };
   const verifyEmail = verifyEmailRoutes({
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,

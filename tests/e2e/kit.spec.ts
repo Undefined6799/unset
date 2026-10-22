@@ -56,6 +56,46 @@ for (const theme of ["dark", "light"] as const) {
       await context.close();
     }
   });
+
+  test(`select_disabled_matches_native ${theme}`, async ({ browser, browserName }) => {
+    const context = await browser.newContext({
+      colorScheme: theme === "dark" ? "light" : "dark",
+      extraHTTPHeaders: { "accept-language": "en", cookie: `__Host-theme=${theme}` },
+    });
+    const page = await context.newPage();
+    try {
+      await openKit(page);
+      // WebKit drops the cookie, so it paints the opposite system scheme. Both cells still cover both themes.
+      if (browserName === "webkit") await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+      else await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      const box = page.getByRole("combobox", { name: "Unavailable" });
+      await expect(box).toHaveAttribute("aria-disabled", "true");
+      const paint = await page.evaluate(() => {
+        const view = globalThis as unknown as {
+          document: { querySelector: (selector: string) => object | null };
+          getComputedStyle: (element: object) => { backgroundColor: string; color: string };
+        };
+        const read = (selector: string) => {
+          const element = view.document.querySelector(selector);
+          if (element === null) return null;
+          const style = view.getComputedStyle(element);
+          return { backgroundColor: style.backgroundColor, color: style.color };
+        };
+        return {
+          disabled: read('[role="combobox"][aria-disabled="true"]'),
+          native: read('select[name="lang-off"]'),
+          enabled: read('[role="combobox"]:not([aria-disabled="true"])'),
+        };
+      });
+      expect(paint.disabled).not.toBeNull();
+      expect(paint.native).not.toBeNull();
+      expect(paint.enabled).not.toBeNull();
+      expect(paint.disabled).toEqual(paint.native);
+      expect(paint.disabled).not.toEqual(paint.enabled);
+    } finally {
+      await context.close();
+    }
+  });
 }
 
 test("tabs_default_arrow_moves_focus", async ({ page }) => {

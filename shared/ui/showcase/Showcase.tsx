@@ -125,7 +125,12 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
       defaultValue="system"
     />
   ),
-  Select: <Select name="lang" label="Language" options={languages} placeholder="pick one" />,
+  Select: (
+    <>
+      <Select name="lang" label="Language" options={languages} placeholder="pick one" />
+      <Select name="lang-off" label="Unavailable" options={languages} defaultValue="en" disabled />
+    </>
+  ),
   Avatar: (
     <p>
       <Avatar name="alex" size={24} /> <Avatar name="alex" /> <Avatar name="alex" size={64} alt="Alex" />{" "}

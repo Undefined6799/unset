@@ -23,6 +23,18 @@ const LIST_MAX = 240;
 /** Letters typed within this many milliseconds of each other make one search. */
 const TYPEAHEAD_MS = 500;
 
+/** True when the select is actually disabled, including one inside a disabled fieldset.
+ * `HTMLSelectElement.disabled` reflects the content attribute (jsdom 30.1.2,
+ * lib/generated/idl/HTMLSelectElement.js `get disabled`; Chrome 156.0.8078.47 agrees).
+ * `:disabled` matches an actually disabled element
+ * (https://html.spec.whatwg.org/multipage/semantics-other.html#selector-disabled, read 2026-10-22).
+ * A form control is disabled inside a disabled fieldset outside its first legend
+ * (https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#concept-fe-disabled).
+ */
+function selectDisabled(element: HTMLSelectElement): boolean {
+  return element.matches(":disabled");
+}
+
 type Native = { element: HTMLSelectElement; options: HTMLOptionElement[] };
 
 /** The first option from `from` on, wrapping round, whose text starts with `query`; -1 when none does. */
@@ -58,7 +70,7 @@ export function SelectListbox({ select }: SelectListboxProps) {
     // area (https://html.spec.whatwg.org/multipage/interaction.html#data-model, 6.6.2, read 2026-10-19).
     const focusBox = (event: Event) => {
       event.preventDefault();
-      if (!element.disabled) box.current?.focus();
+      if (!selectDisabled(element)) box.current?.focus();
     };
     const labels = [...(element.labels ?? [])];
     for (const label of labels) label.addEventListener("click", focusBox);
@@ -72,9 +84,14 @@ export function SelectListbox({ select }: SelectListboxProps) {
 
   if (native === null) return null;
   const { element, options } = native;
+  const disabled = selectDisabled(element);
   const last = options.length - 1;
 
   const pick = (index: number) => {
+    if (selectDisabled(element)) {
+      setOpen(false);
+      return;
+    }
     const option = options[index];
     setOpen(false);
     if (option === undefined || index === chosen) return;
@@ -113,8 +130,10 @@ export function SelectListbox({ select }: SelectListboxProps) {
     " ": () => (open ? pick(active) : show(chosen)),
     Escape: () => setOpen(false),
   };
+  // Read disabled at the event. A later attribute or fieldset change does not render again, and a
+  // boolean captured at render would keep the old state (the label listener already reads it live).
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (element.disabled) return;
+    if (selectDisabled(element)) return;
     if (event.key === "Tab") return open ? pick(active) : undefined;
     if (event.altKey && event.key === "ArrowUp" && open) {
       event.preventDefault();
@@ -133,18 +152,18 @@ export function SelectListbox({ select }: SelectListboxProps) {
       <div
         ref={box}
         role="combobox"
-        tabIndex={element.disabled ? -1 : 0}
+        tabIndex={disabled ? -1 : 0}
         aria-labelledby={element.labels?.[0]?.id || undefined}
         aria-controls={list}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-activedescendant={open ? `${list}-${active}` : undefined}
-        aria-disabled={element.disabled || undefined}
+        aria-disabled={disabled || undefined}
         aria-describedby={element.getAttribute("aria-describedby") ?? undefined}
         aria-invalid={element.getAttribute("aria-invalid") === "true" || undefined}
         className={styles.combobox}
         onKeyDown={onKeyDown}
-        onClick={() => (element.disabled ? undefined : open ? setOpen(false) : show(chosen))}
+        onClick={() => (selectDisabled(element) ? undefined : open ? setOpen(false) : show(chosen))}
         onBlur={() => setOpen(false)}
       >
         {element.options[element.selectedIndex]?.text}
