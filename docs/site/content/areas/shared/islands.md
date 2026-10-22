@@ -22,13 +22,14 @@ The island components on the tree are under `shared/ui/islands/`, not in this pa
 
 Row `shared-islands`: its own folder and npm. No Node built-in. It does not import [ui](../ui/).
 
-Declared in `shared/islands/package.json`:
+Declared in `shared/islands/package.json`, as peer dependencies: the package runs inside its host's one React copy, and the hosts (`apps/web`, `shared/ui`) pin the exact version.
 
-| Dependency | Version |
+| Peer dependency | Range |
 | --- | --- |
-| `react` | 19.3.0 |
+| `react` | ^19.3.0 |
+| `react-dom` | ^19.3.0, optional (only `slot.test.tsx` uses it) |
 
-`react-dom` is a devDependency, 19.3.0.
+The React types come from the root devDependencies.
 
 Who may import `shared/islands/index.ts` is the [shared](../) table, plus row `shared-ui-islands` (the only `shared/ui` edge into this package) and `island-import-boundary`.
 
