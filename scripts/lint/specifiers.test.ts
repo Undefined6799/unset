@@ -91,6 +91,28 @@ test("root_only_packages_only_in_test_files", () => {
   expect(refusal(packages, "scripts/budgets/check.ts", "dependency-cruiser")).toBeUndefined();
 });
 
+test("workspace_peer_dependencies_count_as_declared", () => {
+  // A library workspace that runs inside its host's copy (shared/islands and react) declares it as a peer.
+  const root = tempDir();
+  write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "unset.sh", workspaces: ["shared/*"], peerDependencies: { a: "1" } }),
+  );
+  write(
+    root,
+    "shared/islands/package.json",
+    JSON.stringify({ name: "@unset/shared-islands", peerDependencies: { react: "^19.3.0" } }),
+  );
+  const packages = readPackages(root, (dir) => readdirSync(join(root, dir)).map((name) => `${dir}/${name}`));
+  expect(refusal(packages, "shared/islands/slot.ts", "react")).toBeUndefined();
+  expect(refusal(packages, "shared/islands/slot.ts", "react-dom")).toBe(
+    "a package neither its workspace nor the root package.json declares",
+  );
+  // The root lists no product code, so its peers declare nothing.
+  expect(refusal(packages, "scripts/a.ts", "a")).toBe("a package the root package.json does not declare");
+});
+
 async function cruiseSpecs(from: string, spellings: (root: string) => string[]): Promise<string[]> {
   const root = tempDir();
   write(root, "package.json", JSON.stringify({ name: "unset.sh", private: true }));

@@ -15,7 +15,7 @@ npm run typecheck && npm run lint && npm run guards && npm test
 | `lint` | `biome ci .` | Format and lint. Biome `2.5.15` |
 | `lint` | `depcruise --config scripts/lint/.dependency-cruiser.cjs .` | Import boundaries. dependency-cruiser `18.5.0` |
 | `guards` | `vitest run scripts/guards` | The guards under `scripts/guards/`, including [notes](../docs-rules/) |
-| `test` | `node scripts/test/run.ts` | The test runner below. Vitest `5.0.4`, TypeScript `7.0.2` |
+| `test` | `node scripts/test/run.ts` | The test runner below. Vitest `5.0.5`, TypeScript `7.0.2` |
 
 Versions are the root `devDependencies`.
 

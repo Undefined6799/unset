@@ -79,11 +79,15 @@ keep the grant. P2.08e: compose hands one `sessionLimits` object to both the sto
 `infrastructure/session` stays untouched:
 it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
-deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. Architecture's
-04:15Z ruling: the cookie is single use (the page that reads it clears it), only a bare https origin with no port
-counts, "ours" is string equality with our issuer, and neither the value nor a refusal is logged; anything else falls
-back to our PDS. The account page reads the same `issuerOf` directly. A failed delete is the 503
-`logout.failed`.
+deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. The read has
+its own deadline, `ISSUER_READ_MS`, well below `PG_CONNECT_TIMEOUT_MS`. The session store's `get` ends a checked-out
+query when that signal fires and rejects only after the client is released, so destroying the session does not queue
+behind it (P2.08h). A timeout or error drops the carried issuer and still destroys the session. Architecture's 04:15Z
+ruling, narrowed by P2.08h: the cookie is single use (the page that reads it clears it), only an https origin whose
+host is a DNS name counts (no IP literal, `localhost`, `*.localhost`, trailing dot or non-default port), "ours" is
+string equality with our issuer, and neither the value nor a refusal is logged. Anything else falls back to our PDS
+on the signed-out page; the account page, which reads the same `issuerOf`, shows no link. A failed session delete is
+the 503 `logout.failed`.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The

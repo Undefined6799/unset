@@ -37,6 +37,13 @@ any browser ran it, and a browser report with no specs fails.
 Since P0.07f, each `playwright install --with-deps` runs under `timeout 240s` and once more if that attempt
 fails, in a step capped at 9 minutes: on 2026-10-22 the WebKit install hung to the 30-minute job timeout in 3
 of about 20 runs (#1264, #1274), while it usually takes under a minute.
+Since P0.07g, apt drops a stalled mirror connection after 20 s and retries each file 3 times, and the retry
+first stops the orphaned apt-get: the job log showed azure.archive.ubuntu.com crawling and the P0.07f retry
+failing on the dpkg lock that apt-get still held.
+Since P0.07h, both install jobs cache the browser and the packages apt fetched (actions/cache v6.1.0, keyed on
+the runner image, Playwright version and browser), because the mirror still crawled at about 50 KB/s. apt does
+not hash-check a file already in its archive directory, so a cached package reaches apt only when its SHA256
+matches the signed index.
 Its three jobs pin `actions/setup-node` v7.1.0 (P0.08). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in
 the `a11y` job only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
