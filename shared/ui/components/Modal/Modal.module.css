@@ -2,6 +2,8 @@
    no shadow. */
 @layer components {
   .root {
+    /* The dialog paints ground wherever it sits in the DOM, so its Buttons fill with ground too. */
+    --surface: var(--color-ground);
     box-sizing: border-box;
     width: calc(100% - var(--space-8));
     max-width: 440px;
