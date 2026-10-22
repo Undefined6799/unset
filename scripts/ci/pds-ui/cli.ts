@@ -48,10 +48,13 @@ export async function verifyInputs(
   candidate: Buffer,
   candidateDigest: string,
   artifact: Map<string, Buffer>,
+  /** The config digest the pinned base index names for the platform, for a classic-store base archive. */
+  baseConfig?: string,
 ) {
   await verifySource(source, lock.source);
-  const baseDigest = lock.base.ref.slice(lock.base.ref.lastIndexOf("@") + 1);
-  const result = await compareImages(base, baseDigest, candidate, candidateDigest, lock.base.platform);
+  const pinned = lock.base.ref.slice(lock.base.ref.lastIndexOf("@") + 1);
+  const basePin = baseConfig === undefined ? pinned : { digest: pinned, config: baseConfig };
+  const result = await compareImages(base, basePin, candidate, candidateDigest, lock.base.platform);
   for (const [name, version] of Object.values(PACKAGES)) {
     const path = `app/node_modules/.pnpm/${name.replace("/", "+")}@${version}/node_modules/${name}/package.json`;
     const entry = result.packages.get(path);

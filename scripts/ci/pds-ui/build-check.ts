@@ -6,7 +6,51 @@ import { join } from "node:path";
 import { archive, requireThat, sha256 } from "./archive.ts";
 import { cleanRevision, ROOT, readArtifact, readBounded, verifyInputs } from "./cli.ts";
 import { recipeContract } from "./contract.ts";
+import { manifestConfig, platformManifest } from "./images.ts";
 import { verifySource } from "./verify.ts";
+
+// The runner's classic image store saves the base without its pinned index, so read the index and the platform
+// manifest from the registry (distribution-spec v1.1 pull, anonymous ghcr.io token) and keep the config digest only
+// once each document hashes to the digest that names it.
+function pinnedBaseConfig(
+  ref: string,
+  platform: string,
+  scratch: string,
+  run: (cmd: string, args: string[]) => void,
+): string {
+  const [name, pinned] = ref.split("@") as [string, string];
+  const repository = name.slice("ghcr.io/".length, name.lastIndexOf(":"));
+  requireThat(name.startsWith("ghcr.io/") && /^[a-z0-9-]+\/[a-z0-9-]+$/.test(repository), "unsupported base registry");
+  const fetch = (url: string, output: string, headers: string[]) => {
+    run("curl", [
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--proto",
+      "=https",
+      "--max-time",
+      "60",
+      "--max-filesize",
+      String(1024 * 1024),
+      ...headers.flatMap((header) => ["--header", header]),
+      "--output",
+      join(scratch, output),
+      url,
+    ]);
+    return readBounded(join(scratch, output));
+  };
+  const grant = JSON.parse(
+    fetch(`https://ghcr.io/token?scope=repository:${repository}:pull&service=ghcr.io`, "token.json", []).toString(),
+  ) as { token?: unknown };
+  requireThat(typeof grant.token === "string" && /^[A-Za-z0-9._~+/=-]+$/.test(grant.token), "invalid registry token");
+  const document = (digest: string, accept: string) =>
+    fetch(`https://ghcr.io/v2/${repository}/manifests/${digest}`, `${digest.slice(7)}.json`, [
+      `Authorization: Bearer ${grant.token}`,
+      `Accept: ${accept}`,
+    ]);
+  const manifest = platformManifest(document(pinned, "application/vnd.oci.image.index.v1+json"), pinned, platform);
+  return manifestConfig(document(manifest, "application/vnd.oci.image.manifest.v1+json"), manifest);
+}
 
 async function main(): Promise<void> {
   const lock = recipeContract(ROOT);
@@ -57,6 +101,7 @@ async function main(): Promise<void> {
     run("docker", ["image", "save", "--output", join(scratch, "candidate.tar"), iid]);
     run("docker", ["pull", "--platform", lock.base.platform, lock.base.ref]);
     run("docker", ["image", "save", "--output", join(scratch, "base.tar"), lock.base.ref]);
+    const baseConfig = pinnedBaseConfig(lock.base.ref, lock.base.platform, scratch, run);
     const candidate = readBounded(join(scratch, "candidate.tar"));
     const saved = await archive(candidate);
     const index = JSON.parse(saved.get("index.json")?.data.toString() ?? "");
@@ -68,6 +113,7 @@ async function main(): Promise<void> {
       candidate,
       index.manifests[0].digest,
       readArtifact(join(scratch, "artifact/dist")),
+      baseConfig,
     );
     requireThat(cleanRevision(ROOT) === revision, "checkout changed during build");
     const receipt = {

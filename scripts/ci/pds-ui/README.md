@@ -107,6 +107,12 @@ writes `pds-ui-proof.json` there only after successful native builds and verific
 target to a throwaway directory. Temporary image archives/source/artifacts are removed; the proof remains in CI's
 temporary output and its log. This branch leaves the existing registry/signing process unchanged.
 
+The runner's classic Docker image store keeps only the pulled platform, and `docker image save` writes a manifest of
+its own with uncompressed layers (moby v28.5.2 `image/tarexport/save.go`), so the saved base cannot carry the pinned
+index digest. The driver then reads the pinned index and its platform manifest from ghcr.io, keeps the config digest
+only when each document hashes to the digest that names it, and the verifier requires the saved base to have that
+exact config. Its layers stay bound by the config's diffIDs. The candidate keeps the exact digest rule.
+
 ## Upstream manifest trap
 
 The pinned unmodified output is byte-identical to the official dist but six native manifest hashes are stale:

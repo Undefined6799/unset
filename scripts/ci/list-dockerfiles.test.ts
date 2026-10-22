@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { entryProblems, IGNOREFILES, listDockerfiles } from "./list-dockerfiles.ts";
+import { entryProblems, IGNOREFILES, listDockerfiles, PDS_IGNOREFILE, PDS_RECIPE } from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
@@ -66,8 +66,11 @@ describe("list dockerfiles", () => {
     // The book named {edge, node-app} on 2026-10-07. migrate.Dockerfile has since landed, so this
     // checks the live walk. A later Dockerfile is covered without editing this check (SE-6).
     // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
+    // P2.24t: the one exception is the pds-ui recipe, which reads the PDS image's file.
     expect(IGNOREFILES).toEqual({});
-    for (const image of listed) expect(image.ignorefile, image.name).toBe("/dev/null");
+    for (const image of listed) {
+      expect(image.ignorefile, image.name).toBe(image.dockerfile === PDS_RECIPE ? PDS_IGNOREFILE : "/dev/null");
+    }
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
     const cli = runCli(ROOT, output);
@@ -147,5 +150,65 @@ describe("list dockerfiles", () => {
     const pds = wf.jobs["pds-ui"];
     expect(pds?.steps?.some((step) => step.run === "node scripts/ci/pds-ui/build-check.ts")).toBe(true);
     expect(gate.includes(GH_OPEN)).toBe(false);
+  });
+});
+
+describe("the pds-ui recipe's ignore file (P2.24t)", () => {
+  const BASE =
+    "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4";
+  const BUILDER =
+    "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33";
+  const REVISION = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
+  const ARCHIVE = "706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c0805b0555";
+  const UI = "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist";
+  const lock = JSON.stringify({
+    schema: 1,
+    base: { ref: BASE, platform: "linux/amd64" },
+    builder: { ref: BUILDER, node: "26.10.0", pnpm: "11.11.0" },
+    source: {
+      revision: REVISION,
+      archiveSha256: ARCHIVE,
+      lockSha256: "d56b93f5fe51bbad31919df7039be088e9e61f80f57017a188f02e35f2ca16f8",
+    },
+    uiDirectory: UI,
+  });
+  const recipe = (final: string[]): string =>
+    [
+      `FROM ${BUILDER} AS ui-build`,
+      `ADD --checksum=sha256:${ARCHIVE} https://codeload.github.com/bluesky-social/atproto/tar.gz/${REVISION} /tmp/atproto.tar.gz`,
+      "FROM scratch AS ui-artifact",
+      `FROM ${BASE}`,
+      ...final,
+      "",
+    ].join("\n");
+  const replaceOnly = [`RUN rm -rf /${UI}`, `COPY --from=ui-artifact /dist/ /${UI}/`];
+
+  test("pds_recipe_reads_the_pds_ignorefile_only_while_the_contract_accepts_it", () => {
+    const accepted = tree({
+      "deployment/pds/Dockerfile": recipe(replaceOnly),
+      "deployment/pds/source.lock.json": lock,
+      "deployment/images/node-app.Dockerfile": "FROM scratch\n",
+    });
+    expect(listDockerfiles(accepted).map((image) => [image.dockerfile, image.ignorefile])).toEqual([
+      ["deployment/images/node-app.Dockerfile", "/dev/null"],
+      [PDS_RECIPE, PDS_IGNOREFILE],
+    ]);
+
+    // A recipe that does more than replace the frontend is refused, so it is never scanned with the PDS file.
+    const drifted = tree({
+      "deployment/pds/Dockerfile": recipe([...replaceOnly, "RUN npm install left-pad"]),
+      "deployment/pds/source.lock.json": lock,
+    });
+    expect(() => listDockerfiles(drifted)).toThrow(/exceeds exact distribution replacement/);
+
+    // Without its lock the recipe is no pair, and the contract refuses it.
+    const unpaired = tree({ "deployment/pds/Dockerfile": recipe(replaceOnly) });
+    expect(() => listDockerfiles(unpaired)).toThrow(/regular files/);
+
+    // Another Dockerfile named pds is not the recipe and keeps /dev/null.
+    const namesake = tree({ "deployment/images/pds.Dockerfile": "FROM scratch\n" });
+    expect(listDockerfiles(namesake).map((image) => image.ignorefile)).toEqual(["/dev/null"]);
+
+    for (const root of [accepted, drifted, unpaired, namesake]) rmSync(root, { recursive: true, force: true });
   });
 });

@@ -4472,7 +4472,7 @@ Goal: Task 2 check part: source/image classification, source-input policy, exact
 Done when: Known-bad provider contents, permissions and symlink targets fail; missing entries/assets, version/hash drift and changed runtime config fail. Checks must exercise nonzero inputs. Notes updated or none needed.
 
 ### P2.24c — Build the paired unstyled frontend
-Tags: [SEC]            Depends on: P2.24b            Plan: §5.3; §9; ADR 0027
+Tags: [SEC]            Depends on: P2.24t            Plan: §5.3; §9; ADR 0027
 Where: `deployment/pds/ and image assembly` (one ownership path, its tests/docs)
 Goal: Task 2 build part: resolve the installed dist path and immutable upstream source from the pinned image; lock dependency/source/base/Unset inputs and build unmodified UI first. Copy dist/manifest atomically, with no runtime reinstall.
 Done when: Backend tree/config equality and all four real provider entries/assets pass. No Compose/image admission change yet; record source/version evidence. Notes updated or none needed.
@@ -4572,6 +4572,12 @@ Tags: [ALEX]            Depends on: P2.24, P2.24r            Plan: §5.3; §9; A
 Where: `docs/human/ runbook/features/evidence` (one ownership path, its tests/docs)
 Goal: Task 7 operations: pds-ui runbook, source/version update procedure, complete Figma/flow/accessibility evidence, accepted variances and P2.24 manual SMTP/screens acceptance. Preserve P5.12 production recheck.
 Done when: Typecheck/lint/guards and relevant full browser/integration checks green; no unresolved backend/font/native-flow gate; Alex acceptance linked. UI rollback restores official UI for the same backend, never downgrades account data. Notes updated or none needed.
+
+### P2.24t — Admit the paired recipe to image checks
+Tags: [SEC] [ALEX]            Depends on: P2.24b            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ci/list-dockerfiles.ts` and its test (checks path; book edit 2026-10-20-p224t-paired-recipe-image-checks)
+Goal: The images workflow scans `deployment/pds/Dockerfile` with `.github/trivyignore.pds.yaml` only while the pds-ui contract accepts the pair; every other Dockerfile keeps `/dev/null`. The recipe is the official PDS image with only its frontend replaced, so it carries the findings Alex accepted for that image (P1.33c). No new ids, no later expiry, no scan-export change. The `images.test.ts` half rides P2.24c (SE-6). The id is `t` because outline ids take one letter and a to s are taken.
+Done when: A refused or unpaired recipe fails discovery; a namesake Dockerfile keeps `/dev/null`; Alex's typed line is linked in the PR. Notes updated or none needed.
 
 ### P2.26 — Phase 2 exit
 Tags: (none)            Depends on: P2.23, P2.24, P2.24s, P2.13a, P1.38, P1.29h            Plan: §8 Phase 2 "Exit"; §6.1 gates; §7 "dependency counts recorded at each phase exit"
