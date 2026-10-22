@@ -1,0 +1,28 @@
+# The PDS pages' fonts (P2.24e; ADR 0027; proved by the P2.24d spike, docs/ai/notes/reference/
+# pds-pages-fonts-come-from-edge.md). The PDS writes its page CSP with `default-src 'none'` and no font-src, and serves
+# no asset a browser fetches as a font (@atproto/oauth-provider 0.23.1 dist/lib/write-html.js and
+# dist/router/assets/assets-manifest.js:37), so the edge serves the woff2 files the image copies from shared/ui/fonts
+# and lets HTML pages load them from that one path. Read against Caddy v2.11.7 (modules/caddyhttp/headers/caddyfile.go
+# and headers.go; modules/caddyhttp/fileserver/staticfiles.go). Imported inside the PDS site's route, after the zones
+# and guards and before the upstream: a route runs its directives in the order written.
+(pds-fonts) {
+	# One file name per request, letters, digits and dashes only, so no dot segment or other folder can be named. The
+	# Content-Type is set before file_server, which then keeps it (staticfiles.go:591); security-headers adds nosniff.
+	# file_server answers any method but GET and HEAD with 405 (staticfiles.go:575-581).
+	@pds_font path_regexp ^/_unset/fonts/[A-Za-z0-9-]+\.woff2$
+	header @pds_font Content-Type font/woff2
+	file_server @pds_font {
+		root /etc/caddy/static
+	}
+	# Anything else under the edge's own prefix stops here and never reaches the PDS.
+	respond /_unset/* 404
+	# HTML responses only: append one font-src naming the exact origin and path. `>` defers the replace until the
+	# upstream writes its headers, so every directive, hash and nonce the PDS wrote stays as written; a response with
+	# no CSP gets none (the regexp needs at least one character), and no body is read or rewritten.
+	header {
+		match {
+			header Content-Type text/html*
+		}
+		>Content-Security-Policy "^(.+)$" "$1; font-src https://{$PDS_HOST}/_unset/fonts/"
+	}
+}

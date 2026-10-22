@@ -614,7 +614,11 @@ describe("edge site rules (P1.28f)", () => {
     // fails however it is addressed.
     const route = "\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n";
     const shared = "{$PDS_HOST}: upstream proxied by more than one site";
-    expect(withSites({ "sites/other.caddy": `{$PDS_HOST} {\n${route}}\n` })).toEqual([shared]);
+    // P2.24e: a second PDS site is held to the font rule too.
+    expect(withSites({ "sites/other.caddy": `{$PDS_HOST} {\n${route}}\n` })).toEqual([
+      "{$PDS_HOST}: the route does not import pds-fonts once before its upstream",
+      shared,
+    ]);
     expect(withSites({ "sites/other.caddy": `other.unset.test {\n${route}}\n` })).toEqual([
       "other.unset.test: a literal site address is not loopback",
       "other.unset.test: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream",
@@ -907,6 +911,129 @@ describe("edge site rules (P1.28f)", () => {
   });
 });
 
+describe("PDS fonts (P2.24e)", () => {
+  // The policy the P2.24d spike proved (docs/ai/notes/reference/pds-pages-fonts-come-from-edge.md): woff2 files from
+  // one fixed same-origin path, and one font-src appended to the PDS's HTML CSP. Anything wider fails here.
+  const fonts = read("snippets/pds-fonts.caddy");
+  const site = read("sites/pds.caddy");
+  const snippet = (from: string, to: string) => {
+    const text = fonts.replace(from, to);
+    expect(text).not.toBe(fonts);
+    return { "snippets/pds-fonts.caddy": text };
+  };
+  const pdsSite = (from: string, to: string) => {
+    const text = site.replace(from, to);
+    expect(text).not.toBe(site);
+    return { "sites/pds.caddy": text };
+  };
+  const policy = "the pds-fonts snippet is not the proved font policy";
+
+  test("pds_fonts_append_the_exact_origin_and_path", () => {
+    expect(siteProblems()).toEqual([]);
+    const append = shippedConfig()
+      .snippet("pds-fonts")
+      .flatMap((directive) => directive.block ?? [])
+      .find((directive) => directive.name === ">Content-Security-Policy");
+    expect(append?.args).toEqual(["^(.+)$", "$1; font-src https://pds.unset.test/_unset/fonts/"]);
+  });
+
+  test("pds_fonts_wider_policy_fails", () => {
+    // A remote origin, another path, an extra source or keyword, and another directive.
+    const value = '"$1; font-src https://{$PDS_HOST}/_unset/fonts/"';
+    expect(siteProblems(snippet(value, '"$1; font-src https://fonts.example/"'))).toEqual([policy]);
+    expect(siteProblems(snippet(value, "\"$1; style-src 'unsafe-inline'\""))).toEqual([policy]);
+    expect(siteProblems(snippet("/_unset/fonts/[A-Za-z0-9-]+", "/_unset/fonts/.+"))).toEqual([policy]);
+    expect(siteProblems(snippet("root /etc/caddy/static", "root /etc/caddy"))).toEqual([policy]);
+    // The placeholder is accepted only inside the exact font-src word, so a wildcard or an extra source never reads.
+    for (const wider of [
+      '"$1; font-src https://*.{$PDS_HOST}/_unset/fonts/"',
+      "\"$1; font-src https://{$PDS_HOST}/_unset/fonts/ 'unsafe-inline'\"",
+      '"$1; font-src https://{$PDS_HOST}/"',
+    ]) {
+      expect(() => siteProblems(snippet(value, wider)), wider).toThrow(
+        "an environment placeholder must be a whole word",
+      );
+    }
+  });
+
+  test("pds_fonts_html_only_and_deferred", () => {
+    // Every response, an immediate set in place of the deferred replace, and a CSP on responses without one.
+    expect(siteProblems(snippet("\t\tmatch {\n\t\t\theader Content-Type text/html*\n\t\t}\n", ""))).toEqual([policy]);
+    expect(siteProblems(snippet("text/html*", "*"))).toEqual([policy]);
+    expect(siteProblems(snippet(">Content-Security-Policy", "Content-Security-Policy"))).toEqual([
+      policy,
+      "{$PDS_HOST}: {$PDS_HOST} is outside its position in Content-Security-Policy",
+    ]);
+    expect(siteProblems(snippet('"^(.+)$"', '"^(.*)$"'))).toEqual([
+      policy,
+      "{$PDS_HOST}: {$PDS_HOST} is outside its position in >Content-Security-Policy",
+    ]);
+    // A body rewrite is not a directive the reader knows.
+    expect(() =>
+      siteProblems(snippet("\trespond /_unset/* 404\n", "\trespond /_unset/* 404\n\treplace a b\n")),
+    ).toThrow("directive replace is not allowed in route");
+  });
+
+  test("pds_fonts_imported_once_before_the_upstream", () => {
+    const missing = "{$PDS_HOST}: the route does not import pds-fonts once before its upstream";
+    expect(siteProblems(pdsSite("\t\timport pds-fonts\n", ""))).toEqual([missing]);
+    expect(siteProblems(pdsSite("\t\timport pds-fonts\n", "\t\timport pds-fonts\n\t\timport pds-fonts\n"))).toEqual([
+      missing,
+    ]);
+    const late = site
+      .replace("\t\timport pds-fonts\n", "")
+      .replace(/(\t\timport upstream .*\n)/, "$1\t\timport pds-fonts\n");
+    expect(late).not.toBe(site);
+    expect(siteProblems({ "sites/pds.caddy": late })).toEqual([missing]);
+  });
+
+  test("pds_fonts_no_bypass_outside_the_snippet", () => {
+    // A second way to serve files, a response matcher, or a CSP change anywhere but (pds-fonts) and (strict-csp).
+    const at = "\t\timport pds-fonts\n";
+    expect(siteProblems(pdsSite(at, `${at}\t\tfile_server\n`))).toEqual([
+      "{$PDS_HOST}: serves files outside pds-fonts",
+    ]);
+    expect(siteProblems(pdsSite(at, `${at}\t\theader -content-security-policy\n`))).toEqual([
+      "{$PDS_HOST}: changes a Content-Security-Policy outside pds-fonts",
+    ]);
+    expect(
+      siteProblems(
+        pdsSite(
+          at,
+          `${at}\t\theader {\n\t\t\tmatch {\n\t\t\t\theader Content-Type text/css\n\t\t\t}\n\t\t\t>Content-Security-Policy "^(.+)$" "$1; font-src *"\n\t\t}\n`,
+        ),
+      ),
+    ).toEqual([
+      "{$PDS_HOST}: a response matcher outside pds-fonts",
+      "{$PDS_HOST}: changes a Content-Security-Policy outside pds-fonts",
+    ]);
+    expect(
+      siteProblems(
+        pdsSite("\timport tls\n", '\timport tls\n\theader X-Test "$1; font-src https://{$PDS_HOST}/_unset/fonts/"\n'),
+      ),
+    ).toEqual(["{$PDS_HOST}: {$PDS_HOST} is outside its position in header"]);
+  });
+
+  test("pds_fonts_match_shared_ui", () => {
+    // The image's copies are byte for byte the design sheet's fonts (shared/ui/fonts), licence texts included, and the
+    // Dockerfile copies each file, woff2 to the served path only.
+    const shared = join(EDGE, "..", "..", "shared", "ui", "fonts");
+    const names = readdirSync(join(EDGE, "fonts")).sort();
+    expect(names).toEqual(readdirSync(shared).sort());
+    for (const name of names) {
+      expect(readFileSync(join(EDGE, "fonts", name)).equals(readFileSync(join(shared, name))), name).toBe(true);
+    }
+    const woff2 = names.filter((name) => name.endsWith(".woff2"));
+    expect(dockerfile).toContain(
+      `COPY ${woff2
+        .map((name) => `fonts/${name}`)
+        .sort()
+        .reverse()
+        .join(" ")} /etc/caddy/static/_unset/fonts/\n`,
+    );
+  });
+});
+
 describe("edge image", () => {
   test("edge_from_matches_lock", () => {
     expect(froms(dockerfile)).toEqual([
@@ -1058,7 +1185,15 @@ describe("local stack files (P1.34c)", () => {
         .flatMap((line) => copy(line) ?? [])
         .filter(({ flags }) => !flags.some((flag) => /^--from=/i.test(flag)))
         .flatMap(({ words }) => words.slice(0, -1));
-    expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    expect(sources(dockerfile)).toEqual([
+      "Caddyfile",
+      "snippets/",
+      "sites/pds.caddy",
+      "fonts/SpaceGrotesk-Variable.woff2",
+      "fonts/JetBrainsMono-Variable.woff2",
+      "fonts/OFL-SpaceGrotesk.txt",
+      "fonts/OFL-JetBrainsMono.txt",
+    ]);
     for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
       expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
     }
