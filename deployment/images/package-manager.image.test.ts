@@ -6,7 +6,7 @@
 // kinds.json (P1.29m), so no kind goes unchecked. It builds images, so it lives in an *.image.test.ts file (P1.28r).
 // P1.29p: the same exported filesystem pins each kind's privileges. Every setuid or setgid file and every extended
 // attribute (a file capability is `security.capability`) is on the kind's exact list, and a kind with no list fails.
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   closeSync,
   linkSync,
@@ -41,8 +41,22 @@ const lock = json("bases.lock.json") as Record<string, { ref: string; tag: strin
 const KIND_BY_FINAL_ENTRY = new Map(Object.entries(json("kinds.json") as Record<string, string>));
 /** The mirror list images.test.ts reads (P2.26b), so a final stage on a mirror spelling finds its lock entry. */
 const MIRRORS = json("../mirror.list.json") as { source: string; mirror: string }[];
+// ADR 0027: as in images.test.ts, the accepted pds-ui pair is no generic kind; its own contract and the pds-ui job
+// verify it. A missing or malformed member throws, and every other path keeps every kind check.
+const pairedPds = JSON.parse(
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'const {recipeContract}=await import("./scripts/ci/pds-ui/contract.ts"); console.log(JSON.stringify(recipeContract(process.cwd())));',
+    ],
+    { cwd: join(DEPLOYMENT, ".."), encoding: "utf8" },
+  ),
+);
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
+  .filter((file) => file !== "pds/Dockerfile" || pairedPds === null)
   .sort();
 const built = new Map<string, string>();
 
