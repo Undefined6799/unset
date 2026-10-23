@@ -262,7 +262,9 @@ async function serveTest(): Promise<void> {
         active: "account" as const,
         body: () =>
           render.screens.profile({
+            did: ACCOUNT.did,
             handle: ACCOUNT.handle,
+            verified: true,
             handleUnavailable: false,
             profile: {
               displayName: "Alice",

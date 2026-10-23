@@ -1,11 +1,16 @@
 // The profile layout (Alex 2026-10-23; Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v3 frames 174:1175 and 174:1437):
-// GitHub-style, the avatar, name and short facts in a left column and the member's markdown README on the right.
+// GitHub-style, the avatar, name and short facts in a left column and the member's markdown README on the right. The
+// column follows Alex's 04:04Z mock: the avatar fills it, then name, @handle with [ VERIFIED ], headline, Copy link,
+// and a details list. Name, headline, place, website and README are the member's; handle, tag and DID are not.
 // Shared by the server page and the owner's editing island (ProfileEditor.tsx) so both draw the same markup. The
 // copy comes from the app as `labels`, so it travels as island props like the theme picker's labels.
 import type { ReactNode } from "react";
 import { safeHref } from "../../safe-href.ts";
+import { classNames } from "../../src/class-names.ts";
 import { Avatar } from "../Avatar/Avatar.tsx";
+import { type DescriptionItem, DescriptionList } from "../DescriptionList/DescriptionList.tsx";
 import { Markdown } from "../Markdown/Markdown.tsx";
+import { Tag } from "../Tag/Tag.tsx";
 import styles from "./Profile.module.css";
 
 export type ProfileFieldName = "displayName" | "headline" | "location" | "website" | "readme";
@@ -23,6 +28,11 @@ export type ProfileFieldsView = {
 /** The page's copy (apps/web/src/screens/messages.ts PROFILE, plus the P2.13c set-up card). */
 export type ProfileLabels = {
   readonly handleUnavailable: string;
+  readonly verified: string;
+  readonly details: Readonly<Record<"location" | "website" | "did", string>>;
+  readonly copyLink: string;
+  readonly copied: string;
+  readonly copyFailed: string;
   readonly fields: Readonly<Record<ProfileFieldName, string>>;
   readonly add: Readonly<Record<ProfileFieldName, string>>;
   readonly edit: string;
@@ -46,6 +56,10 @@ export const strings = (value: unknown, keys: readonly string[]) =>
   isRecord(value) && keys.every((key) => typeof value[key] === "string");
 const LABEL_STRINGS = [
   "handleUnavailable",
+  "verified",
+  "copyLink",
+  "copied",
+  "copyFailed",
   "edit",
   "draft",
   "draftBody",
@@ -65,6 +79,7 @@ export const isLabels = (value: unknown): value is ProfileLabels =>
   strings(value, LABEL_STRINGS) &&
   strings(value.fields, FIELDS) &&
   strings(value.add, FIELDS) &&
+  strings(value.details, ["location", "website", "did"]) &&
   strings(value.failed, ["conflict", "invalid", "unavailable", "other"]);
 
 // `field` wraps each editable field: the page shows it as it is, the island adds the pencil and the editor. A field
@@ -76,31 +91,35 @@ function websiteLabel(url: string): string {
   return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
 }
 
+/** A DID short enough for the column, "did:plc:7f3k…tdc9e"; the whole one is its title. */
+function shortDid(did: string): string {
+  return did.length <= 24 ? did : `${did.slice(0, 12)}…${did.slice(-5)}`;
+}
+
 export type ProfileViewProps = {
+  readonly did: string;
   readonly handle: string;
+  /** The handle passed the two-way check; false when it failed or could not run. */
+  readonly verified: boolean;
   readonly handleUnavailable: boolean;
   readonly fields: ProfileFieldsView;
   readonly labels: ProfileLabels;
   readonly field?: FieldSlot;
+  /** The Copy link button; only the island draws one, since copying needs script. */
+  readonly copyLink?: ReactNode;
   /** What the README column shows when there is no README; the app passes its call to action. */
   readonly emptyReadme?: ReactNode;
 };
 
-function Facts({ location, site }: { location: ReactNode | null; site: ReactNode | null }) {
-  return location === null && site === null ? null : (
-    <ul className={styles.facts}>
-      {location === null ? null : <li>{location}</li>}
-      {site === null ? null : <li>{site}</li>}
-    </ul>
-  );
-}
-
 export function ProfileView({
+  did,
   handle,
+  verified,
   handleUnavailable,
   fields,
   labels,
   field = asIs,
+  copyLink = null,
   emptyReadme = null,
 }: ProfileViewProps) {
   const name = fields.displayName === "" ? handle : fields.displayName;
@@ -111,20 +130,30 @@ export function ProfileView({
         {websiteLabel(fields.website)}
       </a>
     );
-  const location = field("location", fields.location === "" ? null : fields.location);
-  const site = field("website", website);
   const headline = field("headline", fields.headline === "" ? null : fields.headline);
+  // A row whose value is null is left out: an empty field on a visitor's view, never on the owner's (it shows "Add").
+  const details: DescriptionItem[] = [
+    { label: labels.details.location, value: field("location", fields.location === "" ? null : fields.location) },
+    { label: labels.details.website, value: field("website", website) },
+    {
+      label: labels.details.did,
+      value: <span title={did}>{shortDid(did)}</span>,
+      mono: true,
+    },
+  ].filter((item) => item.value !== null);
   return (
     <div className={styles.profile}>
       <div className={styles.side}>
-        <Avatar name={name} size={128} />
+        <Avatar name={name} size={128} className={classNames(styles.avatar)} />
         <div className={styles.names}>
           <h1 className={styles.name}>{field("displayName", name)}</h1>
-          {name === handle ? null : <p className={styles.handle}>{handle}</p>}
+          <p className={styles.handle}>{`@${handle}`}</p>
+          {verified ? <Tag status="ok">{labels.verified}</Tag> : null}
         </div>
         {handleUnavailable ? <p>{labels.handleUnavailable}</p> : null}
         {headline === null ? null : <p className={styles.headline}>{headline}</p>}
-        <Facts location={location} site={site} />
+        {copyLink}
+        <DescriptionList items={details} className={classNames(styles.details)} />
       </div>
       <div className={styles.readme}>
         {field("readme", fields.readme === "" ? null : <Markdown source={fields.readme} />) ?? emptyReadme}

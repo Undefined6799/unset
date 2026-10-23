@@ -9,6 +9,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import del from "../../icons/drawings/delete.generated.ts";
 import edit from "../../icons/drawings/edit.generated.ts";
 import show from "../../icons/drawings/show.generated.ts";
+import { classNames } from "../../src/class-names.ts";
 import buttonStyles from "../Button/Button.module.css";
 import { Callout } from "../Callout/Callout.tsx";
 import { IconDrawing } from "../Icon/Icon.tsx";
@@ -27,7 +28,9 @@ import {
 } from "./ProfileView.tsx";
 
 export type ProfileEditorProps = {
+  did: string;
   handle: string;
+  verified: boolean;
   handleUnavailable: boolean;
   fields: ProfileFieldsView;
   labels: ProfileLabels;
@@ -35,7 +38,9 @@ export type ProfileEditorProps = {
 
 export const isProfileEditorProps = (value: unknown): value is ProfileEditorProps =>
   isRecord(value) &&
+  typeof value.did === "string" &&
   typeof value.handle === "string" &&
+  typeof value.verified === "boolean" &&
   typeof value.handleUnavailable === "boolean" &&
   strings(value.fields, FIELDS) &&
   isLabels(value.labels);
@@ -61,11 +66,16 @@ function ActionButton(props: {
   standalone?: boolean;
   disabled?: boolean;
   busy?: boolean;
+  className?: string | undefined;
 }) {
   return (
     <button
       type="button"
-      className={props.standalone ? `${linkStyles.standalone} ${buttonStyles.standalone}` : buttonStyles.root}
+      className={
+        props.standalone
+          ? classNames(linkStyles.standalone, buttonStyles.standalone)
+          : classNames(buttonStyles.root, props.className)
+      }
       onClick={props.onClick}
       disabled={props.disabled}
       aria-busy={props.busy}
@@ -81,6 +91,30 @@ function failure(status: number, failed: ProfileLabels["failed"]): string {
   if (status === 400) return failed.invalid;
   if (status === 503) return failed.unavailable;
   return failed.other;
+}
+
+/** Copies the profile's address; the button says Copied, or Copy failed when the clipboard is missing or refused. */
+function CopyLink({ did, labels }: { did: string; labels: ProfileLabels }) {
+  const [state, setState] = useState<"copy" | "copied" | "failed">("copy");
+  useEffect(() => {
+    if (state === "copy") return;
+    const timer = setTimeout(() => setState("copy"), 1400);
+    return () => clearTimeout(timer);
+  }, [state]);
+  const copy = () => {
+    // The Clipboard API is missing outside a secure context; that fails like a refusal.
+    const link = new URL(`/${did}`, window.location.origin).href;
+    (navigator.clipboard?.writeText(link) ?? Promise.reject()).then(
+      () => setState("copied"),
+      () => setState("failed"),
+    );
+  };
+  const text = { copy: labels.copyLink, copied: labels.copied, failed: labels.copyFailed }[state];
+  return (
+    <ActionButton className={styles.copy} onClick={copy}>
+      {text}
+    </ActionButton>
+  );
 }
 
 function FieldEditor(props: {
@@ -239,7 +273,7 @@ async function post(sent: ProfileFieldsView, failed: ProfileLabels["failed"]): P
   }
 }
 
-export function ProfileEditor({ handle, handleUnavailable, fields, labels }: ProfileEditorProps) {
+export function ProfileEditor({ did, handle, verified, handleUnavailable, fields, labels }: ProfileEditorProps) {
   const [ready, setReady] = useState(false);
   const [published, setPublished] = useState(fields);
   const [history, setHistory] = useState<History>({ list: [fields], at: 0 });
@@ -349,11 +383,14 @@ export function ProfileEditor({ handle, handleUnavailable, fields, labels }: Pro
         </p>
       ) : null}
       <ProfileView
+        did={did}
         handle={handle}
+        verified={verified}
         handleUnavailable={handleUnavailable}
         fields={current}
         labels={labels}
         field={field}
+        copyLink={ready ? <CopyLink did={did} labels={labels} /> : null}
       />
     </>
   );

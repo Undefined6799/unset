@@ -16,8 +16,11 @@ import { PrivacyNotice } from "./welcome/PrivacyNotice.tsx";
 export type { ProfileFieldsView } from "@unset/shared-ui";
 
 export type ProfileProps = {
+  readonly did: string;
   /** displayHandle's text: the verified handle, or `handle.invalid`. */
   readonly handle: string;
+  /** The handle passed the two-way check. */
+  readonly verified: boolean;
   /** The check could not run (an outage), as opposed to the handle failing it. */
   readonly handleUnavailable: boolean;
   readonly privacyNotice?: boolean;
@@ -30,9 +33,9 @@ const EMPTY: ProfileFieldsView = { displayName: "", headline: "", location: "", 
 const { unavailable: _unavailable, ...COPY } = PROFILE;
 const LABELS: ProfileLabels = COPY;
 
-export function Profile({ handle, handleUnavailable, privacyNotice = false, profile }: ProfileProps) {
+export function Profile({ did, handle, verified, handleUnavailable, privacyNotice = false, profile }: ProfileProps) {
   const fields = typeof profile === "object" && profile !== null ? profile : EMPTY;
-  const editor: ProfileEditorProps = { handle, handleUnavailable, fields, labels: LABELS };
+  const editor: ProfileEditorProps = { did, handle, verified, handleUnavailable, fields, labels: LABELS };
   // An unreadable profile is never editable: saving it would overwrite what the PDS holds with blanks.
   const editable = profile !== "unavailable";
   return (

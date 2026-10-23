@@ -51,6 +51,11 @@ const languages = [
 /** The profile's copy for the showcase; the app passes its own (apps/web screens/messages.ts). */
 const PROFILE_LABELS: ProfileLabels = {
   handleUnavailable: "We could not check the handle just now.",
+  verified: "Verified",
+  details: { location: "Location", website: "Website", did: "DID" },
+  copyLink: "Copy link",
+  copied: "Copied",
+  copyFailed: "Copy failed",
   fields: { displayName: "name", headline: "headline", location: "place", website: "website", readme: "README" },
   add: {
     displayName: "Add your name",
@@ -197,7 +202,9 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   ),
   Profile: (
     <ProfileView
+      did="did:plc:ewvi7nxzyoun6zhxrhs64oiz"
       handle="alex.example"
+      verified
       handleUnavailable={false}
       fields={{
         displayName: "Alex",
