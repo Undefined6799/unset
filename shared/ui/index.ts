@@ -32,6 +32,14 @@ export {
 } from "./components/Navigation/Navigation.tsx";
 export type { ThemeChoice, ThemePickerProps } from "./components/Navigation/ThemePicker.tsx";
 export { ThemePickerSlot } from "./components/Navigation/ThemePickerSlot.tsx";
+export type { ProfileEditorProps } from "./components/Profile/ProfileEditor.tsx";
+export { ProfileEditorSlot } from "./components/Profile/ProfileSlot.tsx";
+export {
+  type ProfileFieldsView,
+  type ProfileLabels,
+  ProfileView,
+  type ProfileViewProps,
+} from "./components/Profile/ProfileView.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
