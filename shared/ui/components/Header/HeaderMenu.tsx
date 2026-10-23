@@ -3,16 +3,18 @@
 // focus back on the toggle. Its props are only labels and links, and the schema re-checks every link with safeHref,
 // so a link that is not one never reaches the browser's markup. The action is a link styled as the kit's Button,
 // written out here because Button's module also carries the Icon drawings, which would weigh on every page's island
-// budget; header_action_matches_button keeps the two the same. P2.05p: an action that names a popover is a button
-// that opens that popover over the page with no script (the native popover, as the Navigation drawer uses); the
-// page draws the popover, and the action's href is then only the fallback the page offers elsewhere.
+// budget; header_action_matches_button keeps the two the same. P2.05p: an action that names a dialog is a button
+// that opens that <dialog> as a modal with no script, through the invoker commands `commandfor` and
+// `command="show-modal"` (HTML Living Standard, the button element; MDN marks them Baseline 2025, read 2026-10-23).
+// The page draws the dialog, and the action's href is then only the fallback the page offers elsewhere. React 19.3
+// does not know these attributes, so they are passed through as written.
 import type { KeyboardEvent } from "react";
 import { type HrefScheme, type SafeHref, safeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import buttonStyles from "../Button/Button.module.css";
 import styles from "./Header.module.css";
 
-export type NavLink = { label: string; href: SafeHref; popover?: string };
+export type NavLink = { label: string; href: SafeHref; dialog?: string };
 export type NavItem = NavLink & { current?: boolean };
 
 export type HeaderMenuProps = {
@@ -24,8 +26,8 @@ export type HeaderMenuProps = {
 
 const SCHEMES: readonly HrefScheme[] = ["path", "https:", "http:", "mailto:"];
 
-/** A popover id the page wrote: lowercase words joined by hyphens, nothing a selector or markup could read twice. */
-const POPOVER_ID = /^[a-z]+(?:-[a-z]+)*$/;
+/** A dialog id the page wrote: lowercase words joined by hyphens, nothing a selector or markup could read twice. */
+const DIALOG_ID = /^[a-z]+(?:-[a-z]+)*$/;
 
 const isLink = (value: unknown): value is NavLink => {
   const link = value as Partial<NavLink> | null;
@@ -33,7 +35,7 @@ const isLink = (value: unknown): value is NavLink => {
     typeof link?.label === "string" &&
     typeof link.href === "string" &&
     safeHref(link.href, SCHEMES) !== null &&
-    (link.popover === undefined || (typeof link.popover === "string" && POPOVER_ID.test(link.popover)))
+    (link.dialog === undefined || (typeof link.dialog === "string" && DIALOG_ID.test(link.dialog)))
   );
 };
 
@@ -46,6 +48,9 @@ export const isHeaderMenuProps = (value: unknown): value is HeaderMenuProps => {
     (props.action === undefined || isLink(props.action))
   );
 };
+
+/** The invoker-command attributes that open dialog `id` as a modal; React 19.3 passes unknown lowercase names through. */
+const showModal = (id: string) => ({ commandfor: id, command: "show-modal" });
 
 export function NavLinks({ nav, action }: { nav: readonly NavItem[]; action: NavLink | undefined }) {
   return (
@@ -60,13 +65,13 @@ export function NavLinks({ nav, action }: { nav: readonly NavItem[]; action: Nav
           {item.label}
         </a>
       ))}
-      {action === undefined ? null : action.popover === undefined ? (
+      {action === undefined ? null : action.dialog === undefined ? (
         <a className={buttonStyles.root} href={action.href}>
           <span className={buttonStyles.fill} aria-hidden="true" />
           {action.label}
         </a>
       ) : (
-        <button className={buttonStyles.root} type="button" popoverTarget={action.popover}>
+        <button className={buttonStyles.root} type="button" {...showModal(action.dialog)}>
           <span className={buttonStyles.fill} aria-hidden="true" />
           {action.label}
         </button>

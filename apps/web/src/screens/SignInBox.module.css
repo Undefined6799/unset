@@ -24,7 +24,7 @@
     margin: 0;
   }
 
-  /* A link on the page, a button in the popover (P2.05p): both read as the same text control. */
+  /* A link on the page, a button in the dialog (P2.05p): both read as the same text control. */
   .close {
     padding: 0;
     border: 0;
@@ -41,32 +41,15 @@
   }
 }
 
-/* P2.05p: the same box opened over the page as a native popover. The popover is the whole scrim, centring the box:
-   the UA sheet gives a popover's ::backdrop `pointer-events: none`, so a click on a styled backdrop would reach the
-   page underneath (HTML Living Standard, Rendering, "popover" defaults, read 2026-10-23). A click beside the box
-   lands on the popover itself and changes nothing. Without the Popover API the attribute does nothing, so the box is
-   hidden by @supports and the footer's /login link remains. */
+/* P2.05p: the same box opened over the page as a modal <dialog> (the UA sheet centres a modal dialog in the top
+   layer), leaving a gutter on a phone, over the scrim the Modal uses. The page behind a modal dialog is inert, so its
+   backdrop takes no clicks to the page and focus cannot reach it. */
 @layer screens {
-  .popover {
-    box-sizing: border-box;
-    width: 100%;
-    max-width: none;
-    height: 100%;
-    max-height: none;
-    margin: 0;
-    padding: var(--space-4);
-    border: 0;
+  .dialog {
+    width: calc(100% - 2 * var(--space-4));
+  }
+
+  .dialog::backdrop {
     background-color: var(--color-scrim);
-    place-items: center;
-  }
-
-  .popover:popover-open {
-    display: grid;
-  }
-
-  @supports not selector(:popover-open) {
-    .popover {
-      display: none;
-    }
   }
 }
