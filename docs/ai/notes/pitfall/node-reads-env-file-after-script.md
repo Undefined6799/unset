@@ -10,7 +10,7 @@ importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-21
+checked: 2026-10-23
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and

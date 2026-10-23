@@ -33,7 +33,7 @@ import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
-import { type Deps, type Run, preflight as runPreflight } from "./index.ts";
+import { type Deps, type Run, preflight as runPreflight, SOURCE_LAST_LINE } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
 import { SecretMap } from "./secret-map.ts";
@@ -1514,7 +1514,7 @@ describe("preflight", () => {
     );
     // In Compose's list form a repeated name's last value wins, so a second spelling of a setting is refused.
     const listed = DEV.replace(
-      /    environment:\n      CONFIG_FILE[\s\S]*?      LOG_LEVEL: WARN\n/,
+      / {4}environment:\n {6}CONFIG_FILE[\s\S]*? {6}LOG_LEVEL: WARN\n/,
       "    environment:\n" +
         ["CONFIG_FILE=/tmp/newt.json", "DISABLE_SSH=true", "DISABLE_CLIENTS=true"]
           .concat(["NEWT_METRICS_PROMETHEUS_ENABLED=false", "NEWT_PPROF_ENABLED=false", "LOG_LEVEL=WARN"])
@@ -5339,5 +5339,70 @@ networks:
     for (const args of [[], ["--env", ""], ["--env", "LOCAL"], ["--env", "Prod"], ["--env", "staging"]]) {
       expect(await run(args), JSON.stringify(args)).toEqual(["ERROR --env must be dev, prod or local"]);
     }
+  });
+});
+
+// P1.37y (ADR 0036 Decision 2): under dev with --source, a service may build from the checkout instead of running a
+// lock image; C2 admits the build when C26 passes it and nothing stands beside it. Nothing changes without the flag.
+describe("--source builds staging from the checkout (P1.37y)", () => {
+  const BUILD = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+  const DOCKERFILE = { "deployment/images/node-app.Dockerfile": "FROM scratch\n" };
+  /** A dev stack whose web service is written as `edit` makes it, run with `flags` after the usual arguments. */
+  async function source(
+    edit: (dev: string) => string,
+    flags: string[] = ["--source"],
+    files: Record<string, string> = DOCKERFILE,
+  ) {
+    const { root, file } = stack({
+      compose: edit(DEV),
+      pdsEnv: DEV_ENV,
+      report: PART_A_DONE,
+      networks: DEV_TABLE,
+      files,
+    });
+    return runPreflight(["--env", "dev", "--compose", file, ...flags], { root, run: fakeRun().run, ...fakeFs(root) });
+  }
+  const builtWeb = (dev: string) => dev.replace(`    image: ${WEB}\n`, BUILD);
+
+  test("source_admits_a_build_c26_passes_and_says_so", async () => {
+    const result = await source(builtWeb);
+    expect(failed(result.lines)).toEqual([]);
+    expect(result.lines).toContain("PASS C2 ok");
+    expect(result.lines.at(-1)).toBe(SOURCE_LAST_LINE);
+    expect(result.code).toBe(0);
+    // The flag changes nothing else: C3 to C5 still verify the lock (no UNSIGNED line).
+    expect(result.lines.some((line) => line.startsWith("UNSIGNED"))).toBe(false);
+  });
+
+  test("source_refuses_a_build_beside_an_image", async () => {
+    const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, `$&${BUILD}`));
+    expect(result.lines).toContain("FAIL C2 web has both an image and a build");
+    expect(result.lines.at(-1)).toBe(SOURCE_LAST_LINE);
+  });
+
+  test("source_refuses_a_build_c26_refuses", async () => {
+    // A Dockerfile the images workflow does not scan fails C26, and so C2 under --source.
+    const other = BUILD.replace("deployment/images/node-app.Dockerfile", "deployment/images/node-app.txt");
+    const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, other), ["--source"], {
+      "deployment/images/node-app.txt": "FROM scratch\n",
+    });
+    expect(result.lines).toContain("FAIL C2 web builds from a Dockerfile C26 refuses");
+    expect(failed(result.lines)).toContain("C26");
+  });
+
+  test("without_source_a_build_still_fails_c2_and_no_source_line_prints", async () => {
+    const result = await source(builtWeb, []);
+    expect(result.lines).toContain("FAIL C2 web has a build; dev and prod run only registry images");
+    expect(result.lines).not.toContain(SOURCE_LAST_LINE);
+  });
+
+  test("source_is_dev_only_and_given_once", async () => {
+    const { root, file } = stack({});
+    const run = async (env: string, flags: string[]) =>
+      (await runPreflight(["--env", env, "--compose", file, ...flags], { root, run: fakeRun().run, ...fakeFs(root) }))
+        .lines;
+    expect(await run("prod", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
+    expect(await run("local", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
+    expect(await run("dev", ["--source", "--source"])).toEqual(["ERROR --source may be given once"]);
   });
 });

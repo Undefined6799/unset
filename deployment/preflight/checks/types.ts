@@ -24,6 +24,11 @@ export type Run = (
 
 export type Inputs = WalkInputs & {
   env: Env;
+  /**
+   * `--source` (P1.37y, ADR 0036): under dev only, a service may build from the checkout instead of running a lock
+   * image (C2 admits a build C26 passes); a service that names an image must still name a lock digest.
+   */
+  source: boolean;
   /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
   /** The Compose project directory, `dirname(files[0])`, where every relative path in the stack resolves from. */

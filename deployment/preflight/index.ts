@@ -86,6 +86,8 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
   }
   // A local stack's last word, pass or fail (architecture record 2026-10-12-p129-local-build-preflight, item 2).
   if (local) lines.push(LOCAL_LAST_LINE);
+  // A stack built from the checkout under dev says so on every run, pass or fail (P1.37y; ADR 0036 Decision 2).
+  if (loaded.inputs.source) lines.push(SOURCE_LAST_LINE);
   return { code: failed ? 1 : 0, lines };
 }
 
@@ -110,6 +112,8 @@ const verdict = (outcome: Outcome): string => (outcome.unsigned ? "UNSIGNED" : o
 
 /** The line that ends every `--env local` run: its images are the checkout's own builds, never signed artifacts. */
 export const LOCAL_LAST_LINE = "LOCAL unsigned, local-only stack: never deploy it";
+/** The line that ends every `--env dev --source` run: staging built from its checkout, which no signature covers. */
+export const SOURCE_LAST_LINE = "SOURCE built from the checkout, unsigned: staging only";
 
 /** Child processes with no shell and a bounded output; a spawn error reads as a failed run. */
 const run: Run = (file, args, signal) =>

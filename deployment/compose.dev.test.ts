@@ -36,6 +36,8 @@ const NEWT_SUBNET = "10.250.37.0/29";
 const NEWT_ADDRESS = "10.250.37.2";
 const EDGE_ADDRESS = "10.250.37.3";
 const LOCAL = "compose.local.yaml";
+/** The staging file built from the checkout (P1.37y, ADR 0036): dev's services, five of them built, the rest dev's images. */
+const SOURCE = "compose.dev.source.yaml";
 const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
 const service = (compose: Compose, name: string): Service => {
   const found = compose.services.find((s) => s.name === name);
@@ -150,9 +152,15 @@ describe("compose.dev.yaml (P1.29)", () => {
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
     );
     expect(files).toContain(FILE);
-    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here.
+    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here. The
+    // source file keeps dev's image for what it does not build (compose.dev.source.test.ts holds the rest).
+    const devImages = new Map(dev().services.map((s) => [s.name, s.image]));
     for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
+        if (file === SOURCE && s.build === null) {
+          expect(s.image, `${file} ${s.name}`).toBe(devImages.get(s.name));
+          continue;
+        }
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
         // Every service is built here from a scanned Dockerfile, except a run-only image, named exactly as its lock
         // entry, which the mirror workflow scans (P1.29a).

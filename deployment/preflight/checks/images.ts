@@ -27,7 +27,8 @@ const INDEX_TYPES = [
  * beside a build doesn't hold, since Compose builds the bytes from the checkout (P1.37n; architecture 07:24Z on
  * verify-1079). Under dev that includes migrate, which changes the schema with migration privileges: it is
  * digest-pinned like every other image, and C3 verifies its signature (P1.36r; architecture's section labelled
- * 04:20Z). Only --env local builds.
+ * 04:20Z). Only --env local builds, and dev with --source (P1.37y; ADR 0036 Decision 2): there a service may build
+ * instead, with no image beside it, when C26 passes the build; a service that names an image keeps this rule.
  */
 export const c2: Check = {
   id: "C2",
@@ -37,7 +38,12 @@ export const c2: Check = {
     if (lock === null) return missing(inputs.lockPath);
     const locked = new Set(Object.values(lock).map((entry) => entry.ref));
     for (const { name, image, build } of inputs.compose.services) {
-      if (build !== null) return fail(`${name} has a build; dev and prod run only registry images`);
+      if (build !== null) {
+        if (!inputs.source) return fail(`${name} has a build; dev and prod run only registry images`);
+        if (image !== null) return fail(`${name} has both an image and a build`);
+        if (buildProblem(build, inputs) !== null) return fail(`${name} builds from a Dockerfile C26 refuses`);
+        continue;
+      }
       const match = image === null ? null : OUR_IMAGE.exec(image);
       if (match === null) return fail(`${name} image is not ghcr.io/undefined6799/... by digest`);
       if (!locked.has(`${match[1]}${match[2]}`)) return fail(`${name} image is not in the lock`);

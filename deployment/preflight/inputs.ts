@@ -130,20 +130,21 @@ export const CLI_OPTIONS = {
   env: { type: "string", multiple: true },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
+  source: { type: "boolean", multiple: true },
 } as const;
 const USAGE =
   "usage: --env dev|prod|local --compose <absolute file> [--compose <absolute file>...] " +
-  "[--interpolation-env <absolute file>]";
+  "[--interpolation-env <absolute file>] [--source]";
 
 const ENVS: readonly string[] = ["dev", "prod", "local"] satisfies Env[];
 const isEnv = (value: string | undefined): value is Env => value !== undefined && ENVS.includes(value);
 
-function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
+function parseCli(argv: string[]): { env: Env; source: boolean; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
   // other `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
   const args = argv[0] === "--" ? argv.slice(1) : argv;
   if (args.includes("--")) throw new CannotRun(USAGE);
-  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[] };
+  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[]; source?: boolean[] };
   try {
     ({ values } = parseArgs({ args, options: CLI_OPTIONS, strict: true, allowPositionals: false }));
   } catch {
@@ -153,6 +154,11 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   const [env, ...more] = values.env ?? [];
   if (more.length > 0) throw new CannotRun("--env may be given once");
   if (!isEnv(env)) throw new CannotRun("--env must be dev, prod or local");
+  // --source builds staging from the checkout (P1.37y, ADR 0036 Decision 2): dev only, so prod and local never take it.
+  const sources = values.source ?? [];
+  if (sources.length > 1) throw new CannotRun("--source may be given once");
+  const source = sources.length === 1;
+  if (source && env !== "dev") throw new CannotRun("--source is for --env dev only");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
   // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
   // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
@@ -161,7 +167,7 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
     throw new CannotRun("--compose must be an absolute, normalised path");
   }
-  return { env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
+  return { env, source, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
 }
 
 /**
@@ -300,7 +306,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
   const envFiles = envReader(deps.readEnv ?? readEnvOrNull);
   const environment = deps.environment ?? process.env;
-  const { env, files, envFile } = parseCli(argv);
+  const { env, source, files, envFile } = parseCli(argv);
   refuseWhenSet(composeNames(Object.keys(environment)), environment);
   const { compose, mountedSecrets, interpolated } = loadCompose(files, readText);
   // Compose takes a shell value over the env file (Docker docs, "Interpolation"; compose-go Mapping.Merge).
@@ -341,6 +347,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
   }
   const inputs: Inputs = {
     env,
+    source,
     root: resolve(deps.root),
     projectDir: dirname(files[0] as string),
     compose,

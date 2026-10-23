@@ -20,6 +20,8 @@ npm run local:down
 | --- | --- |
 | `dev:up` | `node deployment/preflight/stack.ts -- up --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `dev:down` | `node deployment/preflight/stack.ts -- down --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
+| `dev:source:up` | `node deployment/preflight/stack.ts -- up --env dev --source --compose deployment/compose.dev.source.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
+| `dev:source:down` | `node deployment/preflight/stack.ts -- down --env dev --source --compose deployment/compose.dev.source.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `local:up` | `node deployment/preflight/stack.ts -- up --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `local:down` | `node deployment/preflight/stack.ts -- down --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 
@@ -28,9 +30,10 @@ npm run local:down
 | `--env` | File | `name` | Services |
 | --- | --- | --- | --- |
 | `dev` | `deployment/compose.dev.yaml` | `unset-dev` | `postgres`, `migrate`, `pds`, `edge`, `web`, `newt` |
+| `dev --source` | `deployment/compose.dev.source.yaml` | `unset-dev` | as `dev`, with `postgres`, `migrate`, `pds`, `edge` and `web` built from the checkout (P1.37y, ADR 0036) |
 | `local` | `deployment/compose.local.yaml` | `unset-local` | `postgres`, `migrate`, `pds`, `edge`, `web`, `pds-token-reader` |
 
-The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`.
+The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`, and `--source` with `dev` only. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`.
 
 ## What the wrapper runs
 
