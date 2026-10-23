@@ -22,7 +22,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "191548c335305cc9e1457e68f744d262f1bd449b5f95fa6fd54ed3de6d19892e"
+        "sha256": "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4"
       }
     ]
   },
@@ -91,7 +91,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "191548c335305cc9e1457e68f744d262f1bd449b5f95fa6fd54ed3de6d19892e"
+        "sha256": "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4"
       }
     ]
   },
@@ -104,7 +104,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "191548c335305cc9e1457e68f744d262f1bd449b5f95fa6fd54ed3de6d19892e"
+        "sha256": "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4"
       }
     ]
   },
@@ -136,6 +136,13 @@
     "variants": [],
     "status": "built"
   },
+  "Markdown": {
+    "sheet": "components/Markdown/README.md",
+    "sheetSha256": "a8165c61eda26ac08a3f5b92d341a049eb3fc45709106f29336e29243051aa91",
+    "props": "MarkdownProps",
+    "variants": [],
+    "status": "built"
+  },
   "MediaFrame": {
     "sheet": "sheet/components/MediaFrame/README.md",
     "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
@@ -152,14 +159,14 @@
   },
   "Navigation": {
     "sheet": "components/Navigation/README.md",
-    "sheetSha256": "31f53b65d56574f71718e8575b39e52c5cb293e588985fdce27834582626392c",
+    "sheetSha256": "562d406c3094dfd83e50ac634da522ec34eeb68df2e7d35425ac71d49f7ca82c",
     "props": "NavigationProps",
-    "variants": ["desktop rail", "phone bar and popup"],
+    "variants": ["left drawer", "phone floating bar"],
     "status": "built",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "191548c335305cc9e1457e68f744d262f1bd449b5f95fa6fd54ed3de6d19892e"
+        "sha256": "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4"
       }
     ]
   },
@@ -273,6 +280,13 @@
     "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
+    "status": "built"
+  },
+  "Profile": {
+    "sheet": "components/Profile/README.md",
+    "sheetSha256": "412787d25daf7d94d771a3644bab7b0cf9794b4dac022aa3214c826ec9d22b0f",
+    "props": "ProfileViewProps",
+    "variants": ["owner editing island"],
     "status": "built"
   }
 }

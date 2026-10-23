@@ -46,14 +46,18 @@ test.describe("javascript disabled", () => {
     // algorithm", focusPreviousElement for a close request).
     test("navigation_popover_without_js", async ({ page }) => {
       await page.goto("/");
-      const toggle = page.locator('button[popovertargetaction="toggle"]');
+      // P2.13e: the floating bar's menu button opens the drawer, and the bar hides while it is open.
+      const bar = page.locator('nav:has(> button[popovertargetaction="toggle"])');
+      const toggle = bar.locator('button[popovertargetaction="toggle"]');
       const panel = page.locator("[popover]");
       await expect(panel).toBeHidden();
       await toggle.press("Enter");
       await expect(panel).toBeVisible();
+      await expect(bar).toBeHidden();
       await expect(panel.getByRole("link", { name: "Settings" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
+      await expect(bar).toBeVisible();
       await expect(toggle).toBeFocused();
     });
 
@@ -69,6 +73,18 @@ test.describe("javascript disabled", () => {
       await summary.press("Enter");
       await expect(menu).not.toHaveAttribute("open");
     });
+  });
+
+  // P2.13e: on desktop the header's menu button opens the drawer and its X closes it, with no script.
+  test("navigation_drawer_without_js", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.locator('header button[popovertargetaction="toggle"]');
+    const panel = page.locator("[popover]");
+    await toggle.click();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Close menu" }).click();
+    await expect(panel).toBeHidden();
   });
 
   // P1.22's test, its theme half (the French half is P1.22b's): the footer form on an app page sets the theme.

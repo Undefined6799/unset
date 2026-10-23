@@ -11,7 +11,7 @@ import { Home } from "./src/screens/Home.tsx";
 import { Legal, type LegalProps } from "./src/screens/Legal.tsx";
 import { Login, type LoginProps } from "./src/screens/Login.tsx";
 import { LoginContinue, type LoginContinueProps } from "./src/screens/LoginContinue.tsx";
-import { Me, type MeProps } from "./src/screens/Me.tsx";
+import { Profile, type ProfileProps } from "./src/screens/Profile.tsx";
 import { SignedOut, type SignedOutProps } from "./src/screens/SignedOut.tsx";
 import { SettingsAccount, type SettingsAccountProps } from "./src/screens/settings/SettingsAccount.tsx";
 import { SettingsProfile, type SettingsProfileProps } from "./src/screens/settings/SettingsProfile.tsx";
@@ -33,7 +33,7 @@ export type {
   LegalProps,
   LoginContinueProps,
   LoginProps,
-  MeProps,
+  ProfileProps,
   SettingsAccountProps,
   SettingsProfileProps,
   SignedOutProps,
@@ -50,7 +50,7 @@ export const screens = {
   login: (props: LoginProps): ReactNode => <Login {...props} />,
   loginContinue: (props: LoginContinueProps): ReactNode => <LoginContinue {...props} />,
   signedOut: (props: SignedOutProps): ReactNode => <SignedOut {...props} />,
-  me: (props: MeProps): ReactNode => <Me {...props} />,
+  profile: (props: ProfileProps): ReactNode => <Profile {...props} />,
   verifyEmail: (props: VerifyEmailProps): ReactNode => <VerifyEmail {...props} />,
   welcomeAge: (): ReactNode => <Age />,
   welcomeTerms: (props: TermsProps): ReactNode => <Terms {...props} />,

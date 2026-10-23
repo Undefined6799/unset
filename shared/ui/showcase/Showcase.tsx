@@ -19,11 +19,13 @@ import { Input } from "../components/Input/Input.tsx";
 import { Kbd } from "../components/Kbd/Kbd.tsx";
 import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
+import { Markdown } from "../components/Markdown/Markdown.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
 import { Modal } from "../components/Modal/Modal.tsx";
 import { Navigation } from "../components/Navigation/Navigation.tsx";
 import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
+import { type ProfileLabels, ProfileView } from "../components/Profile/ProfileView.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
 import { Readme } from "../components/Readme/Readme.tsx";
@@ -47,6 +49,45 @@ const languages = [
 ];
 
 /** One sample per built component, keyed by its inventory name. */
+/** The profile's copy for the showcase; the app passes its own (apps/web screens/messages.ts). */
+const PROFILE_LABELS: ProfileLabels = {
+  handleUnavailable: "We could not check the handle just now.",
+  verified: "Verified",
+  details: { location: "Location", website: "Website", did: "DID" },
+  copyLink: "Copy link",
+  copied: "Copied",
+  copyFailed: "Copy failed",
+  fields: {
+    displayName: "display name",
+    headline: "headline",
+    location: "place",
+    website: "website",
+    readme: "README",
+    links: "links",
+  },
+  add: {
+    displayName: "Display name",
+    headline: "Add a headline",
+    location: "Add a place",
+    website: "Add a website",
+    readme: "Write your README.",
+    links: "Add a link",
+  },
+  edit: "Edit {field}",
+  draft: "Draft",
+  draftBody: "Your changes are not published yet.",
+  revert: "Revert to the published profile",
+  undo: "Undo",
+  redo: "Redo",
+  undoKeys: "Ctrl+Z",
+  redoKeys: "Ctrl+Shift+Z",
+  viewAs: "View as a visitor",
+  publish: "Save",
+  saving: "Saving…",
+  saved: "Saved.",
+  failed: { conflict: "Changed elsewhere.", invalid: "Not saved.", unavailable: "Not answering.", other: "Not saved." },
+};
+
 export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   Button: (
     <>
@@ -194,6 +235,28 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
           ],
         },
       ]}
+  Markdown: (
+    <Markdown
+      source={
+        "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)\n---\n> Quiet software."
+      }
+    />
+  ),
+  Profile: (
+    <ProfileView
+      did="did:plc:ewvi7nxzyoun6zhxrhs64oiz"
+      handle="alex.example"
+      verified
+      handleUnavailable={false}
+      fields={{
+        displayName: "Alex",
+        headline: "Builds quiet software.",
+        location: "Ontario",
+        website: "https://example.com",
+        readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)",
+        links: "https://github.com/alexexample",
+      }}
+      labels={PROFILE_LABELS}
     />
   ),
   Pagination: (
@@ -255,6 +318,7 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   ),
   Navigation: (
     <Navigation
+      menuId="showcase-menu"
       inline
       account={{ href: href("/me"), label: "Your profile" }}
       primary={{ href: href("/"), label: "Home", icon: "home" }}

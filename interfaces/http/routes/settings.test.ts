@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { Did, HandleVerdict } from "@unset/domains-identity";
+import type { ProfileFields } from "@unset/domains-profile";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -25,7 +26,14 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-type World = { signedIn?: boolean; verdict?: HandleVerdict; issuer?: string | null };
+type World = {
+  signedIn?: boolean;
+  verdict?: HandleVerdict;
+  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
+  issuer?: string | null | Error;
+  /** What the member's PDS holds for the profile; absent means no profile yet. */
+  profile?: ProfileFields | null | "unavailable";
+};
 
 function setup(world: World = {}) {
   const opened: string[] = [];
@@ -67,7 +75,12 @@ function setup(world: World = {}) {
         page,
       ),
     screens: web.screens,
-    issuerOf: async () => (world.issuer === undefined ? "https://pds.unset.test" : world.issuer),
+    loadProfile: async () => world.profile ?? null,
+    issuerOf: async () => {
+      const issuer = world.issuer === undefined ? "https://pds.unset.test" : world.issuer;
+      if (issuer instanceof Error) throw issuer;
+      return issuer;
+    },
     pdsIssuer: "https://pds.unset.test",
     log,
   };
@@ -117,8 +130,57 @@ describe("GET /settings/profile", () => {
       { href: "/settings/profile", current: true },
       { href: "/settings/account", current: false },
     ]);
-    expect(html).toContain("Set up your profile");
-    expect(elements(parse(html), "script")).toHaveLength(0);
+    // The side column of the profile page is edited here (Alex 04:29Z): a plain form to POST /profile, back here.
+    const form = elements(parse(html), "form").find((f) =>
+      f.attrs?.some((a) => a.name === "action" && a.value === "/profile"),
+    );
+    expect(form).toBeDefined();
+    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    expect(
+      elements(parse(html), "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value),
+    ).toEqual(["application/json", "module"]);
+  });
+});
+
+describe("Settings › Profile form", () => {
+  const ALICE: ProfileFields = {
+    displayName: "Alice Moreau",
+    headline: "Designer.",
+    location: "Toronto, Ontario",
+    website: "https://alice.example",
+    readme: "## About me",
+    links: "https://github.com/alicem\nhttps://bsky.app/profile/alice",
+  };
+  /** The name and value of each field in the form that posts to /profile. */
+  const fieldsOf = (html: string) => {
+    const form = elements(parse(html), "form").find((f) =>
+      f.attrs?.some((a) => a.name === "action" && a.value === "/profile"),
+    );
+    if (form === undefined) throw new Error("no profile form");
+    return Object.fromEntries(
+      [...elements(form, "input"), ...elements(form, "textarea")].map((el) => {
+        const attr = (name: string) => el.attrs?.find((a) => a.name === name)?.value;
+        return [attr("name"), el.nodeName === "textarea" ? textContent(el) : attr("value")];
+      }),
+    );
+  };
+
+  test("settings_profile_form_is_prefilled_and_leaves_the_readme_out", async () => {
+    const html = await (await setup({ profile: ALICE }).get("/settings/profile")).text();
+    expect(fieldsOf(html)).toEqual({
+      next: "/settings/profile",
+      displayName: "Alice Moreau",
+      headline: "Designer.",
+      location: "Toronto, Ontario",
+      website: "https://alice.example",
+      links: ALICE.links,
+    });
+  });
+
+  test("settings_profile_unreadable_offers_no_form", async () => {
+    const html = await (await setup({ profile: "unavailable" }).get("/settings/profile")).text();
+    expect(html).toContain("We could not load your profile just now");
+    expect(elements(parse(html), "form").some((f) => f.attrs?.some((a) => a.value === "/profile"))).toBe(false);
   });
 });
 
@@ -139,7 +201,9 @@ describe("GET /settings/account", () => {
     expect(values).toEqual(["alice.pds.unset.test", DID]);
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).toContain("Signs this browser out of unset.sh.");
-    expect(elements(document, "form", { method: "post", action: "/logout" })).toHaveLength(1);
+    // One in the page, one in the menu drawer (P2.13e).
+    const main = elements(document, "main")[0];
+    expect(elements(main, "form", { method: "post", action: "/logout" })).toHaveLength(1);
     expect(html).not.toContain("getBlob");
     expect(checked).toEqual([DID]);
   });
@@ -148,6 +212,56 @@ describe("GET /settings/account", () => {
     const html = await (await setup({ issuer: null }).get("/settings/account")).text();
     expect(html).not.toContain("pds.unset.test/account");
     expect(html).toContain("/logout");
+  });
+
+  // Moved from the profile page's tests when the account details moved here (P2.13c; Alex 2026-10-23).
+  test("settings_account_links_a_foreign_recorded_issuer", async () => {
+    // P2.08b: the account link is where a user goes to revoke, so it follows the issuer recorded at sign-in.
+    const html = await (await setup({ issuer: "https://pds.example" }).get("/settings/account")).text();
+    expect(html).toContain('href="https://pds.example/"');
+    expect(html).toContain("your sign-in server (pds.example)");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  async function hidesIssuer(issuer: string, absent: string): Promise<void> {
+    const html = await (await setup({ issuer }).get("/settings/account")).text();
+    expect(html, issuer).not.toContain(absent);
+    expect(html, issuer).not.toContain("your sign-in server");
+    expect(html, issuer).not.toContain("Your account on");
+    expect(html, issuer).not.toContain('href="https://pds.unset.test');
+  }
+
+  test("settings_account_hides_an_ipv4_issuer", () => hidesIssuer("https://198.51.100.1", "198.51.100.1"));
+  test("settings_account_hides_an_ipv6_issuer", () => hidesIssuer("https://[2001:db8::1]", "2001:db8"));
+  test("settings_account_hides_a_localhost_issuer", () => hidesIssuer("https://localhost", "localhost"));
+  test("settings_account_hides_a_localhost_child_issuer", () => hidesIssuer("https://app.localhost", "app.localhost"));
+  test("settings_account_hides_a_trailing_dot_issuer", () => hidesIssuer("https://pds.example.", "pds.example"));
+
+  test("settings_account_hides_a_non_default_port_issuer", async () => {
+    // Only a bare https origin counts (architecture 04:15Z item 2): a port drops the link (P2.08g, verify-1054
+    // mutant 13).
+    const html = await (await setup({ issuer: "https://pds.example:8443" }).get("/settings/account")).text();
+    expect(html).not.toContain("pds.example");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  test("settings_account_lookalike_issuer_is_not_ours", async () => {
+    // "Ours" is string equality with our issuer (architecture 04:15Z item 4). A lookalike gets the plain foreign
+    // link, never the sentence that says it is where the password is typed (P2.08g, verify-1054 mutant 11).
+    for (const lookalike of ["https://evilpds.unset.test", "https://pds.unset.test.example"]) {
+      const html = await (await setup({ issuer: lookalike }).get("/settings/account")).text();
+      expect(html, lookalike).not.toContain("You are going to");
+      expect(html, lookalike).not.toContain(`href="${lookalike}/account"`);
+      expect(html, lookalike).toContain(`href="${lookalike}/"`);
+    }
+  });
+
+  test("settings_account_with_an_unreadable_issuer_still_renders", async () => {
+    const response = await setup({ issuer: new Error("unseal failed") }).get("/settings/account");
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(DID);
+    expect(html).not.toContain('href="https://pds.unset.test');
   });
 
   test("settings_account_handle_unavailable", async () => {

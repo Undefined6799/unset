@@ -138,51 +138,68 @@ describe("signed-out screen", () => {
   });
 });
 
-describe("me screen", () => {
-  const DID = `did:plc:${"a".repeat(24)}`;
-  const OURS = { issuer: "https://pds.example", ours: true };
+describe("profile screen", () => {
+  const ALICE_ID = { did: "did:plc:alice123456789abcdefgh", handle: "alice.pds.example", verified: true };
+  const ALICE = {
+    displayName: "Alice Moreau",
+    headline: "Designer and front-end developer.",
+    location: "Toronto, Ontario",
+    website: "https://alice.example/",
+    readme: "## About me\nI make tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+    links: "https://github.com/alicem",
+  };
 
-  test("me_shows_the_account_and_sign_out", () => {
-    const page = html(screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, ...OURS }));
-    expect(page).toContain("alice.pds.example");
-    expect(page).toContain(`<code>${DID}</code>`);
-    // P2.08d: one sign-out form, for this browser; "Sign out everywhere" is removed.
-    expect(tags(page, "form")).toEqual([{ method: "post", action: "/logout" }]);
-    expect(page).toContain(">Sign out</button>");
-    expect(page).not.toContain('name="confirm"');
-    expect(page).not.toContain("Sign out everywhere");
-    // P2.13c: the Edit profile link, then the account link.
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/account"]);
-    expect(page).toContain(">Your account on pds.example<svg");
-    expect(page).not.toContain("could not check your handle");
-    expect(page).not.toContain("<script");
+  test("profile_shows_the_name_facts_and_readme", () => {
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: ALICE }));
+    expect(page).toContain(">Alice Moreau</h1>");
+    expect(page).toContain(">@alice.pds.example</p>");
+    expect(page).toContain("Verified");
+    expect(page).toContain("Toronto, Ontario");
+    expect(page).toContain('title="did:plc:alice123456789abcdefgh"');
+    expect(tags(page, "a").map((a) => a.href)).toEqual([
+      "https://alice.example/",
+      "https://github.com/alicem",
+      "https://alice.example/tidy",
+    ]);
+    expect(page).toContain(">About me</h2>");
+    // No sign-out here: the account details are on Settings › Account (P2.13c).
+    expect(tags(page, "form")).toEqual([]);
+    expect(page).not.toContain("<code>");
+    // The owner's editing island hydrates over the same markup; its server render has no pencils or draft box.
+    expect(page).toContain('data-island="profile-editor"');
+    const markup = page.replace(/<script[^>]*>[^<]*<\/script>/g, "");
+    expect(markup).not.toContain("Edit display name");
+    expect(markup).not.toContain("Draft");
   });
 
-  test("me_links_the_recorded_foreign_issuer", () => {
-    // P2.08b: the account link follows the issuer recorded at sign-in, so an account on another PDS is sent there.
+  test("profile_without_one_published_is_the_editor_on_an_empty_page", () => {
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: null }));
+    expect(page).toMatch(/<h1[^>]*><span[^>]*>Display name<\/span><\/h1>/);
+    expect(page).toContain('data-island="profile-editor"');
+  });
+
+  test("profile_never_links_an_unsafe_website", () => {
+    const profile = { ...ALICE, website: "javascript:alert(1)", readme: "", links: "javascript:alert(2)" };
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile }));
+    expect(page).not.toContain('href="javascript:');
+    expect(tags(page, "a").map((a) => a.href)).toEqual([]);
+  });
+
+  test("profile_says_when_it_could_not_be_loaded", () => {
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: "unavailable" }));
+    expect(page).toContain("We could not load your profile just now.");
+  });
+
+  test("profile_says_when_the_handle_could_not_be_checked", () => {
     const page = html(
-      screens.me({
-        handle: "alice.pds.example",
-        did: DID,
-        handleUnavailable: false,
-        issuer: "https://pds.example",
-        ours: false,
+      screens.profile({
+        did: ALICE_ID.did,
+        handle: "handle.invalid",
+        verified: false,
+        handleUnavailable: true,
+        profile: null,
       }),
     );
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/"]);
-    expect(page).toContain("your sign-in server (pds.example)");
-    expect(page).not.toContain("only place you type your password");
-  });
-
-  test("me_without_a_recorded_issuer_shows_no_account_link", () => {
-    const page = html(
-      screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, issuer: null, ours: false }),
-    );
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile"]);
-  });
-
-  test("me_says_when_the_handle_could_not_be_checked", () => {
-    const page = html(screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, ...OURS }));
     expect(page).toContain("handle.invalid");
     expect(page).toContain("We could not check your handle just now");
   });

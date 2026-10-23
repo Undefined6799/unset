@@ -3,6 +3,7 @@
 // (session, then onboarding, then a confirmed email) before it reads anything, and is private, no-store and varies on
 // Cookie like every app page (pageResponse, P1.22).
 import { type Did, displayHandle, type HandleVerdict } from "@unset/domains-identity";
+import type { ProfileFields } from "@unset/domains-profile";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { OpenedApp } from "../app-gate.ts";
@@ -20,6 +21,8 @@ export type SettingsDeps = {
   issuerOf: (did: Did) => Promise<string | null>;
   /** Our PDS's issuer origin, to tell our sign-in server from another. */
   pdsIssuer: string;
+  /** The member's published profile; null when there is none yet, "unavailable" when the PDS did not answer. */
+  loadProfile: (did: Did, deadline: AbortSignal) => Promise<ProfileFields | null | "unavailable">;
   log: Logger;
 };
 
@@ -37,7 +40,7 @@ export function settingsRoutes(deps: SettingsDeps): Route[] {
       request,
       title,
       body,
-      islands: "off",
+      // Islands on (the default): the menu drawer's theme picker hydrates so a choice leaves it open (P2.13e).
       shell: { noindex: true, navigation: { active: "settings", accountPath: `/${opened.session.did}` } },
     });
 
@@ -53,7 +56,9 @@ export function settingsRoutes(deps: SettingsDeps): Route[] {
     appRoute(PROFILE, async ({ request, deadline }) => {
       const opened = await deps.open(request, deadline, PROFILE);
       if (opened instanceof Response) return opened;
-      const body = deps.screens.settingsProfile({ privacyNotice: opened.privacyNotice });
+      // The side column of the profile page is edited here (Alex 2026-10-23 04:29Z); the form posts to POST /profile.
+      const profile = await deps.loadProfile(opened.session.did, deadline);
+      const body = deps.screens.settingsProfile({ privacyNotice: opened.privacyNotice, profile });
       return settingsPage(request, opened, "Profile", body);
     }),
     appRoute(ACCOUNT, async ({ request, deadline }) => {

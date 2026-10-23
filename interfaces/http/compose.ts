@@ -20,7 +20,7 @@ import {
   resolveHandle,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { toProfileRecord } from "@unset/domains-profile";
+import { readProfileRecord, toProfileRecord } from "@unset/domains-profile";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
@@ -28,6 +28,7 @@ import {
   createIdentityNetwork,
   createOAuthClient,
   createPdsCall,
+  loadProfileRecord,
   respondToPdsFailure,
   type SavedSession,
   saveProfileRecord,
@@ -326,8 +327,17 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsIssuer,
     log,
   };
-  const settings = settingsRoutes(accountDeps);
-  const me = meRoutes(accountDeps);
+  const loadProfile = async (did: Did, deadline: AbortSignal) => {
+    const stored = await loadProfileRecord(
+      pds.pdsCall,
+      { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 },
+      did,
+    );
+    if (stored.kind !== "ok") return "unavailable" as const;
+    return stored.value === null ? null : readProfileRecord(stored.value.value);
+  };
+  const settings = settingsRoutes({ ...accountDeps, loadProfile });
+  const me = meRoutes({ ...accountDeps, loadProfile });
   const profile = profileRoutes({
     open: accountDeps.open,
     saveProfile: async (did, fields, deadline) => {
