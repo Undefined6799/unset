@@ -2737,6 +2737,21 @@ Reuse: graphify → USE (plan §7 names it; the prototype graphed every package 
 Not in this step: graph-based review bots or blocking on graph metrics (none planned).
 Diagram: none.
 
+### P2.08s — Ask about the PDS after signing out
+Tags: (none)            Depends on: P2.08b
+Alex, 2026-10-23 13:15Z: "it could be only one sign out button. But then when you click sign out, it also says, do
+you also wish to sign out from your @Proto account? And then it redirects them towards the other one."
+
+**What:** No route change: the one Sign out (POST /logout, P2.08) still ends this browser's session and lands on
+/signed-out. That page becomes one box in the sign-in box's look: "You are signed out of unset", then "Also sign out
+of your atproto account? Apps you allowed stay signed in until you remove them there.", the P2.08b account link to
+the recorded issuer, and "No thanks" home. The second sentence is there because the PDS's own sign-out
+(`@atproto/oauth-provider` 0.23.1, `/sign-out` → `removeDeviceAccount`) ends only that browser's PDS session; each
+app's OAuth grant is revoked separately (`/revoke-oauth-session`). The page keeps its shell: the page the visitor
+signed out from needs a session, so there is no page to stay on.
+
+Done when `signed_out_is_one_box_asking_about_the_pds` and `signed_out_page` pass and check is green.
+
 ### P2.09k — `pds-admin` egress policy in `net-guard` (split from P2.09, SE-6)
 Tags: [SEC]            Depends on: P1.18a            Plan: §2 rule 13 (one egress); §5.2 "`pds-admin`"; §9 trusted base (rule SE-6; plan `6275827`)
 Where: `infrastructure/net-guard/src/policies.ts` + its test
