@@ -545,7 +545,7 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 | Data access | ≤5 queries per request path and no PDS round trip the path does not need: one for a read, and for publish exactly the writes the step names (the blob uploads, then one `applyWrites` with `swapCommit` and a CID compare, P2.22), never a call inside a loop; a query inside a loop fails review; each index is created with the query it serves in its migration comment; a cache, index or denormalisation added for speed carries before-and-after p50/p95/p99 in its PR (review against the engineering rules, 2026-10-04, rule PF-1) |
 | All pages | CSS ≤52 KB unminified and ≤12 KB min+gzip per bundle; fonts ≤120 KB, two files, preloaded, `size-adjust` fallbacks |
 | `/@handle` | **0 bytes of JS**; HTML ≤30 KB gzipped |
-| App pages | JS ≤75 KB gzipped total, ≤15 KB per island |
+| App pages | JS ≤80 KB gzipped total (Alex raised it from 75 KB on 2026-10-23 for the menu drawer's theme picker), ≤15 KB per island |
 | Images | AVIF+WebP; avatar ≤20 KB, poster ≤30 KB, explicit `aspect-ratio` |
 | Feed clip | first frame ≤1 s after viewport entry; 360p ≤1.2 Mbps, 720p ≤3 Mbps, keyframe 2 s, faststart (ffprobe in the pipeline test) |
 | Chat origin | cold load ≤3.5 MB gzipped, first room list ≤3 s warm and ≤15 s cold |
