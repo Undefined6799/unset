@@ -1,4 +1,4 @@
-<!-- One step per PR. Fill every heading; write n/a where it does not apply. Self-review against this before asking Alex. -->
+<!-- One step per PR. Fill every heading; write n/a where it does not apply. Self-review against this before hand-off. -->
 
 ## Step
 <!-- The step id, a link to it in docs/ai/book/, and why this step now. -->
