@@ -27,14 +27,17 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
 
 ## 1. Contain (minutes)
 
-Steps 1 and 2 apply once P2.16, P3.16c and P3.20a land. No automatic check, legal hold or admin hold view exists yet
-(the admin service serves only `GET /health`). Until they land, nothing blocks or seals the item for you. How to
-contain by hand today is a decision for Alex. It is not filled in here.
+No automatic check, legal hold or admin hold view exists yet. The admin service serves only `GET /health`
+(`interfaces/admin/routes.manifest.json`; `interfaces/admin/compose.ts` passes `routes: []`; `shared/http/server.ts`
+adds `GET /health`). Nothing on main blocks an item, seals it or freezes uploads. How to contain by hand today is a
+decision for Alex. It is not filled in here. Each later capability belongs to the step that builds it
+(`docs/ai/PLAN.md` §5.8):
 
-1. After those steps have landed: the item is already blocked and sealed under the legal hold by the pipeline (a
-   match or a "suspected" verdict blocks it; plan §5.8). Confirm in the admin panel that the hold exists; do not
-   open the media.
-2. After those steps have landed: freeze the uploader's uploads. Never freeze the reporter's account.
+1. A matched image is blocked, and that uploader's uploads are frozen, by P2.16 (plan §5.8 names the freeze). That
+   step creates no legal-hold record. Never freeze the reporter's account.
+2. The sealed legal-hold record, and the owner-only admin view of its metadata, are P4.07. An image match reaches
+   that record through P5.07b. A suspected item is blocked and sealed on the P4.07 path. P3.16c supplies the
+   preserve verbs only. P3.20a shows delete holds, not legal holds. Do not open the media.
 3. Note the time you were alerted. The reporting steps in sections 2 and 3 run "as soon as feasible" from here; the
    preservation clock in section 4 starts later: it counts from the day after the notice is made (to police today; to
    the law enforcement body the regulations designate once C-16 commences).
