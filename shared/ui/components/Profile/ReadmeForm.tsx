@@ -35,7 +35,7 @@ export function ReadmeForm({ document, labels, placeholder, children }: ReadmeFo
         <div data-readme-editor-mount>{children ?? <p className={styles.placeholder}>{placeholder}</p>}</div>
         <button
           type="button"
-          className={styles.pencil}
+          className={`${styles.pencil} ${styles.readmePencil}`}
           aria-label={labels.edit}
           title={labels.edit}
           hidden

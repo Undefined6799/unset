@@ -6,10 +6,16 @@ export const EDITOR = {
   styles: { bold: "Bold", italic: "Italic", underline: "Underline", strike: "Strike", code: "Code" },
   /** The short marks on the toolbar's buttons; the words above are their accessible names. */
   marks: { bold: "B", italic: "I", underline: "U", strike: "S", code: "</>" },
+  blockType: "Block type",
+  link: "Link",
+  linkMark: "Link",
+  linkUrl: "Link address",
+  linkApply: "Apply",
   slashMenu: "Blocks",
   noMatch: "No block matches",
   addBlock: "Add a block below",
-  dragBlock: "Drag to move this block",
+  blockMenu: "Drag to move, or click for this block's menu",
+  deleteBlock: "Delete",
   blocks: {
     paragraph: "Text",
     heading1: "Heading 1",

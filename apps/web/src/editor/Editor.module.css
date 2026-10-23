@@ -1,7 +1,8 @@
 /* The owner's README editor (ADR 0037 point 5). BlockNote's own stylesheet is not loaded: these rules lay out the
    blocks it renders (attribute selectors on its markup, @blocknote/core 0.56.0: .bn-block-group > .bn-block-outer >
    .bn-block > .bn-block-content[data-content-type]) with the sheet's tokens, so the editor reads like the README a
-   visitor sees (shared/ui Readme). Menus sit on surface-raised with a line-strong edge and the menu shadow. */
+   visitor sees (shared/ui Readme). Menus are the sheet's level 3 (README Elevation): ground, a 1px line-strong edge, radius-sm and
+   shadow-menu at z-menu; the hovered or keyboard-active row fills line, as Select's options do. */
 @layer screens {
   .editor {
     --editor-placeholder: "";
@@ -17,25 +18,75 @@
   }
 
   .editor :global(.ProseMirror) {
-    outline: none;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     word-break: normal;
+  }
+
+  /* Where the editing is (Alex 2026-10-23 23:22Z: "hard to find where the line is"), drawn so the text keeps the
+     README's exact size and place (23:25Z: the box we edit in is the one that is viewed): an outline around the text,
+     which takes no room, the block under the pointer on surface-raised, and an ink bar beside the caret's block
+     (CurrentLine). */
+  .editor :global(.ProseMirror) {
+    border-radius: var(--radius-xs);
+    outline: 1px solid var(--color-line-strong);
+    outline-offset: var(--space-2);
+    caret-color: var(--color-ink);
+  }
+
+  .editor :global(.ProseMirror-focused) {
+    outline: 2px solid var(--color-focus);
+  }
+
+  .editor [data-node-type="blockContainer"]:hover > [data-content-type] {
+    background: var(--color-surface-raised);
+  }
+
+  /* The caret's line (menus.tsx CurrentLine): an ink bar between the outline and the text. */
+  .currentLine {
+    position: absolute;
+    left: calc(var(--space-12) + var(--space-6) - var(--space-1));
+    z-index: var(--z-card);
+    width: 2px;
+    background: var(--color-ink);
+    pointer-events: none;
+  }
+
+  .currentLine[hidden] {
+    display: none;
   }
 
   .editor [data-node-type="blockGroup"] [data-node-type="blockGroup"] {
     margin-left: var(--space-6);
   }
 
+  /* Spacing as the README draws it (shared/ui Readme): blocks space-3 apart, and the items of one list touching. */
+  .editor [data-node-type="blockGroup"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
   .editor [data-node-type="blockOuter"] {
-    margin-block: var(--space-2);
+    margin: 0;
+  }
+
+  .editor
+    [data-node-type="blockOuter"]:has(> * > [data-content-type="bulletListItem"])
+    + [data-node-type="blockOuter"]:has(> * > [data-content-type="bulletListItem"]),
+  .editor
+    [data-node-type="blockOuter"]:has(> * > [data-content-type="numberedListItem"])
+    + [data-node-type="blockOuter"]:has(> * > [data-content-type="numberedListItem"]),
+  .editor
+    [data-node-type="blockOuter"]:has(> * > [data-content-type="checkListItem"])
+    + [data-node-type="blockOuter"]:has(> * > [data-content-type="checkListItem"]) {
+    margin-top: calc(-1 * var(--space-3));
   }
 
   .editor [data-content-type] {
     display: flex;
     gap: var(--space-2);
     font-size: var(--type-body-size);
-    line-height: var(--type-body-line);
   }
 
   .editor [data-content-type] :is(p, h1, h2, h3, blockquote, pre) {
@@ -63,20 +114,56 @@
     font-weight: var(--type-heading-3-weight);
   }
 
+  /* List text starts space-6 in, as the README's list padding puts it; the marker sits in that room. */
+  .editor :is([data-content-type="bulletListItem"], [data-content-type="numberedListItem"]) {
+    position: relative;
+    padding-left: var(--space-6);
+  }
+
   .editor [data-content-type="bulletListItem"]::before {
     content: "•";
+    position: absolute;
+    left: var(--space-2);
     color: var(--color-ink-muted);
   }
 
   .editor [data-content-type="numberedListItem"]::before {
     content: attr(data-index) ".";
+    position: absolute;
+    left: 0;
     color: var(--color-ink-muted);
     font-variant-numeric: tabular-nums;
   }
 
-  .editor [data-content-type="checkListItem"][data-checked="true"] p {
+  /* A check item reads "[×] text" as the README draws it; the real checkbox lies over the mark, unseen, to take the
+     click. */
+  .editor [data-content-type="checkListItem"] {
+    position: relative;
+  }
+
+  .editor [data-content-type="checkListItem"]::before {
+    content: "[ ]";
+    font-family: var(--font-mono);
     color: var(--color-ink-muted);
-    text-decoration: line-through;
+  }
+
+  .editor [data-content-type="checkListItem"][data-checked="true"]::before {
+    content: "[×]";
+  }
+
+  .editor [data-content-type="checkListItem"] > [contenteditable="false"] {
+    display: contents;
+  }
+
+  .editor [data-content-type="checkListItem"] input[type="checkbox"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3ch;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
   }
 
   .editor [data-content-type="quote"] blockquote {
@@ -121,15 +208,27 @@
     display: flex;
     margin: 0;
     padding: var(--space-1);
-    background-color: var(--color-surface-raised);
+    background-color: var(--color-ground);
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-menu);
   }
 
+  /* The "/" menu, laid out like BlockNote's (@blocknote/react 0.56.0 SuggestionMenu): grouped, each item a glyph
+     tile, its title over a muted subtext, and its shortcut on the right. */
   .menu {
     flex-direction: column;
-    min-width: 12rem;
+    width: 20rem;
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+
+  .group {
+    padding: var(--space-2) var(--space-3) var(--space-1);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    text-transform: uppercase;
   }
 
   .option,
@@ -140,11 +239,65 @@
   }
 
   .option {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    border-radius: var(--radius-xs);
     cursor: pointer;
   }
 
+  .option:hover,
   .option[aria-selected="true"] {
-    background-color: var(--color-surface-sunken);
+    background-color: var(--color-line);
+  }
+
+  .glyph {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: var(--space-8);
+    height: var(--space-8);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-raised);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+  }
+
+  .label {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .subtext {
+    color: var(--color-ink-muted);
+    font-size: var(--type-label-size);
+  }
+
+  /* Shortcut keys as the sheet's Kbd (shared/ui Kbd.module.css): one box per key, 6px apart. */
+  .keys {
+    display: flex;
+    flex: none;
+    gap: calc(var(--space-1) * 1.5);
+  }
+
+  .key {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 var(--space-1);
+    border: 1px solid var(--color-line-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-xs);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
   }
 
   .empty {
@@ -153,7 +306,15 @@
 
   .handle {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  /* Under the handle's two buttons, in the handle's own flow. */
+  .handle > .blockMenu {
+    position: static;
+    flex-basis: 100%;
+    min-width: 10rem;
   }
 
   .tool {
@@ -171,11 +332,110 @@
 
   .tool[aria-pressed="true"],
   .tool:hover {
-    background-color: var(--color-surface-sunken);
+    background-color: var(--color-line);
   }
 
   .tool:focus-visible {
     outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .tool:disabled {
+    color: var(--color-ink-muted);
+    cursor: default;
+  }
+
+  /* The toolbar's block type menu, its dividers and its link field (BlockNote's FormattingToolbar layout). */
+  .toolbar {
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .typePicker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Its static place, under the button in the picker's column, is where it opens. The handle's block menu opens
+     the same way under the handle. */
+  .typeMenu,
+  .blockMenu {
+    position: absolute;
+    margin-top: var(--space-1);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    padding: var(--space-1);
+    background-color: var(--color-ground);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-menu);
+  }
+
+  .typeItem {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: var(--color-ink);
+    font: inherit;
+    font-size: var(--type-body-small-size);
+    text-align: left;
+    text-transform: none;
+    justify-content: flex-start;
+    cursor: pointer;
+  }
+
+  .typeItem:hover,
+  .typeItem:focus-visible {
+    background-color: var(--color-line);
+  }
+
+  .typeItem:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* The chosen block type is marked → in success, as Select marks its chosen option. */
+  .chosen {
+    width: 1ch;
+    color: var(--color-success);
+    font-family: var(--font-mono);
+  }
+
+  .divider {
+    align-self: stretch;
+    width: 1px;
+    margin-block: var(--space-1);
+    background-color: var(--color-line);
+  }
+
+  /* The link field as the sheet's Input: 1px line-strong, radius-sm, mono 14px, the 2px focus outline. */
+  .linkField {
+    box-sizing: border-box;
+    width: 16rem;
+    height: 32px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+  }
+
+  .linkField:hover {
+    border-color: var(--color-ink-muted);
+  }
+
+  .linkField:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
   }
 
   .handle .tool[draggable="true"] {

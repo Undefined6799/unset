@@ -3,14 +3,25 @@
 // SideMenu, each a store with `state` and `subscribe`); its React menus are not used, because they write raw HTML
 // (GenericPopover's closing snapshot) which our Trusted Types policy refuses. Menus are placed through the CSSOM
 // (element.style), which the CSP allows; an inline style attribute would be blocked.
+
+import { getDefaultBlockTypeItems } from "@blocknote/core";
 import {
   FormattingToolbarExtension,
   filterSuggestionItems,
-  insertOrUpdateBlockForSlashMenu,
+  getDefaultSlashMenuItems,
   SideMenuExtension,
   SuggestionMenu,
 } from "@blocknote/core/extensions";
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  Fragment,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { endBlockDrag, startBlockDrag } from "./clipboard.ts";
 import styles from "./Editor.module.css";
 import { EDITOR } from "./messages.ts";
@@ -37,18 +48,148 @@ function usePlace(ref: RefObject<HTMLElement | null>, at: { left: number; top: n
   });
 }
 
+/** Closes an open menu on a press outside `ref` or on Escape, as the sheet's Select closes. */
+function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, close: () => void): void {
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: MouseEvent) => {
+      if (!(event.target instanceof Node) || !ref.current?.contains(event.target)) close();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+}
+
+/** The block types the toolbar's type menu offers (BlockNote's block type select), plus the code block. */
+function blockTypes(editor: ReadmeEditor) {
+  const items: { key: string; type: string; props?: Record<string, boolean | number | string> }[] =
+    getDefaultBlockTypeItems(editor);
+  return [...items, { key: "code_block", type: "codeBlock" }];
+}
+
+function currentType(editor: ReadmeEditor) {
+  const block = editor.getTextCursorPosition().block;
+  return blockTypes(editor).find(
+    (item) =>
+      item.type === block.type &&
+      (item.props?.level === undefined || item.props.level === (block.props as Record<string, unknown>).level),
+  );
+}
+
+/** A link the README keeps: a plain http(s) address (domains/profile parseReadme drops any other). */
+const isWebLink = (text: string) => /^https?:\/\/[^\s]+$/i.test(text.trim());
+
+/**
+ * The selection toolbar, laid out like BlockNote's (@blocknote/react 0.56.0 FormattingToolbar): the block type, the
+ * text styles, and a link. The type menu and the link field stay open on our own state while they have focus, since
+ * BlockNote's store hides the toolbar once focus leaves the text.
+ */
 export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
   const shown = useStore(editor.getExtension(FormattingToolbarExtension)?.store as Store<boolean>);
   const [, render] = useState(0);
+  const [types, setTypes] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
   useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
   const ref = useRef<HTMLDivElement>(null);
+  const at = useRef<{ left: number; top: number } | null>(null);
   const selection = shown ? window.getSelection() : null;
   const rect = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null;
-  usePlace(ref, rect === null ? null : { left: rect.left, top: rect.top - 44 });
-  if (!shown) return null;
+  if (rect !== null) at.current = { left: rect.left, top: rect.top - 44 };
+  const open = shown || types || link !== null;
+  useDismiss(types || link !== null, ref, () => {
+    setTypes(false);
+    setLink(null);
+  });
+  usePlace(ref, open ? at.current : null);
+  if (!open) return null;
   const active = editor.getActiveStyles();
+  const current = currentType(editor);
+  const back = () => {
+    setTypes(false);
+    setLink(null);
+    editor.focus();
+  };
+  const setType = (item: ReturnType<typeof blockTypes>[number]) => {
+    const blocks = editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+    for (const block of blocks) editor.updateBlock(block, { type: item.type, props: item.props ?? {} } as never);
+    back();
+  };
+  const applyLink = () => {
+    const url = link?.trim() ?? "";
+    back();
+    if (isWebLink(url)) editor.createLink(url);
+  };
+  const title = (key: string) => editor.dictionary.slash_menu[key as keyof typeof editor.dictionary.slash_menu].title;
+  if (link !== null) {
+    return (
+      <div ref={ref} className={styles.toolbar} role="toolbar" aria-label={EDITOR.toolbar}>
+        <input
+          className={styles.linkField}
+          type="url"
+          aria-label={EDITOR.linkUrl}
+          placeholder="https://"
+          value={link}
+          // biome-ignore lint/a11y/noAutofocus: the field opens on the Link button's press, which asked for it.
+          autoFocus
+          onChange={(event) => setLink(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") applyLink();
+            else if (event.key === "Escape") back();
+            else return;
+            event.preventDefault();
+          }}
+        />
+        <button type="button" className={styles.tool} onClick={applyLink} disabled={!isWebLink(link)}>
+          {EDITOR.linkApply}
+        </button>
+      </div>
+    );
+  }
   return (
     <div ref={ref} className={styles.toolbar} role="toolbar" aria-label={EDITOR.toolbar}>
+      <div className={styles.typePicker}>
+        <button
+          type="button"
+          className={styles.tool}
+          aria-label={EDITOR.blockType}
+          aria-expanded={types}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setTypes((on) => !on)}
+        >
+          {current === undefined ? EDITOR.blockType : title(current.key)} ▾
+        </button>
+        {types ? (
+          <div className={styles.typeMenu} role="menu" aria-label={EDITOR.blockType}>
+            {blockTypes(editor).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="menuitemradio"
+                aria-checked={item.key === current?.key}
+                className={styles.typeItem}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setType(item)}
+              >
+                <span className={styles.chosen} aria-hidden="true">
+                  {item.key === current?.key ? "→" : ""}
+                </span>
+                <span className={styles.glyph} aria-hidden="true">
+                  {GLYPHS[item.key]}
+                </span>
+                {title(item.key)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <span className={styles.divider} aria-hidden="true" />
       {TEXT_STYLES.map((style) => (
         <button
           key={style}
@@ -62,23 +203,47 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
           {EDITOR.marks[style]}
         </button>
       ))}
+      <span className={styles.divider} aria-hidden="true" />
+      <button
+        type="button"
+        className={styles.tool}
+        aria-label={EDITOR.link}
+        aria-pressed={editor.getSelectedLinkUrl() !== undefined}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setLink(editor.getSelectedLinkUrl() ?? "")}
+      >
+        {EDITOR.linkMark}
+      </button>
     </div>
   );
 }
 
-type BlockItem = { title: string; block: ReadmePartialBlock };
+/** The "/" menu's items: BlockNote's own (title, subtext, aliases, group, shortcut badge), for the blocks the README
+ * holds, each with a short glyph in its tile in place of BlockNote's React icons. */
+const GLYPHS: Readonly<Record<string, string>> = {
+  heading: "H1",
+  heading_2: "H2",
+  heading_3: "H3",
+  quote: "\u201c",
+  numbered_list: "1.",
+  bullet_list: "\u2022",
+  check_list: "[\u00d7]",
+  paragraph: "T",
+  code_block: "{ }",
+};
 
-const BLOCK_ITEMS: readonly BlockItem[] = [
-  { title: EDITOR.blocks.paragraph, block: { type: "paragraph" } },
-  { title: EDITOR.blocks.heading1, block: { type: "heading", props: { level: 1 } } },
-  { title: EDITOR.blocks.heading2, block: { type: "heading", props: { level: 2 } } },
-  { title: EDITOR.blocks.heading3, block: { type: "heading", props: { level: 3 } } },
-  { title: EDITOR.blocks.bulletListItem, block: { type: "bulletListItem" } },
-  { title: EDITOR.blocks.numberedListItem, block: { type: "numberedListItem" } },
-  { title: EDITOR.blocks.checkListItem, block: { type: "checkListItem" } },
-  { title: EDITOR.blocks.quote, block: { type: "quote" } },
-  { title: EDITOR.blocks.codeBlock, block: { type: "codeBlock" } },
-];
+/** BlockNote's shortcut ("Ctrl-Alt-1", "⌘-Alt-1") as the sheet's Kbd keys: one key each, symbols for modifiers on a
+ * Mac, `ctrl` elsewhere (sheet components/Kbd and Search). */
+function shortcutKeys(badge: string): string[] {
+  const mac = badge.includes("⌘");
+  const names: Readonly<Record<string, string>> = { Ctrl: "ctrl", Alt: mac ? "⌥" : "alt", Shift: "⇧" };
+  return badge.split("-").map((key) => names[key] ?? key);
+}
+
+function slashItems(editor: ReadmeEditor, query: string) {
+  const ours = getDefaultSlashMenuItems(editor).filter((item) => Object.hasOwn(GLYPHS, item.key));
+  return filterSuggestionItems(ours, query);
+}
 
 /** The keys the open block menu takes from the editor: arrows move, Enter picks, Escape closes. The highlight goes
  * back to the first item whenever the query changes. */
@@ -108,56 +273,97 @@ export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
   const state = useStore(menu?.store as Store<{ show: boolean; query: string; referencePos: DOMRect } | undefined>);
   const open = state?.show === true;
   const query = open ? state.query : null;
-  const items = useMemo(() => filterSuggestionItems([...BLOCK_ITEMS], query ?? ""), [query]);
+  const items = useMemo(() => (query === null ? [] : slashItems(editor, query)), [editor, query]);
   const pick = (index: number) => {
     const item = items[index];
     if (item === undefined) return;
     menu?.closeMenu();
     menu?.clearQuery();
-    insertOrUpdateBlockForSlashMenu(editor, item.block);
+    item.onItemClick();
   };
   const selected = useMenuKeys(editor, query, items.length, pick);
   const ref = useRef<HTMLDivElement>(null);
   usePlace(ref, open ? { left: state.referencePos.left, top: state.referencePos.bottom + 4 } : null);
+  useLayoutEffect(() => {
+    ref.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  });
   if (!open) return null;
   // Focus stays in the editor while the menu is open (the keys above); options are reached by keys or the pointer.
   return (
     <div ref={ref} className={styles.menu} role="listbox" aria-label={EDITOR.slashMenu}>
       {items.map((item, index) => (
-        <div
-          key={item.title}
-          role="option"
-          tabIndex={-1}
-          aria-selected={index === selected}
-          className={styles.option}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            pick(index);
-          }}
-        >
-          {item.title}
-        </div>
+        <Fragment key={item.key}>
+          {item.group !== undefined && item.group !== items[index - 1]?.group ? (
+            <div className={styles.group} role="presentation">
+              {item.group}
+            </div>
+          ) : null}
+          <div
+            role="option"
+            tabIndex={-1}
+            aria-selected={index === selected}
+            className={styles.option}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              pick(index);
+            }}
+          >
+            <span className={styles.glyph} aria-hidden="true">
+              {GLYPHS[item.key]}
+            </span>
+            <span className={styles.label}>
+              <span className={styles.title}>{item.title}</span>
+              {item.subtext === undefined ? null : <span className={styles.subtext}>{item.subtext}</span>}
+            </span>
+            {item.badge === undefined ? null : (
+              <span className={styles.keys}>
+                {shortcutKeys(item.badge).map((key) => (
+                  <kbd key={key} className={styles.key}>
+                    {key}
+                  </kbd>
+                ))}
+              </span>
+            )}
+          </div>
+        </Fragment>
       ))}
       {items.length === 0 ? <div className={styles.empty}>{EDITOR.noMatch}</div> : null}
     </div>
   );
 }
 
+/**
+ * The block handle, as BlockNote's side menu (@blocknote/react 0.56.0 SideMenu): + adds a block below and opens the
+ * "/" menu; :: drags the block, and a click on it opens the block's menu (Alex 2026-10-23 23:30Z: delete from ::).
+ * The side menu stays frozen on its block while that menu is open.
+ */
 export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
   const side = editor.getExtension(SideMenuExtension);
   const state = useStore(
     side?.store as Store<{ show: boolean; referencePos: DOMRect; block: { id: string } } | undefined>,
   );
   const ref = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState(false);
   useEffect(() => side?.setMenuElement(ref.current ?? undefined));
-  const open = state?.show === true;
-  usePlace(ref, open ? { left: state.referencePos.left - 72, top: state.referencePos.top } : null);
-  if (!open) return null;
+  const close = () => {
+    setMenu(false);
+    side?.unfreezeMenu();
+  };
+  useDismiss(menu, ref, close);
+  const open = state?.show === true || menu;
+  usePlace(ref, state?.show === true ? { left: state.referencePos.left - 72, top: state.referencePos.top } : null);
+  if (!open || state === undefined) return null;
   const addBelow = () => {
     const [block] = editor.insertBlocks([{ type: "paragraph" }], state.block.id, "after");
     if (block === undefined) return;
     editor.setTextCursorPosition(block);
     editor.getExtension(SuggestionMenu)?.openSuggestionMenu("/");
+  };
+  const remove = () => {
+    const id = state.block.id;
+    close();
+    editor.removeBlocks([id]);
+    editor.focus();
   };
   return (
     <div ref={ref} className={styles.handle}>
@@ -167,9 +373,17 @@ export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
       <button
         type="button"
         className={styles.tool}
-        aria-label={EDITOR.dragBlock}
+        aria-label={EDITOR.blockMenu}
+        aria-haspopup="menu"
+        aria-expanded={menu}
         draggable
+        onClick={() => {
+          if (menu) return close();
+          side?.freezeMenu();
+          setMenu(true);
+        }}
         onDragStart={(event) => {
+          setMenu(false);
           side?.freezeMenu();
           startBlockDrag(editor, event.nativeEvent, state.block.id);
         }}
@@ -180,6 +394,43 @@ export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
       >
         ::
       </button>
+      {menu ? (
+        <div className={styles.blockMenu} role="menu" aria-label={EDITOR.blockMenu}>
+          <button type="button" role="menuitem" className={styles.typeItem} onClick={remove}>
+            {EDITOR.deleteBlock}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * The line the caret is on (Alex 2026-10-23 23:22Z: "hard to find where the line is"): a bar beside that block,
+ * drawn outside ProseMirror's own markup, so the editor's DOM stays its own. Hidden while the editor does not have
+ * focus.
+ */
+export function CurrentLine({ editor }: { editor: ReadmeEditor }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [, render] = useState(0);
+  useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
+  useEffect(() => editor.onChange(() => render((n) => n + 1)), [editor]);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const box = element?.offsetParent?.getBoundingClientRect();
+    if (element === null || box === undefined) return;
+    const id = editor.isFocused() ? editor.getTextCursorPosition().block.id : null;
+    const block =
+      id === null
+        ? null
+        : editor.domElement?.querySelector(
+            `[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"] > [data-content-type]`,
+          );
+    element.hidden = !(block instanceof HTMLElement);
+    if (!(block instanceof HTMLElement)) return;
+    const rect = block.getBoundingClientRect();
+    element.style.setProperty("top", `${Math.round(rect.top - box.top)}px`);
+    element.style.setProperty("height", `${Math.round(rect.height)}px`);
+  });
+  return <div ref={ref} className={styles.currentLine} aria-hidden="true" hidden />;
 }

@@ -6,7 +6,7 @@ import { SuggestionMenu } from "@blocknote/core/extensions";
 import { useEffect, useRef, useState } from "react";
 import { type Copied, copySelection, pasteText } from "./clipboard.ts";
 import styles from "./Editor.module.css";
-import { BlockHandle, BlockMenu, StyleToolbar } from "./menus.tsx";
+import { BlockHandle, BlockMenu, CurrentLine, StyleToolbar } from "./menus.tsx";
 import { EDITOR } from "./messages.ts";
 import { type ReadmeEditor, type ReadmePartialBlock, readmeSchema } from "./schema.ts";
 
@@ -64,6 +64,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   }, [editor, label]);
   return (
     <div ref={area} className={styles.editor}>
+      <CurrentLine editor={editor} />
       <div ref={mount} />
       <StyleToolbar editor={editor} />
       <BlockMenu editor={editor} />

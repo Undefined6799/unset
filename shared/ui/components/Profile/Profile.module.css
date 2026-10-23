@@ -158,6 +158,13 @@
     opacity: 1;
   }
 
+  /* The README's pencil sits in the column gap, so the README is as wide for its owner as for a visitor. */
+  .readmePencil {
+    position: absolute;
+    top: 0;
+    left: calc(-1 * (var(--space-8) + var(--space-2)));
+  }
+
   .pencil[hidden] {
     display: none;
   }
