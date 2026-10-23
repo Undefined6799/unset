@@ -19,6 +19,6 @@
     "@unset/shared-islands": "*",
     "@unset/shared-log": "*",
     "@unset/shared-ui": "*",
-    "react": "19.3.0"
+    "react": "19.3.1"
   }
 }
