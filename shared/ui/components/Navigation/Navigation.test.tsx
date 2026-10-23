@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { type SafeHref, safeHref } from "../../safe-href.ts";
+import header from "../Header/Header.module.css";
 import { Navigation, NavigationMenuButton, type NavigationProps } from "./Navigation.tsx";
 
 const path = (value: string) => safeHref(value, ["path"]) as SafeHref;
@@ -96,6 +97,9 @@ describe("NavigationMenuButton", () => {
     expect(button?.getAttribute("popovertarget")).toBe("core-menu");
     expect(button?.getAttribute("popovertargetaction")).toBe("toggle");
     expect(button?.getAttribute("aria-label")).toBe("Menu");
+    // Alex 2026-10-23 02:14Z: inside the brand header, Header's .home rule squashed the icon to the mark's ratio.
+    expect(button?.className).not.toContain(header.home);
+    expect(button?.querySelector("svg")?.getAttribute("width")).toBe("24");
   });
 });
 

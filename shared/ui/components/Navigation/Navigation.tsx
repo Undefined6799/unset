@@ -52,7 +52,8 @@ const controlClass = `${header.home} ${header.nav} ${styles.control}`;
 export function NavigationMenuButton({ menuId, label }: { menuId: string; label: string }) {
   return (
     <button
-      className={`${controlClass} ${styles.menuButton}`}
+      // Not Header's .home: the brand header sizes the mark's svg by aspect ratio, which would squash this icon.
+      className={`${styles.control} ${styles.menuButton}`}
       type="button"
       aria-label={label}
       popoverTarget={menuId}
