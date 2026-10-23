@@ -47,6 +47,9 @@ checked: 2026-10-23
   hover/focus and dismiss on Escape; SSR/no-JS retains native title and accessible-name fallback. Alex's
   2026-10-21 browser revision removes the popup Close control and lifts only current phone artwork within
   stationary targets; `closeLabel` stays optional/deprecated for callers. Native toggle/dismissal remains intact.
+- `components/Readme/` (P2.20y, staging preview, not yet on the sheet): renders a member's README blocks (the
+  `sh.unset.profile` lexicon's block model, written with BlockNote) on the server with no script; links pass `safeHref`
+  as http(s) only. Its prop types mirror the lexicon, since shared/ui imports no domain.
 - `presentation.ts` / the explicit `./presentation` package export: Navigation, Button, Input, Icon, Avatar,
   safeHref and needed types only. `./brand-header` points directly to the pure BrandHeader module. Use these entries
   for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
