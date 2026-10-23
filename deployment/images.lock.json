@@ -10,9 +10,8 @@
     "verify": "cosign-keyless"
   },
   "pds": {
-    "ref": "ghcr.io/undefined6799/mirror/pds@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
-    "origin": "upstream",
-    "upstreamSource": "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "ref": "ghcr.io/undefined6799/unset/pds@sha256:c0f26b546f613428127f7768e04fbc0cd76e823d175695d2fc36b8acc82c3bbd",
+    "origin": "first-party",
     "verify": "cosign-keyless"
   },
   "edge": {

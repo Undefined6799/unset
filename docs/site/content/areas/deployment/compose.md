@@ -15,7 +15,7 @@ Dev runs each service's `deployment/images.lock.json` ref, by digest, and has no
 | --- | --- | --- |
 | `postgres` | lock ref, image | `deployment/images/postgres.Dockerfile` |
 | `migrate` | lock ref, image | `deployment/images/migrate.Dockerfile` |
-| `pds` | `ghcr.io/undefined6799/mirror/pds` by the lock digest | `ghcr.io/bluesky-social/pds:0.4.5037` by the `bases.lock.json` digest |
+| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5037` image with only its sign-in UI replaced (ADR 0027, P2.24y) | built from `deployment/pds/Dockerfile` |
 | `edge` | lock ref, image | `deployment/edge/Dockerfile`, context `deployment/edge` |
 | `web` | lock ref, image | `deployment/images/node-app.Dockerfile` |
 | `newt` | lock ref, image. Address `10.250.37.2` on `newt_edge` | absent |
