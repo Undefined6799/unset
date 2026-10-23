@@ -6,6 +6,7 @@ export const LIMITS = {
     displayName: 64,
     headline: 120,
     bio: 600,
+    readme: 10_000,
     location: 100,
     websiteBytes: 2000,
     emailBytes: 254,

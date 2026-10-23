@@ -31,6 +31,7 @@ const FIXTURES: Record<string, Build> = {
   "profile.displayName": P((n) => ({ displayName: text(n) })),
   "profile.headline": P((n) => ({ headline: text(n) })),
   "profile.bio": P((n) => ({ bio: text(n) })),
+  "profile.readme": P((n) => ({ readme: text(n) })),
   "profile.location": P((n) => ({ location: text(n) })),
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
   "profile.emailBytes": P((n) => ({ email: `${text(n - MAIL_DOMAIN.length)}${MAIL_DOMAIN}` })),

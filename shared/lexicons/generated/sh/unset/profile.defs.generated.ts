@@ -31,6 +31,11 @@ type Main = {
   bio?: string;
 
   /**
+   * Free-form page body in a small markdown subset (headings, lists, quotes, code, links, rows and columns), never HTML.
+   */
+  readme?: string;
+
+  /**
    * Free-text place, as the member writes it.
    */
   location?: string;
@@ -88,6 +93,7 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     displayName: /*#__PURE__*/ l.string({ maxGraphemes: 64, maxLength: 640 }),
     headline: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 120, maxLength: 1200 })),
     bio: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 600, maxLength: 6000 })),
+    readme: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 10000, maxLength: 100000 })),
     location: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
     email: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxLength: 254 })),

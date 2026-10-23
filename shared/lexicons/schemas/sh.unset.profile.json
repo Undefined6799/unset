@@ -29,6 +29,12 @@
             "maxLength": 6000,
             "description": "About text: paragraphs, bold, italic and http(s) links (a small markdown subset), never HTML."
           },
+          "readme": {
+            "type": "string",
+            "maxGraphemes": 10000,
+            "maxLength": 100000,
+            "description": "Free-form page body in a small markdown subset (headings, lists, quotes, code, links, rows and columns), never HTML."
+          },
           "location": {
             "type": "string",
             "maxGraphemes": 100,
