@@ -361,7 +361,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Status: PARTLY — README rule 11, ADG §10, EW §1–2, EPA §3.
 - Priority: P1
 
-**DL-2. Give each agent session one slice with one owning domain. Land a `shared/` or `infrastructure/` change as its own PR first. Keep at most three agent PRs waiting for Alex (D4). Keep `[SPIKE]` work on `spike/<name>`, never merged, with its result recorded in an ADR.**
+**DL-2. Give each agent session one slice with one owning domain. Land a `shared/` or `infrastructure/` change as its own PR first. Keep at most three agent PRs waiting for merge (D4). Keep `[SPIKE]` work on `spike/<name>`, never merged, with its result recorded in an ADR.**
 - Enforced by: review-only. A CLAUDE.md instruction plus `gh pr list --state open` before starting; no tool can see concurrent sessions.
 - Source: Team Topologies — ch. 2, ch. 3; Mythical Man-Month — ch. 2, ch. 11.
 - Status: PARTLY — CLAUDE.md worktree rules, ADG §4.
