@@ -6,6 +6,8 @@
 // view as a visitor, and Save, which posts the plain form to POST /profile; the server writes the record to the member's PDS. Before hydration, and with no script, this renders
 // exactly the server page: no pencils and no draft box. It is an island (islands/profile-editor.island.tsx).
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import add from "../../icons/drawings/add.generated.ts";
+import close from "../../icons/drawings/close.generated.ts";
 import del from "../../icons/drawings/delete.generated.ts";
 import edit from "../../icons/drawings/edit.generated.ts";
 import show from "../../icons/drawings/show.generated.ts";
@@ -20,6 +22,7 @@ import {
   type FieldSlot,
   isLabels,
   isRecord,
+  LinkItem,
   type ProfileFieldName,
   type ProfileFieldsView,
   type ProfileLabels,
@@ -44,6 +47,9 @@ export const isProfileEditorProps = (value: unknown): value is ProfileEditorProp
   typeof value.handleUnavailable === "boolean" &&
   strings(value.fields, FIELDS) &&
   isLabels(value.labels);
+
+/** The lexicon's links bound (shared/lexicons LIMITS.profile.linksMax); the server checks it again. */
+const LINKS_MAX = 12;
 
 type History = { readonly list: readonly ProfileFieldsView[]; readonly at: number };
 type Status =
@@ -169,6 +175,106 @@ function FieldEditor(props: {
         />
       )}
     </span>
+  );
+}
+
+/** What a member typed as a link, as the URL the server accepts: "github.com/you" gains https://; null when unusable. */
+export function linkFrom(typed: string): string | null {
+  const text = typed.trim();
+  if (text === "") return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  if (!/^https?:\/\//i.test(withScheme)) return null;
+  try {
+    const url = new URL(withScheme);
+    return url.hostname.includes(".") && url.username === "" && url.password === "" ? withScheme : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The owner's links: each with a remove button, and "+" to add one (Alex 04:06Z). Every change is a draft step. */
+function LinksEditor(props: { links: string; labels: ProfileLabels; onChange: (links: string) => void }) {
+  const { labels } = props;
+  const links = props.links === "" ? [] : props.links.split("\n");
+  const [adding, setAdding] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (adding) ref.current?.focus();
+  }, [adding]);
+  const stop = () => {
+    setAdding(false);
+    setTyped("");
+    setInvalid(false);
+  };
+  const addTyped = () => {
+    if (typed.trim() === "") return stop();
+    const link = linkFrom(typed);
+    if (link === null) return setInvalid(true);
+    if (!links.includes(link)) props.onChange([...links, link].join("\n"));
+    stop();
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      stop();
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      addTyped();
+    }
+  };
+  return (
+    <div className={styles.linksEditor}>
+      {links.length === 0 ? null : (
+        <ul className={styles.links}>
+          {links.map((link) => (
+            <li key={link}>
+              <LinkItem uri={link} />
+              <button
+                type="button"
+                className={styles.tool}
+                aria-label={labels.removeLink.replace("{link}", link)}
+                title={labels.removeLink.replace("{link}", link)}
+                onClick={() => props.onChange(links.filter((other) => other !== link).join("\n"))}
+              >
+                <IconDrawing paths={close} size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adding ? (
+        <span className={styles.editor}>
+          <input
+            ref={ref}
+            className={styles.input}
+            type="url"
+            aria-label={labels.add.links}
+            aria-invalid={invalid}
+            placeholder="github.com/you"
+            value={typed}
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setInvalid(false);
+            }}
+            onKeyDown={onKeyDown}
+            onBlur={addTyped}
+          />
+          {invalid ? <span role="alert">{labels.invalidLink}</span> : null}
+        </span>
+      ) : links.length < LINKS_MAX ? (
+        <button
+          type="button"
+          className={styles.tool}
+          aria-label={labels.add.links}
+          title={labels.add.links}
+          onClick={() => setAdding(true)}
+        >
+          <IconDrawing paths={add} size={20} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -337,6 +443,11 @@ export function ProfileEditor({ did, handle, verified, handleUnavailable, fields
 
   const field: FieldSlot = (name, content) => {
     if (!ready || viewAs) return content;
+    if (name === "links") {
+      return (
+        <LinksEditor links={current.links} labels={labels} onChange={(links) => write("links", history.at, links)} />
+      );
+    }
     if (editing?.name === name) {
       const { from } = editing;
       return (

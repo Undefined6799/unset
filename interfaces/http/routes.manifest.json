@@ -215,7 +215,7 @@
     "path": "/profile",
     "group": "app",
     "accepts": ["application/x-www-form-urlencoded"],
-    "bodyLimit": 327680,
+    "bodyLimit": 409600,
     "rateLimit": "default",
     "mutates": true,
     "middleware": [

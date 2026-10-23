@@ -28,7 +28,7 @@ export type ProfileProps = {
   readonly profile: ProfileFieldsView | null | "unavailable";
 };
 
-const EMPTY: ProfileFieldsView = { displayName: "", headline: "", location: "", website: "", readme: "" };
+const EMPTY: ProfileFieldsView = { displayName: "", headline: "", location: "", website: "", readme: "", links: "" };
 
 const { unavailable: _unavailable, ...COPY } = PROFILE;
 const LABELS: ProfileLabels = COPY;

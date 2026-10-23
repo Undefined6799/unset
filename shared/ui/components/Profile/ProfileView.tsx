@@ -5,16 +5,25 @@
 // Shared by the server page and the owner's editing island (ProfileEditor.tsx) so both draw the same markup. The
 // copy comes from the app as `labels`, so it travels as island props like the theme picker's labels.
 import type { ReactNode } from "react";
+import external from "../../icons/drawings/external.generated.ts";
 import { safeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Avatar } from "../Avatar/Avatar.tsx";
 import { type DescriptionItem, DescriptionList } from "../DescriptionList/DescriptionList.tsx";
+import { IconDrawing } from "../Icon/Icon.tsx";
 import { Markdown } from "../Markdown/Markdown.tsx";
 import { Tag } from "../Tag/Tag.tsx";
 import styles from "./Profile.module.css";
 
-export type ProfileFieldName = "displayName" | "headline" | "location" | "website" | "readme";
-export const FIELDS: readonly ProfileFieldName[] = ["displayName", "headline", "location", "website", "readme"];
+export type ProfileFieldName = "displayName" | "headline" | "location" | "website" | "readme" | "links";
+export const FIELDS: readonly ProfileFieldName[] = [
+  "displayName",
+  "headline",
+  "location",
+  "website",
+  "readme",
+  "links",
+];
 
 export type ProfileFieldsView = {
   readonly displayName: string;
@@ -23,6 +32,8 @@ export type ProfileFieldsView = {
   /** Already checked as a plain http(s) URL by domains/profile; safeHref decides again here before it is a link. */
   readonly website: string;
   readonly readme: string;
+  /** One http(s) URL a line (domains/profile); each is a link through safeHref. */
+  readonly links: string;
 };
 
 /** The page's copy (apps/web/src/screens/messages.ts PROFILE, plus the P2.13c set-up card). */
@@ -33,6 +44,8 @@ export type ProfileLabels = {
   readonly copyLink: string;
   readonly copied: string;
   readonly copyFailed: string;
+  readonly removeLink: string;
+  readonly invalidLink: string;
   readonly fields: Readonly<Record<ProfileFieldName, string>>;
   readonly add: Readonly<Record<ProfileFieldName, string>>;
   readonly edit: string;
@@ -60,6 +73,8 @@ const LABEL_STRINGS = [
   "copyLink",
   "copied",
   "copyFailed",
+  "removeLink",
+  "invalidLink",
   "edit",
   "draft",
   "draftBody",
@@ -89,6 +104,29 @@ const asIs: FieldSlot = (_name, content) => content;
 /** The website as the member typed it, without the scheme, the way a reader says it. */
 function websiteLabel(url: string): string {
   return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+}
+
+/** One of the member's links, as a reader says it ("github.com/alicem"); null when safeHref refuses it. */
+export function LinkItem({ uri }: { uri: string }) {
+  const href = safeHref(uri, ["https:", "http:"]);
+  return href === null ? null : (
+    <a href={href} rel="nofollow ugc noopener noreferrer me">
+      <IconDrawing paths={external} size={16} />
+      {websiteLabel(uri)}
+    </a>
+  );
+}
+
+function LinkList({ links }: { links: string }) {
+  return (
+    <ul className={styles.links}>
+      {links.split("\n").map((uri) => (
+        <li key={uri}>
+          <LinkItem uri={uri} />
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /** A DID short enough for the column, "did:plc:7f3k…tdc9e"; the whole one is its title. */
@@ -154,6 +192,7 @@ export function ProfileView({
         {headline === null ? null : <p className={styles.headline}>{headline}</p>}
         {copyLink}
         <DescriptionList items={details} className={classNames(styles.details)} />
+        {field("links", fields.links === "" ? null : <LinkList links={fields.links} />)}
       </div>
       <div className={styles.readme}>
         {field("readme", fields.readme === "" ? null : <Markdown source={fields.readme} />) ?? emptyReadme}

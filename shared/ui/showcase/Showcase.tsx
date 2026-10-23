@@ -56,13 +56,23 @@ const PROFILE_LABELS: ProfileLabels = {
   copyLink: "Copy link",
   copied: "Copied",
   copyFailed: "Copy failed",
-  fields: { displayName: "name", headline: "headline", location: "place", website: "website", readme: "README" },
+  removeLink: "Remove {link}",
+  invalidLink: "Enter a web address, like github.com/you.",
+  fields: {
+    displayName: "name",
+    headline: "headline",
+    location: "place",
+    website: "website",
+    readme: "README",
+    links: "links",
+  },
   add: {
     displayName: "Add your name",
     headline: "Add a headline",
     location: "Add a place",
     website: "Add a website",
     readme: "Write your README.",
+    links: "Add a link",
   },
   edit: "Edit {field}",
   draft: "Draft",
@@ -212,6 +222,7 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
         location: "Ontario",
         website: "https://example.com",
         readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)",
+        links: "https://github.com/alexexample",
       }}
       labels={PROFILE_LABELS}
     />

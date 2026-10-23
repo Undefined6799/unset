@@ -16,12 +16,15 @@ export const PROFILE = {
   copyLink: "Copy link",
   copied: "Copied",
   copyFailed: "Copy failed",
+  removeLink: "Remove {link}",
+  invalidLink: "Enter a web address, like github.com/you.",
   fields: {
     displayName: "name",
     headline: "headline",
     location: "place",
     website: "website",
     readme: "README",
+    links: "links",
   },
   add: {
     displayName: "Add your name",
@@ -29,6 +32,7 @@ export const PROFILE = {
     location: "Add a place",
     website: "Add a website",
     readme: "Write your README: headings, lists, links, quotes and code. ::: starts a column, --- a new row.",
+    links: "Add a link",
   },
   edit: "Edit {field}",
   draft: "Draft",

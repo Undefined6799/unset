@@ -42,6 +42,7 @@ const ALICE: ProfileFields = {
   location: "Toronto, Ontario",
   website: "https://alice.example/",
   readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+  links: "",
 };
 
 function setup(world: World = {}) {

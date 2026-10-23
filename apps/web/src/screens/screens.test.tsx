@@ -146,6 +146,7 @@ describe("profile screen", () => {
     location: "Toronto, Ontario",
     website: "https://alice.example/",
     readme: "## About me\nI make tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+    links: "https://github.com/alicem",
   };
 
   test("profile_shows_the_name_facts_and_readme", () => {
@@ -155,7 +156,11 @@ describe("profile screen", () => {
     expect(page).toContain("Verified");
     expect(page).toContain("Toronto, Ontario");
     expect(page).toContain('title="did:plc:alice123456789abcdefgh"');
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://alice.example/", "https://alice.example/tidy"]);
+    expect(tags(page, "a").map((a) => a.href)).toEqual([
+      "https://alice.example/",
+      "https://github.com/alicem",
+      "https://alice.example/tidy",
+    ]);
     expect(page).toContain(">About me</h2>");
     // No sign-out here: the account details are on Settings › Account (P2.13c).
     expect(tags(page, "form")).toEqual([]);
@@ -174,7 +179,7 @@ describe("profile screen", () => {
   });
 
   test("profile_never_links_an_unsafe_website", () => {
-    const profile = { ...ALICE, website: "javascript:alert(1)", readme: "" };
+    const profile = { ...ALICE, website: "javascript:alert(1)", readme: "", links: "javascript:alert(2)" };
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile }));
     expect(page).not.toContain('href="javascript:');
     expect(tags(page, "a").map((a) => a.href)).toEqual([]);
