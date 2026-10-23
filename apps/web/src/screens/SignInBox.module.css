@@ -1,0 +1,35 @@
+/* The sign-in box (P2.05m): the kit Modal's look (Modal.module.css: at most 440px, space-6 padding, a 1px `ink`
+   border, `radius-sm`, on `ground`). `.box` is for the container the caller draws it in. */
+@layer screens {
+  .box {
+    --surface: var(--color-ground);
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 440px;
+    padding: var(--space-6);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .title {
+    margin: 0;
+  }
+
+  .close {
+    color: var(--color-ink);
+  }
+
+  .body {
+    margin: var(--space-3) 0 var(--space-6);
+    color: var(--color-ink-muted);
+  }
+}
