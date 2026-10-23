@@ -184,7 +184,8 @@ export function ProfileView({
       <div className={styles.side}>
         <Avatar name={name} size={128} className={classNames(styles.avatar)} />
         <div className={styles.names}>
-          <h1 className={styles.name}>{field("displayName", name)}</h1>
+          {/* The display name (Alex 04:27Z); the owner sees "Add your name" when there is none, a visitor the handle. */}
+          <h1 className={styles.name}>{field("displayName", fields.displayName === "" ? null : name) ?? handle}</h1>
           <p className={styles.handle}>{`@${handle}`}</p>
           {verified ? <Tag status="ok">{labels.verified}</Tag> : null}
         </div>
