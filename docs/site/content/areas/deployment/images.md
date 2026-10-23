@@ -41,7 +41,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | Name | `origin` | Image |
 | --- | --- | --- |
 | `postgres`, `migrate`, `edge`, `web` | `first-party` | `ghcr.io/undefined6799/unset/<name>@sha256:…` |
-| `pds` | `upstream` | `ghcr.io/undefined6799/mirror/pds`, `upstreamSource` the Bluesky `0.4.5037` ref |
+| `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5037` image (P2.24y) |
 | `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.18.1` |
 
 The digest strings live in the lock. This page does not copy them.

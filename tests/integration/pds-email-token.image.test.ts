@@ -13,8 +13,8 @@ const lock = JSON.parse(
   readFileSync(join(import.meta.dirname, "../../deployment/images/bases.lock.json"), "utf8"),
 ) as Record<string, LockEntry>;
 const NODE = `${lock.node?.ref}:${lock.node?.tag}@${lock.node?.digest}`;
-// The PDS image the dev stack runs, by tag and digest: the base lock's entry, which compose.dev.yaml runs from its
-// mirror at the same digest since P2.26b (compose_dev_images_by_digest), and compose.local.yaml by this spelling.
+// The PDS image by tag and digest: the base lock's entry, which deployment/pds/Dockerfile builds on (P2.24y) and
+// changes only in oauth-provider-ui's dist, so env.js is the base's.
 const PDS = lock.pds === undefined ? undefined : `${lock.pds.ref}:${lock.pds.tag}@${lock.pds.digest}`;
 // The image installs its service with pnpm under /app (bluesky-social/pds Dockerfile, WORKDIR /app, COPY ./service);
 // the package link resolves into pnpm's store.

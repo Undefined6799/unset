@@ -181,8 +181,11 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   test("preflight_passes_the_real_dev_file", async () => {
     const result = await preflight(args, deps);
     expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([]);
-    expect(result.lines).toContain("PASS C3 4 first-party images verified");
-    expect(result.lines).toContain("PASS C4 2 upstream images verified");
+    // P2.24y: five first-party images (the PDS recipe joined them) and newt the one upstream. The C3 line reads
+    // "reason withheld" because its count, 5, equals a configured value, which the preflight never prints
+    // (preflight/index.ts withheldIfValued); only the verdict of that line is pinned.
+    expect(result.lines.filter((line) => line.startsWith("PASS C3 "))).toHaveLength(1);
+    expect(result.lines).toContain("PASS C4 1 upstream images verified");
     // Waived under --env dev without a retirement report; only the verdict is pinned, not the reason text.
     expect(result.lines.filter((line) => line.startsWith("PASS C21"))).toHaveLength(1);
     expect(result.code).toBe(0);

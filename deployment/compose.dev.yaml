@@ -87,7 +87,7 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/undefined6799/mirror/pds@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    image: ghcr.io/undefined6799/unset/pds@sha256:c0f26b546f613428127f7768e04fbc0cd76e823d175695d2fc36b8acc82c3bbd
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]

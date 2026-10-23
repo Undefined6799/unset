@@ -539,13 +539,19 @@ function mailLogProblems(env: Map<string, string>): string[] {
 
 describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   test("pds_runs_the_locked_image", () => {
-    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest, run from
-    // its mirror at that digest since P2.26b.
+    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest. Since
+    // P2.24y the stack runs the ADR 0027 recipe published from it: the recipe's final stage is that exact image with
+    // only its oauth-provider-ui dist replaced, and the deploy lock names the published recipe as first-party.
     const pds = readLock().pds;
     expect(pds).toBeDefined();
-    expect(readDeployLock().pds?.upstreamSource).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
-    expect(service(dev(), "pds").image).toBe(`ghcr.io/undefined6799/mirror/pds@${pds?.digest}`);
+    const recipe = readFileSync(join(import.meta.dirname, "pds", "Dockerfile"), "utf8");
+    expect(recipe.match(/^FROM \S+/gm)?.at(-1)).toBe(`FROM ${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    const entry = readDeployLock().pds;
+    expect(entry?.origin).toBe("first-party");
+    expect(entry?.ref).toMatch(/^ghcr\.io\/undefined6799\/unset\/pds@sha256:[0-9a-f]{64}$/);
+    expect(service(dev(), "pds").image).toBe(entry?.ref);
     expect(service(dev(), "pds").build).toBeNull();
+    expect(service(local(), "pds").build).toEqual({ context: "./pds", dockerfile: "Dockerfile" });
   });
 
   test("pds_env_pinned", () => {
