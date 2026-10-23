@@ -3,9 +3,10 @@
 Schema changes are SQL files in `infrastructure/postgres/migrations/`, applied once, in order, by `unset-migrate`
 (`infrastructure/postgres/migrate-cli.ts`). It runs as the one-shot Compose `migrate` service (P1.29) with only the
 `migrator` credentials. `deployment/compose.dev.yaml` defines `postgres`, `migrate`, `pds`, `edge`, `web` and `newt`.
-`deployment/compose.local.yaml` defines `postgres`, `migrate`, `pds`, `edge`, `web` and `pds-token-reader` (profile
-`tools`; `up` does not start it). Only `web` starts after `migrate` exits 0 (`depends_on` with
-`service_completed_successfully`). There is no `api` or `indexer` service. P1.11's outputs in
+`deployment/compose.dev.source.yaml` (staging built from the checkout, `--source`) defines the same six services, and
+its `web` also waits for `migrate`. `deployment/compose.local.yaml` defines `postgres`, `migrate`, `pds`, `edge`, `web`
+and `pds-token-reader` (profile `tools`; `up` does not start it). Only `web` starts after `migrate` exits 0
+(`depends_on` with `service_completed_successfully`). There is no `api` or `indexer` service. P1.11's outputs in
 `docs/ai/book/phase-1.md` say `web`, `api` and `indexer` services will declare that same `depends_on` when they join
 Compose.
 
@@ -33,7 +34,9 @@ schema. So:
   that code change.
 - A migration that creates a table states its grants in the same file (P1.12).
 
-The lint reads SQL as text: the same words inside a string or a function body also count. Comments do not.
+The lint reads SQL as text: the same words inside a string or a function body also count. Comments do not. `TRUNCATE`
+inside a `CREATE TRIGGER` event list (`BEFORE`, `AFTER` or `INSTEAD OF`, events joined by `OR`, from `CREATE` through
+`ON`, with no `UPDATE OF` column list) is not flagged; a clause that does not match keeps its `TRUNCATE` (P1.15x).
 
 ## Index rule (plan §6.1, rule PF-1)
 
@@ -46,8 +49,9 @@ CREATE UNIQUE INDEX sessions_id_idx ON core.sessions (id);
 ```
 
 `query:` names the file (optionally `file:symbol`) whose query the index serves, as a path from the repository root;
-the file must exist. `why:` is `unique`, `foreign-key` or `speed`. An index added for `speed` carries before-and-after
-p50, p95 and p99 for that query in the PR's Performance evidence.
+the file must exist. The migrate image's CLI runs the lint with `checkQueryFiles: false`, so that existence check runs
+only in the repository checks (P1.36h). `why:` is `unique`, `foreign-key` or `speed`. An index added for `speed`
+carries before-and-after p50, p95 and p99 for that query in the PR's Performance evidence.
 
 ## What a run does
 
