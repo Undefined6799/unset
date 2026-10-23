@@ -5,8 +5,9 @@
 > every `[to fill]` placeholder and every open lawyer row in [`legal-status.md`](legal-status.md) stays open
 > (Alex, 2026-10-17, `docs/ai/book/alex-answers.md` row `p137-legal-placeholder`).
 
-What to do when a fingerprint match, a local check, a reviewer or a user report points at child sexual abuse and
-exploitation material (CSAEM) on our service. Plan §5.8 and §6 (decisions 9, 21 and 30). The law below was read on
+What to do when child sexual abuse and exploitation material (CSAEM) is identified on our service. No fingerprint
+match or local check exists yet, so neither points at an item on its own (section 1). Plan §5.8 and §6 (decisions 9,
+21 and 30). The law below was read on
 2026-10-12 (the Act's title on 2026-10-13); every citation is marked for the lawyer hour, and each marker has a row in
 [`legal-status.md`](legal-status.md). This is an operating runbook, not legal advice. Decision 9's one-year preservation
 is ahead of the law in force: it applies only once C-16's amendments commence, and until then the rule is 21 days
@@ -26,9 +27,20 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
 
 ## 1. Contain (minutes)
 
-1. The item is already blocked and sealed under the legal hold by the pipeline (a match or a "suspected" verdict
-   blocks it; plan §5.8). Confirm in the admin panel that the hold exists; do not open the media.
-2. Freeze the uploader's uploads. Never freeze the reporter's account.
+No automatic check, legal hold or admin hold view exists yet. The admin service serves only `GET /health`
+(`interfaces/admin/routes.manifest.json`; `interfaces/admin/compose.ts` passes `routes: []`; `shared/http/server.ts`
+adds `GET /health`). Nothing on main blocks an item, seals it or freezes uploads. How to contain by hand today is a
+decision for Alex. It is not filled in here. Each line below applies once the step that builds it has landed
+(plan §5.8 in `docs/ai/PLAN.md`; the step text is in `docs/ai/book/`).
+
+1. A matched image is not stored, and that uploader's uploads are frozen, once P2.16 lands (plan §5.8 names the
+   freeze). That step's check is the fake, and it creates no legal-hold record. Never freeze the reporter's account.
+2. The sealed legal-hold record, and the owner-only screen of its metadata (ids, dates and status; not the media),
+   are P4.07. The real check is P5.07b, which seals an image match through P4.07's one hold entry point. A matched
+   video is handed to P4.07 by P4.06; once P4.07 lands, that video is blocked and sealed, and the uploader is
+   frozen on P2.16's `uploads_frozen` flag. Suspected material that no fingerprint matched is blocked, sealed and
+   the uploader frozen on that same path. P3.16c supplies the preserve verbs only. P3.20a shows delete holds, not
+   legal holds. Do not open the media.
 3. Note the time you were alerted. The reporting steps in sections 2 and 3 run "as soon as feasible" from here; the
    preservation clock in section 4 starts later: it counts from the day after the notice is made (to police today; to
    the law enforcement body the regulations designate once C-16 commences).

@@ -28,9 +28,9 @@ The welcome screens that need a session at their real paths (age, terms, chat) a
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
 in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). P2.13c adds `/fixture/account` and
 `/fixture/settings-*` the same way, so the account page and both settings pages are in the axe matrix. `nojs.spec.ts` also drives both menus at a
-375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
+375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/signed-out`, since P2.05m draws `/login` as the sign-in box with no shell); P2.05n's `login_close_returns_to_the_page_before` clicks the footer's Sign in on `/legal/terms` so the browser sends its own Referer and the footer
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
-`/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
+`/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.1 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON reports (the checks list already
 covers `scripts/test/`). Since P0.07b, `e2e.yml` runs one `browser` job per Playwright project and an `a11y` job
 (pa11y and Lighthouse) in parallel; the `e2e` gate job takes all three browser reports, so a spec counts as run when

@@ -41,4 +41,4 @@ Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/
 | `domains/` | `identity` |
 | `infrastructure/` | `audit`, `net-guard`, `pds`, `postgres`, `seal`, `session` |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
-| `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, `compose.dev.yaml`, `compose.local.yaml` |
+| `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, `compose.dev.yaml`, `compose.dev.source.yaml`, `compose.local.yaml` |

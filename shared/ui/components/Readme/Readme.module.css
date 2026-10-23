@@ -1,0 +1,77 @@
+/* Readme (a member's README blocks). Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v3 frames: columns sit side by side
+   with a space-12 gap and stack below 720px; quotes have a 2px line-strong bar; code blocks sit on surface-sunken; check
+   items use the kit's [×] bracket mark. Headings take the sheet's heading styles from base.css. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    overflow-wrap: anywhere;
+  }
+
+  .root > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .root > .columns {
+    display: grid;
+    gap: var(--space-8) var(--space-12);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 720px) {
+    .root > .columns[data-columns="2"] {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .root > .columns[data-columns="3"] {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
+
+  .columns > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .root :is(p, h2, h3, h4, ul, ol, blockquote, pre) {
+    margin: 0;
+  }
+
+  .root :is(ul, ol) {
+    padding-left: var(--space-6);
+  }
+
+  .root .checks {
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .check {
+    margin-right: var(--space-2);
+    font-family: var(--font-mono);
+    color: var(--color-ink-muted);
+  }
+
+  .root blockquote {
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-line-strong);
+    color: var(--color-ink-muted);
+  }
+
+  .code {
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    background-color: var(--color-surface-sunken);
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+}

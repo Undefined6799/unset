@@ -35,7 +35,13 @@ const browser = {
     emptyOutDir: true,
     manifest: true,
     rolldownOptions: {
-      input: { boot: "src/islands/runtime/bootstrap.ts", styles: "src/styles.ts" },
+      // The owner's README editor (ADR 0037 point 5) is an entry of its own, which only its page loads; the island
+      // budget gives it its own cap (scripts/budgets/island.ts).
+      input: {
+        boot: "src/islands/runtime/bootstrap.ts",
+        styles: "src/styles.ts",
+        editor: "src/editor/readme.editor.tsx",
+      },
       // An entry keeps its exports, and with them any CSS Module it exports (scripts/ui/web-css.test.ts builds one).
       preserveEntrySignatures: "exports-only",
     },

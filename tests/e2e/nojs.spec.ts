@@ -17,6 +17,27 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // P2.05m: the sign-in page is one box over the scrim, with nothing behind it to tab into; with no Referer, Close goes home.
+  test("login_box_without_js", async ({ page }) => {
+    await page.goto("/login?next=/did");
+    const dialog = page.getByRole("region", { name: "Sign in" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
+    await expect(page.locator("header, footer")).toHaveCount(0);
+  });
+
+  // P2.05n: the browser's own Referer (Referrer-Policy same-origin) brings Close back to the page the visitor left.
+  test("login_close_returns_to_the_page_before", async ({ page }) => {
+    await page.goto("/legal/terms");
+    await page.locator('footer a[href="/login"]').click();
+    await expect(page).toHaveURL(/\/login$/);
+    const close = page.getByRole("region", { name: "Sign in" }).getByRole("link", { name: "Close" });
+    await expect(close).toHaveAttribute("href", "/legal/terms");
+    await close.click();
+    await expect(page).toHaveURL(/\/legal\/terms$/);
+  });
+
   // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
   test.describe("phone", () => {
     test.use({ viewport: { width: 375, height: 800 } });
@@ -37,7 +58,7 @@ test.describe("javascript disabled", () => {
     });
 
     test("default_shell_details_menu_without_js", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/signed-out");
       const menu = page.locator("header details");
       const summary = menu.locator("summary");
       await expect(summary).toBeVisible();

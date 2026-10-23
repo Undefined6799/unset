@@ -11,7 +11,7 @@ How to run the dev stack, apply migrations, and respond. Human docs stay in `doc
 
 | Page | Covers |
 | --- | --- |
-| [Dev stack](dev-stack/) | `npm run dev:up`, `dev:down`, `local:up`, `local:down`, and the files those scripts pass |
+| [Dev stack](dev-stack/) | `npm run dev:up`, `dev:down`, `dev:source:up`, `dev:source:down`, `local:up`, `local:down`, and the files those scripts pass |
 | [Runbooks](runbooks/) | The files in `docs/human/runbooks/` |
 | [Migrations](migrations/) | The Compose `migrate` service and `unset-migrate` |
 | [Incidents](incidents/) | Severity labels and the privacy-breach runbook |

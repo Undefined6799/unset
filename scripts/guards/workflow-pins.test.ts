@@ -77,6 +77,15 @@ describe("workflows", () => {
     expect(problems(builder('--driver-opt "image=moby/buildkit:v0.34.0"'))).toHaveLength(1);
     expect(problems(builder(`--driver-opt "image=moby/buildkit:v0.34.0@sha256:${"a".repeat(64)}"`))).toEqual([]);
     expect(problems(builder('--driver-opt "image=$BUILDKIT_IMAGE"'))).toEqual([]);
+    // P1.27t: the literal default-load option may stand beside it, and nothing may ride on it.
+    expect(problems(builder('--driver-opt "image=$BUILDKIT_IMAGE" --driver-opt default-load=true'))).toEqual([]);
+    expect(problems(builder('--driver-opt default-load=true --driver-opt "image=$BUILDKIT_IMAGE"'))).toEqual([]);
+    expect(
+      problems(
+        builder('--driver-opt "image=$BUILDKIT_IMAGE" --driver-opt default-load=true,image=moby/buildkit:latest'),
+      ),
+    ).toHaveLength(1);
+    expect(problems(builder('--driver-opt "image=$BUILDKIT_IMAGE" --driver-opt default-load=false'))).toHaveLength(1);
     // The last image= wins in buildx's driver options, so exactly one may appear, and a digest cannot ride a CSV tail.
     const pinned = `moby/buildkit:v0.34.0@sha256:${"a".repeat(64)}`;
     expect(

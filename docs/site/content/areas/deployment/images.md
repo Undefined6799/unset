@@ -36,7 +36,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
-`deployment/images.lock.json` is what dev and prod run. Every entry has `verify: cosign-keyless`.
+`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`.
 
 | Name | `origin` | Image |
 | --- | --- | --- |
@@ -59,16 +59,16 @@ The digest strings live in the lock. This page does not copy them.
 | Workflow | When | What the file header says |
 | --- | --- | --- |
 | `.github/workflows/images.yml` | ready pull request, push to `main` | `images` builds `deployment/images/node-app.Dockerfile` for `APP=web`. `edge` builds `deployment/edge/Dockerfile`. `discover` runs `scripts/ci/list-dockerfiles.ts`. `scan-image` builds and scans every Dockerfile that list emits, including `deployment/pds/Dockerfile` (context `deployment/pds`). The vulnerability scan reads the ignore file that list emitted for that image. The exported-filesystem secret scan is a step of `scan-image` on that same build: it runs after a failed vulnerability scan too, and never when the build failed, and it passes `--ignorefile /dev/null`. `pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. `scan` is green only when `discover`, `scan-image` (both scans) and `pds-ui` succeeded. Nothing in this workflow pushes or signs. |
-| `.github/workflows/publish-images.yml` | push to `main` only | Job `publish`, environment `signing`. Builds each image `list-dockerfiles.ts` emits from the checked-out commit, including `deployment/pds/Dockerfile` (context `deployment/pds`, name `pds`, ref `ghcr.io/undefined6799/unset/pds`), pushes by digest, scans each image with the ignore file the list emitted for it, signs and attests with keyless cosign, then runs `scripts/ci/verify-images.ts` on `$RUNNER_TEMP/images.lock.json`. That file records the pushed `pds` ref as `origin: first-party`. `deployment/images.lock.json` stays the deploy lock in the table above. Its `pds` entry stays the upstream mirror. Compose service images are on [compose](../compose/). |
+| `.github/workflows/publish-images.yml` | push to `main` only | Job `publish`, environment `signing`. Builds each image `list-dockerfiles.ts` emits from the checked-out commit, including `deployment/pds/Dockerfile` (context `deployment/pds`, name `pds`, ref `ghcr.io/undefined6799/unset/pds`), pushes by digest, scans each image with the ignore file the list emitted for it, signs and attests with keyless cosign, then runs `scripts/ci/verify-images.ts` on `$RUNNER_TEMP/images.lock.json`. That file records the pushed `pds` ref as `origin: first-party`. `deployment/images.lock.json` stays the deploy lock in the table above. Its `pds` entry is that first-party ref (P2.24y). Compose service images are on [compose](../compose/). |
 | `.github/workflows/mirror.yml` | push to `main`, and weekly `scan` | `scan` runs Trivy on every `source` in `deployment/mirror.list.json`. `copy-and-sign` copies each source to its GHCR mirror by the same digest and signs it. It does not run on the weekly schedule. |
 | `.github/workflows/sigstore-root.yml` | `workflow_dispatch` | Job `fetch`. Installs cosign v3.1.3 and uploads `trusted_root.json` as a run artifact. It does not commit. |
 
 cosign in those workflows and in `deployment/preflight/cosign.ts` is v3.1.3. The preflight expects the binary at `/usr/local/bin/cosign`. The sha256 values are `COSIGN.sha256` in that file and `COSIGN_SHA256` in the workflows.
 
-The dev stack does not build. `npm run dev:up` passes `--no-build`. See [compose](../compose/).
+`npm run dev:up` passes `--no-build` and runs the lock (`deployment/preflight/stack.ts`). `npm run dev:source:up` passes `--build`. `deployment/compose.dev.source.yaml` builds `postgres`, `migrate`, `pds`, `edge` and `web` from the checkout. `newt` stays the lock digest. See [compose](../compose/).
 
 ## Data
 
 The locks, `kinds.json`, `mirror.list.json` and `trusted_root.json` above. No schema, role or table.
 
-`deployment/images.lock.json` is the deploy lock. `deployment/images/bases.lock.json` is the base lock. A service under `--env dev` or `--env prod` runs the deploy lock, not a base tag.
+`deployment/images.lock.json` is the deploy lock. `deployment/images/bases.lock.json` is the base lock. A service under `--env prod`, or under `--env dev` without `--source`, runs the deploy lock, not a base tag. Under `--env dev --source`, a service with a build and no image is admitted when C26 passes; a service that names an image must still name a lock digest (`deployment/preflight/checks/images.ts`).

@@ -48,8 +48,9 @@ export const PAGES: readonly PageFixture[] = [
   { path: "/legal/terms", group: "public", zeroJs: true, expectJs: false },
   { path: "/legal/privacy", group: "public", zeroJs: true, expectJs: false },
   { path: "/legal/domains", group: "public", zeroJs: true, expectJs: false },
-  // P2.13 renders these inside the app shell. The header island is a script; the page still works without it.
-  { path: "/login", group: "app", zeroJs: false, expectJs: true },
+  // P2.05m: the sign-in dialog alone, with no shell and islands off, so no script is requested.
+  { path: "/login", group: "app", zeroJs: true, expectJs: false },
+  // P2.13 renders this inside the app shell. The header island is a script; the page still works without it.
   { path: "/signed-out", group: "app", zeroJs: false, expectJs: true },
   // P2.12 renders this with islands off and no session. The header stays static, so no script is requested.
   { path: "/welcome/blocked", group: "app", zeroJs: true, expectJs: false },

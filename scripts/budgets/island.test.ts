@@ -72,7 +72,7 @@ function run(dir: string, islands: string[] = []): { code: number; lines: string
 }
 
 test("budget_island_limits_are_kib", () => {
-  expect(BUDGET).toEqual({ perIslandGzipBytes: 15 * KIB, totalGzipBytes: 75 * KIB });
+  expect(BUDGET).toEqual({ perIslandGzipBytes: 15 * KIB, totalGzipBytes: 80 * KIB, editorGzipBytes: 256 * KIB });
 });
 
 test("island_budget_passes_within_limits", () => {
@@ -85,7 +85,7 @@ test("island_budget_passes_within_limits", () => {
   const { code, lines } = run(dir, sourcesOf(["demo", "menu"]));
   expect(code).toBe(0);
   expect(lines.filter((line) => line.startsWith("island "))).toHaveLength(2);
-  expect(lines.at(-1)).toMatch(/^all island JS: \d+ gzip bytes in 4 files \(max 76800\)$/);
+  expect(lines.at(-1)).toMatch(/^all island JS: \d+ gzip bytes in 4 files \(max 81920\)$/);
 });
 
 test("island_budget_check", () => {
@@ -116,7 +116,7 @@ test("island_budget_fails_total_over", () => {
 test("island_budget_counts_shared_chunk_once", () => {
   const gz: Record<string, number> = { "assets/boot-a1.js": 100, "assets/runtime-b2.js": 1000, "assets/x-c3.js": 10 };
   const report = checkIslands(manifestOf(["x"]), (file) => gz[file] ?? 0, BUDGET);
-  expect(report.lines.at(-1)).toBe("all island JS: 1110 gzip bytes in 3 files (max 76800)");
+  expect(report.lines.at(-1)).toBe("all island JS: 1110 gzip bytes in 3 files (max 81920)");
 });
 
 test("island_budget_fails_closed", () => {
@@ -179,4 +179,62 @@ test("island_sources_lists_every_island", () => {
   const viteRoot = join(ROOT, "apps", "web");
   const expected = tracked.map((file) => relative(viteRoot, join(ROOT, file))).sort();
   expect(islandSources(ROOT)).toEqual(expected);
+});
+
+// The owner's README editor (ADR 0037 point 5; Alex 2026-10-23 21:29Z: "approve BlockNote 0.56.0 as an owner-only
+// editor chunk outside the island budget"): an entry under src/editor/ and what only it reaches leave the island
+// total and meet their own cap; a chunk an island page also loads is still counted in the island total.
+function withEditor(manifest: Manifest): Manifest {
+  return {
+    ...manifest,
+    "src/editor/readme.editor.tsx": {
+      file: "assets/readme-e1.js",
+      src: "src/editor/readme.editor.tsx",
+      isEntry: true,
+      imports: ["_runtime.js", "_blocknote.js"],
+    },
+    "_blocknote.js": { file: "assets/blocknote-e2.js" },
+  };
+}
+
+test("owner_editor_is_outside_the_island_total", () => {
+  const gz: Record<string, number> = {
+    "assets/boot-a1.js": 100,
+    "assets/runtime-b2.js": 1000,
+    "assets/x-c3.js": 10,
+    "assets/readme-e1.js": 5000,
+    "assets/blocknote-e2.js": 200_000,
+  };
+  const report = checkIslands(withEditor(manifestOf(["x"])), (file) => gz[file] ?? 0, BUDGET);
+  expect(report.over).toEqual([]);
+  expect(report.lines.slice(-2)).toEqual([
+    "all island JS: 1110 gzip bytes in 3 files (max 81920)",
+    "owner editor JS: 205000 gzip bytes in 2 files (max 262144)",
+  ]);
+});
+
+test("owner_editor_over_its_cap_fails", () => {
+  const sizes = {
+    "assets/boot-a1.js": 1,
+    "assets/runtime-b2.js": 1,
+    "assets/x-c3.js": 1,
+    "assets/readme-e1.js": 1,
+    "assets/blocknote-e2.js": 257,
+  };
+  const { code, lines } = run(build(withEditor(manifestOf(["x"])), sizes), sourcesOf(["x"]));
+  expect(code).toBe(1);
+  expect(lines.filter((line) => line.startsWith("::error"))).toEqual([
+    expect.stringMatching(/^::error title=island-budget::owner editor JS: \d+ gzip bytes in 2 files \(max 262144\)$/),
+  ]);
+});
+
+test("an_editor_entry_outside_src_editor_is_an_island_page_entry", () => {
+  const manifest = withEditor(manifestOf(["x"]));
+  const moved = manifest["src/editor/readme.editor.tsx"];
+  if (moved === undefined) throw new Error("fixture");
+  manifest["src/other/readme.editor.tsx"] = { ...moved, src: "src/other/readme.editor.tsx" };
+  delete manifest["src/editor/readme.editor.tsx"];
+  const gz: Record<string, number> = { "assets/readme-e1.js": 5000, "assets/blocknote-e2.js": 200_000 };
+  const report = checkIslands(manifest, (file) => gz[file] ?? 0, BUDGET);
+  expect(report.over).toEqual([expect.stringMatching(/^all island JS: 205000 gzip bytes in 5 files/)]);
 });

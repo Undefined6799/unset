@@ -1,0 +1,178 @@
+/* The owner's README editor (ADR 0037 point 5). BlockNote's own stylesheet is not loaded: these rules lay out the
+   blocks it renders (attribute selectors on its markup, @blocknote/core 0.56.0: .bn-block-group > .bn-block-outer >
+   .bn-block > .bn-block-content[data-content-type]) with the sheet's tokens, so the editor reads like the README a
+   visitor sees (shared/ui Readme). Menus sit on surface-raised with a line-strong edge and the menu shadow. */
+@layer screens {
+  .editor {
+    --editor-placeholder: "";
+    position: relative;
+    /* Room for the block handle: two 32px buttons and their gaps. */
+    padding-left: calc(var(--space-12) + var(--space-6));
+    color: var(--color-ink);
+  }
+
+  .editor :global(.ProseMirror) {
+    outline: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .editor [data-node-type="blockGroup"] [data-node-type="blockGroup"] {
+    margin-left: var(--space-6);
+  }
+
+  .editor [data-node-type="blockOuter"] {
+    margin-block: var(--space-2);
+  }
+
+  .editor [data-content-type] {
+    display: flex;
+    gap: var(--space-2);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-line);
+  }
+
+  .editor [data-content-type] :is(p, h1, h2, h3, blockquote, pre) {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .editor [data-content-type="heading"] h1 {
+    font-size: var(--type-heading-1-size);
+    line-height: var(--type-heading-1-line);
+    font-weight: var(--type-heading-1-weight);
+  }
+
+  .editor [data-content-type="heading"] h2 {
+    font-size: var(--type-heading-2-size);
+    line-height: var(--type-heading-2-line);
+    font-weight: var(--type-heading-2-weight);
+  }
+
+  .editor [data-content-type="heading"] h3 {
+    font-size: var(--type-heading-3-size);
+    line-height: var(--type-heading-3-line);
+    font-weight: var(--type-heading-3-weight);
+  }
+
+  .editor [data-content-type="bulletListItem"]::before {
+    content: "•";
+    color: var(--color-ink-muted);
+  }
+
+  .editor [data-content-type="numberedListItem"]::before {
+    content: attr(data-index) ".";
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .editor [data-content-type="checkListItem"][data-checked="true"] p {
+    color: var(--color-ink-muted);
+    text-decoration: line-through;
+  }
+
+  .editor [data-content-type="quote"] blockquote {
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-line-strong);
+    color: var(--color-ink-muted);
+  }
+
+  .editor [data-content-type="codeBlock"] pre {
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    background-color: var(--color-surface-sunken);
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+
+  .editor
+    [data-is-empty-and-focused]
+    :global(.bn-inline-content):has(> :global(.ProseMirror-trailingBreak):only-child)::before {
+    content: var(--editor-placeholder);
+    position: absolute;
+    color: var(--color-ink-muted);
+    pointer-events: none;
+  }
+
+  .editor :global(.ProseMirror-selectednode) {
+    outline: 2px solid var(--color-focus);
+  }
+
+  .toolbar,
+  .menu,
+  .handle {
+    position: absolute;
+    z-index: var(--z-menu);
+  }
+
+  .toolbar,
+  .menu {
+    display: flex;
+    margin: 0;
+    padding: var(--space-1);
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-menu);
+  }
+
+  .menu {
+    flex-direction: column;
+    min-width: 12rem;
+  }
+
+  .option,
+  .empty {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--type-body-small-size);
+    line-height: var(--type-body-small-line);
+  }
+
+  .option {
+    cursor: pointer;
+  }
+
+  .option[aria-selected="true"] {
+    background-color: var(--color-surface-sunken);
+  }
+
+  .empty {
+    color: var(--color-ink-muted);
+  }
+
+  .handle {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .tool {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    cursor: pointer;
+  }
+
+  .tool[aria-pressed="true"],
+  .tool:hover {
+    background-color: var(--color-surface-sunken);
+  }
+
+  .tool:focus-visible {
+    outline: 2px solid var(--color-focus);
+  }
+
+  .handle .tool[draggable="true"] {
+    cursor: grab;
+  }
+}

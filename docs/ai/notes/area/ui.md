@@ -21,7 +21,7 @@ checked: 2026-10-23
 - The build code for the generated files (tokens, contrast, font metrics, icons) lives in [[ui-build]]; the Node
   entries that run it are in `scripts/ui/`. `tokens/font-metrics.ts` owns the shape of `font-metrics.json`.
 - `src/tokens.css`, `src/base.css`, `src/layers.css`: generated tokens and base styles.
-- `icons/`: the 36 imported plus two hash-registered Iconoir 7.12.1 icons, copied byte for byte, plus the generated `icons.json` allowlist and one
+- `icons/`: the 36 imported plus five hash-registered Iconoir 7.12.1 icons (P2.24f: devices, apps; P2.13e: bulb-off, bulb-on, tv), copied byte for byte, plus the generated `icons.json` allowlist and one
   generated `drawings/<name>.generated.ts` per icon. `components/Icon/` renders them: pages use `<Icon name>`;
   islands use `IconDrawing` with the one drawing module they need, because `icons.json` is about 5 KB gzip and would
   not fit the island budget. No icon npm package and nothing fetched at runtime (decision 33).
@@ -47,6 +47,9 @@ checked: 2026-10-23
   hover/focus and dismiss on Escape; SSR/no-JS retains native title and accessible-name fallback. Alex's
   2026-10-21 browser revision removes the popup Close control and lifts only current phone artwork within
   stationary targets; `closeLabel` stays optional/deprecated for callers. Native toggle/dismissal remains intact.
+- `components/Readme/` (P2.20y, staging preview, not yet on the sheet): renders a member's README blocks (the
+  `sh.unset.profile` lexicon's block model, written with BlockNote) on the server with no script; links pass `safeHref`
+  as http(s) only. Its prop types mirror the lexicon, since shared/ui imports no domain.
 - `presentation.ts` / the explicit `./presentation` package export: Navigation, Button, Input, Icon, Avatar,
   safeHref and needed types only. `./brand-header` points directly to the pure BrandHeader module. Use these entries
   for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
