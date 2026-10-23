@@ -1,5 +1,5 @@
 // A placeholder profile page so the onboarding gate has an app route to refuse (P2.12). P2.13 replaces the body.
-import { PrivacyNotice } from "./welcome/PrivacyNotice.tsx";
+import { PrivacyNotice } from "../welcome/PrivacyNotice.tsx";
 
 export type SettingsProfileProps = { readonly privacyNotice: boolean };
 
