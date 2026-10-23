@@ -242,6 +242,11 @@ describe("ProfileEditor with script", () => {
     expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
   });
 
+  it("an owner with no display name sees Add your name, never the handle, on top", async () => {
+    const { host } = await mount({ ...props, fields: { ...props.fields, displayName: "" } });
+    expect(host.querySelector("h1")?.textContent).toBe("Add your name");
+  });
+
   it("view as hides the pencils", async () => {
     const { host, button, commit } = await mount();
     await act(async () => button("Edit place")?.click());
