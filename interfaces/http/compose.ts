@@ -195,6 +195,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
     authorize: (input, options) => authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log }),
     pdsHost: cfg.PDS_HOSTNAME,
+    publicOrigin: cfg.PUBLIC_ORIGIN,
     handleDomain: cfg.HANDLE_SUFFIX.slice(1),
     allowHttp: cfg.OAUTH_ALLOW_HTTP,
     log,

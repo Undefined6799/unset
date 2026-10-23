@@ -45,7 +45,8 @@ the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-cl
 which writes the secrets to files; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
 
-**Signing in (P2.05).** `routes/login.ts`: GET /login renders the form; POST /login (rate limit `login`, CSRF gate)
+**Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
+same-origin Referer's path, never a `/login` page or `next`, else `/`, so it needs `publicOrigin` from compose.ts); POST /login (rate limit `login`, CSRF gate)
 resolves the handle, issues a P1.16 `login.nonce`, calls `authorize` (infrastructure/pds) with the nonce, expected DID
 and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600 s) and `__Host-login_target`
 (Strict, 120 s, the authorization URL in base64url) and answers 303 to GET /login/continue, which renders a meta

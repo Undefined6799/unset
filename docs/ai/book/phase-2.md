@@ -1383,6 +1383,19 @@ menu test moves to `/signed-out`.
 Done when `login_is_one_modal_box`, `login_get_shows_only_a_catalog_error` and `login_box_without_js` pass and check
 is green.
 
+### P2.05n — Close the sign-in box to the page before
+Tags: (none)            Depends on: P2.05m
+Alex, 2026-10-23 12:23Z: the X "just does not do anything. It should probably go back to the page to which I came
+from." Staging's build sent Close to `next`, the protected page, which redirected straight back; P2.05m's `/` left
+him at home instead.
+
+**What:** GET /login works out Close from the Referer: if it is our origin (Referrer-Policy `same-origin` sends it only
+between our pages, and a 303 keeps it), not a `/login` page, passes `safeReturnPath`, and is not `next`, Close goes
+there; otherwise `/`. No state, no new input stored.
+
+Done when `login_close_goes_back_to_the_page_before` and `login_close_returns_to_the_page_before` (nojs.spec.ts, the
+browser's own Referer) pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`
