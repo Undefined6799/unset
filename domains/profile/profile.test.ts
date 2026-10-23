@@ -9,7 +9,6 @@ const good = {
   headline: "Designer and front-end developer.",
   location: "Toronto, Ontario",
   website: "https://alice.dev",
-  readme: "## About me\nhi\n:::\n## My projects\n- [Tidy](https://github.com/alicem/tidy)",
   links: "https://github.com/alicem\nhttps://bsky.app/profile/alice.bsky.social",
 };
 /** `good` as the record stores it: links are the lexicon's objects. */
@@ -41,7 +40,6 @@ describe("parseProfileFields", () => {
     ["displayName", LIMITS.profile.displayName],
     ["headline", LIMITS.profile.headline],
     ["location", LIMITS.profile.location],
-    ["readme", LIMITS.profile.readme],
   ] as const)("%s counts graphemes up to its limit", (field, limit) => {
     const family = "👩‍👩‍👧";
     expect(parseProfileFields({ [field]: family.repeat(limit) }).ok).toBe(true);
@@ -68,10 +66,10 @@ describe("toProfileRecord", () => {
   const NOW = "2026-10-23T04:00:00.000Z";
 
   test("a first profile writes only filled fields and passes the strict validator", () => {
-    const built = toProfileRecord({ ...EMPTY_PROFILE, displayName: "Alice", readme: "hi" }, null, NOW);
+    const built = toProfileRecord({ ...EMPTY_PROFILE, displayName: "Alice", headline: "hi" }, null, NOW);
     expect(built).toEqual({
       ok: true,
-      record: { $type: "sh.unset.profile", displayName: "Alice", readme: "hi", createdAt: NOW, updatedAt: NOW },
+      record: { $type: "sh.unset.profile", displayName: "Alice", headline: "hi", createdAt: NOW, updatedAt: NOW },
     });
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
@@ -95,7 +93,6 @@ describe("toProfileRecord", () => {
         displayName: good.displayName,
         location: good.location,
         website: good.website,
-        readme: good.readme,
         links: goodStored.links,
         createdAt: "2026-10-01T00:00:00.000Z",
         updatedAt: NOW,
@@ -104,19 +101,19 @@ describe("toProfileRecord", () => {
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
 
-  test("a partial edit (Settings › Profile, or the README alone) keeps every field it does not send", () => {
+  test("a partial edit (Settings › Profile sends the side column only) keeps every field it does not send", () => {
     const existing = { $type: "sh.unset.profile", ...goodStored, createdAt: "2026-10-01T00:00:00.000Z" };
-    const built = toProfileRecord({ readme: "new" }, existing, NOW);
+    const built = toProfileRecord({ location: "Montréal" }, existing, NOW);
     expect(built).toEqual({
       ok: true,
-      record: { ...existing, readme: "new", updatedAt: NOW },
+      record: { ...existing, location: "Montréal", updatedAt: NOW },
     });
     const cleared = toProfileRecord({ headline: "" }, existing, NOW);
     expect(cleared.ok && "headline" in cleared.record).toBe(false);
   });
 
   test("a partial edit cannot leave a profile without a display name", () => {
-    expect(toProfileRecord({ readme: "hi" }, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
+    expect(toProfileRecord({ headline: "hi" }, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
   });
 
   test("a profile without a display name cannot be published", () => {

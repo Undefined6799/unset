@@ -129,7 +129,7 @@ Foreign DIDs return 404. Owner pages show the handle only when P2.02's `verifyHa
 unindexed and zero JS. GET /login sends a signed-in visitor to `/did`. P2.12's `openApp` still requires onboarding
 and email confirmation. Public profile content, editing and invite blocks remain separate work.
 
-**Saving the profile (P2.20p).** `routes/profile.ts`: POST `/profile` (form, 400 KiB body limit, CSRF) opens the
+**Saving the profile (P2.20p).** `routes/profile.ts`: POST `/profile` (form, 96 KiB body limit, CSRF) opens the
 app gate, reads only the fields sent through `domains/profile`, and writes the session's own `sh.unset.profile`
 with a compare-and-swap (`infrastructure/pds/profile-record.ts`). A field left out keeps its stored value. It
 returns 303 to `/<DID>`, or to `/settings/profile` only when `next` is exactly that path.

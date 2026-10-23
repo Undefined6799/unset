@@ -4,7 +4,7 @@
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 
-export const PROFILE_FIELDS = ["displayName", "headline", "location", "website", "readme", "links"] as const;
+export const PROFILE_FIELDS = ["displayName", "headline", "location", "website", "links"] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
 /**
  * Checked fields. An empty string means the field is not set. `links` holds one URL a line, the way a form sends
@@ -17,12 +17,11 @@ export const EMPTY_PROFILE: ProfileFields = {
   headline: "",
   location: "",
   website: "",
-  readme: "",
   links: "",
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
-/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, the README editor). */
+/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile). */
 export type ProfileEdit = Partial<ProfileFields>;
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
@@ -33,9 +32,8 @@ const GRAPHEMES: Record<Exclude<ProfileField, "links">, number> = {
   headline: LIMITS.profile.headline,
   location: LIMITS.profile.location,
   website: LIMITS.profile.websiteBytes,
-  readme: LIMITS.profile.readme,
 };
-const MULTILINE: ReadonlySet<ProfileField> = new Set(["readme", "links"]);
+const MULTILINE: ReadonlySet<ProfileField> = new Set(["links"]);
 
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 function graphemes(text: string, stopAfter: number): number {

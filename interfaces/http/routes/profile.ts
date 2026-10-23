@@ -11,11 +11,8 @@ import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
 
 const FORM = "application/x-www-form-urlencoded";
-/**
- * The readme's 100,000-byte lexicon bound and the links' 12 × 2,000 bytes, percent-encoded at worst three bytes a
- * byte, plus the short fields.
- */
-export const PROFILE_BODY_LIMIT_BYTES = 400 * 1024;
+/** The links' 12 × 2,000 bytes, percent-encoded at worst three bytes a byte, plus the short fields. */
+export const PROFILE_BODY_LIMIT_BYTES = 96 * 1024;
 
 export type ProfileSave =
   | { readonly kind: "saved" }
@@ -32,7 +29,7 @@ export type ProfileDeps = {
 
 /**
  * Each field's one value; a field left out is not sent, so it keeps what the record holds (Settings › Profile edits the
- * side column, the profile page the README). A repeated field is refused like a malformed one.
+ * side column). A repeated field is refused like a malformed one.
  */
 function formFields(form: URLSearchParams): Record<string, unknown> | null {
   const input: Record<string, unknown> = {};

@@ -57,7 +57,6 @@ const FORM = new URLSearchParams({
   headline: "Designer.",
   location: "",
   website: "https://alice.example",
-  readme: "## About me\r\nhi",
   links: "https://github.com/alicem\r\nhttps://bsky.app/profile/alice",
 }).toString();
 
@@ -75,7 +74,6 @@ describe("POST /profile", () => {
           headline: "Designer.",
           location: "",
           website: "https://alice.example",
-          readme: "## About me\nhi",
           links: "https://github.com/alicem\nhttps://bsky.app/profile/alice",
         },
       },
