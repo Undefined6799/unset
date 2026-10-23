@@ -133,6 +133,12 @@
   output: "303 to the step for this account, or to /login."
   errors: "The handler names no error code of its own."
   auth: "reads session"
+"POST /profile":
+  why: "Saves the signed-in member's own profile to their PDS (interfaces/http/routes/profile.ts)."
+  input: "Form fields displayName, headline, location, website, readme and links; a field left out keeps its stored value."
+  output: "303 to the member's profile page, or to /settings/profile when next names it."
+  errors: "profile.invalid, profile.too_long, profile.url_invalid and profile.name_required for bad fields. profile.conflict when the record changed since it was read. profile.pds_unavailable when the PDS does not answer."
+  auth: "gate: openApp"
 "GET /welcome/age":
   why: "Asks for a birth date. The date is not stored (interfaces/http/routes/welcome.ts)."
   input: "No request body."
