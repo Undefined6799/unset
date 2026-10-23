@@ -61,6 +61,8 @@ public profile content and the editor remain separate work (P2.21).
   The runtime takes the island types (`IslandDefinition`, `IslandProps`, `IslandRenderer`), `readProps` and
   `serializeProps` from `@unset/shared-islands` ([[islands]]), through its index only; nothing comes from a subpath
   or from `@unset/shared-ui` (P1.25p).
+  It also closes open popovers on `pagehide` (`popovers.ts`, P2.13e): the back-forward cache restores a page as it
+  was left, so Back showed the menu drawer again. Zero-JS pages (`/`, the legal pages) load no bootstrap and keep it.
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers the global sheets and every CSS Module into the stylesheets each
   page links). Since P1.25 the global sheets (layers, tokens with the two font faces, base) are in it, as globs:
