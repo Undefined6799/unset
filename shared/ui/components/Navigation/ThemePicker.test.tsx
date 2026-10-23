@@ -72,7 +72,7 @@ describe("ThemePicker with script", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/prefs/theme");
-    expect(init).toMatchObject({ method: "POST", credentials: "same-origin", redirect: "manual" });
+    expect(init).toMatchObject({ method: "POST", credentials: "same-origin", redirect: "manual", keepalive: true });
     expect(String(init.body)).toBe("theme=dark&return=%2Fsettings%2Faccount");
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(document.querySelector('meta[name="color-scheme"]')?.getAttribute("content")).toBe("dark");
@@ -118,6 +118,18 @@ describe("ThemePicker with script", () => {
     await act(async () => window.dispatchEvent(restored));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(button("dark").getAttribute("aria-pressed")).toBe("true");
+    sessionStorage.clear();
+  });
+
+  it("takes the theme a fresh page was rendered with as this tab's latest", async () => {
+    // Codex on #1312: a choice made elsewhere (the footer form) left an older one stored for Back to bring back.
+    sessionStorage.setItem("unset.theme", "dark");
+    const { button } = await mount("light");
+    document.documentElement.removeAttribute("data-theme");
+    const restored = Object.assign(new Event("pageshow"), { persisted: true });
+    await act(async () => window.dispatchEvent(restored));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(button("light").getAttribute("aria-pressed")).toBe("true");
     sessionStorage.clear();
   });
 
