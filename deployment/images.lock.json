@@ -1,11 +1,11 @@
 {
   "postgres": {
-    "ref": "ghcr.io/undefined6799/unset/postgres@sha256:b3edf8ad1e957df39124de7249fbff4af26c37d128811493ef2722161d6f5c59",
+    "ref": "ghcr.io/undefined6799/unset/postgres@sha256:f0810f91197d282eb63d52b4ba05598fca19f13421bfe2d3155678ea53884891",
     "origin": "first-party",
     "verify": "cosign-keyless"
   },
   "migrate": {
-    "ref": "ghcr.io/undefined6799/unset/migrate@sha256:a5409bc1556f8df34550442933a0e3d08a517902998757352ad61dda5829ccfd",
+    "ref": "ghcr.io/undefined6799/unset/migrate@sha256:89237144d08eebe4c8b4a31f2b7847eceba851a4645dca1c33e6f624703bec0a",
     "origin": "first-party",
     "verify": "cosign-keyless"
   },
@@ -16,12 +16,12 @@
     "verify": "cosign-keyless"
   },
   "edge": {
-    "ref": "ghcr.io/undefined6799/unset/edge@sha256:c94bcd8c27cc037edfdd7dd49635fbf0c2fe7b96ff5ebd6f97ba99068255e330",
+    "ref": "ghcr.io/undefined6799/unset/edge@sha256:bfcbb99c39340108bf8175b745ce66654ef90e9781b52034f237799c95d6c2bb",
     "origin": "first-party",
     "verify": "cosign-keyless"
   },
   "web": {
-    "ref": "ghcr.io/undefined6799/unset/web@sha256:3338eea418322b989509716758821c89088e0f9bc18b6d91d3fbbfda0e61a73e",
+    "ref": "ghcr.io/undefined6799/unset/web@sha256:a3ded8242d56e88e208980ab7c79b31d21b7875402035959b1f055da13525dfc",
     "origin": "first-party",
     "verify": "cosign-keyless"
   },
