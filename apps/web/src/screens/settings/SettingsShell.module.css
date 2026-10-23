@@ -1,0 +1,73 @@
+/* The settings layout (P2.13c): a side list beside the page, a row above it on phones (Alex, 2026-10-23 01:11:22Z,
+   "Side list"; Figma 4hrOlzQ1d0lA8Acm4KyLVf frames 133:787 and 133:4634). */
+@layer screens {
+  .label {
+    margin: 0 0 var(--space-6);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 560px);
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: block;
+    padding: var(--space-2) var(--space-3);
+    border-left: 2px solid transparent;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+  }
+
+  .item:hover {
+    color: var(--color-ink);
+  }
+
+  .item[aria-current="page"] {
+    border-left-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .page > h1 {
+    margin-top: 0;
+  }
+
+  @media (max-width: 767px) {
+    .body {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-6);
+    }
+
+    .list {
+      flex-direction: row;
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .item {
+      padding: var(--space-2) var(--space-3);
+      border-left: 0;
+      border-bottom: 2px solid transparent;
+    }
+
+    .item[aria-current="page"] {
+      border-bottom-color: var(--color-ink);
+    }
+  }
+}

@@ -28,6 +28,7 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
   const neighbours = (compose: Inputs["compose"]) =>
     pdsNeighbours({
       env: "prod",
+      source: false,
       root: "/repo",
       lockPath: "/repo/lock",
       compose,
@@ -144,6 +145,7 @@ describe("an image's repository (architecture 03:05Z addendum)", () => {
     const inputs = (image: string) =>
       ({
         env: "prod",
+        source: false,
         root: "/repo",
         lockPath: "/repo/lock",
         compose: compose(`services:\n  pds:\n    image: x\n  relay:\n    image: ${image}\n`),

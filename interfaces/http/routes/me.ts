@@ -8,7 +8,7 @@ import type { Logger } from "@unset/shared-log";
 import type { OpenedApp } from "../app-gate.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
-import { issuerOrigin } from "./sign-in-state.ts";
+import { recordedIssuer } from "./account-issuer.ts";
 
 export type MeDeps = {
   /** Session, then onboarding, then a confirmed email (P2.12). A Response is the redirect. */
@@ -24,15 +24,7 @@ export type MeDeps = {
 };
 
 export function meRoutes(deps: MeDeps): Route[] {
-  /** P2.08b: the account link follows the recorded issuer. An unreadable record drops the link, never the page. */
-  const recordedIssuer = (did: Did): Promise<string | null> =>
-    deps.issuerOf(did).then(
-      (issuer) => (issuer === null ? null : issuerOrigin(issuer)),
-      (cause: unknown) => {
-        deps.log.warn("auth.account_issuer_unknown", { kind: cause instanceof Error ? cause.name : "Error" });
-        return null;
-      },
-    );
+  const issuerFor = recordedIssuer(deps.issuerOf, deps.log);
 
   return [
     ...["/did", "/me"].map((path) =>
@@ -67,7 +59,7 @@ export function meRoutes(deps: MeDeps): Route[] {
         const opened = await deps.open(request, deadline, accountPath);
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
-        const [verdict, issuer] = await Promise.all([deps.verifyHandle(did, deadline), recordedIssuer(did)]);
+        const [verdict, issuer] = await Promise.all([deps.verifyHandle(did, deadline), issuerFor(did)]);
         const body = deps.screens.me({
           handle: displayHandle(verdict),
           did,

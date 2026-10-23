@@ -72,7 +72,9 @@ services:
 
   # As in compose.dev.yaml, but with no mail settings at all.
   pds:
-    image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    build:
+      context: ./pds
+      dockerfile: Dockerfile
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]

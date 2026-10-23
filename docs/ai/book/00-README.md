@@ -265,7 +265,7 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     Conventional Commits prefix; decision 35 D2, rule DL-6); the kind of change is a PR label. Merges are squash-only:
     the squash subject is the PR title and its body the commit messages. A PR warns above about 400 changed source
     lines and fails above 800 unless labelled `large-pr` with a reason (tests, lockfile, generated code and lexicon
-    JSON excluded; D3, rule DL-1). At most three agent PRs wait for Alex at once, severity-1 and -2 fixes excepted (D4).
+    JSON excluded; D3, rule DL-1). At most three agent PRs wait for merge at once, severity-1 and -2 fixes excepted (D4).
     The `large-pr` label is only for a change that cannot be cut without leaving a half-working step; a pure function
     with no caller yet (P0.09e) is a valid cut (ruling 2026-10-05). A step that changes a check path and a product path
     together splits: its check part lands first as `<id>q`, and the step depends on it (rule SE-6, ruling 2026-10-05

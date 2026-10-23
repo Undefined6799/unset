@@ -135,7 +135,8 @@ describe("me screen", () => {
     expect(page).toContain(">Sign out</button>");
     expect(page).not.toContain('name="confirm"');
     expect(page).not.toContain("Sign out everywhere");
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
+    // P2.13c: the Edit profile link, then the account link.
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/account"]);
     expect(page).toContain(">Your account on pds.example<svg");
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");
@@ -152,7 +153,7 @@ describe("me screen", () => {
         ours: false,
       }),
     );
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/"]);
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/"]);
     expect(page).toContain("your sign-in server (pds.example)");
     expect(page).not.toContain("only place you type your password");
   });
@@ -161,7 +162,7 @@ describe("me screen", () => {
     const page = html(
       screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, issuer: null, ours: false }),
     );
-    expect(tags(page, "a")).toEqual([]);
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile"]);
   });
 
   test("me_says_when_the_handle_could_not_be_checked", () => {

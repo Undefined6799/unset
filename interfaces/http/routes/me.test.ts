@@ -116,6 +116,19 @@ describe("GET /:did", () => {
     expect(checked).toEqual([DID]);
   });
 
+  test("me.renders_owner_data", async () => {
+    // P2.13c: the initials avatar, the neutral state and the call to action, until P2.18/P2.22 bring the real ones.
+    const html = await (await setup().get()).text();
+    const main = elements(parse(html), "main")[0];
+    expect(elements(main, "a", { href: "/settings/profile" }).map(textContent)).toEqual(["Edit profile"]);
+    expect(textContent(main)).toContain("Set up your profile");
+    expect(textContent(main)).toContain("Not set up yet");
+    expect(elements(main, "span", { "aria-hidden": "true" }).map(textContent)).toContain("A");
+    expect(html).not.toContain("getBlob");
+    // The PDS host only in the one PdsAccountLink href (architecture 2026-10-19 02:25Z).
+    expect(html.match(/href="https:\/\/[^"]*pds\.unset\.test/g)).toEqual(['href="https://pds.unset.test']);
+  });
+
   test("me_no_cache", async () => {
     const response = await setup().get();
     expect(response.headers.get("cache-control")).toBe("private, no-store");

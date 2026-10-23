@@ -1416,7 +1416,7 @@ Outputs:
     ADR?`, `Branch age`, `What I am unsure about` (rule DL-3 as adopted, decision 35; `Step` carries the step id and why).
     Then one line `AI notes: updated / none needed / which` (plan §7, Alex 2026-10-04 22:11Z; the author keeps one
     choice and names the notes).
-    One template (architecture thread, 2026-10-04, findings F-33); the agent self-reviews against it before asking Alex.
+    One template (architecture thread, 2026-10-04, findings F-33); the agent self-reviews against it before hand-off.
     `Large PR:` (a reason line) is optional and read by P0.09c's size check.
 
 Algorithm:

@@ -64,7 +64,7 @@ describe("preflight CLI", () => {
   test("cli_flags_are_not_ones_node_reads", () => {
     // Node scans the `--env-file` family after the script name; `--require` and `--import` are banned as well.
     const names = Object.keys(CLI_OPTIONS);
-    expect(names).toEqual(["env", "compose", "interpolation-env"]);
+    expect(names).toEqual(["env", "compose", "interpolation-env", "source"]);
     for (const name of names) expect(name, name).not.toMatch(/^(env-file|require|import)/);
   });
 
@@ -94,7 +94,7 @@ describe("preflight CLI", () => {
     const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
     expect((await preflight(["--bogus"], deps)).lines).toEqual([
       "ERROR usage: --env dev|prod|local --compose <absolute file> [--compose <absolute file>...] " +
-        "[--interpolation-env <absolute file>]",
+        "[--interpolation-env <absolute file>] [--source]",
     ]);
   });
 });

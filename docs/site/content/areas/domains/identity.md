@@ -20,7 +20,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/verify-handle.ts` | `createHandleVerifier`, `displayHandle`. Trusted base in `.github/CODEOWNERS` (`# trusted base (SE-6)`). |
 | `domains/identity/in-flight.ts` | One shared lookup per DID. Not a package export. |
 | `domains/identity/auth/age.ts` | `parseBirthDate`, `ageInYears`. |
-| `domains/identity/auth/gates.ts` | `emailGate`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`. |
+| `domains/identity/auth/gates.ts` | `emailGate`, `CACHED_RECHECK_CAP_MULTIPLE`, `cachedRecheckCapS`, `withinCachedRecheckCap`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`. |
 | `domains/identity/legal/versions.ts` | `TERMS_VERSION`, `PRIVACY_VERSION`. |
 
 `parseDid` accepts `did:plc` (24 base32 characters) or `did:web` plus a hostname `isResolvableHostname` accepts. It does not lowercase. `parseHandle` trims, drops one leading `@`, and lowercases. It returns null unless that result is a hostname `isResolvableHostname` accepts. The lists and the spec cites are in `syntax.ts`.
@@ -47,7 +47,17 @@ A handle domain with no DNS record is `egress.dns_no_record` on both methods, so
 | the check age is from 0 through `recheckS` seconds | `pass` |
 | anything else | `refresh` |
 
-`verifiedAfterRefresh` maps the caller's `EmailRefresh`: `transient` and `confirmed` to `pass`, `unconfirmed` to `verify`, `ended` to `ended`.
+`verifiedAfterRefresh(answer, cache, nowMs, recheckS)` returns `pass`, `verify`, `ended` or `unavailable`.
+
+| `EmailRefresh` | Result |
+| --- | --- |
+| `confirmed` | `pass` |
+| `unconfirmed` | `verify` |
+| `ended` | `ended` |
+| `transient`, while `withinCachedRecheckCap` holds | `pass` |
+| `transient`, otherwise | `unavailable` |
+
+`withinCachedRecheckCap` holds when `checkedAt` is set and the cache age is from 0 through `cachedRecheckCapS(recheckS)` seconds. `cachedRecheckCapS` is `recheckS` times `CACHED_RECHECK_CAP_MULTIPLE`, and that constant is 4. A null `checkedAt`, or a `checkedAt` later than `nowMs`, is outside that range, so `transient` is `unavailable`. `confirmed`, `unconfirmed` and `ended` do not read the cache.
 
 `onboardingStep` is the first unfinished step. A null account is `age`. `done` stays `done` only when `termsVersion` equals the current terms version; a terms mismatch returns `terms`. `blocked_underage` returns `blocked`.
 
@@ -88,7 +98,7 @@ Re-exports from `index.ts`:
 | From | Names |
 | --- | --- |
 | `auth/age.ts` | `ageInYears`, `parseBirthDate`, `BirthDate` |
-| `auth/gates.ts` | `emailGate`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`, and the types `EmailCache`, `EmailGate`, `EmailRefresh`, `Onboarding`, `OnboardingAccount`, `OnboardingDecision`, `OnboardingStep`, `OnboardingVersions` |
+| `auth/gates.ts` | `emailGate`, `CACHED_RECHECK_CAP_MULTIPLE`, `cachedRecheckCapS`, `withinCachedRecheckCap`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`, and the types `EmailCache`, `EmailGate`, `EmailRefresh`, `Onboarding`, `OnboardingAccount`, `OnboardingDecision`, `OnboardingStep`, `OnboardingVersions` |
 | `contract.ts` | `FetchRequest`, `FetchTarget`, `HttpOutcome`, `IdentityNetwork`, `TxtOutcome` |
 | `did-doc.ts` | `ResolvedDid` |
 | `legal/versions.ts` | `PRIVACY_VERSION`, `TERMS_VERSION` |

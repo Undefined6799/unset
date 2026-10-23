@@ -73,7 +73,8 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  *
  * Services are known by the image they run, never by name alone (architecture 2026-10-15 03:05Z, F3, last section of
  * book edit 2026-10-13-local-plc-a4-steps): a PDS is any service named pds or running the locked PDS image, from any
- * tag or digest, and more than one fails; the edge is the service running the edge image as C25 knows it (runsBuilt).
+ * tag or digest, or built from the PDS Dockerfile (dev --source and local, P1.37y; Codex on #1309), and more than one
+ * fails; the edge is the service running the edge image as C25 knows it (runsBuilt).
  * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
@@ -81,7 +82,10 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   const bases = readBases(inputs) ?? {};
   const lock = inputs.env === "local" ? {} : (readLock(inputs) ?? {});
   const pdsImages = new Set([bases.pds?.ref, lock.pds?.ref].filter((ref) => typeof ref === "string").map(repository));
-  const pdses = services.filter((s) => s.name === "pds" || (s.image !== null && pdsImages.has(repository(s.image))));
+  const builtPds = (s: Service) => s.build !== null && runsBuilt(s, inputs, undefined, PDS_DOCKERFILE) === "yes";
+  const pdses = services.filter(
+    (s) => s.name === "pds" || (s.image !== null && pdsImages.has(repository(s.image))) || builtPds(s),
+  );
   if (pdses.length > 1) return [`${pdses.map((s) => s.name).join(" and ")} both run the pds`];
   const [pds] = pdses;
   if (pds === undefined) return [];
@@ -93,6 +97,8 @@ export function pdsNeighbours(inputs: Inputs): string[] {
 }
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
+/** The Dockerfile a built PDS runs from (compose.local.yaml and compose.dev.source.yaml). */
+const PDS_DOCKERFILE = "deployment/pds/Dockerfile";
 
 /**
  * Under dev the PDS and web reach both staging names only through Pangolin, Newt and the edge (ADR 0031 Decision 3;

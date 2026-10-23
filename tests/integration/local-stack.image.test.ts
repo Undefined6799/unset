@@ -8,9 +8,13 @@ import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../support/docker.ts";
 import { composeNetworkName, PDS_UID, PROJECT, pdsVolumeVerdict } from "../support/local-stack.ts";
 
-const PDS = /^ {4}image: (ghcr\.io\/bluesky-social\/pds:\S+@sha256:[0-9a-f]{64})$/m.exec(
-  readFileSync(join(import.meta.dirname, "../../deployment/compose.local.yaml"), "utf8"),
-)?.[1];
+// compose.local.yaml builds pds from deployment/pds/Dockerfile (P2.24y), whose last stage is the base lock's PDS with
+// only the oauth-provider-ui dist replaced and no USER line, so the uid and volume behaviour under test is the base's.
+type LockEntry = { ref: string; tag: string; digest: string };
+const bases = JSON.parse(
+  readFileSync(join(import.meta.dirname, "../../deployment/images/bases.lock.json"), "utf8"),
+) as Record<string, LockEntry>;
+const PDS = bases.pds === undefined ? undefined : `${bases.pds.ref}:${bases.pds.tag}@${bases.pds.digest}`;
 
 // docker run may pull the PDS image. Inspect, volume, network and rm are shorter. Each call is killed under its own
 // budget so sequential body+cleanup cannot sit on the 600 s suite kill (P1.27k, P1.29o).

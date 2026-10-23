@@ -1,11 +1,13 @@
 // Shared UI (MIT). The island runtime lives in @unset/shared-islands (P1.25p,
 // docs/ai/book/phase-1.md). This index does not re-export it.
 
+export { Avatar, type AvatarProps, type AvatarSize } from "./components/Avatar/Avatar.tsx";
 // P2.05: the kit components the first screens use; P1.25 adds the app shell's chrome (Footer, Header, SkipLink).
 // P2.12 adds Checkbox for the terms screen. It is server-rendered, like Input, and adds no island.
 // P1.25f adds RadioGroup for the footer's theme form, server-rendered the same way.
 export { Button, type ButtonProps } from "./components/Button/Button.tsx";
 export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
+export { Card, type CardProps } from "./components/Card/Card.tsx";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox/Checkbox.tsx";
 export {
   type DescriptionItem,

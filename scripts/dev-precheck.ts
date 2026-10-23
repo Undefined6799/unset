@@ -24,9 +24,10 @@ export const CLI_OPTIONS = {
   env: { type: "string" },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
+  source: { type: "boolean", multiple: true },
 } as const;
 
-const USAGE = "usage: --env local|dev --compose <file> [--compose <file>...] --interpolation-env <file>";
+const USAGE = "usage: --env local|dev --compose <file> [--compose <file>...] --interpolation-env <file> [--source]";
 const PREFLIGHT = resolve(import.meta.dirname, "../deployment/preflight/index.ts");
 const DESCRIBE = "/xrpc/com.atproto.server.describeServer";
 const DESCRIBE_MS = 5_000;
@@ -34,7 +35,8 @@ const DESCRIBE_MS = 5_000;
 export type EnvName = "local" | "dev";
 /** `null` is unreachable (first boot). A parsed body may omit `did` (absent). */
 export type DescribeServer = { did?: string } | null;
-export type Options = { env: EnvName; files: string[]; envFile: string };
+/** `source` (P1.37y, ADR 0036): dev builds from the checkout; passed through to the preflight, which judges the builds. */
+export type Options = { env: EnvName; source: boolean; files: string[]; envFile: string };
 
 export class PrecheckError extends Error {}
 
@@ -115,12 +117,28 @@ export function parse(argv: string[]): Options {
   }
   const { values } = parsed;
   if (values.env !== "dev" && values.env !== "local") throw new PrecheckError(USAGE);
+  const sources = (values.source as boolean[] | undefined) ?? [];
+  if (sources.length > 1) throw new PrecheckError("--source may be given once");
+  const source = sources.length === 1;
+  if (source && values.env !== "dev") throw new PrecheckError("--source is for --env dev only");
   const files = (values.compose as string[] | undefined) ?? [];
   if (files.length === 0) throw new PrecheckError(USAGE);
   const envFiles = (values["interpolation-env"] as string[] | undefined) ?? [];
   if (envFiles.length !== 1) throw new PrecheckError(USAGE);
   const physical = (path: string): string => resolve(process.cwd(), path);
-  return { env: values.env, files: files.map(physical), envFile: physical(envFiles[0] as string) };
+  return { env: values.env, source, files: files.map(physical), envFile: physical(envFiles[0] as string) };
+}
+
+/** The preflight's arguments for these options: the same files and env, and `--source` only when it was given. */
+export function preflightFlags(options: Options): string[] {
+  return [
+    "--env",
+    options.env,
+    ...options.files.flatMap((file) => ["--compose", file]),
+    "--interpolation-env",
+    options.envFile,
+    ...(options.source ? ["--source"] : []),
+  ];
 }
 
 export type Deps = {
@@ -138,13 +156,7 @@ export async function main(argv: string[], deps: Deps, write: (line: string) => 
       write(`${PRODUCTION_HOST_CODE}\n`);
       return 2;
     }
-    const flags = [
-      "--env",
-      options.env,
-      ...options.files.flatMap((file) => ["--compose", file]),
-      "--interpolation-env",
-      options.envFile,
-    ];
+    const flags = preflightFlags(options);
     const result = await precheck({
       env: options.env,
       pdsHostname: hostname,

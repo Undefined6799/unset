@@ -24,7 +24,7 @@ name: unset-dev
 
 services:
   postgres:
-    image: ghcr.io/undefined6799/unset/postgres@sha256:b3edf8ad1e957df39124de7249fbff4af26c37d128811493ef2722161d6f5c59
+    image: ghcr.io/undefined6799/unset/postgres@sha256:f0810f91197d282eb63d52b4ba05598fca19f13421bfe2d3155678ea53884891
     user: "999:999"
     read_only: true
     cap_drop: [ALL]
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/undefined6799/unset/migrate@sha256:a5409bc1556f8df34550442933a0e3d08a517902998757352ad61dda5829ccfd
+    image: ghcr.io/undefined6799/unset/migrate@sha256:89237144d08eebe4c8b4a31f2b7847eceba851a4645dca1c33e6f624703bec0a
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -87,7 +87,7 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/undefined6799/mirror/pds@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    image: ghcr.io/undefined6799/unset/pds@sha256:c0f26b546f613428127f7768e04fbc0cd76e823d175695d2fc36b8acc82c3bbd
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
@@ -127,7 +127,7 @@ services:
   # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
   # 0700 (P1.27o).
   edge:
-    image: ghcr.io/undefined6799/unset/edge@sha256:c94bcd8c27cc037edfdd7dd49635fbf0c2fe7b96ff5ebd6f97ba99068255e330
+    image: ghcr.io/undefined6799/unset/edge@sha256:bfcbb99c39340108bf8175b745ce66654ef90e9781b52034f237799c95d6c2bb
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -167,7 +167,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/undefined6799/unset/web@sha256:3338eea418322b989509716758821c89088e0f9bc18b6d91d3fbbfda0e61a73e
+    image: ghcr.io/undefined6799/unset/web@sha256:a3ded8242d56e88e208980ab7c79b31d21b7875402035959b1f055da13525dfc
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]

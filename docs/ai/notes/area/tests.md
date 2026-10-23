@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # tests
 
@@ -26,7 +26,8 @@ production stylesheet. The toast fixture's `Island` is the production server bui
 render loader imports, so it shares that build's `IslandRunContext`.
 The welcome screens that need a session at their real paths (age, terms, chat) are fixture pages too,
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
-in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.ts` also drives both menus at a
+in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). P2.13c adds `/fixture/account` and
+`/fixture/settings-*` the same way, so the account page and both settings pages are in the axe matrix. `nojs.spec.ts` also drives both menus at a
 375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
