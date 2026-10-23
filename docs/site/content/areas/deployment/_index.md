@@ -14,7 +14,7 @@ What puts the system on machines: Compose, the edge, images and the preflight. D
 
 | Piece | Path | Page |
 | --- | --- | --- |
-| compose | `deployment/compose.dev.yaml`, `deployment/compose.local.yaml` | [compose](compose/) |
+| compose | `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml`, `deployment/compose.local.yaml` | [compose](compose/) |
 | edge | `deployment/edge/` | [edge](edge/) |
 | images | `deployment/images/`, `deployment/images.lock.json`, `deployment/mirror.list.json`, `deployment/sigstore/` | [images](images/) |
 | pds recipe | `deployment/pds/` | [images](images/) |

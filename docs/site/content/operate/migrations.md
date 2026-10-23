@@ -16,13 +16,13 @@ Schema changes applied by the one-shot Compose `migrate` service. File rules and
 | Runner | `migrate` and `migrateThenSyncPasswords` in `infrastructure/postgres/migrate.ts` |
 | Image entrypoint | `ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]` in `deployment/images/migrate.Dockerfile` |
 
-The root `package.json` scripts are `check`, `typecheck`, `lint`, `format`, `guards`, `notes:index`, `test`, `test:images`, `budgets`, `semgrep:fixtures`, `dev:up`, `dev:down`, `local:up` and `local:down`. Starting the stack with `dev:up` or `local:up` starts `migrate`.
+The root `package.json` scripts are `check`, `typecheck`, `lint`, `format`, `guards`, `notes:index`, `test`, `test:images`, `budgets`, `semgrep:fixtures`, `dev:up`, `dev:down`, `dev:source:up`, `dev:source:down`, `local:up` and `local:down`. Starting the stack with `dev:up`, `dev:source:up` or `local:up` starts `migrate`.
 
 ## Compose service
 
-Both `deployment/compose.dev.yaml` and `deployment/compose.local.yaml` name the service `migrate`. Dev sets `image` to the lock ref. Local sets `build` to `deployment/images/migrate.Dockerfile` with context `..`. The image and network rows are on [compose](../../areas/deployment/compose/).
+`deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml` name the service `migrate`. `compose.dev.yaml` sets `image` to the lock ref. The source file and local set `build` to `deployment/images/migrate.Dockerfile` with context `..`. The image and network rows are on [compose](../../areas/deployment/compose/).
 
-Shared settings in both files:
+Shared settings in all three files:
 
 | Key | Value |
 | --- | --- |
@@ -38,7 +38,7 @@ Shared settings in both files:
 | `depends_on.postgres` | `service_healthy` |
 | `secrets` | `migrate_pg_password`, `pg_web_password`, `pg_api_password`, `pg_indexer_password` |
 
-`web` in both files has `depends_on.migrate` of `service_completed_successfully`.
+`web` in all three files has `depends_on.migrate` of `service_completed_successfully`.
 
 ## What one run does
 
