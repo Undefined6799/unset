@@ -82,7 +82,7 @@ test.describe("javascript disabled", () => {
     const panel = page.locator("[popover]");
     await toggle.click();
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("link", { name: "Home" })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Home", exact: true })).toBeVisible();
     await panel.getByRole("button", { name: "Close menu" }).click();
     await expect(panel).toBeHidden();
   });

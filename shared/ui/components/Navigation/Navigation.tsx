@@ -117,9 +117,13 @@ export function Navigation({
             "aria-label": homeLabel,
             children: <Mark width={72} />,
           })}
+          {/* autofocus: the popover focusing steps move focus here on open, so Escape returns it to the menu button;
+              without it, focus left the phone bar as the bar hid and was lost to the body (Chromium, 2026-10-23). */}
           <button
             className={styles.close}
             type="button"
+            // biome-ignore lint/a11y/noAutofocus: focus belongs inside the drawer it opens; the page itself never autofocuses
+            autoFocus
             aria-label={closeLabel}
             popoverTarget={menuId}
             popoverTargetAction="hide"
