@@ -535,4 +535,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   module, `domains/profile`, beside identity (Alex, 2026-10-23 02:59Z). The `sh.unset.profile` record lives on the
   member's PDS and nowhere else; a save changes only the fields sent, compare-and-swap on the stored CID. The owner's
   page edits the README with one island; the side column is edited in Settings › Profile with a plain form; visitors
-  get no script. The README's stored format waits on Alex's BlockNote choice. Proposed, awaiting Alex.
+  get no script. The README is stored as typed blocks and edited with BlockNote, loaded only when the owner edits.
+  Proposed, awaiting Alex.
