@@ -20,8 +20,6 @@ const labels: ProfileLabels = {
     readme: "Write your README.",
   },
   edit: "Edit {field}",
-  done: "Save",
-  cancel: "Cancel",
   draft: "Draft",
   draftBody: "Your changes are not published yet.",
   revert: "Revert to the published profile",
@@ -81,13 +79,12 @@ describe("ProfileEditor with script", () => {
       host.querySelector(`button[aria-label="${label}"], button[data-tip^="${label}"]`) as HTMLButtonElement | null;
     const buttonText = (text: string) =>
       [...host.querySelectorAll("button")].find((b) => b.textContent === text) as HTMLButtonElement | undefined;
-    /** The open field editor's own Save, not the draft box's. */
+    /** Closes the open field editor the way a reader leaves it: focus moves elsewhere. */
     const commit = () =>
       act(async () => {
-        const field = host.querySelector("input, textarea") as HTMLElement;
-        const save = field.parentElement?.querySelector("button");
-        if (save === null || save === undefined) throw new Error("no field editor is open");
-        save.click();
+        const field = host.querySelector("input, textarea") as HTMLElement | null;
+        if (field === null) throw new Error("no field editor is open");
+        field.blur();
       });
     return { host, button, buttonText, commit };
   }
@@ -110,20 +107,37 @@ describe("ProfileEditor with script", () => {
     await act(async () => button("Edit headline")?.click());
     const input = host.querySelector("input[aria-label='Edit headline']") as HTMLInputElement;
     expect(document.activeElement).toBe(input);
+    expect(input.parentElement?.querySelector("button")).toBeNull();
+    // What is typed goes on the draft at once: no Save in the field (Alex 2026-10-23 03:58Z).
     await act(async () => type(input, "  Designer and developer.  "));
-    await commit();
-    expect(host.textContent).toContain("Designer and developer.");
     expect(host.querySelector("section[aria-label='Draft']")).not.toBeNull();
+    await commit();
+    expect(host.querySelector("input")).toBeNull();
+    expect(host.textContent).toContain("Designer and developer.");
+    expect(host.textContent).not.toContain("  Designer and developer.  ");
   });
 
-  it("Escape cancels and Enter saves a one-line field; double-click opens it too", async () => {
+  it("keeps one undo step per field edit, however many keys were typed", async () => {
+    const { host, button, commit } = await mount();
+    await act(async () => button("Edit headline")?.click());
+    const input = host.querySelector("input") as HTMLInputElement;
+    for (const value of ["D", "De", "Dev"]) await act(async () => type(input, value));
+    await commit();
+    await act(async () => button("Undo")?.click());
+    expect(host.textContent).toContain("Designer.");
+    expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
+  });
+
+  it("Escape puts the field back and Enter closes it; double-click opens it too", async () => {
     const { host } = await mount();
     const name = () => host.querySelector("h1 span") as HTMLElement;
     await act(async () => name().dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     let input = host.querySelector("input[aria-label='Edit name']") as HTMLInputElement;
     await act(async () => type(input, "Bob"));
+    expect(host.querySelector("section[aria-label='Draft']")).not.toBeNull();
     await key(input, { key: "Escape" });
     expect(host.querySelector("h1")?.textContent).toContain("Alice");
+    expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
     await act(async () => name().dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     input = host.querySelector("input[aria-label='Edit name']") as HTMLInputElement;
     await act(async () => type(input, "Bob"));

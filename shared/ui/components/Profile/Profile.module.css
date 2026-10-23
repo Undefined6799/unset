@@ -142,12 +142,6 @@
     resize: vertical;
   }
 
-  .editorActions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
   /* The draft box (v5): a callout with a small shadow above the profile; its tools line up with "Draft". */
   .draft {
     margin-bottom: var(--space-8);

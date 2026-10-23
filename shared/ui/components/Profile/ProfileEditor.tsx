@@ -1,9 +1,9 @@
 // The owner's profile editing (Alex 2026-10-23; Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v4 frames 177:1147.. and
 // v5 frames 179:1173..). The page is the editor: hovering a field shows a pencil (always shown on touch screens), and
-// the pencil or a double-click edits the field in place, with Save and Cancel (Enter saves, Esc cancels, Ctrl/⌘+Enter
-// in the README). Each change goes on a draft; once there is one, a draft box above the profile offers revert, undo
-// and redo (Ctrl/⌘+Z, Ctrl/⌘+Shift+Z or Ctrl+Y), view as a visitor, and Save, which posts the plain form to
-// POST /profile; the server writes the record to the member's PDS. Before hydration, and with no script, this renders
+// the pencil or a double-click edits the field in place. What is typed goes on a draft at once, with no Save in the
+// field (Alex 03:58Z); Enter, Ctrl/⌘+Enter in the README, or leaving the field closes it, and Esc puts it back. Once
+// there is a draft, a draft box above the profile offers revert, undo and redo (Ctrl/⌘+Z, Ctrl/⌘+Shift+Z or Ctrl+Y),
+// view as a visitor, and Save, which posts the plain form to POST /profile; the server writes the record to the member's PDS. Before hydration, and with no script, this renders
 // exactly the server page: no pencils and no draft box. It is an island (islands/profile-editor.island.tsx).
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import del from "../../icons/drawings/delete.generated.ts";
@@ -85,55 +85,55 @@ function failure(status: number, failed: ProfileLabels["failed"]): string {
 
 function FieldEditor(props: {
   name: ProfileFieldName;
-  initial: string;
+  value: string;
   labels: ProfileLabels;
-  onCommit: (value: string) => void;
-  onCancel: () => void;
+  onInput: (value: string) => void;
+  onClose: () => void;
+  onRestore: () => void;
 }) {
-  const { labels } = props;
-  const [value, setValue] = useState(props.initial);
   const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   useEffect(() => ref.current?.focus(), []);
+  // Enter or Esc unmounts the field, and a browser may then report it blurred: only the first way out counts.
+  const left = useRef(false);
+  const leave = (how: () => void) => {
+    if (left.current) return;
+    left.current = true;
+    how();
+  };
   const multiline = props.name === "readme";
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      props.onCancel();
+      leave(props.onRestore);
     } else if (event.key === "Enter" && (multiline ? event.ctrlKey || event.metaKey : !event.shiftKey)) {
       event.preventDefault();
-      props.onCommit(value);
+      leave(props.onClose);
     }
   };
-  const label = labels.edit.replace("{field}", labels.fields[props.name]);
+  const shared = {
+    ref,
+    "aria-label": props.labels.edit.replace("{field}", props.labels.fields[props.name]),
+    value: props.value,
+    onKeyDown,
+    onBlur: () => leave(props.onClose),
+  };
   return (
     <span className={multiline ? styles.editorBlock : styles.editor}>
       {multiline ? (
         <textarea
-          ref={ref}
+          {...shared}
           className={styles.textarea}
-          aria-label={label}
-          value={value}
           rows={14}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={onKeyDown}
+          onChange={(event) => props.onInput(event.target.value)}
         />
       ) : (
         <input
-          ref={ref}
+          {...shared}
           className={styles.input}
-          aria-label={label}
           type={props.name === "website" ? "url" : "text"}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={onKeyDown}
+          onChange={(event) => props.onInput(event.target.value)}
         />
       )}
-      <span className={styles.editorActions}>
-        <ActionButton onClick={() => props.onCommit(value)}>{labels.done}</ActionButton>
-        <ActionButton standalone onClick={props.onCancel}>
-          {labels.cancel}
-        </ActionButton>
-      </span>
     </span>
   );
 }
@@ -243,7 +243,9 @@ export function ProfileEditor({ handle, handleUnavailable, fields, labels }: Pro
   const [ready, setReady] = useState(false);
   const [published, setPublished] = useState(fields);
   const [history, setHistory] = useState<History>({ list: [fields], at: 0 });
-  const [editing, setEditing] = useState<ProfileFieldName | null>(null);
+  // The open field and the history step it opened on: what is typed replaces the one step after it, so a field edit
+  // is one undo step however many keys it took, and Esc goes back to it.
+  const [editing, setEditing] = useState<{ readonly name: ProfileFieldName; readonly from: number } | null>(null);
   const [viewAs, setViewAs] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const current = history.list[history.at] ?? fields;
@@ -252,16 +254,34 @@ export function ProfileEditor({ handle, handleUnavailable, fields, labels }: Pro
   useEffect(() => setReady(true), []);
   useHistoryKeys(ready && editing === null, setHistory);
 
-  const commit = (name: ProfileFieldName, raw: string) => {
-    const value = name === "readme" ? raw : raw.trim();
-    setEditing(null);
-    if (value === current[name]) return;
+  const open = (name: ProfileFieldName) => setEditing({ name, from: history.at });
+
+  /** Puts `value` on the draft as the one step after `from`; no step when the field is back where it started. */
+  const write = (name: ProfileFieldName, from: number, value: string) => {
     setStatus({ kind: "idle" });
-    setHistory((h) => ({ list: [...h.list.slice(0, h.at + 1), { ...current, [name]: value }], at: h.at + 1 }));
+    setHistory((h) => {
+      const kept = h.list.slice(0, from + 1);
+      const base = kept[from] ?? fields;
+      return value === base[name]
+        ? { list: kept, at: from }
+        : { list: [...kept, { ...base, [name]: value }], at: from + 1 };
+    });
+  };
+
+  const close = () => {
+    if (editing === null) return;
+    const { name, from } = editing;
+    setEditing(null);
+    if (name !== "readme") write(name, from, current[name].trim());
+  };
+
+  const restore = () => {
+    if (editing === null) return;
+    setEditing(null);
+    setHistory((h) => ({ list: h.list.slice(0, editing.from + 1), at: editing.from }));
   };
 
   const revert = () => {
-    setEditing(null);
     setHistory({ list: [published], at: 0 });
     setStatus({ kind: "idle" });
   };
@@ -283,32 +303,25 @@ export function ProfileEditor({ handle, handleUnavailable, fields, labels }: Pro
 
   const field: FieldSlot = (name, content) => {
     if (!ready || viewAs) return content;
-    if (editing === name) {
+    if (editing?.name === name) {
+      const { from } = editing;
       return (
         <FieldEditor
           name={name}
-          initial={current[name]}
+          value={current[name]}
           labels={labels}
-          onCommit={(value) => commit(name, value)}
-          onCancel={() => setEditing(null)}
+          onInput={(value) => write(name, from, value)}
+          onClose={close}
+          onRestore={restore}
         />
       );
     }
     const label = labels.edit.replace("{field}", labels.fields[name]);
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: double-click is a mouse shortcut; the pencil button beside it is the keyboard and screen-reader way in.
-      <span
-        className={name === "readme" ? styles.editableBlock : styles.editable}
-        onDoubleClick={() => setEditing(name)}
-      >
+      <span className={name === "readme" ? styles.editableBlock : styles.editable} onDoubleClick={() => open(name)}>
         {content ?? <span className={styles.placeholder}>{labels.add[name]}</span>}
-        <button
-          type="button"
-          className={styles.pencil}
-          aria-label={label}
-          title={label}
-          onClick={() => setEditing(name)}
-        >
+        <button type="button" className={styles.pencil} aria-label={label} title={label} onClick={() => open(name)}>
           <IconDrawing paths={edit} size={16} />
         </button>
       </span>

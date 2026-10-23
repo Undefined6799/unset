@@ -26,8 +26,6 @@ export type ProfileLabels = {
   readonly fields: Readonly<Record<ProfileFieldName, string>>;
   readonly add: Readonly<Record<ProfileFieldName, string>>;
   readonly edit: string;
-  readonly done: string;
-  readonly cancel: string;
   readonly draft: string;
   readonly draftBody: string;
   readonly revert: string;
@@ -49,8 +47,6 @@ export const strings = (value: unknown, keys: readonly string[]) =>
 const LABEL_STRINGS = [
   "handleUnavailable",
   "edit",
-  "done",
-  "cancel",
   "draft",
   "draftBody",
   "revert",
