@@ -25,7 +25,7 @@ What puts the system on machines: Compose, the edge, images and the preflight. D
 
 ## Owns
 
-The pieces in the table. `deployment/pds/` is the paired frontend recipe (`Dockerfile`, `source.lock.json`, `README.md`, `build.test.ts`); [images](images/) describes it. The `pds` service images are on [compose](compose/). The `/deployment/` supply-chain row below covers `deployment/pds/`. The tree also has the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. `deployment/postgres/init-local/` is on the tree and is superseded; see [postgres init](postgres-init/).
+The pieces in the table. `deployment/pds/` is the paired frontend recipe (`Dockerfile`, `source.lock.json`, `README.md`, `build.test.ts`, `ui/unset-theme.css`, `ui/theme.test.ts`); [images](images/) describes it. The `pds` service images are on [compose](compose/). The `/deployment/` supply-chain row below covers `deployment/pds/`. The tree also has the Sigstore root, the reserved-label list, `networks.dev.json` and `limits.dev.json`. `deployment/postgres/init-local/` is on the tree and is superseded; see [postgres init](postgres-init/).
 
 `.github/CODEOWNERS` (supply chain, then the trusted-base section):
 
