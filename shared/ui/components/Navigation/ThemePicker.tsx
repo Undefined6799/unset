@@ -77,7 +77,9 @@ export function ThemePicker({ theme, returnTo, labels }: ThemePickerProps) {
   // Saves run one after another, so two quick choices cannot finish out of order: the last click wins.
   const saving = useRef(Promise.resolve());
   // Back can restore an earlier page as it was left (https://web.dev/articles/bfcache, read 2026-10-23), theme too.
+  // A fresh page's theme comes from the cookie, so it replaces whatever this tab stored before.
   useEffect(() => {
+    remember(theme);
     const restore = (event: PageTransitionEvent) => {
       const saved = event.persisted ? remembered() : null;
       if (saved === null) return;
@@ -86,7 +88,7 @@ export function ThemePicker({ theme, returnTo, labels }: ThemePickerProps) {
     };
     window.addEventListener("pageshow", restore);
     return () => window.removeEventListener("pageshow", restore);
-  }, []);
+  }, [theme]);
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     const form = event.currentTarget;
     const choice = ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value;
@@ -101,6 +103,9 @@ export function ThemePicker({ theme, returnTo, labels }: ThemePickerProps) {
         body: new URLSearchParams({ theme: choice, return: returnTo }),
         credentials: "same-origin",
         redirect: "manual",
+        // The save outlives this page if a drawer link is followed at once (Fetch Standard, keepalive flag,
+        // https://fetch.spec.whatwg.org/, Living Standard 19 October 2026).
+        keepalive: true,
       });
       if (response.type !== "opaqueredirect" && !response.ok) throw new Error(`theme save: ${response.status}`);
     } catch {
