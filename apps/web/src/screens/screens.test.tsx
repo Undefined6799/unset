@@ -23,7 +23,7 @@ const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
     body,
     islands: "on",
   }).html;
-const LOGIN = { next: null, error: null, pdsHost: "pds.example" };
+const LOGIN = { next: null, error: null, pdsHost: "pds.example", close: "/" };
 
 /** Every start tag named `name`, each as its attribute map (attribute order is the renderer's, not part of the test). */
 function tags(page: string, name: string): Record<string, string>[] {
@@ -58,6 +58,8 @@ describe("login screen", () => {
     expect(page.match(/<main/g)).toHaveLength(1);
     expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/" })]);
     expect(page).toMatch(/<a [^>]*href="\/"[^>]*>Close<\/a>/);
+    // The route picks where Close goes (login_close_goes_back_to_the_page_before); the screen prints it.
+    expect(html(screens.login({ ...LOGIN, close: "/legal/terms" }))).toMatch(/href="\/legal\/terms"[^>]*>Close</);
   });
 
   test("login_without_next_has_no_hidden_field", () => {

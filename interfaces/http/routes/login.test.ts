@@ -108,9 +108,13 @@ function setup(world: World = {}) {
     log,
   });
   const server = createServer({ config: CONFIG, routes: [...loginRoutes(deps), ...logout], policies, log });
-  const send = (path: string, init: { form?: string; cookie?: string; site?: "same-origin" | "cross-site" } = {}) => {
+  const send = (
+    path: string,
+    init: { form?: string; cookie?: string; site?: "same-origin" | "cross-site"; referer?: string } = {},
+  ) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
     if (init.cookie) headers.set("cookie", init.cookie);
+    if (init.referer) headers.set("referer", init.referer);
     if (init.form === undefined) return server.request(new Request(`${ORIGIN}${path}`, { headers }), "10.0.0.1");
     const site = init.site ?? "same-origin";
     headers.set("content-type", FORM);
@@ -177,6 +181,29 @@ describe("GET /login", () => {
     const forged = await (await send("/login?error=%3Cscript%3Ex")).text();
     expect(forged).not.toContain('role="alert"');
     expect(forged).not.toContain("<script>x");
+  });
+  // Alex, 2026-10-23: Close "should probably go back to the page to which I came from". The Referer (our
+  // Referrer-Policy same-origin sends it only between our own pages, and it survives the protected page's 303) names
+  // that page, unless it is a sign-in page or the protected page in `next`, which would only bounce back here.
+  test("login_close_goes_back_to_the_page_before", async () => {
+    const { send } = setup();
+    const close = async (path: string, referer?: string) => {
+      const html = await (await send(path, referer === undefined ? {} : { referer })).text();
+      return /<a [^>]*href="([^"]*)"[^>]*>Close<\/a>/.exec(html)?.[1];
+    };
+    expect(await close("/login?next=/did", `${ORIGIN}/legal/terms?x=1`)).toBe("/legal/terms?x=1");
+    expect(await close("/login?next=/did", `${ORIGIN}/`)).toBe("/");
+    for (const referer of [
+      undefined,
+      "https://evil.example/page",
+      "https://unset.test.evil.example/legal/terms",
+      `${ORIGIN}/did`,
+      `${ORIGIN}/login?next=/did`,
+      `${ORIGIN}/login/continue`,
+      "not a url",
+    ]) {
+      expect(await close("/login?next=/did", referer), String(referer)).toBe("/");
+    }
   });
 });
 

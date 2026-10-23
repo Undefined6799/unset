@@ -114,6 +114,23 @@ export function loginRoutes(deps: LoginDeps): Route[] {
     return stored === null ? null : deps.safeHref(stored, schemes);
   }
 
+  /**
+   * Where the sign-in box's Close goes (P2.05n; Alex, 2026-10-23: "back to the page to which I came from"): the page
+   * the Referer names, if it is on this request's host, which the kit's host check already held to
+   * HTTP_ALLOWED_HOSTS. Only the host is compared, since TLS may end at the edge. Referrer-Policy same-origin
+   * (shared/http/csp/headers.ts) sends it only between our own pages. A sign-in page, or the protected page `next`
+   * names, would only bounce back here, so those, and anything else, go home.
+   */
+  function closeTarget(request: Request, next: SafePath | null): string {
+    const referer = request.headers.get("referer");
+    if (referer === null || !URL.canParse(referer)) return "/";
+    const from = new URL(referer);
+    const ours = from.host === request.headers.get("host");
+    if (!ours || from.pathname === "/login" || from.pathname.startsWith("/login/")) return "/";
+    const back = safeReturnPath(`${from.pathname}${from.search}`);
+    return back === null || back === next ? "/" : back;
+  }
+
   return [
     defineRoute({
       method: "GET",
@@ -128,7 +145,9 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
         if (session !== null && error === null) return redirect("/did");
         // P2.05m: the page is the sign-in dialog alone, with no shell, so the screen shows the checked ?error= code.
-        const body = deps.screens.login({ next: safeReturnPath(query.get("next")), error, pdsHost: deps.pdsHost });
+        const next = safeReturnPath(query.get("next"));
+        const close = closeTarget(request, next);
+        const body = deps.screens.login({ next, error, pdsHost: deps.pdsHost, close });
         const response = deps.page({ group: "app", request, title: "Sign in", body, islands: "off" });
         if (clearCookie) response.headers.append("set-cookie", sessionClearCookie());
         return response;

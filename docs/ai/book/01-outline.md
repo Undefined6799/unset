@@ -533,6 +533,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.05r | Sign in with one button to our PDS | — | P2.05, P1.36v | `phase-2.md` |
 | P2.05m | Show sign-in as one modal dialog | — | P2.05r | `phase-2.md` |
+| P2.05n | Close the sign-in box to the page before | — | P2.05m | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
 | P2.08 | Logout | [SEC] | P2.06, P2.04s | `phase-2.md` |
