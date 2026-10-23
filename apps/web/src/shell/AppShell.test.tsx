@@ -154,7 +154,7 @@ describe("app shell", () => {
 
   test("sign_in_opens_in_place_with_no_script", () => {
     // P2.05p: with the PDS named, the Header's Sign in opens the sign-in box over the page as a native popover, so
-    // the visitor never leaves the page and Close, Escape or a click outside leave them where they were.
+    // the visitor never leaves the page and Close or Escape leave them where they were.
     const html = render({
       shell: { error: null, noindex: false, signIn: { pdsHost: "pds.test", next: "/legal/terms" } },
     });

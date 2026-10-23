@@ -85,7 +85,7 @@ failed island stays as its server markup and only logs to the console.
 
 **Sign in opens in place (P2.05p).** With `PageDeps.pdsHost` set, the default shell's Header Sign in is a button
 that opens `#sign-in`, a native `popover="auto"` holding the same `screens/SignInBox` the /login page draws. No
-script: Escape, a click outside and its Close button hide it. `next` is the page's path only. The footer's Sign in
+script: Escape and its Close button hide it. The popover is the whole scrim (a `::backdrop` passes clicks through). `next` is the page's path only. The footer's Sign in
 and protected pages' redirects still use /login.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].

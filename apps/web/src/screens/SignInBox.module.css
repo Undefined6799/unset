@@ -41,14 +41,32 @@
   }
 }
 
-/* P2.05p: the same box opened over the page as a native popover (the UA sheet centres it with `inset: 0` and
-   `margin: auto`), leaving a gutter on a phone, over the scrim the Modal uses. */
+/* P2.05p: the same box opened over the page as a native popover. The popover is the whole scrim, centring the box:
+   the UA sheet gives a popover's ::backdrop `pointer-events: none`, so a click on a styled backdrop would reach the
+   page underneath (HTML Living Standard, Rendering, "popover" defaults, read 2026-10-23). A click beside the box
+   lands on the popover itself and changes nothing. Without the Popover API the attribute does nothing, so the box is
+   hidden by @supports and the footer's /login link remains. */
 @layer screens {
   .popover {
-    width: calc(100% - 2 * var(--space-4));
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-4);
+    border: 0;
+    background-color: var(--color-scrim);
+    place-items: center;
   }
 
-  .popover::backdrop {
-    background-color: var(--color-scrim);
+  .popover:popover-open {
+    display: grid;
+  }
+
+  @supports not selector(:popover-open) {
+    .popover {
+      display: none;
+    }
   }
 }

@@ -38,8 +38,9 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
-  // P2.05p: the Header's Sign in opens the box over the page with no script, and Close, Escape and a click outside
-  // each leave the visitor on the page they were on.
+  // P2.05p: the Header's Sign in opens the box over the page with no script, and Close and Escape each leave the
+  // visitor on the page they were on. The box fills the viewport with its scrim, so a click beside it reaches no
+  // link of the page underneath (a popover's ::backdrop does not take pointer events).
   test("sign_in_opens_over_the_page", async ({ page }) => {
     await page.goto("/legal/terms");
     const box = page.getByRole("dialog", { name: "Sign in" });
@@ -55,7 +56,7 @@ test.describe("javascript disabled", () => {
     await expect(box).toBeHidden();
     await open.click();
     await page.mouse.click(5, 5);
-    await expect(box).toBeHidden();
+    await expect(box).toBeVisible();
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
@@ -83,10 +84,11 @@ test.describe("javascript disabled", () => {
       const menu = page.locator("header details");
       const summary = menu.locator("summary");
       await expect(summary).toBeVisible();
-      await expect(menu.getByRole("link", { name: "Sign in" })).toBeHidden();
+      // P2.05p: the action is the button that opens the sign-in box in place.
+      await expect(menu.getByRole("button", { name: "Sign in" })).toBeHidden();
       await summary.press("Enter");
       await expect(menu).toHaveAttribute("open", "");
-      await expect(menu.getByRole("link", { name: "Sign in" })).toBeVisible();
+      await expect(menu.getByRole("button", { name: "Sign in" })).toBeVisible();
       await summary.press("Enter");
       await expect(menu).not.toHaveAttribute("open");
     });
