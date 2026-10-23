@@ -32,8 +32,17 @@ export {
   type PdsContext,
   type PdsFailure,
   type PdsResult,
+  respondToPdsFailure,
   type SessionInfo,
   xrpcFromSession,
 } from "./pds-call.ts";
 export { isAuthFatal, isDpopNonceHandshake } from "./pds-errors.ts";
-export { loadProfileRecord, PROFILE_COLLECTION, PROFILE_RKEY, type StoredRecord } from "./profile-record.ts";
+export {
+  type BuiltRecord,
+  loadProfileRecord,
+  PROFILE_COLLECTION,
+  PROFILE_RKEY,
+  type SaveOutcome,
+  type StoredRecord,
+  saveProfileRecord,
+} from "./profile-record.ts";

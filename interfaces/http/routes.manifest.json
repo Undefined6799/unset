@@ -211,6 +211,25 @@
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
+    "method": "POST",
+    "path": "/profile",
+    "group": "app",
+    "accepts": ["application/x-www-form-urlencoded"],
+    "bodyLimit": 327680,
+    "rateLimit": "default",
+    "mutates": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/:did",
     "group": "app",

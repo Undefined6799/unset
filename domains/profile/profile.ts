@@ -2,7 +2,7 @@
 // on their page, read once from untrusted input into checked fields (DM-1), and the sh.unset.profile record built
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
-import { LIMITS } from "@unset/shared-lexicons";
+import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website", "readme"] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
@@ -87,17 +87,34 @@ export function readProfileRecord(value: unknown): ProfileFields {
 }
 
 export type ProfileRecord = { readonly $type: "sh.unset.profile"; readonly createdAt: string } & Readonly<
-  Partial<Record<ProfileField, string>>
+  Record<string, unknown>
 >;
 
-/** The record to write. The lexicon requires a display name, so a profile without one cannot be published. */
+function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
+  return typeof existing === "object" && existing !== null && !Array.isArray(existing)
+    ? (existing as Readonly<Record<string, unknown>>)
+    : {};
+}
+
+/**
+ * The record to write over `existing` (the stored value, or null for a first profile). The fields this page edits
+ * are replaced, an emptied one removed; every other field (bio, avatar, listed, ...) is kept as it was, createdAt too.
+ * The result passes the lexicon's strict validator or is refused, so a record another client broke is never written
+ * back. The lexicon requires a display name, so a profile without one cannot be published.
+ */
 export function toProfileRecord(
   fields: ProfileFields,
-  createdAt: string,
-):
-  | { readonly ok: true; readonly record: ProfileRecord }
-  | { readonly ok: false; readonly code: "profile.name_required" } {
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   if (fields.displayName === "") return { ok: false, code: "profile.name_required" };
+  const stored = storedObject(existing);
+  const kept = Object.fromEntries(
+    Object.entries(stored).filter(([key]) => !(PROFILE_FIELDS as readonly string[]).includes(key) && key !== "$type"),
+  );
   const set = Object.fromEntries(PROFILE_FIELDS.filter((field) => fields[field] !== "").map((f) => [f, fields[f]]));
-  return { ok: true, record: { $type: "sh.unset.profile", ...set, createdAt } };
+  const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
+  const record: ProfileRecord = { $type: "sh.unset.profile", ...kept, ...set, createdAt, updatedAt: now };
+  if (!validateRecord("sh.unset.profile", record, "write").ok) return { ok: false, code: "profile.invalid" };
+  return { ok: true, record };
 }

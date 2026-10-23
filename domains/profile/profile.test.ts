@@ -58,29 +58,52 @@ describe("parseProfileFields", () => {
 });
 
 describe("toProfileRecord", () => {
-  test("writes only filled fields, and the record passes the strict validator", () => {
-    const built = toProfileRecord({ ...EMPTY_PROFILE, displayName: "Alice", readme: "hi" }, "2026-10-23T03:00:00.000Z");
+  const NOW = "2026-10-23T04:00:00.000Z";
+
+  test("a first profile writes only filled fields and passes the strict validator", () => {
+    const built = toProfileRecord({ ...EMPTY_PROFILE, displayName: "Alice", readme: "hi" }, null, NOW);
+    expect(built).toEqual({
+      ok: true,
+      record: { $type: "sh.unset.profile", displayName: "Alice", readme: "hi", createdAt: NOW, updatedAt: NOW },
+    });
+    expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
+  });
+
+  test("an update keeps createdAt and the fields this page does not edit, and clears emptied ones", () => {
+    const existing = {
+      $type: "sh.unset.profile",
+      displayName: "Old",
+      headline: "Old line",
+      bio: "Kept as it was.",
+      listed: true,
+      createdAt: "2026-10-01T00:00:00.000Z",
+    };
+    const built = toProfileRecord({ ...good, headline: "" }, existing, NOW);
     expect(built).toEqual({
       ok: true,
       record: {
         $type: "sh.unset.profile",
-        displayName: "Alice",
-        readme: "hi",
-        createdAt: "2026-10-23T03:00:00.000Z",
+        bio: "Kept as it was.",
+        listed: true,
+        displayName: good.displayName,
+        location: good.location,
+        website: good.website,
+        readme: good.readme,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: NOW,
       },
     });
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
 
-  test("a full profile passes the strict validator", () => {
-    const built = toProfileRecord(good, "2026-10-23T03:00:00.000Z");
-    expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
+  test("a profile without a display name cannot be published", () => {
+    expect(toProfileRecord(EMPTY_PROFILE, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
   });
 
-  test("a profile without a display name cannot be published", () => {
-    expect(toProfileRecord(EMPTY_PROFILE, "2026-10-23T03:00:00.000Z")).toEqual({
+  test("a stored record another client broke is refused, never written back", () => {
+    expect(toProfileRecord(good, { listed: "yes", createdAt: "2026-10-01T00:00:00.000Z" }, NOW)).toEqual({
       ok: false,
-      code: "profile.name_required",
+      code: "profile.invalid",
     });
   });
 });
