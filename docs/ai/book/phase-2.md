@@ -1396,6 +1396,22 @@ there; otherwise `/`. No state, no new input stored.
 Done when `login_close_goes_back_to_the_page_before` and `login_close_returns_to_the_page_before` (nojs.spec.ts, the
 browser's own Referer) pass and check is green.
 
+### P2.05p — Open sign-in over the page
+Tags: (none)            Depends on: P2.05n
+Alex, 2026-10-23 13:09Z: "the user should have never left the page to start with. And it's just like the model
+appearing on top. So when he presses X, it just stays like where he is and the model closes."
+
+**What:** The default shell's Header Sign in becomes a button that opens the P2.05m box over the page as a native
+`popover="auto"` (no script, as the Navigation drawer: Escape, a click outside and Close all hide it, and the page
+never changes). The box is the same SignInBox the /login page draws, with an `h2` and `role="dialog"`; its form posts
+to the CSRF-gated POST /login with `next` set to the page's path (safeReturnPath, never the query; none on `/`). The
+Header menu's props schema accepts the popover id only as lowercase hyphenated words. GET /login stays as the box on
+its own page: the footer's Sign in, protected pages' redirects and a browser without popovers still use it (P2.05n).
+The core shell (Navigation) keeps its Profile link for now.
+
+Done when `header_action_opens_a_popover_in_place`, `sign_in_opens_in_place_with_no_script`,
+`default_shell_signs_in_in_place` and `sign_in_opens_over_the_page` (nojs.spec.ts) pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`

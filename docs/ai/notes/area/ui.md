@@ -60,4 +60,7 @@ checked: 2026-10-23
 the design sheet. Native Table, CodeBlock, CommandBlock and Kbd tags reuse base.css for identical
 properties; keep the base sheet before component layers, as Input already requires.
 
+**Header action as a popover button (P2.05p).** A `NavLink` with `popover` renders as a `type="button"` with
+`popoverTarget`, styled by Button's module like the link; the island schema accepts only lowercase hyphenated ids.
+
 **Links.** ADR 0016 (design source), [[web]].

@@ -38,6 +38,27 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
+  // P2.05p: the Header's Sign in opens the box over the page with no script, and Close, Escape and a click outside
+  // each leave the visitor on the page they were on.
+  test("sign_in_opens_over_the_page", async ({ page }) => {
+    await page.goto("/legal/terms");
+    const box = page.getByRole("dialog", { name: "Sign in" });
+    const open = page.locator('header button[popovertarget="sign-in"]:visible');
+    await expect(box).toBeHidden();
+    await open.click();
+    await expect(box).toBeVisible();
+    await expect(box.locator('input[name="next"]')).toHaveValue("/legal/terms");
+    await box.getByRole("button", { name: "Close" }).click();
+    await expect(box).toBeHidden();
+    await open.click();
+    await page.keyboard.press("Escape");
+    await expect(box).toBeHidden();
+    await open.click();
+    await page.mouse.click(5, 5);
+    await expect(box).toBeHidden();
+    await expect(page).toHaveURL(/\/legal\/terms$/);
+  });
+
   // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
   test.describe("phone", () => {
     test.use({ viewport: { width: 375, height: 800 } });

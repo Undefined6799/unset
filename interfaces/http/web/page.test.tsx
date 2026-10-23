@@ -161,3 +161,41 @@ test("default_shell_footer_prefs", async () => {
   expect(elements(feed.document, "footer")).toHaveLength(0);
   expect(feed.forms).toHaveLength(0);
 });
+
+test("default_shell_signs_in_in_place", async () => {
+  // P2.05p: with our PDS named, the default shell's Sign in opens the box over the page, and the box sends the
+  // visitor back to this page's path. Only the path, never the query, so no request text is echoed into it.
+  const page = async (path: string, shell: NonNullable<Parameters<typeof pageResponse>[1]["shell"]> = {}) => {
+    const response = pageResponse(
+      { ...deps("test"), pdsHost: "pds.test" },
+      {
+        group: "public",
+        request: new Request(`https://unset.test${path}`),
+        title: "T",
+        body: null,
+        islands: "off",
+        shell,
+      },
+    );
+    const document = parse(await response.text());
+    const box = elements(document, "div", { id: "sign-in", popover: "auto" })[0];
+    return (
+      box &&
+      elements(box, "input", { type: "hidden", name: "next" }).map(
+        (input) => input.attrs?.find((attribute) => attribute.name === "value")?.value,
+      )
+    );
+  };
+  expect(await page("/legal/terms?next=https%3A%2F%2Fevil.example")).toEqual(["/legal/terms"]);
+  expect(await page("/")).toEqual([]);
+  expect(await page("/", { navigation: { active: "home" } })).toBeUndefined();
+  const without = pageResponse(deps("test"), {
+    group: "public",
+    request: new Request("https://unset.test/legal/terms"),
+    title: "T",
+    body: null,
+    islands: "off",
+    shell: {},
+  });
+  expect(await without.text()).not.toContain('id="sign-in"');
+});
