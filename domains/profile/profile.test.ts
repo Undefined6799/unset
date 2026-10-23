@@ -2,7 +2,7 @@
 // input once into checked fields; toProfileRecord builds the sh.unset.profile record we write to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { EMPTY_PROFILE, parseProfileFields, toProfileRecord } from "./profile.ts";
+import { EMPTY_PROFILE, parseProfileFields, readProfileRecord, toProfileRecord } from "./profile.ts";
 
 const good = {
   displayName: "Alice Moreau",
@@ -82,5 +82,27 @@ describe("toProfileRecord", () => {
       ok: false,
       code: "profile.name_required",
     });
+  });
+});
+
+describe("readProfileRecord", () => {
+  test("reads the fields of a stored record", () => {
+    expect(readProfileRecord({ $type: "sh.unset.profile", createdAt: "2026-10-23T03:00:00.000Z", ...good })).toEqual(
+      good,
+    );
+  });
+
+  test("a field another client wrote badly is dropped, the rest still shows", () => {
+    const stored = {
+      ...good,
+      website: "javascript:alert(1)",
+      headline: 7,
+      location: "x".repeat(LIMITS.profile.location + 1),
+    };
+    expect(readProfileRecord(stored)).toEqual({ ...good, website: "", headline: "", location: "" });
+  });
+
+  test("anything that is not an object reads as an empty profile", () => {
+    for (const value of [null, "profile", 3, ["a"]]) expect(readProfileRecord(value)).toEqual(EMPTY_PROFILE);
   });
 });

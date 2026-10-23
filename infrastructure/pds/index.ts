@@ -36,3 +36,4 @@ export {
   xrpcFromSession,
 } from "./pds-call.ts";
 export { isAuthFatal, isDpopNonceHandshake } from "./pds-errors.ts";
+export { loadProfileRecord, PROFILE_COLLECTION, PROFILE_RKEY, type StoredRecord } from "./profile-record.ts";

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, pds]
-checked: 2026-10-17
+checked: 2026-10-23
 ---
 # pds
 
@@ -54,5 +54,10 @@ failures into `ok`, `transient`, `auth_dead`, `scope_missing` and `rejected`. A 
 through an injected `endSessions` (`destroyAllForDid`); this package cannot import `infrastructure/session`. A
 handshake, a 429 or an outage does not. `pdsCall.dev_pds_nonce_rotation` needs the local compose stack and is not
 in the unit tests.
+
+**The profile record (Alex 2026-10-23).** `profile-record.ts` reads the member's `sh.unset.profile` record (rkey
+`self`) from their own repo over `pdsCall`, as an idempotent read. `RecordNotFound` means no profile yet and returns
+`null`, never a failure; any other refusal stays a failure, so an outage never reads as an empty profile. The value
+comes back unparsed: `domains/profile` reads it field by field.
 
 **Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].
