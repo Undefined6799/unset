@@ -108,7 +108,7 @@
     "readme": {
       "type": "object",
       "required": ["blocks"],
-      "description": "Free-form page body as typed blocks (the owner edits it with a block editor), never HTML.",
+      "description": "Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total.",
       "properties": {
         "blocks": {
           "type": "array",
@@ -158,7 +158,7 @@
           "type": "string",
           "format": "uri",
           "maxLength": 2000,
-          "description": "An http or https URL."
+          "description": "An http or https URL. A schema cannot state the scheme; a reader keeps the text and drops the link for any other."
         },
         "content": {
           "type": "array",
