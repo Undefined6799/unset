@@ -19,6 +19,7 @@ import { Input } from "../components/Input/Input.tsx";
 import { Kbd } from "../components/Kbd/Kbd.tsx";
 import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
+import { Markdown } from "../components/Markdown/Markdown.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
 import { Modal } from "../components/Modal/Modal.tsx";
 import { Navigation } from "../components/Navigation/Navigation.tsx";
@@ -158,6 +159,13 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
         { label: "DID", value: "did:plc:eeeeeeeeeeeeeeeeeeeeeeee", mono: true },
         { label: "Joined", value: null },
       ]}
+    />
+  ),
+  Markdown: (
+    <Markdown
+      source={
+        "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)\n---\n> Quiet software."
+      }
     />
   ),
   Pagination: (

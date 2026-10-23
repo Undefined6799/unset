@@ -1,0 +1,72 @@
+/* Markdown (member-written subset). Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v3 frames: columns sit side by side
+   with a space-12 gap and stack below 720px; a rule is a 1px line; quotes have a 2px line-strong bar; code blocks sit
+   on surface-sunken. Headings take the sheet's heading-2 and heading-3 styles from base.css. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    overflow-wrap: anywhere;
+  }
+
+  .row {
+    display: grid;
+    gap: var(--space-8) var(--space-12);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 720px) {
+    .row[data-columns="2"] {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .row[data-columns="3"] {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .column > * {
+    margin: 0;
+  }
+
+  .column ul,
+  .column ol {
+    padding-left: var(--space-6);
+  }
+
+  .column blockquote {
+    margin: 0;
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-line-strong);
+    color: var(--color-ink-muted);
+  }
+
+  .column blockquote > p {
+    margin: 0;
+  }
+
+  .rule {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .code {
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    background-color: var(--color-surface-sunken);
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+}
