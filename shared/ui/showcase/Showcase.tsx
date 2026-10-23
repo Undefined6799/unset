@@ -60,8 +60,6 @@ const PROFILE_LABELS: ProfileLabels = {
     readme: "Write your README.",
   },
   edit: "Edit {field}",
-  done: "Save",
-  cancel: "Cancel",
   draft: "Draft",
   draftBody: "Your changes are not published yet.",
   revert: "Revert to the published profile",

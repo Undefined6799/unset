@@ -26,8 +26,6 @@ export const PROFILE = {
     readme: "Write your README: headings, lists, links, quotes and code. ::: starts a column, --- a new row.",
   },
   edit: "Edit {field}",
-  done: "Save",
-  cancel: "Cancel",
   draft: "Draft",
   draftBody: "Your changes are not published yet.",
   revert: "Revert to the published profile",

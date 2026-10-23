@@ -12,8 +12,9 @@ pending, so the kit's largest Avatar (128) stands in. `ProfileEditorSlot` places
 ## Owner editing (island)
 
 - Hovering a field shows a 32px pencil (Iconoir `edit`); on touch screens (`hover: none`) it is always shown. The
-  pencil, or a double-click on the field, edits it in place with Save and Cancel. Enter saves and Esc cancels a
-  one-line field; Ctrl/⌘+Enter saves the README.
+  pencil, or a double-click on the field, edits it in place. What is typed goes on the draft at once; the field has
+  no Save (Alex 2026-10-23). Enter (Ctrl/⌘+Enter in the README) or leaving the field closes it; Esc puts the field
+  back as it was. One field edit is one undo step.
 - Every change goes on a draft. Once there is one, a draft box (a note Callout with `shadow-1`) sits above the profile
   so the profile still looks like the published page. Its tools line up under "Draft": Revert (Iconoir `delete`),
   Undo and Redo (text until the Iconoir undo and redo icons are on the sheet; the shortcut shows after a 2s hover),
