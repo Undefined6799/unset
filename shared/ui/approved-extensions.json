@@ -17,14 +17,21 @@
       "figmaUrls": [
         "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
         "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395"
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-806",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-858",
+        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-935"
       ],
       "requirements": ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
       "api": [
-        "itemsPlacement?: \"end\" | \"start\" = \"end\"",
+        "menuId: string (the drawer id NavigationMenuButton names)",
         "renderLink?: NavigationLinkRenderer",
         "navigationKey?: string | number",
-        "closeLabel?: string (deprecated; accepted for caller compatibility)"
+        "closeLabel?: string = \"Close menu\" (the drawer's close button)",
+        "homeLabel?: string = \"unset.sh home\"",
+        "actions?: ReactNode (under a line after the destinations)",
+        "extra?: ReactNode (very bottom, under a line)",
+        "NavigationMenuButton({ menuId, label })"
       ],
       "behavior": [
         "Vertical start stack with existing 16px gaps",
@@ -35,7 +42,9 @@
         "Phone current glyph/avatar lifts 8px using space-2 while its 48px target and focus outline stay stationary; 28px glyph sits 2px inside the dock top, 40px avatar extends 4px above it; no current/open-menu underline",
         "Alex approved larger phone icons and a fixed icon-shaped shadow on 2026-10-21: Menu/primary 28px, anonymous profile 24px, selected artwork casts a shadow-hard copy at its resting position with an explicitly approved 1px blur overriding the sheet's hard-shadow default for phone artwork only; desktop sizes and global Icon API unchanged",
         "Alex's latest 2026-10-21 feedback approves a wider, thinner 48px-tall floating phone dock: equal thirds, no padding, matching left/right/bottom max(20px, safe area) gaps, radius-xs, line outline and shadow-menu; popup stays 16px above the dock",
-        "Menu is current only when an item is current; opening the popup alone selects no destination; desktop rail and popup row treatment stay unchanged"
+        "Menu is current only when an item is current; opening the popup alone selects no destination; desktop rail and popup row treatment stay unchanged",
+        "Alex 2026-10-23 (P2.13e) supersedes the rail and popup: one native popover left drawer, 320px, full height, scrim, radius-sm right corners, shadow-1; mark and close X on one line; rows with icon and label, current boxed; actions under a line; extra centered at the very bottom; no Legal links",
+        "Desktop opens it from NavigationMenuButton before the mark in the brand header; phones from the floating bar's menu button; the bar (inset 16px, line-strong edge, radius-sm, shadow-1) hides while the drawer is open; itemsPlacement and hover labels are removed"
       ]
     },
     "Header": {
@@ -43,7 +52,8 @@
       "requirements": ["docs/ai/plans/2026-10-18-pds-ui-design.md#ownership-and-dependency-boundaries"],
       "api": [
         "HeaderProps.homeLabel?: string = \"unset.sh home\"",
-        "BrandHeader and BrandHeaderProps, extracted existing brandOnly composition"
+        "BrandHeader and BrandHeaderProps, extracted existing brandOnly composition",
+        "BrandHeaderProps.start?: ReactNode and HeaderProps.start (brandOnly), before the mark (P2.13e menu button)"
       ],
       "behavior": [
         "64px desktop and 56px phone",

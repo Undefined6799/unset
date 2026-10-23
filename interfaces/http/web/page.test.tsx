@@ -155,7 +155,14 @@ test("default_shell_footer_prefs", async () => {
   // Legal pages are public: the theme follows the system there, so no form (phase-1.md, P1.22: "Public pages show
   // no theme control").
   expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
-  expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
+  // P2.13e: a core-shell app page has no footer; its theme control is the drawer's picker, one form of three
+  // submit buttons, with the same re-checked return path.
+  const core = await page({ group: "app", navigation: true });
+  expect(core.forms).toHaveLength(1);
+  expect(elements(core.document, "footer")).toHaveLength(0);
+  expect(
+    elements(core.forms[0], "button", { name: "theme" }).map((b) => b.attrs?.find((a) => a.name === "value")?.value),
+  ).toEqual(["dark", "system", "light"]);
   // A feed page reaches feed mode through pageResponse: no footer, so no form.
   const feed = await page({ group: "app", feed: true });
   expect(elements(feed.document, "footer")).toHaveLength(0);

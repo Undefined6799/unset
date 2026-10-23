@@ -40,7 +40,9 @@ themselves: `interfaces/http/prefs/return-to.ts` rebuilds their query from a re-
 and the language form (P1.22b) are still to come. Text is in `src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
-brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
+brand-only Header with the menu button, shared Navigation (P2.13e: the left drawer, with this browser's sign-out
+and the `ThemePicker` when the page has a session and prefs) and a main region with room for the phone bar. Pages
+with a footer give `main` the first screen (`.page`), so the footer starts below it (Alex, 2026-10-23). Home has only a
 visually hidden heading. The interface supplies the active destination and a verified account name when available;
 the anonymous public homepage still reads no cookies. Native popovers keep the phone menu usable without JS.
 On screen, core main is a scroll area bounded by the header and navigation; bottom padding alone left keyboard

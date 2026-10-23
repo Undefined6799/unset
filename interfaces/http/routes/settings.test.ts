@@ -139,7 +139,9 @@ describe("GET /settings/account", () => {
     expect(values).toEqual(["alice.pds.unset.test", DID]);
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).toContain("Signs this browser out of unset.sh.");
-    expect(elements(document, "form", { method: "post", action: "/logout" })).toHaveLength(1);
+    // One in the page, one in the menu drawer (P2.13e).
+    const main = elements(document, "main")[0];
+    expect(elements(main, "form", { method: "post", action: "/logout" })).toHaveLength(1);
     expect(html).not.toContain("getBlob");
     expect(checked).toEqual([DID]);
   });

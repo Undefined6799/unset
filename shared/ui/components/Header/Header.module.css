@@ -30,13 +30,23 @@
         padding-inline: var(--space-4);
       }
     }
-    & svg {
+    & .home svg {
       height: auto;
       aspect-ratio: 828 / 220;
     }
     & .home {
       align-items: center;
       height: 48px;
+    }
+  }
+
+  /* P2.13e: the menu button sits before the mark on desktop; phones open the menu from the floating bar. */
+  .brand .start {
+    justify-content: flex-start;
+    gap: var(--space-2);
+    padding-left: var(--space-3);
+    @media (max-width: 767px) {
+      padding-left: var(--space-4);
     }
   }
 
