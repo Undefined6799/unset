@@ -175,6 +175,37 @@ describe("postgres image", () => {
     expect(superuser(after, OTHER_RULES).out.trim()).toBe("0");
   });
 
+  // P1.11z: the server opens /etc/unset/pg_hba.conf as 999, so the folder needs its x bit for others; a publish build
+  // once left it at 0444 and staging's Postgres could not start. Both stay root's and unwritable by anyone else.
+  test("postgres_image_hba_file_is_readable_by_postgres", { timeout: CONTAINER_MS }, () => {
+    const stat = docker(
+      [
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--entrypoint",
+        "stat",
+        image,
+        "-c",
+        "%a %U",
+        "/etc/unset",
+        "/etc/unset/pg_hba.conf",
+      ],
+      { timeoutMs: CONTAINER_CALL_MS },
+    );
+    expect(stat.code, stat.err.slice(-2000)).toBe(0);
+    const [folder = "", file = ""] = stat.out.trim().split("\n");
+    // The folder is 0555 under the publish builder and 0755 under the runner's; either is traversable and root's.
+    expect(["555 root", "755 root"]).toContain(folder);
+    expect(file).toBe("555 root");
+    const read = docker(
+      ["run", "--rm", "--network", "none", "--entrypoint", "head", image, "-c", "1", "/etc/unset/pg_hba.conf"],
+      { timeoutMs: CONTAINER_CALL_MS },
+    );
+    expect(read.code, read.err.slice(-2000)).toBe(0);
+  });
+
   test("postgres_image_strips_gosu", { timeout: CONTAINER_MS }, () => {
     const run = docker(["run", "--rm", "--network", "none", "--entrypoint", "sh", image, "-c", "command -v gosu"], {
       timeoutMs: CONTAINER_CALL_MS,
