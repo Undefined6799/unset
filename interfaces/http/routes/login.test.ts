@@ -171,7 +171,7 @@ describe("GET /login", () => {
     expect(html).toContain('<main id="main"');
     expect(html.match(/<main/g)).toHaveLength(1);
     // P2.05m: the page is the sign-in dialog alone, so the error sits inside it, with no shell behind.
-    const dialog = html.slice(html.indexOf('<section role="dialog"'), html.indexOf("</section>"));
+    const dialog = html.slice(html.indexOf('<section aria-labelledby="sign-in-title"'), html.indexOf("</section>"));
     expect(dialog).toContain("No account uses that handle.");
     expect(html).not.toMatch(/<header|<footer|data-island/);
     const forged = await (await send("/login?error=%3Cscript%3Ex")).text();

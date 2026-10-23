@@ -17,13 +17,13 @@ test.describe("javascript disabled", () => {
     });
   }
 
-  // P2.05m: the sign-in page is one dialog over the scrim, with nothing behind it to tab into.
-  test("login_dialog_without_js", async ({ page }) => {
+  // P2.05m: the sign-in page is one box over the scrim, with nothing behind it to tab into; Close goes home.
+  test("login_box_without_js", async ({ page }) => {
     await page.goto("/login?next=/did");
-    const dialog = page.getByRole("dialog", { name: "Sign in" });
+    const dialog = page.getByRole("region", { name: "Sign in" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/did");
+    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
     await expect(page.locator("header, footer")).toHaveCount(0);
   });
 

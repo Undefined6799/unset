@@ -1,8 +1,10 @@
 // The sign-in page (P2.05; plan §5.3 "Login and signup"). Since P2.05r it is one button that posts with no script and
 // opens our PDS's own sign-in page. Only accounts on our PDS sign in (P1.36v), so there is no handle field. Since
-// P2.05m (Alex, 2026-10-23: "the sign in should only be a modal") the page is that one dialog, drawn open over the
-// scrim with no shell behind it, so nothing else on the page takes focus; the close link goes back to the return
-// path. The error is a catalog code the server has already checked (readErrorParam); the page shows only its text.
+// P2.05m (Alex, 2026-10-23: "the sign in should only be a modal") the page is that one box, drawn in the Modal's look
+// over the scrim with no shell behind it. With no script it cannot trap focus or close on Escape, so it is a page
+// region, not an aria-modal dialog. Close goes home: `next` is often the protected page that sent the visitor here,
+// which would only send them back. The error is a catalog code the server has already checked (readErrorParam); the
+// page shows only its text.
 import { ERROR_MESSAGES, type ErrorCode } from "@unset/shared-errors";
 import { Button, Callout } from "@unset/shared-ui";
 import styles from "./Login.module.css";
@@ -19,12 +21,12 @@ export function Login({ next, error, pdsHost }: LoginProps) {
   const message = error === null ? undefined : ERROR_MESSAGES[error as keyof typeof ERROR_MESSAGES];
   return (
     <main id="main" className={styles.scrim}>
-      <section role="dialog" aria-modal="true" aria-labelledby="sign-in-title" className={styles.dialog}>
+      <section aria-labelledby="sign-in-title" className={styles.dialog}>
         <div className={styles.head}>
           <h1 id="sign-in-title" className={styles.title}>
             Sign in
           </h1>
-          <a className={styles.close} href={next ?? "/"}>
+          <a className={styles.close} href="/">
             Close
           </a>
         </div>

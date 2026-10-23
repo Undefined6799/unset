@@ -47,18 +47,17 @@ describe("login screen", () => {
     expect(page).not.toContain("<script");
   });
 
-  // P2.05m (Alex, 2026-10-23: "the sign in should only be a modal"): the page is one dialog over a scrim, drawn with
-  // no script, with a close link back to where the visitor came from.
-  test("login_is_one_modal_dialog", () => {
-    const page = html(screens.login({ ...LOGIN, next: "/me" }));
-    const dialogs = tags(page, "section");
-    expect(dialogs).toHaveLength(1);
-    expect(dialogs[0]).toMatchObject({ role: "dialog", "aria-modal": "true", "aria-labelledby": "sign-in-title" });
+  // P2.05m (Alex, 2026-10-23: "the sign in should only be a modal"): the page is one box in the Modal's look over a
+  // scrim, drawn with no script. With no script it cannot trap focus, so it is a named region, not an aria-modal
+  // dialog, and Close goes home, since `next` is often the protected page that sent the visitor here.
+  test("login_is_one_modal_box", () => {
+    const page = html(screens.login({ ...LOGIN, next: "/did" }));
+    expect(tags(page, "section")).toEqual([{ "aria-labelledby": "sign-in-title", class: expect.any(String) }]);
+    expect(page).not.toMatch(/role="dialog"|aria-modal/);
     expect(page).toContain('<h1 id="sign-in-title"');
     expect(page.match(/<main/g)).toHaveLength(1);
-    expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/me" })]);
-    expect(page).toMatch(/<a [^>]*href="\/me"[^>]*>Close<\/a>/);
-    expect(tags(html(screens.login(LOGIN)), "a")).toEqual([expect.objectContaining({ href: "/" })]);
+    expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/" })]);
+    expect(page).toMatch(/<a [^>]*href="\/"[^>]*>Close<\/a>/);
   });
 
   test("login_without_next_has_no_hidden_field", () => {

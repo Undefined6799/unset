@@ -1371,16 +1371,17 @@ Alex, 2026-10-23: "the sign in should only be a modal", then "have the button be
 atproto logo", and "the sign in is still not a pop up modal like we said". Mock: Figma 166:867 (desktop), 166:883
 (phone).
 
-**What:** `GET /login` renders the sign-in dialog alone, with no shell and islands off: a `role="dialog"`
-`aria-modal="true"` section in the kit Modal's look, drawn open over the scrim with no script, so every way in (the
-header's Sign in, the drawer's Profile when signed out, a protected page's redirect) lands on the same modal. The
-title is the page's `h1`; a close link goes back to `next` or `/`; the checked `?error=` shows inside the dialog. The
-button reads "Sign in with AtProto" and still posts `intent=chooser`; the PDS host stays in the text. The atproto mark
-before the label waits for Alex's approval of the drawing (CLAUDE.md icon rule: Iconoir only). `/login` moves to the
-zero-script Lighthouse row, and the no-JS header menu test moves to `/signed-out`.
+**What:** `GET /login` renders the sign-in box alone, with no shell and islands off: a section named by its `h1`, in
+the kit Modal's look, drawn over the scrim with no script, so every way in (the header's Sign in, a protected page's
+redirect) lands on the same box. With no script it cannot trap focus or close on Escape, so it is a named region, not
+an `aria-modal` dialog (Codex on #1313). Close goes to `/`, because `next` is often the protected page that sent the
+visitor here. The checked `?error=` shows inside the box. The button reads "Sign in with AtProto" and still posts
+`intent=chooser`; the PDS host stays in the text. The atproto mark before the label waits for Alex's approval of the
+drawing (CLAUDE.md icon rule: Iconoir only). `/login` moves to the zero-script Lighthouse row, and the no-JS header
+menu test moves to `/signed-out`.
 
-Done when `login_is_one_modal_dialog`, `login_get_shows_only_a_catalog_error` and `login_dialog_without_js` pass and
-check is green.
+Done when `login_is_one_modal_box`, `login_get_shows_only_a_catalog_error` and `login_box_without_js` pass and check
+is green.
 
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
