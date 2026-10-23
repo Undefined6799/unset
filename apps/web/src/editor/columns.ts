@@ -2,8 +2,8 @@
 // block dragged by its handle and dropped on the left or right edge of another block goes beside it: two top-level
 // blocks become a columnList of two columns, and a block dropped beside one inside a column adds a column next to it,
 // up to the README's three (LIMITS.profile.readmeColumnsMax). Anywhere else the drop is ProseMirror's own move.
-// normalizeColumns then keeps the shape the README stores: no empty column, and a list of one column reads as its
-// blocks.
+// normalizeColumns then keeps the shape the README stores: no empty column, a list of one column reads as its blocks,
+// and a block that falls into a list but not into a column goes back out of it.
 import { NodeSelection } from "prosemirror-state";
 import type { ReadmeBlock, ReadmeEditor, ReadmePartialBlock } from "./schema.ts";
 
@@ -77,18 +77,32 @@ export function dropIntoColumns(editor: ReadmeEditor, drop: ColumnDrop): void {
   editor.focus();
 }
 
-/** The fix one top-level block needs to keep the README's column shape, or null when it has the shape. */
+/**
+ * The fix one top-level block needs to keep the README's column shape, or null when it has the shape. A block that
+ * lands straight in a column list (Enter on an empty last line of a column, Backspace at the start of the block below,
+ * an ordinary move) leaves it, above the list if it came before the first column and below otherwise, so only the
+ * blocks put side by side are columns (Alex 2026-10-23 23:42Z).
+ */
 export function fixFor(block: ReadmeBlock): ReadmePartialBlock[] | null {
   if (block.type === "column") return block.children.map(copy);
   if (block.type !== "columnList") return null;
-  // A block dropped straight into the list by an ordinary move becomes a column of its own.
-  const columns = block.children
-    .map((child) => (child.type === "column" ? child.children : [child]))
-    .filter((blocks) => blocks.length > 0);
-  if (columns.length < 2) return columns.flat().map(copy);
-  const same = columns.length === block.children.length && block.children.every((child) => child.type === "column");
-  if (same) return null;
-  return [{ type: "columnList", children: columns.map((blocks) => ({ type: "column", children: blocks.map(copy) })) }];
+  const first = block.children.findIndex((child) => child.type === "column");
+  const strays = block.children.filter((child) => child.type !== "column");
+  const columns = block.children.filter((child) => child.type === "column" && child.children.length > 0);
+  if (strays.length === 0 && columns.length === block.children.length && columns.length >= 2) return null;
+  const above = block.children.slice(0, Math.max(first, 0)).filter((child) => child.type !== "column");
+  const below = strays.filter((child) => !above.includes(child));
+  const list: ReadmePartialBlock[] =
+    columns.length >= 2
+      ? [
+          {
+            type: "columnList",
+            children: columns.map((column) => ({ type: "column", children: column.children.map(copy) })),
+          },
+        ]
+      : columns.flatMap((column) => column.children.map(copy));
+  // The strays keep their ids (the list is removed before they are inserted), so the caret can stay in its block.
+  return [...above, ...list, ...below];
 }
 
 /** Removes empty columns and unwraps a list of one column; called after every change. */
@@ -98,10 +112,12 @@ export function normalizeColumns(editor: ReadmeEditor): void {
     return fix === null ? [] : [{ id: block.id, fix }];
   });
   if (fixes.length === 0) return;
+  const caret = editor.getTextCursorPosition().block.id;
   editor.transact(() => {
     for (const { id, fix } of fixes) {
       if (fix.length === 0) editor.removeBlocks([id]);
       else editor.replaceBlocks([id], fix);
     }
   });
+  if (editor.getBlock(caret) !== undefined) editor.setTextCursorPosition(caret, "start");
 }

@@ -17,15 +17,26 @@ test("columns_fix_unwraps_a_list_left_with_one_column", () => {
   expect(fixFor(list)?.map((fix) => fix.type)).toEqual(["paragraph"]);
 });
 
-test("columns_fix_drops_empty_columns_and_wraps_a_stray_block", () => {
+test("columns_fix_drops_empty_columns", () => {
   const list = block("columnList", [
     block("column", [block("paragraph")]),
     block("column", []),
-    block("paragraph", [], "stray"),
+    block("column", [block("paragraph", [], "two")]),
   ]);
-  const [fixed] = fixFor(list) ?? [];
-  expect(fixed?.type).toBe("columnList");
+  const [fixed, ...rest] = fixFor(list) ?? [];
   expect(fixed?.children?.map((column) => column.type)).toEqual(["column", "column"]);
+  expect(rest).toEqual([]);
+});
+
+test("columns_fix_moves_a_block_out_of_the_list_not_into_a_column", () => {
+  // Enter on an empty last line of a column, or Backspace at the start of the block below, lifts it into the list.
+  const list = block("columnList", [
+    block("paragraph", [], "above"),
+    block("column", [block("paragraph")]),
+    block("column", [block("paragraph", [], "two")]),
+    block("heading", [], "below"),
+  ]);
+  expect(fixFor(list)?.map((fix) => fix.type)).toEqual(["paragraph", "columnList", "heading"]);
 });
 
 test("columns_fix_unwraps_a_column_outside_a_list", () => {
