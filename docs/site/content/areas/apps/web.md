@@ -47,7 +47,7 @@ The rest of the package:
 | Copy | `apps/web/src/shell/messages.ts`, `apps/web/src/screens/messages.ts`, `apps/web/src/screens/welcome/messages.ts`, `apps/web/src/screens/settings/messages.ts` |
 | Island runtime | `apps/web/src/islands/runtime/` |
 | Legal parser | `apps/web/src/legal/` |
-| Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css`, `apps/web/src/screens/settings/SettingsShell.module.css`, `apps/web/src/screens/settings/SettingsAccount.module.css` |
+| Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css`, `apps/web/src/screens/Login.module.css`, `apps/web/src/screens/settings/SettingsAccount.module.css`, `apps/web/src/screens/settings/SettingsShell.module.css` |
 
 There is no `*.island.tsx` under `apps/web`. `render.tsx` and `apps/web/src/islands/runtime/bootstrap.ts` glob `apps/web/src/islands/*.island.tsx` and `shared/ui/islands/*.island.tsx`. The island components on the tree are under `shared/ui/islands/`.
 
