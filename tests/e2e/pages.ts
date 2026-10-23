@@ -26,6 +26,9 @@ export const FIXTURES = {
   welcomeAge: "/fixture/welcome-age",
   welcomeTerms: "/fixture/welcome-terms",
   welcomeChat: "/fixture/welcome-chat",
+  account: "/fixture/account",
+  settingsProfile: "/fixture/settings-profile",
+  settingsAccount: "/fixture/settings-account",
 } as const;
 
 export type PageGroup = "app" | "public";
@@ -60,6 +63,10 @@ export const WELCOME_FIXTURES: readonly PageFixture[] = [
   { path: FIXTURES.welcomeAge, group: "app", zeroJs: true, expectJs: false },
   { path: FIXTURES.welcomeTerms, group: "app", zeroJs: true, expectJs: false },
   { path: FIXTURES.welcomeChat, group: "app", zeroJs: true, expectJs: false },
+  // P2.13c: the account page and the settings pages, as their routes render them with a session.
+  { path: FIXTURES.account, group: "app", zeroJs: true, expectJs: false },
+  { path: FIXTURES.settingsProfile, group: "app", zeroJs: true, expectJs: false },
+  { path: FIXTURES.settingsAccount, group: "app", zeroJs: true, expectJs: false },
 ];
 
 /**
@@ -82,7 +89,9 @@ export const NOT_DOCUMENTS: readonly { readonly path: string; readonly reason: s
   { path: "/welcome/age", reason: "redirects to sign-in without a session" },
   { path: "/welcome/terms", reason: "redirects to sign-in without a session" },
   { path: "/welcome/chat", reason: "redirects to sign-in without a session" },
+  { path: "/settings", reason: "always redirects to /settings/profile" },
   { path: "/settings/profile", reason: "redirects to sign-in without a session" },
+  { path: "/settings/account", reason: "redirects to sign-in without a session" },
 ];
 
 export type ThemeCell =

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[ui-build]]", "[[islands]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # ui
 
@@ -29,7 +29,7 @@ checked: 2026-10-22
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
   for P1.26's axe and target-size checks. `index.ts` exports only what the screens use: Button, Callout, Input, Link (P2.05),
-  Checkbox (P2.12, server-rendered, no island), RadioGroup (P1.25f's footer theme form) and the shell's Footer, Header, SkipLink (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
+  Checkbox (P2.12, server-rendered, no island), RadioGroup (P1.25f's footer theme form), Avatar and Card (P2.13c's account and settings pages) and the shell's Footer, Header, SkipLink (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
   after an earlier re-export pulled the kit into boot (P1.25h; architecture record 2026-10-07-p125h-boot-chunk.md).
   Re-measure with `scripts/budgets/island.ts` before exporting more components.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,

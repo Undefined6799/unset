@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-10-19
+checked: 2026-10-23
 ---
 # web
 
@@ -20,7 +20,9 @@ the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/Err
 P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink` (P2.08b: the recorded issuer, its copy in
 `screens/messages.ts`, also on `Me`);
 P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
-`SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner), and the islands runtime under
+`SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner; P2.13c: `settings/`, the
+side list `SettingsShell`, `SettingsProfile` with the "Set up your profile" card, and `SettingsAccount`, with the
+copy in `settings/messages.ts`; `Me` gains the Avatar initial and an Edit profile link), and the islands runtime under
 `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
 
 **The shell (P1.25).** `renderPage` takes `islands: "on" | "off"` and an optional `shell`. "off" (the public pages

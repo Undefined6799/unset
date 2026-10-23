@@ -181,7 +181,15 @@ function setup(world: World = {}) {
         screens: web.screens,
         log,
       }),
-      ...settingsRoutes({ gate, page, screens: web.screens }),
+      ...settingsRoutes({
+        open: (request, deadline, next) => openApp(gate, request, deadline, next),
+        verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
+        page,
+        screens: web.screens,
+        issuerOf: async () => "https://pds.unset.test",
+        pdsIssuer: "https://pds.unset.test",
+        log,
+      }),
       ...meRoutes({
         open: (request, deadline, next) => openApp(gate, request, deadline, next),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),

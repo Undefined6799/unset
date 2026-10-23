@@ -313,16 +313,17 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     screens: render.screens,
     log,
   });
-  const settings = settingsRoutes({ gate, page, screens: render.screens });
-  const me = meRoutes({
-    open: (request, deadline, next) => openApp(gate, request, deadline, next),
-    verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
+  const accountDeps = {
+    open: (request: Request, deadline: AbortSignal, next: string) => openApp(gate, request, deadline, next),
+    verifyHandle: (did: Did, signal: AbortSignal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
     issuerOf,
     pdsIssuer,
     log,
-  });
+  };
+  const settings = settingsRoutes(accountDeps);
+  const me = meRoutes(accountDeps);
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [
