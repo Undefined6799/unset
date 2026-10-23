@@ -44,8 +44,6 @@ export type ProfileLabels = {
   readonly copyLink: string;
   readonly copied: string;
   readonly copyFailed: string;
-  readonly removeLink: string;
-  readonly invalidLink: string;
   readonly fields: Readonly<Record<ProfileFieldName, string>>;
   readonly add: Readonly<Record<ProfileFieldName, string>>;
   readonly edit: string;
@@ -73,8 +71,6 @@ const LABEL_STRINGS = [
   "copyLink",
   "copied",
   "copyFailed",
-  "removeLink",
-  "invalidLink",
   "edit",
   "draft",
   "draftBody",

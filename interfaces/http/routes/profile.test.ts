@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Did } from "@unset/domains-identity";
-import type { ProfileFields } from "@unset/domains-profile";
+import type { ProfileEdit } from "@unset/domains-profile";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -23,7 +23,7 @@ afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
 function setup(world: { signedIn?: boolean; save?: ProfileSave } = {}) {
-  const saved: { did: Did; fields: ProfileFields }[] = [];
+  const saved: { did: Did; fields: ProfileEdit }[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
   const routes = profileRoutes({
     open: async (_request, _deadline, next) =>
@@ -80,6 +80,22 @@ describe("POST /profile", () => {
         },
       },
     ]);
+  });
+
+  test("Settings › Profile sends only the side column and comes back to Settings", async () => {
+    const { post, saved } = setup();
+    const form = new URLSearchParams({ displayName: "Alice", headline: "", next: "/settings/profile" });
+    const response = await post(form.toString());
+    expect(response.headers.get("location")).toBe("/settings/profile");
+    expect(saved).toEqual([{ did: DID, fields: { displayName: "Alice", headline: "" } }]);
+  });
+
+  test("any other next returns to the member's own page", async () => {
+    const { post } = setup();
+    const response = await post(
+      new URLSearchParams({ displayName: "Alice", next: "https://evil.example/" }).toString(),
+    );
+    expect(response.headers.get("location")).toBe(`/${DID}`);
   });
 
   test("a cross-site post is refused before anything is read", async () => {

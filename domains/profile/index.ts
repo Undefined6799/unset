@@ -4,6 +4,7 @@ export {
   EMPTY_PROFILE,
   type ParsedProfile,
   PROFILE_FIELDS,
+  type ProfileEdit,
   type ProfileError,
   type ProfileField,
   type ProfileFields,
