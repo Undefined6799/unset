@@ -59,6 +59,11 @@ type Main = {
    * Wide header image (3:1).
    */
   coverImage?: l.BlobRef;
+
+  /**
+   * The member's links elsewhere (other sites and accounts), in display order.
+   */
+  links?: Link[];
   availability?: Availability;
 
   /**
@@ -103,6 +108,9 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     coverImage: /*#__PURE__*/ l.optional(
       /*#__PURE__*/ l.blob({ accept: ["image/png", "image/jpeg", "image/webp"], maxSize: 2000000 }),
     ),
+    links: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Link>((() => link) as any), { maxLength: 12 }),
+    ),
     availability: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<Availability>((() => availability) as any)),
     stats: /*#__PURE__*/ l.optional(
       /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Stat>((() => stat) as any), { maxLength: 12 }),
@@ -133,6 +141,27 @@ export const $parse = /*#__PURE__*/ main.parse.bind(main);
 export const $safeParse = /*#__PURE__*/ main.safeParse.bind(main);
 export const $validate = /*#__PURE__*/ main.validate.bind(main);
 export const $safeValidate = /*#__PURE__*/ main.safeValidate.bind(main);
+
+/** One link elsewhere. */
+type Link = {
+  $type?: "sh.unset.profile#link";
+
+  /**
+   * An http or https URL.
+   */
+  uri: l.UriString;
+};
+
+export type { Link };
+
+/** One link elsewhere. */
+const link = /*#__PURE__*/ l.typedObject<Link>(
+  $nsid,
+  "link",
+  /*#__PURE__*/ l.object({ uri: /*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 }) }),
+);
+
+export { link };
 
 /** What the member is open to, such as work or collaborations. */
 type Availability = {

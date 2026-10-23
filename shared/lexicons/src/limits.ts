@@ -9,6 +9,8 @@ export const LIMITS = {
     readme: 10_000,
     location: 100,
     websiteBytes: 2000,
+    linksMax: 12,
+    linkUriBytes: 2000,
     emailBytes: 254,
     availabilityLabel: 140,
     availabilityDetail: 300,

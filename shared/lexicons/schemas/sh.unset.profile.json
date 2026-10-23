@@ -64,6 +64,15 @@
             "maxSize": 2000000,
             "description": "Wide header image (3:1)."
           },
+          "links": {
+            "type": "array",
+            "maxLength": 12,
+            "items": {
+              "type": "ref",
+              "ref": "#link"
+            },
+            "description": "The member's links elsewhere (other sites and accounts), in display order."
+          },
           "availability": {
             "type": "ref",
             "ref": "#availability"
@@ -95,6 +104,19 @@
             "format": "datetime",
             "description": "When the profile was last published."
           }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "One link elsewhere.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL."
         }
       }
     },
