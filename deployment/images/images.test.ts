@@ -2217,7 +2217,7 @@ describe("postgres image", () => {
     // The official docker-entrypoint.sh is inherited unchanged. Only our pg_hba.conf is copied in, and the CMD points the
     // server at it (P1.11y): the entrypoint passes the CMD's arguments to initdb's temporary server and to the real one.
     expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([
-      "COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
+      "COPY --chmod=0555 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
       'CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]',
     ]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
