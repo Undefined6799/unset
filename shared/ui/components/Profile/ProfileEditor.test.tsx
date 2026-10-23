@@ -16,13 +16,23 @@ const labels: ProfileLabels = {
   copyLink: "Copy link",
   copied: "Copied",
   copyFailed: "Copy failed",
-  fields: { displayName: "name", headline: "headline", location: "place", website: "website", readme: "README" },
+  removeLink: "Remove {link}",
+  invalidLink: "Enter a web address, like github.com/you.",
+  fields: {
+    displayName: "name",
+    headline: "headline",
+    location: "place",
+    website: "website",
+    readme: "README",
+    links: "links",
+  },
   add: {
     displayName: "Add your name",
     headline: "Add a headline",
     location: "Add a place",
     website: "Add a website",
     readme: "Write your README.",
+    links: "Add a link",
   },
   edit: "Edit {field}",
   draft: "Draft",
@@ -48,7 +58,14 @@ const props: ProfileEditorProps = {
   handle: "alice.pds.example",
   verified: true,
   handleUnavailable: false,
-  fields: { displayName: "Alice", headline: "Designer.", location: "", website: "", readme: "## About me\nhi" },
+  fields: {
+    displayName: "Alice",
+    headline: "Designer.",
+    location: "",
+    website: "",
+    readme: "## About me\nhi",
+    links: "https://github.com/alicem",
+  },
   labels,
 };
 
@@ -73,6 +90,7 @@ describe("ProfileEditor without script", () => {
     expect(host.querySelector('[title="did:plc:7f3kabcdefghijklmtdc9e"]')?.textContent).toBe("did:plc:7f3k…tdc9e");
     const pencils = [...host.querySelectorAll("button[aria-label^='Edit']")].map((b) => b.getAttribute("aria-label"));
     expect(pencils).toEqual(["Edit name", "Edit headline", "Edit place", "Edit website", "Edit README"]);
+    expect(host.querySelector("button[aria-label='Add a link']")).not.toBeNull();
     host.remove();
   });
 
@@ -203,6 +221,27 @@ describe("ProfileEditor with script", () => {
     expect(buttonText("Copied")).toBeDefined();
   });
 
+  it("adds a link with + and removes one, each a draft step (Alex 04:06Z)", async () => {
+    const { host, button } = await mount();
+    expect(host.querySelector('a[href="https://github.com/alicem"]')?.textContent).toBe("github.com/alicem");
+    await act(async () => button("Add a link")?.click());
+    const input = host.querySelector("input[aria-label='Add a link']") as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    await act(async () => type(input, "javascript:alert(1)"));
+    await key(input, { key: "Enter" });
+    expect(host.querySelector("[role=alert]")?.textContent).toBe("Enter a web address, like github.com/you.");
+    await act(async () => type(input, "bsky.app/profile/alice"));
+    await key(input, { key: "Enter" });
+    expect(host.querySelector('a[href="https://bsky.app/profile/alice"]')).not.toBeNull();
+    expect(host.querySelector("section[aria-label='Draft']")).not.toBeNull();
+    await act(async () => button("Remove https://github.com/alicem")?.click());
+    expect(host.querySelector('a[href="https://github.com/alicem"]')).toBeNull();
+    await act(async () => button("Undo")?.click());
+    await act(async () => button("Undo")?.click());
+    expect(host.querySelector('a[href="https://bsky.app/profile/alice"]')).toBeNull();
+    expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
+  });
+
   it("view as hides the pencils", async () => {
     const { host, button, commit } = await mount();
     await act(async () => button("Edit place")?.click());
@@ -237,6 +276,7 @@ describe("ProfileEditor with script", () => {
       location: "Toronto",
       website: "",
       readme: "## About me\nhi",
+      links: "https://github.com/alicem",
     });
     expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
     expect(host.textContent).toContain("Saved to your profile.");

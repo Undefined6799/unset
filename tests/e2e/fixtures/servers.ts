@@ -272,6 +272,7 @@ async function serveTest(): Promise<void> {
               location: "Toronto, Ontario",
               website: "https://alice.example",
               readme: "## About me\nI make small tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+              links: "https://github.com/alicem",
             },
           }),
       },

@@ -11,8 +11,11 @@ import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
 
 const FORM = "application/x-www-form-urlencoded";
-/** The readme's 100,000-byte lexicon bound, percent-encoded at worst three bytes a byte, plus the short fields. */
-export const PROFILE_BODY_LIMIT_BYTES = 320 * 1024;
+/**
+ * The readme's 100,000-byte lexicon bound and the links' 12 × 2,000 bytes, percent-encoded at worst three bytes a
+ * byte, plus the short fields.
+ */
+export const PROFILE_BODY_LIMIT_BYTES = 400 * 1024;
 
 export type ProfileSave =
   | { readonly kind: "saved" }
