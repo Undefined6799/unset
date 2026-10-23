@@ -71,6 +71,21 @@ export function parseProfileFields(input: Readonly<Record<string, unknown>>): Pa
   return { ok: true, fields: fields as ProfileFields };
 }
 
+/**
+ * The fields of a record read back from a member's PDS. Another client may have written it, so each field is
+ * checked on its own and a bad one reads as unset: the page still shows the rest.
+ */
+export function readProfileRecord(value: unknown): ProfileFields {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return EMPTY_PROFILE;
+  const stored = value as Readonly<Record<string, unknown>>;
+  const fields: Record<string, string> = {};
+  for (const field of PROFILE_FIELDS) {
+    const checked = checkField(field, stored[field]);
+    fields[field] = checked.ok ? checked.value : "";
+  }
+  return fields as ProfileFields;
+}
+
 export type ProfileRecord = { readonly $type: "sh.unset.profile"; readonly createdAt: string } & Readonly<
   Partial<Record<ProfileField, string>>
 >;

@@ -9,5 +9,6 @@ export {
   type ProfileFields,
   type ProfileRecord,
   parseProfileFields,
+  readProfileRecord,
   toProfileRecord,
 } from "./profile.ts";

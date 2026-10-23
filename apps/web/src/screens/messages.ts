@@ -6,3 +6,9 @@ export const ACCOUNT_LINK = {
   ours: "Your account on {pdsHost}",
   foreign: "your sign-in server ({pdsHost})",
 } as const;
+
+/** The profile page (Alex 2026-10-23). */
+export const PROFILE = {
+  unavailable: "We could not load your profile just now.",
+  handleUnavailable: "We could not check your handle just now.",
+} as const;

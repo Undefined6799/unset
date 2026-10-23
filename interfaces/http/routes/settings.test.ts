@@ -25,7 +25,12 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-type World = { signedIn?: boolean; verdict?: HandleVerdict; issuer?: string | null };
+type World = {
+  signedIn?: boolean;
+  verdict?: HandleVerdict;
+  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
+  issuer?: string | null | Error;
+};
 
 function setup(world: World = {}) {
   const opened: string[] = [];
@@ -67,7 +72,11 @@ function setup(world: World = {}) {
         page,
       ),
     screens: web.screens,
-    issuerOf: async () => (world.issuer === undefined ? "https://pds.unset.test" : world.issuer),
+    issuerOf: async () => {
+      const issuer = world.issuer === undefined ? "https://pds.unset.test" : world.issuer;
+      if (issuer instanceof Error) throw issuer;
+      return issuer;
+    },
     pdsIssuer: "https://pds.unset.test",
     log,
   };
@@ -153,6 +162,56 @@ describe("GET /settings/account", () => {
     const html = await (await setup({ issuer: null }).get("/settings/account")).text();
     expect(html).not.toContain("pds.unset.test/account");
     expect(html).toContain("/logout");
+  });
+
+  // Moved from the profile page's tests when the account details moved here (P2.13c; Alex 2026-10-23).
+  test("settings_account_links_a_foreign_recorded_issuer", async () => {
+    // P2.08b: the account link is where a user goes to revoke, so it follows the issuer recorded at sign-in.
+    const html = await (await setup({ issuer: "https://pds.example" }).get("/settings/account")).text();
+    expect(html).toContain('href="https://pds.example/"');
+    expect(html).toContain("your sign-in server (pds.example)");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  async function hidesIssuer(issuer: string, absent: string): Promise<void> {
+    const html = await (await setup({ issuer }).get("/settings/account")).text();
+    expect(html, issuer).not.toContain(absent);
+    expect(html, issuer).not.toContain("your sign-in server");
+    expect(html, issuer).not.toContain("Your account on");
+    expect(html, issuer).not.toContain('href="https://pds.unset.test');
+  }
+
+  test("settings_account_hides_an_ipv4_issuer", () => hidesIssuer("https://198.51.100.1", "198.51.100.1"));
+  test("settings_account_hides_an_ipv6_issuer", () => hidesIssuer("https://[2001:db8::1]", "2001:db8"));
+  test("settings_account_hides_a_localhost_issuer", () => hidesIssuer("https://localhost", "localhost"));
+  test("settings_account_hides_a_localhost_child_issuer", () => hidesIssuer("https://app.localhost", "app.localhost"));
+  test("settings_account_hides_a_trailing_dot_issuer", () => hidesIssuer("https://pds.example.", "pds.example"));
+
+  test("settings_account_hides_a_non_default_port_issuer", async () => {
+    // Only a bare https origin counts (architecture 04:15Z item 2): a port drops the link (P2.08g, verify-1054
+    // mutant 13).
+    const html = await (await setup({ issuer: "https://pds.example:8443" }).get("/settings/account")).text();
+    expect(html).not.toContain("pds.example");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  test("settings_account_lookalike_issuer_is_not_ours", async () => {
+    // "Ours" is string equality with our issuer (architecture 04:15Z item 4). A lookalike gets the plain foreign
+    // link, never the sentence that says it is where the password is typed (P2.08g, verify-1054 mutant 11).
+    for (const lookalike of ["https://evilpds.unset.test", "https://pds.unset.test.example"]) {
+      const html = await (await setup({ issuer: lookalike }).get("/settings/account")).text();
+      expect(html, lookalike).not.toContain("You are going to");
+      expect(html, lookalike).not.toContain(`href="${lookalike}/account"`);
+      expect(html, lookalike).toContain(`href="${lookalike}/"`);
+    }
+  });
+
+  test("settings_account_with_an_unreadable_issuer_still_renders", async () => {
+    const response = await setup({ issuer: new Error("unseal failed") }).get("/settings/account");
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(DID);
+    expect(html).not.toContain('href="https://pds.unset.test');
   });
 
   test("settings_account_handle_unavailable", async () => {

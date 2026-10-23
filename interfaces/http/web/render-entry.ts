@@ -27,7 +27,7 @@ const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = {
   login: true,
   loginContinue: true,
   signedOut: true,
-  me: true,
+  profile: true,
   verifyEmail: true,
   welcomeAge: true,
   welcomeTerms: true,

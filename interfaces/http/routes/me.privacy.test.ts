@@ -83,9 +83,7 @@ function accountServer(signedOut = false) {
         page,
       ),
     screens: web.screens,
-    issuerOf: async () => "https://pds.unset.test",
-    pdsIssuer: "https://pds.unset.test",
-    log,
+    loadProfile: async () => null,
   });
   return { server: createServer({ config: CONFIG, routes, policies, log }), lines, resolved };
 }

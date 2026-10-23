@@ -20,6 +20,7 @@ import {
   resolveHandle,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { readProfileRecord } from "@unset/domains-profile";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
@@ -27,6 +28,7 @@ import {
   createIdentityNetwork,
   createOAuthClient,
   createPdsCall,
+  loadProfileRecord,
   type SavedSession,
 } from "@unset/infrastructure-pds";
 import {
@@ -323,7 +325,18 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   };
   const settings = settingsRoutes(accountDeps);
-  const me = meRoutes(accountDeps);
+  const me = meRoutes({
+    ...accountDeps,
+    loadProfile: async (did, deadline) => {
+      const stored = await loadProfileRecord(
+        pds.pdsCall,
+        { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 },
+        did,
+      );
+      if (stored.kind !== "ok") return "unavailable";
+      return stored.value === null ? null : readProfileRecord(stored.value.value);
+    },
+  });
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [

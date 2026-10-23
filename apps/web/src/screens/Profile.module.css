@@ -1,0 +1,58 @@
+/* The profile page (Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v3): a 296px side column beside the README, one
+   column below 768px. The sheet's 296px avatar is pending Alex's approval, so the kit's largest size (128) stands in. */
+@layer screens {
+  .profile {
+    display: grid;
+    grid-template-columns: 296px minmax(0, 1fr);
+    gap: var(--space-12);
+    align-items: start;
+    @media (max-width: 767px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-8);
+    }
+  }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .side > p {
+    margin: 0;
+  }
+
+  .names {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .name {
+    margin: 0;
+  }
+
+  .handle {
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+  }
+
+  .headline {
+    color: var(--color-ink);
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-ink-muted);
+  }
+
+  .readme {
+    min-width: 0;
+  }
+}
