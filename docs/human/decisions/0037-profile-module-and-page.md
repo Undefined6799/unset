@@ -36,21 +36,31 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
    not hold, checks every link with `safeHref`, writes the record as in point 2, and renders visitor HTML itself with
    no script. Raw HTML is never stored or rendered; links carry `rel="nofollow ugc noopener noreferrer"`; no image is
    loaded until uploads go through the media proxy.
-5. **Script only for the owner, and BlockNote only when they edit.** A visitor's page renders the README with no
-   script. The owner's page hydrates one small island, `profile-editor` (within the island budget), served from our
-   own origin under the existing CSP (`script-src 'self'`). Clicking Edit loads a separate owner-only chunk with
-   BlockNote (`@blocknote/core` and `@blocknote/react` 0.56.0, MPL-2.0, on TipTap and ProseMirror, MIT), pinned
-   exactly, bundled and served from our origin, never fetched from a CDN. That chunk is outside the 15 KB per-island
-   and 75 KB total island budget, which still holds for every other island and page; this is a scoped exception and
-   needs Alex's typed line. Columns are our own custom block on BlockNote's core, not `@blocknote/xl-multi-column`
-   (GPL-3.0 or paid). Before hydration the owner's page is exactly the static page.
+5. **Script only for the owner, and BlockNote only on the owner's editor page.** A profile page, the owner's included,
+   runs no script (its CSP has no `script-src`, plan §5.4), so the README is edited on its own page,
+   `GET /profile/readme`, under the app pages' CSP unchanged: scripts only from our assets, and Trusted Types with no
+   policy at all. That page loads a separate owner-only chunk with BlockNote 0.56.0 (`@blocknote/core` and
+   `@blocknote/react`, MPL-2.0, on TipTap and ProseMirror, MIT), pinned exactly, bundled and served from our origin,
+   never fetched from a CDN. The chunk is outside the 15 KB per-island and 75 KB total island budget, which still
+   holds for every other island and page (Alex, 21:29Z: "approve BlockNote 0.56.0 as an owner-only editor chunk outside
+   the island budget"). BlockNote's engine does the editing; its toolbar, slash menu and block handle are our own
+   components on the design sheet, because BlockNote's ready-made menus write raw HTML (a closing popover's snapshot,
+   pasted HTML), which Trusted Types refuses (Alex, 21:40Z: make it follow our rules, it may be reused). So paste is
+   plain text. Columns are our own custom block on BlockNote's core, not `@blocknote/xl-multi-column` (GPL-3.0 or
+   paid).
 6. **The side column is edited in Settings › Profile**, a plain form that posts with no script to `POST /profile` and
    returns there. Handle, verified tag and DID are never editable; they come from the session and the two-way handle
    check (P2.02). Links are up to 12 http(s) addresses, a scheme-less one gaining `https://`, each shown through
    `safeHref` with `rel="nofollow ugc noopener noreferrer me"`.
-7. **One save route.** `POST /profile` takes a form body only (400 KiB cap), runs the session and CSRF gate, takes the
-   DID from the session (never the request), refuses a repeated field, and answers 303 to the member's page or to
-   Settings › Profile (the only other place it returns to).
+7. **Two save routes, form bodies only.** `POST /profile` saves the side column (96 KiB body cap) and
+   `POST /profile/readme` the README (one `readme` field holding the editor's document, at most 100,000 bytes, with a
+   294 KiB body cap since form encoding can triple it). Both run the session and CSRF gate, take the DID from the
+   session (never the request), refuse a repeated field, and answer 303 to the member's page or to Settings › Profile
+   (the only other place they return to). A README larger than 100,000 bytes of JSON is refused on save and read as
+   none, since the lexicon cannot state a total.
+8. **A README the staging preview stored as markdown is kept.** The first night's preview wrote `readme` as a string;
+   the reader takes such a string as plain paragraphs, so the page still shows it and the next save writes it back as
+   blocks. Without that, the strict validator would refuse every save for that member (P2.20x).
 
 ## Alternatives
 - **Keep the profile inside `domains/identity`.** Fewer folders, but identity would mix session security with page
@@ -64,6 +74,8 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
   block model maps to it without a lossy text round trip.
 - **Our own BlockNote-style editor, no dependency.** Fits the island budget, but rich text across blocks, paste,
   mobile keyboards and undo are what ProseMirror exists for; Alex wants the real BlockNote experience.
+- **BlockNote's own menus, with a Trusted Types policy on the editor page.** Works (tried in Chromium, 21:31Z), but
+  loosens the page's CSP for one library; Alex chose our own menus at 21:40Z.
 - **Store BlockNote's JSON as is.** Less mapping, but ties the record to one editor's internal format and its version.
 - **Edit everything in place on the page.** Tried on staging the same night; Alex moved the side column to Settings
   at 04:29Z.
@@ -71,9 +83,9 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
 ## Consequences
 - New folder `domains/profile` (CLAUDE.md "Where does this go" gains the row with the first code PR).
 - `sh.unset.profile` gains `readme` and `links` (P2.20q); `readme` becomes typed blocks (P2.20w).
-- A new runtime dependency on the owner's edit chunk only: BlockNote 0.56.0 and what it brings (TipTap, ProseMirror,
-  its UI kit), with a supply-chain note in the dependency PR. The markdown renderer (#1317) is no longer needed for the
-  README.
+- A new runtime dependency on the owner's edit chunk only: BlockNote 0.56.0 and what it brings (TipTap,
+  ProseMirror, Floating UI), with a supply-chain note in the dependency PR. The markdown renderer (#1317) is no longer
+  needed for the README.
 - The Profile component (and the block renderer) need Alex's approval on the design sheet before their PRs merge.
 - A profile page needs its PDS to answer; when it does not, the page says so and offers no editing, so a save can
   never blank a record it could not read.
@@ -84,6 +96,7 @@ stored record is refused, a profile needs a display name, links are http(s) and 
 session's own DID, CSRF refusal, a repeated field refused, conflict on a swapped record, Settings return), the page
 tests (no script before hydration, unsafe links never linked, an unreadable profile offers no editing), the block
 reader's tests (unknown blocks dropped, unsafe links refused, bounds held) and the island budget test, which fails if
-any chunk but the owner's editor goes over the budget. Acceptance is Alex's line on the pull request
+any chunk but the owner's editor goes over the budget, and an e2e test that the editor page runs with Trusted Types
+and no policy. Acceptance is Alex's line on the pull request
 that adds this record; ADR 0001 notes the proposal at its end and gains the acceptance paragraph when he accepts. The
 status line stays Proposed until then.
