@@ -36,7 +36,8 @@ The approved PDS customization will be a build-only `apps/pds/` presentation pac
 another running app or account server. It will consume generic `shared/ui` and its declared UI runtime, with no
 app/domain/infrastructure/PDS SDK imports, data hooks or authentication logic. The exact upstream frontend owns
 routing, guards, hydration, validation, actions, translations and account state; its reviewed presentation
-patches will live in `deployment/pds/` (planned, ADR 0027). Shared UI remains independent of upstream
+patches live in `deployment/pds/` (ADR 0027): today a CSS theme appended to the upstream stylesheet, built into
+the first-party `pds` image. Shared UI remains independent of upstream
 router/auth types; generic extensions follow design-sheet registration.
 
 Only the resolved installed `@atproto/oauth-provider-ui/dist` directory and manifest may differ from the pinned
