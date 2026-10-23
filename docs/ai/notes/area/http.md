@@ -130,6 +130,11 @@ Foreign DIDs return 404. Owner pages show the handle only when P2.02's `verifyHa
 unindexed and zero JS. GET /login sends a signed-in visitor to `/did`. P2.12's `openApp` still requires onboarding
 and email confirmation. Public profile content, editing and invite blocks remain separate work.
 
+**Saving the profile (P2.20p).** `routes/profile.ts`: POST `/profile` (form, 96 KiB body limit, CSRF) opens the
+app gate, reads only the fields sent through `domains/profile`, and writes the session's own `sh.unset.profile`
+with a compare-and-swap (`infrastructure/pds/profile-record.ts`). A field left out keeps its stored value. It
+returns 303 to `/<DID>`, or to `/settings/profile` only when `next` is exactly that path.
+
 Keep `meRoutes` last in composition so the one-segment DID parameter cannot shadow explicit GET routes. Invalid
 DID segments return 404 before any gate or lookup. The shared router's existing candidate matching means GET
 `/logout` now returns 404 and an unsupported POST to a one-segment path returns 405; trusted routing is unchanged.
