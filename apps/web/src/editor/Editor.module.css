@@ -60,6 +60,49 @@
     margin-left: var(--space-6);
   }
 
+  /* Columns (columns.ts), laid out as the README's: the list's columns side by side space-12 apart (stacked below
+     720px), each column's blocks space-3 apart and not indented, and the list space-8 from the blocks around it. The
+     two container blocks have no content of their own to show. */
+  .editor :is([data-content-type="columnList"], [data-content-type="column"]) {
+    display: none;
+  }
+
+  .editor
+    [data-node-type="blockContainer"]:has(> :is([data-content-type="columnList"], [data-content-type="column"]))
+    > [data-node-type="blockGroup"] {
+    margin-left: 0;
+  }
+
+  @media (min-width: 720px) {
+    .editor [data-node-type="blockContainer"]:has(> [data-content-type="columnList"]) > [data-node-type="blockGroup"] {
+      flex-direction: row;
+      gap: var(--space-12);
+    }
+  }
+
+  .editor [data-node-type="blockOuter"]:has(> * > [data-content-type="column"]) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .editor [data-node-type="blockOuter"]:has(> * > [data-content-type="columnList"]):not(:first-child),
+  .editor [data-node-type="blockOuter"]:has(> * > [data-content-type="columnList"]) + [data-node-type="blockOuter"] {
+    margin-top: calc(var(--space-8) - var(--space-3));
+  }
+
+  /* Where a dragged block would go beside another (columns.ts): an ink bar at that side. */
+  .columnDrop {
+    position: absolute;
+    z-index: var(--z-menu);
+    width: 2px;
+    background: var(--color-ink);
+    pointer-events: none;
+  }
+
+  .columnDrop[hidden] {
+    display: none;
+  }
+
   /* Spacing as the README draws it (shared/ui Readme): blocks space-3 apart, and the items of one list touching. */
   .editor [data-node-type="blockGroup"] {
     display: flex;

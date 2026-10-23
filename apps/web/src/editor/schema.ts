@@ -4,6 +4,7 @@
 import {
   BlockNoteSchema,
   type BlockSpec,
+  createBlockSpec,
   createBulletListItemBlockSpec,
   createCheckListItemBlockSpec,
   createCodeBlockSpec,
@@ -27,6 +28,21 @@ const heading = createHeadingBlockSpec({ levels: [1, 2, 3], allowToggleHeadings:
   "inline"
 >;
 
+// Columns (Alex 2026-10-23 23:31Z: drag a block beside another to make columns). The README stores them as its columns
+// block (P2.20w), and the editor holds them in BlockNote's multi-column JSON shape, which parseReadme already reads: a
+// columnList whose children are columns, each column's children its blocks. BlockNote's own multi-column package is
+// GPL-only and needs @blocknote/react, so these are two plain container blocks with no content of their own; the
+// layout is CSS (Editor.module.css) and the drop is columns.ts.
+const container = (type: "columnList" | "column") =>
+  createBlockSpec(
+    { type, propSchema: {}, content: "none" },
+    {
+      render() {
+        return { dom: document.createElement("div") };
+      },
+    },
+  )();
+
 export const readmeSchema = BlockNoteSchema.create({
   blockSpecs: {
     paragraph: createParagraphBlockSpec(),
@@ -36,6 +52,8 @@ export const readmeSchema = BlockNoteSchema.create({
     checkListItem: createCheckListItemBlockSpec(),
     quote: createQuoteBlockSpec(),
     codeBlock: createCodeBlockSpec(),
+    columnList: container("columnList"),
+    column: container("column"),
   },
   styleSpecs: { bold, italic, underline, strike, code },
   inlineContentSpecs: defaultInlineContentSpecs,

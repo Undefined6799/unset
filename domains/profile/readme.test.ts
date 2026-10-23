@@ -242,17 +242,22 @@ describe("toEditorDocument", () => {
     expect(parsed).toEqual({ ok: true, readme });
   });
 
-  test("editor_document_opens_columns_as_their_blocks_in_order", () => {
-    const columns = {
-      $type: `${DEFS}columns` as const,
-      columns: [
-        { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("left")] }] },
-        { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("right")] }] },
+  test("editor_document_opens_columns_as_a_column_list_and_parses_back", () => {
+    const readme = {
+      blocks: [
+        { $type: `${DEFS}paragraph` as const, content: [text("above")] },
+        {
+          $type: `${DEFS}columns` as const,
+          columns: [
+            { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("left")] }] },
+            { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("right")] }] },
+          ],
+        },
       ],
     };
-    expect(toEditorDocument({ blocks: [columns] }).map((block) => block.content)).toEqual([
-      [{ type: "text", text: "left", styles: {} }],
-      [{ type: "text", text: "right", styles: {} }],
-    ]);
+    const document = toEditorDocument(readme);
+    expect(document.map((block) => block.type)).toEqual(["paragraph", "columnList"]);
+    expect(document[1]?.children.map((column) => column.type)).toEqual(["column", "column"]);
+    expect(parseReadme(JSON.stringify(document))).toEqual({ ok: true, readme });
   });
 });

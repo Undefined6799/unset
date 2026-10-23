@@ -4,7 +4,8 @@
 import { BlockNoteEditor } from "@blocknote/core";
 import { SuggestionMenu } from "@blocknote/core/extensions";
 import { useEffect, useRef, useState } from "react";
-import { type Copied, copySelection, pasteText } from "./clipboard.ts";
+import { type Copied, copySelection, endBlockDrag, pasteText } from "./clipboard.ts";
+import { columnDrop, dropIntoColumns, normalizeColumns } from "./columns.ts";
 import styles from "./Editor.module.css";
 import { BlockHandle, BlockMenu, CurrentLine, StyleToolbar } from "./menus.tsx";
 import { EDITOR } from "./messages.ts";
@@ -35,12 +36,55 @@ function createEditor(initialContent: readonly ReadmePartialBlock[], copied: { c
   });
 }
 
+/**
+ * Takes a handle drag's dragover and drop before ProseMirror when it lands beside a block (columns.ts), showing a bar
+ * where the new column goes; any other drop stays ProseMirror's move. Returns the cleanup.
+ */
+function watchColumnDrops(editor: ReadmeEditor, outer: HTMLElement, bar: HTMLElement | null): () => void {
+  const hide = () => {
+    if (bar !== null) bar.hidden = true;
+  };
+  const over = (event: DragEvent) => {
+    const drop = columnDrop(editor, event);
+    if (drop === null) return hide();
+    event.preventDefault();
+    event.stopPropagation();
+    if (bar === null) return;
+    const box = outer.getBoundingClientRect();
+    const x = drop.side === "left" ? drop.rect.left : drop.rect.right;
+    bar.hidden = false;
+    bar.style.setProperty("left", `${Math.round(x - box.left)}px`);
+    bar.style.setProperty("top", `${Math.round(drop.rect.top - box.top)}px`);
+    bar.style.setProperty("height", `${Math.round(drop.rect.height)}px`);
+  };
+  const drop = (event: DragEvent) => {
+    hide();
+    const target = columnDrop(editor, event);
+    if (target === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dropIntoColumns(editor, target);
+    endBlockDrag(editor);
+  };
+  outer.addEventListener("dragover", over, true);
+  outer.addEventListener("drop", drop, true);
+  outer.addEventListener("dragleave", hide, true);
+  outer.addEventListener("dragend", hide, true);
+  return () => {
+    outer.removeEventListener("dragover", over, true);
+    outer.removeEventListener("drop", drop, true);
+    outer.removeEventListener("dragleave", hide, true);
+    outer.removeEventListener("dragend", hide, true);
+  };
+}
+
 export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps) {
   const copied = useRef<Copied | null>(null);
   const ready = useRef(onReady);
   const [editor] = useState(() => createEditor(initialContent, copied));
   const mount = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
+  const indicator = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = mount.current;
     const outer = area.current;
@@ -55,8 +99,12 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
     outer.addEventListener("copy", onCopy, true);
     outer.addEventListener("cut", onCopy, true);
     outer.style.setProperty("--editor-placeholder", JSON.stringify(EDITOR.placeholder));
+    const stopColumns = watchColumnDrops(editor, outer, indicator.current);
+    const stopNormalize = editor.onChange(() => normalizeColumns(editor));
     ready.current(editor);
     return () => {
+      stopColumns();
+      stopNormalize();
       outer.removeEventListener("copy", onCopy, true);
       outer.removeEventListener("cut", onCopy, true);
       editor.unmount();
@@ -65,6 +113,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   return (
     <div ref={area} className={styles.editor}>
       <CurrentLine editor={editor} />
+      <div ref={indicator} className={styles.columnDrop} aria-hidden="true" hidden />
       <div ref={mount} />
       <StyleToolbar editor={editor} />
       <BlockMenu editor={editor} />

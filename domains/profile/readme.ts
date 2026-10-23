@@ -268,23 +268,43 @@ function editorBlock(block: ReadmeBlock): EditorBlock {
   }
 }
 
-/**
- * The stored README as the document the owner's editor opens: the inverse of parseReadme, with an indented list item
- * nested under the item before it. The editor has no columns yet, so a columns block opens as its blocks in order.
- */
-export function toEditorDocument(readme: Readme): EditorBlock[] {
-  const flat = readme.blocks.flatMap((block) =>
-    block.$type === `${DEFS}columns` ? block.columns.flatMap((column) => column.blocks) : [block],
-  );
+/** Blocks in reading order, an indented list item nested under the item before it. */
+function editorBlocks(blocks: readonly ReadmeBlock[]): EditorBlock[] {
   const document: EditorBlock[] = [];
   // open[d] is the latest list item at depth d, the parent of an item at depth d + 1.
   let open: EditorBlock[] = [];
-  for (const block of flat) {
+  for (const block of blocks) {
     const out = editorBlock(block);
     const indent = block.$type === `${DEFS}listItem` ? Math.min(block.indent ?? 0, open.length) : 0;
     const parent = indent > 0 ? open[indent - 1] : undefined;
     (parent === undefined ? document : parent.children).push(out);
     open = block.$type === `${DEFS}listItem` ? [...open.slice(0, indent), out] : [];
   }
+  return document;
+}
+
+/**
+ * The stored README as the document the owner's editor opens: the inverse of parseReadme. A columns block opens as
+ * BlockNote's multi-column shape, a columnList of columns (the shape parseReadme reads back).
+ */
+export function toEditorDocument(readme: Readme): EditorBlock[] {
+  const document: EditorBlock[] = [];
+  let run: ReadmeBlock[] = [];
+  const flush = () => {
+    document.push(...editorBlocks(run));
+    run = [];
+  };
+  for (const block of readme.blocks) {
+    if (block.$type !== `${DEFS}columns`) {
+      run.push(block);
+      continue;
+    }
+    flush();
+    const columns = block.columns.map(
+      (column): EditorBlock => ({ type: "column", props: {}, content: [], children: editorBlocks(column.blocks) }),
+    );
+    document.push({ type: "columnList", props: {}, content: [], children: columns });
+  }
+  flush();
   return document;
 }
