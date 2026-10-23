@@ -40,10 +40,25 @@ describe("login screen", () => {
     expect(tags(page, "input")).toEqual([{ type: "hidden", name: "next", value: "/me" }]);
     const buttons = tags(page, "button").map(({ type, name, value }) => ({ type, name, value }));
     expect(buttons).toEqual([{ type: "submit", name: "intent", value: "chooser" }]);
-    expect(page).toContain(">Sign in with pds.example</button>");
+    expect(page).toContain(">Sign in with AtProto</button>");
+    expect(page).toContain("<strong>pds.example</strong>");
     expect(page).toContain("only place you type your password");
     // Zero JavaScript: no island ran, so no script of any kind.
     expect(page).not.toContain("<script");
+  });
+
+  // P2.05m (Alex, 2026-10-23: "the sign in should only be a modal"): the page is one dialog over a scrim, drawn with
+  // no script, with a close link back to where the visitor came from.
+  test("login_is_one_modal_dialog", () => {
+    const page = html(screens.login({ ...LOGIN, next: "/me" }));
+    const dialogs = tags(page, "section");
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toMatchObject({ role: "dialog", "aria-modal": "true", "aria-labelledby": "sign-in-title" });
+    expect(page).toContain('<h1 id="sign-in-title"');
+    expect(page.match(/<main/g)).toHaveLength(1);
+    expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/me" })]);
+    expect(page).toMatch(/<a [^>]*href="\/me"[^>]*>Close<\/a>/);
+    expect(tags(html(screens.login(LOGIN)), "a")).toEqual([expect.objectContaining({ href: "/" })]);
   });
 
   test("login_without_next_has_no_hidden_field", () => {

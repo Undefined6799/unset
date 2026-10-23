@@ -17,6 +17,16 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // P2.05m: the sign-in page is one dialog over the scrim, with nothing behind it to tab into.
+  test("login_dialog_without_js", async ({ page }) => {
+    await page.goto("/login?next=/did");
+    const dialog = page.getByRole("dialog", { name: "Sign in" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/did");
+    await expect(page.locator("header, footer")).toHaveCount(0);
+  });
+
   // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
   test.describe("phone", () => {
     test.use({ viewport: { width: 375, height: 800 } });
@@ -37,7 +47,7 @@ test.describe("javascript disabled", () => {
     });
 
     test("default_shell_details_menu_without_js", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/signed-out");
       const menu = page.locator("header details");
       const summary = menu.locator("summary");
       await expect(summary).toBeVisible();

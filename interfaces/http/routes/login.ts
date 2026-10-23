@@ -127,13 +127,9 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         const { session, clearCookie } = await deps.readSession(request, deadline);
         // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
         if (session !== null && error === null) return redirect("/did");
-        const body = deps.screens.login({
-          next: safeReturnPath(query.get("next")),
-          // The shell shows a checked ?error= code. The screen does not repeat it.
-          error: null,
-          pdsHost: deps.pdsHost,
-        });
-        const response = deps.page({ group: "app", request, title: "Sign in", body, shell: {} });
+        // P2.05m: the page is the sign-in dialog alone, with no shell, so the screen shows the checked ?error= code.
+        const body = deps.screens.login({ next: safeReturnPath(query.get("next")), error, pdsHost: deps.pdsHost });
+        const response = deps.page({ group: "app", request, title: "Sign in", body, islands: "off" });
         if (clearCookie) response.headers.append("set-cookie", sessionClearCookie());
         return response;
       },
