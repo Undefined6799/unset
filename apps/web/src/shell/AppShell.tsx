@@ -3,7 +3,8 @@
 // (P1.25f) scrolls without end, so it has no footer: the footer's legal links move into the Header nav, which folds
 // into the same zero-JS menu.
 // P2.05p: given our PDS's host, the default shell's Sign in opens the sign-in box over the page as a native popover
-// (no script; Escape, a click outside and Close all leave the visitor where they were). The footer's Sign in stays a
+// (no script; Escape and Close leave the visitor where they were). The popover is the whole scrim, since a popover's
+// ::backdrop passes clicks through to the page underneath. The footer's Sign in stays a
 // link to /login, the same box as a page, for a browser without popovers.
 // An `error` is a catalog code the server already checked (readErrorParam); only the catalog's text is shown for it.
 import { ERROR_MESSAGES, type ErrorCode } from "@unset/shared-errors";
@@ -40,25 +41,21 @@ const SIGN_IN_TITLE = "sign-in-title";
 
 function SignInPopover({ pdsHost, next }: SignInInPlace) {
   return (
-    <div
-      id={SIGN_IN_BOX}
-      popover="auto"
-      role="dialog"
-      aria-labelledby={SIGN_IN_TITLE}
-      className={`${box.box} ${box.popover}`}
-    >
-      <SignInBox
-        titleId={SIGN_IN_TITLE}
-        heading="h2"
-        next={next}
-        error={null}
-        pdsHost={pdsHost}
-        close={
-          <button type="button" className={box.close} popoverTarget={SIGN_IN_BOX} popoverTargetAction="hide">
-            {SHELL.close}
-          </button>
-        }
-      />
+    <div id={SIGN_IN_BOX} popover="auto" role="dialog" aria-labelledby={SIGN_IN_TITLE} className={box.popover}>
+      <div className={box.box}>
+        <SignInBox
+          titleId={SIGN_IN_TITLE}
+          heading="h2"
+          next={next}
+          error={null}
+          pdsHost={pdsHost}
+          close={
+            <button type="button" className={box.close} popoverTarget={SIGN_IN_BOX} popoverTargetAction="hide">
+              {SHELL.close}
+            </button>
+          }
+        />
+      </div>
     </div>
   );
 }
