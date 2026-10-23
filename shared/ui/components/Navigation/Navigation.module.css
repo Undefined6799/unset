@@ -92,6 +92,9 @@
     padding: 0;
   }
   .menuButton {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
     border: 0;
     background: none;
     color: var(--color-ink);
