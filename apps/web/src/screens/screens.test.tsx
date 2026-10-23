@@ -137,6 +137,7 @@ describe("signed-out screen", () => {
 });
 
 describe("profile screen", () => {
+  const ALICE_ID = { did: "did:plc:alice123456789abcdefgh", handle: "alice.pds.example", verified: true };
   const ALICE = {
     displayName: "Alice Moreau",
     headline: "Designer and front-end developer.",
@@ -146,13 +147,15 @@ describe("profile screen", () => {
   };
 
   test("profile_shows_the_name_facts_and_readme", () => {
-    const page = html(screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile: ALICE }));
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: ALICE }));
     expect(page).toContain(">Alice Moreau</h1>");
-    expect(page).toContain(">alice.pds.example</p>");
+    expect(page).toContain(">@alice.pds.example</p>");
+    expect(page).toContain("Verified");
     expect(page).toContain("Toronto, Ontario");
+    expect(page).toContain('title="did:plc:alice123456789abcdefgh"');
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://alice.example/", "https://alice.example/tidy"]);
     expect(page).toContain(">About me</h2>");
-    // No sign-out and no DID here: the account details are on Settings › Account (P2.13c).
+    // No sign-out here: the account details are on Settings › Account (P2.13c).
     expect(tags(page, "form")).toEqual([]);
     expect(page).not.toContain("<code>");
     // The owner's editing island hydrates over the same markup; its server render has no pencils or draft box.
@@ -163,27 +166,33 @@ describe("profile screen", () => {
   });
 
   test("profile_without_one_published_is_the_editor_on_an_empty_page", () => {
-    const page = html(screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile: null }));
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: null }));
     expect(page).toContain(">alice.pds.example</h1>");
     expect(page).toContain('data-island="profile-editor"');
   });
 
   test("profile_never_links_an_unsafe_website", () => {
     const profile = { ...ALICE, website: "javascript:alert(1)", readme: "" };
-    const page = html(screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile }));
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile }));
     expect(page).not.toContain('href="javascript:');
     expect(tags(page, "a").map((a) => a.href)).toEqual([]);
   });
 
   test("profile_says_when_it_could_not_be_loaded", () => {
-    const page = html(
-      screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile: "unavailable" }),
-    );
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: "unavailable" }));
     expect(page).toContain("We could not load your profile just now.");
   });
 
   test("profile_says_when_the_handle_could_not_be_checked", () => {
-    const page = html(screens.profile({ handle: "handle.invalid", handleUnavailable: true, profile: null }));
+    const page = html(
+      screens.profile({
+        did: ALICE_ID.did,
+        handle: "handle.invalid",
+        verified: false,
+        handleUnavailable: true,
+        profile: null,
+      }),
+    );
     expect(page).toContain("handle.invalid");
     expect(page).toContain("We could not check your handle just now");
   });

@@ -11,6 +11,11 @@ import type { ProfileLabels } from "./ProfileView.tsx";
 
 const labels: ProfileLabels = {
   handleUnavailable: "We could not check your handle just now.",
+  verified: "Verified",
+  details: { location: "Location", website: "Website", did: "DID" },
+  copyLink: "Copy link",
+  copied: "Copied",
+  copyFailed: "Copy failed",
   fields: { displayName: "name", headline: "headline", location: "place", website: "website", readme: "README" },
   add: {
     displayName: "Add your name",
@@ -39,7 +44,9 @@ const labels: ProfileLabels = {
   },
 };
 const props: ProfileEditorProps = {
+  did: "did:plc:7f3kabcdefghijklmtdc9e",
   handle: "alice.pds.example",
+  verified: true,
   handleUnavailable: false,
   fields: { displayName: "Alice", headline: "Designer.", location: "", website: "", readme: "## About me\nhi" },
   labels,
@@ -54,12 +61,32 @@ describe("ProfileEditor without script", () => {
     expect(html).toContain(">About me</h2>");
     expect(html).not.toContain("Edit name");
     expect(html).not.toContain("Draft");
+    expect(html).not.toContain("Copy link");
+  });
+
+  it("shows the handle, its tag and the short DID, none of them editable", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    await act(async () => createRoot(host).render(<ProfileEditor {...props} />));
+    expect(host.textContent).toContain("@alice.pds.example");
+    expect(host.textContent).toContain("Verified");
+    expect(host.querySelector('[title="did:plc:7f3kabcdefghijklmtdc9e"]')?.textContent).toBe("did:plc:7f3k…tdc9e");
+    const pencils = [...host.querySelectorAll("button[aria-label^='Edit']")].map((b) => b.getAttribute("aria-label"));
+    expect(pencils).toEqual(["Edit name", "Edit headline", "Edit place", "Edit website", "Edit README"]);
+    host.remove();
+  });
+
+  it("leaves the tag out when the handle is not verified", () => {
+    const html = renderToStaticMarkup(<ProfileEditor {...props} verified={false} />);
+    expect(html).not.toContain("Verified");
   });
 
   it("accepts only its own props shape", () => {
     expect(isProfileEditorProps(props)).toBe(true);
     expect(isProfileEditorProps({ ...props, fields: { ...props.fields, readme: 1 } })).toBe(false);
     expect(isProfileEditorProps({ ...props, handleUnavailable: "no" })).toBe(false);
+    expect(isProfileEditorProps({ ...props, verified: "yes" })).toBe(false);
+    expect(isProfileEditorProps({ ...props, did: undefined })).toBe(false);
     expect(isProfileEditorProps({ ...props, labels: { ...props.labels, failed: {} } })).toBe(false);
   });
 });
@@ -165,6 +192,15 @@ describe("ProfileEditor with script", () => {
     await act(async () => button("Revert to the published profile")?.click());
     expect(host.textContent).toContain("Designer.");
     expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
+  });
+
+  it("copies the profile's address", async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const { buttonText } = await mount();
+    await act(async () => buttonText("Copy link")?.click());
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/did:plc:7f3kabcdefghijklmtdc9e`);
+    expect(buttonText("Copied")).toBeDefined();
   });
 
   it("view as hides the pencils", async () => {

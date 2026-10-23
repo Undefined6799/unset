@@ -11,6 +11,11 @@ export const ACCOUNT_LINK = {
 export const PROFILE = {
   unavailable: "We could not load your profile just now.",
   handleUnavailable: "We could not check your handle just now.",
+  verified: "Verified",
+  details: { location: "Location", website: "Website", did: "DID" },
+  copyLink: "Copy link",
+  copied: "Copied",
+  copyFailed: "Copy failed",
   fields: {
     displayName: "name",
     headline: "headline",

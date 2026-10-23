@@ -59,7 +59,9 @@ export function meRoutes(deps: MeDeps): Route[] {
           deps.loadProfile(did, deadline),
         ]);
         const body = deps.screens.profile({
+          did,
           handle: displayHandle(verdict),
+          verified: verdict.status === "verified",
           handleUnavailable: verdict.status === "unavailable",
           privacyNotice: opened.privacyNotice,
           profile,
