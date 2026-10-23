@@ -76,7 +76,12 @@ services:
     pids_limit: 64
     restart: "no"
 
-  # Bluesky's PDS, unmodified (@atproto/pds 0.5.37 in image 0.4.5037). Its image sets no USER, so it runs here as the
+  # The first-party PDS image. deployment/images.lock.json pins ghcr.io/undefined6799/unset/pds by digest, with origin
+  # first-party and verify cosign-keyless. deployment/compose.dev.test.ts (pds_runs_the_locked_image) requires that
+  # origin and compose.dev.yaml's pds image to be that ref, with no build on that service.
+  # .github/workflows/publish-images.yml, on a push to main, builds each Dockerfile scripts/ci/list-dockerfiles.ts
+  # lists, including deployment/pds/Dockerfile, pushes it by digest, scans it, signs it and attests it. Its image sets
+  # no USER, so it runs here as the
   # base's node user (uid 1000, nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), with its data in a named volume at
   # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
   # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
