@@ -151,8 +151,11 @@ export function edgeZones(
   env: SecretMap | undefined,
   edgeRef: string | undefined,
   mode: "shipped" | "dev" = "shipped",
+  built = false,
 ): Outcome {
-  const image = edgeImage(compose, edgeRef);
+  // A built edge (dev --source, P1.37y) was already judged by its Dockerfile in deployedEdgeZones; the lock's ref
+  // names nothing it runs.
+  const image = built ? null : edgeImage(compose, edgeRef);
   if (image !== null) return image;
   const sites = mode === "dev" ? devSiteMounts(compose, edgeDir) : edgeSitesDir(compose, edgeDir);
   if (!Array.isArray(sites) && !("dir" in sites)) return sites;
@@ -481,9 +484,16 @@ function deployedEdgeZones(inputs: Inputs): Outcome {
     if (staging !== null) return staging;
   }
   const ref = lock.edge?.ref;
+  // Under dev with --source the edge is built from the checkout (P1.37y; ADR 0036 Decision 2), judged as C25 and the
+  // local rule judge it: exactly EDGE_DOCKERFILE, a build C26 passes, no image beside it (Codex on #1309).
+  const edge = inputs.compose.services.find((service) => service.name === "edge");
+  const built = inputs.source && edge !== undefined && edge.build !== null;
+  if (built && runsBuilt(edge, inputs, undefined, EDGE_DOCKERFILE) !== "yes") {
+    return fail(`the edge is not built from ${EDGE_DOCKERFILE}`);
+  }
   // Under dev the edge serves the dev sites with the self-signed leaf (P1.38e; ADR 0032 Decision 3); prod is unchanged.
   const mode = inputs.env === "dev" ? "dev" : "shipped";
-  return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined, mode);
+  return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined, mode, built);
 }
 
 /**

@@ -2,14 +2,15 @@
 // items F3.1, F3.3 and F3.5 and Amendment 3, and 2026-10-12-stack-wrapper-location):
 //
 //   node deployment/preflight/stack.ts up|down --env dev|local --compose <file> [--compose <file>...]
-//     --interpolation-env <file>
+//     --interpolation-env <file> [--source]
 //
 // `up` runs the local precheck (P1.29s, scripts/dev-precheck.ts) as a child process with exactly these compose files
 // and interpolation env file, all after a `--` so Node reads none of them as its own flags (Node loads an --env-file
 // it finds in argv, Amendment 3), and stops on any non-zero exit. The precheck refuses a production host and a foreign
 // describeServer DID, then runs the deploy preflight as its own child. It then runs
 // `docker compose … --env-file <file> up -d` with the same files in the same order, adding `--build` under local and
-// `--no-build` under dev (P1.37n), so only a local stack builds from the checkout. `down` stops the stack and
+// `--no-build` under dev (P1.37n), so only a local stack builds from the checkout, or staging under `--env dev
+// --source` (P1.37y; ADR 0036), which passes the flag on to the precheck and builds. `down` stops the stack and
 // never passes -v, so the data volumes survive. A COMPOSE_* variable in the caller's shell is refused outright, and
 // both children get an environment built from an allowlist only, so no interpolated name in the shell can change what
 // the precheck read or what Compose runs. Both children talk to a Docker daemon on this host only: C9, C18 and C26
@@ -55,12 +56,14 @@ export const WRAPPER_OPTIONS = {
   env: { type: "string" },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
+  source: { type: "boolean", multiple: true },
 } as const;
-type Options = { action: "up" | "down"; env: "dev" | "local"; files: string[]; envFile: string };
+type Options = { action: "up" | "down"; env: "dev" | "local"; source: boolean; files: string[]; envFile: string };
 
 export { UsageError };
 
-const USAGE = "usage: up|down --env dev|local --compose <file> [--compose <file>...] --interpolation-env <file>";
+const USAGE =
+  "usage: up|down --env dev|local --compose <file> [--compose <file>...] --interpolation-env <file> [--source]";
 
 /** A child that could not start or was killed: a fixed reason naming the program, never its arguments (DC-4). */
 export class StackError extends Error {}
@@ -99,6 +102,10 @@ function parse(argv: string[]): Options {
   const [action, ...rest] = positionals;
   if ((action !== "up" && action !== "down") || rest.length > 0) throw new UsageError("the action is up or down");
   if (values.env !== "dev" && values.env !== "local") throw new UsageError("--env must be dev or local");
+  const sources = (values.source as boolean[] | undefined) ?? [];
+  if (sources.length > 1) throw new UsageError("--source may be given once");
+  const source = sources.length === 1;
+  if (source && values.env !== "dev") throw new UsageError("--source is for --env dev only");
   const files = (values.compose as string[] | undefined) ?? [];
   if (files.length === 0) throw new UsageError("--compose is required");
   const envFiles = (values["interpolation-env"] as string[] | undefined) ?? [];
@@ -106,7 +113,7 @@ function parse(argv: string[]): Options {
   // Resolved once against the physical cwd (getcwd), never $PWD, and that one string goes to both children (C9 record,
   // Amendment 3 and its addendum).
   const physical = (path: string): string => resolve(process.cwd(), path);
-  return { action, env: values.env, files: files.map(physical), envFile: physical(envFiles[0] as string) };
+  return { action, env: values.env, source, files: files.map(physical), envFile: physical(envFiles[0] as string) };
 }
 
 /** Refuses a caller who set any COMPOSE_* variable, naming it (never its value), rather than dropping it unseen. */
@@ -122,7 +129,7 @@ export function plan(
   inputs: WalkInputs = hostWalk,
 ): Plan {
   refuseComposeVariables(from);
-  const { action, env, files, envFile } = parse(argv);
+  const { action, env, source, files, envFile } = parse(argv);
   const compose = ["compose", ...files.flatMap((f) => ["-f", f]), "--env-file", envFile];
   const down: Command = { name: "docker", file: "docker", args: [...compose, "down"] };
   const leafCheck: Command = {
@@ -145,14 +152,16 @@ export function plan(
               ...files.flatMap((f) => ["--compose", f]),
               "--interpolation-env",
               envFile,
+              ...(source ? ["--source"] : []),
             ],
           },
-          // Only a local stack builds from the checkout. Dev runs the registry images C2 pinned, and --no-build stops
-          // Compose building even a build key added after C2 read the files (P1.37n; docs.docker.com compose up).
+          // Only a local stack builds from the checkout, or staging under --source (P1.37y). Dev runs the registry images
+          // C2 pinned, and --no-build stops Compose building even a build key added after C2 read the files (P1.37n;
+          // docs.docker.com compose up).
           {
             name: "docker",
             file: "docker",
-            args: [...compose, "up", "-d", env === "local" ? "--build" : "--no-build"],
+            args: [...compose, "up", "-d", env === "local" || source ? "--build" : "--no-build"],
           },
           ...(env === "local" ? [leafCheck] : []),
         ]

@@ -154,6 +154,24 @@ describe("stack wrapper (P1.27w)", () => {
     ]);
   });
 
+  test("source_builds_under_dev_only", () => {
+    // P1.37y (ADR 0036 Decision 2): --source goes to the precheck and turns --no-build into --build, under dev only.
+    const { commands } = plan([...UP, "--source"], {});
+    expect(commands[0]?.args.at(-1)).toBe("--source");
+    expect(commands[1]?.args.slice(-3)).toEqual(["up", "-d", "--build"]);
+    expect(plan(UP, {}).commands[0]?.args).not.toContain("--source");
+    expect(
+      plan(["down", "--env", "dev", ...COMPOSE, ...ENV_FILE, "--source"], {}).commands.map((c) => c.args.at(-1)),
+    ).toEqual(["down"]);
+    for (const argv of [
+      [...LOCAL_UP, "--source"],
+      [...UP, "--source", "--source"],
+      [...UP, "--source=yes"],
+    ]) {
+      expect(() => plan(argv, {}), argv.join(" ")).toThrow(UsageError);
+    }
+  });
+
   test("compose_paths_reach_both_children_absolute_and_normalized", () => {
     // C9 record Amendment 3: the preflight refuses a relative or unnormalized --compose, and Compose would resolve one
     // against $PWD while Node uses getcwd, so the wrapper resolves each path once and passes that one string to both.
@@ -456,7 +474,7 @@ describe("stack wrapper (P1.27w)", () => {
       scripts: Record<string, string>;
     };
     const calls = Object.values(scripts).filter((script) => script.includes("deployment/preflight/stack.ts"));
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(6);
     for (const call of calls) expect(call, call).toMatch(/^node deployment\/preflight\/stack\.ts -- (up|down) /);
   });
 
@@ -464,7 +482,7 @@ describe("stack wrapper (P1.27w)", () => {
     // Amendment 3 item 2: no --env-file*, --require* or --import*, so a caller's `node stack.ts …` never hands Node one.
     // The accepted flags are listed, and none starts with a banned prefix (P1.34s, nit 1, as cli.test.ts does).
     const names = Object.keys(WRAPPER_OPTIONS);
-    expect(names).toEqual(["env", "compose", "interpolation-env"]);
+    expect(names).toEqual(["env", "compose", "interpolation-env", "source"]);
     for (const name of names) expect(name, name).not.toMatch(/^(env-file|require|import)/);
     // Each is added to an otherwise valid command, so only the flag itself can be why it is refused.
     for (const flag of [
