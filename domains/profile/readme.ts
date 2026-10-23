@@ -183,14 +183,31 @@ export function parseReadme(posted: string): ParsedReadme {
   }
 }
 
+/** A README the staging preview stored as markdown (ADR 0037 point 8): each paragraph as plain text, or null. */
+function legacyReadme(text: string): Readme | null {
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== "")
+    .map(
+      (paragraph): ReadmeBlock => ({
+        $type: `${DEFS}paragraph`,
+        content: [{ $type: `${DEFS}textRun`, text: paragraph }],
+      }),
+    );
+  return { blocks };
+}
+
 /**
  * The README of a record read back from a member's PDS. Another client may have written it, so it is kept only when
- * the lexicon's validator accepts it, and only the block types this app renders are kept; anything else reads as no
- * README, never as a failure of the page.
+ * the lexicon's validator accepts it and it is within README_BYTES, and only the block types this app renders are
+ * kept; anything else reads as no README, never as a failure of the page.
  */
-export function readStoredReadme(value: unknown): Readme {
+export function readStoredReadme(stored: unknown): Readme {
+  const value = typeof stored === "string" ? legacyReadme(stored) : stored;
   const probe = { $type: "sh.unset.profile", displayName: "-", createdAt: "1970-01-01T00:00:00.000Z", readme: value };
   if (!isNode(value) || !validateRecord("sh.unset.profile", probe, "write").ok) return { blocks: [] };
+  if (new TextEncoder().encode(JSON.stringify(value)).length > README_BYTES) return { blocks: [] };
   const known = (block: unknown) => isNode(block) && KNOWN.has(String(block.$type));
   const blocks = list(value.blocks)
     .filter(known)

@@ -3,7 +3,7 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
-import type { Readme } from "./readme.ts";
+import { type Readme, readStoredReadme } from "./readme.ts";
 import { isWebsite, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website", "links"] as const;
@@ -139,14 +139,16 @@ export function toProfileRecord(
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const stored = storedObject(existing);
   const sentFields = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
-  const sent: readonly string[] = fields.readme === undefined ? sentFields : [...sentFields, "readme"];
+  // A README the staging preview stored as markdown is rewritten as blocks, or the record would not validate.
+  const nextReadme = fields.readme ?? (typeof stored.readme === "string" ? readStoredReadme(stored.readme) : undefined);
+  const sent: readonly string[] = nextReadme === undefined ? sentFields : [...sentFields, "readme"];
   const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => !sent.includes(key) && key !== "$type"));
   const set = Object.fromEntries(
     sentFields
       .filter((field) => fields[field] !== "")
       .map((f) => (f === "links" ? [f, (fields.links ?? "").split("\n").map((uri) => ({ uri }))] : [f, fields[f]])),
   );
-  const readme = fields.readme !== undefined && fields.readme.blocks.length > 0 ? { readme: fields.readme } : {};
+  const readme = nextReadme !== undefined && nextReadme.blocks.length > 0 ? { readme: nextReadme } : {};
   const merged: Record<string, unknown> = { ...kept, ...set, ...readme };
   if (typeof merged.displayName !== "string" || merged.displayName === "") {
     return { ok: false, code: "profile.name_required" };

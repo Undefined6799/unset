@@ -156,7 +156,22 @@ describe("readStoredReadme", () => {
     expect(readStoredReadme(later)).toEqual(stored);
   });
 
-  test.each([["## markdown from before"], [{ blocks: [{ $type: `${D}paragraph` }] }], [null]])(
+  test("a README the staging preview stored as markdown reads as plain paragraphs", () => {
+    expect(readStoredReadme("## About\n\nI make **small** tools.\n\n\n")).toEqual({
+      blocks: [
+        { $type: `${D}paragraph`, content: [run("## About")] },
+        { $type: `${D}paragraph`, content: [run("I make **small** tools.")] },
+      ],
+    });
+  });
+
+  test("a README over the byte bound reads as none", () => {
+    const big = Array.from({ length: 60 }, () => ({ $type: `${D}paragraph`, content: [run("x".repeat(2000))] }));
+    expect(new TextEncoder().encode(JSON.stringify({ blocks: big })).length).toBeGreaterThan(README_BYTES);
+    expect(readStoredReadme({ blocks: big })).toEqual({ blocks: [] });
+  });
+
+  test.each([[{ blocks: [{ $type: `${D}paragraph` }] }], [null], [42], ["x".repeat(2001)]])(
     "a README another client broke reads as none: %j",
     (value) => {
       expect(readStoredReadme(value)).toEqual({ blocks: [] });
@@ -173,6 +188,25 @@ describe("toProfileRecord with a README", () => {
     const built = toProfileRecord({ readme: { blocks: readme } }, existing, NOW);
     expect(built).toEqual({ ok: true, record: { ...existing, readme: { blocks: readme }, updatedAt: NOW } });
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
+  });
+
+  test("saving the side column turns a markdown README into blocks, so the record still validates", () => {
+    const legacy = { ...existing, readme: "Hello\n\nWorld" };
+    const built = toProfileRecord({ headline: "New" }, legacy, NOW);
+    expect(built).toEqual({
+      ok: true,
+      record: {
+        ...existing,
+        headline: "New",
+        readme: {
+          blocks: [
+            { $type: `${D}paragraph`, content: [run("Hello")] },
+            { $type: `${D}paragraph`, content: [run("World")] },
+          ],
+        },
+        updatedAt: NOW,
+      },
+    });
   });
 
   test("an empty README removes it", () => {
