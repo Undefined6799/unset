@@ -72,7 +72,7 @@ Declared in `interfaces/http/package.json`:
 | `@unset/shared-islands` | workspace |
 | `@unset/shared-log` | workspace |
 | `@unset/shared-ui` | workspace |
-| `react` | 19.3.0 |
+| `react` | 19.3.1 |
 
 ## Entry points
 

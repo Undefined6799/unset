@@ -62,8 +62,8 @@ Declared in `apps/web/package.json`:
 | `@unset/shared-errors` | workspace |
 | `@unset/shared-islands` | workspace |
 | `@unset/shared-ui` | workspace |
-| `react` | 19.3.0 |
-| `react-dom` | 19.3.0 |
+| `react` | 19.3.1 |
+| `react-dom` | 19.3.1 |
 
 `apps/web/vite.config.ts` imports `scripts/ui/css-scope.ts`. `apps/web/src/styles.ts` globs CSS under `shared/ui/` (`layers.css`, `tokens.css`, `base.css`, and `shared/ui/components/**/*.module.css`). `web-not-admin` refuses a path that is `admin/…` or contains `/admin/`.
 
