@@ -175,9 +175,21 @@
   output: "HTML blocked page, or a redirect to the current step when the account is not blocked."
   errors: "The handler names no error code of its own."
   auth: "reads session"
+"GET /settings":
+  why: "Sends the browser to the first settings page (interfaces/http/routes/settings.ts)."
+  input: "Optional query, carried over unchanged."
+  output: "303 to /settings/profile with the same query."
+  errors: "None. The path is fixed, so only the query changes."
+  auth: "none"
 "GET /settings/profile":
-  why: "Placeholder app page the onboarding gate can refuse (interfaces/http/routes/settings.ts)."
+  why: "The Profile page inside the settings side list (interfaces/http/routes/settings.ts)."
   input: "No request body."
   output: "HTML profile page, or the gate's redirect."
   errors: "The handler returns the gate's redirect. It names no error code of its own."
+  auth: "gate: openApp"
+"GET /settings/account":
+  why: "The Account page: handle, DID and account host, inside the settings side list (interfaces/http/routes/settings.ts)."
+  input: "No request body."
+  output: "HTML account page, or the gate's redirect."
+  errors: "The handler returns the gate's redirect. A handle that cannot be checked shows as unavailable on the page."
   auth: "gate: openApp"
