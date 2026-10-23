@@ -152,10 +152,12 @@ describe("GET /:did", () => {
   });
 
   test("me.renders_owner_data", async () => {
-    // With no profile yet the page is the owner's editor over an empty profile: the handle as the name, initials.
+    // With no profile yet the page is the owner's editor over an empty profile: the "Display name" prompt on top (Alex
+    // 04:28Z: only ever the display name), the handle below it, initials in the avatar.
     const html = await (await setup().get()).text();
     const main = elements(parse(html), "main")[0];
-    expect(elements(main, "h1").map(textContent)).toEqual(["alice.pds.unset.test"]);
+    expect(elements(main, "h1").map(textContent)).toEqual(["Display name"]);
+    expect(html).toContain("@alice.pds.unset.test");
     expect(elements(main, "div", { "data-island": "profile-editor" })).toHaveLength(1);
     expect(elements(main, "span", { "aria-hidden": "true" }).map(textContent)).toContain("A");
     expect(html).not.toContain("getBlob");

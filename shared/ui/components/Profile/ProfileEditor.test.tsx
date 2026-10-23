@@ -19,7 +19,7 @@ const labels: ProfileLabels = {
   removeLink: "Remove {link}",
   invalidLink: "Enter a web address, like github.com/you.",
   fields: {
-    displayName: "name",
+    displayName: "display name",
     headline: "headline",
     location: "place",
     website: "website",
@@ -27,7 +27,7 @@ const labels: ProfileLabels = {
     links: "links",
   },
   add: {
-    displayName: "Add your name",
+    displayName: "Display name",
     headline: "Add a headline",
     location: "Add a place",
     website: "Add a website",
@@ -76,7 +76,7 @@ describe("ProfileEditor without script", () => {
     const html = renderToStaticMarkup(<ProfileEditor {...props} />);
     expect(html).toContain(">Alice</h1>");
     expect(html).toContain(">About me</h2>");
-    expect(html).not.toContain("Edit name");
+    expect(html).not.toContain("Edit display name");
     expect(html).not.toContain("Draft");
     expect(html).not.toContain("Copy link");
   });
@@ -89,7 +89,7 @@ describe("ProfileEditor without script", () => {
     expect(host.textContent).toContain("Verified");
     expect(host.querySelector('[title="did:plc:7f3kabcdefghijklmtdc9e"]')?.textContent).toBe("did:plc:7f3k…tdc9e");
     const pencils = [...host.querySelectorAll("button[aria-label^='Edit']")].map((b) => b.getAttribute("aria-label"));
-    expect(pencils).toEqual(["Edit name", "Edit headline", "Edit place", "Edit website", "Edit README"]);
+    expect(pencils).toEqual(["Edit display name", "Edit headline", "Edit place", "Edit website", "Edit README"]);
     expect(host.querySelector("button[aria-label='Add a link']")).not.toBeNull();
     host.remove();
   });
@@ -177,14 +177,14 @@ describe("ProfileEditor with script", () => {
     const { host } = await mount();
     const name = () => host.querySelector("h1 span") as HTMLElement;
     await act(async () => name().dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
-    let input = host.querySelector("input[aria-label='Edit name']") as HTMLInputElement;
+    let input = host.querySelector("input[aria-label='Edit display name']") as HTMLInputElement;
     await act(async () => type(input, "Bob"));
     expect(host.querySelector("section[aria-label='Draft']")).not.toBeNull();
     await key(input, { key: "Escape" });
     expect(host.querySelector("h1")?.textContent).toContain("Alice");
     expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
     await act(async () => name().dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
-    input = host.querySelector("input[aria-label='Edit name']") as HTMLInputElement;
+    input = host.querySelector("input[aria-label='Edit display name']") as HTMLInputElement;
     await act(async () => type(input, "Bob"));
     await key(input, { key: "Enter" });
     expect(host.querySelector("h1")?.textContent).toContain("Bob");
@@ -242,9 +242,9 @@ describe("ProfileEditor with script", () => {
     expect(host.querySelector("section[aria-label='Draft']")).toBeNull();
   });
 
-  it("an owner with no display name sees Add your name, never the handle, on top", async () => {
+  it("an owner with no display name sees the Display name prompt, never the handle, on top", async () => {
     const { host } = await mount({ ...props, fields: { ...props.fields, displayName: "" } });
-    expect(host.querySelector("h1")?.textContent).toBe("Add your name");
+    expect(host.querySelector("h1")?.textContent).toBe("Display name");
   });
 
   it("view as hides the pencils", async () => {

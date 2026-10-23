@@ -166,13 +166,13 @@ describe("profile screen", () => {
     // The owner's editing island hydrates over the same markup; its server render has no pencils or draft box.
     expect(page).toContain('data-island="profile-editor"');
     const markup = page.replace(/<script[^>]*>[^<]*<\/script>/g, "");
-    expect(markup).not.toContain("Edit name");
+    expect(markup).not.toContain("Edit display name");
     expect(markup).not.toContain("Draft");
   });
 
   test("profile_without_one_published_is_the_editor_on_an_empty_page", () => {
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: null }));
-    expect(page).toContain(">alice.pds.example</h1>");
+    expect(page).toMatch(/<h1[^>]*><span[^>]*>Display name<\/span><\/h1>/);
     expect(page).toContain('data-island="profile-editor"');
   });
 

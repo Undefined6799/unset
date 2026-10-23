@@ -19,7 +19,7 @@ export const PROFILE = {
   removeLink: "Remove {link}",
   invalidLink: "Enter a web address, like github.com/you.",
   fields: {
-    displayName: "name",
+    displayName: "display name",
     headline: "headline",
     location: "place",
     website: "website",
@@ -27,7 +27,7 @@ export const PROFILE = {
     links: "links",
   },
   add: {
-    displayName: "Add your name",
+    displayName: "Display name",
     headline: "Add a headline",
     location: "Add a place",
     website: "Add a website",
