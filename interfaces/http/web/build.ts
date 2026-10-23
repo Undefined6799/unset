@@ -15,6 +15,7 @@ type Chunk = { file: string; src?: string; isEntry?: boolean; imports?: string[]
 const MANIFEST = ".vite/manifest.json";
 const BOOT_SOURCE = "src/islands/runtime/bootstrap.ts";
 const STYLES_SOURCE = "src/styles.ts";
+const EDITOR_SOURCE = "src/editor/readme.editor.tsx";
 /** A built file name: `assets/` and one segment, so no `..`, no leading `/` and no nested path. */
 const FILE = /^assets\/[A-Za-z0-9._-]+$/;
 const ISLAND = /\.island\.tsx$/;
@@ -76,7 +77,9 @@ export function parseWebBuild(text: string, dir: string, islandName: IslandNamer
   const icon = (shape: RegExp) =>
     (styles.assets ?? []).find((file) => shape.test(file)) ?? fail(`${STYLES_SOURCE} has no ${shape.source} icon`);
   const icons = { favicon: icon(FAVICON), appleTouch: icon(APPLE_TOUCH) };
-  return { manifest: { boot: boot.file, styles: styles.css ?? [], fonts, icons, islands }, files };
+  const editor = chunks.get(EDITOR_SOURCE);
+  const editorFile = editor?.isEntry === true ? { editor: editor.file } : {};
+  return { manifest: { boot: boot.file, styles: styles.css ?? [], fonts, icons, islands, ...editorFile }, files };
 }
 
 /** Reads `<dir>/.vite/manifest.json`; throws when it is missing or malformed, so startup fails closed. */

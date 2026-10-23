@@ -3,7 +3,7 @@
 // ownership check, the handle check and the profile read. App pages are private, no-store and vary on Cookie
 // (pageResponse, P1.22).
 import { type Did, displayHandle, type HandleVerdict, parseDid } from "@unset/domains-identity";
-import type { ProfileFields } from "@unset/domains-profile";
+import { type PublishedProfile, toEditorDocument } from "@unset/domains-profile";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
@@ -17,7 +17,7 @@ export type MeDeps = {
   page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   /** The member's published profile from their own PDS: null when there is none, "unavailable" when it did not answer. */
-  loadProfile: (did: Did, deadline: AbortSignal) => Promise<ProfileFields | null | "unavailable">;
+  loadProfile: (did: Did, deadline: AbortSignal) => Promise<PublishedProfile | null | "unavailable">;
 };
 
 export function meRoutes(deps: MeDeps): Route[] {
@@ -58,6 +58,9 @@ export function meRoutes(deps: MeDeps): Route[] {
           deps.verifyHandle(did, deadline),
           deps.loadProfile(did, deadline),
         ]);
+        // The owner edits the README in place (Alex 23:09Z); an unreadable profile is never offered for saving over.
+        const editable = profile !== "unavailable";
+        const readme = profile === null || profile === "unavailable" ? [] : profile.readme;
         const body = deps.screens.profile({
           did,
           handle: displayHandle(verdict),
@@ -65,12 +68,14 @@ export function meRoutes(deps: MeDeps): Route[] {
           handleUnavailable: verdict.status === "unavailable",
           privacyNotice: opened.privacyNotice,
           profile,
+          ...(editable ? { readmeDocument: JSON.stringify(toEditorDocument({ blocks: [...readme] })) } : {}),
         });
         return deps.page({
           group: "app",
           request,
           title: displayHandle(verdict),
           body,
+          ...(editable ? { editor: true as const } : {}),
           // Islands on (the default): the menu drawer's theme picker hydrates so a choice leaves it open (P2.13e).
           shell: {
             noindex: true,

@@ -1,6 +1,6 @@
 // P2.05 (screens/Login.tsx, screens/LoginContinue.tsx): the sign-in pages, rendered through the render entry exactly as
 // the web server renders them. The form posts with no script; the continue page moves on by a meta refresh.
-import type { SafeHref } from "@unset/shared-ui";
+import type { ProfileFieldsView, SafeHref } from "@unset/shared-ui";
 import { describe, expect, test } from "vitest";
 import { type Assets, renderPage, screens } from "../../render.tsx";
 
@@ -145,9 +145,15 @@ describe("profile screen", () => {
     headline: "Designer and front-end developer.",
     location: "Toronto, Ontario",
     website: "https://alice.example/",
-    readme: "## About me\nI make tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+    readme: [
+      {
+        $type: "sh.unset.profile#heading",
+        level: 2,
+        content: [{ $type: "sh.unset.profile#textRun", text: "About me" }],
+      },
+    ],
     links: "https://github.com/alicem",
-  };
+  } satisfies ProfileFieldsView;
 
   test("profile_shows_the_name_facts_and_readme", () => {
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: ALICE }));
@@ -156,30 +162,30 @@ describe("profile screen", () => {
     expect(page).toContain("Verified");
     expect(page).toContain("Toronto, Ontario");
     expect(page).toContain('title="did:plc:alice123456789abcdefgh"');
-    expect(tags(page, "a").map((a) => a.href)).toEqual([
-      "https://alice.example/",
-      "https://github.com/alicem",
-      "https://alice.example/tidy",
-    ]);
-    expect(page).toContain(">About me</h2>");
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://alice.example/", "https://github.com/alicem"]);
+    expect(page).toContain(">About me</h3>");
     // No sign-out here: the account details are on Settings › Account (P2.13c).
     expect(tags(page, "form")).toEqual([]);
     expect(page).not.toContain("<code>");
-    // The owner's editing island hydrates over the same markup; its server render has no pencils or draft box.
-    expect(page).toContain('data-island="profile-editor"');
-    const markup = page.replace(/<script[^>]*>[^<]*<\/script>/g, "");
-    expect(markup).not.toContain("Edit display name");
-    expect(markup).not.toContain("Draft");
+    // Without an editor document (a visitor's view) the README is not a form and the page has no script.
+    expect(page).not.toContain("<script");
   });
 
-  test("profile_without_one_published_is_the_editor_on_an_empty_page", () => {
+  test("profile_owner_gets_the_readme_inside_its_form_with_the_pencil_hidden", () => {
+    const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: ALICE, readmeDocument: "[]" }));
+    expect(tags(page, "form")).toEqual([{ method: "post", action: "/profile/readme", "data-readme-editor": "true" }]);
+    expect(page).toMatch(/<div data-readme-editor-mount="true"><div[^>]*><div><h3>About me<\/h3>/);
+    expect(page).toMatch(/<button[^>]*aria-label="Edit README"[^>]*hidden=""/);
+  });
+
+  test("profile_without_one_published_is_an_empty_page", () => {
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: null }));
     expect(page).toMatch(/<h1[^>]*><span[^>]*>Display name<\/span><\/h1>/);
-    expect(page).toContain('data-island="profile-editor"');
+    expect(tags(page, "a")).toEqual([]);
   });
 
   test("profile_never_links_an_unsafe_website", () => {
-    const profile = { ...ALICE, website: "javascript:alert(1)", readme: "", links: "javascript:alert(2)" };
+    const profile = { ...ALICE, website: "javascript:alert(1)", links: "javascript:alert(2)" };
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile }));
     expect(page).not.toContain('href="javascript:');
     expect(tags(page, "a").map((a) => a.href)).toEqual([]);

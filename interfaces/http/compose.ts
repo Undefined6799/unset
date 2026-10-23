@@ -20,7 +20,7 @@ import {
   resolveHandle,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { readProfileRecord, toProfileRecord } from "@unset/domains-profile";
+import { readPublishedProfile, toProfileRecord } from "@unset/domains-profile";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
@@ -334,7 +334,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       did,
     );
     if (stored.kind !== "ok") return "unavailable" as const;
-    return stored.value === null ? null : readProfileRecord(stored.value.value);
+    return stored.value === null ? null : readPublishedProfile(stored.value.value);
   };
   const settings = settingsRoutes({ ...accountDeps, loadProfile });
   const me = meRoutes({ ...accountDeps, loadProfile });

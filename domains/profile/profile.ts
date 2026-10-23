@@ -116,6 +116,15 @@ export function readProfileRecord(value: unknown): ProfileFields {
   return fields as ProfileFields;
 }
 
+/** A published profile as its page shows it: the checked fields and the README's blocks. */
+export type PublishedProfile = ProfileFields & { readonly readme: Readme["blocks"] };
+
+/** A record read back from a member's PDS, fields and README each checked on their own (readStoredReadme). */
+export function readPublishedProfile(value: unknown): PublishedProfile {
+  const stored = typeof value === "object" && value !== null ? (value as Readonly<Record<string, unknown>>) : {};
+  return { ...readProfileRecord(value), readme: readStoredReadme(stored.readme).blocks };
+}
+
 export type ProfileRecord = { readonly $type: "sh.unset.profile"; readonly createdAt: string } & Readonly<
   Record<string, unknown>
 >;

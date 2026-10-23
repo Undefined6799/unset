@@ -4,7 +4,7 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import { toProfileRecord } from "./profile.ts";
-import { parseReadme, README_BYTES, readStoredReadme } from "./readme.ts";
+import { parseReadme, README_BYTES, readStoredReadme, toEditorDocument } from "./readme.ts";
 
 const D = "sh.unset.profile#";
 const text = (t: string, styles: Record<string, unknown> = {}) => ({ type: "text", text: t, styles });
@@ -213,5 +213,46 @@ describe("toProfileRecord with a README", () => {
     const withReadme = { ...existing, readme: { blocks: readme } };
     const built = toProfileRecord({ readme: { blocks: [] } }, withReadme, NOW);
     expect(built.ok && "readme" in built.record).toBe(false);
+  });
+});
+
+describe("toEditorDocument", () => {
+  const DEFS = "sh.unset.profile#";
+  const text = (value: string) => ({ $type: `${DEFS}textRun` as const, text: value });
+
+  test("editor_document_parses_back_to_the_same_readme", () => {
+    const readme = {
+      blocks: [
+        { $type: `${DEFS}heading` as const, level: 2 as const, content: [text("About me")] },
+        {
+          $type: `${DEFS}paragraph` as const,
+          content: [
+            { ...text("I make "), bold: true as const },
+            { $type: `${DEFS}linkRun` as const, uri: "https://example.com/", content: [text("tools")] },
+          ],
+        },
+        { $type: `${DEFS}listItem` as const, style: "bullet" as const, content: [text("one")] },
+        { $type: `${DEFS}listItem` as const, style: "bullet" as const, indent: 1, content: [text("under one")] },
+        { $type: `${DEFS}listItem` as const, style: "check" as const, checked: true as const, content: [text("done")] },
+        { $type: `${DEFS}codeBlock` as const, text: "let a = 1;", language: "ts" },
+        { $type: `${DEFS}quote` as const, content: [text("Quiet.")] },
+      ],
+    };
+    const parsed = parseReadme(JSON.stringify(toEditorDocument(readme)));
+    expect(parsed).toEqual({ ok: true, readme });
+  });
+
+  test("editor_document_opens_columns_as_their_blocks_in_order", () => {
+    const columns = {
+      $type: `${DEFS}columns` as const,
+      columns: [
+        { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("left")] }] },
+        { blocks: [{ $type: `${DEFS}paragraph` as const, content: [text("right")] }] },
+      ],
+    };
+    expect(toEditorDocument({ blocks: [columns] }).map((block) => block.content)).toEqual([
+      [{ type: "text", text: "left", styles: {} }],
+      [{ type: "text", text: "right", styles: {} }],
+    ]);
   });
 });

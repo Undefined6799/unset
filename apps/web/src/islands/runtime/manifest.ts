@@ -12,6 +12,8 @@ export type BuildManifest = Readonly<{
   fonts: readonly string[];
   /** The two PNG icons the styles entry exports (P1.25a), which every page's head links. */
   icons: Readonly<{ favicon: string; appleTouch: string }>;
+  /** The owner's README editor entry (ADR 0037 point 5), loaded only by the page that asks for it. */
+  editor?: string;
   /** Per island name: its chunk and the chunks it imports statically, the chunk first. */
   islands: ReadonlyMap<string, readonly string[]>;
 }>;

@@ -221,3 +221,70 @@ export function readStoredReadme(stored: unknown): Readme {
     );
   return { blocks: blocks as Readme["blocks"] };
 }
+
+/** A block of BlockNote's document as the owner's editor loads it (the shape parseReadme reads back). */
+export type EditorBlock = {
+  readonly type: string;
+  readonly props: Readonly<Record<string, string | number | boolean>>;
+  readonly content: readonly unknown[];
+  readonly children: EditorBlock[];
+};
+
+function editorText(run: TextRun) {
+  const styles: Record<string, true> = {};
+  for (const style of STYLES) if (run[style] === true) styles[style] = true;
+  return { type: "text", text: run.text, styles };
+}
+
+const editorRuns = (content: Run[]) =>
+  content.map((run) =>
+    run.$type === `${DEFS}linkRun`
+      ? { type: "link", href: run.uri, content: run.content.map(editorText) }
+      : editorText(run),
+  );
+
+function editorBlock(block: ReadmeBlock): EditorBlock {
+  const plain = (type: string, props: EditorBlock["props"], content: readonly unknown[]) => ({
+    type,
+    props,
+    content,
+    children: [],
+  });
+  switch (block.$type) {
+    case `${DEFS}paragraph`:
+      return plain("paragraph", {}, editorRuns(block.content));
+    case `${DEFS}quote`:
+      return plain("quote", {}, editorRuns(block.content));
+    case `${DEFS}heading`:
+      return plain("heading", { level: block.level }, editorRuns(block.content));
+    case `${DEFS}codeBlock`:
+      return plain("codeBlock", block.language ? { language: block.language } : {}, [
+        { type: "text", text: block.text, styles: {} },
+      ]);
+    case `${DEFS}listItem`: {
+      const type = { bullet: "bulletListItem", numbered: "numberedListItem", check: "checkListItem" }[block.style];
+      return plain(type, block.style === "check" ? { checked: block.checked === true } : {}, editorRuns(block.content));
+    }
+  }
+}
+
+/**
+ * The stored README as the document the owner's editor opens: the inverse of parseReadme, with an indented list item
+ * nested under the item before it. The editor has no columns yet, so a columns block opens as its blocks in order.
+ */
+export function toEditorDocument(readme: Readme): EditorBlock[] {
+  const flat = readme.blocks.flatMap((block) =>
+    block.$type === `${DEFS}columns` ? block.columns.flatMap((column) => column.blocks) : [block],
+  );
+  const document: EditorBlock[] = [];
+  // open[d] is the latest list item at depth d, the parent of an item at depth d + 1.
+  let open: EditorBlock[] = [];
+  for (const block of flat) {
+    const out = editorBlock(block);
+    const indent = block.$type === `${DEFS}listItem` ? Math.min(block.indent ?? 0, open.length) : 0;
+    const parent = indent > 0 ? open[indent - 1] : undefined;
+    (parent === undefined ? document : parent.children).push(out);
+    open = block.$type === `${DEFS}listItem` ? [...open.slice(0, indent), out] : [];
+  }
+  return document;
+}

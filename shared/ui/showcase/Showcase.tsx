@@ -53,6 +53,7 @@ const languages = [
 const PROFILE_LABELS: ProfileLabels = {
   handleUnavailable: "We could not check the handle just now.",
   verified: "Verified",
+  checkItem: { done: "Done", notDone: "Not done" },
   details: { location: "Location", website: "Website", did: "DID" },
   copyLink: "Copy link",
   copied: "Copied",
@@ -235,6 +236,8 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
           ],
         },
       ]}
+    />
+  ),
   Markdown: (
     <Markdown
       source={
@@ -253,7 +256,12 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
         headline: "Builds quiet software.",
         location: "Ontario",
         website: "https://example.com",
-        readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)",
+        readme: [
+          {
+            $type: "sh.unset.profile#paragraph",
+            content: [{ $type: "sh.unset.profile#textRun", text: "I make small tools." }],
+          },
+        ],
         links: "https://github.com/alexexample",
       }}
       labels={PROFILE_LABELS}

@@ -84,6 +84,8 @@ export type PageInput = Readonly<{
   islands: "on" | "off";
   /** Render inside AppShell; absent for the screens that still render their own <main>. */
   shell?: ShellOptions;
+  /** Load the owner's README editor entry; a fixed argument of its one route. */
+  editor?: true;
   /** The islands to look names up in; tests pass their own. */
   registry?: ReadonlyMap<string, IslandDefinition>;
 }>;
@@ -98,6 +100,7 @@ export function renderPage(input: PageInput): { html: string; tooLarge: readonly
       assets={input.assets}
       run={run}
       {...(input.shell === undefined ? {} : { shell: input.shell })}
+      {...(input.editor ? { editor: true as const } : {})}
     >
       {input.body}
     </Document>,

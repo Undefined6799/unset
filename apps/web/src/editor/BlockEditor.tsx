@@ -25,6 +25,9 @@ function createEditor(initialContent: readonly ReadmePartialBlock[], copied: { c
     ...(initialContent.length > 0 ? { initialContent: [...initialContent] } : {}),
     // TipTap would inject its stylesheet through innerHTML (Trusted Types refuses it); Editor.module.css has the rules.
     _tiptapOptions: { injectCSS: false },
+    // The placeholder extension appends a <style> element (@blocknote/core 0.56.0 src/extensions/Placeholder/
+    // Placeholder.ts), which the CSP's style-src refuses; disableExtensions takes its key (BlockNoteEditor.ts:115).
+    disableExtensions: ["placeholder"],
     pasteHandler: ({ event, editor }) => {
       pasteText(editor, event.clipboardData?.getData("text/plain") ?? "", copied.current);
       return true;

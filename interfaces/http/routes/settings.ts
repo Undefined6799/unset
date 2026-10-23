@@ -3,7 +3,7 @@
 // (session, then onboarding, then a confirmed email) before it reads anything, and is private, no-store and varies on
 // Cookie like every app page (pageResponse, P1.22).
 import { type Did, displayHandle, type HandleVerdict } from "@unset/domains-identity";
-import type { ProfileFields } from "@unset/domains-profile";
+import type { PublishedProfile } from "@unset/domains-profile";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { OpenedApp } from "../app-gate.ts";
@@ -22,7 +22,7 @@ export type SettingsDeps = {
   /** Our PDS's issuer origin, to tell our sign-in server from another. */
   pdsIssuer: string;
   /** The member's published profile; null when there is none yet, "unavailable" when the PDS did not answer. */
-  loadProfile: (did: Did, deadline: AbortSignal) => Promise<ProfileFields | null | "unavailable">;
+  loadProfile: (did: Did, deadline: AbortSignal) => Promise<PublishedProfile | null | "unavailable">;
   log: Logger;
 };
 

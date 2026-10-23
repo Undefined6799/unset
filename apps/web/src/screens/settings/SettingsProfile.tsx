@@ -15,7 +15,7 @@ export type SettingsProfileProps = {
 };
 
 function ProfileForm({ profile }: { profile: ProfileFieldsView | null }) {
-  const value = (field: keyof ProfileFieldsView) => profile?.[field] ?? "";
+  const value = (field: Exclude<keyof ProfileFieldsView, "readme">) => profile?.[field] ?? "";
   return (
     <form method="post" action="/profile" className={styles.form}>
       <input type="hidden" name="next" value="/settings/profile" />

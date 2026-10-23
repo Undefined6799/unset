@@ -271,7 +271,13 @@ async function serveTest(): Promise<void> {
               headline: "Designer and front-end developer.",
               location: "Toronto, Ontario",
               website: "https://alice.example",
-              readme: "## About me\nI make small tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+              readme: [
+                {
+                  $type: "sh.unset.profile#heading",
+                  level: 2,
+                  content: [{ $type: "sh.unset.profile#textRun", text: "About me" }],
+                },
+              ],
               links: "https://github.com/alicem",
             },
           }),

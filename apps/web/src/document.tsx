@@ -55,6 +55,8 @@ export function Document(props: {
   run: IslandRun | null;
   /** Absent for a screen that still renders its own <main> (the screens built before P1.25). */
   shell?: ShellOptions;
+  /** Load the owner's README editor entry (ADR 0037 point 5); only its own page asks. */
+  editor?: true;
   children: ReactNode;
 }): ReactNode {
   const { prefs, run, shell } = props;
@@ -88,6 +90,9 @@ export function Document(props: {
           </IslandRunContext>
         )}
         {run === null ? null : <IslandScripts run={run} assets={props.assets} />}
+        {props.editor && props.assets.manifest.editor !== undefined ? (
+          <script type="module" src={`${props.assets.origin}/${props.assets.manifest.editor}`} />
+        ) : null}
       </body>
     </html>
   );

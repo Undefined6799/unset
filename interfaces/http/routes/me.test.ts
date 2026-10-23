@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { Did, HandleVerdict } from "@unset/domains-identity";
-import type { ProfileFields } from "@unset/domains-profile";
+import type { PublishedProfile } from "@unset/domains-profile";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -33,15 +33,25 @@ type World = {
   clearCookie?: boolean;
   verdict?: HandleVerdict;
   /** What the member's PDS holds; absent means no profile yet. */
-  profile?: ProfileFields | null | "unavailable";
+  profile?: PublishedProfile | null | "unavailable";
 };
 
-const ALICE: ProfileFields = {
+const ALICE: PublishedProfile = {
   displayName: "Alice Moreau",
   headline: "Designer and front-end developer.",
   location: "Toronto, Ontario",
   website: "https://alice.example/",
-  readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+  readme: [
+    { $type: "sh.unset.profile#heading", level: 2, content: [{ $type: "sh.unset.profile#textRun", text: "About me" }] },
+    {
+      $type: "sh.unset.profile#paragraph",
+      content: [
+        { $type: "sh.unset.profile#textRun", text: "I make " },
+        { $type: "sh.unset.profile#textRun", text: "small", bold: true },
+        { $type: "sh.unset.profile#textRun", text: " tools." },
+      ],
+    },
+  ],
   links: "",
 };
 
@@ -119,9 +129,8 @@ describe("GET /:did", () => {
     expect(account).toBeDefined();
     const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
     expect(initials).toContain("A");
-    // P2.13e: the only script is the island boot, and the props of the profile editor and the drawer's theme picker.
+    // P2.13e: the only script is the island boot and the drawer's theme picker props; the README is edited elsewhere.
     expect(elements(document, "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value)).toEqual([
-      "application/json",
       "application/json",
       "module",
     ]);
@@ -139,7 +148,7 @@ describe("GET /:did", () => {
     const website = elements(main, "a", { href: "https://alice.example/" })[0];
     expect(website && textContent(website)).toBe("alice.example");
     expect(website?.attrs?.find((a) => a.name === "rel")?.value).toBe("nofollow ugc noopener noreferrer me");
-    expect(elements(main, "h2").map(textContent)).toEqual(["About me", "My projects"]);
+    expect(elements(main, "h3").map(textContent)).toEqual(["About me"]);
     expect(elements(main, "strong").map(textContent)).toEqual(["small"]);
   });
 
@@ -152,13 +161,13 @@ describe("GET /:did", () => {
   });
 
   test("me.renders_owner_data", async () => {
-    // With no profile yet the page is the owner's editor over an empty profile: the "Display name" prompt on top (Alex
-    // 04:28Z: only ever the display name), the handle below it, initials in the avatar.
+    // With no profile yet the page is an empty profile: the "Display name" prompt on top (Alex 04:28Z: only ever the
+    // display name), the handle below it, initials in the avatar, and the README's form for editing in place.
     const html = await (await setup().get()).text();
     const main = elements(parse(html), "main")[0];
     expect(elements(main, "h1").map(textContent)).toEqual(["Display name"]);
     expect(html).toContain("@alice.pds.unset.test");
-    expect(elements(main, "div", { "data-island": "profile-editor" })).toHaveLength(1);
+    expect(elements(main, "form", { action: "/profile/readme" })).toHaveLength(1);
     expect(elements(main, "span", { "aria-hidden": "true" }).map(textContent)).toContain("A");
     expect(html).not.toContain("getBlob");
     // The account details moved to Settings › Account (P2.13c), so the PDS host is not linked here.

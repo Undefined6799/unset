@@ -11,6 +11,11 @@
     color: var(--color-ink);
   }
 
+  /* In place on the profile page the text stays where the README reads; the handle sits in the column gap. */
+  :global([data-readme-editor-mount]) .editor {
+    margin-left: calc(-1 * (var(--space-12) + var(--space-6)));
+  }
+
   .editor :global(.ProseMirror) {
     outline: none;
     white-space: pre-wrap;
@@ -39,21 +44,22 @@
     margin: 0;
   }
 
+  /* The README draws a level-n heading one level down (h2 for 1, so the page keeps one h1; shared/ui Readme), and
+     the editor matches it: level 1 at the h2 size, level 2 at the h3 size, level 3 at body size. */
   .editor [data-content-type="heading"] h1 {
-    font-size: var(--type-heading-1-size);
-    line-height: var(--type-heading-1-line);
-    font-weight: var(--type-heading-1-weight);
-  }
-
-  .editor [data-content-type="heading"] h2 {
     font-size: var(--type-heading-2-size);
     line-height: var(--type-heading-2-line);
     font-weight: var(--type-heading-2-weight);
   }
 
-  .editor [data-content-type="heading"] h3 {
+  .editor [data-content-type="heading"] h2 {
     font-size: var(--type-heading-3-size);
     line-height: var(--type-heading-3-line);
+    font-weight: var(--type-heading-3-weight);
+  }
+
+  .editor [data-content-type="heading"] h3 {
+    font-size: var(--type-body-size);
     font-weight: var(--type-heading-3-weight);
   }
 

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { Did, HandleVerdict } from "@unset/domains-identity";
-import type { ProfileFields } from "@unset/domains-profile";
+import type { PublishedProfile } from "@unset/domains-profile";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -32,7 +32,7 @@ type World = {
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
   issuer?: string | null | Error;
   /** What the member's PDS holds for the profile; absent means no profile yet. */
-  profile?: ProfileFields | null | "unavailable";
+  profile?: PublishedProfile | null | "unavailable";
 };
 
 function setup(world: World = {}) {
@@ -143,12 +143,18 @@ describe("GET /settings/profile", () => {
 });
 
 describe("Settings › Profile form", () => {
-  const ALICE: ProfileFields = {
+  const ALICE: PublishedProfile = {
     displayName: "Alice Moreau",
     headline: "Designer.",
     location: "Toronto, Ontario",
     website: "https://alice.example",
-    readme: "## About me",
+    readme: [
+      {
+        $type: "sh.unset.profile#heading",
+        level: 2,
+        content: [{ $type: "sh.unset.profile#textRun", text: "About me" }],
+      },
+    ],
     links: "https://github.com/alicem\nhttps://bsky.app/profile/alice",
   };
   /** The name and value of each field in the form that posts to /profile. */

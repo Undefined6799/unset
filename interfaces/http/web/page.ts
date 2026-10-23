@@ -37,6 +37,8 @@ export type PageSpec = {
   title: string;
   body: ReactNode;
   islands?: "off";
+  /** Load the owner's README editor entry (ADR 0037 point 5); written in its one route. */
+  editor?: true;
   /** Render inside the app shell; `noindex` also sends `X-Robots-Tag`. */
   shell?: { noindex?: true; navigation?: ShellOptions["navigation"]; feed?: true };
 };
@@ -73,6 +75,7 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
     body: page.body,
     islands: page.islands ?? "on",
     ...(shell ? { shell } : {}),
+    ...(page.editor ? { editor: true as const } : {}),
   });
   // The name comes from the island registry the render looked it up in, never from the request.
   for (const island of tooLarge) deps.log.warn("island.props_too_large", { island });

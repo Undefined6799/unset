@@ -9,12 +9,15 @@ export {
   type ProfileField,
   type ProfileFields,
   type ProfileRecord,
+  type PublishedProfile,
   parseProfileFields,
   readProfileRecord,
+  readPublishedProfile,
   toProfileRecord,
 } from "./profile.ts";
 export {
   type ColumnsBlock,
+  type EditorBlock,
   type LinkRun,
   type ParsedReadme,
   parseReadme,
@@ -25,4 +28,5 @@ export {
   type Run,
   readStoredReadme,
   type TextRun,
+  toEditorDocument,
 } from "./readme.ts";

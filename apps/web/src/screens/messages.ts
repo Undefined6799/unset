@@ -12,6 +12,8 @@ export const PROFILE = {
   unavailable: "We could not load your profile just now.",
   handleUnavailable: "We could not check your handle just now.",
   verified: "Verified",
+  checkItem: { done: "Done", notDone: "Not done" },
+  readmeForm: { edit: "Edit README", label: "README", save: "Save", cancel: "Cancel" },
   details: { location: "Location", website: "Website", did: "DID" },
   copyLink: "Copy link",
   copied: "Copied",

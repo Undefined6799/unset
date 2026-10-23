@@ -122,6 +122,14 @@
     min-width: 0;
   }
 
+  /* The README's Save and Cancel, under the editor while it is open. */
+  .readmeActions:not([hidden]) {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    margin-top: var(--space-4);
+  }
+
   .placeholder {
     color: var(--color-ink-muted);
     font-style: italic;
@@ -148,6 +156,10 @@
   .editableBlock:hover .pencil,
   .pencil:focus-visible {
     opacity: 1;
+  }
+
+  .pencil[hidden] {
+    display: none;
   }
 
   .pencil:hover {
