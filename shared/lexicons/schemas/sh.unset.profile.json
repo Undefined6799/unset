@@ -29,6 +29,12 @@
             "maxLength": 6000,
             "description": "About text: paragraphs, bold, italic and http(s) links (a small markdown subset), never HTML."
           },
+          "readme": {
+            "type": "string",
+            "maxGraphemes": 10000,
+            "maxLength": 100000,
+            "description": "Free-form page body in a small markdown subset (headings, lists, quotes, code, links, rows and columns), never HTML."
+          },
           "location": {
             "type": "string",
             "maxGraphemes": 100,
@@ -57,6 +63,15 @@
             "accept": ["image/png", "image/jpeg", "image/webp"],
             "maxSize": 2000000,
             "description": "Wide header image (3:1)."
+          },
+          "links": {
+            "type": "array",
+            "maxLength": 12,
+            "items": {
+              "type": "ref",
+              "ref": "#link"
+            },
+            "description": "The member's links elsewhere (other sites and accounts), in display order."
           },
           "availability": {
             "type": "ref",
@@ -89,6 +104,19 @@
             "format": "datetime",
             "description": "When the profile was last published."
           }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "One link elsewhere.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL."
         }
       }
     },
