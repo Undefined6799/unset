@@ -71,10 +71,10 @@ Declared in `shared/ui/package.json`:
 | Dependency | Version | Kind |
 | --- | --- | --- |
 | `@unset/shared-islands` | workspace | dependency |
-| `react` | 19.3.0 | dependency |
+| `react` | 19.3.1 | dependency |
 | `@types/react` | 19.3.0 | devDependency |
 | `@types/react-dom` | 19.3.0 | devDependency |
-| `react-dom` | 19.3.0 | devDependency |
+| `react-dom` | 19.3.1 | devDependency |
 
 Who may import the index is the [shared](../) table. [ui-build](../ui-build/) may import it as types only. From outside this package, `infra-shared-via-index` reaches `index.ts`. A `.css` file is the exception, which is how `apps/web/src/styles.ts` reaches the styles.
 
