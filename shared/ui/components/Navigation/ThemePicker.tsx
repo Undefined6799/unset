@@ -7,7 +7,7 @@
 // (https://fetch.spec.whatwg.org/#concept-request-redirect-mode, read 2026-10-23); the Set-Cookie on that 303 is
 // stored by the browser's HTTP-network fetch either way (same spec, "HTTP-network fetch"). No test here runs a real
 // browser against it yet, so that cookie step is unverified until staging or an e2e test with a session shows it.
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import bulbOff from "../../icons/drawings/bulb-off.generated.ts";
 import bulbOn from "../../icons/drawings/bulb-on.generated.ts";
 import tv from "../../icons/drawings/tv.generated.ts";
@@ -54,13 +54,47 @@ function apply(theme: ThemeChoice): void {
     ?.setAttribute("content", theme === "system" ? "dark light" : theme);
 }
 
+/** This tab's last saved choice, for pages the back-forward cache restores; the theme cookie is HttpOnly. */
+const SAVED = "unset.theme";
+function remember(theme: ThemeChoice): void {
+  try {
+    sessionStorage.setItem(SAVED, theme);
+  } catch {
+    // Storage can be off; the cookie still holds the choice for every page the server renders.
+  }
+}
+function remembered(): ThemeChoice | null {
+  try {
+    const value = sessionStorage.getItem(SAVED);
+    return isChoice(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ThemePicker({ theme, returnTo, labels }: ThemePickerProps) {
   const [current, setCurrent] = useState(theme);
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  // Saves run one after another, so two quick choices cannot finish out of order: the last click wins.
+  const saving = useRef(Promise.resolve());
+  // Back can restore an earlier page as it was left (https://web.dev/articles/bfcache, read 2026-10-23), theme too.
+  useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      const saved = event.persisted ? remembered() : null;
+      if (saved === null) return;
+      apply(saved);
+      setCurrent(saved);
+    };
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
+  }, []);
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     const form = event.currentTarget;
     const choice = ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value;
     if (!isChoice(choice)) return;
     event.preventDefault();
+    saving.current = saving.current.then(() => save(form, choice));
+  };
+  const save = async (form: HTMLFormElement, choice: ThemeChoice) => {
     try {
       const response = await fetch("/prefs/theme", {
         method: "POST",
@@ -77,6 +111,7 @@ export function ThemePicker({ theme, returnTo, labels }: ThemePickerProps) {
       return;
     }
     apply(choice);
+    remember(choice);
     setCurrent(choice);
   };
   return (

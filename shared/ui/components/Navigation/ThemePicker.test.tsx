@@ -86,6 +86,41 @@ describe("ThemePicker with script", () => {
     navigated.mockRestore();
   });
 
+  it("saves two quick choices one after the other, so the last one wins", async () => {
+    // Codex on #1312: two saves in flight could finish out of order and leave the first choice applied and stored.
+    const pending: (() => void)[] = [];
+    const fetch = vi.fn(
+      () => new Promise<Response>((resolve) => pending.push(() => resolve({ type: "opaqueredirect" } as Response))),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("dark")));
+    await act(async () => form.requestSubmit(button("light")));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => pending.shift()?.());
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(String((fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body)).toContain("theme=light");
+    await act(async () => pending.shift()?.());
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(button("light").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("brings a page restored by Back up to the latest saved choice", async () => {
+    // Codex on #1312: the back-forward cache restores an earlier page with the theme it had when it was left.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ type: "opaqueredirect" }) as Response),
+    );
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("dark")));
+    document.documentElement.removeAttribute("data-theme");
+    const restored = Object.assign(new Event("pageshow"), { persisted: true });
+    await act(async () => window.dispatchEvent(restored));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(button("dark").getAttribute("aria-pressed")).toBe("true");
+    sessionStorage.clear();
+  });
+
   it("falls back to the plain form when the save fails", async () => {
     vi.stubGlobal(
       "fetch",
