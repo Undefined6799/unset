@@ -136,7 +136,7 @@ describe("GET /login", () => {
     expect(html).not.toContain('name="handle"');
     expect(html).not.toContain("alice");
     expect(html).toContain('<input type="hidden" name="next" value="/me"/>');
-    expect(html).toContain(`Sign in with ${PDS}</button>`);
+    expect(html).toContain("Sign in with AtProto</button>");
     expect(cookies(response)).toEqual([]);
     expect([nonces(), authorized.length, resolved.length]).toEqual([0, 0, 0]);
   });
@@ -168,8 +168,12 @@ describe("GET /login", () => {
     const html = await (await send("/login?error=login.handle_not_found")).text();
     expect(html).toContain("No account uses that handle.");
     expect(html.match(/No account uses that handle\./g)).toHaveLength(1);
-    expect(html).toContain('<main id="main">');
+    expect(html).toContain('<main id="main"');
     expect(html.match(/<main/g)).toHaveLength(1);
+    // P2.05m: the page is the sign-in dialog alone, so the error sits inside it, with no shell behind.
+    const dialog = html.slice(html.indexOf('<section aria-labelledby="sign-in-title"'), html.indexOf("</section>"));
+    expect(dialog).toContain("No account uses that handle.");
+    expect(html).not.toMatch(/<header|<footer|data-island/);
     const forged = await (await send("/login?error=%3Cscript%3Ex")).text();
     expect(forged).not.toContain('role="alert"');
     expect(forged).not.toContain("<script>x");

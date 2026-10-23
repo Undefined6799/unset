@@ -53,7 +53,7 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
     // expectJs false stays at 0 scripts, including /welcome/blocked (islands off).
-    // /login and /signed-out load the header island:
+    // /signed-out loads the header island:
     // boot plus its graph was 226093 bytes in the current web build, under 256 KiB.
     const matrix = config.ci.assert.assertMatrix;
     for (const row of matrix) {

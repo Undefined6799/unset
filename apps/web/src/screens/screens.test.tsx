@@ -40,10 +40,24 @@ describe("login screen", () => {
     expect(tags(page, "input")).toEqual([{ type: "hidden", name: "next", value: "/me" }]);
     const buttons = tags(page, "button").map(({ type, name, value }) => ({ type, name, value }));
     expect(buttons).toEqual([{ type: "submit", name: "intent", value: "chooser" }]);
-    expect(page).toContain(">Sign in with pds.example</button>");
+    expect(page).toContain(">Sign in with AtProto</button>");
+    expect(page).toContain("<strong>pds.example</strong>");
     expect(page).toContain("only place you type your password");
     // Zero JavaScript: no island ran, so no script of any kind.
     expect(page).not.toContain("<script");
+  });
+
+  // P2.05m (Alex, 2026-10-23: "the sign in should only be a modal"): the page is one box in the Modal's look over a
+  // scrim, drawn with no script. With no script it cannot trap focus, so it is a named region, not an aria-modal
+  // dialog, and Close goes home, since `next` is often the protected page that sent the visitor here.
+  test("login_is_one_modal_box", () => {
+    const page = html(screens.login({ ...LOGIN, next: "/did" }));
+    expect(tags(page, "section")).toEqual([{ "aria-labelledby": "sign-in-title", class: expect.any(String) }]);
+    expect(page).not.toMatch(/role="dialog"|aria-modal/);
+    expect(page).toContain('<h1 id="sign-in-title"');
+    expect(page.match(/<main/g)).toHaveLength(1);
+    expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/" })]);
+    expect(page).toMatch(/<a [^>]*href="\/"[^>]*>Close<\/a>/);
   });
 
   test("login_without_next_has_no_hidden_field", () => {
