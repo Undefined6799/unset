@@ -77,6 +77,11 @@ export function dropIntoColumns(editor: ReadmeEditor, drop: ColumnDrop): void {
   editor.focus();
 }
 
+/** A block with no text and nothing nested: what Delete, or deleting all its text, leaves in a column. */
+function isBlank(block: ReadmeBlock): boolean {
+  return block.children.length === 0 && (!Array.isArray(block.content) || block.content.length === 0);
+}
+
 /**
  * The fix one top-level block needs to keep the README's column shape, or null when it has the shape. A block that
  * lands straight in a column list (Enter on an empty last line of a column, Backspace at the start of the block below,
@@ -88,7 +93,9 @@ export function fixFor(block: ReadmeBlock): ReadmePartialBlock[] | null {
   if (block.type !== "columnList") return null;
   const first = block.children.findIndex((child) => child.type === "column");
   const strays = block.children.filter((child) => child.type !== "column");
-  const columns = block.children.filter((child) => child.type === "column" && child.children.length > 0);
+  // A column left with only blank blocks goes, so deleting what was beside a block takes it back to one column
+  // (Alex 2026-10-23 23:54Z).
+  const columns = block.children.filter((child) => child.type === "column" && !child.children.every(isBlank));
   if (strays.length === 0 && columns.length === block.children.length && columns.length >= 2) return null;
   const above = block.children.slice(0, Math.max(first, 0)).filter((child) => child.type !== "column");
   const below = strays.filter((child) => !above.includes(child));
@@ -97,11 +104,11 @@ export function fixFor(block: ReadmeBlock): ReadmePartialBlock[] | null {
       ? [
           {
             type: "columnList",
-            children: columns.map((column) => ({ type: "column", children: column.children.map(copy) })),
+            children: columns.map((column) => ({ type: "column", children: column.children })),
           },
         ]
-      : columns.flatMap((column) => column.children.map(copy));
-  // The strays keep their ids (the list is removed before they are inserted), so the caret can stay in its block.
+      : columns.flatMap((column) => column.children);
+  // Every block keeps its id (the list is removed before they are inserted), so the caret can stay in its block.
   return [...above, ...list, ...below];
 }
 
