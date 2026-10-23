@@ -23,7 +23,8 @@ The server reaches screens through the `screens` object in `apps/web/render.tsx`
 | `welcomeChat` | `apps/web/src/screens/welcome/ChatLater.tsx` |
 | `welcomeBlocked` | `apps/web/src/screens/welcome/UnderAge.tsx` |
 | `me` | `apps/web/src/screens/Me.tsx` |
-| `settingsProfile` | `apps/web/src/screens/SettingsProfile.tsx` |
+| `settingsProfile` | `apps/web/src/screens/settings/SettingsProfile.tsx` |
+| `settingsAccount` | `apps/web/src/screens/settings/SettingsAccount.tsx` |
 | `legal` | `apps/web/src/screens/Legal.tsx` |
 | `errorPage` | `apps/web/src/errors/ErrorPage.tsx` |
 
@@ -31,8 +32,9 @@ Modules a screen renders that are not themselves a `screens` key:
 
 | Module | Rendered by |
 | --- | --- |
-| `apps/web/src/screens/PdsAccountLink.tsx` | `Me`, `SignedOut`, `VerifyEmail` |
-| `apps/web/src/screens/welcome/PrivacyNotice.tsx` | `Me`, `SettingsProfile` |
+| `apps/web/src/screens/PdsAccountLink.tsx` | `Me`, `SettingsAccount`, `SignedOut`, `VerifyEmail` |
+| `apps/web/src/screens/settings/SettingsShell.tsx` | `SettingsProfile`, `SettingsAccount` |
+| `apps/web/src/screens/welcome/PrivacyNotice.tsx` | `Me`, `SettingsProfile`, `SettingsAccount` |
 
 The rest of the package:
 
@@ -42,10 +44,10 @@ The rest of the package:
 | Shell | `apps/web/src/shell/AppShell.tsx` |
 | Head | `apps/web/src/shell/head.tsx` |
 | Theme form | `apps/web/src/shell/PrefsForms.tsx` |
-| Copy | `apps/web/src/shell/messages.ts`, `apps/web/src/screens/messages.ts`, `apps/web/src/screens/welcome/messages.ts` |
+| Copy | `apps/web/src/shell/messages.ts`, `apps/web/src/screens/messages.ts`, `apps/web/src/screens/welcome/messages.ts`, `apps/web/src/screens/settings/messages.ts` |
 | Island runtime | `apps/web/src/islands/runtime/` |
 | Legal parser | `apps/web/src/legal/` |
-| Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css` |
+| Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css`, `apps/web/src/screens/settings/SettingsShell.module.css`, `apps/web/src/screens/settings/SettingsAccount.module.css` |
 
 There is no `*.island.tsx` under `apps/web`. `render.tsx` and `apps/web/src/islands/runtime/bootstrap.ts` glob `apps/web/src/islands/*.island.tsx` and `shared/ui/islands/*.island.tsx`. The island components on the tree are under `shared/ui/islands/`.
 

@@ -51,7 +51,9 @@ Routes are `interfaces/http/routes.manifest.json`.
 | `GET /welcome`, `GET` and `POST /welcome/age`, `/welcome/terms`, `/welcome/chat`, `GET /welcome/blocked` | Onboarding. `interfaces/http/routes/welcome.ts`. Screens are `apps/web/src/screens/welcome/`. `ChatLater.tsx` shows the heading "Chat comes later". |
 | `GET /did`, `GET /me` | `303` to `/<DID>` of the session. `interfaces/http/routes/me.ts` |
 | `GET /:did` | The caller's own account page: handle, DID, a PDS link when the recorded issuer can be read, and sign out. Another DID is `http.not_found`. The file says this is not a public profile. |
-| `GET /settings/profile` | The heading `Profile`. `apps/web/src/screens/SettingsProfile.tsx` says the body is a placeholder. |
+| `GET /settings` | 303 to `/settings/profile`, keeping the query. `interfaces/http/routes/settings.ts` |
+| `GET /settings/profile` | Heading `Profile` inside the settings side list, and a card titled `Set up your profile`. The card body says the editor is not ready and the profile stays private. `apps/web/src/screens/settings/SettingsProfile.tsx` |
+| `GET /settings/account` | Heading `Account` inside the settings side list: handle, DID, a PDS link when the recorded issuer can be read, and sign out. An unchecked handle shows as unavailable. `apps/web/src/screens/settings/SettingsAccount.tsx` |
 | `POST /prefs/theme` | Theme form. `interfaces/http/routes/prefs.ts` |
 | `GET /health`, `GET /assets/:file`, `GET /oauth-client-metadata.json`, `GET /oauth/jwks.json`, `GET /.well-known/security.txt` | Listed in the manifest. `security.txt` is built in `interfaces/http/security-txt.ts`. |
 
