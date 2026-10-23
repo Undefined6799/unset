@@ -22,8 +22,10 @@ export const EMPTY_PROFILE: ProfileFields = {
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
+/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, the README editor). */
+export type ProfileEdit = Partial<ProfileFields>;
 export type ParsedProfile =
-  | { readonly ok: true; readonly fields: ProfileFields }
+  | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
 
 const GRAPHEMES: Record<Exclude<ProfileField, "links">, number> = {
@@ -41,6 +43,9 @@ function graphemes(text: string, stopAfter: number): number {
   for (const _ of segmenter.segment(text)) if (++count > stopAfter) break;
   return count;
 }
+
+/** A web address as people type it: "alice.dev" means https://alice.dev; one with any scheme is left as it is. */
+const withScheme = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
 
 /** A plain http or https URL with a host and no credentials, as the lexicon's website and link fields expect. */
 function isWebsite(text: string): boolean {
@@ -62,7 +67,8 @@ function checkLinks(raw: string): Checked {
   const links = raw
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line !== "");
+    .filter((line) => line !== "")
+    .map(withScheme);
   if (links.length > LIMITS.profile.linksMax) return { ok: false, code: "profile.too_long" };
   if (links.some((link) => bytes(link) > LIMITS.profile.linkUriBytes)) return { ok: false, code: "profile.too_long" };
   if (!links.every(isWebsite)) return { ok: false, code: "profile.url_invalid" };
@@ -73,7 +79,8 @@ function checkField(field: ProfileField, raw: unknown): Checked {
   if (raw === undefined || raw === null) return { ok: true, value: "" };
   if (typeof raw !== "string") return { ok: false, code: "profile.invalid" };
   if (field === "links") return checkLinks(raw);
-  const value = MULTILINE.has(field) ? raw.replaceAll("\r\n", "\n") : raw.trim();
+  const trimmed = MULTILINE.has(field) ? raw.replaceAll("\r\n", "\n") : raw.trim();
+  const value = field === "website" && trimmed !== "" ? withScheme(trimmed) : trimmed;
   if (!MULTILINE.has(field) && /[\r\n]/.test(value)) return { ok: false, code: "profile.invalid" };
   const tooLong =
     field === "website" ? bytes(value) > GRAPHEMES.website : graphemes(value, GRAPHEMES[field]) > GRAPHEMES[field];
@@ -86,11 +93,12 @@ function checkField(field: ProfileField, raw: unknown): Checked {
 export function parseProfileFields(input: Readonly<Record<string, unknown>>): ParsedProfile {
   const fields: Record<string, string> = {};
   for (const field of PROFILE_FIELDS) {
+    if (input[field] === undefined) continue;
     const checked = checkField(field, input[field]);
     if (!checked.ok) return { ok: false, field, code: checked.code };
     fields[field] = checked.value;
   }
-  return { ok: true, fields: fields as ProfileFields };
+  return { ok: true, fields };
 }
 
 /** The stored link objects as one URL a line; anything else reads as a bad value, so as no links. */
@@ -129,28 +137,32 @@ function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
 }
 
 /**
- * The record to write over `existing` (the stored value, or null for a first profile). The fields this page edits
- * are replaced, an emptied one removed; every other field (bio, avatar, listed, ...) is kept as it was, createdAt too.
+ * The record to write over `existing` (the stored value, or null for a first profile). The fields sent are replaced, an
+ * emptied one removed; every other field (one not sent, bio, avatar, listed, ...) is kept as it was, createdAt too.
  * The result passes the lexicon's strict validator or is refused, so a record another client broke is never written
  * back. The lexicon requires a display name, so a profile without one cannot be published.
  */
 export function toProfileRecord(
-  fields: ProfileFields,
+  fields: ProfileEdit,
   existing: unknown,
   now: string,
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
-  if (fields.displayName === "") return { ok: false, code: "profile.name_required" };
   const stored = storedObject(existing);
+  const sent = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
   const kept = Object.fromEntries(
-    Object.entries(stored).filter(([key]) => !(PROFILE_FIELDS as readonly string[]).includes(key) && key !== "$type"),
+    Object.entries(stored).filter(([key]) => !(sent as readonly string[]).includes(key) && key !== "$type"),
   );
   const set = Object.fromEntries(
-    PROFILE_FIELDS.filter((field) => fields[field] !== "").map((f) =>
-      f === "links" ? [f, fields.links.split("\n").map((uri) => ({ uri }))] : [f, fields[f]],
-    ),
+    sent
+      .filter((field) => fields[field] !== "")
+      .map((f) => (f === "links" ? [f, (fields.links ?? "").split("\n").map((uri) => ({ uri }))] : [f, fields[f]])),
   );
+  const merged: Record<string, unknown> = { ...kept, ...set };
+  if (typeof merged.displayName !== "string" || merged.displayName === "") {
+    return { ok: false, code: "profile.name_required" };
+  }
   const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
-  const record: ProfileRecord = { $type: "sh.unset.profile", ...kept, ...set, createdAt, updatedAt: now };
+  const record: ProfileRecord = { $type: "sh.unset.profile", ...merged, createdAt, updatedAt: now };
   if (!validateRecord("sh.unset.profile", record, "write").ok) return { ok: false, code: "profile.invalid" };
   return { ok: true, record };
 }

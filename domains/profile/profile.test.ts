@@ -24,8 +24,9 @@ describe("parseProfileFields", () => {
     expect(parsed).toEqual({ ok: true, fields: good });
   });
 
-  test("missing fields read as empty", () => {
-    expect(parseProfileFields({})).toEqual({ ok: true, fields: EMPTY_PROFILE });
+  test("only the fields sent are read, so a form that edits some leaves the rest alone", () => {
+    expect(parseProfileFields({})).toEqual({ ok: true, fields: {} });
+    expect(parseProfileFields({ headline: " Hi " })).toEqual({ ok: true, fields: { headline: "Hi" } });
   });
 
   test("a non-string field is refused", () => {
@@ -55,7 +56,7 @@ describe("parseProfileFields", () => {
     expect(parseProfileFields({ headline: "a\nb" })).toEqual({ ok: false, field: "headline", code: "profile.invalid" });
   });
 
-  test.each(["javascript:alert(1)", "ftp://x.example", "//x.example", "x.example", "https://user:pw@x.example"])(
+  test.each(["javascript:alert(1)", "ftp://x.example", "mailto:a@x.example", "https://user:pw@x.example"])(
     "website must be a plain http or https URL: %s",
     (website) => {
       expect(parseProfileFields({ website })).toEqual({ ok: false, field: "website", code: "profile.url_invalid" });
@@ -103,6 +104,21 @@ describe("toProfileRecord", () => {
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
 
+  test("a partial edit (Settings › Profile, or the README alone) keeps every field it does not send", () => {
+    const existing = { $type: "sh.unset.profile", ...goodStored, createdAt: "2026-10-01T00:00:00.000Z" };
+    const built = toProfileRecord({ readme: "new" }, existing, NOW);
+    expect(built).toEqual({
+      ok: true,
+      record: { ...existing, readme: "new", updatedAt: NOW },
+    });
+    const cleared = toProfileRecord({ headline: "" }, existing, NOW);
+    expect(cleared.ok && "headline" in cleared.record).toBe(false);
+  });
+
+  test("a partial edit cannot leave a profile without a display name", () => {
+    expect(toProfileRecord({ readme: "hi" }, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
+  });
+
   test("a profile without a display name cannot be published", () => {
     expect(toProfileRecord(EMPTY_PROFILE, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
   });
@@ -139,7 +155,14 @@ describe("readProfileRecord", () => {
 describe("links (Alex 2026-10-23 04:06Z: members add their own links)", () => {
   test("reads one URL a line, trimmed, blank lines dropped", () => {
     const parsed = parseProfileFields({ links: " https://a.example \r\n\n https://b.example/x \n" });
-    expect(parsed).toEqual({ ok: true, fields: { ...EMPTY_PROFILE, links: "https://a.example\nhttps://b.example/x" } });
+    expect(parsed).toEqual({ ok: true, fields: { links: "https://a.example\nhttps://b.example/x" } });
+  });
+
+  test("a web address typed without a scheme gains https://, for the website and each link", () => {
+    expect(parseProfileFields({ website: "alice.dev", links: "github.com/alicem" })).toEqual({
+      ok: true,
+      fields: { website: "https://alice.dev", links: "https://github.com/alicem" },
+    });
   });
 
   test("refuses a link that is not a plain http(s) URL", () => {

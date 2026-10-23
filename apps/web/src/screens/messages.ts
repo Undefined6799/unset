@@ -16,8 +16,6 @@ export const PROFILE = {
   copyLink: "Copy link",
   copied: "Copied",
   copyFailed: "Copy failed",
-  removeLink: "Remove {link}",
-  invalidLink: "Enter a web address, like github.com/you.",
   fields: {
     displayName: "display name",
     headline: "headline",

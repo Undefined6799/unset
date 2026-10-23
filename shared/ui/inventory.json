@@ -277,7 +277,7 @@
   },
   "Profile": {
     "sheet": "components/Profile/README.md",
-    "sheetSha256": "66667554afc7b00c2578ec0f0e5b04505e6e15d1414aaab4c7506f692f1c80b2",
+    "sheetSha256": "412787d25daf7d94d771a3644bab7b0cf9794b4dac022aa3214c826ec9d22b0f",
     "props": "ProfileViewProps",
     "variants": ["owner editing island"],
     "status": "built"
