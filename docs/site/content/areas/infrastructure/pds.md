@@ -53,7 +53,7 @@ Declared in `infrastructure/pds/package.json`:
 | Package export `.` | `infrastructure/pds/index.ts` |
 | Composition | `interfaces/http/compose.ts` |
 
-No `main.ts` and no Compose service for this package. The dev stack's `pds` service is Bluesky's image (`deployment/compose.dev.yaml`), not this folder.
+No `main.ts` and no Compose service for this package. The `pds` service in `deployment/compose.dev.yaml` is Bluesky's image, not this folder. `deployment/compose.dev.source.yaml` builds `pds` from `deployment/pds/Dockerfile`.
 
 ## Data
 

@@ -36,7 +36,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
-`deployment/images.lock.json` is what dev and prod run. Every entry has `verify: cosign-keyless`.
+`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`.
 
 | Name | `origin` | Image |
 | --- | --- | --- |
@@ -65,10 +65,10 @@ The digest strings live in the lock. This page does not copy them.
 
 cosign in those workflows and in `deployment/preflight/cosign.ts` is v3.1.3. The preflight expects the binary at `/usr/local/bin/cosign`. The sha256 values are `COSIGN.sha256` in that file and `COSIGN_SHA256` in the workflows.
 
-The dev stack does not build. `npm run dev:up` passes `--no-build`. See [compose](../compose/).
+`npm run dev:up` passes `--no-build` and runs the lock (`deployment/preflight/stack.ts`). `npm run dev:source:up` passes `--build`. `deployment/compose.dev.source.yaml` builds `postgres`, `migrate`, `pds`, `edge` and `web` from the checkout. `newt` stays the lock digest. See [compose](../compose/).
 
 ## Data
 
 The locks, `kinds.json`, `mirror.list.json` and `trusted_root.json` above. No schema, role or table.
 
-`deployment/images.lock.json` is the deploy lock. `deployment/images/bases.lock.json` is the base lock. A service under `--env dev` or `--env prod` runs the deploy lock, not a base tag.
+`deployment/images.lock.json` is the deploy lock. `deployment/images/bases.lock.json` is the base lock. A service under `--env prod`, or under `--env dev` without `--source`, runs the deploy lock, not a base tag. Under `--env dev --source`, a service with a build and no image is admitted when C26 passes; a service that names an image must still name a lock digest (`deployment/preflight/checks/images.ts`).

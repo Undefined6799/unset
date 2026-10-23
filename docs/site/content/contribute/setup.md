@@ -47,7 +47,9 @@ Every script in the root `package.json`:
 | `semgrep:fixtures` | `node scripts/lint/semgrep-fixtures.ts run` |
 | `dev:up` | `node deployment/preflight/stack.ts -- up --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `dev:down` | `node deployment/preflight/stack.ts -- down --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
+| `dev:source:up` | `node deployment/preflight/stack.ts -- up --env dev --source --compose deployment/compose.dev.source.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
+| `dev:source:down` | `node deployment/preflight/stack.ts -- down --env dev --source --compose deployment/compose.dev.source.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `local:up` | `node deployment/preflight/stack.ts -- up --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 | `local:down` | `node deployment/preflight/stack.ts -- down --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env` |
 
-`notes:index` is on [Docs rules](../docs-rules/). The four stack commands are the Compose wrappers. Their files are on [compose](../../areas/deployment/compose/). The interpolation env and the secret files sit outside this checkout.
+`notes:index` is on [Docs rules](../docs-rules/). The six stack commands are the Compose wrappers. Their files are on [compose](../../areas/deployment/compose/). The interpolation env and the secret files sit outside this checkout.
