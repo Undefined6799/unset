@@ -280,7 +280,7 @@ async function serveTest(): Promise<void> {
         path: FIXTURES.settingsProfile,
         title: "Profile",
         active: "settings" as const,
-        body: () => render.screens.settingsProfile({ privacyNotice: false }),
+        body: () => render.screens.settingsProfile({ privacyNotice: false, profile: null }),
       },
       {
         path: FIXTURES.settingsAccount,

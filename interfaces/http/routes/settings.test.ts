@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { Did, HandleVerdict } from "@unset/domains-identity";
+import type { ProfileFields } from "@unset/domains-profile";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -30,6 +31,8 @@ type World = {
   verdict?: HandleVerdict;
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
   issuer?: string | null | Error;
+  /** What the member's PDS holds for the profile; absent means no profile yet. */
+  profile?: ProfileFields | null | "unavailable";
 };
 
 function setup(world: World = {}) {
@@ -72,6 +75,7 @@ function setup(world: World = {}) {
         page,
       ),
     screens: web.screens,
+    loadProfile: async () => world.profile ?? null,
     issuerOf: async () => {
       const issuer = world.issuer === undefined ? "https://pds.unset.test" : world.issuer;
       if (issuer instanceof Error) throw issuer;
@@ -126,11 +130,57 @@ describe("GET /settings/profile", () => {
       { href: "/settings/profile", current: true },
       { href: "/settings/account", current: false },
     ]);
-    expect(html).toContain("Set up your profile");
+    // The side column of the profile page is edited here (Alex 04:29Z): a plain form to POST /profile, back here.
+    const form = elements(parse(html), "form").find((f) =>
+      f.attrs?.some((a) => a.name === "action" && a.value === "/profile"),
+    );
+    expect(form).toBeDefined();
     // P2.13e: the only script is the island boot and the drawer's theme-picker props.
     expect(
       elements(parse(html), "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value),
     ).toEqual(["application/json", "module"]);
+  });
+});
+
+describe("Settings › Profile form", () => {
+  const ALICE: ProfileFields = {
+    displayName: "Alice Moreau",
+    headline: "Designer.",
+    location: "Toronto, Ontario",
+    website: "https://alice.example",
+    readme: "## About me",
+    links: "https://github.com/alicem\nhttps://bsky.app/profile/alice",
+  };
+  /** The name and value of each field in the form that posts to /profile. */
+  const fieldsOf = (html: string) => {
+    const form = elements(parse(html), "form").find((f) =>
+      f.attrs?.some((a) => a.name === "action" && a.value === "/profile"),
+    );
+    if (form === undefined) throw new Error("no profile form");
+    return Object.fromEntries(
+      [...elements(form, "input"), ...elements(form, "textarea")].map((el) => {
+        const attr = (name: string) => el.attrs?.find((a) => a.name === name)?.value;
+        return [attr("name"), el.nodeName === "textarea" ? textContent(el) : attr("value")];
+      }),
+    );
+  };
+
+  test("settings_profile_form_is_prefilled_and_leaves_the_readme_out", async () => {
+    const html = await (await setup({ profile: ALICE }).get("/settings/profile")).text();
+    expect(fieldsOf(html)).toEqual({
+      next: "/settings/profile",
+      displayName: "Alice Moreau",
+      headline: "Designer.",
+      location: "Toronto, Ontario",
+      website: "https://alice.example",
+      links: ALICE.links,
+    });
+  });
+
+  test("settings_profile_unreadable_offers_no_form", async () => {
+    const html = await (await setup({ profile: "unavailable" }).get("/settings/profile")).text();
+    expect(html).toContain("We could not load your profile just now");
+    expect(elements(parse(html), "form").some((f) => f.attrs?.some((a) => a.value === "/profile"))).toBe(false);
   });
 });
 
