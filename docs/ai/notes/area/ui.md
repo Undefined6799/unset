@@ -64,4 +64,8 @@ checked: 2026-10-23
 the design sheet. Native Table, CodeBlock, CommandBlock and Kbd tags reuse base.css for identical
 properties; keep the base sheet before component layers, as Input already requires.
 
+**Header action as a dialog button (P2.05p).** A `NavLink` with `dialog` renders as a `type="button"` with
+`commandfor` and `command="show-modal"` (invoker commands; React 19.3 passes the unknown attributes through), styled
+by Button's module like the link; the island schema accepts only lowercase hyphenated ids.
+
 **Links.** ADR 0016 (design source), [[web]].

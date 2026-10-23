@@ -31,7 +31,7 @@ export const PROFILE = {
     headline: "Add a headline",
     location: "Add a place",
     website: "Add a website",
-    readme: "Write your README: headings, lists, links, quotes and code. ::: starts a column, --- a new row.",
+    readme: "Write your README: double-click here or use the pencil.",
     links: "Add a link",
   },
   edit: "Edit {field}",
@@ -52,4 +52,11 @@ export const PROFILE = {
     unavailable: "Your sign-in server is not answering, so nothing was saved. Try again.",
     other: "Your profile could not be saved. Try again.",
   },
+} as const;
+
+export const SIGNED_OUT = {
+  title: "You are signed out of unset",
+  ask: "Also sign out of your atproto account?",
+  otherApps: "Apps you allowed stay signed in until you remove them there.",
+  noThanks: "No thanks",
 } as const;

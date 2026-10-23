@@ -7,9 +7,11 @@
 // and returning to the page's path. Only the path goes back, never the query, so no request text is echoed into it;
 // P2.13d: on the two sign-in pages a rebuilt, re-checked next and handle go back too (prefs/return-to.ts).
 // A feed page asks for `feed`, which drops the footer.
+// P2.05p: with our PDS's host, the default shell's Sign in opens the sign-in box over the page, returning to the
+// page's path (re-checked by safeReturnPath, never the query; none for home, which keeps sign-in's own default).
 import type { ShellOptions } from "@unset/apps-web";
 import { ERROR_MESSAGES, readErrorParam } from "@unset/shared-errors";
-import type { ErrorPage, RouteGroup } from "@unset/shared-http";
+import { type ErrorPage, type RouteGroup, safeReturnPath } from "@unset/shared-http";
 import type { IslandDefinition } from "@unset/shared-islands";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
@@ -28,6 +30,8 @@ export type PageDeps = Readonly<{
   log: Logger;
   /** The island registry; tests pass their own, production uses every `*.island.tsx`. */
   islands?: ReadonlyMap<string, IslandDefinition>;
+  /** Our PDS's host: the default shell's Sign in opens in place when it is set (compose.ts). */
+  pdsHost?: string;
 }>;
 
 /** What a route asks for. `islands: "off"` is written in the route itself, never chosen from the request. */
@@ -61,11 +65,16 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
     page.group === "app"
       ? { theme: prefs.htmlAttrs["data-theme"] ?? ("system" as const), returnTo: pageReturnTo(url) }
       : undefined;
+  const signIn =
+    deps.pdsHost === undefined || page.shell?.navigation !== undefined
+      ? undefined
+      : { pdsHost: deps.pdsHost, next: url.pathname === "/" ? null : safeReturnPath(url.pathname) };
   const shell = page.shell && {
     error: readErrorParam(url.searchParams),
     noindex,
     ...(page.shell.navigation === undefined ? {} : { navigation: page.shell.navigation }),
     ...(page.shell.feed === undefined ? {} : { feed: page.shell.feed }),
+    ...(signIn === undefined ? {} : { signIn }),
     ...(footerPrefs === undefined ? {} : { prefs: footerPrefs }),
   };
   const { html, tooLarge } = deps.render({

@@ -161,6 +161,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     assetsOrigin: new URL(cfg.ASSETS_BASE === "" ? cfg.PUBLIC_ORIGIN : cfg.ASSETS_BASE).origin,
     env: cfg.UNSET_ENV,
     log,
+    pdsHost: cfg.PDS_HOSTNAME,
   };
   const oauth = await composeOAuth(cfg, log);
   const page: Services["page"] = (input) => pageResponse(deps, input);
