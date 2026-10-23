@@ -24,12 +24,31 @@
     margin: 0;
   }
 
+  /* A link on the page, a button in the popover (P2.05p): both read as the same text control. */
   .close {
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--color-ink);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   .body {
     margin: var(--space-3) 0 var(--space-6);
     color: var(--color-ink-muted);
+  }
+}
+
+/* P2.05p: the same box opened over the page as a native popover (the UA sheet centres it with `inset: 0` and
+   `margin: auto`), leaving a gutter on a phone, over the scrim the Modal uses. */
+@layer screens {
+  .popover {
+    width: calc(100% - 2 * var(--space-4));
+  }
+
+  .popover::backdrop {
+    background-color: var(--color-scrim);
   }
 }
