@@ -73,7 +73,8 @@ failed island stays as its server markup and only logs to the console.
 
 **Rules worth knowing.**
 - Islands may import `shared/ui`, `shared/islands` and `react/jsx-runtime` (island-import-boundary, P1.23q, P1.25o).
-- Island budgets: 15 KB each and 75 KB in total, gzipped (P1.23q).
+- Island budgets: 15 KB each and 80 KB in total, gzipped (P1.23q; Alex raised the total from 75 KB on 2026-10-23,
+  when the theme picker took it 1,727 bytes over, almost all of the total being React itself).
 - Every `*.island.tsx` under `src/islands/` or `shared/ui/islands/` must keep its own lazy chunk: a dynamic entry
   that no entry reaches through static `imports`. `scripts/budgets/island.ts` refuses otherwise before the size gate,
   so an island inlined into boot can no longer drop out of the count unseen (P1.25l).
