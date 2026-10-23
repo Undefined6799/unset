@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # http
 
@@ -115,7 +115,11 @@ repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:2
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
 birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
-`GET /settings/profile` is a placeholder page so the gate has an app route to refuse.
+**Settings (P2.13c).** `routes/settings.ts`: GET `/settings` answers 303 to `/settings/profile`, keeping only the
+query, without opening the gate. `/settings/profile` (the "Set up your profile" card until P2.21) and
+`/settings/account` (handle, DID, the sign-in server link, the sign-out form) open the app gate, then render inside
+the settings side list. Account takes the same deps as `meRoutes`; compose builds them once as `accountDeps`, and both
+read the recorded issuer through `routes/account-issuer.ts`.
 
 **The signed-in account (P2.13).** `routes/me.ts`: GET `/did` and legacy `/me` open the existing app gate, then 303
 to the session's `/<DID>` (private/no-store, Vary Cookie). GET `/:did` validates with identity's `parseDid`, opens
