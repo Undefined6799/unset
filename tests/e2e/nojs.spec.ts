@@ -38,17 +38,21 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
-  // P2.05p: the Header's Sign in opens the box over the page with no script, and Close and Escape each leave the
-  // visitor on the page they were on. The box fills the viewport with its scrim, so a click beside it reaches no
-  // link of the page underneath (a popover's ::backdrop does not take pointer events).
+  // P2.05p: the Header's Sign in opens the box over the page as a modal dialog with no script (invoker commands).
+  // Close and Escape each leave the visitor on the page they were on; a click on the scrim reaches nothing behind it,
+  // and Tab never reaches the page behind, which a modal dialog makes inert.
   test("sign_in_opens_over_the_page", async ({ page }) => {
     await page.goto("/legal/terms");
     const box = page.getByRole("dialog", { name: "Sign in" });
-    const open = page.locator('header button[popovertarget="sign-in"]:visible');
+    const open = page.locator('header button[commandfor="sign-in"]:visible');
     await expect(box).toBeHidden();
     await open.click();
     await expect(box).toBeVisible();
     await expect(box.locator('input[name="next"]')).toHaveValue("/legal/terms");
+    for (let i = 0; i < 4; i += 1) {
+      await page.keyboard.press("Tab");
+      await expect(page.locator("header :focus, main :focus, footer :focus")).toHaveCount(0);
+    }
     await box.getByRole("button", { name: "Close" }).click();
     await expect(box).toBeHidden();
     await open.click();
