@@ -27,11 +27,10 @@ export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
 
-const GRAPHEMES: Record<Exclude<ProfileField, "links">, number> = {
+const GRAPHEMES: Record<Exclude<ProfileField, "links" | "website">, number> = {
   displayName: LIMITS.profile.displayName,
   headline: LIMITS.profile.headline,
   location: LIMITS.profile.location,
-  website: LIMITS.profile.websiteBytes,
 };
 const MULTILINE: ReadonlySet<ProfileField> = new Set(["links"]);
 
@@ -81,7 +80,9 @@ function checkField(field: ProfileField, raw: unknown): Checked {
   const value = field === "website" && trimmed !== "" ? withScheme(trimmed) : trimmed;
   if (!MULTILINE.has(field) && /[\r\n]/.test(value)) return { ok: false, code: "profile.invalid" };
   const tooLong =
-    field === "website" ? bytes(value) > GRAPHEMES.website : graphemes(value, GRAPHEMES[field]) > GRAPHEMES[field];
+    field === "website"
+      ? bytes(value) > LIMITS.profile.websiteBytes
+      : graphemes(value, GRAPHEMES[field]) > GRAPHEMES[field];
   if (tooLong) return { ok: false, code: "profile.too_long" };
   if (field === "website" && value !== "" && !isWebsite(value)) return { ok: false, code: "profile.url_invalid" };
   return { ok: true, value };

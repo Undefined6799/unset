@@ -41,13 +41,14 @@ export const ERROR_CODES = {
   "login.session_ended": { status: 401, public: true },
   // P2.08b: the sign-out's own delete failed; the cookie stays, so trying again finds the session.
   "logout.failed": { status: 503, public: true },
-  // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.
+  // P2.20p, the profile save. Shown from a redirect (`error=`).
   "profile.invalid": { status: 400, public: true },
   "profile.too_long": { status: 400, public: true },
   "profile.url_invalid": { status: 400, public: true },
   "profile.name_required": { status: 400, public: true },
   "profile.conflict": { status: 409, public: true },
   "profile.pds_unavailable": { status: 503, public: true },
+  // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.
   "welcome.date_invalid": { status: 400, public: true },
   "welcome.terms_required": { status: 400, public: true },
   "welcome.country_required": { status: 400, public: true },
