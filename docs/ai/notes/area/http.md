@@ -161,4 +161,7 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 
 **Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
 
+**In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
+sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`.
+
 **Links.** [[web]], [[config]], [[errors]].

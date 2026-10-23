@@ -14,6 +14,7 @@ export const SHELL = {
   closeMenu: "Close menu",
   homeLabel: "unset.sh home",
   signOut: "Sign out",
+  close: "Close",
   legalColumn: "Legal",
   terms: "Terms",
   privacy: "Privacy",

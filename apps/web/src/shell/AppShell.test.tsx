@@ -216,6 +216,39 @@ describe("app shell", () => {
     expect(menu).not.toContain(" open");
   });
 
+  test("sign_in_opens_in_place_with_no_script", () => {
+    // P2.05p: with the PDS named, the Header's Sign in opens the sign-in box over the page as a native popover, so
+    // the visitor never leaves the page and Close, Escape or a click outside leave them where they were.
+    const html = render({
+      shell: { error: null, noindex: false, signIn: { pdsHost: "pds.test", next: "/legal/terms" } },
+    });
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const box = doc.querySelector("#sign-in");
+    expect(box?.getAttribute("popover")).toBe("auto");
+    expect(box?.getAttribute("role")).toBe("dialog");
+    expect(doc.getElementById(box?.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("Sign in");
+    expect(box?.textContent).toContain("pds.test");
+    const form = box?.querySelector("form");
+    expect(form?.getAttribute("method")).toBe("post");
+    expect(form?.getAttribute("action")).toBe("/login");
+    expect(form?.querySelector('input[name="next"]')?.getAttribute("value")).toBe("/legal/terms");
+    const close = [...(box?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Close");
+    expect(close?.getAttribute("popovertarget")).toBe("sign-in");
+    expect(close?.getAttribute("popovertargetaction")).toBe("hide");
+    const openers = [...doc.querySelectorAll('header button[popovertarget="sign-in"]')];
+    expect(openers.length).toBeGreaterThan(0);
+    expect(openers.every((b) => b.textContent === "Sign in")).toBe(true);
+    expect(doc.querySelector('header a[href="/login"]')).toBeNull();
+    expect(html).not.toContain("<script");
+    expect(doc.querySelector("main #sign-in")).toBeNull();
+  });
+
+  test("sign_in_stays_a_link_without_the_pds", () => {
+    const doc = new DOMParser().parseFromString(render(), "text/html");
+    expect(doc.querySelector("#sign-in")).toBeNull();
+    expect(doc.querySelector('header a[href="/login"]')).not.toBeNull();
+  });
+
   test("shell_footer_links", () => {
     const footer = render().split("<footer")[1] ?? "";
     for (const href of ["/", "/login", "/legal/terms", "/legal/privacy", "/legal/domains"]) {

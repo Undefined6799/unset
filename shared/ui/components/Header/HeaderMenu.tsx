@@ -3,14 +3,16 @@
 // focus back on the toggle. Its props are only labels and links, and the schema re-checks every link with safeHref,
 // so a link that is not one never reaches the browser's markup. The action is a link styled as the kit's Button,
 // written out here because Button's module also carries the Icon drawings, which would weigh on every page's island
-// budget; header_action_matches_button keeps the two the same.
+// budget; header_action_matches_button keeps the two the same. P2.05p: an action that names a popover is a button
+// that opens that popover over the page with no script (the native popover, as the Navigation drawer uses); the
+// page draws the popover, and the action's href is then only the fallback the page offers elsewhere.
 import type { KeyboardEvent } from "react";
 import { type HrefScheme, type SafeHref, safeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import buttonStyles from "../Button/Button.module.css";
 import styles from "./Header.module.css";
 
-export type NavLink = { label: string; href: SafeHref };
+export type NavLink = { label: string; href: SafeHref; popover?: string };
 export type NavItem = NavLink & { current?: boolean };
 
 export type HeaderMenuProps = {
@@ -22,9 +24,17 @@ export type HeaderMenuProps = {
 
 const SCHEMES: readonly HrefScheme[] = ["path", "https:", "http:", "mailto:"];
 
+/** A popover id the page wrote: lowercase words joined by hyphens, nothing a selector or markup could read twice. */
+const POPOVER_ID = /^[a-z]+(?:-[a-z]+)*$/;
+
 const isLink = (value: unknown): value is NavLink => {
   const link = value as Partial<NavLink> | null;
-  return typeof link?.label === "string" && typeof link.href === "string" && safeHref(link.href, SCHEMES) !== null;
+  return (
+    typeof link?.label === "string" &&
+    typeof link.href === "string" &&
+    safeHref(link.href, SCHEMES) !== null &&
+    (link.popover === undefined || (typeof link.popover === "string" && POPOVER_ID.test(link.popover)))
+  );
 };
 
 export const isHeaderMenuProps = (value: unknown): value is HeaderMenuProps => {
@@ -50,11 +60,16 @@ export function NavLinks({ nav, action }: { nav: readonly NavItem[]; action: Nav
           {item.label}
         </a>
       ))}
-      {action === undefined ? null : (
+      {action === undefined ? null : action.popover === undefined ? (
         <a className={buttonStyles.root} href={action.href}>
           <span className={buttonStyles.fill} aria-hidden="true" />
           {action.label}
         </a>
+      ) : (
+        <button className={buttonStyles.root} type="button" popoverTarget={action.popover}>
+          <span className={buttonStyles.fill} aria-hidden="true" />
+          {action.label}
+        </button>
       )}
     </nav>
   );

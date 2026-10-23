@@ -1,0 +1,54 @@
+/* The sign-in box (P2.05m): the kit Modal's look (Modal.module.css: at most 440px, space-6 padding, a 1px `ink`
+   border, `radius-sm`, on `ground`). `.box` is for the container the caller draws it in. */
+@layer screens {
+  .box {
+    --surface: var(--color-ground);
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 440px;
+    padding: var(--space-6);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .title {
+    margin: 0;
+  }
+
+  /* A link on the page, a button in the popover (P2.05p): both read as the same text control. */
+  .close {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-ink);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .body {
+    margin: var(--space-3) 0 var(--space-6);
+    color: var(--color-ink-muted);
+  }
+}
+
+/* P2.05p: the same box opened over the page as a native popover (the UA sheet centres it with `inset: 0` and
+   `margin: auto`), leaving a gutter on a phone, over the scrim the Modal uses. */
+@layer screens {
+  .popover {
+    width: calc(100% - 2 * var(--space-4));
+  }
+
+  .popover::backdrop {
+    background-color: var(--color-scrim);
+  }
+}

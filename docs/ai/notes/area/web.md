@@ -86,4 +86,9 @@ failed island stays as its server markup and only logs to the console.
   a rule the kit already provides. The cap is 52 KiB (53,248 bytes) unminified and 12 KiB gzip (#965).
   Measure both builds with `scripts/budgets/css.ts`; those limits live in a check path (SE-6).
 
+**Sign in opens in place (P2.05p).** With `PageDeps.pdsHost` set, the default shell's Header Sign in is a button
+that opens `#sign-in`, a native `popover="auto"` holding the same `screens/SignInBox` the /login page draws. No
+script: Escape, a click outside and its Close button hide it. `next` is the page's path only. The footer's Sign in
+and protected pages' redirects still use /login.
+
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].
