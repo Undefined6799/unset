@@ -19,6 +19,10 @@ const SDK_ADAPTERS = [
   { sdk: "age-encryption", adapter: "infrastructure/seal/" },
   { sdk: "@atproto/lex[^/]*", adapter: "shared/lexicons/" },
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
+  // The owner's README editor (ADR 0037 point 5): BlockNote and the ProseMirror it runs on, in the browser only.
+  { sdk: "@blocknote/[^/]+", adapter: "apps/web/src/editor/" },
+  { sdk: "prosemirror-[^/]+", adapter: "apps/web/src/editor/" },
+  { sdk: "@tiptap/[^/]+", adapter: "apps/web/src/editor/" },
 ];
 
 /** Node built-ins a domain may not import: I/O arrives as a passed-in dependency (README rule 1). */
