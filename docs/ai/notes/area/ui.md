@@ -21,7 +21,7 @@ checked: 2026-10-23
 - The build code for the generated files (tokens, contrast, font metrics, icons) lives in [[ui-build]]; the Node
   entries that run it are in `scripts/ui/`. `tokens/font-metrics.ts` owns the shape of `font-metrics.json`.
 - `src/tokens.css`, `src/base.css`, `src/layers.css`: generated tokens and base styles.
-- `icons/`: the 36 imported plus two hash-registered Iconoir 7.12.1 icons, copied byte for byte, plus the generated `icons.json` allowlist and one
+- `icons/`: the 36 imported plus five hash-registered Iconoir 7.12.1 icons (P2.24f: devices, apps; P2.13e: bulb-off, bulb-on, tv), copied byte for byte, plus the generated `icons.json` allowlist and one
   generated `drawings/<name>.generated.ts` per icon. `components/Icon/` renders them: pages use `<Icon name>`;
   islands use `IconDrawing` with the one drawing module they need, because `icons.json` is about 5 KB gzip and would
   not fit the island budget. No icon npm package and nothing fetched at runtime (decision 33).

@@ -56,7 +56,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(38);
+  expect(Object.keys(json.icons)).toHaveLength(41);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -320,12 +320,79 @@ const REGISTRATION = {
         ],
       ],
     },
+    "bulb-off": {
+      iconoirName: "light-bulb",
+      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb.svg",
+      sourceSha256: "c2a5d2a7de5a05a81b169f5701f60fef924d05067c4fcd41b18aa78f718621f8",
+      drawings: [
+        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M9.00082 15C9.00098 13 8.50098 12.5 7.50082 11.5C6.50067 10.5 6.02422 9.48689 6.00082 8C5.95284 4.95029 8.00067 3 12.0008 3C16.001 3 18.0488 4.95029 18.0008 8C17.9774 9.48689 17.5007 10.5 16.5008 11.5C15.501 12.5 15.001 13 15.0008 15",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    "bulb-on": {
+      iconoirName: "light-bulb-on",
+      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb-on.svg",
+      sourceSha256: "d1f1ec747dffe741096cb553e6ee82d1df24573547a72201f9c1ffe84832743f",
+      drawings: [
+        ["path", { d: "M21 2L20 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 2L4 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M21 16L20 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 16L4 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    tv: {
+      iconoirName: "modern-tv",
+      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/modern-tv.svg",
+      sourceSha256: "0c71cfd7f5c25858f2876a85de1bef57f595ad69fa57011f40a87ee86dee6ca5",
+      drawings: [
+        ["path", { d: "M7 21L17 21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+      ],
+    },
   },
 };
 const ADDITIONS: Record<string, string> = {
   devices:
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M2 21L17 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M21 21L22 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
   apps: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z" stroke="currentColor" stroke-width="1.5"/>\n<path d="M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  "bulb-off":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9 18H15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 21H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9.00082 15C9.00098 13 8.50098 12.5 7.50082 11.5C6.50067 10.5 6.02422 9.48689 6.00082 8C5.95284 4.95029 8.00067 3 12.0008 3C16.001 3 18.0488 4.95029 18.0008 8C17.9774 9.48689 17.5007 10.5 16.5008 11.5C15.501 12.5 15.001 13 15.0008 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "bulb-on":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M21 2L20 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 2L4 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M21 16L20 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 16L4 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 18H15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 21H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  tv: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M7 21L17 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -349,7 +416,7 @@ function baseFiles(): Map<string, string> {
   files.set("inventory.json", JSON.stringify(inventory));
   const json = JSON.parse(files.get("icons/icons.json") as string);
   delete json.extensionProvenance;
-  for (const alias of ["devices", "apps"]) {
+  for (const alias of Object.keys(ADDITIONS)) {
     files.delete(`icons/svg/${alias}.svg.txt`);
     files.delete(`icons/drawings/${alias}.generated.ts`);
     for (const field of ["icons", "iconoir", "drawings"]) delete json[field][alias];
@@ -426,21 +493,31 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_38_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(38);
+  expect(Object.keys(json.icons)).toHaveLength(41);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
     apps: "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd",
+    "bulb-off": REGISTRATION.icons["bulb-off"].sourceSha256,
+    "bulb-on": REGISTRATION.icons["bulb-on"].sourceSha256,
+    tv: REGISTRATION.icons.tv.sourceSha256,
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
-  expect(json.iconoir).toEqual({ ...base.iconoir, devices: "computer", apps: "view-grid" });
+  expect(json.iconoir).toEqual({
+    ...base.iconoir,
+    devices: "computer",
+    apps: "view-grid",
+    "bulb-off": "light-bulb",
+    "bulb-on": "light-bulb-on",
+    tv: "modern-tv",
+  });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));
   expect(json.extensionProvenance).toEqual({

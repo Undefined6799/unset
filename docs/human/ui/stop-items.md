@@ -23,3 +23,8 @@ No stop item is open.
 - **Search** · needed by P1.24u · sheet draft: https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt · approved by Alex 2026-10-21 22:18Z, sheet v81
 
 Card's item is the opaque surface: `surface-card` is solid since v40, so there is no solid variant.
+
+The theme picker's three icons (P2.13e; Figma 151:939) were added to the Icon list on Alex's word, not as new
+pieces: `bulb-off` (Iconoir `light-bulb`) and `bulb-on` (`light-bulb-on`), approved by Alex 2026-10-23 01:22Z ("do
+the light-bulb and lightbulb-on"), and `tv` (`modern-tv`), approved with the pick of option A, the three-icon picker,
+2026-10-23 01:37Z ("yes A is pretty good").
