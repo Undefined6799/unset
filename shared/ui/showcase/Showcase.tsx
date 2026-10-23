@@ -25,6 +25,7 @@ import { Modal } from "../components/Modal/Modal.tsx";
 import { Navigation } from "../components/Navigation/Navigation.tsx";
 import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
+import { type ProfileLabels, ProfileView } from "../components/Profile/ProfileView.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
 import { Search } from "../components/Search/Search.tsx";
@@ -47,6 +48,34 @@ const languages = [
 ];
 
 /** One sample per built component, keyed by its inventory name. */
+/** The profile's copy for the showcase; the app passes its own (apps/web screens/messages.ts). */
+const PROFILE_LABELS: ProfileLabels = {
+  handleUnavailable: "We could not check the handle just now.",
+  fields: { displayName: "name", headline: "headline", location: "place", website: "website", readme: "README" },
+  add: {
+    displayName: "Add your name",
+    headline: "Add a headline",
+    location: "Add a place",
+    website: "Add a website",
+    readme: "Write your README.",
+  },
+  edit: "Edit {field}",
+  done: "Save",
+  cancel: "Cancel",
+  draft: "Draft",
+  draftBody: "Your changes are not published yet.",
+  revert: "Revert to the published profile",
+  undo: "Undo",
+  redo: "Redo",
+  undoKeys: "Ctrl+Z",
+  redoKeys: "Ctrl+Shift+Z",
+  viewAs: "View as a visitor",
+  publish: "Save",
+  saving: "Saving…",
+  saved: "Saved.",
+  failed: { conflict: "Changed elsewhere.", invalid: "Not saved.", unavailable: "Not answering.", other: "Not saved." },
+};
+
 export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   Button: (
     <>
@@ -166,6 +195,20 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
       source={
         "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)\n---\n> Quiet software."
       }
+    />
+  ),
+  Profile: (
+    <ProfileView
+      handle="alex.example"
+      handleUnavailable={false}
+      fields={{
+        displayName: "Alex",
+        headline: "Builds quiet software.",
+        location: "Ontario",
+        website: "https://example.com",
+        readme: "## About me\nI make **small** tools.\n:::\n## My projects\n- [Tidy](https://example.com/tidy)",
+      }}
+      labels={PROFILE_LABELS}
     />
   ),
   Pagination: (

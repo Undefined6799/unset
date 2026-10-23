@@ -274,5 +274,12 @@
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
     "status": "built"
+  },
+  "Profile": {
+    "sheet": "components/Profile/README.md",
+    "sheetSha256": "880ad35393da74ac00586eac07495f0ed95dda5809eb871ea1e4db6869eb6297",
+    "props": "ProfileViewProps",
+    "variants": ["owner editing island"],
+    "status": "built"
   }
 }

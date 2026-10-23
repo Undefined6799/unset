@@ -154,24 +154,27 @@ describe("profile screen", () => {
     expect(page).toContain("Toronto, Ontario");
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://alice.example/", "https://alice.example/tidy"]);
     expect(page).toContain(">About me</h2>");
-    // No sign-out, no DID and no script here: the account details are on Settings › Account (P2.13c).
+    // No sign-out and no DID here: the account details are on Settings › Account (P2.13c).
     expect(tags(page, "form")).toEqual([]);
     expect(page).not.toContain("<code>");
-    expect(page).not.toContain("<script");
+    // The owner's editing island hydrates over the same markup; its server render has no pencils or draft box.
+    expect(page).toContain('data-island="profile-editor"');
+    const markup = page.replace(/<script[^>]*>[^<]*<\/script>/g, "");
+    expect(markup).not.toContain("Edit name");
+    expect(markup).not.toContain("Draft");
   });
 
-  test("profile_without_one_published_offers_to_set_it_up", () => {
+  test("profile_without_one_published_is_the_editor_on_an_empty_page", () => {
     const page = html(screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile: null }));
     expect(page).toContain(">alice.pds.example</h1>");
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile"]);
-    expect(page).toContain("Set up your profile");
+    expect(page).toContain('data-island="profile-editor"');
   });
 
   test("profile_never_links_an_unsafe_website", () => {
     const profile = { ...ALICE, website: "javascript:alert(1)", readme: "" };
     const page = html(screens.profile({ handle: "alice.pds.example", handleUnavailable: false, profile }));
-    expect(page).not.toContain("javascript:");
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile"]);
+    expect(page).not.toContain('href="javascript:');
+    expect(tags(page, "a").map((a) => a.href)).toEqual([]);
   });
 
   test("profile_says_when_it_could_not_be_loaded", () => {

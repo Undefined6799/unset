@@ -118,8 +118,9 @@ describe("GET /:did", () => {
     expect(account).toBeDefined();
     const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
     expect(initials).toContain("A");
-    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    // P2.13e: the only script is the island boot, and the props of the profile editor and the drawer's theme picker.
     expect(elements(document, "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value)).toEqual([
+      "application/json",
       "application/json",
       "module",
     ]);
@@ -139,7 +140,6 @@ describe("GET /:did", () => {
     expect(website?.attrs?.find((a) => a.name === "rel")?.value).toBe("nofollow ugc noopener noreferrer me");
     expect(elements(main, "h2").map(textContent)).toEqual(["About me", "My projects"]);
     expect(elements(main, "strong").map(textContent)).toEqual(["small"]);
-    expect(elements(main, "a", { href: "/settings/profile" })).toEqual([]);
   });
 
   test("me_with_an_unavailable_profile_still_renders", async () => {
@@ -151,12 +151,11 @@ describe("GET /:did", () => {
   });
 
   test("me.renders_owner_data", async () => {
-    // P2.13c: the initials avatar, the neutral state and the call to action, until P2.18/P2.22 bring the real ones.
+    // With no profile yet the page is the owner's editor over an empty profile: the handle as the name, initials.
     const html = await (await setup().get()).text();
     const main = elements(parse(html), "main")[0];
-    expect(elements(main, "a", { href: "/settings/profile" }).map(textContent)).toEqual(["Edit profile"]);
-    expect(textContent(main)).toContain("Set up your profile");
-    expect(textContent(main)).toContain("Not set up yet");
+    expect(elements(main, "h1").map(textContent)).toEqual(["alice.pds.unset.test"]);
+    expect(elements(main, "div", { "data-island": "profile-editor" })).toHaveLength(1);
     expect(elements(main, "span", { "aria-hidden": "true" }).map(textContent)).toContain("A");
     expect(html).not.toContain("getBlob");
     // The account details moved to Settings › Account (P2.13c), so the PDS host is not linked here.
@@ -179,7 +178,8 @@ describe("GET /:did", () => {
   test("me_handle_invalid", async () => {
     const html = await (await setup({ verdict: { status: "invalid", checkedAt: 0 } }).get()).text();
     expect(html).toContain("handle.invalid");
-    expect(html).not.toContain("could not check");
+    // The copy travels in the editing island's props; the page itself does not say it.
+    expect(html.replace(/<script[^>]*>[^<]*<\/script>/g, "")).not.toContain("could not check");
     const account = elements(elements(parse(html), "nav")[0], "a", { href: ACCOUNT_PATH, "aria-current": "page" })[0];
     expect(account).toBeDefined();
     const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
