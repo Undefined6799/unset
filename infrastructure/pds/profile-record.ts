@@ -62,7 +62,9 @@ export type SaveOutcome<C extends string> =
  * Reads the stored record, lets `build` make the new one from it, and writes it back with `swapRecord` set to the CID
  * it read, so a change made in between is a conflict rather than lost (DA-4: compare-and-swap at the PDS;
  * https://atproto.com/specs/repository and com.atproto.repo.putRecord `swapRecord`, InvalidSwapError in @atproto/api
- * 0.27.0). A first profile has no CID to swap on and is written plainly. The write is not retried (not idempotent).
+ * 0.27.0). A first profile swaps on null, which the PDS reads as "must not exist yet" (putRecord's swapRecord is
+ * nullable: @atproto/lex-client dist/lexicons/com/atproto/repo/putRecord.defs.js:15), so two first saves cannot
+ * overwrite each other. The write is not retried (not idempotent).
  */
 export async function saveProfileRecord<C extends string>(
   pdsCall: PdsCall,
@@ -85,7 +87,7 @@ export async function saveProfileRecord<C extends string>(
           collection: PROFILE_COLLECTION,
           rkey: PROFILE_RKEY,
           record: { ...built.record },
-          ...(swap === null ? {} : { swapRecord: swap }),
+          swapRecord: swap,
         });
         return { kind: "saved" };
       } catch (error: unknown) {

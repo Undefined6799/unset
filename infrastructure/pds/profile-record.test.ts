@@ -105,7 +105,7 @@ test("an update swaps on the stored record's CID", async () => {
   });
 });
 
-test("a first profile is written with no swap", async () => {
+test("a first profile is written only if none exists yet", async () => {
   const { result, calls, seen } = save((url) =>
     url.pathname.endsWith("getRecord")
       ? Response.json({ error: "RecordNotFound", message: "none" }, { status: 400 })
@@ -113,7 +113,8 @@ test("a first profile is written with no swap", async () => {
   );
   expect(await result).toEqual({ kind: "ok", value: { kind: "saved" } });
   expect(seen).toEqual([null]);
-  expect(calls[1]?.body).not.toHaveProperty("swapRecord");
+  // A null swap tells the PDS the record must not exist, so a profile another save created meanwhile is a conflict.
+  expect(calls[1]?.body).toHaveProperty("swapRecord", null);
 });
 
 test("a record changed since it was read is a conflict, not a save", async () => {
