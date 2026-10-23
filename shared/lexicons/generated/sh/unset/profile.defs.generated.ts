@@ -138,7 +138,7 @@ export const $safeParse = /*#__PURE__*/ main.safeParse.bind(main);
 export const $validate = /*#__PURE__*/ main.validate.bind(main);
 export const $safeValidate = /*#__PURE__*/ main.safeValidate.bind(main);
 
-/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. */
+/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total. */
 type Readme = {
   $type?: "sh.unset.profile#readme";
 
@@ -158,7 +158,7 @@ type Readme = {
 
 export type { Readme };
 
-/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. */
+/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total. */
 const readme = /*#__PURE__*/ l.typedObject<Readme>(
   $nsid,
   "readme",
@@ -220,7 +220,7 @@ type LinkRun = {
   $type?: "sh.unset.profile#linkRun";
 
   /**
-   * An http or https URL.
+   * An http or https URL. A schema cannot state the scheme; a reader keeps the text and drops the link for any other.
    */
   uri: l.UriString;
   content: TextRun[];
