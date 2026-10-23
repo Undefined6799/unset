@@ -29,7 +29,7 @@ The same README calls the repository a rebuild of the 0x40 prototype around a sm
 | --- | --- |
 | Node | `.nvmrc` is `26.12.0`. Root `package.json` `engines.node` is `>=26.0.0`. |
 | Server | Hono `4.13.13` and `@hono/node-server` `2.1.5` in `shared/http/package.json`. `shared/http/server.ts` imports `Hono`. |
-| Screens | React `19.3.0` in `apps/web/package.json`. Package `@unset/apps-web`. [web](../../areas/apps/web/) |
+| Screens | React `19.3.1` in `apps/web/package.json`. Package `@unset/apps-web`. [web](../../areas/apps/web/) |
 | Shell | `apps/web/src/shell/AppShell.tsx`. The human note is [`docs/human/features/core-shell.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/features/core-shell.md). |
 | OAuth client | `@atproto/oauth-client-node` `0.5.9` in `infrastructure/pds/package.json`. |
 | Framework decision | [ADR 0015](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0015-web-framework-glue.md) |
@@ -51,7 +51,9 @@ Routes are `interfaces/http/routes.manifest.json`.
 | `GET /welcome`, `GET` and `POST /welcome/age`, `/welcome/terms`, `/welcome/chat`, `GET /welcome/blocked` | Onboarding. `interfaces/http/routes/welcome.ts`. Screens are `apps/web/src/screens/welcome/`. `ChatLater.tsx` shows the heading "Chat comes later". |
 | `GET /did`, `GET /me` | `303` to `/<DID>` of the session. `interfaces/http/routes/me.ts` |
 | `GET /:did` | The caller's own account page: handle, DID, a PDS link when the recorded issuer can be read, and sign out. Another DID is `http.not_found`. The file says this is not a public profile. |
-| `GET /settings/profile` | The heading `Profile`. `apps/web/src/screens/SettingsProfile.tsx` says the body is a placeholder. |
+| `GET /settings` | 303 to `/settings/profile`, keeping the query. `interfaces/http/routes/settings.ts` |
+| `GET /settings/profile` | Heading `Profile` inside the settings side list, and a card titled `Set up your profile`. The card body says the editor is not ready and the profile stays private. `apps/web/src/screens/settings/SettingsProfile.tsx` |
+| `GET /settings/account` | Heading `Account` inside the settings side list: handle, DID, a PDS link when the recorded issuer can be read, and sign out. An unchecked handle shows as unavailable. `apps/web/src/screens/settings/SettingsAccount.tsx` |
 | `POST /prefs/theme` | Theme form. `interfaces/http/routes/prefs.ts` |
 | `GET /health`, `GET /assets/:file`, `GET /oauth-client-metadata.json`, `GET /oauth/jwks.json`, `GET /.well-known/security.txt` | Listed in the manifest. `security.txt` is built in `interfaces/http/security-txt.ts`. |
 

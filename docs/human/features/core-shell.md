@@ -37,6 +37,6 @@ POST to a one-segment path returns 405. No shared router behavior or security me
 The local Navigation README is registered in the UI inventory as the extension approved on 2026-10-17. The pinned
 sheet copy and generated tokens remain unchanged. Native interaction behavior follows the
 [HTML Living Standard](https://html.spec.whatwg.org/multipage/popover.html), read 2026-10-17; rendering uses the
-repository's React 19.3.0 and React DOM 19.3.0.
+repository's React 19.3.1 and React DOM 19.3.1.
 The bounded content area's overflow follows [CSS Overflow Level 3](https://www.w3.org/TR/css-overflow-3/#overflow-properties)
 (7 October 2025 working draft), with keyboard behavior checked in the production browser render.
