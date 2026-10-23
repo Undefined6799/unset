@@ -133,6 +133,8 @@ and email confirmation. Public profile content, editing and invite blocks remain
 app gate, reads only the fields sent through `domains/profile`, and writes the session's own `sh.unset.profile`
 with a compare-and-swap (`infrastructure/pds/profile-record.ts`). A field left out keeps its stored value. It
 returns 303 to `/<DID>`, or to `/settings/profile` only when `next` is exactly that path.
+POST `/profile/readme` (P2.20x, 296 KiB body limit) takes one field, the owner's BlockNote document as JSON, which
+`domains/profile` reads into the lexicon's README blocks; anything else in the form is ignored.
 
 Keep `meRoutes` last in composition so the one-segment DID parameter cannot shadow explicit GET routes. Invalid
 DID segments return 404 before any gate or lookup. The shared router's existing candidate matching means GET

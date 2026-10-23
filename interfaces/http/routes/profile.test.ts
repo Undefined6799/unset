@@ -36,7 +36,7 @@ function setup(world: { signedIn?: boolean; save?: ProfileSave } = {}) {
     },
   });
   const server = createServer({ config: CONFIG, routes, policies, log });
-  const post = (body: string, init: { csrf?: boolean } = {}) => {
+  const post = (body: string, init: { csrf?: boolean; path?: string } = {}) => {
     const headers = new Headers({
       host: "unset.test",
       "x-forwarded-for": "192.0.2.1",
@@ -47,7 +47,8 @@ function setup(world: { signedIn?: boolean; save?: ProfileSave } = {}) {
       headers.set("origin", ORIGIN);
       headers.set("sec-fetch-site", "same-origin");
     }
-    return server.request(new Request(`${ORIGIN}/profile`, { method: "POST", headers, body }), "10.0.0.1");
+    const url = `${ORIGIN}${init.path ?? "/profile"}`;
+    return server.request(new Request(url, { method: "POST", headers, body }), "10.0.0.1");
   };
   return { post, saved };
 }
@@ -143,5 +144,54 @@ describe("POST /profile", () => {
     const response = await post(FORM);
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/login?error=login.session_ended");
+  });
+});
+
+describe("POST /profile/readme", () => {
+  const document = [
+    { type: "paragraph", props: {}, content: [{ type: "text", text: "hello", styles: {} }], children: [] },
+  ];
+  const body = (value: unknown) => new URLSearchParams({ readme: JSON.stringify(value) }).toString();
+  const README = "/profile/readme";
+
+  test("saves the editor's document as the session's own README and nothing else", async () => {
+    const { post, saved } = setup();
+    const response = await post(`${body(document)}&displayName=Mallory&did=did%3Aplc%3Ab`, { path: README });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`/${DID}`);
+    expect(saved).toEqual([
+      {
+        did: DID,
+        fields: {
+          readme: {
+            blocks: [
+              { $type: "sh.unset.profile#paragraph", content: [{ $type: "sh.unset.profile#textRun", text: "hello" }] },
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  test.each([
+    ["no document", "displayName=A"],
+    ["two documents", `${body(document)}&${body(document)}`],
+    ["a document that is not JSON", "readme=%7B"],
+  ])("%s is refused and nothing is written", async (_name, form) => {
+    const { post, saved } = setup();
+    expect((await post(form, { path: README })).status).toBe(400);
+    expect(saved).toEqual([]);
+  });
+
+  test("a cross-site post is refused before anything is read", async () => {
+    const { post, saved } = setup();
+    expect((await post(body(document), { csrf: false, path: README })).status).toBe(403);
+    expect(saved).toEqual([]);
+  });
+
+  test("signed out goes to sign-in and saves nothing", async () => {
+    const { post, saved } = setup({ signedIn: false });
+    expect((await post(body(document), { path: README })).status).toBe(303);
+    expect(saved).toEqual([]);
   });
 });

@@ -230,6 +230,25 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/profile/readme",
+    "group": "app",
+    "accepts": ["application/x-www-form-urlencoded"],
+    "bodyLimit": 301024,
+    "rateLimit": "default",
+    "mutates": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/:did",
     "group": "app",

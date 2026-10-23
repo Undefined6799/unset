@@ -3,6 +3,7 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import type { Readme } from "./readme.ts";
 import { isWebsite, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website", "links"] as const;
@@ -22,8 +23,11 @@ export const EMPTY_PROFILE: ProfileFields = {
 };
 
 export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url_invalid" | "profile.name_required";
-/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile). */
-export type ProfileEdit = Partial<ProfileFields>;
+/**
+ * The fields one save sends; a field left out keeps what the record holds (Settings › Profile, the README editor). The
+ * README comes from parseReadme; an empty one is removed.
+ */
+export type ProfileEdit = Partial<ProfileFields> & { readonly readme?: Readme };
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileField; readonly code: ProfileError };
@@ -134,16 +138,16 @@ export function toProfileRecord(
   now: string,
 ): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
   const stored = storedObject(existing);
-  const sent = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
-  const kept = Object.fromEntries(
-    Object.entries(stored).filter(([key]) => !(sent as readonly string[]).includes(key) && key !== "$type"),
-  );
+  const sentFields = PROFILE_FIELDS.filter((field) => fields[field] !== undefined);
+  const sent: readonly string[] = fields.readme === undefined ? sentFields : [...sentFields, "readme"];
+  const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => !sent.includes(key) && key !== "$type"));
   const set = Object.fromEntries(
-    sent
+    sentFields
       .filter((field) => fields[field] !== "")
       .map((f) => (f === "links" ? [f, (fields.links ?? "").split("\n").map((uri) => ({ uri }))] : [f, fields[f]])),
   );
-  const merged: Record<string, unknown> = { ...kept, ...set };
+  const readme = fields.readme !== undefined && fields.readme.blocks.length > 0 ? { readme: fields.readme } : {};
+  const merged: Record<string, unknown> = { ...kept, ...set, ...readme };
   if (typeof merged.displayName !== "string" || merged.displayName === "") {
     return { ok: false, code: "profile.name_required" };
   }
