@@ -136,6 +136,13 @@
     "variants": [],
     "status": "built"
   },
+  "Markdown": {
+    "sheet": "components/Markdown/README.md",
+    "sheetSha256": "a8165c61eda26ac08a3f5b92d341a049eb3fc45709106f29336e29243051aa91",
+    "props": "MarkdownProps",
+    "variants": [],
+    "status": "built"
+  },
   "MediaFrame": {
     "sheet": "sheet/components/MediaFrame/README.md",
     "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
