@@ -5374,6 +5374,18 @@ describe("--source builds staging from the checkout (P1.37y)", () => {
     expect(result.lines.some((line) => line.startsWith("UNSIGNED"))).toBe(false);
   });
 
+  test("source_judges_a_built_edge_by_its_dockerfile", async () => {
+    // Codex on #1309: C18 took the edge by the lock's image only, so a built edge failed every --source run. Built
+    // from deployment/edge/Dockerfile it passes; built from another scanned Dockerfile it fails C18 by name.
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    const files = { "deployment/edge/Dockerfile": "FROM scratch\n" };
+    const ok = await source((dev) => dev.replace(`    image: ${EDGE}\n`, edgeBuild), ["--source"], files);
+    expect(failed(ok.lines)).toEqual([]);
+    expect(ok.lines).toContain("PASS C18 ok");
+    const other = await source((dev) => dev.replace(`    image: ${EDGE}\n`, BUILD), ["--source"], DOCKERFILE);
+    expect(other.lines).toContain("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
   test("source_refuses_a_build_beside_an_image", async () => {
     const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, `$&${BUILD}`));
     expect(result.lines).toContain("FAIL C2 web has both an image and a build");

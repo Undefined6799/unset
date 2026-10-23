@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
-import { edgeZones } from "./preflight/checks/edge.ts";
+import { c18, edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c32 } from "./preflight/checks/placeholders.ts";
@@ -919,13 +919,13 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
   const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
   const DEPLOY_LOCK = join(CHECKOUT, "deployment/images.lock.json");
   const lockFile = (path: string) => (path === BASES || path === DEPLOY_LOCK ? readFileSync(path, "utf8") : null);
-  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base and deploy locks. */
-  const devInputs = (edit: (text: string) => string = (text) => text) => {
-    const file = join(DEPLOYMENT, FILE);
-    const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
+  /** The preflight's inputs for a compose file's text after `edit`, with the real base and deploy locks. */
+  const inputsFor = (name: string, flags: string[], edit: (text: string) => string = (text) => text) => {
+    const file = join(DEPLOYMENT, name);
+    const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE, ...flags], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : lockFile(path)),
+      readText: (path) => (path === file ? edit(read(name)) : lockFile(path)),
       readEnv: (path) =>
         path === ENV_FILE
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
@@ -944,6 +944,9 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     });
     return inputs;
   };
+  const devInputs = (edit?: (text: string) => string) => inputsFor(FILE, [], edit);
+  /** compose.dev.source.yaml under --source (P1.37y). */
+  const sourceInputs = (edit?: (text: string) => string) => inputsFor(SOURCE, ["--source"], edit);
   /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
   const outcomes = async (edit?: (text: string) => string): Promise<Outcome[]> => {
     const inputs = devInputs(edit);
@@ -962,6 +965,50 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
     // Renamed, the PDS is still known by its image.
     expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
+  });
+
+  test("source_stack_pds_and_edge_are_known_by_their_dockerfiles", async () => {
+    // Codex on #1309 (P1.37y): under --source the PDS and the edge build, so C17 and C18 know them by the Dockerfile,
+    // not the lock's image. The real source file passes both; a renamed built PDS is still a PDS.
+    const inputs = sourceInputs();
+    expect(inputs.compose.services.find((s) => s.name === "pds")?.build).not.toBeNull();
+    expect(pdsNeighbours(inputs)).toEqual([]);
+    const webOnEdge = (text: string) =>
+      text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
+    const renamed = (text: string) =>
+      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+    expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([
+      "web shares a network with the pds",
+    ]);
+    // C18 on the built edge: the lock's ref is not consulted, the dev site rules still are.
+    const signal = new AbortController().signal;
+    const c18Outcome = await c18.run(inputs, signal);
+    expect(c18Outcome.reason).not.toMatch(/edge image|not built from/);
+    const env = new SecretMap([
+      ["PDS_HOST", "staging.unset.ac"],
+      ["PDS_UPSTREAM", "pds:3000"],
+      ["ACME_EMAIL", "edge@example.test"],
+      ["APP_HOST", "staging.unset.sh"],
+      ["APP_UPSTREAM", "web:8080"],
+    ]);
+    const compose: Compose = {
+      ...inputs.compose,
+      services: inputs.compose.services.map((s) =>
+        s.name !== "edge"
+          ? s
+          : {
+              ...s,
+              mounts: s.mounts.map((m) =>
+                m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
+              ),
+            },
+      ),
+    };
+    expect(edgeZones(compose, join(DEPLOYMENT, "edge"), env, undefined, "dev", true)).toEqual(pass());
+    const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
+    expect(edgeZones(compose, join(DEPLOYMENT, "edge"), env, ref, "dev")).toEqual(
+      fail("the edge service does not run the lock's edge image"),
+    );
   });
 
   test("c32_passes_on_the_dev_stack", async () => {
