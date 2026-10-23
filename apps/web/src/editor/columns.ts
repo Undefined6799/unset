@@ -1,5 +1,6 @@
 // Columns by drag (Alex 2026-10-23 23:31Z: dragging a block beside another makes two columns, as BlockNote does). A
-// block dragged by its handle and dropped on the left or right edge of another block goes beside it: two top-level
+// block dragged by its handle and dropped on another block goes beside it, on the side of the half it was dropped on
+// (Alex 23:56Z: dropping it on top splits, so no aiming at the far edge): two top-level
 // blocks become a columnList of two columns, and a block dropped beside one inside a column adds a column next to it,
 // up to the README's three (LIMITS.profile.readmeColumnsMax). Anywhere else the drop is ProseMirror's own move.
 // normalizeColumns then keeps the shape the README stores: no empty column, a list of one column reads as its blocks,
@@ -9,8 +10,8 @@ import type { ReadmeBlock, ReadmeEditor, ReadmePartialBlock } from "./schema.ts"
 
 /** shared/lexicons LIMITS.profile.readmeColumnsMax, kept here so the editor chunk does not load the lexicons. */
 const COLUMNS_MAX = 3;
-/** How far in from a block's side a drop counts as beside it. */
-const EDGE = 0.2;
+/** The top and bottom share of a block where a drop stays ProseMirror's move between blocks. */
+const BETWEEN = 0.25;
 
 export type ColumnDrop = { readonly target: string; readonly side: "left" | "right"; readonly rect: DOMRect };
 
@@ -39,9 +40,9 @@ export function columnDrop(editor: ReadmeEditor, event: DragEvent): ColumnDrop |
   if (!(content instanceof HTMLElement) || typeof id !== "string" || id === dragged) return null;
   if (CONTAINERS.has(content.dataset.contentType ?? "")) return null;
   const rect = content.getBoundingClientRect();
-  const edge = rect.width * EDGE;
-  const side = event.clientX < rect.left + edge ? "left" : event.clientX > rect.right - edge ? "right" : null;
-  if (side === null) return null;
+  const band = rect.height * BETWEEN;
+  if (event.clientY < rect.top + band || event.clientY > rect.bottom - band) return null;
+  const side = event.clientX < rect.left + rect.width / 2 ? "left" : "right";
   const parent = editor.getParentBlock(id);
   if (parent === undefined) return { target: id, side, rect };
   if (parent.type !== "column") return null;
