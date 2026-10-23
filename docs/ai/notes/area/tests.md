@@ -28,7 +28,7 @@ The welcome screens that need a session at their real paths (age, terms, chat) a
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
 in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). P2.13c adds `/fixture/account` and
 `/fixture/settings-*` the same way, so the account page and both settings pages are in the axe matrix. `nojs.spec.ts` also drives both menus at a
-375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/signed-out`, since P2.05m draws `/login` as the sign-in box with no shell) and the footer
+375 px viewport with script off (the menu drawer from the floating bar on `/`, which hides the bar while open, and the Header `<details>` on `/signed-out`, since P2.05m draws `/login` as the sign-in box with no shell), the drawer from the header's menu button on desktop (P2.13e) and the footer
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON reports (the checks list already
