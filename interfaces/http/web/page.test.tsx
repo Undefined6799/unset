@@ -185,7 +185,7 @@ test("default_shell_signs_in_in_place", async () => {
       },
     );
     const document = parse(await response.text());
-    const box = elements(document, "div", { id: "sign-in", popover: "auto" })[0];
+    const box = elements(document, "dialog", { id: "sign-in" })[0];
     return (
       box &&
       elements(box, "input", { type: "hidden", name: "next" }).map(

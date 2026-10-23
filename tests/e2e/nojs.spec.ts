@@ -38,16 +38,21 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
-  // P2.05p: the Header's Sign in opens the box over the page with no script, and Close, Escape and a click outside
-  // each leave the visitor on the page they were on.
+  // P2.05p: the Header's Sign in opens the box over the page as a modal dialog with no script (invoker commands).
+  // Close and Escape each leave the visitor on the page they were on; a click on the scrim reaches nothing behind it,
+  // and Tab never reaches the page behind, which a modal dialog makes inert.
   test("sign_in_opens_over_the_page", async ({ page }) => {
     await page.goto("/legal/terms");
     const box = page.getByRole("dialog", { name: "Sign in" });
-    const open = page.locator('header button[popovertarget="sign-in"]:visible');
+    const open = page.locator('header button[commandfor="sign-in"]:visible');
     await expect(box).toBeHidden();
     await open.click();
     await expect(box).toBeVisible();
     await expect(box.locator('input[name="next"]')).toHaveValue("/legal/terms");
+    for (let i = 0; i < 4; i += 1) {
+      await page.keyboard.press("Tab");
+      await expect(page.locator("header :focus, main :focus, footer :focus")).toHaveCount(0);
+    }
     await box.getByRole("button", { name: "Close" }).click();
     await expect(box).toBeHidden();
     await open.click();
@@ -55,7 +60,7 @@ test.describe("javascript disabled", () => {
     await expect(box).toBeHidden();
     await open.click();
     await page.mouse.click(5, 5);
-    await expect(box).toBeHidden();
+    await expect(box).toBeVisible();
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
@@ -87,10 +92,11 @@ test.describe("javascript disabled", () => {
       const menu = page.locator("header details");
       const summary = menu.locator("summary");
       await expect(summary).toBeVisible();
-      await expect(menu.getByRole("link", { name: "Sign in" })).toBeHidden();
+      // P2.05p: the action is the button that opens the sign-in box in place.
+      await expect(menu.getByRole("button", { name: "Sign in" })).toBeHidden();
       await summary.press("Enter");
       await expect(menu).toHaveAttribute("open", "");
-      await expect(menu.getByRole("link", { name: "Sign in" })).toBeVisible();
+      await expect(menu.getByRole("button", { name: "Sign in" })).toBeVisible();
       await summary.press("Enter");
       await expect(menu).not.toHaveAttribute("open");
     });

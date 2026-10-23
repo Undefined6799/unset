@@ -107,15 +107,20 @@ describe("continue screen", () => {
 });
 
 describe("signed-out screen", () => {
-  test("signed_out_links_to_the_pds_account_and_sign_in", () => {
+  test("signed_out_is_one_box_asking_about_the_pds", () => {
+    // P2.08s (Alex, 2026-10-23 13:15Z): one Sign out, then a box asks whether to sign out of the atproto account too.
     const page = html(screens.signedOut({ issuer: "https://pds.example", ours: true }));
-    expect(page).toContain("You are signed out");
+    expect(page).toContain('<section aria-labelledby="signed-out-title"');
+    expect(page).toMatch(/<h1 id="signed-out-title"[^>]*>You are signed out of unset<\/h1>/);
+    expect(page).toContain("Also sign out of your atproto account?");
+    expect(page).toContain("Apps you allowed stay signed in until you remove them there.");
     expect(page).toContain(
       "You are going to pds.example, our sign-in server; it is the only place you type your password",
     );
-    expect(page).toContain("On a shared computer, sign out there too.");
-    const links = tags(page, "a").map((a) => a.href);
-    expect(links).toEqual(["https://pds.example/account", "/login"]);
+    expect(page).toContain(">Your account on pds.example<svg");
+    // The sheet's standalone Link, like the account choice above it (Link README).
+    expect(page).toMatch(/href="\/"[^>]*>No thanks<svg/);
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account", "/"]);
     expect(page).not.toContain("<script");
   });
 
@@ -125,7 +130,7 @@ describe("signed-out screen", () => {
     expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
     expect(own).toContain(">Your account on pds.test<svg");
     const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
-    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/login"]);
+    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
     expect(foreign).not.toContain("only place you type your password");
   });
@@ -133,7 +138,7 @@ describe("signed-out screen", () => {
   test("pdsAccountLink_refuses_a_non_https_issuer", () => {
     for (const issuer of ["http://pds.example", "javascript:alert(1)", "not a url"]) {
       const page = html(screens.signedOut({ issuer, ours: false }));
-      expect(tags(page, "a").map((a) => a.href)).toEqual(["/login"]);
+      expect(tags(page, "a").map((a) => a.href)).toEqual(["/"]);
     }
   });
 });

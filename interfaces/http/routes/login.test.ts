@@ -208,6 +208,19 @@ describe("GET /login", () => {
 });
 
 describe("POST /login", () => {
+  // P2.05p: the in-place box posts here from any page, public ones included, which cannot vary on the cookie. A
+  // browser that is already signed in goes to its profile, as GET /login sends it, and no authorization starts, so
+  // its session is never replaced by whatever account the PDS picks.
+  test("login_post_signed_in_goes_to_the_profile", async () => {
+    const { send, authorized, nonces } = setup({ signedIn: true });
+    const response = await send("/login", { form: "intent=chooser&next=%2Flegal%2Fterms" });
+    expect(response.status).toBe(303);
+    expect(location(response)).toBe("/did");
+    expect(cookies(response)).toEqual([]);
+    expect(authorized).toEqual([]);
+    expect(nonces()).toBe(0);
+  });
+
   test("login_post_handle", async () => {
     const { send, resolved, authorized } = setup();
     const response = await send("/login", { form: `handle=alice.${PDS}&intent=login` });

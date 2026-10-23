@@ -51,3 +51,10 @@ export const PROFILE = {
     other: "Your profile could not be saved. Try again.",
   },
 } as const;
+
+export const SIGNED_OUT = {
+  title: "You are signed out of unset",
+  ask: "Also sign out of your atproto account?",
+  otherApps: "Apps you allowed stay signed in until you remove them there.",
+  noThanks: "No thanks",
+} as const;

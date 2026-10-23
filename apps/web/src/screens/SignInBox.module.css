@@ -24,7 +24,7 @@
     margin: 0;
   }
 
-  /* A link on the page, a button in the popover (P2.05p): both read as the same text control. */
+  /* A link on the page, a button in the dialog (P2.05p): both read as the same text control. */
   .close {
     padding: 0;
     border: 0;
@@ -41,14 +41,15 @@
   }
 }
 
-/* P2.05p: the same box opened over the page as a native popover (the UA sheet centres it with `inset: 0` and
-   `margin: auto`), leaving a gutter on a phone, over the scrim the Modal uses. */
+/* P2.05p: the same box opened over the page as a modal <dialog> (the UA sheet centres a modal dialog in the top
+   layer), leaving a gutter on a phone, over the scrim the Modal uses. The page behind a modal dialog is inert, so its
+   backdrop takes no clicks to the page and focus cannot reach it. */
 @layer screens {
-  .popover {
+  .dialog {
     width: calc(100% - 2 * var(--space-4));
   }
 
-  .popover::backdrop {
+  .dialog::backdrop {
     background-color: var(--color-scrim);
   }
 }
