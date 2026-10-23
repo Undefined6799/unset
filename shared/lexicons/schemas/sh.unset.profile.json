@@ -30,10 +30,8 @@
             "description": "About text: paragraphs, bold, italic and http(s) links (a small markdown subset), never HTML."
           },
           "readme": {
-            "type": "string",
-            "maxGraphemes": 10000,
-            "maxLength": 100000,
-            "description": "Free-form page body in a small markdown subset (headings, lists, quotes, code, links, rows and columns), never HTML."
+            "type": "ref",
+            "ref": "#readme"
           },
           "location": {
             "type": "string",
@@ -103,6 +101,204 @@
             "type": "string",
             "format": "datetime",
             "description": "When the profile was last published."
+          }
+        }
+      }
+    },
+    "readme": {
+      "type": "object",
+      "required": ["blocks"],
+      "description": "Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total.",
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "union",
+            "refs": ["#paragraph", "#heading", "#listItem", "#quote", "#codeBlock", "#columns"]
+          },
+          "description": "Blocks in reading order. A block type this app does not know is skipped."
+        }
+      }
+    },
+    "textRun": {
+      "type": "object",
+      "required": ["text"],
+      "description": "A run of text with one set of styles.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxGraphemes": 2000,
+          "maxLength": 20000
+        },
+        "bold": {
+          "type": "boolean"
+        },
+        "italic": {
+          "type": "boolean"
+        },
+        "underline": {
+          "type": "boolean"
+        },
+        "strike": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "boolean",
+          "description": "Inline code."
+        }
+      }
+    },
+    "linkRun": {
+      "type": "object",
+      "required": ["uri", "content"],
+      "description": "Linked text.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL. A schema cannot state the scheme; a reader keeps the text and drops the link for any other."
+        },
+        "content": {
+          "type": "array",
+          "maxLength": 50,
+          "items": {
+            "type": "ref",
+            "ref": "#textRun"
+          }
+        }
+      }
+    },
+    "paragraph": {
+      "type": "object",
+      "required": ["content"],
+      "description": "A paragraph.",
+      "properties": {
+        "content": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "union",
+            "refs": ["#textRun", "#linkRun"]
+          },
+          "description": "The block's text, as runs in reading order."
+        }
+      }
+    },
+    "heading": {
+      "type": "object",
+      "required": ["level", "content"],
+      "description": "A heading.",
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "content": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "union",
+            "refs": ["#textRun", "#linkRun"]
+          },
+          "description": "The block's text, as runs in reading order."
+        }
+      }
+    },
+    "listItem": {
+      "type": "object",
+      "required": ["style", "content"],
+      "description": "One list item; consecutive items of one style form a list.",
+      "properties": {
+        "style": {
+          "type": "string",
+          "maxLength": 16,
+          "knownValues": ["bullet", "numbered", "check"],
+          "description": "An unknown value renders as bullet."
+        },
+        "indent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Nesting depth, from 0."
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "For check items: ticked."
+        },
+        "content": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "union",
+            "refs": ["#textRun", "#linkRun"]
+          },
+          "description": "The block's text, as runs in reading order."
+        }
+      }
+    },
+    "quote": {
+      "type": "object",
+      "required": ["content"],
+      "description": "A quote.",
+      "properties": {
+        "content": {
+          "type": "array",
+          "maxLength": 200,
+          "items": {
+            "type": "union",
+            "refs": ["#textRun", "#linkRun"]
+          },
+          "description": "The block's text, as runs in reading order."
+        }
+      }
+    },
+    "codeBlock": {
+      "type": "object",
+      "required": ["text"],
+      "description": "Preformatted code, shown as written.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxGraphemes": 10000,
+          "maxLength": 100000
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Language name, for display only."
+        }
+      }
+    },
+    "columns": {
+      "type": "object",
+      "required": ["columns"],
+      "description": "Two or three columns side by side; they stack on narrow screens.",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "minLength": 2,
+          "maxLength": 3,
+          "items": {
+            "type": "ref",
+            "ref": "#column"
+          }
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "required": ["blocks"],
+      "description": "One column: blocks in reading order, no nested columns.",
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "maxLength": 100,
+          "items": {
+            "type": "union",
+            "refs": ["#paragraph", "#heading", "#listItem", "#quote", "#codeBlock"]
           }
         }
       }
