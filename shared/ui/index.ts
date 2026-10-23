@@ -20,6 +20,9 @@ export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Icon, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
+// P1.24h: the one link validator; every component link takes its SafeHref.
+export { Markdown, type MarkdownProps } from "./components/Markdown/Markdown.tsx";
+export { MARKDOWN_LIMITS, type MarkdownDocument, parseMarkdown } from "./components/Markdown/markdown.ts";
 export {
   Navigation,
   type NavigationAnchorProps,
@@ -29,10 +32,18 @@ export {
 } from "./components/Navigation/Navigation.tsx";
 export type { ThemeChoice, ThemePickerProps } from "./components/Navigation/ThemePicker.tsx";
 export { ThemePickerSlot } from "./components/Navigation/ThemePickerSlot.tsx";
+export type { ProfileEditorProps } from "./components/Profile/ProfileEditor.tsx";
+export { ProfileEditorSlot } from "./components/Profile/ProfileSlot.tsx";
+export {
+  type ProfileFieldsView,
+  type ProfileLabels,
+  ProfileView,
+  type ProfileViewProps,
+} from "./components/Profile/ProfileView.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
-// P1.24h: the one link validator; every component link takes its SafeHref.
+export { Textarea, type TextareaProps } from "./components/Textarea/Textarea.tsx";
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 // P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.
 export type { FallbackFace, FontMetrics } from "./tokens/font-metrics.ts";

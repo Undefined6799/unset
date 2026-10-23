@@ -136,6 +136,13 @@
     "variants": [],
     "status": "built"
   },
+  "Markdown": {
+    "sheet": "components/Markdown/README.md",
+    "sheetSha256": "a8165c61eda26ac08a3f5b92d341a049eb3fc45709106f29336e29243051aa91",
+    "props": "MarkdownProps",
+    "variants": [],
+    "status": "built"
+  },
   "MediaFrame": {
     "sheet": "sheet/components/MediaFrame/README.md",
     "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
@@ -266,6 +273,13 @@
     "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
+    "status": "built"
+  },
+  "Profile": {
+    "sheet": "components/Profile/README.md",
+    "sheetSha256": "412787d25daf7d94d771a3644bab7b0cf9794b4dac022aa3214c826ec9d22b0f",
+    "props": "ProfileViewProps",
+    "variants": ["owner editing island"],
     "status": "built"
   }
 }

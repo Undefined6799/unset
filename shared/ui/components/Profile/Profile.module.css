@@ -1,0 +1,263 @@
+/* The profile page (Figma 4hrOlzQ1d0lA8Acm4KyLVf, page Profile, v3; side column per Alex's 04:04Z mock): a 296px side
+   column beside the README, one column below 768px. The avatar fills the column (the 296px size on the sheet is
+   pending Alex's approval), drawn by Avatar at 128 and stretched here. */
+@layer components {
+  .profile {
+    display: grid;
+    grid-template-columns: 296px minmax(0, 1fr);
+    gap: var(--space-12);
+    align-items: start;
+    @media (max-width: 767px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-8);
+    }
+  }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .side > p {
+    margin: 0;
+  }
+
+  .names {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .name {
+    margin: 0;
+  }
+
+  .avatar.avatar {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    font-size: calc(var(--type-display-size) * 2);
+  }
+
+  .handle {
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+  }
+
+  .headline {
+    color: var(--color-ink);
+  }
+
+  .copy {
+    width: 100%;
+  }
+
+  /* The details sit label beside value in the narrow column, under one hairline, with no rules between rows. */
+  .details {
+    margin: 0;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-line);
+  }
+
+  .details > div {
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-1) 0;
+    border-bottom: 0;
+  }
+
+  /* The member's links (Alex 04:06Z): one a row, an icon before each; the owner adds more with "+". */
+  .links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    overflow-wrap: anywhere;
+  }
+
+  .links li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .linksEditor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .readme {
+    min-width: 0;
+  }
+
+  /* Owner editing (Figma page Profile, v4): the pencil shows on hover or focus, always on touch screens. */
+  .editable,
+  .editableBlock {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 100%;
+  }
+
+  .editableBlock {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .editableBlock > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .placeholder {
+    color: var(--color-ink-muted);
+    font-style: italic;
+    font-weight: var(--type-body-weight);
+    font-size: var(--type-body-size);
+  }
+
+  .pencil {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    opacity: 0;
+  }
+
+  .editable:hover .pencil,
+  .editableBlock:hover .pencil,
+  .pencil:focus-visible {
+    opacity: 1;
+  }
+
+  .pencil:hover {
+    border-color: var(--color-line-strong);
+    color: var(--color-ink);
+  }
+
+  @media (hover: none) {
+    .pencil {
+      opacity: 1;
+    }
+  }
+
+  .editor,
+  .editorBlock {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+    font-size: var(--type-body-size);
+    font-weight: var(--type-body-weight);
+  }
+
+  .input,
+  .textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink);
+    font: inherit;
+  }
+
+  .textarea {
+    font-family: var(--font-mono);
+    resize: vertical;
+  }
+
+  /* The draft box (v5): a callout with a small shadow above the profile; its tools line up with "Draft". */
+  .draft {
+    margin-bottom: var(--space-8);
+    box-shadow: var(--shadow-1);
+  }
+
+  .draftBody {
+    margin: 0 0 var(--space-3);
+  }
+
+  .draftActions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .grow {
+    flex: 1;
+  }
+
+  .tool {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .tool:hover:not(:disabled),
+  .tool[aria-pressed="true"] {
+    border-color: var(--color-line-strong);
+  }
+
+  .tool:disabled {
+    color: var(--color-ink-muted);
+    cursor: default;
+  }
+
+  /* The undo and redo shortcut, shown after a 2s hover (Alex 2026-10-23). */
+  .tool[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(var(--space-8) * -1);
+    left: 0;
+    z-index: var(--z-menu);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-ink);
+    color: var(--color-ground);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    white-space: nowrap;
+    visibility: hidden;
+  }
+
+  .tool[data-tip]:hover::after {
+    visibility: visible;
+    transition: visibility 0s 2s;
+  }
+
+  .saved {
+    margin: 0 0 var(--space-6);
+    color: var(--color-ink-muted);
+  }
+}

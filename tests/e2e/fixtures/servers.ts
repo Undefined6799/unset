@@ -260,13 +260,27 @@ async function serveTest(): Promise<void> {
         path: FIXTURES.account,
         title: "alice.pds.unset.test",
         active: "account" as const,
-        body: () => render.screens.me(ACCOUNT),
+        body: () =>
+          render.screens.profile({
+            did: ACCOUNT.did,
+            handle: ACCOUNT.handle,
+            verified: true,
+            handleUnavailable: false,
+            profile: {
+              displayName: "Alice",
+              headline: "Designer and front-end developer.",
+              location: "Toronto, Ontario",
+              website: "https://alice.example",
+              readme: "## About me\nI make small tools.\n:::\n## My projects\n- [Tidy](https://alice.example/tidy)",
+              links: "https://github.com/alicem",
+            },
+          }),
       },
       {
         path: FIXTURES.settingsProfile,
         title: "Profile",
         active: "settings" as const,
-        body: () => render.screens.settingsProfile({ privacyNotice: false }),
+        body: () => render.screens.settingsProfile({ privacyNotice: false, profile: null }),
       },
       {
         path: FIXTURES.settingsAccount,
