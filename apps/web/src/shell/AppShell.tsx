@@ -14,12 +14,12 @@ import {
   type SafeHref,
   SkipLink,
   safeHref,
+  ThemePickerSlot,
 } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import styles from "../screens/CoreShell.module.css";
-import { SHELL } from "./messages.ts";
+import { PREFS, SHELL } from "./messages.ts";
 import { PrefsForms, type PrefsFormsProps } from "./PrefsForms.tsx";
-import { ThemePicker } from "./ThemePicker.tsx";
 
 /** A path on our origin as the kit's SafeHref; a path that fails safeHref is a programming error. */
 function path(href: string): SafeHref {
@@ -35,6 +35,7 @@ const LEGAL = [
   { label: SHELL.domains, href: path("/legal/domains") },
 ];
 const MENU_ID = "core-menu";
+const THEME_LABELS = { group: PREFS.theme, dark: PREFS.dark, system: PREFS.system, light: PREFS.light };
 
 /** This browser's sign-out (P2.08d), as the drawer's one action; only a page with a session shows it. */
 const SIGN_OUT = (
@@ -96,7 +97,11 @@ export function AppShell({ error, navigation, feed, prefs, children }: AppShellP
           closeLabel={SHELL.closeMenu}
           homeLabel={SHELL.homeLabel}
           {...(navigation.accountPath === undefined ? {} : { actions: SIGN_OUT })}
-          {...(prefs === undefined ? {} : { extra: <ThemePicker {...prefs} /> })}
+          {...(prefs === undefined
+            ? {}
+            : {
+                extra: <ThemePickerSlot {...prefs} labels={THEME_LABELS} />,
+              })}
         />
         <main id="main" tabIndex={-1} className={styles.main}>
           {content}

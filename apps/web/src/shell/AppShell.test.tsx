@@ -110,15 +110,36 @@ describe("core shell", () => {
     expect(form?.querySelector('input[type="hidden"][name="return"]')?.getAttribute("value")).toBe("/settings/account");
     expect(form?.querySelector("fieldset > legend")?.textContent).toBe("Theme");
     const buttons = [...(form?.querySelectorAll("button") ?? [])];
-    expect(
-      buttons.map((b) => [b.type, b.name, b.value, b.getAttribute("aria-label"), b.getAttribute("aria-pressed")]),
-    ).toEqual([
+    expect(buttons.map((b) => [b.type, b.name, b.value, b.textContent, b.getAttribute("aria-pressed")])).toEqual([
       ["submit", "theme", "dark", "Dark", "false"],
       ["submit", "theme", "system", "System", "false"],
       ["submit", "theme", "light", "Light", "true"],
     ]);
     expect(buttons.every((b) => b.querySelector("svg") !== null)).toBe(true);
     expect(core().querySelector('form[action="/prefs/theme"]')).toBeNull();
+  });
+
+  // Alex 2026-10-23 02:15Z: a theme choice must not close the drawer, so on a page with islands the picker hydrates
+  // and saves in the background (ThemePicker.tsx); its props are the server-checked choice and return path only.
+  test("drawer_theme_picker_hydrates_on_island_pages", () => {
+    const html = render({
+      islands: "on",
+      shell: {
+        error: null,
+        noindex: true,
+        navigation: { active: "settings", accountPath: "/did:plc:abc" },
+        prefs: { theme: "dark", returnTo: "/settings/account" },
+      },
+    });
+    const document = new DOMParser().parseFromString(html, "text/html");
+    const slot = document.querySelector('[popover="auto"] [data-island="theme-picker"]');
+    expect(slot?.querySelector('form[action="/prefs/theme"]')).not.toBeNull();
+    const id = slot?.getAttribute("data-island-id") ?? "";
+    expect(JSON.parse(document.getElementById(id)?.textContent ?? "null")).toEqual({
+      theme: "dark",
+      returnTo: "/settings/account",
+      labels: { group: "Theme", dark: "Dark", system: "System", light: "Light" },
+    });
   });
 
   test("signed_in_avatar_uses_only_the_supplied_name", () => {

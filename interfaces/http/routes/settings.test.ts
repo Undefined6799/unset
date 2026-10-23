@@ -118,7 +118,10 @@ describe("GET /settings/profile", () => {
       { href: "/settings/account", current: false },
     ]);
     expect(html).toContain("Set up your profile");
-    expect(elements(parse(html), "script")).toHaveLength(0);
+    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    expect(
+      elements(parse(html), "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value),
+    ).toEqual(["application/json", "module"]);
   });
 });
 

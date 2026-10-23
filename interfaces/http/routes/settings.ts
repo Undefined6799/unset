@@ -37,7 +37,7 @@ export function settingsRoutes(deps: SettingsDeps): Route[] {
       request,
       title,
       body,
-      islands: "off",
+      // Islands on (the default): the menu drawer's theme picker hydrates so a choice leaves it open (P2.13e).
       shell: { noindex: true, navigation: { active: "settings", accountPath: `/${opened.session.did}` } },
     });
 
