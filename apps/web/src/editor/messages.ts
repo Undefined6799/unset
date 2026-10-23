@@ -1,0 +1,24 @@
+// English text for the owner's README editor. One catalog per feature until the i18n slice (P1.19).
+
+export const EDITOR = {
+  placeholder: "Write, or type / for blocks",
+  toolbar: "Text style",
+  styles: { bold: "Bold", italic: "Italic", underline: "Underline", strike: "Strike", code: "Code" },
+  /** The short marks on the toolbar's buttons; the words above are their accessible names. */
+  marks: { bold: "B", italic: "I", underline: "U", strike: "S", code: "</>" },
+  slashMenu: "Blocks",
+  noMatch: "No block matches",
+  addBlock: "Add a block below",
+  dragBlock: "Drag to move this block",
+  blocks: {
+    paragraph: "Text",
+    heading1: "Heading 1",
+    heading2: "Heading 2",
+    heading3: "Heading 3",
+    bulletListItem: "Bullet list",
+    numberedListItem: "Numbered list",
+    checkListItem: "Check list",
+    quote: "Quote",
+    codeBlock: "Code",
+  },
+} as const;

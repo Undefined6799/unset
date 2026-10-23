@@ -59,6 +59,14 @@ public profile content and the editor remain separate work (P2.21).
   The runtime takes the island types (`IslandDefinition`, `IslandProps`, `IslandRenderer`), `readProps` and
   `serializeProps` from `@unset/shared-islands` ([[islands]]), through its index only; nothing comes from a subpath
   or from `@unset/shared-ui` (P1.25p).
+- `src/editor/readme.editor.tsx` is the owner's README editor (P2.20o, ADR 0037 point 5): its own browser entry,
+  loaded only by the README editor page, with its own 256 KB gzip cap outside the island total. It runs
+  `@blocknote/core` 0.56.0's engine with our menus (`menus.tsx`), never BlockNote's React UI, and keeps no HTML on
+  any path (`clipboard.ts`): app pages enforce Trusted Types with no policy, and BlockNote's own copy, HTML paste,
+  side-menu drag, TipTap CSS injection and popover snapshot all write or parse HTML. Pasting from another app gives
+  plain text; a copy made in the editor pastes back with its formatting. Its CSS lays out BlockNote's markup with
+  tokens (`Editor.module.css`), since BlockNote's stylesheet is not loaded. Only `src/editor/` may import
+  `@blocknote/*`, `@tiptap/*` or `prosemirror-*` (depcruise SDK adapters).
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers the global sheets and every CSS Module into the stylesheets each
   page links). Since P1.25 the global sheets (layers, tokens with the two font faces, base) are in it, as globs:
