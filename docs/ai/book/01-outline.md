@@ -545,6 +545,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08f | Mark sign out everywhere unused in session | trusted | P2.08d | `phase-2.md` |
 | P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
 | P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
+| P2.08s | Ask about the PDS after signing out | — | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
 | P2.11b | ~~Count sessions ended on a revoked grant~~ **Retired** (moved to P3.20c, architecture 07:08Z) | [SEC] | P2.11a | `phase-2.md` |
