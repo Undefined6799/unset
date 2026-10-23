@@ -38,8 +38,6 @@ export type LoginDeps = {
   ) => Promise<AuthorizeResult>;
   /** Our PDS's host: the chooser's authorization server is `https://` and this. */
   pdsHost: string;
-  /** PUBLIC_ORIGIN: a Referer from this origin names the page Close goes back to. */
-  publicOrigin: string;
   /** What a name typed without a dot is completed with. */
   handleDomain: string;
   /** OAUTH_ALLOW_HTTP: a local stack may send the browser to plain HTTP. */
@@ -117,17 +115,18 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   }
 
   /**
-   * Where the sign-in box's Close goes (P2.05m; Alex, 2026-10-23: "back to the page to which I came from"): the page
-   * the Referer names, if it is ours. Referrer-Policy same-origin (shared/http/csp/headers.ts) sends it only between
-   * our own pages, and a redirect keeps it, so after a protected page's 303 it still names the page before. A sign-in
-   * page, or the protected page `next` names, would only bounce back here, so those, and anything else, go home.
+   * Where the sign-in box's Close goes (P2.05n; Alex, 2026-10-23: "back to the page to which I came from"): the page
+   * the Referer names, if it is on this request's host, which the kit's host check already held to
+   * HTTP_ALLOWED_HOSTS. Only the host is compared, since TLS may end at the edge. Referrer-Policy same-origin
+   * (shared/http/csp/headers.ts) sends it only between our own pages. A sign-in page, or the protected page `next`
+   * names, would only bounce back here, so those, and anything else, go home.
    */
   function closeTarget(request: Request, next: SafePath | null): string {
     const referer = request.headers.get("referer");
     if (referer === null || !URL.canParse(referer)) return "/";
     const from = new URL(referer);
-    if (from.origin !== deps.publicOrigin || from.pathname === "/login" || from.pathname.startsWith("/login/"))
-      return "/";
+    const ours = from.host === request.headers.get("host");
+    if (!ours || from.pathname === "/login" || from.pathname.startsWith("/login/")) return "/";
     const back = safeReturnPath(`${from.pathname}${from.search}`);
     return back === null || back === next ? "/" : back;
   }

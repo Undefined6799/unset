@@ -91,7 +91,6 @@ function setup(world: World = {}) {
       return world.authorized ?? { ok: true, url: new URL(AS_URL) };
     },
     pdsHost: PDS,
-    publicOrigin: ORIGIN,
     handleDomain: PDS,
     allowHttp: world.allowHttp ?? false,
     log,
@@ -197,6 +196,7 @@ describe("GET /login", () => {
     for (const referer of [
       undefined,
       "https://evil.example/page",
+      "https://unset.test.evil.example/legal/terms",
       `${ORIGIN}/did`,
       `${ORIGIN}/login?next=/did`,
       `${ORIGIN}/login/continue`,
