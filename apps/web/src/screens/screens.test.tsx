@@ -118,7 +118,8 @@ describe("signed-out screen", () => {
       "You are going to pds.example, our sign-in server; it is the only place you type your password",
     );
     expect(page).toContain(">Your account on pds.example<svg");
-    expect(page).toMatch(/href="\/"[^>]*>No thanks</);
+    // The sheet's standalone Link, like the account choice above it (Link README).
+    expect(page).toMatch(/href="\/"[^>]*>No thanks<svg/);
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account", "/"]);
     expect(page).not.toContain("<script");
   });

@@ -29,7 +29,11 @@ export function SignedOut({ issuer, ours }: SignedOutProps) {
       </p>
       <div className={styles.choices}>
         <PdsAccountLink issuer={issuer} ours={ours} />
-        {home === null ? null : <Link href={home}>{SIGNED_OUT.noThanks}</Link>}
+        {home === null ? null : (
+          <Link href={home} variant="standalone">
+            {SIGNED_OUT.noThanks}
+          </Link>
+        )}
       </div>
     </section>
   );
