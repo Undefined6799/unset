@@ -327,19 +327,17 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsIssuer,
     log,
   };
-  const settings = settingsRoutes(accountDeps);
-  const me = meRoutes({
-    ...accountDeps,
-    loadProfile: async (did, deadline) => {
-      const stored = await loadProfileRecord(
-        pds.pdsCall,
-        { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 },
-        did,
-      );
-      if (stored.kind !== "ok") return "unavailable";
-      return stored.value === null ? null : readProfileRecord(stored.value.value);
-    },
-  });
+  const loadProfile = async (did: Did, deadline: AbortSignal) => {
+    const stored = await loadProfileRecord(
+      pds.pdsCall,
+      { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 },
+      did,
+    );
+    if (stored.kind !== "ok") return "unavailable" as const;
+    return stored.value === null ? null : readProfileRecord(stored.value.value);
+  };
+  const settings = settingsRoutes({ ...accountDeps, loadProfile });
+  const me = meRoutes({ ...accountDeps, loadProfile });
   const profile = profileRoutes({
     open: accountDeps.open,
     saveProfile: async (did, fields, deadline) => {

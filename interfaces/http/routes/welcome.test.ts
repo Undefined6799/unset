@@ -189,6 +189,7 @@ function setup(world: World = {}) {
         issuerOf: async () => "https://pds.unset.test",
         pdsIssuer: "https://pds.unset.test",
         log,
+        loadProfile: async () => null,
       }),
       ...meRoutes({
         open: (request, deadline, next) => openApp(gate, request, deadline, next),
