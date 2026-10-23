@@ -17,12 +17,14 @@ export {
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
 export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHeader.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
+export { Icon, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
 export {
   Navigation,
   type NavigationAnchorProps,
   type NavigationLinkRenderer,
+  NavigationMenuButton,
   type NavigationProps,
 } from "./components/Navigation/Navigation.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";

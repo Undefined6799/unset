@@ -2,6 +2,8 @@
 // P1.25 (shell/AppShell.tsx, shell/head.tsx, errors/ErrorPage.tsx): the shell through the render entry, as the web
 // server renders it. A zero-JS page must work as plain HTML, so these read the markup only.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { type Assets, type PageInput, renderPage, screens } from "../../render.tsx";
 
@@ -67,15 +69,56 @@ describe("core shell", () => {
     expect(document.querySelector("[data-island]")).toBeNull();
   });
 
-  test("phone_menu_has_native_dismiss_and_settings_without_new_scripts", () => {
+  // P2.13e: one left drawer (Figma 135:806, 135:858, 135:935), opened by the header's menu button on desktop and the
+  // floating bar's on phones; it closes with its X, Escape or a press outside (native popover).
+  test("drawer_opens_from_the_header_and_the_bar_and_closes_with_its_x", () => {
     const document = core("settings");
-    const popup = document.querySelector('[popover="auto"]');
-    expect(popup).not.toBeNull();
-    // The popup has no Close control (Alex, 2026-10-21, approved-extensions.json Navigation): the native auto
-    // popover dismisses on Escape and outside press, and its toggle names it.
-    expect(document.querySelector('[popovertargetaction="hide"]')).toBeNull();
-    expect(document.querySelector(`[popovertarget="${popup?.id}"]`)).not.toBeNull();
-    expect(popup?.querySelector('[href="/settings/profile"][aria-current="page"]')).not.toBeNull();
+    const drawer = document.querySelector('[popover="auto"]');
+    expect(drawer?.id).toBe("core-menu");
+    const toggles = [...document.querySelectorAll('[popovertarget="core-menu"][popovertargetaction="toggle"]')];
+    expect(toggles).toHaveLength(2);
+    expect(toggles[0]?.closest("header")).not.toBeNull();
+    expect(drawer?.querySelector('[popovertargetaction="hide"]')?.getAttribute("aria-label")).toBe("Close menu");
+    expect(drawer?.querySelector('[href="/settings/profile"][aria-current="page"]')).not.toBeNull();
+  });
+
+  const signedIn = (theme: "dark" | "light" | "system") =>
+    new DOMParser().parseFromString(
+      render({
+        shell: {
+          error: null,
+          noindex: true,
+          navigation: { active: "settings", accountPath: "/did:plc:abc" },
+          prefs: { theme, returnTo: "/settings/account" },
+        },
+      }),
+      "text/html",
+    );
+
+  test("drawer_signs_this_browser_out_under_a_line", () => {
+    const drawer = signedIn("system").querySelector('[popover="auto"]');
+    const form = drawer?.querySelector('form[action="/logout"]');
+    expect(form?.getAttribute("method")).toBe("post");
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toBe("Sign out");
+    expect(core().querySelector('form[action="/logout"]')).toBeNull();
+  });
+
+  test("drawer_theme_picker_posts_dark_device_or_light", () => {
+    const drawer = signedIn("light").querySelector('[popover="auto"]');
+    const form = drawer?.lastElementChild?.querySelector('form[action="/prefs/theme"]');
+    expect(form?.getAttribute("method")).toBe("post");
+    expect(form?.querySelector('input[type="hidden"][name="return"]')?.getAttribute("value")).toBe("/settings/account");
+    expect(form?.querySelector("fieldset > legend")?.textContent).toBe("Theme");
+    const buttons = [...(form?.querySelectorAll("button") ?? [])];
+    expect(
+      buttons.map((b) => [b.type, b.name, b.value, b.getAttribute("aria-label"), b.getAttribute("aria-pressed")]),
+    ).toEqual([
+      ["submit", "theme", "dark", "Dark", "false"],
+      ["submit", "theme", "system", "System", "false"],
+      ["submit", "theme", "light", "Light", "true"],
+    ]);
+    expect(buttons.every((b) => b.querySelector("svg") !== null)).toBe(true);
+    expect(core().querySelector('form[action="/prefs/theme"]')).toBeNull();
   });
 
   test("signed_in_avatar_uses_only_the_supplied_name", () => {
@@ -157,6 +200,16 @@ describe("app shell", () => {
     for (const href of ["/", "/login", "/legal/terms", "/legal/privacy", "/legal/domains"]) {
       expect(footer).toContain(`href="${href}"`);
     }
+  });
+
+  // Alex 2026-10-23: the footer always starts at least one screen down, so a short page shows no footer until scrolled.
+  test("shell_footer_starts_below_the_first_screen", () => {
+    const document = new DOMParser().parseFromString(render(), "text/html");
+    const page = document.querySelector("main")?.parentElement;
+    expect(page?.querySelector(":scope > header")).not.toBeNull();
+    expect(page?.nextElementSibling?.tagName).toBe("FOOTER");
+    const css = readFileSync(join(import.meta.dirname, "../screens/CoreShell.module.css"), "utf8");
+    expect(/\.page\s*\{([^}]*)\}/.exec(css)?.[1]).toMatch(/min-height:\s*100dvh/);
   });
 
   test("shell_feed_no_footer", () => {
