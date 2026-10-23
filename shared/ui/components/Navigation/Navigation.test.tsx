@@ -36,6 +36,9 @@ describe("Navigation drawer", () => {
     expect(close?.getAttribute("popovertargetaction")).toBe("hide");
     expect(close?.getAttribute("aria-label")).toBe("Close menu");
     expect(close?.type).toBe("button");
+    // Opening moves focus into the drawer, so Escape gives it back to the menu button even when the phone bar was
+    // hidden while the drawer was open (HTML popover focusing steps; CI e2e navigation_popover_without_js).
+    expect(close?.hasAttribute("autofocus")).toBe(true);
     const links = [...drawer.querySelectorAll("li a")];
     expect(links.map((a) => [a.getAttribute("href"), a.querySelector("span:last-child")?.textContent])).toEqual([
       ["/", "Home"],
