@@ -20,6 +20,8 @@ export function layerFor(file: string): string | undefined {
   if (file === "shared/ui/src/base.css") return "base";
   if (/^shared\/ui\/components\/.+\.module\.css$/.test(file)) return "components";
   if (/^apps\/[^/]+\/(?:src\/)?screens\/.+\.module\.css$/.test(file)) return "screens";
+  // The owner's README editor styles a page of its own (ADR 0037 point 5).
+  if (/^apps\/web\/src\/editor\/.+\.module\.css$/.test(file)) return "screens";
   return undefined;
 }
 

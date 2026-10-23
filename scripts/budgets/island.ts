@@ -7,6 +7,11 @@
 // chunk whose `src` ends in `.island.tsx`; the total is every JS file reachable from the entry chunks through
 // `imports` and `dynamicImports`, each counted once.
 //
+// The owner's README editor is the one exception (ADR 0037 point 5; Alex 2026-10-23 21:29Z: "approve BlockNote 0.56.0
+// as an owner-only editor chunk outside the island budget"): an entry whose `src` is under src/editor/, and every file
+// only it reaches, leave the island total and meet their own cap, `editorGzipBytes`. A file an island page also loads
+// stays in the island total, so the exception never makes room for ordinary pages.
+//
 // Before the size gate, every island in the source tree must keep its own lazy chunk (P1.25l; book edit
 // 2026-10-07-p125l-islands-lazy-chunks; plan §5.1). The manifest alone cannot show an island inlined into boot, which
 // has no chunk and is simply not counted (#464's first build), so the islands found on disk are checked against it.
@@ -15,7 +20,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-export type IslandBudget = { perIslandGzipBytes: number; totalGzipBytes: number };
+export type IslandBudget = { perIslandGzipBytes: number; totalGzipBytes: number; editorGzipBytes: number };
 /** The fields of Vite's ManifestChunk this budget reads. */
 export type ManifestChunk = {
   file: string;
@@ -34,10 +39,15 @@ const VITE_ROOT = "apps/web";
 /** Where islands live, as the depcruise island rule names them (scripts/lint/.dependency-cruiser.cjs, `ISLAND`). */
 export const ISLAND_ROOTS = ["apps/web/src/islands", "shared/ui/islands"];
 const ISLAND = /\.island\.tsx$/;
+/** Where an owner editor entry's source lives, relative to the Vite root. */
+const EDITOR_ROOT = "src/editor/";
 const JS = /\.m?js$/;
 
-/** Every manifest key reachable from the entry chunks; a key that names no chunk is an error, never a skip. */
-function reachable(manifest: Manifest): string[] {
+const isEditorEntry = (chunk: ManifestChunk): boolean =>
+  chunk.isEntry === true && chunk.src?.startsWith(EDITOR_ROOT) === true;
+
+/** Every manifest key reachable from the entry chunks `pick` keeps; a key that names no chunk is an error, never a skip. */
+function reachable(manifest: Manifest, pick: (chunk: ManifestChunk) => boolean): string[] {
   const seen = new Set<string>();
   const visit = (key: string): void => {
     if (seen.has(key)) return;
@@ -46,7 +56,7 @@ function reachable(manifest: Manifest): string[] {
     seen.add(key);
     for (const next of [...(chunk.imports ?? []), ...(chunk.dynamicImports ?? [])]) visit(next);
   };
-  for (const [key, chunk] of Object.entries(manifest)) if (chunk.isEntry) visit(key);
+  for (const [key, chunk] of Object.entries(manifest)) if (chunk.isEntry && pick(chunk)) visit(key);
   return [...seen].sort();
 }
 
@@ -99,30 +109,51 @@ export function islandsAreLazyChunks(manifest: Manifest, islands: string[]): str
   return refusals;
 }
 
-/** Each island chunk against the per-island limit, and every reachable JS file together against the total. */
+/** The JS files of `keys`, each once. */
+function jsFiles(manifest: Manifest, keys: string[]): Set<string> {
+  return new Set(keys.map((key) => (manifest[key] as ManifestChunk).file).filter((file) => JS.test(file)));
+}
+
+/**
+ * Each island chunk against the per-island limit, every JS file island pages reach together against the total, and
+ * what only the owner editor reaches against its own cap.
+ */
 export function checkIslands(
   manifest: Manifest,
   gzipBytes: (file: string) => number,
   budget: IslandBudget,
 ): IslandReport {
-  const keys = reachable(manifest);
+  const keys = reachable(manifest, (chunk) => !isEditorEntry(chunk));
   if (keys.length === 0) throw new Error("the manifest has no entry chunk");
   const lines: string[] = [];
   const over: string[] = [];
-  const files = new Set<string>();
+  const check = (text: string, bytes: number, max: number): void => {
+    lines.push(text);
+    if (bytes > max) over.push(text);
+  };
   for (const key of keys) {
     const chunk = manifest[key] as ManifestChunk;
-    if (!JS.test(chunk.file)) continue;
-    files.add(chunk.file);
-    if (!ISLAND.test(chunk.src ?? key)) continue;
-    const text = `island ${chunk.src ?? key}: ${gzipBytes(chunk.file)} gzip bytes (max ${budget.perIslandGzipBytes})`;
-    lines.push(text);
-    if (gzipBytes(chunk.file) > budget.perIslandGzipBytes) over.push(text);
+    if (!JS.test(chunk.file) || !ISLAND.test(chunk.src ?? key)) continue;
+    const bytes = gzipBytes(chunk.file);
+    check(
+      `island ${chunk.src ?? key}: ${bytes} gzip bytes (max ${budget.perIslandGzipBytes})`,
+      bytes,
+      budget.perIslandGzipBytes,
+    );
   }
+  const files = jsFiles(manifest, keys);
   const total = [...files].reduce((sum, file) => sum + gzipBytes(file), 0);
-  const text = `all island JS: ${total} gzip bytes in ${files.size} files (max ${budget.totalGzipBytes})`;
-  lines.push(text);
-  if (total > budget.totalGzipBytes) over.push(text);
+  check(
+    `all island JS: ${total} gzip bytes in ${files.size} files (max ${budget.totalGzipBytes})`,
+    total,
+    budget.totalGzipBytes,
+  );
+  const editorFiles = [...jsFiles(manifest, reachable(manifest, isEditorEntry))].filter((file) => !files.has(file));
+  if (editorFiles.length > 0) {
+    const editor = editorFiles.reduce((sum, file) => sum + gzipBytes(file), 0);
+    const text = `owner editor JS: ${editor} gzip bytes in ${editorFiles.length} files (max ${budget.editorGzipBytes})`;
+    check(text, editor, budget.editorGzipBytes);
+  }
   return { lines, over };
 }
 
