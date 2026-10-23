@@ -39,11 +39,13 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
 5. **Script only for the owner, and BlockNote only on the owner's editor page.** A profile page, the owner's included,
    runs no script (its CSP has no `script-src`, plan §5.4), so the README is edited on its own page,
    `GET /profile/readme`, under the app pages' CSP unchanged: scripts only from our assets, and Trusted Types with no
-   policy at all. That page loads a separate owner-only chunk with BlockNote 0.56.0 (`@blocknote/core` and
-   `@blocknote/react`, MPL-2.0, on TipTap and ProseMirror, MIT), pinned exactly, bundled and served from our origin,
-   never fetched from a CDN. The chunk is outside the 15 KB per-island and 75 KB total island budget, which still
-   holds for every other island and page (Alex, 21:29Z: "approve BlockNote 0.56.0 as an owner-only editor chunk outside
-   the island budget"). BlockNote's engine does the editing; its toolbar, slash menu and block handle are our own
+   policy at all. That page loads a separate owner-only chunk with BlockNote 0.56.0's core (`@blocknote/core`,
+   MPL-2.0, on TipTap and ProseMirror, MIT), pinned exactly, bundled and served from our origin, never fetched from
+   a CDN. The chunk is outside the 15 KB per-island and 80 KB total island budget, which still holds for every other
+   island and page (Alex, 21:29Z: "approve BlockNote 0.56.0 as an owner-only editor chunk outside the island budget").
+   The exception is a folder, not one file: every browser entry under `apps/web/src/editor/`, with the JS only those
+   entries reach, shares one cap of 256 KiB gzip, and only that folder may import BlockNote, TipTap or ProseMirror
+   (P2.20z). BlockNote's engine does the editing; its toolbar, slash menu and block handle are our own
    components on the design sheet, because BlockNote's ready-made menus write raw HTML (a closing popover's snapshot,
    pasted HTML), which Trusted Types refuses (Alex, 21:40Z: make it follow our rules, it may be reused). So paste is
    plain text. Columns are our own custom block on BlockNote's core, not `@blocknote/xl-multi-column` (GPL-3.0 or
@@ -96,7 +98,7 @@ stored record is refused, a profile needs a display name, links are http(s) and 
 session's own DID, CSRF refusal, a repeated field refused, conflict on a swapped record, Settings return), the page
 tests (no script before hydration, unsafe links never linked, an unreadable profile offers no editing), the block
 reader's tests (unknown blocks dropped, unsafe links refused, bounds held) and the island budget test, which fails if
-any chunk but the owner's editor goes over the budget, and an e2e test that the editor page runs with Trusted Types
+any chunk outside `apps/web/src/editor/` goes over the island budget or that folder goes over its own cap, and an e2e test that the editor page runs with Trusted Types
 and no policy. Acceptance is Alex's line on the pull request
 that adds this record; ADR 0001 notes the proposal at its end and gains the acceptance paragraph when he accepts. The
 status line stays Proposed until then.
