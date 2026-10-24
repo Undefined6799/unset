@@ -31,7 +31,7 @@ export type ReadmeListItem = {
 };
 export type ReadmeBlockData =
   | {
-      readonly $type: `${typeof D}paragraph` | `${typeof D}quote`;
+      readonly $type: `${typeof D}paragraph` | `${typeof D}display` | `${typeof D}quote`;
       readonly align?: string;
       readonly content: readonly ReadmeRun[];
     }
@@ -146,6 +146,14 @@ function block(node: Exclude<ReadmeBlockData, ReadmeListItem>, key: number): Rea
     case `${D}paragraph`:
       return (
         <p key={key} {...aligned(node.align)}>
+          {runs(node.content)}
+        </p>
+      );
+    case `${D}display`:
+      // The sheet's display style (Alex 2026-10-24 00:08Z), as large text, not a heading: the page's outline stays
+      // the README's headings.
+      return (
+        <p key={key} className={styles.display} {...aligned(node.align)}>
           {runs(node.content)}
         </p>
       );

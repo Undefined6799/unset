@@ -6,9 +6,11 @@
 
 import { getDefaultBlockTypeItems } from "@blocknote/core";
 import {
+  type DefaultSuggestionItem,
   FormattingToolbarExtension,
   filterSuggestionItems,
   getDefaultSlashMenuItems,
+  insertOrUpdateBlockForSlashMenu,
   SideMenuExtension,
   SuggestionMenu,
 } from "@blocknote/core/extensions";
@@ -73,7 +75,19 @@ function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, close: ()
 function blockTypes(editor: ReadmeEditor) {
   const items: { key: string; type: string; props?: Record<string, boolean | number | string> }[] =
     getDefaultBlockTypeItems(editor);
-  return [...items, { key: "code_block", type: "codeBlock" }];
+  const [paragraph, ...rest] = items;
+  return [
+    ...(paragraph === undefined ? [] : [paragraph]),
+    { key: "display", type: "display" },
+    ...rest,
+    { key: "code_block", type: "codeBlock" },
+  ];
+}
+
+/** A block menu entry's title: BlockNote's dictionary, or ours for the display block. */
+function typeTitle(editor: ReadmeEditor, key: string): string {
+  if (key === "display") return EDITOR.display.title;
+  return editor.dictionary.slash_menu[key as keyof typeof editor.dictionary.slash_menu].title;
 }
 
 function currentType(editor: ReadmeEditor) {
@@ -145,7 +159,7 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
     back();
     if (isWebLink(url)) editor.createLink(url);
   };
-  const title = (key: string) => editor.dictionary.slash_menu[key as keyof typeof editor.dictionary.slash_menu].title;
+  const title = (key: string) => typeTitle(editor, key);
   if (link !== null) {
     return (
       <div ref={ref} className={styles.toolbar} role="toolbar" aria-label={EDITOR.toolbar}>
@@ -258,6 +272,7 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
 /** The "/" menu's items: BlockNote's own (title, subtext, aliases, group, shortcut badge), for the blocks the README
  * holds, each with a short glyph in its tile in place of BlockNote's React icons. */
 const GLYPHS: Readonly<Record<string, string>> = {
+  display: "Aa",
   heading: "H1",
   heading_2: "H2",
   heading_3: "H3",
@@ -277,9 +292,24 @@ function shortcutKeys(badge: string): string[] {
   return badge.split("-").map((key) => names[key] ?? key);
 }
 
-function slashItems(editor: ReadmeEditor, query: string) {
-  const ours = getDefaultSlashMenuItems(editor).filter((item) => Object.hasOwn(GLYPHS, item.key));
-  return filterSuggestionItems(ours, query);
+/** A slash menu entry: BlockNote's own, or the display block's, whose key is not in BlockNote's dictionary. */
+type SlashItem = Omit<DefaultSuggestionItem, "key"> & { key: string };
+
+function slashItems(editor: ReadmeEditor, query: string): SlashItem[] {
+  const ours: SlashItem[] = getDefaultSlashMenuItems(editor).filter((item) => Object.hasOwn(GLYPHS, item.key));
+  const group = ours.find((item) => item.key === "heading")?.group;
+  const display: SlashItem = {
+    key: "display",
+    title: EDITOR.display.title,
+    subtext: EDITOR.display.subtext,
+    aliases: [...EDITOR.display.aliases],
+    ...(group === undefined ? {} : { group }),
+    onItemClick: () => {
+      insertOrUpdateBlockForSlashMenu(editor, { type: "display" });
+    },
+  };
+  const at = ours.findIndex((item) => item.key === "heading");
+  return filterSuggestionItems([...ours.slice(0, Math.max(at, 0)), display, ...ours.slice(Math.max(at, 0))], query);
 }
 
 /** The keys the open block menu takes from the editor: arrows move, Enter picks, Escape closes. The highlight goes

@@ -26,6 +26,11 @@ describe("Readme", () => {
     expect(out).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; &lt;script&gt;");
   });
 
+  it("readme_draws_display_text_in_the_display_style", () => {
+    const out = html([{ $type: `${D}display`, content: [t("Hello")] }]);
+    expect(out).toContain(`<p class="${styles.display}">Hello</p>`);
+  });
+
   it("readme_draws_only_centre_and_right_alignment", () => {
     const out = html([
       { ...p(t("c")), align: "center" },

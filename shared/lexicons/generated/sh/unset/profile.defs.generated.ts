@@ -146,6 +146,7 @@ type Readme = {
    * Blocks in reading order. A block type this app does not know is skipped.
    */
   blocks: (
+    | l.$Typed<Display>
     | l.$Typed<Paragraph>
     | l.$Typed<Heading>
     | l.$Typed<ListItem>
@@ -166,6 +167,7 @@ const readme = /*#__PURE__*/ l.typedObject<Readme>(
     blocks: /*#__PURE__*/ l.array(
       /*#__PURE__*/ l.typedUnion(
         [
+          /*#__PURE__*/ l.typedRef<Display>((() => display) as any),
           /*#__PURE__*/ l.typedRef<Paragraph>((() => paragraph) as any),
           /*#__PURE__*/ l.typedRef<Heading>((() => heading) as any),
           /*#__PURE__*/ l.typedRef<ListItem>((() => listItem) as any),
@@ -279,6 +281,46 @@ const paragraph = /*#__PURE__*/ l.typedObject<Paragraph>(
 );
 
 export { paragraph };
+
+/** Display text: the design sheet's largest type style, for a hero line. */
+type Display = {
+  $type?: "sh.unset.profile#display";
+
+  /**
+   * Text alignment. Absent, or an unknown value, reads as the start of the line.
+   */
+  align?: "center" | "right" | l.UnknownString;
+
+  /**
+   * The block's text, as runs in reading order.
+   */
+  content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
+};
+
+export type { Display };
+
+/** Display text: the design sheet's largest type style, for a hero line. */
+const display = /*#__PURE__*/ l.typedObject<Display>(
+  $nsid,
+  "display",
+  /*#__PURE__*/ l.object({
+    align: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["center", "right"] }>({ maxLength: 16 }),
+    ),
+    content: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<TextRun>((() => textRun) as any),
+          /*#__PURE__*/ l.typedRef<LinkRun>((() => linkRun) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { display };
 
 /** A heading. */
 type Heading = {
@@ -457,6 +499,7 @@ export { columns };
 type Column = {
   $type?: "sh.unset.profile#column";
   blocks: (
+    | l.$Typed<Display>
     | l.$Typed<Paragraph>
     | l.$Typed<Heading>
     | l.$Typed<ListItem>
@@ -476,6 +519,7 @@ const column = /*#__PURE__*/ l.typedObject<Column>(
     blocks: /*#__PURE__*/ l.array(
       /*#__PURE__*/ l.typedUnion(
         [
+          /*#__PURE__*/ l.typedRef<Display>((() => display) as any),
           /*#__PURE__*/ l.typedRef<Paragraph>((() => paragraph) as any),
           /*#__PURE__*/ l.typedRef<Heading>((() => heading) as any),
           /*#__PURE__*/ l.typedRef<ListItem>((() => listItem) as any),

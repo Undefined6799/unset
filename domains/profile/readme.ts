@@ -24,6 +24,7 @@ export type Run = TextRun | LinkRun;
 export type Align = "center" | "right";
 export type ReadmeBlock =
   | { readonly $type: `${typeof DEFS}paragraph`; readonly align?: Align; readonly content: Run[] }
+  | { readonly $type: `${typeof DEFS}display`; readonly align?: Align; readonly content: Run[] }
   | {
       readonly $type: `${typeof DEFS}heading`;
       readonly level: 1 | 2 | 3;
@@ -58,7 +59,7 @@ const LIST_STYLES = { bulletListItem: "bullet", numberedListItem: "numbered", ch
 const STYLES = ["bold", "italic", "underline", "strike", "code"] as const;
 
 const KNOWN: ReadonlySet<string> = new Set(
-  ["paragraph", "heading", "listItem", "quote", "codeBlock", "columns"].map((def) => `${DEFS}${def}`),
+  ["paragraph", "display", "heading", "listItem", "quote", "codeBlock", "columns"].map((def) => `${DEFS}${def}`),
 );
 
 class TooLong extends Error {}
@@ -132,7 +133,8 @@ function align(props: Node): { align?: Align } {
 function block(value: Node, depth: number): ReadmeBlock | null {
   const props = isNode(value.props) ? value.props : {};
   const type = value.type;
-  if (type === "paragraph") return { $type: `${DEFS}paragraph`, ...align(props), content: runs(value.content) };
+  if (type === "paragraph" || type === "display")
+    return { $type: `${DEFS}${type}`, ...align(props), content: runs(value.content) };
   if (type === "quote") return { $type: `${DEFS}quote`, content: runs(value.content) };
   if (type === "heading") {
     const level = props.level === 1 || props.level === 2 ? props.level : 3;
@@ -269,6 +271,8 @@ function editorBlock(block: ReadmeBlock): EditorBlock {
   switch (block.$type) {
     case `${DEFS}paragraph`:
       return plain("paragraph", aligned, editorRuns(block.content));
+    case `${DEFS}display`:
+      return plain("display", aligned, editorRuns(block.content));
     case `${DEFS}quote`:
       return plain("quote", {}, editorRuns(block.content));
     case `${DEFS}heading`:

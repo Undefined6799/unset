@@ -161,6 +161,15 @@
     text-align: right;
   }
 
+  /* Display text as the README draws it (shared/ui Readme .display): the sheet's display style. */
+  .editor [data-content-type="display"] p {
+    margin: 0;
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-line);
+    font-weight: var(--type-display-weight);
+    letter-spacing: var(--type-display-tracking);
+  }
+
   /* The README draws a level-n heading one level down (h2 for 1, so the page keeps one h1; shared/ui Readme), and
      the editor matches it: level 1 at the h2 size, level 2 at the h3 size, level 3 at body size. */
   .editor [data-content-type="heading"] h1 {
