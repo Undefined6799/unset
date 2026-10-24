@@ -129,8 +129,10 @@ describe("GET /:did", () => {
     expect(account).toBeDefined();
     const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
     expect(initials).toContain("A");
-    // P2.13e: the only script is the island boot and the drawer's theme picker props; the README is edited elsewhere.
+    // P2.13e: the scripts are the island boot and island props: the drawer's theme picker and the Share button
+    // (Alex 2026-10-24 00:12Z); the README editor is its own chunk, loaded by the owner's page only.
     expect(elements(document, "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value)).toEqual([
+      "application/json",
       "application/json",
       "module",
     ]);

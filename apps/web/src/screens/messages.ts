@@ -16,6 +16,7 @@ export const PROFILE = {
   readmeForm: { edit: "Edit README", label: "README", save: "Save", cancel: "Cancel" },
   details: { location: "Location", website: "Website", did: "DID" },
   copyLink: "Copy link",
+  share: "Share profile",
   copied: "Copied",
   copyFailed: "Copy failed",
   fields: {

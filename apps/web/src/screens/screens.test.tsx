@@ -172,8 +172,11 @@ describe("profile screen", () => {
     // No sign-out here: the account details are on Settings › Account (P2.13c).
     expect(tags(page, "form")).toEqual([]);
     expect(page).not.toContain("<code>");
-    // Without an editor document (a visitor's view) the README is not a form and the page has no script.
-    expect(page).not.toContain("<script");
+    // Without an editor document (a visitor's view) the README is not a form and the editor chunk is not loaded; the
+    // only island is the Share button (Alex 2026-10-24 00:12Z), drawn only once script runs.
+    expect(page).not.toContain("editor");
+    expect([...page.matchAll(/data-island="([^"]+)"/g)].map((match) => match[1])).toEqual(["share"]);
+    expect(page).not.toContain("Share profile</button>");
   });
 
   test("profile_owner_gets_the_readme_inside_its_form_with_the_pencil_hidden", () => {

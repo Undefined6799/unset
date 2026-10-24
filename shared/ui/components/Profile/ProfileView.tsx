@@ -4,8 +4,10 @@
 // and a details list. Name, headline, place, website and README are the member's; handle, tag and DID are not.
 // The owner's page draws the README inside its form (ReadmeForm.tsx), which the editor chunk opens in place. The copy
 // comes from the app as `labels`.
+import { IslandSlot } from "@unset/shared-islands";
 import type { ReactNode } from "react";
 import external from "../../icons/drawings/external.generated.ts";
+import shareIsland from "../../islands/share.island.tsx";
 import { safeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Avatar } from "../Avatar/Avatar.tsx";
@@ -46,6 +48,8 @@ export type ProfileLabels = {
   readonly checkItem: ReadmeProps["labels"];
   readonly details: Readonly<Record<"location" | "website" | "did", string>>;
   readonly copyLink: string;
+  /** The Share button's accessible name. */
+  readonly share: string;
   readonly copied: string;
   readonly copyFailed: string;
   readonly fields: Readonly<Record<ProfileFieldName, string>>;
@@ -73,6 +77,7 @@ const LABEL_STRINGS = [
   "handleUnavailable",
   "verified",
   "copyLink",
+  "share",
   "copied",
   "copyFailed",
   "edit",
@@ -200,6 +205,14 @@ export function ProfileView({
           </h1>
           <p className={styles.handle}>{`@${handle}`}</p>
           {verified ? <Tag status="ok">{labels.verified}</Tag> : null}
+        </div>
+        {/* The ways to reach the member (Alex 2026-10-24 00:12Z): Share first; the contact means they turn on follow. */}
+        <div className={styles.contacts}>
+          <IslandSlot
+            name="share"
+            island={shareIsland}
+            props={{ label: labels.share, copied: labels.copied, copyFailed: labels.copyFailed }}
+          />
         </div>
         {handleUnavailable ? <p>{labels.handleUnavailable}</p> : null}
         {headline === null ? null : <p className={styles.headline}>{headline}</p>}

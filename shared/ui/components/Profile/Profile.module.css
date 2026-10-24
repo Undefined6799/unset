@@ -47,6 +47,39 @@
     font-family: var(--font-mono);
   }
 
+  /* The ways to reach the member, under the handle: 32px icon buttons in a row, as the pencil without its fade. */
+  .contacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .contacts:empty {
+    display: none;
+  }
+
+  .contact {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+
+  .contact:hover {
+    background-color: var(--color-line);
+  }
+
+  .contact:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
   .headline {
     color: var(--color-ink);
   }

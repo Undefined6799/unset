@@ -56,6 +56,7 @@ const PROFILE_LABELS: ProfileLabels = {
   checkItem: { done: "Done", notDone: "Not done" },
   details: { location: "Location", website: "Website", did: "DID" },
   copyLink: "Copy link",
+  share: "Share profile",
   copied: "Copied",
   copyFailed: "Copy failed",
   fields: {
