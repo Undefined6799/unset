@@ -3,6 +3,7 @@
 import type { IslandDefinition } from "@unset/shared-islands";
 import { hydrateRoot } from "react-dom/client";
 import { hydrateIslands } from "./hydrate.ts";
+import { closePopoversOnPageHide } from "./popovers.ts";
 import { byName } from "./registry.ts";
 
 // Lazy: each island is its own chunk, fetched only when the page has one (vite 8.3.1 import.meta.glob).
@@ -12,4 +13,5 @@ const loaders = byName(
   }),
 );
 
+closePopoversOnPageHide(window);
 void hydrateIslands(document, loaders, hydrateRoot);
