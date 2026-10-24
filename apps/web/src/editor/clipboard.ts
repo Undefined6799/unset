@@ -49,6 +49,15 @@ function blockPosition(editor: ReadmeEditor, id: string): number {
   return found;
 }
 
+/** Selects the whole block with `id` as a node (ProseMirror outlines it), as a drag from the handle does. */
+export function selectBlock(editor: ReadmeEditor, id: string): boolean {
+  const view = editor.prosemirrorView;
+  const pos = blockPosition(editor, id);
+  if (pos < 0) return false;
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+  return true;
+}
+
 /** Starts dragging one block from the handle: ProseMirror moves its slice on drop, with no HTML on the way. */
 export function startBlockDrag(editor: ReadmeEditor, event: DragEvent, blockId: string): void {
   const view = editor.prosemirrorView;

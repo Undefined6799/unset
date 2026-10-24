@@ -7,9 +7,10 @@ import { useEffect, useRef, useState } from "react";
 import { type Copied, copySelection, endBlockDrag, pasteText } from "./clipboard.ts";
 import { columnDrop, dropIntoColumns, normalizeColumns } from "./columns.ts";
 import styles from "./Editor.module.css";
-import { BlockHandle, BlockMenu, CurrentLine, StyleToolbar } from "./menus.tsx";
+import { BlockHandle, BlockMenu, CurrentLine, HeldBlockMenu, StyleToolbar } from "./menus.tsx";
 import { EDITOR } from "./messages.ts";
 import { type ReadmeEditor, type ReadmePartialBlock, readmeSchema } from "./schema.ts";
+import { type TouchDrop, watchBlockHolds } from "./touch.ts";
 
 export type BlockEditorProps = {
   /** The document to start from; empty for a new one. */
@@ -49,29 +50,43 @@ function placeOver(
   element.style.setProperty("height", `${Math.round(rect.height)}px`);
 }
 
+type Marks = { readonly bar: HTMLElement | null; readonly target: HTMLElement | null };
+
 /**
- * Takes a handle drag's dragover and drop before ProseMirror when it lands on a block (columns.ts): the block it would
- * pair with is outlined (Alex 2026-10-24 00:04Z) and a bar marks the side the new column goes; any other drop stays
- * ProseMirror's move. Both are overlays, so ProseMirror's own DOM is never touched. Returns the cleanup.
+ * Shows where a moving block would land, as overlays, so ProseMirror's own DOM is never touched: beside a block, that
+ * block is outlined (Alex 2026-10-24 00:04Z) and a bar marks the side the new column goes; before or after a block
+ * (a touch hold's move), a bar lies in the gap there.
  */
-function watchColumnDrops(
-  editor: ReadmeEditor,
-  outer: HTMLElement,
-  marks: readonly (HTMLElement | null)[],
-): () => void {
-  const [bar, target] = marks;
-  const hide = () => {
-    for (const mark of marks) if (mark !== null) mark.hidden = true;
-  };
+function showDrop(outer: HTMLElement, marks: Marks, drop: TouchDrop | null): void {
+  if (marks.bar) marks.bar.hidden = true;
+  if (marks.target) marks.target.hidden = true;
+  if (drop === null) return;
+  const box = outer.getBoundingClientRect();
+  if (drop.kind === "move") {
+    const { rect } = drop;
+    // Half of the space-3 gap between blocks, less the bar's own 2px.
+    const top = drop.placement === "before" ? rect.top - 7 : rect.bottom + 5;
+    if (marks.bar) placeOver(marks.bar, box, { left: rect.left, top, width: rect.width, height: 2 });
+    return;
+  }
+  const { rect, side } = drop.drop;
+  if (marks.target) placeOver(marks.target, box, rect);
+  const x = side === "left" ? rect.left : rect.right;
+  if (marks.bar) placeOver(marks.bar, box, { left: x, top: rect.top, width: 2, height: rect.height });
+}
+
+/**
+ * Takes a handle drag's dragover and drop before ProseMirror when it lands on a block (columns.ts), showing where the
+ * new column goes; any other drop stays ProseMirror's move. Returns the cleanup.
+ */
+function watchColumnDrops(editor: ReadmeEditor, outer: HTMLElement, marks: Marks): () => void {
+  const hide = () => showDrop(outer, marks, null);
   const over = (event: DragEvent) => {
     const drop = columnDrop(editor, event);
     if (drop === null) return hide();
     event.preventDefault();
     event.stopPropagation();
-    const box = outer.getBoundingClientRect();
-    if (target) placeOver(target, box, drop.rect);
-    const x = drop.side === "left" ? drop.rect.left : drop.rect.right;
-    if (bar) placeOver(bar, box, { left: x, top: drop.rect.top, width: 2, height: drop.rect.height });
+    showDrop(outer, marks, { kind: "columns", drop });
   };
   const drop = (event: DragEvent) => {
     hide();
@@ -102,6 +117,8 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   const area = useRef<HTMLDivElement>(null);
   const indicator = useRef<HTMLDivElement>(null);
   const pairing = useRef<HTMLDivElement>(null);
+  // The block a touch hold let go of, whose menu is open.
+  const [held, setHeld] = useState<string | null>(null);
   useEffect(() => {
     const element = mount.current;
     const outer = area.current;
@@ -116,11 +133,14 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
     outer.addEventListener("copy", onCopy, true);
     outer.addEventListener("cut", onCopy, true);
     outer.style.setProperty("--editor-placeholder", JSON.stringify(EDITOR.placeholder));
-    const stopColumns = watchColumnDrops(editor, outer, [indicator.current, pairing.current]);
+    const marks = { bar: indicator.current, target: pairing.current };
+    const stopColumns = watchColumnDrops(editor, outer, marks);
+    const stopHolds = watchBlockHolds(editor, outer, { menu: setHeld, show: (drop) => showDrop(outer, marks, drop) });
     const stopNormalize = editor.onChange(() => normalizeColumns(editor));
     ready.current(editor);
     return () => {
       stopColumns();
+      stopHolds();
       stopNormalize();
       outer.removeEventListener("copy", onCopy, true);
       outer.removeEventListener("cut", onCopy, true);
@@ -136,6 +156,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
       <StyleToolbar editor={editor} />
       <BlockMenu editor={editor} />
       <BlockHandle editor={editor} />
+      {held === null ? null : <HeldBlockMenu editor={editor} id={held} close={() => setHeld(null)} />}
     </div>
   );
 }

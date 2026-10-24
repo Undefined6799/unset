@@ -198,6 +198,21 @@
     left: calc(-1 * (var(--space-8) + var(--space-2)));
   }
 
+  /* One column below 768px: no gap beside the README, so its pencil sits above it, at the right (Alex 2026-10-24
+     03:41Z: the phone gets the pencil too). A double tap opens the editor as a double-click does, so the README
+     turns off the browser's double-tap zoom. */
+  @media (max-width: 767px) {
+    .readmePencil {
+      top: calc(-1 * (var(--space-8) + var(--space-2)));
+      right: 0;
+      left: auto;
+    }
+  }
+
+  .editableBlock > :global([data-readme-editor-mount]) {
+    touch-action: manipulation;
+  }
+
   .pencil[hidden] {
     display: none;
   }

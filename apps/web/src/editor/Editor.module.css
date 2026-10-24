@@ -19,6 +19,22 @@
     margin-left: calc(-1 * (var(--space-12) + var(--space-6)));
   }
 
+  /* One column below 768px (Profile.module.css): no gap for the handle, so the editor takes the README's width. */
+  @media (max-width: 767px) {
+    .editor,
+    :global([data-readme-editor-mount]) .editor {
+      margin-left: 0;
+      padding-left: 0;
+    }
+  }
+
+  /* A touch screen has no hover to show the handle: a held block is selected and moved instead (touch.ts). */
+  @media (hover: none) {
+    .handle {
+      display: none;
+    }
+  }
+
   .editor :global(.ProseMirror) {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -421,9 +437,12 @@
   }
 
   /* The toolbar's block type menu, its dividers and its link field (BlockNote's FormattingToolbar layout). */
+  /* On a narrow screen the toolbar wraps onto more rows rather than running off it (Alex 2026-10-24 03:41Z). */
   .toolbar {
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
+    max-width: 100%;
   }
 
   .typePicker {
@@ -435,7 +454,8 @@
   /* Its static place, under the button in the picker's column, is where it opens. The handle's block menu opens
      the same way under the handle. */
   .typeMenu,
-  .blockMenu {
+  .blockMenu,
+  .heldMenu {
     position: absolute;
     margin-top: var(--space-1);
     left: 0;
@@ -447,6 +467,12 @@
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-menu);
+  }
+
+  /* A held block's menu (touch.ts) is placed under the block by script, over the text, as the other menus. */
+  .heldMenu {
+    z-index: var(--z-menu);
+    margin-top: 0;
   }
 
   .typeItem {

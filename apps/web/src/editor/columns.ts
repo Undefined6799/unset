@@ -13,10 +13,16 @@ const COLUMNS_MAX = 3;
 /** The top and bottom share of a block where a drop stays ProseMirror's move between blocks. */
 const BETWEEN = 0.25;
 
-export type ColumnDrop = { readonly target: string; readonly side: "left" | "right"; readonly rect: DOMRect };
+export type ColumnDrop = {
+  /** The block being moved. */
+  readonly dragged: string;
+  readonly target: string;
+  readonly side: "left" | "right";
+  readonly rect: DOMRect;
+};
 
 /** The block the handle is dragging: startBlockDrag selects it as a node. */
-function draggedId(editor: ReadmeEditor): string | null {
+export function draggedId(editor: ReadmeEditor): string | null {
   const selection = editor.prosemirrorView.state.selection;
   const id: unknown = selection instanceof NodeSelection ? selection.node.attrs.id : null;
   return typeof id === "string" ? id : null;
@@ -30,33 +36,57 @@ function copy(block: ReadmeBlock): ReadmePartialBlock {
   return { ...rest, children: children.map(copy) } as ReadmePartialBlock;
 }
 
+/** The block under `element` that holds text (not a column list or a column), as its id and content element. */
+export function textBlockAt(element: Element | null): { id: string; content: HTMLElement } | null {
+  const container = element?.closest('[data-node-type="blockContainer"]');
+  const content = container?.querySelector(":scope > [data-content-type]");
+  const id = container?.getAttribute("data-id");
+  if (!(content instanceof HTMLElement) || typeof id !== "string") return null;
+  return CONTAINERS.has(content.dataset.contentType ?? "") ? null : { id, content };
+}
+
 /** Where a block drag over `event` would make columns, or null for an ordinary move. */
 export function columnDrop(editor: ReadmeEditor, event: DragEvent): ColumnDrop | null {
   const dragged = draggedId(editor);
   if (editor.prosemirrorView.dragging === null || dragged === null) return null;
-  const container = event.target instanceof Element ? event.target.closest('[data-node-type="blockContainer"]') : null;
-  const content = container?.querySelector(":scope > [data-content-type]");
-  const id = container?.getAttribute("data-id");
-  if (!(content instanceof HTMLElement) || typeof id !== "string" || id === dragged) return null;
-  if (CONTAINERS.has(content.dataset.contentType ?? "")) return null;
-  const rect = content.getBoundingClientRect();
+  return columnDropAt(
+    editor,
+    dragged,
+    event.target instanceof Element ? event.target : null,
+    event.clientX,
+    event.clientY,
+  );
+}
+
+/** Where dropping `dragged` at the point (x, y), over `element`, would make columns (a mouse drag or a touch hold). */
+export function columnDropAt(
+  editor: ReadmeEditor,
+  dragged: string,
+  element: Element | null,
+  x: number,
+  y: number,
+): ColumnDrop | null {
+  const block = textBlockAt(element);
+  if (block === null || block.id === dragged) return null;
+  const { id } = block;
+  const rect = block.content.getBoundingClientRect();
   const band = rect.height * BETWEEN;
-  if (event.clientY < rect.top + band || event.clientY > rect.bottom - band) return null;
-  const side = event.clientX < rect.left + rect.width / 2 ? "left" : "right";
+  if (y < rect.top + band || y > rect.bottom - band) return null;
+  const side = x < rect.left + rect.width / 2 ? "left" : "right";
   const parent = editor.getParentBlock(id);
-  if (parent === undefined) return { target: id, side, rect };
+  if (parent === undefined) return { dragged, target: id, side, rect };
   if (parent.type !== "column") return null;
   const list = editor.getParentBlock(parent.id);
-  const others = list?.children.filter((column) => !column.children.every((block) => block.id === dragged)) ?? [];
-  return others.length < COLUMNS_MAX ? { target: id, side, rect } : null;
+  const others = list?.children.filter((column) => !column.children.every((child) => child.id === dragged)) ?? [];
+  return others.length < COLUMNS_MAX ? { dragged, target: id, side, rect } : null;
 }
 
 /** Puts the dragged block beside the drop's target, in one undo step; both keep their ids, since each is removed
  * before it is inserted again. */
 export function dropIntoColumns(editor: ReadmeEditor, drop: ColumnDrop): void {
-  const dragged = draggedId(editor);
-  const moving = dragged === null ? undefined : editor.getBlock(dragged);
-  if (dragged === null || moving === undefined) return;
+  const { dragged } = drop;
+  const moving = editor.getBlock(dragged);
+  if (moving === undefined) return;
   editor.transact(() => {
     editor.removeBlocks([dragged]);
     const parent = editor.getParentBlock(drop.target);
@@ -76,6 +106,17 @@ export function dropIntoColumns(editor: ReadmeEditor, drop: ColumnDrop): void {
   // The caret goes into the moved block, so no container is left selected.
   editor.setTextCursorPosition(dragged, "end");
   editor.focus();
+}
+
+/** Moves `dragged` before or after `target`, in one undo step, keeping its id (a touch hold's ordinary move). */
+export function moveBlock(editor: ReadmeEditor, dragged: string, target: string, placement: "before" | "after"): void {
+  const moving = editor.getBlock(dragged);
+  if (moving === undefined || dragged === target) return;
+  editor.transact(() => {
+    editor.removeBlocks([dragged]);
+    if (editor.getBlock(target) !== undefined) editor.insertBlocks([moving], target, placement);
+  });
+  if (editor.getBlock(dragged) !== undefined) editor.setTextCursorPosition(dragged, "end");
 }
 
 /** A block with no text and nothing nested: what Delete, or deleting all its text, leaves in a column. */

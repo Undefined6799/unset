@@ -41,14 +41,16 @@ function useStore<T>(store: Store<T>): T {
 /** Puts `ref`'s element at a viewport position (`at`, from a DOMRect); null while the menu is hidden. The element is
  * absolutely placed in the editor, so the position is taken relative to the editor's box, and kept inside its width
  * (right-aligned text would otherwise push the toolbar past the page's edge). */
-function usePlace(ref: RefObject<HTMLElement | null>, at: { left: number; top: number } | null): void {
+function usePlace(ref: RefObject<HTMLElement | null>, at: { left: number; top: number; above?: true } | null): void {
   useLayoutEffect(() => {
     const element = ref.current;
     const box = element?.offsetParent?.getBoundingClientRect();
     if (element === null || box === undefined || at === null) return;
     const left = Math.max(0, Math.min(at.left - box.left, box.width - element.offsetWidth));
+    // `above`: the element's bottom sits at `top`, however many rows it wrapped onto.
+    const top = at.above ? at.top - element.offsetHeight : at.top;
     element.style.setProperty("left", `${Math.round(left)}px`);
-    element.style.setProperty("top", `${Math.round(at.top - box.top)}px`);
+    element.style.setProperty("top", `${Math.round(top - box.top)}px`);
   });
 }
 
@@ -122,10 +124,10 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
   const [link, setLink] = useState<string | null>(null);
   useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
   const ref = useRef<HTMLDivElement>(null);
-  const at = useRef<{ left: number; top: number } | null>(null);
+  const at = useRef<{ left: number; top: number; above?: true } | null>(null);
   const selection = shown ? window.getSelection() : null;
   const rect = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null;
-  if (rect !== null) at.current = { left: rect.left, top: rect.top - 44 };
+  if (rect !== null) at.current = { left: rect.left, top: rect.top - 4, above: true };
   const open = shown || types || link !== null;
   useDismiss(types || link !== null, ref, () => {
     setTypes(false);
@@ -468,6 +470,32 @@ export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The menu of a block held on a touch screen and let go (touch.ts): the handle's block menu, under the block, since a
+ * phone has no handle to hover. The block stays selected while it is open.
+ */
+export function HeldBlockMenu({ editor, id, close }: { editor: ReadmeEditor; id: string; close: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(true, ref, close);
+  const content = editor.prosemirrorView.dom.querySelector(
+    `[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"] > [data-content-type]`,
+  );
+  const rect = content?.getBoundingClientRect() ?? null;
+  usePlace(ref, rect === null ? null : { left: rect.left, top: rect.bottom + 4 });
+  if (rect === null) return null;
+  const remove = () => {
+    close();
+    editor.removeBlocks([id]);
+  };
+  return (
+    <div ref={ref} className={styles.heldMenu} role="menu" aria-label={EDITOR.blockMenu}>
+      <button type="button" role="menuitem" className={styles.typeItem} onClick={remove}>
+        {EDITOR.deleteBlock}
+      </button>
     </div>
   );
 }

@@ -40,6 +40,28 @@ function formParts(page: Document) {
   return { form, field, mount, pencil, actions, cancel };
 }
 
+/** How close in time (ms) and place (CSS px) two taps must be to count as a double tap. */
+const DOUBLE_TAP = { ms: 350, px: 24 };
+
+/**
+ * A double tap on a touch screen (Alex 2026-10-24 03:41Z: "same kind of behavior as the computer with the pencil and
+ * double tap"). Not every mobile browser sends dblclick for two taps, so the taps are counted here; a mouse
+ * keeps its dblclick.
+ */
+function doubleTap(then: () => void): (event: PointerEvent) => void {
+  let last = { at: Number.NEGATIVE_INFINITY, x: 0, y: 0 };
+  return (event) => {
+    if (event.pointerType === "mouse") return;
+    const near = Math.hypot(event.clientX - last.x, event.clientY - last.y) <= DOUBLE_TAP.px;
+    if (near && event.timeStamp - last.at <= DOUBLE_TAP.ms) {
+      last = { at: Number.NEGATIVE_INFINITY, x: 0, y: 0 };
+      then();
+      return;
+    }
+    last = { at: event.timeStamp, x: event.clientX, y: event.clientY };
+  };
+}
+
 /**
  * Makes the owner's README editable in place: the pencil or a double-click swaps the README for the editor, Cancel
  * puts the README back, and Save posts the editor's document. Does nothing on a page without the README form.
@@ -86,6 +108,7 @@ export function startReadmeEditor(page: Document): void {
   });
   pencil.addEventListener("click", open);
   mount.addEventListener("dblclick", open);
+  mount.addEventListener("pointerup", doubleTap(open));
   cancel.addEventListener("click", close);
   pencil.hidden = false;
 }
