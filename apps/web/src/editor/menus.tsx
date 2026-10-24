@@ -25,7 +25,7 @@ import {
 import { endBlockDrag, startBlockDrag } from "./clipboard.ts";
 import styles from "./Editor.module.css";
 import { EDITOR } from "./messages.ts";
-import { type ReadmeEditor, type ReadmePartialBlock, TEXT_STYLES } from "./schema.ts";
+import { ALIGNMENTS, type Alignment, type ReadmeEditor, type ReadmePartialBlock, TEXT_STYLES } from "./schema.ts";
 
 type Store<T> = { readonly state: T; subscribe: (listener: () => void) => () => void };
 
@@ -37,13 +37,15 @@ function useStore<T>(store: Store<T>): T {
 }
 
 /** Puts `ref`'s element at a viewport position (`at`, from a DOMRect); null while the menu is hidden. The element is
- * absolutely placed in the editor, so the position is taken relative to the editor's box. */
+ * absolutely placed in the editor, so the position is taken relative to the editor's box, and kept inside its width
+ * (right-aligned text would otherwise push the toolbar past the page's edge). */
 function usePlace(ref: RefObject<HTMLElement | null>, at: { left: number; top: number } | null): void {
   useLayoutEffect(() => {
     const element = ref.current;
     const box = element?.offsetParent?.getBoundingClientRect();
     if (element === null || box === undefined || at === null) return;
-    element.style.setProperty("left", `${Math.round(at.left - box.left)}px`);
+    const left = Math.max(0, Math.min(at.left - box.left, box.width - element.offsetWidth));
+    element.style.setProperty("left", `${Math.round(left)}px`);
     element.style.setProperty("top", `${Math.round(at.top - box.top)}px`);
   });
 }
@@ -91,6 +93,14 @@ const isWebLink = (text: string) => /^https?:\/\/[^\s]+$/i.test(text.trim());
  * text styles, and a link. The type menu and the link field stay open on our own state while they have focus, since
  * BlockNote's store hides the toolbar once focus leaves the text.
  */
+/** The blocks the selection covers. A triple click selects a block up to the start of the next one, so a block the
+ * selection only touches at its start is not one of them. */
+function selectedBlocks(editor: ReadmeEditor) {
+  const blocks = editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+  const { $to, empty } = editor.prosemirrorView.state.selection;
+  return !empty && $to.parentOffset === 0 && blocks.length > 1 ? blocks.slice(0, -1) : blocks;
+}
+
 export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
   const shown = useStore(editor.getExtension(FormattingToolbarExtension)?.store as Store<boolean>);
   const [, render] = useState(0);
@@ -116,8 +126,17 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
     setLink(null);
     editor.focus();
   };
+  const selected = selectedBlocks(editor);
+  // As BlockNote's TextAlignButton: only blocks with a textAlignment prop take one (a quote or a code block does not).
+  const alignable = selected.filter((block) => "textAlignment" in block.props);
+  const alignment = (alignable[0]?.props as { textAlignment?: string } | undefined)?.textAlignment ?? "left";
+  const setAlignment = (value: Alignment) => {
+    for (const block of alignable) editor.updateBlock(block, { props: { textAlignment: value } } as never);
+    render((n) => n + 1);
+    editor.focus();
+  };
   const setType = (item: ReturnType<typeof blockTypes>[number]) => {
-    const blocks = editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+    const blocks = selected;
     for (const block of blocks) editor.updateBlock(block, { type: item.type, props: item.props ?? {} } as never);
     back();
   };
@@ -203,6 +222,28 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
           {EDITOR.marks[style]}
         </button>
       ))}
+      {alignable.length > 0 ? (
+        <>
+          <span className={styles.divider} aria-hidden="true" />
+          {ALIGNMENTS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={styles.tool}
+              aria-label={EDITOR.align[value]}
+              aria-pressed={alignment === value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setAlignment(value)}
+            >
+              <span className={styles.alignMark} data-align={value} aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            </button>
+          ))}
+        </>
+      ) : null}
       <span className={styles.divider} aria-hidden="true" />
       <button
         type="button"

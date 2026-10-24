@@ -6,6 +6,8 @@ export const EDITOR = {
   styles: { bold: "Bold", italic: "Italic", underline: "Underline", strike: "Strike", code: "Code" },
   /** The short marks on the toolbar's buttons; the words above are their accessible names. */
   marks: { bold: "B", italic: "I", underline: "U", strike: "S", code: "</>" },
+  /** BlockNote's text alignment buttons (Alex 2026-10-23 23:57Z). */
+  align: { left: "Align left", center: "Align centre", right: "Align right" },
   blockType: "Block type",
   link: "Link",
   linkMark: "Link",

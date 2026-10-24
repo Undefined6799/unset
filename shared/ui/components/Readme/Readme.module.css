@@ -58,6 +58,14 @@
     color: var(--color-ink-muted);
   }
 
+  .root [data-align="center"] {
+    text-align: center;
+  }
+
+  .root [data-align="right"] {
+    text-align: right;
+  }
+
   .root blockquote {
     padding-left: var(--space-4);
     border-left: 2px solid var(--color-line-strong);

@@ -245,6 +245,11 @@ type Paragraph = {
   $type?: "sh.unset.profile#paragraph";
 
   /**
+   * Text alignment. Absent, or an unknown value, reads as the start of the line.
+   */
+  align?: "center" | "right" | l.UnknownString;
+
+  /**
    * The block's text, as runs in reading order.
    */
   content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
@@ -257,6 +262,9 @@ const paragraph = /*#__PURE__*/ l.typedObject<Paragraph>(
   $nsid,
   "paragraph",
   /*#__PURE__*/ l.object({
+    align: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["center", "right"] }>({ maxLength: 16 }),
+    ),
     content: /*#__PURE__*/ l.array(
       /*#__PURE__*/ l.typedUnion(
         [
@@ -278,6 +286,11 @@ type Heading = {
   level: number;
 
   /**
+   * Text alignment. Absent, or an unknown value, reads as the start of the line.
+   */
+  align?: "center" | "right" | l.UnknownString;
+
+  /**
    * The block's text, as runs in reading order.
    */
   content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
@@ -291,6 +304,9 @@ const heading = /*#__PURE__*/ l.typedObject<Heading>(
   "heading",
   /*#__PURE__*/ l.object({
     level: /*#__PURE__*/ l.integer({ minimum: 1, maximum: 3 }),
+    align: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["center", "right"] }>({ maxLength: 16 }),
+    ),
     content: /*#__PURE__*/ l.array(
       /*#__PURE__*/ l.typedUnion(
         [
@@ -326,6 +342,11 @@ type ListItem = {
   checked?: boolean;
 
   /**
+   * Text alignment. Absent, or an unknown value, reads as the start of the line.
+   */
+  align?: "center" | "right" | l.UnknownString;
+
+  /**
    * The block's text, as runs in reading order.
    */
   content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
@@ -341,6 +362,9 @@ const listItem = /*#__PURE__*/ l.typedObject<ListItem>(
     style: /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["bullet", "numbered", "check"] }>({ maxLength: 16 }),
     indent: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.integer({ minimum: 0, maximum: 3 })),
     checked: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    align: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["center", "right"] }>({ maxLength: 16 }),
+    ),
     content: /*#__PURE__*/ l.array(
       /*#__PURE__*/ l.typedUnion(
         [

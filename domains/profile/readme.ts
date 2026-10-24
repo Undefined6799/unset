@@ -1,6 +1,6 @@
 // The profile README (Alex, 2026-10-23 21:08Z: edited with BlockNote, the logic on the backend). The owner's editor
 // posts BlockNote's document; it is untrusted input, read here once (DM-1) into our own block model, the one the
-// sh.unset.profile lexicon stores (P2.20w). Anything the model does not hold (colours, alignment, images, tables,
+// sh.unset.profile lexicon stores (P2.20w). Anything the model does not hold (colours, justified text, images, tables,
 // unknown blocks) is dropped, never passed through. BlockNote's document shape is read from @blocknote/core 0.56.0:
 // blocks are { type, props, content, children } (src/schema/blocks/types.ts BlockFromConfigNoChildren), inline content
 // is { type: "text", text, styles } or { type: "link", href, content } (src/schema/inlineContent/types.ts), and a code
@@ -20,14 +20,22 @@ export type TextRun = {
 };
 export type LinkRun = { readonly $type: `${typeof DEFS}linkRun`; readonly uri: string; readonly content: TextRun[] };
 export type Run = TextRun | LinkRun;
+/** Text alignment other than the start of the line (Alex 2026-10-23 23:57Z: the toolbar's alignment). */
+export type Align = "center" | "right";
 export type ReadmeBlock =
-  | { readonly $type: `${typeof DEFS}paragraph`; readonly content: Run[] }
-  | { readonly $type: `${typeof DEFS}heading`; readonly level: 1 | 2 | 3; readonly content: Run[] }
+  | { readonly $type: `${typeof DEFS}paragraph`; readonly align?: Align; readonly content: Run[] }
+  | {
+      readonly $type: `${typeof DEFS}heading`;
+      readonly level: 1 | 2 | 3;
+      readonly align?: Align;
+      readonly content: Run[];
+    }
   | {
       readonly $type: `${typeof DEFS}listItem`;
       readonly style: "bullet" | "numbered" | "check";
       readonly indent?: number;
       readonly checked?: true;
+      readonly align?: Align;
       readonly content: Run[];
     }
   | { readonly $type: `${typeof DEFS}quote`; readonly content: Run[] }
@@ -115,14 +123,20 @@ function codeBlock(block: Node): ReadmeBlock {
   };
 }
 
+/** BlockNote's textAlignment prop as the record's align: left, justify and anything else are left out. */
+function align(props: Node): { align?: Align } {
+  return props.textAlignment === "center" || props.textAlignment === "right" ? { align: props.textAlignment } : {};
+}
+
 /** One BlockNote block without its children, or null for a block the model does not hold. */
 function block(value: Node, depth: number): ReadmeBlock | null {
   const props = isNode(value.props) ? value.props : {};
   const type = value.type;
-  if (type === "paragraph" || type === "quote") return { $type: `${DEFS}${type}`, content: runs(value.content) };
+  if (type === "paragraph") return { $type: `${DEFS}paragraph`, ...align(props), content: runs(value.content) };
+  if (type === "quote") return { $type: `${DEFS}quote`, content: runs(value.content) };
   if (type === "heading") {
     const level = props.level === 1 || props.level === 2 ? props.level : 3;
-    return { $type: `${DEFS}heading`, level, content: runs(value.content) };
+    return { $type: `${DEFS}heading`, level, ...align(props), content: runs(value.content) };
   }
   if (type === "codeBlock") return codeBlock(value);
   if (typeof type !== "string" || !Object.hasOwn(LIST_STYLES, type)) return null;
@@ -133,6 +147,7 @@ function block(value: Node, depth: number): ReadmeBlock | null {
     style,
     ...(indent > 0 ? { indent } : {}),
     ...(style === "check" && props.checked === true ? { checked: true as const } : {}),
+    ...align(props),
     content: runs(value.content),
   };
 }
@@ -250,20 +265,22 @@ function editorBlock(block: ReadmeBlock): EditorBlock {
     content,
     children: [],
   });
+  const aligned = "align" in block && block.align !== undefined ? { textAlignment: block.align } : {};
   switch (block.$type) {
     case `${DEFS}paragraph`:
-      return plain("paragraph", {}, editorRuns(block.content));
+      return plain("paragraph", aligned, editorRuns(block.content));
     case `${DEFS}quote`:
       return plain("quote", {}, editorRuns(block.content));
     case `${DEFS}heading`:
-      return plain("heading", { level: block.level }, editorRuns(block.content));
+      return plain("heading", { level: block.level, ...aligned }, editorRuns(block.content));
     case `${DEFS}codeBlock`:
       return plain("codeBlock", block.language ? { language: block.language } : {}, [
         { type: "text", text: block.text, styles: {} },
       ]);
     case `${DEFS}listItem`: {
       const type = { bullet: "bulletListItem", numbered: "numberedListItem", check: "checkListItem" }[block.style];
-      return plain(type, block.style === "check" ? { checked: block.checked === true } : {}, editorRuns(block.content));
+      const checked = block.style === "check" ? { checked: block.checked === true } : {};
+      return plain(type, { ...checked, ...aligned }, editorRuns(block.content));
     }
   }
 }

@@ -66,3 +66,8 @@ export type ReadmePartialBlock = typeof readmeSchema.PartialBlock;
 /** The text styles the toolbar toggles, in its order. */
 export const TEXT_STYLES = ["bold", "italic", "underline", "strike", "code"] as const;
 export type TextStyle = (typeof TEXT_STYLES)[number];
+
+/** The alignments the toolbar sets, in its order: the ones the README stores (domains/profile readme.ts Align), and
+ * left, which clears them. BlockNote's justify is not offered, since the README does not keep it. */
+export const ALIGNMENTS = ["left", "center", "right"] as const;
+export type Alignment = (typeof ALIGNMENTS)[number];

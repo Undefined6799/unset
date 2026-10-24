@@ -138,6 +138,15 @@
     margin: 0;
   }
 
+  /* Alignment as the README draws it (shared/ui Readme, data-align): BlockNote marks the block's content. */
+  .editor [data-text-alignment="center"] {
+    text-align: center;
+  }
+
+  .editor [data-text-alignment="right"] {
+    text-align: right;
+  }
+
   /* The README draws a level-n heading one level down (h2 for 1, so the page keeps one h1; shared/ui Readme), and
      the editor matches it: level 1 at the h2 size, level 2 at the h3 size, level 3 at body size. */
   .editor [data-content-type="heading"] h1 {
@@ -376,6 +385,34 @@
   .tool[aria-pressed="true"],
   .tool:hover {
     background-color: var(--color-line);
+  }
+
+  /* The alignment buttons' mark: three lines of text, set to the button's alignment, drawn in ink (no icon on the
+     sheet yet; Iconoir's align-left, align-center and align-right once the sheet lists them). */
+  .alignMark {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: var(--space-4);
+    align-items: flex-start;
+  }
+
+  .alignMark[data-align="center"] {
+    align-items: center;
+  }
+
+  .alignMark[data-align="right"] {
+    align-items: flex-end;
+  }
+
+  .alignMark > span {
+    width: 100%;
+    height: 2px;
+    background-color: currentColor;
+  }
+
+  .alignMark > span:nth-child(2) {
+    width: 60%;
   }
 
   .tool:focus-visible {

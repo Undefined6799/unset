@@ -45,13 +45,40 @@ describe("parseReadme", () => {
     ]);
   });
 
-  test("what the README does not hold is dropped: colours, alignment, images, tables, unknown blocks", () => {
+  test("what the README does not hold is dropped: colours, justified text, images, tables, unknown blocks", () => {
     const blocks = blocksOf([
       bn("image", undefined, { url: "https://evil.example/x.png" }, [bn("paragraph", [text("child")])]),
       bn("table", { type: "tableContent", rows: [] }),
-      bn("paragraph", [text("kept", { textColor: "red", backgroundColor: "blue" })], { textAlignment: "center" }),
+      bn("paragraph", [text("kept", { textColor: "red", backgroundColor: "blue" })], { textAlignment: "justify" }),
     ]);
     expect(blocks).toEqual([{ $type: `${D}paragraph`, content: [run("kept")] }]);
+  });
+
+  test("readme_keeps_centre_and_right_alignment", () => {
+    const blocks = blocksOf([
+      bn("paragraph", [text("centred")], { textAlignment: "center" }),
+      bn("heading", [text("right")], { level: 1, textAlignment: "right" }),
+      bn("checkListItem", [text("item")], { textAlignment: "center" }),
+      bn("quote", [text("quote")], { textAlignment: "right" }),
+    ]);
+    expect(blocks).toEqual([
+      { $type: `${D}paragraph`, align: "center", content: [run("centred")] },
+      { $type: `${D}heading`, level: 1, align: "right", content: [run("right")] },
+      { $type: `${D}listItem`, style: "check", align: "center", content: [run("item")] },
+      // BlockNote's quote has no alignment, so none is stored for it.
+      { $type: `${D}quote`, content: [run("quote")] },
+    ]);
+    const probe = {
+      $type: "sh.unset.profile",
+      displayName: "-",
+      createdAt: "1970-01-01T00:00:00.000Z",
+      readme: { blocks },
+    };
+    expect(validateRecord("sh.unset.profile", probe, "write").ok).toBe(true);
+    expect(parseReadme(JSON.stringify(toEditorDocument({ blocks: blocks as never })))).toEqual({
+      ok: true,
+      readme: { blocks },
+    });
   });
 
   test("headings deeper than three read as level three", () => {

@@ -175,6 +175,12 @@
       "required": ["content"],
       "description": "A paragraph.",
       "properties": {
+        "align": {
+          "type": "string",
+          "maxLength": 16,
+          "knownValues": ["center", "right"],
+          "description": "Text alignment. Absent, or an unknown value, reads as the start of the line."
+        },
         "content": {
           "type": "array",
           "maxLength": 200,
@@ -195,6 +201,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 3
+        },
+        "align": {
+          "type": "string",
+          "maxLength": 16,
+          "knownValues": ["center", "right"],
+          "description": "Text alignment. Absent, or an unknown value, reads as the start of the line."
         },
         "content": {
           "type": "array",
@@ -227,6 +239,12 @@
         "checked": {
           "type": "boolean",
           "description": "For check items: ticked."
+        },
+        "align": {
+          "type": "string",
+          "maxLength": 16,
+          "knownValues": ["center", "right"],
+          "description": "Text alignment. Absent, or an unknown value, reads as the start of the line."
         },
         "content": {
           "type": "array",

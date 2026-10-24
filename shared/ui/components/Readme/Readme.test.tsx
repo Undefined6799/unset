@@ -26,6 +26,19 @@ describe("Readme", () => {
     expect(out).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; &lt;script&gt;");
   });
 
+  it("readme_draws_only_centre_and_right_alignment", () => {
+    const out = html([
+      { ...p(t("c")), align: "center" },
+      { $type: `${D}heading`, level: 1, align: "right", content: [t("r")] },
+      { ...li("bullet", "i"), align: "center" },
+      { ...p(t("x")), align: 'left" onclick="x' },
+    ]);
+    expect(out).toContain('<p data-align="center">c</p>');
+    expect(out).toContain('<h2 data-align="right">r</h2>');
+    expect(out).toContain('<li data-align="center">i</li>');
+    expect(out).toContain("<p>x</p>");
+  });
+
   it("readme_links_only_http_and_say_user_content", () => {
     const link = (uri: string) => ({ $type: `${D}linkRun` as const, uri, content: [t("site")] });
     const out = html([

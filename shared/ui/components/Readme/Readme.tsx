@@ -26,11 +26,21 @@ export type ReadmeListItem = {
   readonly style: string;
   readonly indent?: number;
   readonly checked?: boolean;
+  readonly align?: string;
   readonly content: readonly ReadmeRun[];
 };
 export type ReadmeBlockData =
-  | { readonly $type: `${typeof D}paragraph` | `${typeof D}quote`; readonly content: readonly ReadmeRun[] }
-  | { readonly $type: `${typeof D}heading`; readonly level: number; readonly content: readonly ReadmeRun[] }
+  | {
+      readonly $type: `${typeof D}paragraph` | `${typeof D}quote`;
+      readonly align?: string;
+      readonly content: readonly ReadmeRun[];
+    }
+  | {
+      readonly $type: `${typeof D}heading`;
+      readonly level: number;
+      readonly align?: string;
+      readonly content: readonly ReadmeRun[];
+    }
   | ReadmeListItem
   | { readonly $type: `${typeof D}codeBlock`; readonly text: string; readonly language?: string };
 export type ReadmeColumns = {
@@ -68,6 +78,12 @@ function runs(content: readonly ReadmeRun[]): ReactNode[] {
   });
 }
 
+/** A block's alignment as a data attribute the stylesheet reads; only centre and right are drawn, anything else reads
+ * as the start of the line. */
+function aligned(align: string | undefined): { "data-align"?: "center" | "right" } {
+  return align === "center" || align === "right" ? { "data-align": align } : {};
+}
+
 type ListNode = { item: ReadmeListItem; children: ListNode[] };
 
 /** List items in reading order as a tree: an item one indent deeper than the one before it nests inside it. */
@@ -97,7 +113,7 @@ function checkMark(checked: boolean | undefined, labels: ReadmeProps["labels"]):
 
 function listItem(node: ListNode, key: number, labels: ReadmeProps["labels"]): ReactNode {
   return (
-    <li key={key}>
+    <li key={key} {...aligned(node.item.align)}>
       {node.item.style === "check" ? checkMark(node.item.checked, labels) : null}
       {runs(node.item.content)}
       {node.children.length > 0 ? lists(node.children, labels) : null}
@@ -128,7 +144,11 @@ function lists(nodes: readonly ListNode[], labels: ReadmeProps["labels"]): React
 function block(node: Exclude<ReadmeBlockData, ReadmeListItem>, key: number): ReactNode {
   switch (node.$type) {
     case `${D}paragraph`:
-      return <p key={key}>{runs(node.content)}</p>;
+      return (
+        <p key={key} {...aligned(node.align)}>
+          {runs(node.content)}
+        </p>
+      );
     case `${D}quote`:
       return (
         <blockquote key={key}>
@@ -137,7 +157,11 @@ function block(node: Exclude<ReadmeBlockData, ReadmeListItem>, key: number): Rea
       );
     case `${D}heading`: {
       const Heading = node.level <= 1 ? "h2" : node.level === 2 ? "h3" : "h4";
-      return <Heading key={key}>{runs(node.content)}</Heading>;
+      return (
+        <Heading key={key} {...aligned(node.align)}>
+          {runs(node.content)}
+        </Heading>
+      );
     }
     case `${D}codeBlock`:
       return (
