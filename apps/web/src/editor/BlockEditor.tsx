@@ -36,26 +36,42 @@ function createEditor(initialContent: readonly ReadmePartialBlock[], copied: { c
   });
 }
 
+/** Puts an overlay over `rect` (viewport coordinates), relative to the editor's box. */
+function placeOver(
+  element: HTMLElement,
+  box: DOMRect,
+  rect: { left: number; top: number; width: number; height: number },
+) {
+  element.hidden = false;
+  element.style.setProperty("left", `${Math.round(rect.left - box.left)}px`);
+  element.style.setProperty("top", `${Math.round(rect.top - box.top)}px`);
+  element.style.setProperty("width", `${Math.round(rect.width)}px`);
+  element.style.setProperty("height", `${Math.round(rect.height)}px`);
+}
+
 /**
- * Takes a handle drag's dragover and drop before ProseMirror when it lands beside a block (columns.ts), showing a bar
- * where the new column goes; any other drop stays ProseMirror's move. Returns the cleanup.
+ * Takes a handle drag's dragover and drop before ProseMirror when it lands on a block (columns.ts): the block it would
+ * pair with is outlined (Alex 2026-10-24 00:04Z) and a bar marks the side the new column goes; any other drop stays
+ * ProseMirror's move. Both are overlays, so ProseMirror's own DOM is never touched. Returns the cleanup.
  */
-function watchColumnDrops(editor: ReadmeEditor, outer: HTMLElement, bar: HTMLElement | null): () => void {
+function watchColumnDrops(
+  editor: ReadmeEditor,
+  outer: HTMLElement,
+  marks: readonly (HTMLElement | null)[],
+): () => void {
+  const [bar, target] = marks;
   const hide = () => {
-    if (bar !== null) bar.hidden = true;
+    for (const mark of marks) if (mark !== null) mark.hidden = true;
   };
   const over = (event: DragEvent) => {
     const drop = columnDrop(editor, event);
     if (drop === null) return hide();
     event.preventDefault();
     event.stopPropagation();
-    if (bar === null) return;
     const box = outer.getBoundingClientRect();
+    if (target) placeOver(target, box, drop.rect);
     const x = drop.side === "left" ? drop.rect.left : drop.rect.right;
-    bar.hidden = false;
-    bar.style.setProperty("left", `${Math.round(x - box.left)}px`);
-    bar.style.setProperty("top", `${Math.round(drop.rect.top - box.top)}px`);
-    bar.style.setProperty("height", `${Math.round(drop.rect.height)}px`);
+    if (bar) placeOver(bar, box, { left: x, top: drop.rect.top, width: 2, height: drop.rect.height });
   };
   const drop = (event: DragEvent) => {
     hide();
@@ -85,6 +101,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   const mount = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const indicator = useRef<HTMLDivElement>(null);
+  const pairing = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = mount.current;
     const outer = area.current;
@@ -99,7 +116,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
     outer.addEventListener("copy", onCopy, true);
     outer.addEventListener("cut", onCopy, true);
     outer.style.setProperty("--editor-placeholder", JSON.stringify(EDITOR.placeholder));
-    const stopColumns = watchColumnDrops(editor, outer, indicator.current);
+    const stopColumns = watchColumnDrops(editor, outer, [indicator.current, pairing.current]);
     const stopNormalize = editor.onChange(() => normalizeColumns(editor));
     ready.current(editor);
     return () => {
@@ -113,6 +130,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   return (
     <div ref={area} className={styles.editor}>
       <CurrentLine editor={editor} />
+      <div ref={pairing} className={styles.columnTarget} aria-hidden="true" hidden />
       <div ref={indicator} className={styles.columnDrop} aria-hidden="true" hidden />
       <div ref={mount} />
       <StyleToolbar editor={editor} />

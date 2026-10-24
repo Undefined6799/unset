@@ -7,6 +7,8 @@
   .editor {
     --editor-placeholder: "";
     position: relative;
+    /* Its own stacking context, so the drop target's fill (.columnTarget) can sit under the text. */
+    isolation: isolate;
     /* Room for the block handle: two 32px buttons and their gaps. */
     padding-left: calc(var(--space-12) + var(--space-6));
     color: var(--color-ink);
@@ -99,6 +101,18 @@
     pointer-events: none;
   }
 
+  /* The block a drop would pair with: filled as a hovered block, under its text, and ringed as the sheet's focus. */
+  .columnTarget {
+    position: absolute;
+    z-index: calc(var(--z-base) - 1);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-raised);
+    pointer-events: none;
+  }
+
+  .columnTarget[hidden],
   .columnDrop[hidden] {
     display: none;
   }
@@ -385,34 +399,6 @@
   .tool[aria-pressed="true"],
   .tool:hover {
     background-color: var(--color-line);
-  }
-
-  /* The alignment buttons' mark: three lines of text, set to the button's alignment, drawn in ink (no icon on the
-     sheet yet; Iconoir's align-left, align-center and align-right once the sheet lists them). */
-  .alignMark {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    width: var(--space-4);
-    align-items: flex-start;
-  }
-
-  .alignMark[data-align="center"] {
-    align-items: center;
-  }
-
-  .alignMark[data-align="right"] {
-    align-items: flex-end;
-  }
-
-  .alignMark > span {
-    width: 100%;
-    height: 2px;
-    background-color: currentColor;
-  }
-
-  .alignMark > span:nth-child(2) {
-    width: 60%;
   }
 
   .tool:focus-visible {

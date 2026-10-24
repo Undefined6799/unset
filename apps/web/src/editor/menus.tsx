@@ -235,11 +235,7 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setAlignment(value)}
             >
-              <span className={styles.alignMark} data-align={value} aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
+              {EDITOR.alignMarks[value]}
             </button>
           ))}
         </>
