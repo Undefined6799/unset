@@ -13,7 +13,7 @@ export const PROFILE = {
   handleUnavailable: "We could not check your handle just now.",
   verified: "Verified",
   checkItem: { done: "Done", notDone: "Not done" },
-  readmeForm: { edit: "Edit README", label: "README", save: "Save", cancel: "Cancel" },
+  readmeForm: { edit: "Edit README", label: "README", save: "Save", cancel: "Cancel", editing: "Editing your README" },
   details: { location: "Location", website: "Website", did: "DID" },
   copyLink: "Copy link",
   share: "Share profile",

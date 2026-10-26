@@ -15,6 +15,8 @@ export type ReadmeFormLabels = {
   readonly label: string;
   readonly save: string;
   readonly cancel: string;
+  /** The editing bar's words (Alex 2026-10-26 21:04Z: an editing-mode bar across the screen). */
+  readonly editing: string;
 };
 
 export type ReadmeFormProps = {
@@ -44,11 +46,14 @@ export function ReadmeForm({ document, labels, placeholder, children }: ReadmeFo
           <IconDrawing paths={edit} size={16} />
         </button>
       </div>
+      {/* Editing mode (Alex 2026-10-26 21:04Z): while the editor is open, Save and Cancel sit in a bar across the top
+          of the screen, not under the README. */}
       <div className={styles.readmeActions} hidden data-readme-actions>
-        <Button type="submit">{labels.save}</Button>
+        <p className={styles.editingLabel}>{labels.editing}</p>
         <Button type="button" variant="standalone" name="cancel">
           {labels.cancel}
         </Button>
+        <Button type="submit">{labels.save}</Button>
       </div>
     </form>
   );
