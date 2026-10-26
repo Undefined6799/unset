@@ -7,8 +7,9 @@
   .editor {
     --editor-placeholder: "";
     position: relative;
-    /* Its own stacking context, so the drop target's fill (.columnTarget) can sit under the text. */
-    isolation: isolate;
+    /* Its own stacking context, so the drop target's fill (.columnTarget) can sit under the text, raised one step
+       so its menus draw over what follows it on the page, such as Save and Cancel (Alex 2026-10-26 21:01Z). */
+    z-index: var(--z-card);
     /* Room for the block handle: two 32px buttons and their gaps. */
     padding-left: calc(var(--space-12) + var(--space-6));
     color: var(--color-ink);
