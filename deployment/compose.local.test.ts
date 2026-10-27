@@ -1020,11 +1020,11 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
           : { code: 0, stdout: "", stderr: "" },
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
+    // The reader's fstat of each env file is the virtual file C9 judges (P1.34r).
     readEnv: (path) => {
       const entry = files.get(path);
-      return entry?.text === undefined
-        ? null
-        : { text: entry.text, id: `${DEV}:${[...files.keys()].indexOf(path) + 1}` };
+      const file = look(statSync)(path);
+      return entry?.text === undefined || file === null ? null : { text: entry.text, file };
     },
     readdir: (path) => {
       const names = files.get(path)?.names;

@@ -926,14 +926,14 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
       readText: (path) => (path === file ? edit(read(name)) : lockFile(path)),
-      readEnv: (path) =>
-        path === ENV_FILE
-          ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
-          : path === join(ENV, "pds.env")
-            ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
-            : path === join(ENV, "newt.env")
-              ? { text: read("env/newt.example.env"), id: `${DEV}:5` }
-              : null,
+      // Each env file as the reader's fstat of it: the virtual file C9 judges (P1.34r).
+      readEnv: (path) => {
+        const file = virtual.get(path);
+        const example = { [ENV_FILE]: "dev-public", [join(ENV, "pds.env")]: "pds", [join(ENV, "newt.env")]: "newt" }[
+          path
+        ];
+        return file === undefined || example === undefined ? null : { text: read(`env/${example}.example.env`), file };
+      },
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,

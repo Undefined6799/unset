@@ -62,13 +62,15 @@ function composeReadFileProblem(path: string, inputs: Inputs): Outcome | null {
   const walked = resolveChecked(path, inputs);
   if (walked === "missing") return missing(path);
   if (walked !== null && walked !== "kind") return fail(`${path} lies on a path ${WALK_REASONS[walked]}`);
-  const info = inputs.stat(path);
-  if (info === null) return missing(path);
+  // The file judged is the one the values came from: the reader's fstat of its descriptor, which already held the
+  // walk's (dev, ino), not a later stat of the path (P1.34r, architecture Amendment 9 B1, replacing P1.34p's check).
+  const [info, ...again] = inputs.envReads.get(path) ?? [];
+  if (info === undefined) return missing(path);
   if (walked === "kind" || !info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
   // A second name, inside the checkout for instance, would carry the values past C26's path test (Amendment 6).
   if (info.nlink !== 1) return fail(`${path} has more than one hard link`);
-  // The values came from the file the reader opened; a swap since then means C9 would judge another file (P1.34p).
-  if (inputs.envReads.get(path) !== `${info.dev}:${info.ino}`)
+  // A path read twice from two files gave values from both.
+  if (again.some((read) => read.dev !== info.dev || read.ino !== info.ino))
     return fail(`${path} changed after the preflight read it`);
   if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
   if (info.uid !== inputs.uid) return fail(`${path} is not owned by the deploy user`);
