@@ -12,6 +12,8 @@ export const EDITOR = {
   /** The alignment buttons' words, as Link's: the sheet has no alignment icon yet (Iconoir only, decision 33). */
   alignMarks: { left: "Left", center: "Centre", right: "Right" },
   blockType: "Block type",
+  /** The display block's entries in the block menus, as BlockNote's dictionary words its own. */
+  display: { title: "Display", subtext: "The largest text, for a hero line", aliases: ["display", "hero", "big"] },
   link: "Link",
   linkMark: "Link",
   linkUrl: "Link address",

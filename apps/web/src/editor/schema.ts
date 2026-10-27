@@ -1,6 +1,7 @@
 // The blocks the owner's editor offers (ADR 0037 point 4): exactly what the sh.unset.profile README holds, so nothing
 // typed here is dropped on save. BlockNote 0.56.0's block and style specs (@blocknote/core src/blocks/defaultBlocks.ts):
-// headings stop at level 3, and colours, alignment, images, tables and toggles are not in the schema at all.
+// headings stop at level 3, display text is our own block, and colours, images, tables and toggles are not in the schema
+// at all.
 import {
   BlockNoteSchema,
   type BlockSpec,
@@ -13,6 +14,7 @@ import {
   createParagraphBlockSpec,
   createQuoteBlockSpec,
   defaultInlineContentSpecs,
+  defaultProps,
   defaultStyleSpecs,
 } from "@blocknote/core";
 
@@ -43,9 +45,22 @@ const container = (type: "columnList" | "column") =>
     },
   )();
 
+// Display text (Alex 2026-10-24 00:08Z: "the display text, like in the design sheet"): the sheet's display style as a
+// block of inline text that can be aligned, as a paragraph can.
+const display = createBlockSpec(
+  { type: "display", propSchema: { textAlignment: defaultProps.textAlignment }, content: "inline" },
+  {
+    render() {
+      const dom = document.createElement("p");
+      return { dom, contentDOM: dom };
+    },
+  },
+)();
+
 export const readmeSchema = BlockNoteSchema.create({
   blockSpecs: {
     paragraph: createParagraphBlockSpec(),
+    display,
     heading,
     bulletListItem: createBulletListItemBlockSpec(),
     numberedListItem: createNumberedListItemBlockSpec(),

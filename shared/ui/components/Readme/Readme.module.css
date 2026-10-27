@@ -61,6 +61,13 @@
     color: var(--color-ink-muted);
   }
 
+  .root .display {
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-line);
+    font-weight: var(--type-display-weight);
+    letter-spacing: var(--type-display-tracking);
+  }
+
   .root [data-align="center"] {
     text-align: center;
   }

@@ -54,6 +54,27 @@ describe("parseReadme", () => {
     expect(blocks).toEqual([{ $type: `${D}paragraph`, content: [run("kept")] }]);
   });
 
+  test("readme_keeps_display_text", () => {
+    // Display (Alex 2026-10-24 00:08Z: the design sheet's display style) is the editor's own block type.
+    const blocks = blocksOf([bn("display", [text("Hello")], { textAlignment: "center" }), bn("display", [text("Hi")])]);
+    expect(blocks).toEqual([
+      { $type: `${D}display`, align: "center", content: [run("Hello")] },
+      { $type: `${D}display`, content: [run("Hi")] },
+    ]);
+    const probe = {
+      $type: "sh.unset.profile",
+      displayName: "-",
+      createdAt: "1970-01-01T00:00:00.000Z",
+      readme: { blocks },
+    };
+    expect(validateRecord("sh.unset.profile", probe, "write").ok).toBe(true);
+    expect(readStoredReadme({ blocks })).toEqual({ blocks });
+    expect(parseReadme(JSON.stringify(toEditorDocument({ blocks: blocks as never })))).toEqual({
+      ok: true,
+      readme: { blocks },
+    });
+  });
+
   test("readme_keeps_centre_and_right_alignment", () => {
     const blocks = blocksOf([
       bn("paragraph", [text("centred")], { textAlignment: "center" }),
