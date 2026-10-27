@@ -17,8 +17,10 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statfsSync,
   statSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -411,6 +413,35 @@ const as4242 =
     const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
+/**
+ * fakeFs, with a statfs that runs `act` once, right after the walk first judged `target`: its statfs is the walk's last
+ * look at an entry (shared/host-pin walk.ts), so `act` lands between the walk and the open.
+ */
+function afterWalk(root: string, target: string, act: () => void): Pick<Deps, "lstat" | "statfs"> {
+  let done = false;
+  return {
+    ...fakeFs(root),
+    statfs: (path) => {
+      const info = statfsSync(path);
+      if (path === target && !done) {
+        done = true;
+        act();
+      }
+      return info;
+    },
+  };
+}
+/** fakeFs's lstat, which runs `act` once, just before it looks at `target` the second time. */
+function beforeSecondLook(root: string, target: string, act: () => void): Pick<Deps, "lstat"> {
+  const { lstat } = fakeFs(root);
+  let looks = 0;
+  return {
+    lstat: (path) => {
+      if (path === target && ++looks === 2) act();
+      return lstat?.(path) ?? null;
+    },
+  };
+}
 /** A complete retirement report (C21): prod and local on the old host need one; dev is waived (Alex, 2026-10-21). */
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
@@ -742,8 +773,8 @@ describe("preflight", () => {
     expect((await check({ compose: envInside, files: fixture })).lines).toContain(inside);
     // The same file reached through a link that lives outside the project.
     const viaLink = stack({ files: fixture });
-    symlinkSync(join(viaLink.root, "deployment/edge/edge.test.env"), join(envOf(viaLink.root), "dev.env"));
-    writeFileSync(viaLink.file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"));
+    symlinkSync(join(viaLink.root, "deployment/edge/edge.test.env"), join(envOf(viaLink.root), "dev-public.env"));
+    writeFileSync(viaLink.file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev-public.env"));
     const linked = await preflight(["--env", "prod", "--compose", viaLink.file], {
       root: viaLink.root,
       run: fakeRun().run,
@@ -755,11 +786,11 @@ describe("preflight", () => {
     expect((await check({ compose: secretInside, files: fixture })).lines).toContain(inside);
     // A real env file beside the checkout passes.
     const { root, file } = stack();
-    writeFileSync(join(envOf(root), "dev.env"), readFileSync(join(envOf(root), "pds.env")));
-    chmodSync(join(envOf(root), "dev.env"), 0o600);
+    writeFileSync(join(envOf(root), "dev-public.env"), readFileSync(join(envOf(root), "pds.env")));
+    chmodSync(join(envOf(root), "dev-public.env"), 0o600);
     writeFileSync(
       file,
-      readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"),
+      readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev-public.env"),
     );
     const beside = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(failed(beside.lines)).toEqual([]);
@@ -791,26 +822,92 @@ describe("preflight", () => {
     expect(inFolder.lines).toContain(reach);
   });
 
-  // P1.34p Amendment 2, item 2: an env file is read only as a regular file, and only as the file C9 then judges.
-  test("c9_env_file_read_safely", { timeout: 10_000 }, async () => {
+  // P1.34p Amendment 2, item 2, and P1.34r (architecture Amendment 9, B1): an env file is walked, then opened, then
+  // fstat'ed, and read only from that descriptor, so nothing at a refused path is ever read.
+  test("c9_env_file_read_safely", async () => {
     const { root, file } = stack();
     const pdsEnv = join(envOf(root), "pds.env");
     rmSync(pdsEnv);
     execFileSync("mkfifo", ["-m", "600", pdsEnv]);
-    // A FIFO with no writer would block a plain read for ever; the preflight stops instead.
+    // A FIFO with no writer would block a plain read for ever; the preflight stops instead, by the suite's own limit.
     const fifo = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(fifo).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is not a regular file`] });
-    // A file swapped after it was read: C9 sees another (dev, ino) than the one the values came from.
+    // A real swap between the walk and the open: the walk met one file, the descriptor holds another. The reader is the
+    // real one; only the walk's statfs is the hook that renames the other file into place once the walk has judged it.
     const swapped = stack();
     const swappedEnv = join(envOf(swapped.root), "pds.env");
-    const readEnv = (path: string) => (path === swappedEnv ? { text: readFileSync(path, "utf8"), id: "0:0" } : null);
+    const other = join(envOf(swapped.root), "other.env");
+    writeFileSync(other, readFileSync(swappedEnv));
+    chmodSync(other, 0o600);
     const result = await preflight(["--env", "prod", "--compose", swapped.file], {
       root: swapped.root,
       run: fakeRun().run,
-      ...fakeFs(swapped.root),
-      readEnv,
+      ...afterWalk(swapped.root, swappedEnv, () => renameSync(other, swappedEnv)),
     });
-    expect(result.lines).toContain(`FAIL C9 ${swappedEnv} changed after the preflight read it`);
+    expect(result).toEqual({ code: 2, lines: [`ERROR ${swappedEnv} changed while the preflight read it`] });
+  });
+
+  // P1.34r step 4: a 64 KiB cap from the fstat size, so a huge file is refused before any of it is read.
+  test("env_reader_refuses_an_oversize_file_unread", async () => {
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    const run = () => preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    const text = readFileSync(pdsEnv, "utf8");
+    // Exactly the cap is read; one byte more is refused. Comment lines keep the values as they were.
+    const padded = (size: number) => `${text}${"#".repeat(size - Buffer.byteLength(text) - 1)}\n`;
+    writeFileSync(pdsEnv, padded(64 * 1024));
+    expect((await run()).code).not.toBe(2);
+    writeFileSync(pdsEnv, padded(64 * 1024 + 1));
+    expect(await run()).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is larger than 64 KiB`] });
+    // A sparse 3 GiB file: a reader that read it in full would fail on its size or run out of memory, not refuse it.
+    truncateSync(pdsEnv, 3 * 1024 ** 3);
+    expect(await run()).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is larger than 64 KiB`] });
+  });
+
+  // P1.34r step 2 (mutant M6, an open without O_NOFOLLOW): the walk met the file, and a link to that same file then
+  // took its name. Followed, the link would reach the walk's (dev, ino); O_NOFOLLOW refuses it instead.
+  test("env_reader_opens_without_following_a_link", async () => {
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    const moved = join(envOf(root), "moved.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...afterWalk(root, pdsEnv, () => {
+        renameSync(pdsEnv, moved);
+        symlinkSync(moved, pdsEnv);
+      }),
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${pdsEnv}`] });
+  });
+
+  // Mutant M17: the project's .env may be absent, but one the walk found and the reader then cannot open is an ERROR,
+  // never read as absent (which would interpolate every name as empty).
+  test("env_reader_errors_on_an_unreadable_dot_env", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...afterWalk(root, dotEnv, () => rmSync(dotEnv)),
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${dotEnv}`] });
+  });
+
+  // P1.34r: the reader keeps every (dev, ino) a path was read from. The .env is read twice; a whole file swapped in
+  // between, itself walked, opened and fstat'ed as one file, still means the values came from two files.
+  test("env_reader_keeps_every_read_of_a_path", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const other = join(root, "deployment/.env.other");
+    writeFileSync(other, readFileSync(dotEnv));
+    chmodSync(other, 0o600);
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...beforeSecondLook(root, dotEnv, () => renameSync(other, dotEnv)),
+    });
+    expect(result.lines).toContain(`FAIL C9 ${dotEnv} changed after the preflight read it`);
   });
 
   // P1.34p Amendment 2, item 3: FUSE (FUSE_SUPER_MAGIC, linux/magic.h) is refused beside procfs.
