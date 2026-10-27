@@ -105,13 +105,15 @@ function scopeOf(path: string, pattern: string): { folder: string; file: string 
 }
 
 /**
- * A trusted file's own test: its basename (without the last extension) with `.test.ts`, beside it, or under
- * `tests/<suite>/` at a mirrored path that ends in one or more of the file's own folders.
+ * A trusted `.ts` file's own test: its basename with `.test.ts` for `.ts`, beside it, or under `tests/<suite>/` at a
+ * mirrored path that ends in one or more of the file's own folders. A trusted file of any other kind (a `.json`, a
+ * `.sql`) carries no test: main never let `roles.test.ts` ride beside `roles.json`, and nothing here starts to.
  */
 function ownTest(path: string, file: string): boolean {
+  if (!file.endsWith(".ts")) return false;
   const folders = file.split("/");
   const base = folders.pop() as string;
-  const test = `${base.replace(/(.)\.[^.]*$/, "$1")}.test.ts`;
+  const test = `${base.slice(0, -".ts".length)}.test.ts`;
   if (path === [...folders, test].join("/")) return true;
   const rest = /^tests\/[^/]+\/(.+)$/.exec(path)?.[1];
   return rest !== undefined && folders.some((_, i) => rest === [...folders.slice(i), test].join("/"));

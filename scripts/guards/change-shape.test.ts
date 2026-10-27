@@ -467,10 +467,10 @@ describe("trusted base (SE-6)", () => {
     ]) {
       expect(isolateFiles([COOKIE, own])).toEqual({ ok: true, touched: true });
     }
-    expect(isolateFiles(["infrastructure/postgres/roles.json", "tests/integration/postgres/roles.test.ts"])).toEqual({
-      ok: true,
-      touched: true,
-    });
+    // Red: a trusted file that is not .ts carries no test, beside it or mirrored (main refused the beside one).
+    for (const stray of ["infrastructure/postgres/roles.test.ts", "tests/integration/postgres/roles.test.ts"]) {
+      expect(isolateFiles(["infrastructure/postgres/roles.json", stray])).toEqual({ ok: false, outside: [stray] });
+    }
     // Green: a folder pattern's tests/**/<folder>/** file still rides.
     expect(isolateFiles(["shared/http/csp/build.ts", "tests/integration/http/unrelated.test.ts"])).toEqual({
       ok: true,
