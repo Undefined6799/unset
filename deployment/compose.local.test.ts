@@ -329,8 +329,8 @@ function pinDrift(s: Service, environment: Record<string, string>, envFiles: str
 
 /**
  * The closed list of words that make a key secret-bearing, each matched as a whole word of the key, in any case. A key
- * splits into words on `_`, `-` and `.`, and at each lower-to-upper boundary (P1.35v; book edit 2026-10-15-verify-903-
- * info-items, clause (a)), so `Db.apiToken`, `db-password` and `dbPassword` all hold a listed word.
+ * splits into words as `keyWords` says (P1.35v, P1.36t; book edit 2026-10-15-verify-903-info-items, clause (a) and
+ * architecture 05:00Z M1), so `Db.apiToken`, `db-password`, `dbPassword`, `PASSWORD2` and `APIKey` all hold one.
  */
 const SECRET_WORDS = new Set([
   "PASSWORD",
@@ -376,8 +376,31 @@ function secretRefusal(key: string, value: string | null): string | null {
   return accepted ? null : `${key} carries a secret other than as a /run/secrets file or a required reference`;
 }
 
-/** The words of a key: split on `_`, `-` and `.`, then before each upper-case letter that follows a lower-case one. */
-const keyWords = (key: string): string[] => key.replaceAll(/([a-z])([A-Z])/g, "$1_$2").split(/[_.-]/);
+/**
+ * The words of a key: split on `_`, `-` and `.`, before each upper-case letter that follows a lower-case one, between a
+ * letter and a digit either way, and at the end of an acronym, so `APIKey` gives `API`, `Key` (P1.36t M1; book edit
+ * 2026-10-15-verify-903-info-items, architecture 05:00Z).
+ */
+const keyWords = (key: string): string[] =>
+  key
+    .replaceAll(/([a-z])([A-Z])/g, "$1_$2")
+    .replaceAll(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .replaceAll(/([A-Za-z])([0-9])/g, "$1_$2")
+    .replaceAll(/([0-9])([A-Za-z])/g, "$1_$2")
+    .split(/[_.-]/);
+
+/**
+ * Each `environment` entry of every service in one compose file that carries a secret as refused, named by file, service
+ * and key, never by value (P1.36t M3: architecture 12:40Z, "the same predicate applies in compose", reaches every
+ * service, not only the local-only ones and their pins).
+ */
+const environmentSecretRefusals = (compose: Compose, file: string): string[] =>
+  compose.services.flatMap((s) =>
+    s.environment.flatMap(([key, value]) => {
+      const why = secretRefusal(key, asWritten(value));
+      return why === null ? [] : [`${file}: ${s.name}: environment ${why}`];
+    }),
+  );
 
 /** A `*_FILE` key whose literal value names a file under /run/secrets/, with no `.`, `..` or empty segment. */
 const secretFile = (key: string, value: string): boolean =>
@@ -416,6 +439,10 @@ function drift(dev: Compose, local: Compose): string[] {
   if (!same(devShared, shared)) problems.push("the networks or their internal flags differ");
   for (const { name } of local.networks) if (DEV_ONLY_NETWORKS.has(name)) problems.push(`${name} is in the local file`);
   problems.push(...localOnlyNetworkDrift(local), ...localOnlyDrift(local));
+  problems.push(
+    ...environmentSecretRefusals(dev, "compose.dev.yaml"),
+    ...environmentSecretRefusals(local, "compose.local.yaml"),
+  );
   return problems;
 }
 
