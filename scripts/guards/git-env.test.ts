@@ -21,15 +21,21 @@ const fixtureRepoTests = (): string[] =>
     .filter((f) => /"init"/.test(readFileSync(join(ROOT, "scripts", "guards", f), "utf8")))
     .map((f) => `scripts/guards/${f}`);
 
+/** Why `text`, a file that makes a throwaway repository, may let the caller's git env or config in. Empty means fine. */
+function fixtureGitProblems(file: string, text: string): string[] {
+  const problems: string[] = [];
+  if (!text.includes("fixtureGitEnv")) problems.push(`${file}: does not use fixtureGitEnv`);
+  if (/withoutGitEnv\(\)/.test(text)) problems.push(`${file}: uses withoutGitEnv()`);
+  return problems;
+}
+
 test("fixture_helper_strips_git_env", () => {
   const env = { PATH: "/bin", GIT_DIR: "/r/.git", GIT_INDEX_FILE: "/r/.git/index", GIT_WORK_TREE: "/r", HOME: "/h" };
   expect(withoutGitEnv(env)).toEqual({ PATH: "/bin", HOME: "/h" });
   // Every test file that makes a throwaway repository strips the caller's GIT_* variables and git config (P1.23g).
   expect(fixtureRepoTests().length).toBeGreaterThan(0);
   for (const file of fixtureRepoTests()) {
-    const text = readFileSync(join(ROOT, file), "utf8");
-    expect(text, file).toContain("fixtureGitEnv");
-    expect(text, file).not.toMatch(/withoutGitEnv\(\)/);
+    expect(fixtureGitProblems(file, readFileSync(join(ROOT, file), "utf8"))).toEqual([]);
   }
 });
 
