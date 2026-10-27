@@ -3,7 +3,7 @@
 // that match /(^|\/)([\w.-]+\.)?Dockerfile$/ and dropping anything under node_modules.
 // Node v26.10.0 fs.readdirSync recursive (nodejs.org/docs/latest-v26.x/api/fs.html, the
 // readdirSync options; recursive added in v20.1.0 / v18.17.0) lists the names under
-// deployment/. realpathSync then refuses a path that resolves outside that directory.
+// deployment/. realpathSync.native then refuses a path that resolves outside that directory.
 //
 // Ignore files are this map, never "a <name>.trivyignore beside the Dockerfile". P1.29v
 // emptied it, so every shipped image is scanned in full. A later entry is a loosening and
@@ -63,6 +63,21 @@ function inside(dir: string, path: string): boolean {
   return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
+/**
+ * True only when the kernel resolves the Dockerfile inside the kernel-resolved deployment/.
+ * realpathSync.native is realpath(3), which follows a link before applying a later "..";
+ * the JS realpathSync resolves link text lexically and collapses "x/.." first (P0.09v).
+ * Any realpath error (missing file, dangling link, loop) fails closed.
+ */
+function containedNatively(root: string, dockerfile: string): boolean {
+  try {
+    const deployment = realpathSync.native(join(root, "deployment"));
+    return inside(deployment, realpathSync.native(join(root, dockerfile)));
+  } catch {
+    return false;
+  }
+}
+
 /** Why one repo-relative path must not be scanned. Empty means it may. */
 export function entryProblems(root: string, dockerfile: string): string[] {
   if (
@@ -73,12 +88,7 @@ export function entryProblems(root: string, dockerfile: string): string[] {
   ) {
     return [`path outside deployment/: ${dockerfile}`];
   }
-  const deployment = join(root, "deployment");
-  if (!existsSync(deployment) || !existsSync(join(root, dockerfile))) {
-    return [`path outside deployment/: ${dockerfile}`];
-  }
-  const real = realpathSync(join(root, dockerfile));
-  if (!inside(realpathSync(deployment), real)) return [`path outside deployment/: ${dockerfile}`];
+  if (!containedNatively(root, dockerfile)) return [`path outside deployment/: ${dockerfile}`];
   const name = imageName(dockerfile);
   if (!NAME.test(name)) return [`name does not match ${NAME}: ${name} (${dockerfile})`];
   return [];
