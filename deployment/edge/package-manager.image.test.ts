@@ -128,6 +128,14 @@ describe("edge image package manager", () => {
     );
   }, 600_000);
 
+  test("edge_image_default_user_is_caddy", () => {
+    // P1.34j item 1: the user Docker recorded for the built image, whatever spelling, case or continuation the
+    // Dockerfile used, is caddy's uid and gid (images.test.ts reads the Dockerfile; this reads what the build made).
+    const image = buildEdgeImage();
+    const user = docker(["image", "inspect", "--format", "{{.Config.User}}", image], CALL_MS);
+    expect({ code: user.code, user: user.out.trim() }, user.err).toEqual({ code: 0, user: "65532:65532" });
+  }, 600_000);
+
   test("edge_image_keeps_ca_bundle", () => {
     const image = buildEdgeImage();
     const base = fileIn(runtimeBase(), CA_BUNDLE);
