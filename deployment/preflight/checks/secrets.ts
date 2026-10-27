@@ -64,16 +64,20 @@ function composeReadFileProblem(path: string, inputs: Inputs): Outcome | null {
   if (walked !== null && walked !== "kind") return fail(`${path} lies on a path ${WALK_REASONS[walked]}`);
   // The file judged is the one the values came from: the reader's fstat of its descriptor, which already held the
   // walk's (dev, ino), not a later stat of the path (P1.34r, architecture Amendment 9 B1, replacing P1.34p's check).
-  const [info, ...again] = inputs.envReads.get(path) ?? [];
+  // Every read is judged, not only the first: a chmod between two reads of one file changes what the second gave.
+  const reads = inputs.envReads.get(path) ?? [];
+  const [info] = reads;
   if (info === undefined) return missing(path);
-  if (walked === "kind" || !info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
+  if (walked === "kind" || reads.some((read) => !read.isFile() || read.size === 0))
+    return fail(`${path} is empty or not a file`);
   // A second name, inside the checkout for instance, would carry the values past C26's path test (Amendment 6).
-  if (info.nlink !== 1) return fail(`${path} has more than one hard link`);
+  if (reads.some((read) => read.nlink !== 1)) return fail(`${path} has more than one hard link`);
   // A path read twice from two files gave values from both.
-  if (again.some((read) => read.dev !== info.dev || read.ino !== info.ino))
+  if (reads.some((read) => read.dev !== info.dev || read.ino !== info.ino))
     return fail(`${path} changed after the preflight read it`);
-  if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
-  if (info.uid !== inputs.uid) return fail(`${path} is not owned by the deploy user`);
+  if (reads.some((read) => (read.mode & 0o777) !== 0o600))
+    return fail(`${path} must have exactly owner read and write permissions`);
+  if (reads.some((read) => read.uid !== inputs.uid)) return fail(`${path} is not owned by the deploy user`);
   return null;
 }
 

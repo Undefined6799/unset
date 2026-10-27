@@ -920,6 +920,18 @@ describe("preflight", () => {
     expect(result.lines).toContain(`FAIL C9 ${dotEnv} changed after the preflight read it`);
   });
 
+  // Codex on #1405: every read of a path is judged, not only the first, so a chmod between reads of the same file fails.
+  test("env_reader_judges_every_read_of_a_path", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...beforeSecondLook(root, dotEnv, () => chmodSync(dotEnv, 0o644)),
+    });
+    expect(result.lines).toContain(`FAIL C9 ${dotEnv} must have exactly owner read and write permissions`);
+  });
+
   // P1.34p Amendment 2, item 3: FUSE (FUSE_SUPER_MAGIC, linux/magic.h) is refused beside procfs.
   test("c9_fuse_refused", async () => {
     const FUSE = 0x65735546;
