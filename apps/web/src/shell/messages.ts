@@ -13,6 +13,8 @@ export const SHELL = {
   coreMenu: "Menu",
   closeMenu: "Close menu",
   close: "Close",
+  homeLabel: "unset.sh home",
+  signOut: "Sign out",
   legalColumn: "Legal",
   terms: "Terms",
   privacy: "Privacy",

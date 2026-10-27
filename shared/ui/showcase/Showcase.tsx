@@ -219,6 +219,7 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
   ),
   Navigation: (
     <Navigation
+      menuId="showcase-menu"
       inline
       account={{ href: href("/me"), label: "Your profile" }}
       primary={{ href: href("/"), label: "Home", icon: "home" }}
