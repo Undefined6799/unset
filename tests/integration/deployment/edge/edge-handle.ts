@@ -8,7 +8,7 @@ import { request } from "node:https"; // guard-allow: egress local edge test onl
 import { connect as tcpConnect } from "node:net"; // guard-allow: egress local edge test only
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls"; // guard-allow: egress local edge test only
-import { docker, killBefore, subcommand } from "../../../support/docker.ts";
+import { docker, killBefore, type Ran, subcommand } from "../../../support/docker.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const PDS_HOST = "pds.unset.test";
@@ -61,6 +61,15 @@ export interface Edge {
   /** Everything the container wrote: stdout (access log) and stderr (default log). */
   logs(): { stdout: string; stderr: string };
   stop(): Promise<void>;
+}
+
+/**
+ * The output of a docker call that must succeed. docker() returns a non-zero code without throwing, so a command that
+ * failed would read as one that printed nothing: a failed `find` passed the ownership test (N5, P1.34g).
+ */
+export function outputOf(ran: Ran, what: string): string {
+  if (ran.code !== 0) throw new Error(`${what} exited ${ran.code}: ${ran.err.trim().slice(-2000)}`);
+  return ran.out;
 }
 
 /** The pinned Node image the probe runs in (the node-app base, deployment/images/bases.lock.json). */

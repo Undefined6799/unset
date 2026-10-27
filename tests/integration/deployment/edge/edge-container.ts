@@ -22,6 +22,13 @@ export function buildEdgeImage(): string {
 }
 
 /**
+ * The docker calls stopEdgeAndRemoveImage can make, each killed at CALL_MS: the stop's `rm -f` and `volume rm`, then
+ * the tag's `rmi`. The suite's teardown budget is derived from it (edge-suite.ts), and edge-exit-codes.image.test.ts
+ * counts the calls, so a new one fails there instead of outrunning the budget (N3, P1.34g; RE-1).
+ */
+export const TEARDOWN_DOCKER_CALLS = 3;
+
+/**
  * Stops the edge, then removes the image tag the suite built, even when the stop failed; when both fail, one
  * AggregateError holds both, the stop's first (P1.11i). Only the tag goes, never -f: since P1.27z the trusted edge
  * tests build and remove tags of their own, so removing this one deletes nothing they hold.
