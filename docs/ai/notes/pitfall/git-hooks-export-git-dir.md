@@ -4,13 +4,13 @@ type: pitfall
 status: current
 areas: ["[[ci]]", "[[tests]]"]
 summary: Hooks export GIT_DIR and ~/.gitconfig may sign commits, so git on a temp repo in tests runs with fixtureGitEnv().
-code: [scripts/guards/git-env.ts, scripts/githooks/pre-commit]
-sources: [https://github.com/git/git/blob/v2.43.0/Documentation/githooks.txt, https://github.com/git/git/blob/v2.43.0/Documentation/git.txt]
+code: [scripts/guards/git-env.ts, scripts/githooks/pre-commit, scripts/ci/secrets-fixtures.ts]
+sources: [https://github.com/git/git/blob/v2.43.0/Documentation/githooks.txt, https://github.com/git/git/blob/v2.43.0/Documentation/git.txt, https://github.com/git/git/blob/v2.43.0/Documentation/config/core.txt, https://github.com/git/git/blob/v2.43.0/Documentation/git-config.txt]
 importance: high
 related: []
 replaced_by: null
 tags: [pitfall, ci, tests]
-checked: 2026-10-12
+checked: 2026-10-27
 ---
 # Git hooks export GIT_DIR to everything they run
 
@@ -30,11 +30,20 @@ signer, so every fixture commit ran it: slow enough to time out `job_reads_git_s
 throwaway commits with a real key. `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1` (git(1)
 "Environment Variables", v2.43.0) stop git reading them.
 
+**Home ignore and attributes files too (P1.23h).** With no config file at all git still reads
+`$XDG_CONFIG_HOME/git/ignore` and `git/attributes` (or `~/.config/git/...`), the defaults of
+`core.excludesFile` and `core.attributesFile` (`Documentation/config/core.txt`, v2.43.0). A home
+`*.secret` ignore hid a file in a secrets fixture: a false green. `fixtureGitEnv()` pins both to
+`/dev/null` through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n`
+(`Documentation/git-config.txt`, "ENVIRONMENT"), setting the count itself.
+
 **The rule.** Every git spawn on a throwaway repository, and any child process that runs git there,
-gets `env: fixtureGitEnv()` from `scripts/guards/git-env.ts`: `withoutGitEnv()` plus no global or
-system config and a fixed author and committer. The test `fixture_helper_strips_git_env` fails a
-`scripts/guards/*.test.ts` file that runs `git init` without it, and `fixture_git_ignores_global_config`
-proves a signing global config is ignored. Guards reading the real checkout keep `withoutGitEnv()`. As a
+gets `env: fixtureGitEnv()` from `scripts/guards/git-env.ts`: `withoutGitEnv()` plus no global,
+system or home git file and a fixed author and committer. The test `fixture_helper_strips_git_env`
+parses each `scripts/guards` and `scripts/ci` file that runs `git init` and fails any
+`execFileSync`/`execFile`/`spawn`/`spawnSync` of `"git"` whose options literal lacks an `env` that is
+`fixtureGitEnv(...)` or spreads it; `fixture_git_ignores_global_config`, `_system_config`,
+`_xdg_excludes` and `_xdg_attributes` prove each file is ignored. Guards reading the real checkout keep `withoutGitEnv()`. As a
 second layer the hook unsets the three variables before the guards (`pre_commit_unsets_git_env`).
 
 **Repair.** Only by hand: the stray branches and commits stay in the local repository until someone
