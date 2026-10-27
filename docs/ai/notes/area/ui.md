@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[ui-build]]", "[[islands]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-23
+checked: 2026-10-26
 ---
 # ui
 
@@ -51,9 +51,12 @@ checked: 2026-10-23
 - `components/Readme/` (P2.20y, staging preview, not yet on the sheet): renders a member's README blocks (the
   `sh.unset.profile` lexicon's block model, written with BlockNote) on the server with no script; links pass `safeHref`
   as http(s) only. Its prop types mirror the lexicon, since shared/ui imports no domain.
+  Reading and editing columns use the README's container width (640px for two, 840px for three); a wide viewport
+  can still have a narrow README beside the identity sidebar. See [[editor-touch-controls]].
 - `presentation.ts` / the explicit `./presentation` package export: Navigation, Button, Input, Icon, Avatar,
-  safeHref and needed types only. `./brand-header` points directly to the pure BrandHeader module. Use these entries
-  for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
+  safeHref, selected generated icon drawings and needed types only. The root export selects this entry under the
+  browser condition (ADR 0039); Node/SSR retains `index.ts`. Apps keep their public root import, and unused Header
+  and ThemePicker islands stay lazy. `./brand-header` points directly to pure BrandHeader. Native Button callbacks,
   refs and ARIA/title props keep action/pending state in the caller. Input is unchanged.
 - `approved-extensions.json`: P2.24f's bounded component/API/icon record, hash-pinned on existing Navigation,
   Header, Button and Icon inventory rows; imported sheet bytes/metadata stay immutable. The generator verifies the

@@ -28,16 +28,18 @@ function formParts(page: Document) {
   const pencil = form.querySelector("button[data-readme-edit]");
   const actions = form.querySelector("[data-readme-actions]");
   const cancel = form.querySelector('button[name="cancel"]');
+  const status = form.querySelector("[data-readme-unsaved]");
   if (
     !(field instanceof HTMLTextAreaElement) ||
     !(mount instanceof HTMLElement) ||
     !(pencil instanceof HTMLButtonElement) ||
     !(actions instanceof HTMLElement) ||
-    !(cancel instanceof HTMLButtonElement)
+    !(cancel instanceof HTMLButtonElement) ||
+    !(status instanceof HTMLElement)
   ) {
     return null;
   }
-  return { form, field, mount, pencil, actions, cancel };
+  return { form, field, mount, pencil, actions, cancel, status };
 }
 
 /**
@@ -47,10 +49,25 @@ function formParts(page: Document) {
 export function startReadmeEditor(page: Document): void {
   const parts = formParts(page);
   if (parts === null) return;
-  const { form, field, mount, pencil, actions, cancel } = parts;
+  const { form, field, mount, pencil, actions, cancel, status } = parts;
+  const view = page.defaultView;
   const shown = [...mount.childNodes];
   let editor: ReadmeEditor | null = null;
   let root: Root | null = null;
+  let dirty = false;
+  let stopChanges: (() => void) | undefined;
+  // Only attach while dirty: browsers choose the warning text, and may omit it on mobile app termination.
+  // https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event
+  const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+    event.preventDefault();
+    event.returnValue = " ";
+  };
+  const setDirty = (changed: boolean) => {
+    dirty = changed;
+    status.hidden = !dirty;
+    view?.removeEventListener("beforeunload", warnBeforeLeaving);
+    if (dirty) view?.addEventListener("beforeunload", warnBeforeLeaving);
+  };
   const open = () => {
     if (root !== null) return;
     pencil.hidden = true;
@@ -62,12 +79,21 @@ export function startReadmeEditor(page: Document): void {
         label={field.getAttribute("aria-label") ?? ""}
         onReady={(ready) => {
           editor = ready;
+          // Compare the normalized document, not the partial server JSON; undoing to it is clean again.
+          // @blocknote/core 0.56.0 src/editor/BlockNoteEditor.ts:1426: onChange returns its unsubscribe function.
+          const original = JSON.stringify(ready.document);
+          stopChanges = ready.onChange(() => setDirty(JSON.stringify(ready.document) !== original));
           form.dataset.ready = "true";
+          ready.focus();
         }}
       />,
     );
   };
   const close = () => {
+    if (dirty && !view?.confirm(form.dataset.readmeDiscard)) return;
+    stopChanges?.();
+    stopChanges = undefined;
+    setDirty(false);
     root?.unmount();
     root = null;
     editor = null;
@@ -78,11 +104,17 @@ export function startReadmeEditor(page: Document): void {
     pencil.focus();
   };
   form.addEventListener("submit", (event) => {
+    if (event.defaultPrevented) return;
     if (editor === null) {
       event.preventDefault();
       return;
     }
     field.value = JSON.stringify(editor.document);
+    view?.removeEventListener("beforeunload", warnBeforeLeaving);
+    // A later submit listener can still cancel the navigation; keep those changes protected.
+    queueMicrotask(() => {
+      if (event.defaultPrevented) setDirty(dirty);
+    });
   });
   pencil.addEventListener("click", open);
   mount.addEventListener("dblclick", open);

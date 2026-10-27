@@ -10,6 +10,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseReadme } from "@unset/domains-profile";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import { migrate } from "@unset/infrastructure-postgres";
 import { compose } from "@unset/interfaces-http/compose.ts";
@@ -37,6 +38,60 @@ const ACCOUNT = {
   issuer: "https://pds.unset.test",
   ours: true,
 };
+
+/** Synthetic editor content; the fixture never reads or writes a member's account. */
+type FixtureBlock = {
+  type: string;
+  props?: Record<string, string | number | boolean>;
+  content?: string;
+  children?: FixtureBlock[];
+};
+const EDITOR_DOCUMENT = JSON.stringify(
+  [
+    { type: "heading", props: { level: 1 }, content: "Editor input fixture" },
+    {
+      type: "paragraph",
+      content:
+        "A first paragraph wraps across several lines at narrow widths. The editor must keep its text, menus, and actions inside the available space while the profile sidebar follows its normal responsive layout.\nThis second line also exercises a multiline text block.",
+    },
+    { type: "paragraph", content: "Move this paragraph with the block actions." },
+    { type: "paragraph", content: "The next paragraph stays readable after a move." },
+    { type: "checkListItem", props: { checked: false }, content: "Check keyboard and touch access." },
+    {
+      type: "columnList",
+      children: [
+        {
+          type: "column",
+          children: [
+            { type: "heading", props: { level: 2 }, content: "Left column" },
+            { type: "paragraph", content: "A small project with a concise description." },
+          ],
+        },
+        {
+          type: "column",
+          children: [
+            { type: "heading", props: { level: 2 }, content: "Right column" },
+            { type: "paragraph", content: "Another project keeps its position in reading order." },
+          ],
+        },
+      ],
+    },
+    { type: "paragraph", content: "Final line for keyboard navigation." },
+  ].map(function textRuns(block: FixtureBlock): object {
+    return {
+      ...block,
+      ...("content" in block && typeof block.content === "string"
+        ? { content: [{ type: "text", text: block.content, styles: {} }] }
+        : {}),
+      ...("children" in block ? { children: block.children?.map(textRuns) } : {}),
+    };
+  }),
+);
+const EDITOR_README = (() => {
+  const parsed = parseReadme(EDITOR_DOCUMENT);
+  if (!parsed.ok) throw new Error("editor fixture document is invalid");
+  return parsed.readme;
+})();
 
 // The wait process probes both listeners. scripts/guards/egress.ts scans tests/ and refuses a
 // dynamic fetch, so the probe is guardedFetch. An internal policy allows these exact http origins,
@@ -315,6 +370,40 @@ async function serveTest(): Promise<void> {
           }),
       }),
     ),
+    defineRoute({
+      method: "GET",
+      path: "/fixture/editor",
+      group: "app",
+      rateLimit: "default",
+      session: "none",
+      handler: ({ request }) =>
+        pageResponse(deps, {
+          group: "app",
+          request,
+          title: "Editor input fixture",
+          editor: true,
+          islands: "off",
+          body: render.screens.profile({
+            did: ACCOUNT.did,
+            handle: "editor.example.test",
+            verified: false,
+            handleUnavailable: false,
+            profile: {
+              displayName: "Editor Sample",
+              headline: "Synthetic content for browser checks.",
+              location: "Example City",
+              website: "https://example.com/editor",
+              links: "",
+              readme: EDITOR_README.blocks,
+            },
+            readmeDocument: EDITOR_DOCUMENT,
+          }),
+          shell: {
+            noindex: true,
+            navigation: { active: "account", accountPath: "/fixture/editor", accountName: "editor.example.test" },
+          },
+        }),
+    }),
     htmlRoute(FIXTURES.unlabeled, "public", `<input name="name">`),
     htmlRoute(FIXTURES.inline, "public", `<script>globalThis.__inline = 1</script>`),
     htmlRoute(FIXTURES.script, "app", `<script type="module" src="/${boot}"></script>`),

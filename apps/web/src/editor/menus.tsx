@@ -12,20 +12,26 @@ import {
   SideMenuExtension,
   SuggestionMenu,
 } from "@blocknote/core/extensions";
+import { IconDrawing, iconAdd, iconClose, iconDelete, iconDone, iconDown, iconMore, iconUp } from "@unset/shared-ui";
 import {
+  type FocusEvent,
   Fragment,
+  type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { moveBlock } from "./block-actions.ts";
 import { endBlockDrag, startBlockDrag } from "./clipboard.ts";
 import styles from "./Editor.module.css";
+import { type EditorInput, useMenuPosition } from "./interaction.ts";
 import { EDITOR } from "./messages.ts";
-import { ALIGNMENTS, type Alignment, type ReadmeEditor, type ReadmePartialBlock, TEXT_STYLES } from "./schema.ts";
+import { ALIGNMENTS, type Alignment, type ReadmeEditor, TEXT_STYLES } from "./schema.ts";
 
 type Store<T> = { readonly state: T; subscribe: (listener: () => void) => () => void };
 
@@ -36,34 +42,68 @@ function useStore<T>(store: Store<T>): T {
   );
 }
 
-/** Puts `ref`'s element at a viewport position (`at`, from a DOMRect); null while the menu is hidden. The element is
- * absolutely placed in the editor, so the position is taken relative to the editor's box, and kept inside its width
- * (right-aligned text would otherwise push the toolbar past the page's edge). */
-function usePlace(ref: RefObject<HTMLElement | null>, at: { left: number; top: number } | null): void {
+function menuKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
+  const items = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role^="menuitem"]:not(:disabled)'),
+  );
+  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  const next =
+    event.key === "ArrowDown"
+      ? (index + 1) % items.length
+      : event.key === "ArrowUp"
+        ? (index - 1 + items.length) % items.length
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : null;
+  if (next === null || !items.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  items[next]?.focus();
+}
+
+function useMenuFocus(ref: RefObject<HTMLElement | null>, open: boolean): void {
   useLayoutEffect(() => {
-    const element = ref.current;
-    const box = element?.offsetParent?.getBoundingClientRect();
-    if (element === null || box === undefined || at === null) return;
-    const left = Math.max(0, Math.min(at.left - box.left, box.width - element.offsetWidth));
-    element.style.setProperty("left", `${Math.round(left)}px`);
-    element.style.setProperty("top", `${Math.round(at.top - box.top)}px`);
-  });
+    if (open) ref.current?.querySelector<HTMLButtonElement>('button[role^="menuitem"]:not(:disabled)')?.focus();
+  }, [open, ref]);
+}
+
+function useControlFocus() {
+  const [focused, setFocused] = useState(false);
+  return {
+    focused,
+    onFocus: () => setFocused(true),
+    onBlur: (event: FocusEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+    },
+  };
+}
+
+function useSelectionAnchor(shown: boolean): DOMRect | null {
+  const at = useRef<DOMRect | null>(null);
+  const selection = shown ? window.getSelection() : null;
+  if (selection && selection.rangeCount > 0) at.current = selection.getRangeAt(0).getBoundingClientRect();
+  return at.current;
 }
 
 /** Closes an open menu on a press outside `ref` or on Escape, as the sheet's Select closes. */
-function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, close: () => void): void {
+function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, close: () => void, onEscape?: () => void): void {
   useEffect(() => {
     if (!open) return;
-    const outside = (event: MouseEvent) => {
+    const outside = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !ref.current?.contains(event.target)) close();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") {
+        close();
+        onEscape?.();
+      }
     };
-    document.addEventListener("mousedown", outside);
+    document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", onKey);
     };
   });
@@ -101,23 +141,35 @@ function selectedBlocks(editor: ReadmeEditor) {
   return !empty && $to.parentOffset === 0 && blocks.length > 1 ? blocks.slice(0, -1) : blocks;
 }
 
-export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
+export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: EditorInput }) {
   const shown = useStore(editor.getExtension(FormattingToolbarExtension)?.store as Store<boolean>);
   const [, render] = useState(0);
   const [types, setTypes] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const controlFocus = useControlFocus();
+  const typeTrigger = useRef<HTMLButtonElement>(null);
+  const typeMenu = useRef<HTMLDivElement>(null);
   useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
   const ref = useRef<HTMLDivElement>(null);
-  const at = useRef<{ left: number; top: number } | null>(null);
-  const selection = shown ? window.getSelection() : null;
-  const rect = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null;
-  if (rect !== null) at.current = { left: rect.left, top: rect.top - 44 };
-  const open = shown || types || link !== null;
-  useDismiss(types || link !== null, ref, () => {
-    setTypes(false);
-    setLink(null);
-  });
-  usePlace(ref, open ? at.current : null);
+  useMenuFocus(ref, types);
+  const at = useSelectionAnchor(shown);
+  const compact = input.compact && input.focused;
+  const open = shown || types || link !== null || compact || controlFocus.focused;
+  useDismiss(
+    types || link !== null,
+    ref,
+    () => {
+      setTypes(false);
+      setLink(null);
+    },
+    () => {
+      if (types) typeTrigger.current?.focus();
+      else editor.focus();
+    },
+  );
+  useMenuPosition(ref, open && !compact ? at : null, "above");
+  useMenuPosition(typeMenu, types ? (typeTrigger.current?.getBoundingClientRect() ?? null) : null, "above");
+  const className = `${styles.toolbar} ${compact ? styles.touchToolbar : ""}`;
   if (!open) return null;
   const active = editor.getActiveStyles();
   const current = currentType(editor);
@@ -148,7 +200,14 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
   const title = (key: string) => editor.dictionary.slash_menu[key as keyof typeof editor.dictionary.slash_menu].title;
   if (link !== null) {
     return (
-      <div ref={ref} className={styles.toolbar} role="toolbar" aria-label={EDITOR.toolbar}>
+      <div
+        ref={ref}
+        className={className}
+        role="toolbar"
+        aria-label={EDITOR.toolbar}
+        onFocus={controlFocus.onFocus}
+        onBlur={controlFocus.onBlur}
+      >
         <input
           className={styles.linkField}
           type="url"
@@ -168,24 +227,42 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
         <button type="button" className={styles.tool} onClick={applyLink} disabled={!isWebLink(link)}>
           {EDITOR.linkApply}
         </button>
+        <button type="button" className={styles.tool} onClick={back} aria-label={EDITOR.close}>
+          <IconDrawing paths={iconClose} />
+        </button>
       </div>
     );
   }
   return (
-    <div ref={ref} className={styles.toolbar} role="toolbar" aria-label={EDITOR.toolbar}>
+    <div
+      ref={ref}
+      className={className}
+      role="toolbar"
+      aria-label={EDITOR.toolbar}
+      onFocus={controlFocus.onFocus}
+      onBlur={controlFocus.onBlur}
+    >
       <div className={styles.typePicker}>
         <button
+          ref={typeTrigger}
           type="button"
           className={styles.tool}
           aria-label={EDITOR.blockType}
           aria-expanded={types}
+          aria-haspopup="menu"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setTypes((on) => !on)}
         >
-          {current === undefined ? EDITOR.blockType : title(current.key)} ▾
+          {current === undefined ? EDITOR.blockType : title(current.key)} <IconDrawing paths={iconDown} size={16} />
         </button>
         {types ? (
-          <div className={styles.typeMenu} role="menu" aria-label={EDITOR.blockType}>
+          <div
+            ref={typeMenu}
+            className={styles.typeMenu}
+            role="menu"
+            aria-label={EDITOR.blockType}
+            onKeyDown={menuKeys}
+          >
             {blockTypes(editor).map((item) => (
               <button
                 key={item.key}
@@ -197,7 +274,7 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
                 onClick={() => setType(item)}
               >
                 <span className={styles.chosen} aria-hidden="true">
-                  {item.key === current?.key ? "→" : ""}
+                  {item.key === current?.key ? <IconDrawing paths={iconDone} size={16} /> : null}
                 </span>
                 <span className={styles.glyph} aria-hidden="true">
                   {GLYPHS[item.key]}
@@ -215,9 +292,14 @@ export function StyleToolbar({ editor }: { editor: ReadmeEditor }) {
           type="button"
           className={styles.tool}
           aria-label={EDITOR.styles[style]}
+          title={EDITOR.styles[style]}
+          data-mark={style}
           aria-pressed={active[style] === true}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => editor.toggleStyles({ [style]: true })}
+          onClick={() => {
+            editor.toggleStyles({ [style]: true });
+            render((n) => n + 1);
+          }}
         >
           {EDITOR.marks[style]}
         </button>
@@ -306,6 +388,7 @@ function useMenuKeys(editor: ReadmeEditor, query: string | null, count: number, 
 }
 
 export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
+  const id = useId();
   const menu = editor.getExtension(SuggestionMenu);
   const state = useStore(menu?.store as Store<{ show: boolean; query: string; referencePos: DOMRect } | undefined>);
   const open = state?.show === true;
@@ -320,14 +403,26 @@ export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
   };
   const selected = useMenuKeys(editor, query, items.length, pick);
   const ref = useRef<HTMLDivElement>(null);
-  usePlace(ref, open ? { left: state.referencePos.left, top: state.referencePos.bottom + 4 } : null);
+  useMenuPosition(ref, open ? state.referencePos : null, "below");
+  useEffect(() => {
+    const dom = editor.domElement;
+    if (!dom || !open) return;
+    dom.setAttribute("aria-expanded", "true");
+    dom.setAttribute("aria-controls", id);
+    if (items.length) dom.setAttribute("aria-activedescendant", `${id}-${selected}`);
+    return () => {
+      dom.removeAttribute("aria-expanded");
+      dom.removeAttribute("aria-controls");
+      dom.removeAttribute("aria-activedescendant");
+    };
+  }, [editor, open, id, items.length, selected]);
   useLayoutEffect(() => {
     ref.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
   });
   if (!open) return null;
   // Focus stays in the editor while the menu is open (the keys above); options are reached by keys or the pointer.
   return (
-    <div ref={ref} className={styles.menu} role="listbox" aria-label={EDITOR.slashMenu}>
+    <div id={id} ref={ref} className={styles.menu} role="listbox" aria-label={EDITOR.slashMenu}>
       {items.map((item, index) => (
         <Fragment key={item.key}>
           {item.group !== undefined && item.group !== items[index - 1]?.group ? (
@@ -336,13 +431,18 @@ export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
             </div>
           ) : null}
           <div
+            id={`${id}-${index}`}
             role="option"
             tabIndex={-1}
             aria-selected={index === selected}
             className={styles.option}
-            onMouseDown={(event) => {
-              event.preventDefault();
-              pick(index);
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => pick(index)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                pick(index);
+              }
             }}
           >
             <span className={styles.glyph} aria-hidden="true">
@@ -374,46 +474,70 @@ export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
  * "/" menu; :: drags the block, and a click on it opens the block's menu (Alex 2026-10-23 23:30Z: delete from ::).
  * The side menu stays frozen on its block while that menu is open.
  */
-export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
+export function BlockHandle({ editor, input }: { editor: ReadmeEditor; input: EditorInput }) {
   const side = editor.getExtension(SideMenuExtension);
   const state = useStore(
     side?.store as Store<{ show: boolean; referencePos: DOMRect; block: { id: string } } | undefined>,
   );
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
+  useMenuFocus(ref, menu);
+  const [, render] = useState(0);
+  useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
+  useEffect(() => editor.onChange(() => render((n) => n + 1)), [editor]);
   useEffect(() => side?.setMenuElement(ref.current ?? undefined));
   const close = () => {
     setMenu(false);
     side?.unfreezeMenu();
   };
-  useDismiss(menu, ref, close);
-  const open = state?.show === true || menu;
-  usePlace(ref, state?.show === true ? { left: state.referencePos.left - 72, top: state.referencePos.top } : null);
-  if (!open || state === undefined) return null;
+  useDismiss(menu, ref, close, () => trigger.current?.focus());
+  const open = state?.show === true || menu || input.focused;
+  const block = !input.touch && state?.show ? state.block : editor.getTextCursorPosition().block;
+  const selectedRect =
+    editor.domElement
+      ?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] > [data-content-type]`)
+      ?.getBoundingClientRect() ?? null;
+  useMenuPosition(ref, !input.touch && open ? (state?.show ? state.referencePos : selectedRect) : null, "side");
+  useMenuPosition(menuRef, menu ? (trigger.current?.getBoundingClientRect() ?? null) : null, "above");
+  if (!open) return null;
   const addBelow = () => {
-    const [block] = editor.insertBlocks([{ type: "paragraph" }], state.block.id, "after");
-    if (block === undefined) return;
-    editor.setTextCursorPosition(block);
+    close();
+    const [added] = editor.insertBlocks([{ type: "paragraph" }], block.id, "after");
+    if (added === undefined) return;
+    editor.setTextCursorPosition(added);
+    editor.focus();
     editor.getExtension(SuggestionMenu)?.openSuggestionMenu("/");
   };
   const remove = () => {
-    const id = state.block.id;
+    const id = block.id;
     close();
     editor.removeBlocks([id]);
     editor.focus();
   };
   return (
-    <div ref={ref} className={styles.handle}>
-      <button type="button" className={styles.tool} aria-label={EDITOR.addBlock} onClick={addBelow}>
-        +
-      </button>
+    <div ref={ref} className={`${styles.handle} ${input.touch ? styles.touchHandle : ""}`}>
       <button
         type="button"
         className={styles.tool}
-        aria-label={EDITOR.blockMenu}
+        aria-label={EDITOR.addBlock}
+        title={EDITOR.addBlock}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={addBelow}
+      >
+        <IconDrawing paths={iconAdd} />
+      </button>
+      <button
+        ref={trigger}
+        type="button"
+        className={styles.tool}
+        aria-label={EDITOR.blockActions}
+        title={input.touch ? EDITOR.blockActions : EDITOR.blockMenu}
         aria-haspopup="menu"
         aria-expanded={menu}
-        draggable
+        draggable={!input.touch}
+        onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
           if (menu) return close();
           side?.freezeMenu();
@@ -422,18 +546,54 @@ export function BlockHandle({ editor }: { editor: ReadmeEditor }) {
         onDragStart={(event) => {
           setMenu(false);
           side?.freezeMenu();
-          startBlockDrag(editor, event.nativeEvent, state.block.id);
+          startBlockDrag(editor, event.nativeEvent, block.id);
         }}
         onDragEnd={() => {
           endBlockDrag(editor);
           side?.unfreezeMenu();
         }}
       >
-        ::
+        <IconDrawing paths={iconMore} />
+        {input.touch ? EDITOR.blockActions : null}
       </button>
       {menu ? (
-        <div className={styles.blockMenu} role="menu" aria-label={EDITOR.blockMenu}>
+        <div
+          ref={menuRef}
+          className={styles.blockMenu}
+          role="menu"
+          aria-label={EDITOR.blockActions}
+          onKeyDown={menuKeys}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.typeItem}
+            disabled={!editor.getPrevBlock(block.id)}
+            onClick={() => {
+              moveBlock(editor, block.id, "up");
+              close();
+              editor.focus();
+            }}
+          >
+            <IconDrawing paths={iconUp} />
+            {EDITOR.moveUp}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.typeItem}
+            disabled={!editor.getNextBlock(block.id)}
+            onClick={() => {
+              moveBlock(editor, block.id, "down");
+              close();
+              editor.focus();
+            }}
+          >
+            <IconDrawing paths={iconDown} />
+            {EDITOR.moveDown}
+          </button>
           <button type="button" role="menuitem" className={styles.typeItem} onClick={remove}>
+            <IconDrawing paths={iconDelete} />
             {EDITOR.deleteBlock}
           </button>
         </div>

@@ -7,9 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { type Copied, copySelection, endBlockDrag, pasteText } from "./clipboard.ts";
 import { columnDrop, dropIntoColumns, normalizeColumns } from "./columns.ts";
 import styles from "./Editor.module.css";
+import { useDockedCaret, useEditorInput, useMenuPosition } from "./interaction.ts";
 import { BlockHandle, BlockMenu, CurrentLine, StyleToolbar } from "./menus.tsx";
 import { EDITOR } from "./messages.ts";
 import { type ReadmeEditor, type ReadmePartialBlock, readmeSchema } from "./schema.ts";
+import { TouchBlocks } from "./TouchBlocks.tsx";
 
 export type BlockEditorProps = {
   /** The document to start from; empty for a new one. */
@@ -98,8 +100,16 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   const copied = useRef<Copied | null>(null);
   const ready = useRef(onReady);
   const [editor] = useState(() => createEditor(initialContent, copied));
+  const input = useEditorInput(editor);
   const mount = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
+  useMenuPosition(
+    controls,
+    input.compact && input.focused ? (area.current?.getBoundingClientRect() ?? null) : null,
+    "dock",
+  );
+  useDockedCaret(editor, controls, input.compact && input.focused);
   const indicator = useRef<HTMLDivElement>(null);
   const pairing = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -128,14 +138,23 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
     };
   }, [editor, label]);
   return (
-    <div ref={area} className={styles.editor}>
+    <div
+      ref={area}
+      className={styles.editor}
+      data-editor-root
+      data-touch={input.touch || undefined}
+      data-compact={input.compact || undefined}
+    >
+      <div ref={controls} className={styles.controls} data-docked={(input.compact && input.focused) || undefined}>
+        <StyleToolbar editor={editor} input={input} />
+        {!input.compact ? <BlockHandle editor={editor} input={input} /> : null}
+        <TouchBlocks editor={editor} active={input.compact} />
+      </div>
       <CurrentLine editor={editor} />
       <div ref={pairing} className={styles.columnTarget} aria-hidden="true" hidden />
       <div ref={indicator} className={styles.columnDrop} aria-hidden="true" hidden />
       <div ref={mount} />
-      <StyleToolbar editor={editor} />
       <BlockMenu editor={editor} />
-      <BlockHandle editor={editor} />
     </div>
   );
 }

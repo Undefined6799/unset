@@ -5,7 +5,11 @@
   "type": "module",
   "license": "MIT",
   "exports": {
-    ".": "./index.ts",
+    ".": {
+      "types": "./index.ts",
+      "browser": "./presentation.ts",
+      "default": "./index.ts"
+    },
     "./presentation": "./presentation.ts",
     "./brand-header": "./components/Header/BrandHeader.tsx"
   },

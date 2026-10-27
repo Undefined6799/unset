@@ -19,6 +19,12 @@ export const EDITOR = {
   noMatch: "No block matches",
   addBlock: "Add a block below",
   blockMenu: "Drag to move, or click for this block's menu",
+  blockActions: "Block actions",
+  gestureHint: "At a block’s edge, hold and drag to move. Double tap for actions. Gestures on text select words.",
+  moveUp: "Move up",
+  moveDown: "Move down",
+  done: "Done",
+  close: "Close",
   deleteBlock: "Delete",
   blocks: {
     paragraph: "Text",

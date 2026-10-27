@@ -17,7 +17,7 @@ export {
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
 export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHeader.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
-export { Icon, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
+export { Icon, IconDrawing, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
@@ -50,6 +50,13 @@ export {
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
 export { Textarea, type TextareaProps } from "./components/Textarea/Textarea.tsx";
+export { default as iconAdd } from "./icons/drawings/add.generated.ts";
+export { default as iconClose } from "./icons/drawings/close.generated.ts";
+export { default as iconDelete } from "./icons/drawings/delete.generated.ts";
+export { default as iconDone } from "./icons/drawings/done.generated.ts";
+export { default as iconDown } from "./icons/drawings/down.generated.ts";
+export { default as iconMore } from "./icons/drawings/more.generated.ts";
+export { default as iconUp } from "./icons/drawings/up.generated.ts";
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 // P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.
 export type { FallbackFace, FontMetrics } from "./tokens/font-metrics.ts";

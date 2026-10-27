@@ -178,7 +178,14 @@ describe("profile screen", () => {
 
   test("profile_owner_gets_the_readme_inside_its_form_with_the_pencil_hidden", () => {
     const page = html(screens.profile({ ...ALICE_ID, handleUnavailable: false, profile: ALICE, readmeDocument: "[]" }));
-    expect(tags(page, "form")).toEqual([{ method: "post", action: "/profile/readme", "data-readme-editor": "true" }]);
+    expect(tags(page, "form")).toEqual([
+      {
+        method: "post",
+        action: "/profile/readme",
+        "data-readme-editor": "true",
+        "data-readme-discard": "Discard your unsaved changes?",
+      },
+    ]);
     expect(page).toMatch(/<div data-readme-editor-mount="true"><div[^>]*><div><h3>About me<\/h3>/);
     expect(page).toMatch(/<button[^>]*aria-label="Edit README"[^>]*hidden=""/);
   });

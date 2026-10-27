@@ -43,3 +43,5 @@ one-paragraph entry; new decisions also get their own file.
 | [0034](0034-docs-only-auto-merge.md) | Docs-only pull requests auto-merge when CI is green (P0.07e) | Proposed (awaiting Alex) |
 | [0035](0035-web-search-searxng.md) | Web search through our own SearXNG, queried by the server through net-guard (P3.14s) | Proposed (awaiting Alex) |
 | [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Proposed (awaiting Alex) |
+| [0038](0038-editor-history-boundaries.md) | Explicit undo boundaries use the history package already shipped by BlockNote | Proposed |
+| [0039](0039-browser-ui-public-entry.md) | The public UI package selects its existing pure presentation entry in browsers | Proposed |

@@ -5,6 +5,7 @@
    shadow-menu at z-menu; the hovered or keyboard-active row fills line, as Select's options do. */
 @layer screens {
   .editor {
+    container: editor / inline-size;
     --editor-placeholder: "";
     position: relative;
     /* Its own stacking context, so the drop target's fill (.columnTarget) can sit under the text. */
@@ -75,7 +76,18 @@
     margin-left: 0;
   }
 
-  @media (min-width: 720px) {
+  @container editor (min-width: 640px) {
+    .editor
+      [data-node-type="blockContainer"]:has(> [data-content-type="columnList"]):not(
+        :has(> [data-node-type="blockGroup"] > [data-node-type="blockOuter"]:nth-child(3))
+      )
+      > [data-node-type="blockGroup"] {
+      flex-direction: row;
+      gap: var(--space-12);
+    }
+  }
+
+  @container editor (min-width: 840px) {
     .editor [data-node-type="blockContainer"]:has(> [data-content-type="columnList"]) > [data-node-type="blockGroup"] {
       flex-direction: row;
       gap: var(--space-12);
@@ -376,11 +388,9 @@
     gap: var(--space-1);
   }
 
-  /* Under the handle's two buttons, in the handle's own flow. */
+  /* Each submenu is independently placed inside the visible editor area. */
   .handle > .blockMenu {
-    position: static;
-    flex-basis: 100%;
-    min-width: 10rem;
+    width: 10rem;
   }
 
   .tool {
@@ -413,6 +423,8 @@
 
   /* The toolbar's block type menu, its dividers and its link field (BlockNote's FormattingToolbar layout). */
   .toolbar {
+    flex-wrap: wrap;
+    box-sizing: border-box;
     align-items: center;
     gap: var(--space-1);
   }
@@ -423,21 +435,21 @@
     flex-direction: column;
   }
 
-  /* Its static place, under the button in the picker's column, is where it opens. The handle's block menu opens
-     the same way under the handle. */
   .typeMenu,
   .blockMenu {
     position: absolute;
-    margin-top: var(--space-1);
     left: 0;
     display: flex;
     flex-direction: column;
-    min-width: 12rem;
+    min-width: 0;
+    width: 12rem;
     padding: var(--space-1);
     background-color: var(--color-ground);
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-menu);
+    max-height: min(22rem, 50dvh);
+    overflow-y: auto;
   }
 
   .typeItem {
@@ -485,6 +497,8 @@
   .linkField {
     box-sizing: border-box;
     width: 16rem;
+    min-width: 0;
+    flex: 1;
     height: 32px;
     padding: 0 var(--space-3);
     border: 1px solid var(--color-line-strong);
@@ -506,5 +520,185 @@
 
   .handle .tool[draggable="true"] {
     cursor: grab;
+  }
+
+  .controls {
+    display: contents;
+  }
+
+  .tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+  }
+
+  .menu {
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+  }
+
+  .typeItem:disabled {
+    color: var(--color-ink-muted);
+    cursor: default;
+  }
+
+  .editor[data-compact] .controls {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    background: var(--color-ground);
+    z-index: var(--z-menu);
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .editor[data-compact] .controls[data-docked] {
+    position: absolute;
+    box-shadow: var(--shadow-menu);
+  }
+
+  .touchToolbar {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+  }
+
+  .touchHandle {
+    position: relative;
+    padding-block: var(--space-1);
+  }
+
+  .editor[data-compact] .tool,
+  .editor[data-compact] .typeItem {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .editor[data-compact] .keys {
+    display: none;
+  }
+
+  .touchBlocksButton {
+    align-self: flex-start;
+    border: 1px solid var(--color-line-strong);
+    margin: var(--space-1);
+  }
+
+  .blockSheet {
+    --sheet-safe-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+    position: fixed;
+    inset: auto 0 0;
+    margin: 0 auto;
+    width: min(100%, 36rem);
+    max-height: 70dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-4);
+    padding-bottom: calc(var(--space-4) + var(--sheet-safe-bottom));
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-menu);
+  }
+
+  .blockSheet::backdrop {
+    background: var(--color-scrim);
+  }
+  .blockSheet .tool,
+  .blockSheet .typeItem {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .sheetHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+  .sheetHeader h2 {
+    font-size: var(--type-heading-3-size);
+    margin: 0;
+  }
+  .sheetActions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-block: var(--space-4);
+  }
+  .deleteAction {
+    color: var(--color-danger);
+  }
+  .gestureHint {
+    color: var(--color-ink-muted);
+    font-size: var(--type-label-size);
+    margin: 0;
+  }
+
+  .editor[data-compact] [data-content-type] {
+    padding-block: var(--space-2);
+  }
+  .editor [data-touch-dragging] {
+    outline: 2px solid var(--color-focus);
+    opacity: 0.6;
+  }
+  .editor [data-touch-drop="before"] {
+    border-top: 2px solid var(--color-focus);
+  }
+  .editor [data-touch-drop="after"] {
+    border-bottom: 2px solid var(--color-focus);
+  }
+
+  .editor[data-compact] {
+    padding-left: var(--space-3);
+    padding-bottom: calc(var(--space-12) * 4);
+  }
+
+  :global([data-readme-editor-mount]) .editor[data-compact] {
+    margin-left: 0;
+  }
+
+  .editor[data-compact] .currentLine {
+    left: 0;
+  }
+
+  .tool[data-mark="bold"] {
+    font-weight: var(--type-heading-3-weight);
+  }
+  .tool[data-mark="italic"] {
+    font-style: italic;
+  }
+  .tool[data-mark="underline"] {
+    text-decoration: underline;
+  }
+  .tool[data-mark="strike"] {
+    text-decoration: line-through;
+  }
+
+  @media (max-width: 767px) {
+    :global([data-readme-editor-mount]) .editor {
+      margin-left: 0;
+    }
+
+    .editor {
+      padding-left: 0;
+      padding-top: var(--space-12);
+    }
+
+    .editor[data-compact] {
+      padding-top: 0;
+    }
+
+    .currentLine {
+      left: calc(-1 * var(--space-2));
+    }
+
+    .keys {
+      display: none;
+    }
   }
 }

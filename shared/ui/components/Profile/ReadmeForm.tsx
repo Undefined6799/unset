@@ -15,6 +15,8 @@ export type ReadmeFormLabels = {
   readonly label: string;
   readonly save: string;
   readonly cancel: string;
+  readonly discard: string;
+  readonly unsaved: string;
 };
 
 export type ReadmeFormProps = {
@@ -29,8 +31,17 @@ export type ReadmeFormProps = {
 
 export function ReadmeForm({ document, labels, placeholder, children }: ReadmeFormProps) {
   return (
-    <form method="post" action="/profile/readme" data-readme-editor>
+    <form method="post" action="/profile/readme" data-readme-editor data-readme-discard={labels.discard}>
       <textarea name="readme" hidden readOnly aria-label={labels.label} defaultValue={document} data-readme-document />
+      <div className={styles.readmeActions} hidden data-readme-actions>
+        <Button type="submit">{labels.save}</Button>
+        <Button type="button" variant="standalone" name="cancel">
+          {labels.cancel}
+        </Button>
+        <p className={styles.readmeStatus} role="status" hidden data-readme-unsaved>
+          {labels.unsaved}
+        </p>
+      </div>
       <div className={styles.editableBlock}>
         <div data-readme-editor-mount>{children ?? <p className={styles.placeholder}>{placeholder}</p>}</div>
         <button
@@ -43,12 +54,6 @@ export function ReadmeForm({ document, labels, placeholder, children }: ReadmeFo
         >
           <IconDrawing paths={edit} size={16} />
         </button>
-      </div>
-      <div className={styles.readmeActions} hidden data-readme-actions>
-        <Button type="submit">{labels.save}</Button>
-        <Button type="button" variant="standalone" name="cancel">
-          {labels.cancel}
-        </Button>
       </div>
     </form>
   );

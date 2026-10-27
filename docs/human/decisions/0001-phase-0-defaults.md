@@ -531,3 +531,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   fixed unsigned line. Production stays CI-built, keyless-signed and digest-pinned (ADR 0033, unchanged), and main
   changes only by PR. Accepted costs: untested code on an isolated, invite-only staging; a build can fill its disk.
   Proposed, awaiting Alex.
+- **Explicit editor undo boundaries (own record: [0038](0038-editor-history-boundaries.md)):** declare the existing
+  BlockNote dependency `prosemirror-history` 1.5.1 directly to use its public `closeHistory` API around block moves.
+  This keeps adjacent typing in separate undo events without internal plugin keys or another resolved package.
+  Proposed for review with the editor UI improvements, 2026-10-26.
+- **Browser UI public entry (own record: [0039](0039-browser-ui-public-entry.md)):** browser imports of
+  `@unset/shared-ui` select the existing pure presentation entry; Node/SSR keeps the full public index. This lets
+  the editor reuse selected Iconoir drawings without bundling the full registry or making other islands eager.
+  Proposed for review with the editor UI improvements, 2026-10-26.

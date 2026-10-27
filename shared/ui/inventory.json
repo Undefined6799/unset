@@ -200,7 +200,7 @@
   },
   "Readme": {
     "sheet": "components/Readme/README.md",
-    "sheetSha256": "efb5585df0a35cd24baa87788b3c534f8c788d06e5632ea8e6d0f1668c32464d",
+    "sheetSha256": "c59f5068a5b9ad011df26bb708535bf798063a53584fe10030c60f1d29b94cf4",
     "props": "ReadmeProps",
     "variants": [],
     "status": "built"
@@ -284,7 +284,7 @@
   },
   "Profile": {
     "sheet": "components/Profile/README.md",
-    "sheetSha256": "412787d25daf7d94d771a3644bab7b0cf9794b4dac022aa3214c826ec9d22b0f",
+    "sheetSha256": "bdf23a63bd137f2080b7d4f2cfc2c6dd3a7a633c52cd2ea597ffd15d736a1d5c",
     "props": "ProfileViewProps",
     "variants": ["owner editing island"],
     "status": "built"

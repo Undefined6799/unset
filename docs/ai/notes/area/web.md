@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-10-23
+checked: 2026-10-26
 ---
 # web
 
@@ -68,6 +68,8 @@ public profile content and the editor remain separate work (P2.21).
   plain text; a copy made in the editor pastes back with its formatting. Its CSS lays out BlockNote's markup with
   tokens (`Editor.module.css`), since BlockNote's stylesheet is not loaded. Only `src/editor/` may import
   `@blocknote/*`, `@tiptap/*` or `prosemirror-*` (depcruise SDK adapters).
+  Input and placement follow [[editor-touch-controls]]; touch is independent of viewport width. The form protects
+  dirty content on cancel/navigation while retaining its native POST; it does not store an autosaved draft.
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers the global sheets and every CSS Module into the stylesheets each
   page links). Since P1.25 the global sheets (layers, tokens with the two font faces, base) are in it, as globs:

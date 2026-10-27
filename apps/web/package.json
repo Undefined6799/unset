@@ -20,6 +20,7 @@
     "@unset/shared-errors": "*",
     "@unset/shared-islands": "*",
     "@unset/shared-ui": "*",
+    "prosemirror-history": "1.5.1",
     "prosemirror-model": "1.25.12",
     "prosemirror-state": "1.4.4",
     "react": "19.3.1",

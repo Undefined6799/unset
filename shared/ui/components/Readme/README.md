@@ -18,7 +18,8 @@ A member's README, written with the BlockNote editor and stored as the `sh.unset
   deeper than the one before nests inside it. Check items show the kit's `[×]` or `[ ]` mark in `mono`.
 - Text runs: bold, italic, underline, strike and inline code. A link is kept only for an `http:` or `https:` address
   (`safeHref`); anything else stays plain text.
-- A columns block puts two or three columns side by side with a `space-12` gap from 720px; they stack below it.
+- A columns block uses the README's available width, independently of the viewport or profile sidebar. Two columns
+  sit side by side from 640px; three from 840px, with a `space-12` gap. Each group stacks below its threshold.
 
 ## Use
 
