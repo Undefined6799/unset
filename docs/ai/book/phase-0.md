@@ -1131,9 +1131,14 @@ Algorithm (what the agent does):
      `run: echo "${{ github.head_ref }}"` → `workflow-pins` test (in `check`) or `actionlint` fails; (d) `eval(userInput)`
      in `apps/web/x.ts` → `semgrep` fails. Record each run URL in the PR body. Close the scratch PR, delete its branch.
      The planted values are never pasted into any committed file (a full-history scan would fail forever).
-  6. `npm audit` reports a high finding in the current lockfile → no `--omit` or ignore list; open a separate PR bumping
-     the dependency, or stop and ask Alex if no fix exists. `npm audit signatures` fails → stop and ask (it means a
-     package in the lockfile does not match its registry signature).
+  6. `npm audit` reports a high or critical finding in the current lockfile → the `audit` job runs
+     `node scripts/ci/npm-audit.ts`, which reads `npm audit --json` and accepts the advisory only when
+     `.github/npm-audit-ignore.yaml` has an entry naming that exact GHSA id, the package, the exact versions
+     it covers and a statement, with `expired_at` after today UTC and at most 30 days ahead. The check fails on an
+     expired entry, on a high or critical advisory the file does not list, on an entry that matches nothing, and
+     on a version or package the entry does not name. A finding that cannot be accepted that way → open a separate
+     PR bumping the dependency, or stop and ask Alex if no fix exists. `npm audit signatures` fails → stop and ask
+     (it means a package in the lockfile does not match its registry signature).
   7. Semgrep CE cannot fetch its registry rules (network or licence change), or loads zero rules → the job fails; stop
      and ask; never drop the job.
   8. Alex tail (**applied 2026-10-06**, read back 22:35Z, ADR 0017; done by the P0.03 ruleset): ask Alex to add `audit`, `actionlint`, `semgrep` to
