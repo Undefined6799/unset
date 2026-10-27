@@ -10,7 +10,7 @@ importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-23
+checked: 2026-10-27
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -63,3 +63,6 @@ Re-checked at P2.26b, which runs verify-images as `/usr/bin/env PATH=<cosign's f
 narrows to the pinned cosign's folder, so the rules above still hold.
 Re-checked at P2.26v, which adds an optional `arch` dep to `inputs.ts` for picking the pinned cosign; no flag
 changed, and the rules above still hold.
+
+Re-checked at P1.37u (#1114), which added the wait for `docker info` in `stack.ts`; the child environment, the
+leading `--` and the three rules above are unchanged.

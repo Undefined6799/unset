@@ -19,6 +19,7 @@ import {
   CHILD_ENV_NAMES,
   childEnv,
   DOCKER_INFO_DEADLINE_MS,
+  DOCKER_WAIT_MS,
   type Exit,
   main,
   plan as planStack,
@@ -76,14 +77,55 @@ const HOST: Record<string, Entry> = {
 const SOCKET = fakeHost(HOST);
 const plan = (argv: string[], from: Readonly<Record<string, string | undefined>>) => planStack(argv, from, SOCKET);
 const MACHINE = "devbox";
-const runner = (
-  spawn: (file: string) => number | null,
-  daemon = `Debian GNU/Linux 13 (trixie)|${MACHINE}`,
-): Runner => ({
-  spawn: (file) => ({ status: spawn(file), signal: null }),
-  capture: () => ({ status: 0, signal: null, stdout: `${daemon}\n` }),
-  hostname: MACHINE,
-});
+const runner = (spawn: (file: string) => number | null, daemon = `Debian GNU/Linux 13 (trixie)|${MACHINE}`): Runner => {
+  // A fake clock: only sleep moves it, so a wait in these tests takes no real time.
+  let clock = 0;
+  return {
+    spawn: (file) => ({ status: spawn(file), signal: null }),
+    capture: () => ({ status: 0, signal: null, stdout: `${daemon}\n` }),
+    hostname: MACHINE,
+    now: () => clock,
+    sleep: (ms) => {
+      clock += ms;
+    },
+  };
+};
+const timedOut = Object.assign(new Error("spawnSync docker ETIMEDOUT"), { code: "ETIMEDOUT" });
+// What the Docker CLI prints when the socket refuses the connection (docker/cli v29.9.2,
+// vendor/github.com/moby/moby/client/errors.go:35-43 and request.go:184-192).
+const REFUSED = "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n";
+
+/**
+ * A daemon that starts late, on a fake clock (P1.37u). Before `readyAt` ms each `docker info` gets no answer, so it
+ * is killed at its deadline, or, with `refused`, the socket refuses at once; from `readyAt` on, the daemon answers
+ * `answer`. Records when it was asked and each pause the wrapper took.
+ */
+function lateDaemon(readyAt: number, { answer = `x|${MACHINE}`, refused = false } = {}) {
+  let clock = 0;
+  const asked: number[] = [];
+  const slept: number[] = [];
+  const ran: string[] = [];
+  const late: Runner = {
+    spawn: (file) => {
+      ran.push(file);
+      return { status: 0, signal: null };
+    },
+    capture: (_file, _args, _env, timeoutMs) => {
+      asked.push(clock);
+      if (clock >= readyAt) return { status: 0, signal: null, stdout: `${answer}\n`, stderr: "" };
+      if (refused) return { status: 1, signal: null, stdout: "", stderr: REFUSED };
+      clock += timeoutMs;
+      return { status: null, signal: "SIGKILL", stdout: "", stderr: "", error: timedOut };
+    },
+    hostname: MACHINE,
+    now: () => clock,
+    sleep: (ms) => {
+      slept.push(ms);
+      clock += ms;
+    },
+  };
+  return { runner: late, asked, slept, ran, clock: () => clock };
+}
 
 const COMPOSE = ["--compose", "deployment/compose.dev.yaml"];
 const ENV_FILE = ["--interpolation-env", "deployment/env/dev.env"];
@@ -531,12 +573,63 @@ describe("stack wrapper (P1.27w)", () => {
       },
     });
     expect(deadline).toBe(DOCKER_INFO_DEADLINE_MS);
-    const timedOut = Object.assign(new Error("spawnSync docker ETIMEDOUT"), { code: "ETIMEDOUT" });
     const slow: Runner = {
       ...runner(() => 0),
       capture: () => ({ status: null, signal: "SIGKILL", stdout: "", error: timedOut }),
     };
-    expect(() => run(plan(UP, {}), slow)).toThrow(new StackError("docker did not answer in time"));
+    expect(() => run(plan(UP, {}), slow)).toThrow(new StackError("docker did not answer in time (waited 60 s)"));
+  });
+
+  test("a_daemon_that_answers_after_15_s_passes", () => {
+    // P1.37u red 1: a daemon still starting gets no answer for 15 s, then a local daemon answers; the stack starts.
+    const late = lateDaemon(15_000);
+    expect(run(plan(UP, {}), late.runner)).toBe(0);
+    expect(late.ran).toEqual([process.execPath, "docker"]);
+    expect(late.asked.length).toBeGreaterThan(1);
+    expect(late.clock()).toBeLessThan(DOCKER_WAIT_MS);
+    // A socket that refuses the connection while the daemon starts waits the same way.
+    const refused = lateDaemon(15_000, { refused: true });
+    expect(run(plan(UP, {}), refused.runner)).toBe(0);
+    expect(refused.asked.length).toBeGreaterThan(1);
+  });
+
+  test("no_answer_for_the_whole_bound_fails_with_the_timeout", () => {
+    // P1.37u red 2: a daemon that never answers fails with the same timeout, naming the time waited, and the wait
+    // never runs past the bound: each try's deadline and each pause end inside it (RE-1).
+    for (const refused of [false, true]) {
+      const never = lateDaemon(Number.POSITIVE_INFINITY, { refused });
+      expect(() => run(plan(UP, {}), never.runner)).toThrow(
+        new StackError("docker did not answer in time (waited 60 s)"),
+      );
+      expect(never.clock()).toBe(DOCKER_WAIT_MS);
+      expect(never.ran).toEqual([]);
+    }
+  });
+
+  test("any_answer_is_judged_at_once", () => {
+    // P1.37u red 3: a remote daemon is refused on its first answer, with no wait, and so is any other failed answer.
+    const remote = lateDaemon(0, { answer: "x|elsewhere" });
+    expect(() => run(plan(UP, {}), remote.runner)).toThrow(new UsageError("the Docker daemon is not on this machine"));
+    expect(remote.asked).toEqual([0]);
+    expect(remote.slept).toEqual([]);
+    const denied = lateDaemon(0);
+    const deniedRunner: Runner = {
+      ...denied.runner,
+      capture: (...call) => {
+        denied.runner.capture(...call);
+        return { status: 1, signal: null, stdout: "", stderr: "permission denied while trying to connect\n" };
+      },
+    };
+    expect(run(plan(UP, {}), deniedRunner)).toBe(1);
+    expect(denied.asked).toEqual([0]);
+    expect(denied.slept).toEqual([]);
+  });
+
+  test("the_wait_is_sixty_seconds", () => {
+    // P1.37u item 4: 60 s is at least 3 times the slowest first Docker answer in a week of green local-stack runs
+    // (4.8 s, an upper bound; the PR records the runs).
+    expect(DOCKER_WAIT_MS).toBe(60_000);
+    expect(DOCKER_WAIT_MS).toBeGreaterThanOrEqual(3 * 4_818);
   });
 
   test("the_socket_and_its_folder_are_only_root_or_the_deploy_user_s", () => {
@@ -634,6 +727,13 @@ describe("stack wrapper (P1.27w)", () => {
     expect(Date.now() - started).toBeLessThan(10_000);
     expect(late.signal).toBe("SIGKILL");
     expect((late.error as NodeJS.ErrnoException | undefined)?.code).toBe("ETIMEDOUT");
+    // The capture reads stderr too, which is how a refused connection is told apart (P1.37u).
+    const [loud, loudArgs] = node("process.stderr.write('refused'); process.exit(1)");
+    expect(processRunner.capture(loud, [...loudArgs], env, 5_000)).toMatchObject({ status: 1, stderr: "refused" });
+    // The real pause blocks for the time asked, on the clock the wait reads.
+    const before = processRunner.now();
+    processRunner.sleep(50);
+    expect(processRunner.now() - before).toBeGreaterThanOrEqual(45);
     const [ok, okArgs] = node("process.stdout.write('x|y')");
     expect(processRunner.capture(ok, [...okArgs], env, 5_000)).toMatchObject({
       status: 0,
