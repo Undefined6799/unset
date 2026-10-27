@@ -28,3 +28,7 @@ The theme picker's three icons (P2.13e; Figma 151:939) were added to the Icon li
 pieces: `bulb-off` (Iconoir `light-bulb`) and `bulb-on` (`light-bulb-on`), approved by Alex 2026-10-23 01:22Z ("do
 the light-bulb and lightbulb-on"), and `tv` (`modern-tv`), approved with the pick of option A, the three-icon picker,
 2026-10-23 01:37Z ("yes A is pretty good").
+
+The README editor's 16 icons (P2.20x) were added to the Icon list on Alex's word, not as new pieces: approved
+2026-10-27 20:43Z ("Yes thats good") on the mockup of the block menu and the phone formatting bar. The list is in
+`shared/ui/icons/README.md`.

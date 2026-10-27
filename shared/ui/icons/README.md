@@ -22,4 +22,12 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   The imported 36-name sheet and its pins remain unchanged; `extensionProvenance` records the separate registration.
 - P2.13e adds `bulb-off` (regular `light-bulb`), `bulb-on` (`light-bulb-on`) and `tv` (`modern-tv`) for the menu's theme
   picker, approved by Alex on 2026-10-23 (Figma 151:939), from the same commit and pinned the same way: 41 names.
+- P2.20x adds 16 icons for the README editor's block menu and formatting bar, approved by Alex on 2026-10-27 20:43Z
+  on a mockup in the editor thread (there is no Figma node; each entry records that approval instead of a
+  `figmaUrl`): `text`, `display` (`text-size`), `quote`, `bullet-list` (`list`), `numbered-list`
+  (`numbered-list-left`), `check-list` (`task-list`), `code-block` (`code-brackets`), `bold`, `italic`, `underline`,
+  `strike` (`strikethrough`), `inline-code` (`code`), `link`, `align-left`, `align-center` and `align-right`, from the
+  same commit and pinned the same way: 57 names. Iconoir has no heading icons, so H1 to H3 stay text tiles.
+  `inline-code` is not named `code` because the generator compares sorted names to sorted file names, and
+  `code-block.svg.txt` sorts before `code.svg.txt`.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.

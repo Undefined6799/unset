@@ -56,7 +56,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(41);
+  expect(Object.keys(json.icons)).toHaveLength(57);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -385,6 +385,374 @@ const REGISTRATION = {
         ],
       ],
     },
+    text: {
+      iconoirName: "text",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/text.svg",
+      sourceSha256: "e334a56aefdd7379a6f4ea07e9e48f2efdbd69e57bcc4cd19211b8e585b4c0d3",
+      drawings: [
+        ["path", { d: "M19 7V5L5 5V7", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M12 5L12 19M12 19H10M12 19H14",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    display: {
+      iconoirName: "text-size",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/text-size.svg",
+      sourceSha256: "4c727de5535fe870bbd0b55aacc568249a387f943c9be58bc01b8774e7d2ce82",
+      drawings: [
+        ["path", { d: "M3 7L3 5L17 5V7", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M10 5L10 19M10 19H12M10 19H8",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        ["path", { d: "M13 14L13 12H21V14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M17 12V19M17 19H15.5M17 19H18.5",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    quote: {
+      iconoirName: "quote",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/quote.svg",
+      sourceSha256: "2d2f61f1f3c2a647a0af10b8bd5afcb11bf947c322de1d3fcec57789334fd762",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M10 12H5C4.44772 12 4 11.5523 4 11V7.5C4 6.94772 4.44772 6.5 5 6.5H9C9.55228 6.5 10 6.94772 10 7.5V12ZM10 12C10 14.5 9 16 6 17.5",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M20 12H15C14.4477 12 14 11.5523 14 11V7.5C14 6.94772 14.4477 6.5 15 6.5H19C19.5523 6.5 20 6.94772 20 7.5V12ZM20 12C20 14.5 19 16 16 17.5",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+          },
+        ],
+      ],
+    },
+    "bullet-list": {
+      iconoirName: "list",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/list.svg",
+      sourceSha256: "503708f73587ae9feba442c9f041f2b76698be15dcd5a70dce3c92ab46740a8a",
+      drawings: [
+        ["path", { d: "M8 6L20 6", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          { d: "M4 6.01L4.01 5.99889", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" },
+        ],
+        [
+          "path",
+          { d: "M4 12.01L4.01 11.9989", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" },
+        ],
+        [
+          "path",
+          { d: "M4 18.01L4.01 17.9989", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" },
+        ],
+        ["path", { d: "M8 12L20 12", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M8 18L20 18", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    "numbered-list": {
+      iconoirName: "numbered-list-left",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/numbered-list-left.svg",
+      sourceSha256: "1d787ab3ba821c142245b8ecb49f2730cff88d70385ce32cf53324a245c6d442",
+      drawings: [
+        ["path", { d: "M9 5L21 5", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M5 7L5 3L3.5 4.5", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M5.5 14L3.5 14L5.40471 11.0371C5.46692 10.9403 5.50215 10.8268 5.47709 10.7145C5.41935 10.4557 5.216 10 4.5 10C3.50001 10 3.5 10.8889 3.5 10.8889C3.5 10.8889 3.5 10.8889 3.5 10.8889L3.5 11.1111",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M4 19L4.5 19C5.05228 19 5.5 19.4477 5.5 20V20C5.5 20.5523 5.05228 21 4.5 21L3.5 21",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        ["path", { d: "M3.5 17L5.5 17L4 19", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M9 12L21 12", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M9 19L21 19", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    "check-list": {
+      iconoirName: "task-list",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/task-list.svg",
+      sourceSha256: "5700f48d763355bf15c7258e05a0daaa9de4308505fb2f967811288ac8234cc6",
+      drawings: [
+        ["path", { d: "M9 6L20 6", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M3.80002 5.79999L4.60002 6.59998L6.60001 4.59999",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M3.80002 11.8L4.60002 12.6L6.60001 10.6",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M3.80002 17.8L4.60002 18.6L6.60001 16.6",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        ["path", { d: "M9 12L20 12", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M9 18L20 18", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    "code-block": {
+      iconoirName: "code-brackets",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/code-brackets.svg",
+      sourceSha256: "8885bba2e2c636f17dc9483e6c6e00edd8f1fa8c688abfd31e6cb876a8dcc212",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M9.00001 21L8.00001 21C6.89544 21 6.00001 20.1057 6.00001 19.0011C6.00001 17.4501 6.00001 15.3443 6 14C6 13 4.5 12 4.5 12C4.5 12 6.00001 11 6.00001 10C6.00001 8.827 6.00001 6.62207 6.00001 4.99914C6.00001 3.89457 6.89544 3 8.00001 3L9.00001 3",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M15 21L16 21C17.1046 21 18 20.1057 18 19.0011C18 17.4501 18 15.3443 18 14C18 13 19.5 12 19.5 12C19.5 12 18 11 18 10C18 8.827 18 6.62207 18 4.99914C18 3.89457 17.1046 3 16 3L15 3",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    bold: {
+      iconoirName: "bold",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/bold.svg",
+      sourceSha256: "4288dadb50cc126a9117112b71924f0d30ade0fc8e18f22536d6b35c3b75f628",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M12 11.6667H8M12 11.6667C12 11.6667 15.3333 11.6667 15.3333 8.33333C15.3333 5.00002 12 5 12 5C12 5 12 5 12 5H8.6C8.26863 5 8 5.26863 8 5.6V11.6667M12 11.6667C12 11.6667 16 11.6667 16 15.3333C16 19 12 19 12 19C12 19 12 19 12 19H8.6C8.26863 19 8 18.7314 8 18.4V11.6667",
+            stroke: "currentColor",
+            strokeWidth: "1.5",
+          },
+        ],
+      ],
+    },
+    italic: {
+      iconoirName: "italic",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/italic.svg",
+      sourceSha256: "d06e0f9fd69857ab0b692e61895885271ef37443c1393ec6aba4f86466616a30",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M11 5L14 5M17 5L14 5M14 5L10 19M10 19L7 19M10 19L13 19",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    underline: {
+      iconoirName: "underline",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/underline.svg",
+      sourceSha256: "9dd20b3d700833db4e27df89ffb6d685244f64af2a529706dab6ba6803d885e0",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M16 5V11C16 13.2091 14.2091 15 12 15V15C9.79086 15 8 13.2091 8 11V5",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        ["path", { d: "M6 19L18 19", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    strike: {
+      iconoirName: "strikethrough",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/strikethrough.svg",
+      sourceSha256: "21614ebf0359ad62c70d80e9c7f9782113292e5dc08a302dbdeb8bcf0296414b",
+      drawings: [
+        ["path", { d: "M3 12L21 12", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          {
+            d: "M16.2857 3L10.068 3C7.82129 3 6 4.82129 6 7.06797C6 8.81895 7.12044 10.3735 8.78157 10.9272L12 12M6 21H13.932C16.1787 21 18 19.1787 18 16.932C18 16.2409 17.8255 15.5804 17.512 15",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    "inline-code": {
+      iconoirName: "code",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/code.svg",
+      sourceSha256: "dfdd2ec8355b62482c7f220c914c93bc610ee235afc61f9a1d02c8b20fe685fa",
+      drawings: [
+        ["path", { d: "M13.5 6L10 18.5", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        [
+          "path",
+          { d: "M6.5 8.5L3 12L6.5 15.5", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" },
+        ],
+        [
+          "path",
+          { d: "M17.5 8.5L21 12L17.5 15.5", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" },
+        ],
+      ],
+    },
+    link: {
+      iconoirName: "link",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/link.svg",
+      sourceSha256: "84a5b6ae115d7afff785889a88d98a4615951a30f15984fb7b4e1644b8e8faed",
+      drawings: [
+        [
+          "path",
+          {
+            d: "M14 11.9976C14 9.5059 11.683 7 8.85714 7C8.52241 7 7.41904 7.00001 7.14286 7.00001C4.30254 7.00001 2 9.23752 2 11.9976C2 14.376 3.70973 16.3664 6 16.8714C6.36756 16.9525 6.75006 16.9952 7.14286 16.9952",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+        [
+          "path",
+          {
+            d: "M10 11.9976C10 14.4893 12.317 16.9952 15.1429 16.9952C15.4776 16.9952 16.581 16.9952 16.8571 16.9952C19.6975 16.9952 22 14.7577 22 11.9976C22 9.6192 20.2903 7.62884 18 7.12383C17.6324 7.04278 17.2499 6.99999 16.8571 6.99999",
+            stroke: "currentColor",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          },
+        ],
+      ],
+    },
+    "align-left": {
+      iconoirName: "align-left",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-left.svg",
+      sourceSha256: "fb5d4bfc94ee5a0428439014401e2d94c800f00109bf1382bc91209caccc2c41",
+      drawings: [
+        ["path", { d: "M3 10L17 10", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 6H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 18L17 18", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 14H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    "align-center": {
+      iconoirName: "align-center",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-center.svg",
+      sourceSha256: "01023a0bebd3d03d27a53636bb2556d0d62ae79c6831052043c5744425c7e2c4",
+      drawings: [
+        ["path", { d: "M3 6H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 14H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M6 10L18 10", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M6 18L18 18", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
+    "align-right": {
+      iconoirName: "align-right",
+      approval:
+        'Alex 2026-10-27 20:43Z ("Yes thats good"), on the editor mockup icons-mock.png in the README editor thread',
+      sourceUrl:
+        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/align-right.svg",
+      sourceSha256: "672d1c8e3adf6b1e288f2b282f8aed1a4009346906133113046a1ca00f9dc8d4",
+      drawings: [
+        ["path", { d: "M7 10L21 10", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 6H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M7 18L21 18", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+        ["path", { d: "M3 14H21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
+      ],
+    },
   },
 };
 const ADDITIONS: Record<string, string> = {
@@ -396,7 +764,56 @@ const ADDITIONS: Record<string, string> = {
   "bulb-on":
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M21 2L20 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 2L4 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M21 16L20 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 16L4 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 18H15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 21H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   tv: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M7 21L17 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  text: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M19 7V5L5 5V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M12 5L12 19M12 19H10M12 19H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  display:
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 7L3 5L17 5V7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 5L10 19M10 19H12M10 19H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M13 14L13 12H21V14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M17 12V19M17 19H15.5M17 19H18.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  quote:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M10 12H5C4.44772 12 4 11.5523 4 11V7.5C4 6.94772 4.44772 6.5 5 6.5H9C9.55228 6.5 10 6.94772 10 7.5V12ZM10 12C10 14.5 9 16 6 17.5" stroke="currentColor"   stroke-linecap="round"/>\n<path d="M20 12H15C14.4477 12 14 11.5523 14 11V7.5C14 6.94772 14.4477 6.5 15 6.5H19C19.5523 6.5 20 6.94772 20 7.5V12ZM20 12C20 14.5 19 16 16 17.5" stroke="currentColor"   stroke-linecap="round"/>\n</svg>\n',
+  "bullet-list":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M8 6L20 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 6.01L4.01 5.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 12.01L4.01 11.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 18.01L4.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M8 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M8 18L20 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "numbered-list":
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9 5L21 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M5 7L5 3L3.5 4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M5.5 14L3.5 14L5.40471 11.0371C5.46692 10.9403 5.50215 10.8268 5.47709 10.7145C5.41935 10.4557 5.216 10 4.5 10C3.50001 10 3.5 10.8889 3.5 10.8889C3.5 10.8889 3.5 10.8889 3.5 10.8889L3.5 11.1111" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 19L4.5 19C5.05228 19 5.5 19.4477 5.5 20V20C5.5 20.5523 5.05228 21 4.5 21L3.5 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3.5 17L5.5 17L4 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 12L21 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 19L21 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "check-list":
+    '<svg width="24" stroke-width="1.5" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9 6L20 6" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3.80002 5.79999L4.60002 6.59998L6.60001 4.59999" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3.80002 11.8L4.60002 12.6L6.60001 10.6" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3.80002 17.8L4.60002 18.6L6.60001 16.6" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 12L20 12" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 18L20 18" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "code-block":
+    '<svg width="24" stroke-width="1.5" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9.00001 21L8.00001 21C6.89544 21 6.00001 20.1057 6.00001 19.0011C6.00001 17.4501 6.00001 15.3443 6 14C6 13 4.5 12 4.5 12C4.5 12 6.00001 11 6.00001 10C6.00001 8.827 6.00001 6.62207 6.00001 4.99914C6.00001 3.89457 6.89544 3 8.00001 3L9.00001 3" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M15 21L16 21C17.1046 21 18 20.1057 18 19.0011C18 17.4501 18 15.3443 18 14C18 13 19.5 12 19.5 12C19.5 12 18 11 18 10C18 8.827 18 6.62207 18 4.99914C18 3.89457 17.1046 3 16 3L15 3" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  bold: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M12 11.6667H8M12 11.6667C12 11.6667 15.3333 11.6667 15.3333 8.33333C15.3333 5.00002 12 5 12 5C12 5 12 5 12 5H8.6C8.26863 5 8 5.26863 8 5.6V11.6667M12 11.6667C12 11.6667 16 11.6667 16 15.3333C16 19 12 19 12 19C12 19 12 19 12 19H8.6C8.26863 19 8 18.7314 8 18.4V11.6667" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  italic:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M11 5L14 5M17 5L14 5M14 5L10 19M10 19L7 19M10 19L13 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  underline:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M16 5V11C16 13.2091 14.2091 15 12 15V15C9.79086 15 8 13.2091 8 11V5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6 19L18 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  strike:
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 12L21 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M16.2857 3L10.068 3C7.82129 3 6 4.82129 6 7.06797C6 8.81895 7.12044 10.3735 8.78157 10.9272L12 12M6 21H13.932C16.1787 21 18 19.1787 18 16.932C18 16.2409 17.8255 15.5804 17.512 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "inline-code":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M13.5 6L10 18.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6.5 8.5L3 12L6.5 15.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M17.5 8.5L21 12L17.5 15.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  link: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M14 11.9976C14 9.5059 11.683 7 8.85714 7C8.52241 7 7.41904 7.00001 7.14286 7.00001C4.30254 7.00001 2 9.23752 2 11.9976C2 14.376 3.70973 16.3664 6 16.8714C6.36756 16.9525 6.75006 16.9952 7.14286 16.9952" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 11.9976C10 14.4893 12.317 16.9952 15.1429 16.9952C15.4776 16.9952 16.581 16.9952 16.8571 16.9952C19.6975 16.9952 22 14.7577 22 11.9976C22 9.6192 20.2903 7.62884 18 7.12383C17.6324 7.04278 17.2499 6.99999 16.8571 6.99999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "align-left":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 10L17 10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 6H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 18L17 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 14H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "align-center":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M3 6H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 14H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6 10L18 10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M6 18L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  "align-right":
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M7 10L21 10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 6H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M7 18L21 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 14H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
 };
+
+/** The README editor's block menu and formatting bar (Alex 2026-10-27). */
+const EDITOR_ICONS = [
+  "text",
+  "display",
+  "quote",
+  "bullet-list",
+  "numbered-list",
+  "check-list",
+  "code-block",
+  "bold",
+  "italic",
+  "underline",
+  "strike",
+  "inline-code",
+  "link",
+  "align-left",
+  "align-center",
+  "align-right",
+] as const;
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 // Recorded from the last absent-pointer commit, 18291e6; never derived with the generator under test.
@@ -496,14 +913,14 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_57_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(41);
+  expect(Object.keys(json.icons)).toHaveLength(57);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
@@ -511,6 +928,7 @@ test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
     "bulb-off": REGISTRATION.icons["bulb-off"].sourceSha256,
     "bulb-on": REGISTRATION.icons["bulb-on"].sourceSha256,
     tv: REGISTRATION.icons.tv.sourceSha256,
+    ...Object.fromEntries(EDITOR_ICONS.map((name) => [name, REGISTRATION.icons[name].sourceSha256])),
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
   expect(json.iconoir).toEqual({
@@ -520,6 +938,7 @@ test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
     "bulb-off": "light-bulb",
     "bulb-on": "light-bulb-on",
     tv: "modern-tv",
+    ...Object.fromEntries(EDITOR_ICONS.map((name) => [name, REGISTRATION.icons[name].iconoirName])),
   });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));

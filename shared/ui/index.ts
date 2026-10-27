@@ -17,7 +17,7 @@ export {
 export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
 export { BrandHeader, type BrandHeaderProps } from "./components/Header/BrandHeader.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
-export { Icon, IconDrawing, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
+export { Icon, IconDrawing, type IconName, type IconPaths, type IconProps } from "./components/Icon/Icon.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
@@ -51,11 +51,27 @@ export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
 export { Textarea, type TextareaProps } from "./components/Textarea/Textarea.tsx";
 export { default as iconAdd } from "./icons/drawings/add.generated.ts";
+export { default as iconAlignCenter } from "./icons/drawings/align-center.generated.ts";
+export { default as iconAlignLeft } from "./icons/drawings/align-left.generated.ts";
+export { default as iconAlignRight } from "./icons/drawings/align-right.generated.ts";
+export { default as iconBold } from "./icons/drawings/bold.generated.ts";
+export { default as iconBulletList } from "./icons/drawings/bullet-list.generated.ts";
+export { default as iconCheckList } from "./icons/drawings/check-list.generated.ts";
 export { default as iconClose } from "./icons/drawings/close.generated.ts";
+export { default as iconCodeBlock } from "./icons/drawings/code-block.generated.ts";
 export { default as iconDelete } from "./icons/drawings/delete.generated.ts";
+export { default as iconDisplay } from "./icons/drawings/display.generated.ts";
 export { default as iconDone } from "./icons/drawings/done.generated.ts";
 export { default as iconDown } from "./icons/drawings/down.generated.ts";
+export { default as iconInlineCode } from "./icons/drawings/inline-code.generated.ts";
+export { default as iconItalic } from "./icons/drawings/italic.generated.ts";
+export { default as iconLink } from "./icons/drawings/link.generated.ts";
 export { default as iconMore } from "./icons/drawings/more.generated.ts";
+export { default as iconNumberedList } from "./icons/drawings/numbered-list.generated.ts";
+export { default as iconQuote } from "./icons/drawings/quote.generated.ts";
+export { default as iconStrike } from "./icons/drawings/strike.generated.ts";
+export { default as iconText } from "./icons/drawings/text.generated.ts";
+export { default as iconUnderline } from "./icons/drawings/underline.generated.ts";
 export { default as iconUp } from "./icons/drawings/up.generated.ts";
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 // P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.
