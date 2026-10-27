@@ -104,9 +104,12 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   const mount = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
+  // Compact controls stay docked at the bottom for the whole edit, focused or not, so the bar never sits under Save
+  // and Cancel at the top (Alex 2026-10-27: "save should remain at the very top of the page"). A fresh anchor on each
+  // render re-places the dock after a change that fires no scroll or resize event, such as focus moving.
   useMenuPosition(
     controls,
-    input.compact && input.focused ? (area.current?.getBoundingClientRect() ?? null) : null,
+    input.compact ? (area.current?.getBoundingClientRect() ?? new DOMRect()) : null,
     "dock",
   );
   useDockedCaret(editor, controls, input.compact && input.focused);
@@ -160,8 +163,8 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
       <div
         ref={controls}
         className={styles.controls}
-        data-docked={(input.compact && input.focused) || undefined}
-        data-covers-navigation={(input.compact && input.focused) || undefined}
+        data-docked={input.compact || undefined}
+        data-covers-navigation={input.compact || undefined}
       >
         <StyleToolbar editor={editor} input={input} />
         {!input.compact ? <BlockHandle editor={editor} input={input} /> : null}
