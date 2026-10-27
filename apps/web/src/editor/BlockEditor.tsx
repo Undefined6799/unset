@@ -110,6 +110,18 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
     "dock",
   );
   useDockedCaret(editor, controls, input.compact && input.focused);
+  // A press on the compact bar keeps focus in the text, as BlockNote's toolbar buttons do. WebKit (every iPhone browser)
+  // does not focus a tapped button, so the text would lose focus and undock the bar before the click landed. The
+  // desktop handle is left alone: preventing its mousedown would stop its native drag.
+  useEffect(() => {
+    const element = controls.current;
+    const keep = (event: MouseEvent) => {
+      const compact = element?.closest("[data-compact]") !== null;
+      if (compact && !(event.target instanceof HTMLInputElement)) event.preventDefault();
+    };
+    element?.addEventListener("mousedown", keep);
+    return () => element?.removeEventListener("mousedown", keep);
+  }, []);
   const indicator = useRef<HTMLDivElement>(null);
   const pairing = useRef<HTMLDivElement>(null);
   useEffect(() => {
