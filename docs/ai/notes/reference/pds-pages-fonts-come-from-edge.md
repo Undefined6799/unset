@@ -10,7 +10,7 @@ importance: high
 related: ["[[pds]]", "[[deployment]]"]
 replaced_by: null
 tags: [reference, pds, deployment]
-checked: 2026-10-22
+checked: 2026-10-27
 ---
 # PDS sign-in pages get their fonts from the edge (P2.24d spike)
 
@@ -45,3 +45,6 @@ written by the same `write-html.js`, so the CSP shape is the same as on the sign
 sign-in page once staging runs the new edge.
 
 **Rule.** Do not ask the PDS to serve fonts or relax its CSP. Fonts are an edge concern (P2.24e).
+
+Re-checked at P1.27h (#691), which changed only the edge image tests' docker budgets and helper; the font path, the
+CSP rule and the Caddy shape above are unchanged.
