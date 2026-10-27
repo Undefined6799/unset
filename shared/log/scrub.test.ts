@@ -1,6 +1,8 @@
 // Value scrubbing (P1.03; rule SE-7), split from logger.test.ts (P1.37o N2) with no test changed.
+import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 import { scrub } from "./index.ts";
+import { EMAIL } from "./scrub.ts";
 
 describe("logger", () => {
   test.each([
@@ -41,6 +43,7 @@ describe("logger", () => {
     ["after an encoded quote", `%22did:plc:${ID}`, "%22[redacted]"],
     ["after an encoded space", `%20did:plc:${ID}`, "%20[redacted]"],
     ["after a word character", `user_did%3Aplc%3A${ID}`, "user_[redacted]"],
+    ["percent-encoded did:web", "did%3Aweb%3Aexample.com", "[redacted]"],
   ])("logger_scrubs_encoded_dids %s", (_kind, value, scrubbed) => {
     // A client may send a DID's colons percent-encoded, in either hex case (RFC 3986 2.1), or encoded twice. A method
     // may hold digits, or be only digits (W3C did-core method-char). `alice` and `3:alice` are obvious placeholders
@@ -68,5 +71,26 @@ describe("logger", () => {
     const reason = scrub(`a\nb\u0000c\u0085d${"x ".repeat(200)}`);
     expect(reason.startsWith("a?b?c?d")).toBe(true);
     expect(reason.length).toBe(200);
+  });
+});
+
+describe("email scrub", () => {
+  // The pattern before P1.37o: equivalent output, but it retried at every position of a run with no @ (verify-1088 O1).
+  const BEFORE = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
+  const text = fc.string({ unit: fc.constantFrom("a", "b", "aa", ".", "..", "@", " ", "  "), maxLength: 40 });
+
+  test("email_scrub_matches_the_old_pattern", () => {
+    fc.assert(
+      fc.property(text, (value) => {
+        expect(value.replace(EMAIL, "[redacted]")).toBe(value.replace(BEFORE, "[redacted]"));
+      }),
+      { numRuns: 5_000 },
+    );
+  });
+
+  test("email_scrub_finishes_a_long_run_without_at", () => {
+    // Uncapped on purpose: scrub() cuts its input to 1,000 characters, so only the bare pattern shows the cost.
+    const value = "a.".repeat(50_000);
+    expect(value.replace(EMAIL, "[redacted]")).toBe(value);
   });
 });
