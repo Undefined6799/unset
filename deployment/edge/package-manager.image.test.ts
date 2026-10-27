@@ -15,9 +15,11 @@ import { randomBytes, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { runOrKill } from "./docker-call.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
 const EDGE = import.meta.dirname;
+const docker = (args: readonly string[], timeoutMs: number) => runOrKill(spawnSync, "docker", args, timeoutMs);
 const CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
 const built: string[] = [];
 // A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
@@ -28,28 +30,9 @@ const CONTAINER_MS = 120_000;
 // blocked spawnSync holds the event loop, so vitest's budget cannot stop it, and a hung daemon would hold the run
 // until scripts/test/run.ts kills it whole at 600 s, failing with no name. A daemon call (run, cat, rmi) gets 50 s, so
 // the afterAll's two removals fit inside CONTAINER_MS; a build gets 300 s inside its test's 600 s. This trusted test
-// keeps its own helper rather than import product test code.
+// keeps its own helper (docker-call.ts) rather than import product test code.
 const CALL_MS = 50_000;
 const BUILD_MS = 300_000;
-
-/** Docker's subcommand in full: up to two leading words (`run`, `image inspect`), never a flag or a reference. */
-function subcommand(args: readonly string[]): string {
-  const end = args.findIndex((arg) => !/^[a-z][a-z-]*$/.test(arg));
-  return args.slice(0, Math.min(end === -1 ? args.length : end, 2)).join(" ");
-}
-
-function docker(args: readonly string[], timeoutMs: number): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: "SIGKILL",
-  });
-  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
-    throw new Error(`docker ${subcommand(args)} killed after ${timeoutMs} ms`);
-  }
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
-}
 
 /** The edge's runtime base, pinned by index digest in deployment/images/bases.lock.json. */
 function runtimeBase(): string {
