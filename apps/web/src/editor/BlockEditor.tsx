@@ -107,11 +107,7 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
   // Compact controls stay docked at the bottom for the whole edit, focused or not, so the bar never sits under Save
   // and Cancel at the top (Alex 2026-10-27: "save should remain at the very top of the page"). A fresh anchor on each
   // render re-places the dock after a change that fires no scroll or resize event, such as focus moving.
-  useMenuPosition(
-    controls,
-    input.compact ? (area.current?.getBoundingClientRect() ?? new DOMRect()) : null,
-    "dock",
-  );
+  useMenuPosition(controls, input.compact ? (area.current?.getBoundingClientRect() ?? new DOMRect()) : null, "dock");
   useDockedCaret(editor, controls, input.compact && input.focused);
   // A press on the compact bar keeps focus in the text, as BlockNote's toolbar buttons do. WebKit (every iPhone browser)
   // does not focus a tapped button, so the text would lose focus and undock the bar before the click landed. The
