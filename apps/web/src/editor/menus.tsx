@@ -14,7 +14,33 @@ import {
   SideMenuExtension,
   SuggestionMenu,
 } from "@blocknote/core/extensions";
-import { IconDrawing, iconAdd, iconClose, iconDelete, iconDone, iconDown, iconMore, iconUp } from "@unset/shared-ui";
+import {
+  IconDrawing,
+  type IconPaths,
+  iconAdd,
+  iconAlignCenter,
+  iconAlignLeft,
+  iconAlignRight,
+  iconBold,
+  iconBulletList,
+  iconCheckList,
+  iconClose,
+  iconCodeBlock,
+  iconDelete,
+  iconDisplay,
+  iconDone,
+  iconDown,
+  iconInlineCode,
+  iconItalic,
+  iconLink,
+  iconMore,
+  iconNumberedList,
+  iconQuote,
+  iconStrike,
+  iconText,
+  iconUnderline,
+  iconUp,
+} from "@unset/shared-ui";
 import {
   type FocusEvent,
   Fragment,
@@ -33,7 +59,7 @@ import { endBlockDrag, startBlockDrag } from "./clipboard.ts";
 import styles from "./Editor.module.css";
 import { type EditorInput, useMenuPosition } from "./interaction.ts";
 import { EDITOR } from "./messages.ts";
-import { ALIGNMENTS, type Alignment, type ReadmeEditor, TEXT_STYLES } from "./schema.ts";
+import { ALIGNMENTS, type Alignment, type ReadmeEditor, TEXT_STYLES, type TextStyle } from "./schema.ts";
 
 type Store<T> = { readonly state: T; subscribe: (listener: () => void) => () => void };
 
@@ -281,7 +307,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
           onClick={() => setPicker((on) => (on === "types" ? null : "types"))}
         >
           {/* Compact controls show the type's glyph tile, as the menu does, so the bar fits one row. */}
-          {current === undefined ? EDITOR.blockType : compact ? GLYPHS[current.key] : title(current.key)}{" "}
+          {current === undefined ? EDITOR.blockType : compact ? <Glyph name={current.key} /> : title(current.key)}{" "}
           <IconDrawing paths={iconDown} size={16} />
         </button>
         {types ? (
@@ -306,7 +332,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
                   {item.key === current?.key ? <IconDrawing paths={iconDone} size={16} /> : null}
                 </span>
                 <span className={styles.glyph} aria-hidden="true">
-                  {GLYPHS[item.key]}
+                  <Glyph name={item.key} />
                 </span>
                 {title(item.key)}
               </button>
@@ -330,7 +356,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
             render((n) => n + 1);
           }}
         >
-          {EDITOR.marks[style]}
+          <IconDrawing paths={MARK_ICONS[style]} />
         </button>
       ))}
       {alignable.length > 0 && compact ? (
@@ -347,7 +373,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setPicker((on) => (on === "align" ? null : "align"))}
             >
-              {EDITOR.alignMarks[alignment as Alignment]} <IconDrawing paths={iconDown} size={16} />
+              <IconDrawing paths={ALIGN_ICONS[alignment as Alignment]} /> <IconDrawing paths={iconDown} size={16} />
             </button>
             {aligning ? (
               <div
@@ -370,6 +396,9 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
                     <span className={styles.chosen} aria-hidden="true">
                       {alignment === value ? <IconDrawing paths={iconDone} size={16} /> : null}
                     </span>
+                    <span className={styles.glyph} aria-hidden="true">
+                      <IconDrawing paths={ALIGN_ICONS[value]} />
+                    </span>
                     {EDITOR.align[value]}
                   </button>
                 ))}
@@ -390,7 +419,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setAlignment(value)}
             >
-              {EDITOR.alignMarks[value]}
+              <IconDrawing paths={ALIGN_ICONS[value]} />
             </button>
           ))}
         </>
@@ -404,7 +433,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => setLink(editor.getSelectedLinkUrl() ?? "")}
       >
-        {EDITOR.linkMark}
+        <IconDrawing paths={iconLink} />
       </button>
     </div>
   );
@@ -412,17 +441,37 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
 
 /** The "/" menu's items: BlockNote's own (title, subtext, aliases, group, shortcut badge), for the blocks the README
  * holds, each with a short glyph in its tile in place of BlockNote's React icons. */
-const GLYPHS: Readonly<Record<string, string>> = {
-  display: "Aa",
+const GLYPHS: Readonly<Record<string, string | IconPaths>> = {
+  display: iconDisplay,
   heading: "H1",
   heading_2: "H2",
   heading_3: "H3",
-  quote: "\u201c",
-  numbered_list: "1.",
-  bullet_list: "\u2022",
-  check_list: "[\u00d7]",
-  paragraph: "T",
-  code_block: "{ }",
+  quote: iconQuote,
+  numbered_list: iconNumberedList,
+  bullet_list: iconBulletList,
+  check_list: iconCheckList,
+  paragraph: iconText,
+  code_block: iconCodeBlock,
+};
+
+/** A block type's tile: its Iconoir drawing (Alex 2026-10-27), or text where Iconoir has none (the headings). */
+function Glyph({ name }: { name: string }) {
+  const glyph = GLYPHS[name];
+  return typeof glyph === "string" || glyph === undefined ? glyph : <IconDrawing paths={glyph} />;
+}
+
+const MARK_ICONS: Readonly<Record<TextStyle, IconPaths>> = {
+  bold: iconBold,
+  italic: iconItalic,
+  underline: iconUnderline,
+  strike: iconStrike,
+  code: iconInlineCode,
+};
+
+const ALIGN_ICONS: Readonly<Record<Alignment, IconPaths>> = {
+  left: iconAlignLeft,
+  center: iconAlignCenter,
+  right: iconAlignRight,
 };
 
 /** BlockNote's shortcut ("Ctrl-Alt-1", "⌘-Alt-1") as the sheet's Kbd keys: one key each, symbols for modifiers on a
@@ -535,7 +584,7 @@ export function BlockMenu({ editor }: { editor: ReadmeEditor }) {
             }}
           >
             <span className={styles.glyph} aria-hidden="true">
-              {GLYPHS[item.key]}
+              <Glyph name={item.key} />
             </span>
             <span className={styles.label}>
               <span className={styles.title}>{item.title}</span>
