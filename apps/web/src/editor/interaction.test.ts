@@ -305,6 +305,48 @@ test("menu_stays_clear_of_sticky_and_fixed_bars_that_precede_the_editor", async 
   nav.remove();
 });
 
+// Each update measures the menu at full height before cutting it again; that must not reset its own scroll.
+test("menu_keeps_its_own_scroll_position_across_updates", async () => {
+  const host = document.createElement("div");
+  const wrapper = document.createElement("div");
+  wrapper.dataset.editorRoot = "";
+  const menu = document.createElement("div");
+  wrapper.append(menu, host);
+  document.body.append(wrapper);
+  vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 900));
+  vi.spyOn(menu, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 300));
+  Object.defineProperty(menu, "offsetParent", { value: wrapper });
+  // jsdom does not lay out: model a browser clamping scrollTop whenever the box is taller than its content allows.
+  let scrolled = 0;
+  Object.defineProperty(menu, "scrollTop", {
+    get: () => scrolled,
+    set: (value: number) => {
+      scrolled = value;
+    },
+  });
+  const style = menu.style;
+  const setMax = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, "maxHeight");
+  Object.defineProperty(style, "maxHeight", {
+    get: () => setMax?.get?.call(style),
+    set: (value: string) => {
+      setMax?.set?.call(style, value);
+      if (Number.parseFloat(value) > 300) scrolled = 0;
+    },
+  });
+  vi.stubGlobal("innerWidth", 400);
+  vi.stubGlobal("innerHeight", 900);
+  const ref = { current: menu };
+  function Probe() {
+    useMenuPosition(ref, new DOMRect(0, 700, 100, 44), "above");
+    return null;
+  }
+  root = createRoot(host);
+  await act(async () => root?.render(createElement(Probe)));
+  scrolled = 120;
+  await act(async () => window.dispatchEvent(new Event("resize")));
+  expect(menu.scrollTop).toBe(120);
+});
+
 test("docked_controls_remain_inside_the_clipping_scroll_container", async () => {
   const scroller = document.createElement("div");
   scroller.style.overflowX = "auto";

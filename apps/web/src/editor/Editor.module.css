@@ -546,16 +546,25 @@
     cursor: default;
   }
 
+  /* Compact controls are one bar (Alex 2026-10-27, direction A): the formatting row scrolls sideways, and Block
+     actions stays at its end. */
   .editor[data-compact] .controls {
     position: relative;
     display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    align-items: stretch;
     margin-bottom: var(--space-4);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
     background: var(--color-ground);
     z-index: var(--z-menu);
     box-sizing: border-box;
     width: 100%;
+  }
+
+  /* Undocking puts the bar back in the flow on the press that left the editor. If the page's scroll anchor were
+     inside the editor, the browser would scroll to hold it, moving Save and Cancel between that press and its click. */
+  .editor[data-compact] {
+    overflow-anchor: none;
   }
 
   .editor[data-compact] .controls[data-docked] {
@@ -565,8 +574,19 @@
 
   .touchToolbar {
     position: static;
-    width: 100%;
+    flex: 1;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    border: 0;
     box-shadow: none;
+  }
+
+  /* The pickers' menus are placed against the bar, so the row's sideways scroll does not clip them. */
+  .editor[data-compact] .typePicker {
+    position: static;
   }
 
   .touchHandle {
@@ -585,9 +605,11 @@
   }
 
   .touchBlocksButton {
-    align-self: flex-start;
-    border: 1px solid var(--color-line-strong);
+    flex: none;
+    align-self: center;
     margin: var(--space-1);
+    border-left: 1px solid var(--color-line);
+    border-radius: 0;
   }
 
   .blockSheet {

@@ -11,6 +11,10 @@
         height: calc(100dvh - 116px - max(20px, env(safe-area-inset-bottom)));
         padding: var(--space-4);
       }
+      /* The phone bar hides under a docked page control (Navigation.module.css), so its room goes to the content. */
+      &:has([data-covers-navigation]) {
+        height: calc(100dvh - 64px);
+      }
     }
 
     /* Pages with a footer: the header and main together fill the first screen, so the footer starts below it

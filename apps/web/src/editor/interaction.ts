@@ -190,7 +190,8 @@ function underStickyBars(element: HTMLElement, view: Rect): Rect {
   const middle = view.top + view.height / 2;
   for (let parent: Element | null = element; parent; parent = parent.parentElement) {
     for (let bar = parent.previousElementSibling; bar; bar = bar.previousElementSibling) {
-      if (!/sticky|fixed/.test(window.getComputedStyle(bar).position)) continue;
+      const style = window.getComputedStyle(bar);
+      if (!/sticky|fixed/.test(style.position) || style.visibility === "hidden") continue;
       const rect = bar.getBoundingClientRect();
       const shown = rect.width > 0 && rect.height > 0 && rect.bottom > view.top && rect.top < view.top + view.height;
       if (!shown) continue;
@@ -240,6 +241,8 @@ export function useMenuPosition(
         0,
         Math.min(view.left + view.width - gap, region.right) - Math.max(view.left + gap, region.left),
       );
+      // Measuring at full height lets the browser clamp the menu's own scroll; put it back after.
+      const scrolled = element.scrollTop;
       element.style.position = "absolute";
       element.style.boxSizing = "border-box";
       element.style.maxWidth = `${width}px`;
@@ -260,6 +263,7 @@ export function useMenuPosition(
       element.style.top = `${top}px`;
       element.style.maxWidth = `${position.maxWidth}px`;
       element.style.maxHeight = `${position.maxHeight}px`;
+      element.scrollTop = scrolled;
     };
     let frame = 0;
     const changed =
@@ -276,7 +280,11 @@ export function useMenuPosition(
     observer?.observe(root);
     if (anchor instanceof HTMLElement) observer?.observe(anchor);
     window.addEventListener("resize", changed);
-    window.addEventListener("scroll", changed, true);
+    // The menu's own scrolling does not move it.
+    const onScroll = (event: Event) => {
+      if (!(event.target instanceof Node && element.contains(event.target))) changed();
+    };
+    window.addEventListener("scroll", onScroll, true);
     visual?.addEventListener("resize", changed);
     visual?.addEventListener("scroll", changed);
     update();
@@ -284,7 +292,7 @@ export function useMenuPosition(
       cancelAnimationFrame(frame);
       observer?.disconnect();
       window.removeEventListener("resize", changed);
-      window.removeEventListener("scroll", changed, true);
+      window.removeEventListener("scroll", onScroll, true);
       visual?.removeEventListener("resize", changed);
       visual?.removeEventListener("scroll", changed);
       clear();

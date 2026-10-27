@@ -159,7 +159,7 @@
   },
   "Navigation": {
     "sheet": "components/Navigation/README.md",
-    "sheetSha256": "562d406c3094dfd83e50ac634da522ec34eeb68df2e7d35425ac71d49f7ca82c",
+    "sheetSha256": "1c32ea2b42823b98de29f3b610de48bbe7358104dc5451d2b6dba3a63b8de83d",
     "props": "NavigationProps",
     "variants": ["left drawer", "phone floating bar"],
     "status": "built",

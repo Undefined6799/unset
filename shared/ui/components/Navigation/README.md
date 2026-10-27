@@ -13,7 +13,8 @@ the mark in the brand header (`Header`'s `start`) and toggles the drawer. On pho
 hidden and the floating bar keeps menu, home and account in equal thirds: inset 16px from the sides and
 `max(20px, safe area)` from the bottom, 1px `line-strong` edge, `radius-sm`, `shadow-1`, no underline. Its menu
 button toggles the same drawer, and the bar is hidden while the drawer is open (`.drawer:popover-open ~ .phone`),
-back when it closes. `itemsPlacement`, the hover labels and the rail's current line are removed with the rail.
+back when it closes. It is also hidden while a page control docked at the bottom marks itself
+`data-covers-navigation` (the README editor's bar while editing; Alex 2026-10-27, direction A). `itemsPlacement`, the hover labels and the rail's current line are removed with the rail.
 
 Approved core-shell composition, 2026-10-17. Figma source:
 https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=0-1

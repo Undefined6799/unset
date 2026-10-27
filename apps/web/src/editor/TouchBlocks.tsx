@@ -1,3 +1,4 @@
+import { IconDrawing, iconMore } from "@unset/shared-ui";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { moveBlock } from "./block-actions.ts";
 import styles from "./Editor.module.css";
@@ -52,9 +53,11 @@ export function TouchBlocks({ editor, active }: { editor: ReadmeEditor; active: 
         className={`${styles.tool} ${styles.touchBlocksButton}`}
         type="button"
         aria-haspopup="dialog"
+        aria-label={EDITOR.blockActions}
+        title={EDITOR.blockActions}
         onClick={() => open(editor.getTextCursorPosition().block.id)}
       >
-        {EDITOR.blockActions}
+        <IconDrawing paths={iconMore} />
       </button>
       <dialog
         ref={dialog}

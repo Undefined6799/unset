@@ -294,13 +294,31 @@ for (const height of [844, 505]) {
   test(`editor_phone_type_menu_items_stay_readable_and_selectable ${height}`, async ({ browser, browserName }) => {
     await withEditor(browser, browserName, { width: 390, touch: true }, async (page) => {
       await page.setViewportSize({ width: 390, height });
-      await page.locator('[data-editor-root] [data-content-type="paragraph"]').filter({ hasText: NEIGHBOR }).tap();
-      await page.evaluate(() => (globalThis as unknown as { scrollBy(x: number, y: number): void }).scrollBy(0, 300));
-      const scrolled = () => page.evaluate(() => (globalThis as unknown as { scrollY: number }).scrollY);
+      const paragraph = page
+        .locator('[data-editor-root] [data-content-type="paragraph"]')
+        .filter({ hasText: NEIGHBOR });
+      // Playwright scrolls a target to the scroller's edge, where the docked bar covers it; a finger scrolls first.
+      await paragraph.evaluate((element) =>
+        (element as unknown as { scrollIntoView(options: object): void }).scrollIntoView({ block: "center" }),
+      );
+      await paragraph.tap();
+      // Direction A (Alex 2026-10-27): one bar, and the phone navigation gives up its place while it is docked.
+      const bar = await page.getByRole("toolbar", { name: "Text style", exact: true }).boundingBox();
+      expect(bar?.height).toBeLessThanOrEqual(56);
+      const phoneBar = page.locator("nav").filter({ has: page.getByRole("button", { name: "Menu", exact: true }) });
+      await expect(phoneBar).toBeHidden();
+      // The page scrolls in the shell's main, not the window (CoreShell.module.css).
+      const main = page.locator("main");
+      await main.evaluate((element) =>
+        (element as unknown as { scrollBy(x: number, y: number): void }).scrollBy(0, 300),
+      );
+      const scrolled = () => main.evaluate((element) => (element as unknown as { scrollTop: number }).scrollTop);
       const before = await scrolled();
       await page.getByRole("button", { name: "Block type", exact: true }).tap();
       const menu = page.getByRole("menu", { name: "Block type", exact: true });
       await expect(menu).toBeVisible();
+      // Opening the menu does not move the page.
+      expect(await scrolled()).toBe(before);
       const actions = await page.locator("[data-readme-actions]").boundingBox();
       const rect = await menu.boundingBox();
       expect(rect).not.toBeNull();
@@ -317,7 +335,6 @@ for (const height of [844, 505]) {
         // A trial tap runs Playwright's hit-target check: no other element, the toolbar included, may receive it.
         await item.tap({ trial: true, timeout: 2_000 });
       }
-      expect(await scrolled()).toBe(before);
       await menu.getByRole("menuitemradio", { name: "Check List", exact: true }).tap();
       await expect(menu).toBeHidden();
       const checked = page

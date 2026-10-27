@@ -8,6 +8,7 @@ export const EDITOR = {
   marks: { bold: "B", italic: "I", underline: "U", strike: "S", code: "</>" },
   /** BlockNote's text alignment buttons (Alex 2026-10-23 23:57Z). */
   align: { left: "Align left", center: "Align centre", right: "Align right" },
+  alignment: "Alignment",
   /** The alignment buttons' words, as Link's: the sheet has no alignment icon yet (Iconoir only, decision 33). */
   alignMarks: { left: "Left", center: "Centre", right: "Right" },
   blockType: "Block type",

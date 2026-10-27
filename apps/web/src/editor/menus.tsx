@@ -65,7 +65,9 @@ function menuKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
 
 function useMenuFocus(ref: RefObject<HTMLElement | null>, open: boolean): void {
   useLayoutEffect(() => {
-    if (open) ref.current?.querySelector<HTMLButtonElement>('button[role^="menuitem"]:not(:disabled)')?.focus();
+    // This runs before the menu is placed; scrolling to the item's unplaced position would move the page.
+    const item = open ? ref.current?.querySelector<HTMLButtonElement>('button[role^="menuitem"]:not(:disabled)') : null;
+    item?.focus({ preventScroll: true });
   }, [open, ref]);
 }
 
@@ -144,38 +146,45 @@ function selectedBlocks(editor: ReadmeEditor) {
 export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: EditorInput }) {
   const shown = useStore(editor.getExtension(FormattingToolbarExtension)?.store as Store<boolean>);
   const [, render] = useState(0);
-  const [types, setTypes] = useState(false);
+  // One of the toolbar's two pickers at a time: block type, or (in compact controls) alignment.
+  const [picker, setPicker] = useState<"types" | "align" | null>(null);
+  const types = picker === "types";
+  const aligning = picker === "align";
   const [link, setLink] = useState<string | null>(null);
   const controlFocus = useControlFocus();
   const typeTrigger = useRef<HTMLButtonElement>(null);
   const typeMenu = useRef<HTMLDivElement>(null);
+  const alignTrigger = useRef<HTMLButtonElement>(null);
+  const alignMenu = useRef<HTMLDivElement>(null);
   useEffect(() => editor.onSelectionChange(() => render((n) => n + 1)), [editor]);
   const ref = useRef<HTMLDivElement>(null);
-  useMenuFocus(ref, types);
+  useMenuFocus(ref, picker !== null);
   const at = useSelectionAnchor(shown);
   const compact = input.compact && input.focused;
-  const open = shown || types || link !== null || compact || controlFocus.focused;
+  const open = shown || picker !== null || link !== null || compact || controlFocus.focused;
   useDismiss(
-    types || link !== null,
+    picker !== null || link !== null,
     ref,
     () => {
-      setTypes(false);
+      setPicker(null);
       setLink(null);
     },
     () => {
       if (types) typeTrigger.current?.focus();
+      else if (aligning) alignTrigger.current?.focus();
       else editor.focus();
     },
   );
   useMenuPosition(ref, open && !compact ? at : null, "above");
   // From the whole toolbar, so the menu never opens over the toolbar's other rows.
   useMenuPosition(typeMenu, types ? ref.current : null, "above");
+  useMenuPosition(alignMenu, aligning ? ref.current : null, "above");
   const className = `${styles.toolbar} ${compact ? styles.touchToolbar : ""}`;
   if (!open) return null;
   const active = editor.getActiveStyles();
   const current = currentType(editor);
   const back = () => {
-    setTypes(false);
+    setPicker(null);
     setLink(null);
     editor.focus();
   };
@@ -185,6 +194,7 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
   const alignment = (alignable[0]?.props as { textAlignment?: string } | undefined)?.textAlignment ?? "left";
   const setAlignment = (value: Alignment) => {
     for (const block of alignable) editor.updateBlock(block, { props: { textAlignment: value } } as never);
+    setPicker(null);
     render((n) => n + 1);
     editor.focus();
   };
@@ -252,9 +262,11 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
           aria-expanded={types}
           aria-haspopup="menu"
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => setTypes((on) => !on)}
+          onClick={() => setPicker((on) => (on === "types" ? null : "types"))}
         >
-          {current === undefined ? EDITOR.blockType : title(current.key)} <IconDrawing paths={iconDown} size={16} />
+          {/* Compact controls show the type's glyph tile, as the menu does, so the bar fits one row. */}
+          {current === undefined ? EDITOR.blockType : compact ? GLYPHS[current.key] : title(current.key)}{" "}
+          <IconDrawing paths={iconDown} size={16} />
         </button>
         {types ? (
           <div
@@ -305,7 +317,51 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
           {EDITOR.marks[style]}
         </button>
       ))}
-      {alignable.length > 0 ? (
+      {alignable.length > 0 && compact ? (
+        <>
+          <span className={styles.divider} aria-hidden="true" />
+          <div className={styles.typePicker}>
+            <button
+              ref={alignTrigger}
+              type="button"
+              className={styles.tool}
+              aria-label={EDITOR.alignment}
+              aria-expanded={aligning}
+              aria-haspopup="menu"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setPicker((on) => (on === "align" ? null : "align"))}
+            >
+              {EDITOR.alignMarks[alignment as Alignment]} <IconDrawing paths={iconDown} size={16} />
+            </button>
+            {aligning ? (
+              <div
+                ref={alignMenu}
+                className={styles.typeMenu}
+                role="menu"
+                aria-label={EDITOR.alignment}
+                onKeyDown={menuKeys}
+              >
+                {ALIGNMENTS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={alignment === value}
+                    className={styles.typeItem}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setAlignment(value)}
+                  >
+                    <span className={styles.chosen} aria-hidden="true">
+                      {alignment === value ? <IconDrawing paths={iconDone} size={16} /> : null}
+                    </span>
+                    {EDITOR.align[value]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : alignable.length > 0 ? (
         <>
           <span className={styles.divider} aria-hidden="true" />
           {ALIGNMENTS.map((value) => (

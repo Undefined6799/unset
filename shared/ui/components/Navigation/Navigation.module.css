@@ -156,6 +156,10 @@
   .drawer:popover-open ~ .phone {
     visibility: hidden;
   }
+  /* A page control docked at the bottom (the README editor's bar) takes the bar's place while it is shown. */
+  :global(body:has([data-covers-navigation])) .phone {
+    visibility: hidden;
+  }
   @media (max-width: 767px) {
     .menuButton {
       display: none;

@@ -145,7 +145,12 @@ export function BlockEditor({ initialContent, onReady, label }: BlockEditorProps
       data-touch={input.touch || undefined}
       data-compact={input.compact || undefined}
     >
-      <div ref={controls} className={styles.controls} data-docked={(input.compact && input.focused) || undefined}>
+      <div
+        ref={controls}
+        className={styles.controls}
+        data-docked={(input.compact && input.focused) || undefined}
+        data-covers-navigation={(input.compact && input.focused) || undefined}
+      >
         <StyleToolbar editor={editor} input={input} />
         {!input.compact ? <BlockHandle editor={editor} input={input} /> : null}
         <TouchBlocks editor={editor} active={input.compact} />
