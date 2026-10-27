@@ -26,6 +26,19 @@ test("menu_flips_above_and_limits_height_to_the_available_space", () => {
   ).toMatchObject({ top: 8, maxHeight: 484 });
 });
 
+// A software keyboard can leave less than three rows on either side of the docked toolbar.
+test("menu_covers_its_anchor_rather_than_shrinking_below_three_rows", () => {
+  expect(
+    menuPosition(
+      { ...anchor, top: 200, height: 100 },
+      { width: 200, height: 400 },
+      { ...viewport, top: 150, height: 240 },
+      region,
+      "above",
+    ),
+  ).toMatchObject({ top: 158, maxHeight: 224 });
+});
+
 test("menu_width_uses_the_editor_region_on_a_medium_screen", () => {
   expect(
     menuPosition(
@@ -219,6 +232,77 @@ test("position_hook_tracks_scrolling_and_clears_styles_when_the_anchor_disappear
   expect(menu.style.maxHeight).toBe("");
   await act(async () => window.dispatchEvent(new Event("resize")));
   expect(menu.style.top).toBe("");
+});
+
+// The block-type trigger sits in docked controls that move on their own (useDockedCaret); a rect captured when the
+// menu opened left the menu over the toolbar (Alex 2026-10-27).
+test("menu_follows_its_trigger_when_the_trigger_moves_after_opening", async () => {
+  const host = document.createElement("div");
+  const wrapper = document.createElement("div");
+  wrapper.dataset.editorRoot = "";
+  const trigger = document.createElement("button");
+  const menu = document.createElement("div");
+  wrapper.append(trigger, menu, host);
+  document.body.append(wrapper);
+  let triggerTop = 700;
+  vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 900));
+  vi.spyOn(trigger, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, triggerTop, 100, 44));
+  vi.spyOn(menu, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 300));
+  Object.defineProperty(menu, "offsetParent", { value: wrapper });
+  vi.stubGlobal("innerWidth", 400);
+  vi.stubGlobal("innerHeight", 900);
+  const ref = { current: menu };
+  function Probe() {
+    useMenuPosition(ref, trigger, "above");
+    return null;
+  }
+  root = createRoot(host);
+  await act(async () => root?.render(createElement(Probe)));
+  expect(menu.style.top).toBe("392px");
+  await act(async () => {
+    triggerTop = 400;
+    window.dispatchEvent(new Event("scroll"));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(menu.style.top).toBe("92px");
+});
+
+// The sticky Save and Cancel bar and the fixed phone navigation precede the editor and paint over it.
+test("menu_stays_clear_of_sticky_and_fixed_bars_that_precede_the_editor", async () => {
+  const form = document.createElement("form");
+  const bar = document.createElement("div");
+  bar.style.position = "sticky";
+  const wrapper = document.createElement("div");
+  wrapper.dataset.editorRoot = "";
+  const host = document.createElement("div");
+  const menu = document.createElement("div");
+  wrapper.append(menu, host);
+  form.append(bar, wrapper);
+  document.body.append(form);
+  const nav = document.createElement("nav");
+  nav.style.position = "fixed";
+  document.body.prepend(nav);
+  vi.spyOn(bar, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 80));
+  vi.spyOn(nav, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 520, 400, 80));
+  vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(new DOMRect(0, -200, 400, 1200));
+  vi.spyOn(menu, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 400));
+  Object.defineProperty(menu, "offsetParent", { value: wrapper });
+  vi.stubGlobal("innerWidth", 400);
+  vi.stubGlobal("innerHeight", 600);
+  const ref = { current: menu };
+  function Probe({ at }: { at: number }) {
+    useMenuPosition(ref, new DOMRect(0, at, 100, 44), "above");
+    return null;
+  }
+  root = createRoot(host);
+  await act(async () => root?.render(createElement(Probe, { at: 400 })));
+  // Room above the trigger is 88..392, under the bar: the menu is cut to that height and scrolls.
+  expect(menu.style.maxHeight).toBe("304px");
+  expect(menu.style.top).toBe("288px");
+  // Below a trigger near the top, the room ends 8px above the fixed navigation (520).
+  await act(async () => root?.render(createElement(Probe, { at: 100 })));
+  expect(menu.style.maxHeight).toBe("360px");
+  nav.remove();
 });
 
 test("docked_controls_remain_inside_the_clipping_scroll_container", async () => {

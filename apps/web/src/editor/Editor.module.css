@@ -435,9 +435,11 @@
     flex-direction: column;
   }
 
+  /* Above the toolbar's later buttons, which share its stacking context. */
   .typeMenu,
   .blockMenu {
     position: absolute;
+    z-index: var(--z-menu);
     left: 0;
     display: flex;
     flex-direction: column;
@@ -481,6 +483,7 @@
 
   /* The chosen block type is marked → in success, as Select marks its chosen option. */
   .chosen {
+    flex: none;
     width: 1ch;
     color: var(--color-success);
     font-family: var(--font-mono);

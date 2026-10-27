@@ -288,6 +288,46 @@ test("editor_pointer_type_menu_fits_near_viewport_bottom", async ({ browser, bro
   });
 });
 
+// Alex 2026-10-27: after scrolling, the compact type menu opened over the docked toolbar, whose labels painted over
+// Check List and Code Block. 505px tall stands in for a software keyboard (Playwright sets the layout viewport).
+for (const height of [844, 505]) {
+  test(`editor_phone_type_menu_items_stay_readable_and_selectable ${height}`, async ({ browser, browserName }) => {
+    await withEditor(browser, browserName, { width: 390, touch: true }, async (page) => {
+      await page.setViewportSize({ width: 390, height });
+      await page.locator('[data-editor-root] [data-content-type="paragraph"]').filter({ hasText: NEIGHBOR }).tap();
+      await page.evaluate(() => (globalThis as unknown as { scrollBy(x: number, y: number): void }).scrollBy(0, 300));
+      const scrolled = () => page.evaluate(() => (globalThis as unknown as { scrollY: number }).scrollY);
+      const before = await scrolled();
+      await page.getByRole("button", { name: "Block type", exact: true }).tap();
+      const menu = page.getByRole("menu", { name: "Block type", exact: true });
+      await expect(menu).toBeVisible();
+      const actions = await page.locator("[data-readme-actions]").boundingBox();
+      const rect = await menu.boundingBox();
+      expect(rect).not.toBeNull();
+      expect(actions).not.toBeNull();
+      if (rect !== null && actions !== null) {
+        expect(rect.y).toBeGreaterThanOrEqual(actions.y + actions.height - 1);
+        expect(rect.y + rect.height).toBeLessThanOrEqual(height);
+      }
+      for (const name of ["Paragraph", "Check List", "Code Block"]) {
+        const item = menu.getByRole("menuitemradio", { name, exact: true });
+        await item.evaluate((element) =>
+          (element as unknown as { scrollIntoView(options: object): void }).scrollIntoView({ block: "nearest" }),
+        );
+        // A trial tap runs Playwright's hit-target check: no other element, the toolbar included, may receive it.
+        await item.tap({ trial: true, timeout: 2_000 });
+      }
+      expect(await scrolled()).toBe(before);
+      await menu.getByRole("menuitemradio", { name: "Check List", exact: true }).tap();
+      await expect(menu).toBeHidden();
+      const checked = page
+        .locator('[data-editor-root] [data-content-type="checkListItem"]')
+        .filter({ hasText: NEIGHBOR });
+      await expect(checked).toHaveCount(1);
+    });
+  });
+}
+
 test("editor_touch_edge_double_tap_opens_block_actions", async ({ browser, browserName }) => {
   await withEditor(browser, browserName, { width: 900, touch: true }, async (page) => {
     const paragraph = page.locator('[data-editor-root] [data-content-type="paragraph"]').filter({ hasText: MOVING });

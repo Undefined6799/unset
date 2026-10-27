@@ -168,7 +168,8 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
     },
   );
   useMenuPosition(ref, open && !compact ? at : null, "above");
-  useMenuPosition(typeMenu, types ? (typeTrigger.current?.getBoundingClientRect() ?? null) : null, "above");
+  // From the whole toolbar, so the menu never opens over the toolbar's other rows.
+  useMenuPosition(typeMenu, types ? ref.current : null, "above");
   const className = `${styles.toolbar} ${compact ? styles.touchToolbar : ""}`;
   if (!open) return null;
   const active = editor.getActiveStyles();
@@ -500,7 +501,7 @@ export function BlockHandle({ editor, input }: { editor: ReadmeEditor; input: Ed
       ?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] > [data-content-type]`)
       ?.getBoundingClientRect() ?? null;
   useMenuPosition(ref, !input.touch && open ? (state?.show ? state.referencePos : selectedRect) : null, "side");
-  useMenuPosition(menuRef, menu ? (trigger.current?.getBoundingClientRect() ?? null) : null, "above");
+  useMenuPosition(menuRef, menu ? trigger.current : null, "above");
   if (!open) return null;
   const addBelow = () => {
     close();

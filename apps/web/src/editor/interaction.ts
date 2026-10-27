@@ -110,6 +110,8 @@ export function useEditorInput(editor: ReadmeEditor): EditorInput {
 }
 
 const gap = 8;
+/** Three 44px touch rows: the least a menu shows beside its anchor before it covers the anchor instead. */
+const fewestRows = 132;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
 
 /** Viewport coordinates, before conversion to the menu's positioned ancestor. */
@@ -140,7 +142,9 @@ export function menuPosition(
     const below = Math.max(0, bottomBound - anchor.top - anchor.height - gap);
     const preferAbove = placement !== "below";
     const useAbove = preferAbove ? above >= size.height || above >= below : below < size.height && above > below;
-    maxHeight = Math.min(maxHeight, useAbove ? above : below);
+    const room = useAbove ? above : below;
+    // With too little room on either side the menu keeps the whole view and covers its anchor, painting above it.
+    if (room >= Math.min(size.height, fewestRows)) maxHeight = Math.min(maxHeight, room);
     top = useAbove ? anchor.top - gap - Math.min(size.height, maxHeight) : anchor.top + anchor.height + gap;
     top = clamp(top, topBound, bottomBound - Math.min(size.height, maxHeight));
   }
@@ -172,13 +176,38 @@ function visibleRect(element: HTMLElement): Rect {
     const bottom = clipsY ? Math.min(view.top + view.height, rect.top + rect.height) : view.top + view.height;
     view = { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
   }
-  return view;
+  return underStickyBars(element, view);
 }
 
-/** CSSOM keeps placement compatible with the application's style-src-attr policy. */
+/**
+ * Sticky or fixed bars placed before the editor paint over it (the README's Save and Cancel at the top, the phone
+ * navigation at the bottom): a bar in the view's upper half covers down to its bottom, one in the lower half from its
+ * top.
+ */
+function underStickyBars(element: HTMLElement, view: Rect): Rect {
+  let top = view.top;
+  let bottom = view.top + view.height;
+  const middle = view.top + view.height / 2;
+  for (let parent: Element | null = element; parent; parent = parent.parentElement) {
+    for (let bar = parent.previousElementSibling; bar; bar = bar.previousElementSibling) {
+      if (!/sticky|fixed/.test(window.getComputedStyle(bar).position)) continue;
+      const rect = bar.getBoundingClientRect();
+      const shown = rect.width > 0 && rect.height > 0 && rect.bottom > view.top && rect.top < view.top + view.height;
+      if (!shown) continue;
+      if (rect.top + rect.height / 2 < middle) top = Math.max(top, rect.bottom);
+      else bottom = Math.min(bottom, rect.top);
+    }
+  }
+  return { ...view, top: Math.min(top, bottom), height: Math.max(0, bottom - top) };
+}
+
+/**
+ * CSSOM keeps placement compatible with the application's style-src-attr policy. An element anchor is measured on
+ * every update, after the frame's other placements (the docked controls it may sit in move on the same events).
+ */
 export function useMenuPosition(
   ref: RefObject<HTMLElement | null>,
-  anchor: DOMRect | null,
+  anchor: DOMRect | HTMLElement | null,
   placement: Placement,
 ): void {
   useLayoutEffect(() => {
@@ -198,12 +227,15 @@ export function useMenuPosition(
     const update = () => {
       const region = root.getBoundingClientRect();
       const view = visibleRect(root);
-      const translated = {
-        left: anchor.left + region.left - origin.left,
-        top: anchor.top + region.top - origin.top,
-        width: anchor.width,
-        height: anchor.height,
-      };
+      const translated =
+        anchor instanceof HTMLElement
+          ? anchor.getBoundingClientRect()
+          : {
+              left: anchor.left + region.left - origin.left,
+              top: anchor.top + region.top - origin.top,
+              width: anchor.width,
+              height: anchor.height,
+            };
       const width = Math.max(
         0,
         Math.min(view.left + view.width - gap, region.right) - Math.max(view.left + gap, region.left),
@@ -229,21 +261,32 @@ export function useMenuPosition(
       element.style.maxWidth = `${position.maxWidth}px`;
       element.style.maxHeight = `${position.maxHeight}px`;
     };
+    let frame = 0;
+    const changed =
+      anchor instanceof HTMLElement
+        ? () => {
+            update();
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(update);
+          }
+        : update;
     const visual = window.visualViewport;
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(changed);
     observer?.observe(element);
     observer?.observe(root);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    visual?.addEventListener("resize", update);
-    visual?.addEventListener("scroll", update);
+    if (anchor instanceof HTMLElement) observer?.observe(anchor);
+    window.addEventListener("resize", changed);
+    window.addEventListener("scroll", changed, true);
+    visual?.addEventListener("resize", changed);
+    visual?.addEventListener("scroll", changed);
     update();
     return () => {
+      cancelAnimationFrame(frame);
       observer?.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      visual?.removeEventListener("resize", update);
-      visual?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", changed);
+      window.removeEventListener("scroll", changed, true);
+      visual?.removeEventListener("resize", changed);
+      visual?.removeEventListener("scroll", changed);
       clear();
     };
   }, [ref, anchor, placement]);
