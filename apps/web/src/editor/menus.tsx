@@ -160,7 +160,9 @@ export function StyleToolbar({ editor, input }: { editor: ReadmeEditor; input: E
   const ref = useRef<HTMLDivElement>(null);
   useMenuFocus(ref, picker !== null);
   const at = useSelectionAnchor(shown);
-  const compact = input.compact && input.focused;
+  // Compact controls never fall back to the floating toolbar: WebKit on iPhone can move focus out of the editor (a tap
+  // on a button, the keyboard closing) while the selection stays, and the bar then stays where the controls are.
+  const compact = input.compact;
   const open = shown || picker !== null || link !== null || compact || controlFocus.focused;
   useDismiss(
     picker !== null || link !== null,

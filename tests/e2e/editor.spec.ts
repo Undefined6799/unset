@@ -103,7 +103,9 @@ for (const cell of CELLS) {
         await activate(bold, cell.touch);
         await expect(bold).toHaveAttribute("aria-pressed", "false");
         await activate(page.getByRole("heading", { name: "Editor Sample", exact: true }), cell.touch);
-        await expect(toolbar).toBeHidden();
+        // Leaving the editor undocks the one bar back above the README; it does not disappear (Alex 2026-10-27).
+        await expect(editor.locator("[data-docked]")).toHaveCount(0);
+        await expect(toolbar).toBeVisible();
         await activate(paragraph, cell.touch);
         await expect(toolbar).toBeVisible();
         await expect(editor.getByRole("button", { name: "Add a block below", exact: true })).toHaveCount(0);
@@ -285,6 +287,27 @@ test("editor_pointer_type_menu_fits_near_viewport_bottom", async ({ browser, bro
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(blockType).toBeFocused();
+  });
+});
+
+// Alex 2026-10-27 (iPhone): with focus outside the editor but its selection kept, the phone fell back to the floating
+// desktop toolbar over the text. Compact controls keep their one bar, above the README, whatever has focus.
+test("editor_phone_bar_stays_one_row_above_the_readme_without_focus", async ({ browser, browserName }) => {
+  await withEditor(browser, browserName, { width: 390, touch: true }, async (page) => {
+    const editor = page.locator("[data-editor-root]");
+    const paragraph = editor.locator('[data-content-type="paragraph"]').filter({ hasText: MOVING });
+    await paragraph.tap();
+    await page.keyboard.press("Shift+End");
+    await page.evaluate(() =>
+      (globalThis as unknown as { document: { activeElement: { blur(): void } } }).document.activeElement.blur(),
+    );
+    const bar = page.getByRole("toolbar", { name: "Text style", exact: true });
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Align left", exact: true })).toHaveCount(0);
+    const box = await bar.boundingBox();
+    const first = await editor.locator('[data-content-type="heading"]').first().boundingBox();
+    expect(box?.height).toBeLessThanOrEqual(56);
+    if (box !== null && first !== null) expect(box.y + box.height).toBeLessThanOrEqual(first.y);
   });
 });
 
