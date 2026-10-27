@@ -5,7 +5,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
-import { EDGE, type Edge, logsWhen, type ProbeStep } from "./edge-container.ts";
+import { EDGE } from "./edge-container.ts";
+import { type Edge, logsWhen, type ProbeStep } from "./edge-handle.ts";
 import { registerEdgeSuite } from "./edge-suite.ts";
 import { timeoutProblems } from "./timeouts.ts";
 

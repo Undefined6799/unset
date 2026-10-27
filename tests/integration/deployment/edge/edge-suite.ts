@@ -1,7 +1,8 @@
 // The edge suite's hooks (P1.11s): edge.image.test.ts registers them through registerEdgeSuite, so
 // edge-teardown.image.test.ts can pin that the afterAll removes the image tag as well as stopping the edge (#723
 // verify). An image module: it reaches the build helper (scripts/test/image-rules.test.ts).
-import { buildEdgeImage, type Edge, pullProbeImage, startEdge, stopEdgeAndRemoveImage } from "./edge-container.ts";
+import { buildEdgeImage, startEdge, stopEdgeAndRemoveImage } from "./edge-container.ts";
+import { type Edge, pullProbeImage } from "./edge-handle.ts";
 
 type Hook = (fn: () => Promise<void>, timeoutMs: number) => void;
 type SuiteParts = { prepare: () => string; start: (image: string) => Promise<Edge> };
