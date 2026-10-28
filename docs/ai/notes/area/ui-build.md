@@ -37,11 +37,12 @@ inside this workspace and outside its node_modules (P1.25d, P1.25r, P1.25s). Eac
 dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
 
 **Registered icons (P2.24f).** The optional singleton `inventory.Icon.extensions` pin may name only
-`approved-extensions.json`. Its closed record fixes ADR 0027's dated approval, the immutable base-sheet pins,
-Iconoir 7.12.1 source commit, each icon's Figma node, aliases and exact drawings. The three component proof entries
-keep fixed source/requirement links; their API/behavior prose is a nonempty string array so reviewed packaging
-clarifications do not change the icon contract. Duplicate JSON keys and missing, unknown or altered proof fail.
-`APPROVED_EXTENSION.icons` in `shared/ui-build/icons.ts` matches `shared/ui/approved-extensions.json` and joins the
+`approved-extensions.json`. `APPROVED_EXTENSION_SHA256` in `shared/ui-build/icons.ts` pins that file's exact bytes
+(ADR 0027's dated approval, base-sheet pins, Iconoir commit, Figma nodes, aliases, drawings and component prose
+alike); any byte change, prose or key order included, fails with `icons.registration` naming the file and both
+hashes, and needs a reviewed bump of the constant (`icon_one_byte_change_to_the_approved_record_fails_closed`).
+After the pin, the build still checks the fields it reads (icon aliases, source hashes, the drawing allowlist) and
+that the base-sheet pins match the actual sheet. The record's `icons` object joins the
 36 imported icons as five names: `devices` → `computer`, `apps` → `view-grid`, `bulb-off` → `light-bulb`,
 `bulb-on` → `light-bulb-on` and `tv` → `modern-tv`. Source bytes are hash-checked before the unchanged SVG parser
 compares drawings. `icons/svg`, `icons/drawings` and `icons.json` each hold those 41 names.
