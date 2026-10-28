@@ -1,0 +1,15 @@
+# Accepted Trivy findings for our own app images, node-app and migrate (P1.29v follow-up). Format: Trivy v0.75.0
+# docs/guide/configuration/filtering.md (.trivyignore.yaml); matching: pkg/result/ignore.go MatchVulnerability, which
+# applies an entry only when its id, one of its paths (the package's PkgPath) and one of its purls all match.
+# Every entry needs `id`, `paths`, `purls`, a `statement` and `expired_at` at most 30 days ahead;
+# scripts/ci/trivyignore-app.test.ts fails on anything else, and on an entry once it has expired. A new entry needs
+# Alex's card and typed line.
+# P1.29v: Alex's card 2026-10-28T01:40:52Z ("Yes, add a 30-day ignore file") accepts CVE-2023-54404 for zod 3.25.76.
+vulnerabilities:
+  - id: CVE-2023-54404
+    paths:
+      - "app/node_modules/zod/package.json"
+    purls:
+      - "pkg:npm/zod@3.25.76"
+    statement: "zod 3.25.76 has no fixed 3.x release and every @atproto package we use (oauth-client 0.9.0, api 0.29.5) requires zod ^3.23.8; zod 4 drops ZodError.errors, which @atproto/oauth-client reads, so an override breaks sign-in errors. Denial of service only, by a large array: the OAuth library fetches only our own PDS through net-guard's 1 MiB cap and parses DID documents our identity domain rebuilt (same finding as GHSA-mrhx-c7xc-m3w5 in .github/npm-audit-ignore.yaml). Removed when @atproto moves to zod >= 4.6.6, or at expiry."
+    expired_at: 2026-11-22
