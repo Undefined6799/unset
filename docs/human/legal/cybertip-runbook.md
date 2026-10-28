@@ -27,11 +27,11 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
 
 ## 1. Contain (minutes)
 
-No automatic check, legal hold or admin hold view exists yet. The admin service serves only `GET /health`
-(`interfaces/admin/routes.manifest.json`; `interfaces/admin/compose.ts` passes `routes: []`; `shared/http/server.ts`
-adds `GET /health`). Nothing on main blocks an item, seals it or freezes uploads. How to contain by hand today is a
-decision for Alex. It is not filled in here. Each line below applies once the step that builds it has landed
-(plan §5.8 in `docs/ai/PLAN.md`; the step text is in `docs/ai/book/`).
+No automatic check, legal hold or admin hold view exists yet. There is no admin service on main
+(`interfaces/admin` lands with its skeleton, P3.17 in `docs/ai/book/phase-3.md`). Nothing on main blocks an
+item, seals it or freezes uploads. How to contain by hand today is a decision for Alex. It is not filled in
+here. Each line below applies once the step that builds it has landed (plan §5.8 in `docs/ai/PLAN.md`; the
+step text is in `docs/ai/book/`).
 
 1. A matched image is not stored, and that uploader's uploads are frozen, once P2.16 lands (plan §5.8 names the
    freeze). That step's check is the fake, and it creates no legal-hold record. Never freeze the reporter's account.
