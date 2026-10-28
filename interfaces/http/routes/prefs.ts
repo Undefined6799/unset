@@ -4,17 +4,13 @@
 // The return target is checked by themeReturnTo (P2.13d), which also lets the sign-in pages return to themselves.
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
+import { single } from "../form-field.ts";
 import { themeReturnTo } from "../prefs/return-to.ts";
 import { parseTheme, themeCookie } from "../prefs/theme.ts";
+import { redirect } from "../redirect.ts";
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-
-/** The one value of `name` in the form, or null when it is missing or repeated. */
-function single(form: URLSearchParams, name: string): string | null {
-  const values = form.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
 
 export const prefsRoutes = (): Route[] => [
   defineRoute({
@@ -31,11 +27,7 @@ export const prefsRoutes = (): Route[] => [
       const theme = parseTheme(single(form, "theme"));
       // Thrown, so the kit renders the error through the web server's error page (P1.25k), not its own fixed page.
       if (theme === null) throw new AppError("prefs.invalid");
-      const location = themeReturnTo(single(form, "return"));
-      return new Response(null, {
-        status: 303,
-        headers: { location, "cache-control": "no-store", "set-cookie": themeCookie(theme) },
-      });
+      return redirect(themeReturnTo(single(form, "return")), [themeCookie(theme)]);
     },
   }),
 ];

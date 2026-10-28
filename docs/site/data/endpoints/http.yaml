@@ -82,7 +82,7 @@
 "GET /oauth/callback":
   why: "Turns a grant into a session for the browser that started sign-in (interfaces/http/routes/oauth-callback.ts). A mutating GET listed in GET_MUTATION_EXCEPTIONS."
   input: "OAuth callback query. The nonce cookie is compared with the returned app state."
-  output: "303 to the stored next path or /did, with a session cookie, or 303 back to /login."
+  output: "303 to the stored next path or /did, with a session cookie, or 303 back to /login. When a silent sign-in needs a page, 303 straight to the PDS once more."
   errors: "login.failed, login.state_mismatch, login.expired, login.account_mismatch, login.scope_insufficient, or login followed by the callback reason."
   auth: "none"
 "POST /logout":
@@ -97,6 +97,12 @@
   output: "HTML signed-out page, or 303 to /did when a session is present."
   errors: "The handler names no error code of its own."
   auth: "reads session"
+"POST /signed-out":
+  why: "No thanks on the signed-out page: the next sign-in no longer asks for the password (interfaces/http/routes/logout.ts)."
+  input: "Form body. No field is read."
+  output: "303 to / clearing the signed-out marker cookie."
+  errors: "The handler names no error code of its own."
+  auth: "none"
 "GET /verify-email":
   why: "Shows whether the PDS reports the email confirmed (interfaces/http/routes/verify-email.ts)."
   input: "No request body. A query string is ignored."

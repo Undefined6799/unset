@@ -13,6 +13,8 @@ import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
 import type { AccountStore } from "../account.ts";
+import { single } from "../form-field.ts";
+import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
@@ -47,19 +49,8 @@ function termsPath(next: string | null, code?: ErrorCode): string {
   return code === undefined ? path : withErrorParam(path, code);
 }
 
-function redirect(location: string, cookies: readonly string[] = []): Response {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of cookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
-}
-
 const login = (next: string, clearCookie: boolean): Response =>
   redirect(`/login?${new URLSearchParams({ next })}`, clearCookie ? [sessionClearCookie()] : []);
-
-function single(form: URLSearchParams, name: string): string | null {
-  const values = form.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
 
 function destination(step: OnboardingStep, emailConfirmed: boolean | null): string {
   switch (step) {

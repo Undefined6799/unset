@@ -12,6 +12,11 @@ export type AppState = {
   /** The account the form named, or null for the PDS chooser (any account on that server may come back). */
   readonly expectedDid: Did | null;
   readonly next: SafePath | null;
+  /**
+   * P2.05s: asked with prompt=none. Only such a flow may be asked once more, with a page, when the server needs one;
+   * the second ask is not silent, so it can never loop. A state written before P2.05s reads as not silent.
+   */
+  readonly silent: boolean;
 };
 
 const NONCE = /^[A-Za-z0-9_-]{43}$/;
@@ -35,8 +40,8 @@ const ISSUER_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
 const ISSUER_TTL_S = 600;
 
 export function appStateOf(state: AppState): string {
-  const { nonce, expectedDid, next } = state;
-  return JSON.stringify({ v: 1, nonce, flow: "login", expectedDid, next, startedAt: Date.now() });
+  const { nonce, expectedDid, next, silent } = state;
+  return JSON.stringify({ v: 1, nonce, flow: "login", expectedDid, next, silent, startedAt: Date.now() });
 }
 
 /** The appState the library handed back, or null for anything not in the shape appStateOf writes. */
@@ -48,13 +53,13 @@ export function parseAppState(text: string): AppState | null {
     return null;
   }
   if (typeof value !== "object" || value === null) return null;
-  const { v, nonce, flow, expectedDid, next, startedAt } = value as Record<string, unknown>;
+  const { v, nonce, flow, expectedDid, next, silent, startedAt } = value as Record<string, unknown>;
   if (v !== 1 || flow !== "login" || typeof startedAt !== "number") return null;
   if (typeof nonce !== "string" || !NONCE.test(nonce)) return null;
   const did = typeof expectedDid === "string" ? parseDid(expectedDid) : null;
   if (expectedDid !== null && did === null) return null;
   // Checked again on the way out, as on the way in: a stored path is still input.
-  return { nonce, expectedDid: did, next: safeReturnPath(next) };
+  return { nonce, expectedDid: did, next: safeReturnPath(next), silent: silent === true };
 }
 
 export const nonceCookie = (nonce: string): string =>
