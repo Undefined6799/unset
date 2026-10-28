@@ -101,7 +101,13 @@ const limited = (compose: Compose, name: string, change: Partial<Hardening>): Co
 });
 
 /** One deploy-lock entry (deployment/images.lock.json; scripts/ci/verify-images.ts LockEntry). */
-type DeployEntry = { ref: string; origin: "first-party" | "upstream"; upstreamSource?: string; verify: string };
+type DeployEntry = {
+  ref: string;
+  origin: "first-party" | "upstream";
+  upstreamSource?: string;
+  gitCommit?: string;
+  verify: string;
+};
 const readDeployLock = (): Record<string, DeployEntry> =>
   JSON.parse(read("images.lock.json")) as Record<string, DeployEntry>;
 
@@ -170,6 +176,15 @@ describe("compose.dev.yaml (P1.29)", () => {
           );
         }
       }
+    }
+  });
+
+  test("deploy_lock_names_each_first_party_commit", () => {
+    // P2.26h: verify-images binds each first-party entry to the commit its signed provenance names, so every one carries
+    // a full commit and no mirror claims one of ours.
+    for (const [name, entry] of Object.entries(readDeployLock())) {
+      if (entry.origin === "first-party") expect(entry.gitCommit, name).toMatch(/^[0-9a-f]{40}$/);
+      else expect(entry.gitCommit, name).toBeUndefined();
     }
   });
 

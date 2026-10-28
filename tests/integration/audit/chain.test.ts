@@ -14,22 +14,16 @@ import {
   appendAudit,
   verifyChain,
 } from "@unset/infrastructure-audit";
-import {
-  createPool,
-  migrate,
-  type Pool,
-  type PoolClient,
-  withClient,
-  withTransaction,
-} from "@unset/infrastructure-postgres";
-import { createLogger } from "@unset/shared-log";
+import { type Pool, type PoolClient, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  migrateAsMigrator,
   type PostgresContainer,
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
   stopAllPostgresAfter,
+  testPools,
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -37,7 +31,7 @@ const ROLES = ["web", "admin", "auditor"] as const;
 type Role = (typeof ROLES)[number];
 const migratorPassword = randomPassword();
 const passwords = Object.fromEntries(ROLES.map((role) => [role, randomPassword()])) as Record<Role, string>;
-const pools: Pool[] = [];
+const pools = testPools("audit-chain-test");
 let postgres: PostgresContainer;
 let as: Record<Role, Pool>;
 let statements = 0;
@@ -51,46 +45,18 @@ beforeAll(async () => {
     initDir: join(REPOSITORY, "deployment", "postgres", "init"),
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
-  const result = await migrate({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database: "unset",
-      user: "migrator",
-      password: migratorPassword,
-      ssl: false,
-    },
-    dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
-    root: REPOSITORY,
-    checkQueryFiles: true,
-    log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
-    retryDelaysMs: [],
-  });
-  if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+  await migrateAsMigrator(postgres, migratorPassword);
   for (const role of ROLES) postgres.sql("postgres", `ALTER ROLE ${role} PASSWORD '${passwords[role]}'`);
   as = { web: poolAs("web"), admin: poolAs("admin"), auditor: poolAs("auditor") };
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
 function poolAs(role: Role): Pool {
-  const pool = createPool({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database: "unset",
-      user: role,
-      password: passwords[role],
-      ssl: false,
-    },
-    service: "audit-chain-test",
-    max: 1,
-    connectTimeoutMs: 5000,
+  return pools.open(postgres, "unset", role, passwords[role], {
     onStatement: () => {
       statements += 1;
     },
   });
-  pools.push(pool);
-  return pool;
 }
 
 const append = (role: "web" | "admin", event: AuditEvent) =>
@@ -264,20 +230,7 @@ function owner(): Pool {
       `CREATE ROLE audit_verifier LOGIN NOINHERIT PASSWORD '${password}'; ` +
         "GRANT audit_owner TO audit_verifier WITH INHERIT FALSE, SET TRUE; GRANT CONNECT ON DATABASE unset TO audit_verifier",
     );
-    ownerPool = createPool({
-      connection: {
-        host: "127.0.0.1",
-        port: postgres.port,
-        database: "unset",
-        user: "audit_verifier",
-        password,
-        ssl: false,
-      },
-      service: "audit-chain-test",
-      max: 1,
-      connectTimeoutMs: 5000,
-    });
-    pools.push(ownerPool);
+    ownerPool = pools.open(postgres, "unset", "audit_verifier", password);
   }
   return ownerPool;
 }

@@ -7,7 +7,7 @@
 // the order, and a style outside every layer outranks all layered styles, so one stray rule beats the whole system.
 import { type Finding, filesUnder, read, scanFiles } from "./files.ts";
 
-export const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
+const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
 const RULE = "css-layers";
 export const LAYERS_FILE = "shared/ui/src/layers.css";
 const TOKENS_FILE = "shared/ui/src/tokens.css";
@@ -20,6 +20,8 @@ export function layerFor(file: string): string | undefined {
   if (file === "shared/ui/src/base.css") return "base";
   if (/^shared\/ui\/components\/.+\.module\.css$/.test(file)) return "components";
   if (/^apps\/[^/]+\/(?:src\/)?screens\/.+\.module\.css$/.test(file)) return "screens";
+  // The owner's README editor styles a page of its own (ADR 0037 point 5).
+  if (/^apps\/web\/src\/editor\/.+\.module\.css$/.test(file)) return "screens";
   return undefined;
 }
 

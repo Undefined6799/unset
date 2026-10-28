@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Finding, filesUnder, scanFiles } from "./files.ts";
 
-export const SCANNED_DIRS = ["."] as const;
+const SCANNED_DIRS = ["."] as const;
 const RULE = "ip-columns";
 export const ALLOW_FILE = "scripts/guards/ip-columns.allow.json";
 

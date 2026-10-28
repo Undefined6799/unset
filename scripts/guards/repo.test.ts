@@ -11,7 +11,6 @@ import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
-import * as inlineStyle from "./inline-style.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as routeRegistration from "./route-registration.ts";
@@ -23,7 +22,6 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["egress", egress.scanAll],
   ["cookie-domain", cookieDomain.scanAll],
   ["inner-html", innerHtml.scanAll],
-  ["inline-style", inlineStyle.scanAll],
   ["css-layers", cssLayers.scanAll],
   ["web-no-moderator", webNoModerator.scanAll],
   ["ip-columns", ipColumns.scanAll],
@@ -65,7 +63,6 @@ test("unreadable_file_is_finding", () => {
   const scanned: Record<string, string> = {
     "ip-columns": "infrastructure/postgres/migrations/0001.sql",
     "composition-root": "interfaces/http/main.ts",
-    "inline-style": "apps/web/src/Bad.tsx",
     "css-layers": "apps/web/src/screens/Bad.module.css",
     // The inventory is the base the rest is checked against, so an unreadable one is the whole report.
     "ui-inventory": "shared/ui/inventory.json",

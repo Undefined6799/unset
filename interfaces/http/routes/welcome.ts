@@ -16,6 +16,7 @@ import type { AccountStore } from "../account.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
+import { withRevokeTimeout } from "./revoke.ts";
 
 export type WelcomeDeps = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
@@ -39,15 +40,7 @@ export type WelcomeDeps = {
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY = 2048;
-const REVOKE_MS = 10_000;
 const EMAIL = /^[^\s@]+@[^\s@]+$/;
-
-class RevokeTimeout extends Error {
-  constructor() {
-    super("revoke timed out");
-    this.name = "RevokeTimeout";
-  }
-}
 
 function termsPath(next: string | null, code?: ErrorCode): string {
   const path = next === null ? "/welcome/terms" : `/welcome/terms?${new URLSearchParams({ next })}`;
@@ -113,29 +106,6 @@ function failure(error: unknown): { kind: string; sqlstate?: string } {
   return state === undefined ? { kind } : { kind, sqlstate: state };
 }
 
-function withTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
-  if (deadline.aborted) return Promise.reject(new RevokeTimeout());
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new RevokeTimeout()), REVOKE_MS);
-    const onAbort = () => reject(new RevokeTimeout());
-    deadline.addEventListener("abort", onAbort, { once: true });
-    const finish = () => {
-      clearTimeout(timer);
-      deadline.removeEventListener("abort", onAbort);
-    };
-    work.then(
-      (value) => {
-        finish();
-        resolve(value);
-      },
-      (error: unknown) => {
-        finish();
-        reject(error);
-      },
-    );
-  });
-}
-
 type Located =
   | { readonly kind: "in"; readonly session: Session; readonly step: OnboardingStep }
   | { readonly kind: "out"; readonly response: Response };
@@ -181,7 +151,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (step !== "blocked") return redirect(destination(step, session.emailConfirmed));
     } else if (hosted) deps.log.warn("age_gate.hosted_block", { kind: audit.lane, count: audit.seq });
     try {
-      await withTimeout(deps.revoke(session.did), deadline);
+      await withRevokeTimeout(deps.revoke(session.did), deadline);
     } catch (error) {
       deps.log.warn("oauth.revoke_failed", { kind: className(error) });
     }

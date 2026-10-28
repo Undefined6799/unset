@@ -40,7 +40,7 @@ export const sessionConfig = {
  * timeouts, and the DID document cache. PLC_URL must be https on a host net-guard's `plc` policy allows; the identity
  * network refuses anything else at boot (infrastructure/pds/identity-network.ts).
  */
-export const identityConfig = {
+const identityConfig = {
   PLC_URL: url({ protocols: ["https:"] }),
   IDENTITY_HTTP_TIMEOUT_MS: int({ min: 500, max: 10_000, default: 3000 }),
   IDENTITY_DNS_TIMEOUT_MS: int({ min: 500, max: 10_000, default: 2000 }),
@@ -89,7 +89,7 @@ const PUBLIC_TEXT = new RegExp(
  * a mailto, or an https URI on PUBLIC_ORIGIN with no userinfo (RFC 9116 §2.5.3). Expires must be a future RFC 3339
  * instant at most 365 days ahead; inside 30 days the process still boots and the renewal test fails.
  */
-export const legalConfig = {
+const legalConfig = {
   PRIVACY_OFFICER_TITLE: str({ pattern: PUBLIC_TEXT }),
   PRIVACY_OFFICER_CONTACT: str({ pattern: PUBLIC_TEXT }),
   SUPPORT_EMAIL: str({ pattern: PUBLIC_TEXT }),
@@ -112,7 +112,7 @@ export const legalConfig = {
  * with key TEST_ROUTES, exit 78), so no deployed routing holds them. UNSET_ENV has no `local` value; the local stack
  * runs as dev, so it refuses too.
  */
-export const testRoutesConfig = {
+const testRoutesConfig = {
   TEST_ROUTES: withRule(
     bool({ default: false }),
     (config) => config.TEST_ROUTES !== true || config.UNSET_ENV === "test",

@@ -62,11 +62,7 @@ describe("source and installed artifact coupling", () => {
       JSON.stringify({
         schema: 1,
         base: { ref: `ghcr.io/bluesky-social/pds:0.4.5037@${base.digest}`, platform: "linux/arm64" },
-        builder: {
-          ref: `docker.io/library/node:26-trixie-slim@sha256:${"0".repeat(64)}`,
-          node: "26.10.0",
-          pnpm: "11.11.0",
-        },
+        builder: { ...pair.builder, pnpm: "11.11.0" },
         source: { revision, archiveSha256: sha(source), lockSha256: sha("frozen") },
         uiDirectory: ui,
       }),

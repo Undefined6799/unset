@@ -16,7 +16,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 import { type LoginDeps, loginRoutes } from "./login.ts";
 import { logoutRoutes } from "./logout.ts";
 
@@ -52,26 +52,7 @@ function setup(world: World = {}) {
     write: (l) => lines.push(JSON.parse(l)),
   });
   const deps: LoginDeps = {
-    page: (page) =>
-      pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log,
-        },
-        page,
-      ),
+    page: testPage(log),
     screens: web.screens,
     safeHref: web.safeHref,
     readSession: async () => ({
@@ -324,7 +305,25 @@ describe("POST /login", () => {
     const { send, authorized } = setup();
     await send("/login", { form: "handle=alice", cookie: jar });
     await send("/login", { form: "handle=alice" });
-    expect(authorized.map((a) => a.prompt)).toEqual(["login", undefined]);
+    // P2.05s: without the marker the sign-in is tried silently first; with it, never.
+    expect(authorized.map((a) => a.prompt)).toEqual(["login", "none"]);
+    expect(authorized.map((a) => a.appState.silent)).toEqual([false, true]);
+  });
+
+  test("login_tries_silent_first", async () => {
+    // P2.05s (Alex, 2026-10-28 02:01Z "yes"): a browser already signed in at the PDS, which allowed unset before,
+    // comes straight back with no PDS page. The appState says so, and only such a flow may be asked again with one.
+    const { send, authorized } = setup();
+    const response = await send("/login", { form: "intent=chooser&next=%2Flegal%2Fterms" });
+    expect(location(response)).toBe("/login/continue");
+    expect(authorized).toHaveLength(1);
+    expect(authorized[0]).toMatchObject({ input: `https://${PDS}`, prompt: "none" });
+    expect(authorized[0]?.appState).toMatchObject({
+      nonce: NONCE,
+      expectedDid: null,
+      next: "/legal/terms",
+      silent: true,
+    });
   });
 
   test("login_rate_limited", async () => {
