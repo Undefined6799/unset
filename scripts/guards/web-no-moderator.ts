@@ -4,7 +4,7 @@
 import { posix } from "node:path";
 import { type Finding, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from "./files.ts";
 
-export const SCANNED_DIRS = PRODUCT_DIRS;
+const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "web-no-moderator";
 const WEB_PREFIXES = ["apps/web/", "interfaces/http/"];
 

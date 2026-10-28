@@ -1,9 +1,10 @@
-// Guard: no raw HTML sink anywhere in product code, tests included (XSS; PLAN.md §2).
+// Guard: no raw HTML sink in apps/, interfaces/, domains/, infrastructure/ or shared/, the unit tests beside the
+// code included; tests/ and deployment/ are not scanned (XSS; PLAN.md §2).
 // Zero exemptions and no guard-allow: P2.20 renders profile markdown to React elements,
 // so no file needs raw HTML. This is the single mechanism for raw HTML sinks.
 import { type Finding, scanFiles, sourceFiles } from "./files.ts";
 
-export const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
+const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
 const RULE = "inner-html";
 
 const SINKS = [
