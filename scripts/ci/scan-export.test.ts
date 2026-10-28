@@ -6,7 +6,7 @@
 // --exit-code, --ignorefile, --skip-dirs). ENTRYPOINT's first element is
 // `docker inspect --format` (docs.docker.com/reference/cli/docker/inspect/).
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -14,7 +14,6 @@ import { parse } from "yaml";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const GH_OPEN = `$${"{{"}`;
-const PIN = "aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa";
 const gh = (inner: string): string => `$${"{{"} ${inner} }}`;
 
 type Step = {
@@ -36,6 +35,13 @@ type Job = {
 };
 type Workflow = { jobs: Record<string, Job> };
 const wf = parse(readFileSync(join(ROOT, ".github", "workflows", "images.yml"), "utf8")) as Workflow;
+// A workflow's TRIVY_IMAGE pins. Renovate bumps them there only (.github/renovate.json), so none is copied here (#1357).
+const WORKFLOWS = join(ROOT, ".github", "workflows");
+function trivyPinsOf(file: string): string[] {
+  const doc = parse(readFileSync(join(WORKFLOWS, file), "utf8")) as Partial<Workflow> & { env?: Job["env"] };
+  const envs = [doc.env, ...Object.values(doc.jobs ?? {}).map((job) => job.env)];
+  return envs.flatMap((env) => (env?.TRIVY_IMAGE === undefined ? [] : [env.TRIVY_IMAGE]));
+}
 
 const runsOf = (job: Job | undefined): string => (job?.steps ?? []).map((step) => step.run ?? "").join("\n");
 const asList = (needs: Job["needs"]): string[] => (needs === undefined ? [] : Array.isArray(needs) ? needs : [needs]);
@@ -170,7 +176,12 @@ describe("scan-export gates the secret scan", () => {
     expect(job?.strategy?.["fail-fast"]).toBe(false);
     expect(job?.strategy?.matrix?.include).toBe(gh("fromJSON(needs.discover.outputs.images)"));
     expect(asList(job?.needs)).toEqual(["discover"]);
-    expect(job?.env?.TRIVY_IMAGE).toBe(PIN);
+    const pin = job?.env?.TRIVY_IMAGE;
+    expect(pin).toMatch(/^aquasec\/trivy:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/);
+    const files = readdirSync(WORKFLOWS).filter((file) => /\.ya?ml$/.test(file));
+    const pinned = new Map(files.map((file) => [file, trivyPinsOf(file)] as const).filter(([, pins]) => pins.length));
+    expect([...pinned.keys()].sort()).toEqual(["images.yml", "mirror.yml", "publish-images.yml"]);
+    expect(new Set([...pinned.values()].flat())).toEqual(new Set([pin]));
     const steps = job?.steps ?? [];
     const build = steps.findIndex((step) => step.id === "build");
     const vulns = steps.findIndex((step) => step.name === "Scan");

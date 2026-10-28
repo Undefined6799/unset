@@ -42,15 +42,15 @@ describe("logger hardening", () => {
   });
 
   test.each([
-    ["did:plc", "user did:plc:eeeeeeeeeeeeeeeeeeeeeeee"],
-    ["did:web", "user did:web:alice.example.com"],
-    ["ipv4 next to a word", "client_10.0.0.1"],
-    ["ipv4 after a letter", "v192.168.1.1x"],
-    ["basic credentials", "Basic dXNlcjpwYXNz"],
-  ])("logger_scrubs_more_shapes %s", (_kind, value) => {
+    ["did:plc", "user did:plc:eeeeeeeeeeeeeeeeeeeeeeee", "user [redacted]"],
+    ["did:web", "user did:web:alice.example.com", "user [redacted]"],
+    ["ipv4 next to a word", "client_10.0.0.1", "client_[redacted]"],
+    ["ipv4 after a letter", "v192.168.1.1x", "v[redacted]x"],
+    ["basic credentials", "Basic dXNlcjpwYXNz", "[redacted]"],
+  ])("logger_scrubs_more_shapes %s", (_kind, value, scrubbed) => {
     const reason = reasonOf(value);
     expect(reason).toContain("[redacted]");
-    expect(reason).not.toMatch(/did:|10\.0\.0\.1|192\.168|dXNlcjpwYXNz/);
+    expect(reason).toBe(scrubbed);
   });
 
   test("logger_keeps_harmless_colons", () => {

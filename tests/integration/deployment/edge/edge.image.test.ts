@@ -5,7 +5,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
-import { EDGE, type Edge, logsWhen, type ProbeStep } from "./edge-container.ts";
+import { EDGE } from "./edge-container.ts";
+import { type Edge, logsWhen, outputOf, type ProbeStep } from "./edge-handle.ts";
 import { registerEdgeSuite } from "./edge-suite.ts";
 import { timeoutProblems } from "./timeouts.ts";
 
@@ -192,7 +193,8 @@ describe("edge", () => {
       ["/data", "/config", "/data/caddy", "/config/caddy"].map((path) => `65532:65532 700 ${path}`),
     );
     const loose = ["(", "!", "-user", "65532", "-o", "!", "-group", "65532", "-o", "-perm", "-1000", "-o", "-perm"];
-    expect(inImage("find", "/data", "/config", ...loose, "-o+w", ")").out.trim()).toBe("");
+    // Its exit code too: a find that could not run prints nothing, which read as nothing loose (N5, P1.34g).
+    expect(outputOf(inImage("find", "/data", "/config", ...loose, "-o+w", ")"), "find").trim()).toBe("");
     // Ownership changes nowhere else: outside those two trees only the base's /etc/shadow is not root:root.
     const elsewhere = [
       "!",

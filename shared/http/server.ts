@@ -263,7 +263,10 @@ export function createServer(options: ServerOptions) {
 
   /** Steps 1 and 7–12: the checks and the handler under the route's deadline; errors render by code. */
   async function run({ route, params }: Matched, request: Request, reqId: string, peer?: string): Promise<Response> {
-    const deadline = AbortSignal.timeout(route.deadlineMs ?? config.REQUEST_DEADLINE_MS);
+    const deadlineMs = route.deadlineMs ?? config.REQUEST_DEADLINE_MS;
+    // The signal and deadlineAt start at the same moment on the monotonic clock, before admission (P2.08j).
+    const deadlineAt = performance.now() + deadlineMs;
+    const deadline = AbortSignal.timeout(deadlineMs);
     // Step 2b, trustedProxy: every route but /health, which needs no client identity (architecture ruling 2026-10-05).
     const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
     let exceeded = () => false;
@@ -271,7 +274,7 @@ export function createServer(options: ServerOptions) {
       const admitted = await admit(route, request, clientIp, reqId);
       if (admitted instanceof Response) return admitted;
       exceeded = admitted.exceeded;
-      return route.handler({ request: admitted.request, clientIp, params, deadline, reqId });
+      return route.handler({ request: admitted.request, clientIp, params, deadline, deadlineAt, reqId });
     };
     const result = admitThenHandle(); // awaited in the race below; after a deadline, its late result is logged
     const timedOut = new Promise<"deadline">((resolve) => {

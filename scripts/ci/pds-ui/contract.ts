@@ -1,8 +1,31 @@
 // Exact, checks-only recipe registration. No Compose/vendor admission or deploy import exception.
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-export const UI_DIRECTORY =
-  "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist";
+/**
+ * Each reviewed official PDS tag and the atproto versions it ships (bluesky-social/pds service/pnpm-lock.yaml at that
+ * tag). Two pairs only while the 0.4.5049 re-pin (P1.38h) lands, by Alex's line of 2026-10-26T20:20:14Z; the next
+ * tightening drops 0.4.5037.
+ */
+export const PAIRS: Readonly<Record<string, Pair>> = {
+  "0.4.5037": { pds: "0.5.37", oauthProvider: "0.23.1", oauthProviderUi: "0.10.5" },
+  "0.4.5049": { pds: "0.5.49", oauthProvider: "0.24.3", oauthProviderUi: "0.10.7" },
+};
+export type Pair = { pds: string; oauthProvider: string; oauthProviderUi: string };
+export const uiDirectoryOf = (pair: Pair): string =>
+  `app/node_modules/.pnpm/@atproto+oauth-provider-ui@${pair.oauthProviderUi}/node_modules/@atproto/oauth-provider-ui/dist`;
+/** The source package.json path, name and version the pair requires, in the atproto repository layout. */
+export const packagesOf = (pair: Pair): ReadonlyArray<readonly [string, string, string]> => [
+  ["packages/pds", "@atproto/pds", pair.pds],
+  ["packages/oauth/oauth-provider", "@atproto/oauth-provider", pair.oauthProvider],
+  ["packages/oauth/oauth-provider-ui", "@atproto/oauth-provider-ui", pair.oauthProviderUi],
+];
+const BASE_REF = /^ghcr\.io\/bluesky-social\/pds:(0\.4\.[0-9]+)@sha256:[0-9a-f]{64}$/;
+/** The pair a parsed lock names by its base tag. */
+export function pairOf(lock: Lock): Pair {
+  const pair = PAIRS[BASE_REF.exec(lock.base.ref)?.[1] ?? ""];
+  if (!pair) throw new Error("invalid PDS source lock");
+  return pair;
+}
 export type Lock = {
   schema: 1;
   base: { ref: string; platform: "linux/amd64" | "linux/arm64" };
@@ -15,9 +38,8 @@ export function parseLock(text: string): Lock {
   const lock = JSON.parse(text) as Lock;
   if (
     lock.schema !== 1 ||
-    lock.uiDirectory !== UI_DIRECTORY ||
     !["linux/amd64", "linux/arm64"].includes(lock.base.platform) ||
-    !/^ghcr\.io\/bluesky-social\/pds:0\.4\.5037@sha256:[0-9a-f]{64}$/.test(lock.base.ref) ||
+    lock.uiDirectory !== uiDirectoryOf(pairOf(lock)) ||
     !/^docker\.io\/library\/node:26-trixie-slim@sha256:[0-9a-f]{64}$/.test(lock.builder.ref) ||
     lock.builder.node !== "26.10.0" ||
     lock.builder.pnpm !== "11.11.0" ||
@@ -62,8 +84,8 @@ export function recipeContract(root: string): Lock | null {
   const final = lines.slice(lines.findLastIndex((line) => /^FROM /i.test(line)));
   const expected = [
     `FROM ${lock.base.ref}`,
-    `RUN rm -rf /${UI_DIRECTORY}`,
-    `COPY --from=ui-artifact /dist/ /${UI_DIRECTORY}/`,
+    `RUN rm -rf /${lock.uiDirectory}`,
+    `COPY --from=ui-artifact /dist/ /${lock.uiDirectory}/`,
   ];
   if (JSON.stringify(final) !== JSON.stringify(expected))
     throw new Error("PDS runtime recipe exceeds exact distribution replacement");
