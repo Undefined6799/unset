@@ -3,21 +3,12 @@ import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 /**
  * Each reviewed official PDS tag, the atproto versions it ships (bluesky-social/pds service/pnpm-lock.yaml at that
- * tag) and the exact builder its frontend is built with. Two pairs only while the 0.4.5049 re-pin (P1.38h) lands, by
- * Alex's line of 2026-10-26T20:20:14Z; the next tightening drops 0.4.5037. P1.38j: atproto at 0.5.49 (5d6febdd) sets
- * devEngines Node "^22.23.4 || ^24.22.1 || ^26.12.1" and pnpm 11.11.0 refuses Node 26.10.0, so that pair names the
- * node:26.12.1-trixie-slim index (registry-1.docker.io, read 2026-10-28).
+ * tag) and the exact builder its frontend is built with. P1.38j: atproto at 0.5.49 (5d6febdd) sets devEngines Node
+ * "^22.23.4 || ^24.22.1 || ^26.12.1" and pnpm 11.11.0 refuses Node 26.10.0, so the pair names the
+ * node:26.12.1-trixie-slim index (registry-1.docker.io, read 2026-10-28). P1.38m: 0.4.5037 was dropped once the
+ * 0.4.5049 re-pin (P1.38h) merged, as Alex's line of 2026-10-26T20:20:14Z allowed it only until then.
  */
 export const PAIRS: Readonly<Record<string, Pair>> = {
-  "0.4.5037": {
-    pds: "0.5.37",
-    oauthProvider: "0.23.1",
-    oauthProviderUi: "0.10.5",
-    builder: {
-      ref: "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
-      node: "26.10.0",
-    },
-  },
   "0.4.5049": {
     pds: "0.5.49",
     oauthProvider: "0.24.3",

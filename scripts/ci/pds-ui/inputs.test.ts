@@ -7,7 +7,7 @@ import { PAIRS, type Pair, parseLock, uiDirectoryOf } from "./contract.ts";
 import { artifacts, image, sha, tar } from "./fixtures/native.ts";
 import { verifySource } from "./verify.ts";
 
-const pair = PAIRS["0.4.5037"] as Pair;
+const pair = PAIRS["0.4.5049"] as Pair;
 const ui = uiDirectoryOf(pair);
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
@@ -36,9 +36,9 @@ describe("source and installed artifact coupling", () => {
   test("binds actual source, installed packages and every installed artifact byte", async () => {
     const revision = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
     const packages = {
-      "packages/pds": ["@atproto/pds", "0.5.37"],
-      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
+      "packages/pds": ["@atproto/pds", "0.5.49"],
+      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.24.3"],
+      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.7"],
     };
     const source = await tar([
       { name: `atproto-${revision}/pnpm-lock.yaml`, body: "frozen" },
@@ -61,7 +61,7 @@ describe("source and installed artifact coupling", () => {
     const lock = parseLock(
       JSON.stringify({
         schema: 1,
-        base: { ref: `ghcr.io/bluesky-social/pds:0.4.5037@${base.digest}`, platform: "linux/arm64" },
+        base: { ref: `ghcr.io/bluesky-social/pds:0.4.5049@${base.digest}`, platform: "linux/arm64" },
         builder: { ...pair.builder, pnpm: "11.11.0" },
         source: { revision, archiveSha256: sha(source), lockSha256: sha("frozen") },
         uiDirectory: ui,
@@ -83,7 +83,7 @@ describe("source and installed artifact coupling", () => {
         {
           ...packageEntries[0],
           name: packageEntries[0]?.name ?? "",
-          body: JSON.stringify({ name: "@atproto/pds", version: "0.5.38" }),
+          body: JSON.stringify({ name: "@atproto/pds", version: "0.5.50" }),
         },
         ...packageEntries.slice(1),
         ...[...artifact].map(([name, body]) => ({ name: `${ui}/${name}`, body })),
@@ -93,7 +93,7 @@ describe("source and installed artifact coupling", () => {
     ]);
     const wrongLock = {
       ...lock,
-      base: { ...lock.base, ref: `ghcr.io/bluesky-social/pds:0.4.5037@${wrongPackage.digest}` },
+      base: { ...lock.base, ref: `ghcr.io/bluesky-social/pds:0.4.5049@${wrongPackage.digest}` },
     };
     await expect(
       verifyInputs(wrongLock, source, wrongPackage.bytes, wrongPackage.bytes, wrongPackage.digest, artifact),
@@ -103,9 +103,9 @@ describe("source and installed artifact coupling", () => {
     const revision = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
     const root = `atproto-${revision}`;
     const packages = {
-      "packages/pds": ["@atproto/pds", "0.5.37"],
-      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
+      "packages/pds": ["@atproto/pds", "0.5.49"],
+      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.24.3"],
+      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.7"],
     };
     const source = await tar([
       { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
@@ -133,7 +133,9 @@ describe("source and installed artifact coupling", () => {
       })),
     ]);
     await expect(verifySource(badSource, { ...lock, archiveSha256: sha(badSource) }, pair)).rejects.toThrow(/version/);
-    await expect(verifySource(source, lock, PAIRS["0.4.5049"] as Pair)).rejects.toThrow(/version/);
+    // The dropped 0.4.5037 versions (P1.38m) no longer match the reviewed pair.
+    const dropped = { ...pair, pds: "0.5.37", oauthProvider: "0.23.1", oauthProviderUi: "0.10.5" };
+    await expect(verifySource(source, lock, dropped)).rejects.toThrow(/version/);
     for (const delta of [
       { revision: "0".repeat(40) },
       { archiveSha256: "0".repeat(64) },
