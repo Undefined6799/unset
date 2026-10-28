@@ -3,7 +3,7 @@ title: Dev stack
 weight: 1
 ---
 
-The two stacks the npm scripts start. Service images, networks and limits are on [compose](../../areas/deployment/compose/). The checks that run first are on [preflight](../../areas/deployment/preflight/). How to create the files outside the checkout is [dev-stack secrets](https://github.com/Undefined6799/unset/blob/main/docs/human/runbooks/dev-stack-secrets.md).
+The npm scripts start `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml`. Service images, networks and limits are on [compose](../../areas/deployment/compose/). The checks that run first are on [preflight](../../areas/deployment/preflight/). How to create the files outside the checkout is [dev-stack secrets](https://github.com/Undefined6799/unset/blob/main/docs/human/runbooks/dev-stack-secrets.md).
 
 ## Commands
 
@@ -12,6 +12,8 @@ From the repository root (`package.json`):
 ```sh
 npm run dev:up
 npm run dev:down
+npm run dev:source:up
+npm run dev:source:down
 npm run local:up
 npm run local:down
 ```
@@ -33,19 +35,19 @@ npm run local:down
 | `dev --source` | `deployment/compose.dev.source.yaml` | `unset-dev` | as `dev`, with `postgres`, `migrate`, `pds`, `edge` and `web` built from the checkout (P1.37y, ADR 0036) |
 | `local` | `deployment/compose.local.yaml` | `unset-local` | `postgres`, `migrate`, `pds`, `edge`, `web`, `pds-token-reader` |
 
-The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`, and `--source` with `dev` only. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`.
+The wrapper usage in `deployment/preflight/stack.ts` accepts `dev` or `local`. `--source` is accepted with `dev` only, and at most once. `scripts/dev-precheck.ts` applies the same two refusals. The preflight usage in `deployment/preflight/inputs.ts` also accepts `prod`, and refuses `--source` the same way.
 
 ## What the wrapper runs
 
 `deployment/preflight/stack.ts` `plan` builds the commands. `up` runs three steps under `local`, and the first two under `dev`:
 
-1. `node scripts/dev-precheck.ts` with the same `--env`, `--compose` and `--interpolation-env`.
-2. `docker compose -f <file> --env-file <file> up -d`, then `--no-build` when `--env` is `dev` and `--build` when `--env` is `local`.
+1. `node scripts/dev-precheck.ts` with the same `--env`, `--compose` and `--interpolation-env`, plus `--source` when the wrapper was given it (`preflightFlags`).
+2. `docker compose -f <file> --env-file <file> up -d`, then `--build` when `--env` is `local` or `--source` was given, and `--no-build` when `--env` is `dev` without `--source`.
 3. Under `local` only, `node deployment/preflight/served-leaf.ts -- --env local`. That command's `undo` is the `down` command below. `runOrUndo` runs `undo` when the command's exit code is not 0.
 
-`down` is `docker compose -f <file> --env-file <file> down`.
+`down` is `docker compose -f <file> --env-file <file> down`. `--source` on `down` is not passed to Compose.
 
-`WRAPPER_OPTIONS` is `env`, `compose` and `interpolation-env`. `plan` calls `refuseComposeVariables`: a caller environment name that starts with `COMPOSE_` throws `UsageError`. `childEnv` copies `PATH`, `HOME`, `DOCKER_CONFIG` and `DOCKER_CERT_PATH` when they are set (`CHILD_ENV_NAMES`), and always sets `NODE_OPTIONS` to empty and `DOCKER_HOST` from `localDockerHost`. `run` calls `refuseRemoteDaemon` before those commands. That function runs `docker info` and requires the reported `Name` to equal this machine's hostname.
+`WRAPPER_OPTIONS` is `env`, `compose`, `interpolation-env` and `source`. `plan` calls `refuseComposeVariables`: a caller environment name that starts with `COMPOSE_` throws `UsageError`. `childEnv` copies `PATH`, `HOME`, `DOCKER_CONFIG` and `DOCKER_CERT_PATH` when they are set (`CHILD_ENV_NAMES`), and always sets `NODE_OPTIONS` to empty and `DOCKER_HOST` from `localDockerHost`. `run` calls `refuseRemoteDaemon` before those commands. That function runs `docker info` and requires the reported `Name` to equal this machine's hostname. It asks for up to 60 s in all (`DOCKER_WAIT_MS`), each try killed at 10 s (`DOCKER_INFO_DEADLINE_MS`), with pauses from 1 s doubling to 5 s; only no answer or a refused connection waits, any answer is judged at once, and after the bound it fails with `docker did not answer in time (waited 60 s)`.
 
 `scripts/dev-precheck.ts` then runs the preflight. `hostnamePin` returns `precheck.production_host` for an empty host, for `PRODUCTION_HOST` (`unset.ac`), for a dev host other than `DEV_HOST` (`staging.unset.ac`), and for a local host that fails `LOCAL_HOST`. `didVerdict` returns `precheck.unknown_pds_did` when `describeServer` returns a `did` other than `did:web:` plus that hostname. The check list is on [preflight](../../areas/deployment/preflight/).
 
@@ -55,10 +57,10 @@ Compose `file:` and `env_file:` paths are relative to the compose file, so `../.
 
 | Path beside the checkout | Read by |
 | --- | --- |
-| `unset-dev-env/dev-public.env` | Both npm scripts, as `--interpolation-env`. The template header says this is the file to copy the template to. |
-| `unset-dev-env/pds.env` | `env_file` on `pds` in both compose files. |
-| `unset-dev-env/newt.env` | `env_file` on `newt` in `deployment/compose.dev.yaml`. |
-| `unset-dev-secrets/` | `secrets.*.file` in both compose files. |
+| `unset-dev-env/dev-public.env` | All six npm scripts, as `--interpolation-env`. The template header says this is the file to copy the template to. |
+| `unset-dev-env/pds.env` | `env_file` on `pds` in all three compose files. |
+| `unset-dev-env/newt.env` | `env_file` on `newt` in `deployment/compose.dev.yaml` and `deployment/compose.dev.source.yaml`. |
+| `unset-dev-secrets/` | `secrets.*.file` in all three compose files. |
 | `unset-dev-trust/` | Bind `../../unset-dev-trust:/etc/unset-dev-trust:ro` on `pds` and `web` in `deployment/compose.local.yaml`. `devTrustFolder` in `deployment/preflight/checks/secrets.ts` is this folder. `devTrustJudged` is true only for `local`. |
 | `unset-dev-ca/` | `devCaFolder` in `deployment/preflight/checks/secrets.ts`. C9 fails when a secret or env file reaches it (`devCaInputProblem`). C26 fails when a build context reaches it (`contextProblem` in `deployment/preflight/checks/build.ts`). |
 
@@ -80,6 +82,6 @@ Basenames of the `file:` secrets. Owner, mode and how to create each file are in
 
 | File | Compose file |
 | --- | --- |
-| `pg_superuser_password`, `pg_migrator_password`, `pg_tap_password`, `migrate_pg_password`, `pg_web_password`, `pg_api_password`, `pg_indexer_password`, `web_seal_keyring`, `web_oauth_client_keys` | both |
-| `dev_tls_cert`, `dev_tls_key` | `deployment/compose.dev.yaml` |
+| `pg_superuser_password`, `pg_migrator_password`, `pg_tap_password`, `migrate_pg_password`, `pg_web_password`, `pg_api_password`, `pg_indexer_password`, `web_seal_keyring`, `web_oauth_client_keys` | all three |
+| `dev_tls_cert`, `dev_tls_key` | `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` |
 | `local_tls_cert`, `local_tls_key` | `deployment/compose.local.yaml` |

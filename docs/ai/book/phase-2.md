@@ -1365,6 +1365,60 @@ continue page are unchanged, so one click reaches the PDS's sign-in page.
 
 Done when `login_form_posts_only_the_chooser` and `login_get_renders_no_state` pass and check is green.
 
+### P2.05m — Show sign-in as one modal dialog
+Tags: (none)            Depends on: P2.05r
+Alex, 2026-10-23: "the sign in should only be a modal", then "have the button be @ Sign in with AtProto", "the @ being
+atproto logo", and "the sign in is still not a pop up modal like we said". Mock: Figma 166:867 (desktop), 166:883
+(phone).
+
+**What:** `GET /login` renders the sign-in box alone, with no shell and islands off: a section named by its `h1`, in
+the kit Modal's look, drawn over the scrim with no script, so every way in (the header's Sign in, a protected page's
+redirect) lands on the same box. With no script it cannot trap focus or close on Escape, so it is a named region, not
+an `aria-modal` dialog (Codex on #1313). Close goes to `/`, because `next` is often the protected page that sent the
+visitor here. The checked `?error=` shows inside the box. The button reads "Sign in with AtProto" and still posts
+`intent=chooser`; the PDS host stays in the text. The atproto mark before the label waits for Alex's approval of the
+drawing (CLAUDE.md icon rule: Iconoir only). `/login` moves to the zero-script Lighthouse row, and the no-JS header
+menu test moves to `/signed-out`.
+
+Done when `login_is_one_modal_box`, `login_get_shows_only_a_catalog_error` and `login_box_without_js` pass and check
+is green.
+
+### P2.05n — Close the sign-in box to the page before
+Tags: (none)            Depends on: P2.05m
+Alex, 2026-10-23 12:23Z: the X "just does not do anything. It should probably go back to the page to which I came
+from." Staging's build sent Close to `next`, the protected page, which redirected straight back; P2.05m's `/` left
+him at home instead.
+
+**What:** GET /login works out Close from the Referer: if it is our origin (Referrer-Policy `same-origin` sends it only
+between our pages, and a 303 keeps it), not a `/login` page, passes `safeReturnPath`, and is not `next`, Close goes
+there; otherwise `/`. No state, no new input stored.
+
+Done when `login_close_goes_back_to_the_page_before` and `login_close_returns_to_the_page_before` (nojs.spec.ts, the
+browser's own Referer) pass and check is green.
+
+### P2.05p — Open sign-in over the page
+Tags: (none)            Depends on: P2.05n
+Alex, 2026-10-23 13:09Z: "the user should have never left the page to start with. And it's just like the model
+appearing on top. So when he presses X, it just stays like where he is and the model closes."
+
+**What:** The default shell's Header Sign in becomes a button that opens the P2.05m box over the page as a modal
+`<dialog>` with no script, through the invoker commands `commandfor` and `command="show-modal"` (MDN: Baseline 2025).
+The page behind is inert, so neither a click on the scrim nor Tab reaches it; Escape and Close (`command="close"`)
+hide it, and the page never changes. The box is the same SignInBox the /login page draws, with an `h2`; its form
+posts to the CSRF-gated POST /login with `next` set to the page's path (safeReturnPath, never the query; none on
+`/`). The Header menu's props schema accepts the dialog id only as lowercase hyphenated words. GET /login stays as the
+box on its own page: the footer's Sign in, protected pages' redirects and older browsers still use it (P2.05n). The
+core shell (Navigation) keeps its Profile link for now.
+
+A first cut used `popover="auto"`; review (Codex on #1355) showed its `::backdrop` passes clicks to the page
+(`pointer-events: none !important`, HTML Rendering §15.3.3) and that a non-modal popover lets Tab reach the hidden
+page. POST /login sends a browser that is already signed in to `/did`, as GET does, since the box also posts from
+public pages that cannot vary on the cookie.
+
+Done when `header_action_opens_a_dialog_in_place`, `sign_in_opens_in_place_with_no_script`,
+`default_shell_signs_in_in_place`, `login_post_signed_in_goes_to_the_profile` and `sign_in_opens_over_the_page`
+(nojs.spec.ts) pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`
@@ -2682,6 +2736,21 @@ Done when (tests):
 Reuse: graphify → USE (plan §7 names it; the prototype graphed every package with it). Provisional — for reuse review.
 Not in this step: graph-based review bots or blocking on graph metrics (none planned).
 Diagram: none.
+
+### P2.08s — Ask about the PDS after signing out
+Tags: (none)            Depends on: P2.08b
+Alex, 2026-10-23 13:15Z: "it could be only one sign out button. But then when you click sign out, it also says, do
+you also wish to sign out from your @Proto account? And then it redirects them towards the other one."
+
+**What:** No route change: the one Sign out (POST /logout, P2.08) still ends this browser's session and lands on
+/signed-out. That page becomes one box in the sign-in box's look: "You are signed out of unset", then "Also sign out
+of your atproto account? Apps you allowed stay signed in until you remove them there.", the P2.08b account link to
+the recorded issuer, and "No thanks" home. The second sentence is there because the PDS's own sign-out
+(`@atproto/oauth-provider` 0.23.1, `/sign-out` → `removeDeviceAccount`) ends only that browser's PDS session; each
+app's OAuth grant is revoked separately (`/revoke-oauth-session`). The page keeps its shell: the page the visitor
+signed out from needs a session, so there is no page to stay on.
+
+Done when `signed_out_is_one_box_asking_about_the_pds` and `signed_out_page` pass and check is green.
 
 ### P2.09k — `pds-admin` egress policy in `net-guard` (split from P2.09, SE-6)
 Tags: [SEC]            Depends on: P1.18a            Plan: §2 rule 13 (one egress); §5.2 "`pds-admin`"; §9 trusted base (rule SE-6; plan `6275827`)

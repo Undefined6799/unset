@@ -52,8 +52,8 @@ sends no second token request, and a second login replacing the stored token set
 **PDS calls (P2.07).** `pds-call.ts` is the only place that calls `client.restore(` or `new Agent(`. It classifies
 failures into `ok`, `transient`, `auth_dead`, `scope_missing` and `rejected`. A dead grant ends the DID's sessions
 through an injected `endSessions` (`destroyAllForDid`); this package cannot import `infrastructure/session`. A
-handshake, a 429 or an outage does not. `pdsCall.dev_pds_nonce_rotation` needs the local compose stack and is not
-in the unit tests.
+handshake, a 429 or an outage does not. A DPoP nonce rotation against the dev PDS
+(`pdsCall.dev_pds_nonce_rotation`, book P2.07) is planned and not built; no test on main covers it.
 
 **The profile record (Alex 2026-10-23).** `profile-record.ts` reads the member's `sh.unset.profile` record (rkey
 `self`) from their own repo over `pdsCall`, as an idempotent read. `RecordNotFound` means no profile yet and returns

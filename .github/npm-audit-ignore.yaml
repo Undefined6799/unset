@@ -1,0 +1,23 @@
+# Accepted npm audit findings (P0.07i), read by scripts/ci/npm-audit.ts in the audit job. Every entry needs the GHSA
+# `id`, the `package`, the exact installed `versions` it covers, a `statement` saying why the finding cannot reach us
+# and what removes it, and `expired_at` (yyyy-mm-dd) at most 30 days ahead. The gate fails on any other high or
+# critical advisory, on an expired entry, on a version not listed, and on an entry that matches nothing.
+#
+# advisories:
+#   - id: GHSA-xxxx-xxxx-xxxx
+#     package: name
+#     versions: ["1.2.3"]
+#     statement: why the finding cannot reach us, and what removes it
+#     expired_at: yyyy-mm-dd
+advisories:
+  - id: GHSA-mrhx-c7xc-m3w5
+    package: zod
+    versions: ["3.25.76"]
+    statement: >-
+      zod 3 has no fixed release and every @atproto package we use (oauth-client 0.8.9, api 0.27.0; newest 0.8.10 and
+      0.29.3 too) requires zod ^3.23.8; zod 4 drops ZodError.errors, which @atproto/oauth-client
+      dist/oauth-resolver-error.js reads, so an override breaks sign-in errors. Denial of service only, by a large
+      array: the OAuth library fetches only our own PDS (ownIssuerOnly) through net-guard's 1 MiB cap, reads DID
+      documents our identity domain rebuilt, and gets callback params as strings. Removed when @atproto moves to
+      zod >= 4.6.6, or at expiry.
+    expired_at: 2026-11-22

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[ui]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # ui-build
 
@@ -38,12 +38,15 @@ dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
 
 **Registered icons (P2.24f).** The optional singleton `inventory.Icon.extensions` pin may name only
 `approved-extensions.json`. Its closed record fixes ADR 0027's dated approval, the immutable base-sheet pins,
-Iconoir 7.12.1 source commit, the two Figma nodes, aliases and exact drawings. The three component proof entries
+Iconoir 7.12.1 source commit, each icon's Figma node, aliases and exact drawings. The three component proof entries
 keep fixed source/requirement links; their API/behavior prose is a nonempty string array so reviewed packaging
 clarifications do not change the icon contract. Duplicate JSON keys and missing, unknown or altered proof fail.
-Only `devices` → `computer` and `apps` → `view-grid` may join the 36 imported icons; source bytes are hash-checked
-before the unchanged SVG parser compares drawings. Outputs retain the original `sheetVersion` and separately
-record `extensionProvenance` with the registration hash and approval. Without the pointer every committed output
-stays byte-identical.
+`APPROVED_EXTENSION.icons` in `shared/ui-build/icons.ts` matches `shared/ui/approved-extensions.json` and joins the
+36 imported icons as five names: `devices` → `computer`, `apps` → `view-grid`, `bulb-off` → `light-bulb`,
+`bulb-on` → `light-bulb-on` and `tv` → `modern-tv`. Source bytes are hash-checked before the unchanged SVG parser
+compares drawings. `icons/svg`, `icons/drawings` and `icons.json` each hold those 41 names.
+`icon_approved_extension_generates_only_the_41_registered_icons` checks that generation. Outputs retain the original
+`sheetVersion` and separately record `extensionProvenance` with the registration hash and approval. Without the
+pointer every committed output stays byte-identical.
 
 **Links.** Architecture record `2026-10-07-p125-ui-build-workspace.md`, [[ui]].

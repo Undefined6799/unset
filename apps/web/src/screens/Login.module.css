@@ -1,0 +1,12 @@
+/* The sign-in page (P2.05m): the shell's sign-in box (SignInBox.module.css), centred over the `scrim` with no
+   script, because the page is the box. */
+@layer screens {
+  .scrim {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding: var(--space-4);
+    background-color: var(--color-scrim);
+  }
+}

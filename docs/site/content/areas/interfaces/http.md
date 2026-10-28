@@ -26,7 +26,8 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/logout.ts` | Sign-out for this browser. Session count: `interfaces/http/logout-sessions.ts`. |
 | `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: `interfaces/http/account.ts`. |
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
-| `interfaces/http/routes/settings.ts` | Settings profile page. |
+| `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |
+| `interfaces/http/routes/account-issuer.ts` | `recordedIssuer`: the issuer origin recorded at sign-in. `settings.ts` and `me.ts` call it. |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
 | `interfaces/http/app-gate.ts` | Page gate `openApp`: session, then onboarding, then a confirmed email. |
 | `interfaces/http/web/page.ts` | Page responses and the kit error-page hook. |
@@ -41,6 +42,8 @@ The confirmed-email cache is rechecked at the next gated page view, at most `EMA
 `compose.ts` keeps `meRoutes` last so the one-segment DID route does not shadow the explicit paths.
 
 Screens are `apps/web`. The loader requires `renderPage`, `islandName`, `screens` and `safeHref`.
+
+`pageResponse` uses `islands: "on"` when the route omits `islands` (`interfaces/http/web/page.ts`). `GET /:did` (`routes/me.ts`) and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`) omit it, so the drawer's theme picker can hydrate. The routes that pass `"off"` are `GET /` (`routes/home.ts`), the legal pages (`routes/legal.ts`), `GET /login` (`routes/login.ts`) and the welcome pages (`routes/welcome.ts`).
 
 ## May import
 
@@ -71,7 +74,7 @@ Declared in `interfaces/http/package.json`:
 | `@unset/shared-islands` | workspace |
 | `@unset/shared-log` | workspace |
 | `@unset/shared-ui` | workspace |
-| `react` | 19.3.0 |
+| `react` | 19.3.1 |
 
 ## Entry points
 

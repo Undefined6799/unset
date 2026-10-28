@@ -292,8 +292,15 @@ const IMAGE_STEPS: Step[] = [
   { uses: "actions/checkout@<sha>", with: { "persist-credentials": false, "fetch-depth": 0 } },
   { uses: "actions/setup-node@<sha>", with: { "node-version-file": ".nvmrc", cache: "npm" } },
   { run: "npm ci" },
+  {
+    name: "Create the BuildKit builder",
+    run: 'docker buildx create --use --name images --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" --driver-opt default-load=true',
+  },
   { run: "npm run test:images" },
 ];
+/** The BuildKit image publish-images.yml builds the shipped images on (P1.27s); image-tests must build on the same. */
+const PUBLISH = readFileSync(join(ROOT, ".github", "workflows", "publish-images.yml"), "utf8");
+const PUBLISH_BUILDKIT = /^\s+BUILDKIT_IMAGE: (\S+)$/m.exec(PUBLISH)?.[1];
 
 describe("check gate (P0.07d)", () => {
   const jobs = readWorkflow(CI).workflow.jobs ?? {};
@@ -326,7 +333,9 @@ describe("check gate (P0.07d)", () => {
     const job = jobs["image-tests"];
     expect(job?.if).toBe(CHECK_IF);
     expect(job?.["continue-on-error"]).toBeUndefined();
-    expect(job?.env).toBeUndefined();
+    // P1.27t: one BuildKit for the images the tests run and the images staging runs.
+    expect(PUBLISH_BUILDKIT).toMatch(/^moby\/buildkit:v[\d.]+@sha256:[0-9a-f]{64}$/);
+    expect(job?.env).toEqual({ BUILDKIT_IMAGE: PUBLISH_BUILDKIT });
     expect(job?.defaults).toBeUndefined();
     expect((job?.steps ?? []).map(normalised)).toEqual(IMAGE_STEPS);
   });

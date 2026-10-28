@@ -23,7 +23,7 @@ const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
     body,
     islands: "on",
   }).html;
-const LOGIN = { next: null, error: null, pdsHost: "pds.example" };
+const LOGIN = { next: null, error: null, pdsHost: "pds.example", close: "/" };
 
 /** Every start tag named `name`, each as its attribute map (attribute order is the renderer's, not part of the test). */
 function tags(page: string, name: string): Record<string, string>[] {
@@ -40,10 +40,26 @@ describe("login screen", () => {
     expect(tags(page, "input")).toEqual([{ type: "hidden", name: "next", value: "/me" }]);
     const buttons = tags(page, "button").map(({ type, name, value }) => ({ type, name, value }));
     expect(buttons).toEqual([{ type: "submit", name: "intent", value: "chooser" }]);
-    expect(page).toContain(">Sign in with pds.example</button>");
+    expect(page).toContain(">Sign in with AtProto</button>");
+    expect(page).toContain("<strong>pds.example</strong>");
     expect(page).toContain("only place you type your password");
     // Zero JavaScript: no island ran, so no script of any kind.
     expect(page).not.toContain("<script");
+  });
+
+  // P2.05m (Alex, 2026-10-23: "the sign in should only be a modal"): the page is one box in the Modal's look over a
+  // scrim, drawn with no script. With no script it cannot trap focus, so it is a named region, not an aria-modal
+  // dialog, and Close goes home, since `next` is often the protected page that sent the visitor here.
+  test("login_is_one_modal_box", () => {
+    const page = html(screens.login({ ...LOGIN, next: "/did" }));
+    expect(tags(page, "section")).toEqual([{ "aria-labelledby": "sign-in-title", class: expect.any(String) }]);
+    expect(page).not.toMatch(/role="dialog"|aria-modal/);
+    expect(page).toContain('<h1 id="sign-in-title"');
+    expect(page.match(/<main/g)).toHaveLength(1);
+    expect(tags(page, "a")).toEqual([expect.objectContaining({ href: "/" })]);
+    expect(page).toMatch(/<a [^>]*href="\/"[^>]*>Close<\/a>/);
+    // The route picks where Close goes (login_close_goes_back_to_the_page_before); the screen prints it.
+    expect(html(screens.login({ ...LOGIN, close: "/legal/terms" }))).toMatch(/href="\/legal\/terms"[^>]*>Close</);
   });
 
   test("login_without_next_has_no_hidden_field", () => {
@@ -91,15 +107,20 @@ describe("continue screen", () => {
 });
 
 describe("signed-out screen", () => {
-  test("signed_out_links_to_the_pds_account_and_sign_in", () => {
+  test("signed_out_is_one_box_asking_about_the_pds", () => {
+    // P2.08s (Alex, 2026-10-23 13:15Z): one Sign out, then a box asks whether to sign out of the atproto account too.
     const page = html(screens.signedOut({ issuer: "https://pds.example", ours: true }));
-    expect(page).toContain("You are signed out");
+    expect(page).toContain('<section aria-labelledby="signed-out-title"');
+    expect(page).toMatch(/<h1 id="signed-out-title"[^>]*>You are signed out of unset<\/h1>/);
+    expect(page).toContain("Also sign out of your atproto account?");
+    expect(page).toContain("Apps you allowed stay signed in until you remove them there.");
     expect(page).toContain(
       "You are going to pds.example, our sign-in server; it is the only place you type your password",
     );
-    expect(page).toContain("On a shared computer, sign out there too.");
-    const links = tags(page, "a").map((a) => a.href);
-    expect(links).toEqual(["https://pds.example/account", "/login"]);
+    expect(page).toContain(">Your account on pds.example<span");
+    // The sheet's standalone Link, like the account choice above it (Link README).
+    expect(page).toMatch(/href="\/"[^>]*>No thanks<svg/);
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account", "/"]);
     expect(page).not.toContain("<script");
   });
 
@@ -107,17 +128,30 @@ describe("signed-out screen", () => {
     const own = html(screens.signedOut({ issuer: "https://pds.test", ours: true }));
     expect(own).toContain("https://pds.test/account");
     expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
-    expect(own).toContain(">Your account on pds.test<svg");
+    expect(own).toContain(">Your account on pds.test<span");
     const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
-    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/login"]);
+    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
     expect(foreign).not.toContain("only place you type your password");
+  });
+
+  test("pdsAccountLink_opens_the_sign_in_server_in_a_new_tab", () => {
+    // P2.08k (Alex, 2026-10-28: "when we go on the pds it just opens another tab"): unset.sh stays open behind it.
+    for (const ours of [true, false]) {
+      const page = html(screens.signedOut({ issuer: "https://pds.example", ours }));
+      const [account] = tags(page, "a");
+      expect(account).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
+      expect(page).toContain('<span class="visually-hidden"> (opens in a new tab)</span>');
+    }
+    expect(tags(html(screens.signedOut({ issuer: "https://pds.example", ours: true })), "a")[1]).not.toHaveProperty(
+      "target",
+    );
   });
 
   test("pdsAccountLink_refuses_a_non_https_issuer", () => {
     for (const issuer of ["http://pds.example", "javascript:alert(1)", "not a url"]) {
       const page = html(screens.signedOut({ issuer, ours: false }));
-      expect(tags(page, "a").map((a) => a.href)).toEqual(["/login"]);
+      expect(tags(page, "a").map((a) => a.href)).toEqual(["/"]);
     }
   });
 });
@@ -137,7 +171,7 @@ describe("me screen", () => {
     expect(page).not.toContain("Sign out everywhere");
     // P2.13c: the Edit profile link, then the account link.
     expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/account"]);
-    expect(page).toContain(">Your account on pds.example<svg");
+    expect(page).toContain(">Your account on pds.example<span");
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");
   });
@@ -176,5 +210,15 @@ describe("verify email screen", () => {
   test("confirmed_email_continues_to_the_self_profile_shortcut", () => {
     const page = html(screens.verifyEmail({ state: "confirmed", pdsHost: "pds.example" }));
     expect(tags(page, "a").map((a) => a.href)).toEqual(["/did"]);
+  });
+
+  test("unconfirmed_email_opens_the_account_in_a_new_tab_and_checks_here", () => {
+    // P2.08k: the member confirms in the new tab, then comes back to this one to check again.
+    const page = html(screens.verifyEmail({ state: "unconfirmed", pdsHost: "pds.example" }));
+    const links = tags(page, "a");
+    expect(links.map((a) => a.href)).toEqual(["https://pds.example/account", "/verify-email"]);
+    expect(links[0]).toMatchObject({ target: "_blank" });
+    expect(links[1]).not.toHaveProperty("target");
+    expect(page).toContain("Confirm your email in the new tab, then come back here.");
   });
 });

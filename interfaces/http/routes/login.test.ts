@@ -108,9 +108,13 @@ function setup(world: World = {}) {
     log,
   });
   const server = createServer({ config: CONFIG, routes: [...loginRoutes(deps), ...logout], policies, log });
-  const send = (path: string, init: { form?: string; cookie?: string; site?: "same-origin" | "cross-site" } = {}) => {
+  const send = (
+    path: string,
+    init: { form?: string; cookie?: string; site?: "same-origin" | "cross-site"; referer?: string } = {},
+  ) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
     if (init.cookie) headers.set("cookie", init.cookie);
+    if (init.referer) headers.set("referer", init.referer);
     if (init.form === undefined) return server.request(new Request(`${ORIGIN}${path}`, { headers }), "10.0.0.1");
     const site = init.site ?? "same-origin";
     headers.set("content-type", FORM);
@@ -136,7 +140,7 @@ describe("GET /login", () => {
     expect(html).not.toContain('name="handle"');
     expect(html).not.toContain("alice");
     expect(html).toContain('<input type="hidden" name="next" value="/me"/>');
-    expect(html).toContain(`Sign in with ${PDS}</button>`);
+    expect(html).toContain("Sign in with AtProto</button>");
     expect(cookies(response)).toEqual([]);
     expect([nonces(), authorized.length, resolved.length]).toEqual([0, 0, 0]);
   });
@@ -168,15 +172,55 @@ describe("GET /login", () => {
     const html = await (await send("/login?error=login.handle_not_found")).text();
     expect(html).toContain("No account uses that handle.");
     expect(html.match(/No account uses that handle\./g)).toHaveLength(1);
-    expect(html).toContain('<main id="main">');
+    expect(html).toContain('<main id="main"');
     expect(html.match(/<main/g)).toHaveLength(1);
+    // P2.05m: the page is the sign-in dialog alone, so the error sits inside it, with no shell behind.
+    const dialog = html.slice(html.indexOf('<section aria-labelledby="sign-in-title"'), html.indexOf("</section>"));
+    expect(dialog).toContain("No account uses that handle.");
+    expect(html).not.toMatch(/<header|<footer|data-island/);
     const forged = await (await send("/login?error=%3Cscript%3Ex")).text();
     expect(forged).not.toContain('role="alert"');
     expect(forged).not.toContain("<script>x");
   });
+  // Alex, 2026-10-23: Close "should probably go back to the page to which I came from". The Referer (our
+  // Referrer-Policy same-origin sends it only between our own pages, and it survives the protected page's 303) names
+  // that page, unless it is a sign-in page or the protected page in `next`, which would only bounce back here.
+  test("login_close_goes_back_to_the_page_before", async () => {
+    const { send } = setup();
+    const close = async (path: string, referer?: string) => {
+      const html = await (await send(path, referer === undefined ? {} : { referer })).text();
+      return /<a [^>]*href="([^"]*)"[^>]*>Close<\/a>/.exec(html)?.[1];
+    };
+    expect(await close("/login?next=/did", `${ORIGIN}/legal/terms?x=1`)).toBe("/legal/terms?x=1");
+    expect(await close("/login?next=/did", `${ORIGIN}/`)).toBe("/");
+    for (const referer of [
+      undefined,
+      "https://evil.example/page",
+      "https://unset.test.evil.example/legal/terms",
+      `${ORIGIN}/did`,
+      `${ORIGIN}/login?next=/did`,
+      `${ORIGIN}/login/continue`,
+      "not a url",
+    ]) {
+      expect(await close("/login?next=/did", referer), String(referer)).toBe("/");
+    }
+  });
 });
 
 describe("POST /login", () => {
+  // P2.05p: the in-place box posts here from any page, public ones included, which cannot vary on the cookie. A
+  // browser that is already signed in goes to its profile, as GET /login sends it, and no authorization starts, so
+  // its session is never replaced by whatever account the PDS picks.
+  test("login_post_signed_in_goes_to_the_profile", async () => {
+    const { send, authorized, nonces } = setup({ signedIn: true });
+    const response = await send("/login", { form: "intent=chooser&next=%2Flegal%2Fterms" });
+    expect(response.status).toBe(303);
+    expect(location(response)).toBe("/did");
+    expect(cookies(response)).toEqual([]);
+    expect(authorized).toEqual([]);
+    expect(nonces()).toBe(0);
+  });
+
   test("login_post_handle", async () => {
     const { send, resolved, authorized } = setup();
     const response = await send("/login", { form: `handle=alice.${PDS}&intent=login` });
