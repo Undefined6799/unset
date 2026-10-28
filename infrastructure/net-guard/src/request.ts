@@ -85,7 +85,7 @@ function checkRequest(req: GuardedRequest): Limits {
 
 /**
  * The caller's headers with keys lowercased, then ours, which win: the user agent names us, and we decode only what
- * we advertise. A caller `host` header is refused, in any case: undici (8.11.2, lib/core/request.js processHeader)
+ * we advertise. A caller `host` header is refused, in any case: undici (8.12.2, lib/core/request.js processHeader)
  * would send it as Host and take the TLS server name from it, so the certificate would be checked against it.
  */
 function requestHeaders(headers: Record<string, string> = {}, commit: string): Record<string, string> {
@@ -245,8 +245,8 @@ function egressError(error: unknown, signal: AbortSignal): NetGuardError {
 /**
  * The connector: pinned lookup, connect timeout, and the server name the certificate is checked against. An IP
  * literal gets no server name (RFC 6066 §3 forbids one; Node refuses it), so its certificate must name the address.
- * undici 8.11.2 has no typed per-request server name; this one applies because no host header reaches undici
- * (lib/core/connect.js:77 prefers the request's, derived from that header).
+ * undici 8.12.2 has no typed per-request server name; this one applies because no host header reaches undici
+ * (lib/core/connect.js:83 prefers the request's, derived from that header).
  */
 function connectorFor(
   addresses: readonly string[],
