@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { type FSWatcher, readdirSync, readFileSync, watch } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, relative } from "node:path";
+import { beforeAll, describe, expect, test } from "vitest";
 import { generatedDrift, readSchemas, type SchemaFile, schemaProblems } from "./build.ts";
 
 const schemas = readSchemas();
@@ -170,6 +171,57 @@ describe("schema build checks", () => {
 
   test("generated_types_current", { timeout: 60_000 }, () => {
     expect(generatedDrift()).toEqual([]);
+  });
+});
+
+const REPO = join(import.meta.dirname, "..", "..", "..");
+
+/** Every folder under `dir`, itself included; node_modules is installed, not ours. */
+function folders(dir: string): string[] {
+  const below = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== "node_modules")
+    .flatMap((entry) => folders(join(dir, entry.name)));
+  return [dir, ...below];
+}
+
+/** The entries created or removed in each watched folder while `run` runs, as absolute paths. */
+async function entriesTouched(dirs: string[], run: () => void): Promise<string[]> {
+  const touched = new Set<string>();
+  const watchers: FSWatcher[] = dirs.map((dir) =>
+    watch(dir, (event, name) => {
+      if (event === "rename" && name) touched.add(join(dir, name));
+    }),
+  );
+  try {
+    run();
+    // inotify events queued during the synchronous build arrive on the next turns of the event loop.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  } finally {
+    for (const watcher of watchers) watcher.close();
+  }
+  return [...touched];
+}
+
+describe("lexicon build output folder", () => {
+  // A docs test walks shared/ while this build runs (verify-1113-931b44c), so the build may not write there.
+  let underShared: string[] = [];
+  let inTemp: string[] = [];
+  beforeAll(async () => {
+    const shared = folders(join(REPO, "shared"));
+    const touched = await entriesTouched([...shared, tmpdir()], () => generatedDrift());
+    underShared = touched.filter((path) => !relative(join(REPO, "shared"), path).startsWith(".."));
+    inTemp = touched.filter((path) => dirname(path) === tmpdir());
+  }, 60_000);
+
+  test("generate_writes_nothing_under_shared", () => {
+    expect(underShared).toEqual([]);
+  });
+
+  test("generate_builds_outside_the_repo", () => {
+    const builds = inTemp.filter((path) => path.split("/").at(-1)?.startsWith("unset-lexicons-"));
+    expect(builds).toHaveLength(1);
+    const fromRepo = relative(REPO, builds[0] ?? REPO);
+    expect(fromRepo.startsWith("..") || isAbsolute(fromRepo), fromRepo).toBe(true);
   });
 });
 
