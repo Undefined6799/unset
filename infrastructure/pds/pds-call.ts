@@ -93,7 +93,7 @@ function delay(ms: number, deadline: AbortSignal): Promise<void> {
 }
 
 /** The XRPC client over one restored session. Only this file constructs it (pds-call.guard). */
-export function xrpcFromSession(session: SessionFetch): Agent {
+function xrpcFromSession(session: SessionFetch): Agent {
   return new Agent(session);
 }
 

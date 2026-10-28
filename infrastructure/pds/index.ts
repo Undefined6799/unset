@@ -27,12 +27,10 @@ export {
 export {
   createPdsCall,
   PDS_CALL_TIMEOUT_MS,
-  PDS_UPLOAD_TIMEOUT_MS,
   type PdsCallDeps,
   type PdsContext,
   type PdsFailure,
   type PdsResult,
   type SessionInfo,
-  xrpcFromSession,
 } from "./pds-call.ts";
 export { isAuthFatal, isDpopNonceHandshake } from "./pds-errors.ts";
