@@ -4,6 +4,7 @@
 // one of the two is ever displayed, so assistive tech meets the links once. The menu is the header-menu island
 // (P1.24j, HeaderMenu.tsx), which adds Escape-to-close and focus return.
 import { IslandSlot } from "@unset/shared-islands";
+import type { ReactNode } from "react";
 import headerMenu from "../../islands/header-menu.island.tsx";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
@@ -25,6 +26,8 @@ export type HeaderProps = {
   /** Compact brand header when navigation is supplied separately by the app shell. */
   brandOnly?: boolean;
   className?: string;
+  /** brandOnly: before the mark, the core shell's menu button (P2.13e). */
+  start?: ReactNode;
 };
 
 export function Header({
@@ -35,6 +38,7 @@ export function Header({
   menuLabel = "menu",
   brandOnly = false,
   className,
+  start,
 }: HeaderProps) {
   if (brandOnly)
     return (
@@ -42,6 +46,7 @@ export function Header({
         homeLabel={homeLabel}
         {...(homeHref === undefined ? {} : { homeHref })}
         {...(className === undefined ? {} : { className })}
+        start={start}
       />
     );
   // The menu comes before the inline nav so that, folded or not, the shown one ends the bar.

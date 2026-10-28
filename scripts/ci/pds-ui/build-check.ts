@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { archive, requireThat, sha256 } from "./archive.ts";
 import { cleanRevision, ROOT, readArtifact, readBounded, verifyInputs } from "./cli.ts";
-import { recipeContract } from "./contract.ts";
+import { pairOf, recipeContract } from "./contract.ts";
 import { manifestConfig, platformManifest } from "./images.ts";
 import { verifySource } from "./verify.ts";
 
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
       source,
       `https://codeload.github.com/bluesky-social/atproto/tar.gz/${lock.source.revision}`,
     ]);
-    await verifySource(readBounded(source), lock.source);
+    await verifySource(readBounded(source), lock.source, pairOf(lock));
     const common = ["--platform", lock.base.platform, "--file", "deployment/pds/Dockerfile"];
     run("docker", [
       "buildx",

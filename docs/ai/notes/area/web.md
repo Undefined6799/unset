@@ -18,7 +18,8 @@ checked: 2026-10-23
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under
 `src/screens/` (P1.25: `Home`, `Legal`; P2.15: `src/legal/` parses the build-inlined English markdown once;
 P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink` (P2.08b: the recorded issuer, its copy in
-`screens/messages.ts`, also on `Me`);
+`screens/messages.ts`, also on `Me`; P2.08s: one box asking whether to sign out of the atproto account too, which
+says other apps stay signed in until removed there);
 P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
 `SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner; P2.13c: `settings/`, the
 side list `SettingsShell`, `SettingsProfile` with the "Set up your profile" card, and `SettingsAccount`, with the
@@ -40,7 +41,9 @@ themselves: `interfaces/http/prefs/return-to.ts` rebuilds their query from a re-
 and the language form (P1.22b) are still to come. Text is in `src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
-brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
+brand-only Header with the menu button, shared Navigation (P2.13e: the left drawer, with this browser's sign-out
+and the `ThemePicker` when the page has a session and prefs) and a main region with room for the phone bar. Pages
+with a footer give `main` the first screen (`.page`), so the footer starts below it (Alex, 2026-10-23). Home has only a
 visually hidden heading. The interface supplies the active destination and a verified account name when available;
 the anonymous public homepage still reads no cookies. Native popovers keep the phone menu usable without JS.
 On screen, core main is a scroll area bounded by the header and navigation; bottom padding alone left keyboard
@@ -59,6 +62,8 @@ public profile content and the editor remain separate work (P2.21).
   The runtime takes the island types (`IslandDefinition`, `IslandProps`, `IslandRenderer`), `readProps` and
   `serializeProps` from `@unset/shared-islands` ([[islands]]), through its index only; nothing comes from a subpath
   or from `@unset/shared-ui` (P1.25p).
+  It also closes open popovers on `pagehide` (`popovers.ts`, P2.13e): the back-forward cache restores a page as it
+  was left, so Back showed the menu drawer again. Zero-JS pages (`/`, the legal pages) load no bootstrap and keep it.
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers the global sheets and every CSS Module into the stylesheets each
   page links). Since P1.25 the global sheets (layers, tokens with the two font faces, base) are in it, as globs:
@@ -82,5 +87,11 @@ failed island stays as its server markup and only logs to the console.
 - CSS combines tokens, base and the kit. Do not trim unrelated shared sheets to fit the budget, or duplicate
   a rule the kit already provides. The cap is 52 KiB (53,248 bytes) unminified and 12 KiB gzip (#965).
   Measure both builds with `scripts/budgets/css.ts`; those limits live in a check path (SE-6).
+
+**Sign in opens in place (P2.05p).** With `PageDeps.pdsHost` set, the default shell's Header Sign in is a button
+that opens `#sign-in`, a modal `<dialog>` (invoker commands, no script) holding the same `screens/SignInBox` the
+/login page draws. Escape and its Close button hide it; the page behind is inert. Not a popover: its `::backdrop`
+passes clicks through and Tab leaves it. `next` is the page's path only. The footer's Sign in
+and protected pages' redirects still use /login.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].

@@ -43,13 +43,16 @@ The rest of the package:
 | Document | `apps/web/src/document.tsx` |
 | Shell | `apps/web/src/shell/AppShell.tsx` |
 | Head | `apps/web/src/shell/head.tsx` |
-| Theme form | `apps/web/src/shell/PrefsForms.tsx` |
+| Footer theme form | `apps/web/src/shell/PrefsForms.tsx` |
+| Popover close | `apps/web/src/islands/runtime/popovers.ts` |
 | Copy | `apps/web/src/shell/messages.ts`, `apps/web/src/screens/messages.ts`, `apps/web/src/screens/welcome/messages.ts`, `apps/web/src/screens/settings/messages.ts` |
 | Island runtime | `apps/web/src/islands/runtime/` |
 | Legal parser | `apps/web/src/legal/` |
 | Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css`, `apps/web/src/screens/Login.module.css`, `apps/web/src/screens/settings/SettingsAccount.module.css`, `apps/web/src/screens/settings/SettingsShell.module.css` |
 
-There is no `*.island.tsx` under `apps/web`. `render.tsx` and `apps/web/src/islands/runtime/bootstrap.ts` glob `apps/web/src/islands/*.island.tsx` and `shared/ui/islands/*.island.tsx`. The island components on the tree are under `shared/ui/islands/`.
+There is no `*.island.tsx` under `apps/web`. `render.tsx` and `apps/web/src/islands/runtime/bootstrap.ts` glob `apps/web/src/islands/*.island.tsx` and `shared/ui/islands/*.island.tsx`. The island components on the tree are under `shared/ui/islands/`. `bootstrap.ts` calls `closePopoversOnPageHide` (`popovers.ts`) on `pagehide`, so an open popover is shut before the back-forward cache stores the page.
+
+When `navigation` is set, `AppShell` renders `NavigationMenuButton` and `Navigation`, and `ThemePickerSlot` when `prefs` is set. When `navigation` and `feed` are both unset, it renders `PrefsForms` in the footer when `prefs` is set (`apps/web/src/shell/AppShell.tsx`).
 
 ## May import
 

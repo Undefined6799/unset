@@ -34,9 +34,18 @@ const lock = JSON.parse(readFileSync(join(EDGE, "..", "images", "bases.lock.json
 >;
 
 /**
+ * BuildKit's line continuation for the default `\` escape: a backslash ending the line, spaces or tabs after it, that
+ * is not itself escaped, so `x=\\` continues nothing (moby/buildkit master frontend/dockerfile/parser/parser.go:168,
+ * setEscapeToken; read 2026-10-27). Its comment says it misreads an escaped backslash before a continuation (`\\\`);
+ * the edge test copies that reading rather than guess another, and edge_dockerfile_only_what_the_rules_read keeps the
+ * rest of the file within what these simple rules read.
+ */
+const CONTINUES = /([^\\])\\[ \t]*$|^\\[ \t]*$/;
+
+/**
  * The final stage's RUN instructions before USER, each with its continuation lines joined by newlines. Keywords are
- * matched in any case with any whitespace after them, and a line continues only after one ending in a backslash
- * (moby/buildkit frontend/dockerfile/docs/reference.md, "Format" and "escape", read 2026-10-12).
+ * matched in any case with any whitespace after them, and a line continues only after one ending in an unescaped
+ * backslash (CONTINUES; moby/buildkit frontend/dockerfile/docs/reference.md, "Format" and "escape", read 2026-10-12).
  */
 const runsBeforeUser = (text: string): string[] => {
   const runtime = text.split(/^FROM\s.*$/im).at(-1) ?? "";
@@ -45,11 +54,77 @@ const runsBeforeUser = (text: string): string[] => {
   for (const line of runtime.split("\n")) {
     if (!continued && (line.trim() === "" || /^\s*#/.test(line))) continue;
     instructions.push(continued ? `${instructions.pop() ?? ""}\n${line}` : line);
-    continued = line.endsWith("\\");
+    continued = CONTINUES.test(line);
   }
   const user = instructions.findIndex((instruction) => /^\s*USER\s/i.test(instruction));
   return instructions.slice(0, user === -1 ? undefined : user).filter((instruction) => /^\s*RUN\s/i.test(instruction));
 };
+/** The one copy from a build stage: the Caddy binary xcaddy built (P1.34j item 2). */
+const BINARY_COPY = "COPY --from=build /out/caddy /usr/bin/caddy";
+
+/**
+ * The instructions, continuation lines joined (CONTINUES), and comment and blank lines skipped inside one as outside
+ * it, as BuildKit skips them (parser.go, isComment and isEmptyContinuationLine). Simple on purpose: it is sound only on
+ * text that is printable ASCII and LF, where a space is the only blank, and dockerfileShapeProblems refuses the rest.
+ */
+function logicalInstructions(text: string): string[] {
+  const out: string[] = [];
+  let open: string | undefined;
+  for (const line of text.split("\n")) {
+    if (/^ *(?:#.*)?$/.test(line)) continue;
+    const continued = CONTINUES.test(line);
+    const piece = continued ? line.replace(CONTINUES, "$1") : line;
+    open = open === undefined ? piece.trimStart() : open + piece;
+    if (!continued) {
+      out.push(open);
+      open = undefined;
+    }
+  }
+  return open === undefined ? out : [...out, open];
+}
+
+/** The words before the first that is not a `--` flag: BuildKit reads only those as flags (split_command.go). */
+function leadingFlags(rest: string): string[] {
+  const words = rest.split(" ").filter((word) => word !== "");
+  const end = words.findIndex((word) => !word.startsWith("--"));
+  return end === -1 ? words : words.slice(0, end);
+}
+
+/** What one joined instruction may not hold (P1.34j items 2, 4, 5 and 7); fixed words. */
+function instructionShapeProblems(instruction: string): string[] {
+  const [, keyword = "", rest = ""] = /^(\S*)\s*(.*)$/.exec(instruction) ?? [];
+  const copies = /^(?:COPY|ADD)$/i.test(keyword);
+  const problems: string[] = [];
+  // A heredoc's body bypasses every line rule here (reference.md, "Here-Documents").
+  if ((copies || /^RUN$/i.test(keyword)) && instruction.includes("<<")) problems.push("a heredoc");
+  if (/--mount/i.test(instruction)) problems.push("a --mount flag");
+  if (copies && leadingFlags(rest).some((flag) => /["'\\]/.test(flag))) {
+    problems.push("a COPY or ADD flag with a quote or backslash");
+  }
+  return problems;
+}
+
+/**
+ * What the edge Dockerfile may not hold, so the line rules in this file read it as BuildKit does (P1.34j; architecture
+ * 2026-10-13 00:58Z: restricting the input beats mirroring BuildKit's parser). Each reason is fixed words.
+ */
+function dockerfileShapeProblems(text: string): string[] {
+  const problems = new Set<string>();
+  // BuildKit splits on unicode.IsSpace and skips such lines inside a continuation (parser.go); any byte beyond
+  // printable ASCII and LF is refused, so no blank, CR or line separator can hide an instruction (N8, N9).
+  if (/[^\x20-\x7e\n]/.test(text)) problems.add("a byte outside printable ASCII and LF");
+  // A parser directive comes before the first instruction; `escape` swaps the continuation character and `syntax`
+  // swaps the parser (reference.md, "Parser directives").
+  const head = text.split("\n").filter((_, at, lines) => lines.slice(0, at).every((l) => /^\s*(?:#.*)?$/.test(l)));
+  if (head.some((line) => /^\s*#\s*(?:syntax|escape)\s*=/i.test(line))) problems.add("a parser directive");
+  const all = logicalInstructions(text);
+  for (const problem of all.flatMap(instructionShapeProblems)) problems.add(problem);
+  // Every copy from a build stage is the one binary copy, in any case or flag order (items 2 and 5).
+  const fromCopies = all.filter((instruction) => /--from/i.test(instruction));
+  if (fromCopies.join("\n") !== BINARY_COPY) problems.add("a COPY --from other than the binary");
+  return [...problems];
+}
+
 /** The setcap line as P1.28o wrote it; Amendment 3 keeps it unchanged. */
 const SETCAP_RUN = [
   "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\",
@@ -1081,13 +1156,18 @@ describe("edge image", () => {
       return (
         setcap === SETCAP_RUN &&
         exec.length === listed.length &&
-        exec.every((run, at) => JSON.stringify(JSON.parse(run.replace(/^RUN /, ""))) === JSON.stringify(listed[at]))
+        exec.every(
+          (run, at) => JSON.stringify(JSON.parse(run.replace(/^\s*RUN\s+/i, ""))) === JSON.stringify(listed[at]),
+        )
       );
     };
     expect(listed).toHaveLength(2);
     expect(ruled(dockerfile)).toBe(true);
     const chown = 'RUN ["/bin/chown", "-R", "65532:65532", "/data", "/config"]\n';
     const chmod = 'RUN ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]\n';
+    // The keyword is read in any case, as the run list reads it (P1.34j item 9): a listed RUN spelled `run` is the same
+    // instruction to BuildKit, so it is read, not thrown on.
+    expect(ruled(dockerfile.replace(chown, chown.replace(/^RUN/, "run")))).toBe(true);
     for (const fixture of [
       dockerfile.replace(chown, ""),
       dockerfile.replace(chown, "").replace(chmod, `${chmod}${chown}`),
@@ -1099,9 +1179,61 @@ describe("edge image", () => {
       dockerfile.replace(chmod, `${chmod}run ["/bin/true"]\n`),
       dockerfile.replace(chmod, `${chmod}RUN\t["/bin/true"]\n`),
       dockerfile.replace(chmod, `${chmod}  RUN ["/bin/true"]\n`),
+      // An escaped backslash ends no line (CONTINUES), so the duplicate listed RUN after it is a fourth RUN (P1.34j
+      // item 8).
+      dockerfile.replace(chmod, `${chmod}LABEL x=\\\\\n${chmod}`),
     ]) {
       expect(fixture).not.toBe(dockerfile);
       expect(ruled(fixture), fixture).toBe(false);
+    }
+  });
+
+  test("edge_dockerfile_only_what_the_rules_read", () => {
+    expect(dockerfileShapeProblems(dockerfile)).toEqual([]);
+    const build = "      --output /out/caddy\n";
+    const runtime = "WORKDIR /etc/caddy\n";
+    const inBuild = (line: string) => dockerfile.replace(build, `${build}${line}\n`);
+    const inRuntime = (line: string) => dockerfile.replace(runtime, `${runtime}${line}\n`);
+    const mount = "RUN --mount=type=bind,source=local,target=/l cp -r /l /out/local";
+    const laundered = "COPY --from=build /out/local/ /etc/caddy/local/";
+    const ascii = "a byte outside printable ASCII and LF";
+    const pinned = "a COPY --from other than the binary";
+    const flag = "a COPY or ADD flag with a quote or backslash";
+    const cases: [string, string][] = [
+      // N-a (item 2): a builder bind mount of local/, then a copy of what it made; each half is refused alone.
+      [inRuntime(laundered).replace(build, `${build}${mount}\n`), "a --mount flag"],
+      [inRuntime(laundered).replace(build, `${build}${mount}\n`), pinned],
+      [inBuild("run --MOUNT=type=bind,source=local,target=/l true"), "a --mount flag"],
+      [inRuntime(laundered), pinned],
+      [inRuntime("copy --FROM=build /out/caddy /usr/bin/caddy"), pinned],
+      [dockerfile.replace(`${BINARY_COPY}\n`, ""), pinned],
+      // N7 (items 4 and 5): a backslash-escaped space inside a flag word, and an empty quoted flag.
+      [inRuntime("COPY --exclude=x\\ --from=build local/ /etc/caddy/local/"), flag],
+      [inRuntime("COPY --exclude=x\\ --from=build local/ /etc/caddy/local/"), pinned],
+      [inRuntime('COPY --"" --from=build local/ /etc/caddy/local/'), flag],
+      [inRuntime("ADD --chown='0' local/ /srv/"), flag],
+      // N8 (item 3): a blank BuildKit skips inside a continuation, so the COPY of local/ joins on.
+      [inRuntime("COPY \\\n\v\n local/ /srv/"), ascii],
+      [inRuntime("COPY \\\n\f\n local/ /srv/"), ascii],
+      [inRuntime("COPY \\\n\u00a0\n local/ /srv/"), ascii],
+      [inRuntime("COPY \\\n\r\r\n local/ /srv/"), ascii],
+      // N9 (item 3): a separator the line regex stops at.
+      [inRuntime("COPY local/\r/srv/"), ascii],
+      [inRuntime("COPY local/\u2028/srv/"), ascii],
+      [inRuntime("COPY local/\u2029/srv/"), ascii],
+      [inRuntime("LABEL x=y\tz"), ascii],
+      // Item 6: a parser directive, in any case.
+      [`# syntax=docker/dockerfile:1\n${dockerfile}`, "a parser directive"],
+      [`#ESCAPE=\`\n${dockerfile}`, "a parser directive"],
+      // Item 7: a heredoc in RUN, COPY or ADD, also split by a continuation.
+      [inBuild("RUN <<EOF\ntouch /out/x\nEOF"), "a heredoc"],
+      [inRuntime("COPY <<EOF /etc/caddy/x\nEOF"), "a heredoc"],
+      [inRuntime("add <<EOF /etc/caddy/x\nEOF"), "a heredoc"],
+      [inBuild("RUN cat <\\\n<EOF\nx\nEOF"), "a heredoc"],
+    ];
+    for (const [fixture, reason] of cases) {
+      expect(fixture, reason).not.toBe(dockerfile);
+      expect(dockerfileShapeProblems(fixture), JSON.stringify(fixture.slice(-120))).toContain(reason);
     }
   });
 

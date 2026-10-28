@@ -1,0 +1,151 @@
+// @vitest-environment jsdom
+// P2.13e: the menu drawer's theme picker (Figma 151:939). Without script it is a plain form that POSTs and comes back;
+// once its island runs, a choice is saved in the background and applied in place, so the drawer stays open (Alex,
+// 2026-10-23 02:15Z).
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isThemePickerProps, ThemePicker, type ThemePickerProps } from "./ThemePicker.tsx";
+
+const props: ThemePickerProps = {
+  theme: "system",
+  returnTo: "/settings/account",
+  labels: { group: "Theme", dark: "Dark", system: "System", light: "Light" },
+};
+const markup = (value: ThemePickerProps = props) =>
+  new DOMParser().parseFromString(renderToStaticMarkup(<ThemePicker {...value} />), "text/html");
+
+describe("ThemePicker without script", () => {
+  it("is one form of three submit buttons, the current one pressed", () => {
+    const doc = markup({ ...props, theme: "light" });
+    const form = doc.querySelector("form");
+    expect([form?.getAttribute("method"), form?.getAttribute("action")]).toEqual(["post", "/prefs/theme"]);
+    expect(doc.querySelector('input[type="hidden"][name="return"]')?.getAttribute("value")).toBe("/settings/account");
+    expect(doc.querySelector("fieldset > legend")?.textContent).toBe("Theme");
+    const buttons = [...doc.querySelectorAll("button")];
+    expect(buttons.map((b) => [b.type, b.name, b.value, b.getAttribute("aria-pressed"), b.textContent])).toEqual([
+      ["submit", "theme", "dark", "false", "Dark"],
+      ["submit", "theme", "system", "false", "System"],
+      ["submit", "theme", "light", "true", "Light"],
+    ]);
+    expect(buttons.every((b) => b.querySelector("svg") !== null)).toBe(true);
+  });
+
+  it("accepts only its own props shape", () => {
+    expect(isThemePickerProps(props)).toBe(true);
+    expect(isThemePickerProps({ ...props, theme: "blue" })).toBe(false);
+    expect(isThemePickerProps({ ...props, returnTo: 1 })).toBe(false);
+    expect(isThemePickerProps({ ...props, labels: { group: "Theme" } })).toBe(false);
+  });
+});
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+describe("ThemePicker with script", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute("data-theme");
+    document.head.replaceChildren();
+    document.body.replaceChildren();
+  });
+
+  async function mount(theme: ThemePickerProps["theme"] = "system") {
+    document.head.replaceChildren(
+      Object.assign(document.createElement("meta"), { name: "color-scheme", content: "dark light" }),
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<ThemePicker {...props} theme={theme} />));
+    const form = host.querySelector("form") as HTMLFormElement;
+    const button = (value: string) => host.querySelector(`button[value="${value}"]`) as HTMLButtonElement;
+    return { form, button };
+  }
+
+  it("saves the choice in the background and applies it in place", async () => {
+    const fetch = vi.fn(async () => ({ type: "opaqueredirect", ok: false, status: 0 }) as Response);
+    vi.stubGlobal("fetch", fetch);
+    const navigated = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => undefined);
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("dark")));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/prefs/theme");
+    expect(init).toMatchObject({ method: "POST", credentials: "same-origin", redirect: "manual", keepalive: true });
+    expect(String(init.body)).toBe("theme=dark&return=%2Fsettings%2Faccount");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(document.querySelector('meta[name="color-scheme"]')?.getAttribute("content")).toBe("dark");
+    expect(button("dark").getAttribute("aria-pressed")).toBe("true");
+    expect(button("system").getAttribute("aria-pressed")).toBe("false");
+    expect(navigated).not.toHaveBeenCalled();
+
+    await act(async () => form.requestSubmit(button("system")));
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    expect(document.querySelector('meta[name="color-scheme"]')?.getAttribute("content")).toBe("dark light");
+    navigated.mockRestore();
+  });
+
+  it("saves two quick choices one after the other, so the last one wins", async () => {
+    // Codex on #1312: two saves in flight could finish out of order and leave the first choice applied and stored.
+    const pending: (() => void)[] = [];
+    const fetch = vi.fn(
+      () => new Promise<Response>((resolve) => pending.push(() => resolve({ type: "opaqueredirect" } as Response))),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("dark")));
+    await act(async () => form.requestSubmit(button("light")));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => pending.shift()?.());
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(String((fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body)).toContain("theme=light");
+    await act(async () => pending.shift()?.());
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(button("light").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("brings a page restored by Back up to the latest saved choice", async () => {
+    // Codex on #1312: the back-forward cache restores an earlier page with the theme it had when it was left.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ type: "opaqueredirect" }) as Response),
+    );
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("dark")));
+    document.documentElement.removeAttribute("data-theme");
+    const restored = Object.assign(new Event("pageshow"), { persisted: true });
+    await act(async () => window.dispatchEvent(restored));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(button("dark").getAttribute("aria-pressed")).toBe("true");
+    sessionStorage.clear();
+  });
+
+  it("takes the theme a fresh page was rendered with as this tab's latest", async () => {
+    // Codex on #1312: a choice made elsewhere (the footer form) left an older one stored for Back to bring back.
+    sessionStorage.setItem("unset.theme", "dark");
+    const { button } = await mount("light");
+    document.documentElement.removeAttribute("data-theme");
+    const restored = Object.assign(new Event("pageshow"), { persisted: true });
+    await act(async () => window.dispatchEvent(restored));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(button("light").getAttribute("aria-pressed")).toBe("true");
+    sessionStorage.clear();
+  });
+
+  it("falls back to the plain form when the save fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("offline");
+      }),
+    );
+    const navigated = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => undefined);
+    const { form, button } = await mount();
+    await act(async () => form.requestSubmit(button("light")));
+    expect(navigated).toHaveBeenCalledTimes(1);
+    expect(form.querySelector('input[type="hidden"][name="theme"]')?.getAttribute("value")).toBe("light");
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    navigated.mockRestore();
+  });
+});

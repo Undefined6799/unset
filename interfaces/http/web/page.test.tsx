@@ -155,9 +155,54 @@ test("default_shell_footer_prefs", async () => {
   // Legal pages are public: the theme follows the system there, so no form (phase-1.md, P1.22: "Public pages show
   // no theme control").
   expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
-  expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
+  // P2.13e: a core-shell app page has no footer; its theme control is the drawer's picker, one form of three
+  // submit buttons, with the same re-checked return path.
+  const core = await page({ group: "app", navigation: true });
+  expect(core.forms).toHaveLength(1);
+  expect(elements(core.document, "footer")).toHaveLength(0);
+  expect(
+    elements(core.forms[0], "button", { name: "theme" }).map((b) => b.attrs?.find((a) => a.name === "value")?.value),
+  ).toEqual(["dark", "system", "light"]);
   // A feed page reaches feed mode through pageResponse: no footer, so no form.
   const feed = await page({ group: "app", feed: true });
   expect(elements(feed.document, "footer")).toHaveLength(0);
   expect(feed.forms).toHaveLength(0);
+});
+
+test("default_shell_signs_in_in_place", async () => {
+  // P2.05p: with our PDS named, the default shell's Sign in opens the box over the page, and the box sends the
+  // visitor back to this page's path. Only the path, never the query, so no request text is echoed into it.
+  const page = async (path: string, shell: NonNullable<Parameters<typeof pageResponse>[1]["shell"]> = {}) => {
+    const response = pageResponse(
+      { ...deps("test"), pdsHost: "pds.test" },
+      {
+        group: "public",
+        request: new Request(`https://unset.test${path}`),
+        title: "T",
+        body: null,
+        islands: "off",
+        shell,
+      },
+    );
+    const document = parse(await response.text());
+    const box = elements(document, "dialog", { id: "sign-in" })[0];
+    return (
+      box &&
+      elements(box, "input", { type: "hidden", name: "next" }).map(
+        (input) => input.attrs?.find((attribute) => attribute.name === "value")?.value,
+      )
+    );
+  };
+  expect(await page("/legal/terms?next=https%3A%2F%2Fevil.example")).toEqual(["/legal/terms"]);
+  expect(await page("/")).toEqual([]);
+  expect(await page("/", { navigation: { active: "home" } })).toBeUndefined();
+  const without = pageResponse(deps("test"), {
+    group: "public",
+    request: new Request("https://unset.test/legal/terms"),
+    title: "T",
+    body: null,
+    islands: "off",
+    shell: {},
+  });
+  expect(await without.text()).not.toContain('id="sign-in"');
 });

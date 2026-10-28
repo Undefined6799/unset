@@ -24,6 +24,9 @@ provenance only: never served by the assets route and never imported. `shared/ui
 them against the sheet's ICONS data (or the fixed, hash-pinned registration: P2.24f's two icons and P2.13e's three), and generates
 `icons.json` (36 imported plus the five registered names) and the per-icon `drawings/` modules, which are what the Icon component and `IconDrawing` use.
 
+The same hash-pinned registration also carries the approved component extensions (Navigation's Figma nodes,
+P2.13e's drawer included), so a change there edits `icons.ts` without touching any copied SVG.
+
 **Do not** fix it by excluding the folder in `biome.json`: that is a check-path change and weakens lint for any real
 SVG added later.
 
