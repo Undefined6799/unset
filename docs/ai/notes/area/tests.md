@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-23
+checked: 2026-10-28
 ---
 # tests
 
@@ -65,6 +65,9 @@ flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins i
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
   `postgres` entry pins, the base of our gosu-free image (P1.29d), run as upstream ships it (root, then gosu).
+  The files that start their own container migrate with `migrateAsMigrator(postgres, password, database?, dir?)`
+  and open pools with `testPools(service).open(postgres, database, user, password)`, logged in as the role under
+  test (TE-2); `pools.end` is the close for `stopAllPostgresAfter` (P1.11 cleanup).
 - `support/docker.ts`: every synchronous docker call in tests goes through `docker(args, { timeoutMs })`, which kills
   the call with SIGKILL at its timeout and throws a message naming it (P1.27k). A blocked `spawnSync` cannot be
   interrupted by vitest's test timeout, so without this a hung daemon held the event loop until `scripts/test/run.ts`
