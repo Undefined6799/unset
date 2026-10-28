@@ -12,6 +12,7 @@ import type { Logger } from "@unset/shared-log";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
+import { withRevokeTimeout } from "./revoke.ts";
 import {
   clearIssuerCookie,
   clearNonceCookie,
@@ -45,21 +46,12 @@ export type LogoutDeps = {
 };
 
 const FORM = "application/x-www-form-urlencoded";
-/** Book P2.08: the revocation call gets 10 seconds, then we drop the stored set ourselves. */
-const REVOKE_MS = 10_000;
 /**
  * The issuer read's own deadline (P2.08h). 250 ms is well below `PG_CONNECT_TIMEOUT_MS`'s default of 2000
  * (`infrastructure/postgres/config.ts`). A hung store must not hold sign-out for the pool's connect wait.
  * `AbortSignal.timeout`: https://nodejs.org/docs/latest-v26.x/api/globals.html#abortsignaltimeoutdelay (Node 26.12.0).
  */
 export const ISSUER_READ_MS = 250;
-
-class RevokeTimeout extends Error {
-  constructor() {
-    super("revoke timed out");
-    this.name = "RevokeTimeout";
-  }
-}
 
 function className(cause: unknown): string {
   return cause instanceof Error && cause.name !== "" ? cause.name : "Error";
@@ -77,24 +69,11 @@ function finish(location: string, issuer: string | null): Response {
   return new Response(null, { status: 303, headers });
 }
 
-function withTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
-  if (deadline.aborted) return Promise.reject(new RevokeTimeout());
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new RevokeTimeout()), REVOKE_MS);
-    const onAbort = () => reject(new RevokeTimeout());
-    deadline.addEventListener("abort", onAbort, { once: true });
-    work.then(resolve, reject).finally(() => {
-      clearTimeout(timer);
-      deadline.removeEventListener("abort", onAbort);
-    });
-  });
-}
-
 export function logoutRoutes(deps: LogoutDeps): Route[] {
   /** Revoke the grant. On any failure the stored set is deleted here, so no grant remains on our side. */
   async function revokeOrDrop(did: Did, deadline: AbortSignal): Promise<void> {
     try {
-      await withTimeout(deps.revokeGrant(did), deadline);
+      await withRevokeTimeout(deps.revokeGrant(did), deadline);
     } catch (cause: unknown) {
       deps.log.warn("oauth.revoke_failed", { kind: className(cause) });
       await deps.deleteTokenSet(did, deadline).catch((drop: unknown) => {
