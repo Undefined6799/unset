@@ -34,6 +34,11 @@ export type CallbackDeps = {
   ) => Promise<{ cookieValue: string; expiresAt: Date }>;
   /** SESSION_ABSOLUTE_S: the cookie lives as long as the session can. */
   sessionMaxAgeS: number;
+  /**
+   * P1.36y sign-in-lock.ts `during`: from the library storing the token set until the session row exists, the
+   * account's lock is held, so the last browser's sign-out cannot revoke this grant midway.
+   */
+  signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   log: Logger;
 };
 
@@ -102,10 +107,11 @@ export function oauthCallbackRoutes(deps: CallbackDeps): Route[] {
       rateLimit: "login",
       mutates: true,
       session: "none",
-      handler: async ({ request, deadline }) => {
-        const completed = await deps.complete(new URL(request.url).searchParams);
-        return finish(request, completed, deadline);
-      },
+      handler: ({ request, deadline }) =>
+        deps.signInScope(async () => {
+          const completed = await deps.complete(new URL(request.url).searchParams);
+          return finish(request, completed, deadline);
+        }),
     }),
   ];
 }

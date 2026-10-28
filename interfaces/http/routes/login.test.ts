@@ -83,6 +83,7 @@ function setup(world: World = {}) {
     issuerOf: async () => `https://${PDS}`,
     revokeGrant: async () => undefined,
     deleteTokenSet: async () => undefined,
+    whenLastBrowser: (_did, _deadline, fn) => fn(),
     page: deps.page,
     screens: web.screens,
     pdsIssuer: `https://${PDS}`,

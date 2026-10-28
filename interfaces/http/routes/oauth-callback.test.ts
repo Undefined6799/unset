@@ -73,6 +73,14 @@ function setup(world: World = {}) {
       return { cookieValue: SID, expiresAt: new Date(Date.now() + 1000) };
     },
     sessionMaxAgeS: 2_592_000,
+    signInScope: async (fn) => {
+      calls.push("scope opens");
+      try {
+        return await fn();
+      } finally {
+        calls.push("scope ends");
+      }
+    },
     log,
   };
   const server = createServer({ config: CONFIG, routes: oauthCallbackRoutes(deps), policies, log });
@@ -81,7 +89,9 @@ function setup(world: World = {}) {
     if (cookie !== undefined) headers.set("cookie", cookie);
     return server.request(new Request(`${ORIGIN}/oauth/callback${query}`, { headers }), "10.0.0.1");
   };
-  return { send, calls, created, lines, routes: server.routeTable() };
+  // Every test but the scope's own reads the calls made inside the sign-in scope.
+  const inner = () => calls.filter((call) => !call.startsWith("scope "));
+  return { send, calls, inner, created, lines, routes: server.routeTable() };
 }
 
 const NONCE_COOKIE = `__Host-oauth_nonce=${NONCE}`;
@@ -91,13 +101,20 @@ const cookies = (response: Response) => response.headers.getSetCookie();
 const events = (lines: Record<string, unknown>[]) => lines.filter((line) => String(line.event).startsWith("auth."));
 
 describe("GET /oauth/callback", () => {
+  test("callback_runs_inside_the_sign_in_scope", async () => {
+    // P1.36y: the token set is stored and the session row created while the account's sign-in lock can be held.
+    const { send, calls } = setup();
+    await send(NONCE_COOKIE);
+    expect(calls).toEqual(["scope opens", "complete st", `consume ${NONCE}`, "create", "scope ends"]);
+  });
+
   test("callback_success_creates_session", async () => {
-    const { send, calls, created, lines } = setup();
+    const { send, inner: calls, created, lines } = setup();
     const response = await send(NONCE_COOKIE);
     expect(response.status).toBe(303);
     expect(location(response)).toBe("/did");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(calls).toEqual(["complete st", `consume ${NONCE}`, "create"]);
+    expect(calls()).toEqual(["complete st", `consume ${NONCE}`, "create"]);
     expect(created).toEqual([{ did: DID, replacing: null }]);
     expect(cookies(response)).toEqual([
       CLEAR_NONCE,
@@ -123,11 +140,11 @@ describe("GET /oauth/callback", () => {
 
   test("callback_no_cookie_or_cookie_mismatch", async () => {
     for (const cookie of [undefined, `__Host-oauth_nonce=${"m".repeat(43)}`, `${NONCE_COOKIE}; ${NONCE_COOKIE}`]) {
-      const { send, calls, lines } = setup();
+      const { send, inner: calls, lines } = setup();
       const response = await send(cookie);
       expect(location(response), String(cookie)).toBe("/login?error=login.state_mismatch");
       // Nothing consumed, no session, and the cookie stays: another tab's flow may still own it.
-      expect(calls).toEqual(["complete st"]);
+      expect(calls()).toEqual(["complete st"]);
       expect(cookies(response)).toEqual([]);
       expect(events(lines)).toEqual([
         expect.objectContaining({ event: "auth.login_denied", code: "login.state_mismatch" }),
@@ -137,25 +154,25 @@ describe("GET /oauth/callback", () => {
 
   test("callback_library_failures_keep_the_nonce", async () => {
     for (const reason of ["expired", "consent_denied", "pds_unreachable", "failed"] as const) {
-      const { send, calls } = setup({ completed: { ok: false, reason } });
+      const { send, inner: calls } = setup({ completed: { ok: false, reason } });
       const response = await send(NONCE_COOKIE);
       expect(location(response)).toBe(`/login?error=login.${reason}`);
-      expect(calls).toEqual(["complete st"]);
+      expect(calls()).toEqual(["complete st"]);
       expect(cookies(response)).toEqual([]);
     }
   });
 
   test("callback_nonce_already_spent", async () => {
-    const { send, calls } = setup({ consumed: "invalid" });
+    const { send, inner: calls } = setup({ consumed: "invalid" });
     const response = await send(NONCE_COOKIE);
     expect(location(response)).toBe("/login?error=login.expired");
-    expect(calls).toEqual(["complete st", `consume ${NONCE}`]);
+    expect(calls()).toEqual(["complete st", `consume ${NONCE}`]);
   });
 
   test("callback_nonce_store_down", async () => {
-    const { send, calls } = setup({ consumed: "throws" });
+    const { send, inner: calls } = setup({ consumed: "throws" });
     expect(location(await send(NONCE_COOKIE))).toBe("/login?error=login.failed");
-    expect(calls).not.toContain("create");
+    expect(calls()).not.toContain("create");
   });
 
   test("callback_appstate_malformed", async () => {
@@ -168,18 +185,18 @@ describe("GET /oauth/callback", () => {
       appState({ expectedDid: "alice" }),
     ];
     for (const shape of shapes) {
-      const { send, calls } = setup({ completed: { appState: shape } });
+      const { send, inner: calls } = setup({ completed: { appState: shape } });
       expect(location(await send(NONCE_COOKIE)), shape).toBe("/login?error=login.failed");
-      expect(calls).toEqual(["complete st"]);
+      expect(calls()).toEqual(["complete st"]);
     }
   });
 
   test("callback_expected_account", async () => {
-    const { send, calls } = setup({ completed: { did: OTHER } });
+    const { send, inner: calls } = setup({ completed: { did: OTHER } });
     const response = await send(NONCE_COOKIE);
     expect(location(response)).toBe("/login?error=login.account_mismatch");
     // The nonce is spent and its cookie cleared; the grant stays for that account's other browsers.
-    expect(calls).toEqual(["complete st", `consume ${NONCE}`]);
+    expect(calls()).toEqual(["complete st", `consume ${NONCE}`]);
     expect(cookies(response)).toEqual([CLEAR_NONCE]);
     const chooser = setup({ completed: { did: OTHER, appState: appState({ expectedDid: null }) } });
     expect(location(await chooser.send(NONCE_COOKIE))).toBe("/did");
@@ -187,10 +204,10 @@ describe("GET /oauth/callback", () => {
 
   test("callback_scope_insufficient_revokes", async () => {
     const narrow = SCOPE_METADATA.replace(" account:email?action=read", "");
-    const { send, calls } = setup({ completed: { scope: narrow } });
+    const { send, inner: calls } = setup({ completed: { scope: narrow } });
     const response = await send(NONCE_COOKIE);
     expect(location(response)).toBe("/login?error=login.scope_insufficient");
-    expect(calls).toEqual(["complete st", `consume ${NONCE}`, "revoke"]);
+    expect(calls()).toEqual(["complete st", `consume ${NONCE}`, "revoke"]);
   });
 
   test("callback_rotates_old_session", async () => {

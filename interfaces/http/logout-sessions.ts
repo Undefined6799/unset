@@ -5,6 +5,7 @@
 import type { Did } from "@unset/domains-identity";
 import { type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { Session, SessionDb, SessionLimits, SessionStore } from "@unset/infrastructure-session";
+import type { DidLock } from "./sign-in-lock.ts";
 
 /**
  * How many of `did`'s sessions can still sign a browser in (P2.08c). A row past its idle or absolute expiry is not
@@ -33,12 +34,15 @@ export function browserLogout(options: {
   readonly limits: SessionLimits;
   /** `@atproto/oauth-client` 0.8.9 `OAuthClient.revoke` (dist/oauth-client.js). Deletes the stored set in a `finally`. */
   readonly revoke: (did: Did) => Promise<void>;
+  /** The account's sign-in lock (P1.36y, sign-in-lock.ts), held by a sign-in while it stores its token set. */
+  readonly lockDid: DidLock;
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
+  whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
 } {
-  const { pool, sessions, limits, revoke } = options;
+  const { pool, sessions, limits, revoke, lockDid } = options;
   return {
     destroySession: (session, deadline) =>
       withTransaction(pool, deadline, async (tx) => {
@@ -46,6 +50,12 @@ export function browserLogout(options: {
         return remainingSessions(tx, session.did, limits.idleS);
       }),
     revokeGrant: revoke,
+    // Counted again under the lock: a sign-in that finished since the delete above has its session row by now.
+    whenLastBrowser: (did, deadline, fn) =>
+      lockDid(did, async () => {
+        const remaining = await withClient(pool, deadline, (db) => remainingSessions(db, did, limits.idleS));
+        if (remaining === 0) await fn();
+      }),
     deleteTokenSet: (did, deadline) =>
       withClient(pool, deadline, (db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did])).then(
         () => undefined,

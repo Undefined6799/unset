@@ -10,6 +10,8 @@ import { inTransaction } from "./tx.ts";
 /** What each lock serialises: the first int4 of the lock key. Closed; a new use adds a line, never reuses a number. */
 export const LockNamespace = {
   oauth: 1,
+  /** One account's sign-in against its last browser's sign-out (P1.36y, interfaces/http/sign-in-lock.ts). */
+  signIn: 2,
 } as const;
 export type LockNamespace = (typeof LockNamespace)[keyof typeof LockNamespace];
 

@@ -31,6 +31,8 @@ type World = {
   issuer?: string | null | Error | "stall";
   /** The last browser's revocation fails at the PDS (P2.08g). */
   revokeFails?: boolean;
+  /** P1.36y: what the recount under the account's lock finds: a sign-in finished meanwhile, or the lock failed. */
+  underLock?: "still_last" | "signed_in_meanwhile" | "lock_fails";
 };
 
 function setup(world: World = {}) {
@@ -75,6 +77,12 @@ function setup(world: World = {}) {
     deleteTokenSet: async () => {
       calls.push("deleteTokenSet");
       if (!world.revokeFails) throw new Error("token delete is not this test");
+    },
+    whenLastBrowser: async (_did, _deadline, fn) => {
+      calls.push("lock");
+      if (world.underLock === "lock_fails") throw new Error("LockTimeout");
+      if (world.underLock === "signed_in_meanwhile") return;
+      await fn();
     },
     page: testPage(log),
     screens: web.screens,
@@ -163,7 +171,7 @@ describe("POST /logout", () => {
     const { send, calls } = setup({ remaining: 0 });
     const response = await send("/logout");
     expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
-    expect(calls).toEqual(["issuerOf", "destroy", "revoke"]);
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke"]);
   });
 
   test("logout_double_click_ends_at_the_fallback_link", async () => {
@@ -193,10 +201,29 @@ describe("POST /logout", () => {
     const { send, calls, lines } = setup({ remaining: 0, revokeFails: true });
     const response = await send("/logout");
     expect(response.headers.get("location")).toBe("/signed-out");
-    expect(calls).toEqual(["issuerOf", "destroy", "revoke", "deleteTokenSet"]);
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke", "deleteTokenSet"]);
     expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toEqual([
       expect.objectContaining({ kind: "Error" }),
     ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
+  });
+
+  test("logout.last_browser_keeps_a_grant_a_new_sign_in_took", async () => {
+    // P1.36y: the count said last browser, but under the account's lock a sign-in elsewhere had already finished, so
+    // the grant it stored stays.
+    const { send, calls } = setup({ remaining: 0, underLock: "signed_in_meanwhile" });
+    expect((await send("/logout")).headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["issuerOf", "destroy", "lock"]);
+  });
+
+  test("logout.last_browser_revokes_when_the_lock_fails", async () => {
+    // P1.36y: no lock is no reason to keep a grant nobody uses (review F13); the revoke runs without it.
+    const { send, calls, lines } = setup({ remaining: 0, underLock: "lock_fails", revokeFails: true });
+    expect((await send("/logout")).headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke", "deleteTokenSet"]);
+    expect(lines.filter((line) => line.event === "oauth.revoke_failed")[0]).toEqual(
+      expect.objectContaining({ kind: "Error" }),
+    );
     expect(JSON.stringify(lines)).not.toContain(DID);
   });
 

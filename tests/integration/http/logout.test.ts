@@ -6,7 +6,15 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { AUDIT_ACTIONS } from "@unset/infrastructure-audit";
-import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
+import {
+  createLockPool,
+  createOAuthSessionStore,
+  createPool,
+  LockNamespace,
+  withAdvisoryLock,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionDb, type SessionLimits } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
@@ -27,6 +35,14 @@ const webPool = createPool({
   connectTimeoutMs: 5000,
 });
 afterAll(() => webPool.end());
+// P1.36y: the real sign-in lock, as compose builds it, so sign-out recounts under a Postgres advisory lock.
+const lockPool = createLockPool({
+  connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
+  service: "logout-http-lock",
+  max: 2,
+  log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
+});
+afterAll(() => lockPool.pool.end());
 // Reads audit.chain only, to count it (architecture 04:51Z); never handed to the server under test.
 const auditorPool = asAuditor(inject("postgresAuditor"), database);
 afterAll(() => auditorPool.end());
@@ -127,6 +143,8 @@ beforeAll(async () => {
             if (mode === "keep") throw new Error("RevokeDown");
             await tokenSets.del(owner);
           },
+          lockDid: <T>(owner: string, fn: () => Promise<T>) =>
+            withAdvisoryLock(lockPool, LockNamespace.signIn, owner, fn),
         }),
         // P2.08b: these sets carry no recorded issuer; the route tests cover a foreign one.
         issuerOf: async () => null,
