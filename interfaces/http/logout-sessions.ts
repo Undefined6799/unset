@@ -45,7 +45,7 @@ export function browserLogout(options: {
         await sessions.destroy(tx, session.idHash);
         return remainingSessions(tx, session.did, limits.idleS);
       }),
-    revokeGrant: (did) => revoke(did),
+    revokeGrant: revoke,
     deleteTokenSet: (did, deadline) =>
       withClient(pool, deadline, (db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did])).then(
         () => undefined,
