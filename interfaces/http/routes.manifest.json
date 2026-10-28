@@ -199,6 +199,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -209,6 +210,7 @@
     "bodyLimit": 1024,
     "rateLimit": "login",
     "mutates": true,
+    "handlerSession": true,
     "middleware": [
       "requestId",
       "hostCheck",
@@ -227,6 +229,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -236,6 +239,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -245,6 +249,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -254,6 +259,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -263,6 +269,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -273,6 +280,7 @@
     "bodyLimit": 2048,
     "rateLimit": "default",
     "mutates": true,
+    "handlerSession": true,
     "middleware": [
       "requestId",
       "hostCheck",
@@ -291,6 +299,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -301,6 +310,7 @@
     "bodyLimit": 2048,
     "rateLimit": "default",
     "mutates": true,
+    "handlerSession": true,
     "middleware": [
       "requestId",
       "hostCheck",
@@ -319,6 +329,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -329,6 +340,7 @@
     "bodyLimit": 2048,
     "rateLimit": "default",
     "mutates": true,
+    "handlerSession": true,
     "middleware": [
       "requestId",
       "hostCheck",
@@ -365,6 +377,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
@@ -374,6 +387,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
+    "handlerSession": true,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   }
 ]

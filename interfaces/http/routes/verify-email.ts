@@ -79,7 +79,7 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
       path: "/verify-email",
       group: "app",
       rateLimit: "default",
-      session: "none",
+      session: "handler",
       handler: async ({ request, deadline }) => {
         const session = await deps.readSession(request, deadline);
         if (session === null) return login("/verify-email");
@@ -96,7 +96,7 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
       bodyLimit: 1024,
       rateLimit: "login",
       mutates: true,
-      session: "none",
+      session: "handler",
       handler: async ({ request, deadline }) => {
         const session = await deps.readSession(request, deadline);
         if (session === null) return login("/verify-email");

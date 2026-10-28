@@ -165,4 +165,11 @@ is set. The callback asks once more with a page only for a silent appState whose
 same `authorizationTarget` POST /login uses, and 303s straight to the PDS. POST /signed-out ("No thanks") clears the
 marker; CSRF-gated, in the route manifest.
 
+**Session in the manifest (#1279, P1.04s/u).** The web routes gate in their handlers (`openApp`, or
+`readSession` then a 303 to `/login?next=`), never in the kit, so they declare `session: "handler"`: the manifest
+shows `handlerSession: true` and the kit enforces nothing. `"required"` would have the kit read a session, and no
+reader is wired, so it answers 500. `routes.session.test.ts` calls every route signed out and fails when the routes
+that send to sign-in and the declared ones differ. A route that only peeks (GET /login, POST /logout, GET and POST
+/signed-out, /welcome/blocked, /settings's redirect) stays `"none"`. A new path parameter needs a sample value in that test.
+
 **Links.** [[web]], [[config]], [[errors]].
