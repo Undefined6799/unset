@@ -108,6 +108,13 @@ describe("image workflows", () => {
     expect(run).toContain(`docker image inspect --format '{{join .RepoDigests "\\n"}}' "$ref" | grep -qxF "$ref"`);
     expect(run).toContain('docker tag "$ref" "unset-scan/$name:ci"');
     expect(steps.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"');
+    // P2.26h: the lock entry names the commit the provenance attests, both from GITHUB_SHA, so verify-images can bind them.
+    expect(run).toContain('--arg sha "$GITHUB_SHA"');
+    expect(run).toContain("digest: {gitCommit: $sha}");
+    expect(run).toContain(
+      `jq --arg name "$name" --arg ref "$ref" --arg sha "$GITHUB_SHA" \\\n` +
+        `    '.[$name] = {ref: $ref, origin: "first-party", gitCommit: $sha, verify: "cosign-keyless"}'`,
+    );
     // cosign is installed from its release by checksum, before anything signs.
     expect(run).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
   });
