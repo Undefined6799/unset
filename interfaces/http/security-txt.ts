@@ -36,7 +36,7 @@ export function securityContactAllowed(contact: string, origin: string): boolean
 }
 
 /** The Contact value a researcher can use. `privacy-page` becomes the privacy notice on this origin. */
-export function securityContactValue(origin: string, contact: string): string {
+function securityContactValue(origin: string, contact: string): string {
   return contact === SECURITY_CONTACT_PAGE ? `${origin}/legal/privacy` : contact;
 }
 

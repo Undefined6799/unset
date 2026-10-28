@@ -4,7 +4,7 @@
 // (PLAN.md §5.2, domains table). No guard-allow: there is no acceptable exception.
 import { type Finding, isTestFile, PRODUCT_DIRS, scanFiles, sourceFiles } from "./files.ts";
 
-export const SCANNED_DIRS = PRODUCT_DIRS;
+const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "cookie-domain";
 
 const DOMAIN_ATTR = /;\s*domain\s*=/i; // "...; Domain=example.com" in a Set-Cookie string

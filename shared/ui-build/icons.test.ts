@@ -6,7 +6,14 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { ICONOIR_VERSION, type IconsIo, parseSvg, runIcons, sheetDrawings } from "./icons.ts";
+import {
+  APPROVED_EXTENSION_SHA256,
+  ICONOIR_VERSION,
+  type IconsIo,
+  parseSvg,
+  runIcons,
+  sheetDrawings,
+} from "./icons.ts";
 
 const UI = join(import.meta.dirname, "..", "ui");
 const temps: string[] = [];
@@ -169,224 +176,7 @@ test("icon_svg_allowlist_enforced", () => {
     expect(() => sheetDrawings(`var ICONS = ${icons};\n`), icons).toThrow(/icons\.parse/);
 });
 
-// Independent P2.24f fixture inputs: the approved record and exact official Iconoir 7.12.1 source bytes.
-const REGISTRATION = {
-  schemaVersion: 1,
-  baseSheet: {
-    version: "1792621080-00d4",
-    iconReadmeSha256: "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
-    bundleSha256: "bbd51a646aa5252053779db83c2776b2c6a5d4388bde30b31216ff6818fcbcab",
-  },
-  designApproval: {
-    by: "Alex",
-    date: "2026-10-18",
-    record: "docs/human/decisions/0027-pds-frontend-distribution.md",
-    scope:
-      "Existing approved PDS screens and named components; API entries below implement their recorded requirements.",
-  },
-  registeredOn: "2026-10-21",
-  components: {
-    Navigation: {
-      figmaUrls: [
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-806",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-858",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-935",
-      ],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
-      api: [
-        'itemsPlacement?: "end" | "start" = "end"',
-        "renderLink?: NavigationLinkRenderer",
-        "navigationKey?: string | number",
-      ],
-      behavior: [
-        "Vertical start stack with existing 16px gaps",
-        "Labels visible on hover and keyboard focus",
-        "Native auto popover; close after caller-confirmed committed navigation",
-      ],
-    },
-    Header: {
-      figmaUrls: ["https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=32-2086"],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui-design.md#ownership-and-dependency-boundaries"],
-      api: [
-        'HeaderProps.homeLabel?: string = "unset.sh home"',
-        "BrandHeader and BrandHeaderProps, extracted existing brandOnly composition",
-      ],
-      behavior: [
-        "64px desktop and 56px phone",
-        "Translated brand accessible name",
-        "Pure ./brand-header package entry imports no app island runtime",
-      ],
-    },
-    Button: {
-      figmaUrls: [
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=17-456",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
-      ],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
-      api: [
-        'variant?: "solid" | "standalone" = "solid"',
-        "title?: string",
-        "aria-label?: string",
-        'aria-busy?: boolean | "true" | "false"',
-        "button branch: onClick?: MouseEventHandler<HTMLButtonElement>",
-        "button branch: ref?: Ref<HTMLButtonElement>",
-      ],
-      behavior: [
-        "Standalone Link appearance with native button semantics",
-        "Existing disabled/current/pending behavior remains caller-owned",
-        "SafeHref anchor branch and refused/disabled-link fallback remain intact",
-      ],
-    },
-  },
-  iconoir: {
-    version: "7.12.1",
-    commit: "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e",
-  },
-  icons: {
-    devices: {
-      iconoirName: "computer",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1906",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/computer.svg",
-      sourceSha256: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
-      drawings: [
-        [
-          "path",
-          {
-            d: "M2 21L17 21",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M21 21L22 21",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-    apps: {
-      iconoirName: "view-grid",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1911",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/view-grid.svg",
-      sourceSha256: "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd",
-      drawings: [
-        [
-          "path",
-          {
-            d: "M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-    "bulb-off": {
-      iconoirName: "light-bulb",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb.svg",
-      sourceSha256: "c2a5d2a7de5a05a81b169f5701f60fef924d05067c4fcd41b18aa78f718621f8",
-      drawings: [
-        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M9.00082 15C9.00098 13 8.50098 12.5 7.50082 11.5C6.50067 10.5 6.02422 9.48689 6.00082 8C5.95284 4.95029 8.00067 3 12.0008 3C16.001 3 18.0488 4.95029 18.0008 8C17.9774 9.48689 17.5007 10.5 16.5008 11.5C15.501 12.5 15.001 13 15.0008 15",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-      ],
-    },
-    "bulb-on": {
-      iconoirName: "light-bulb-on",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb-on.svg",
-      sourceSha256: "d1f1ec747dffe741096cb553e6ee82d1df24573547a72201f9c1ffe84832743f",
-      drawings: [
-        ["path", { d: "M21 2L20 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M3 2L4 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M21 16L20 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M3 16L4 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-      ],
-    },
-    tv: {
-      iconoirName: "modern-tv",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/modern-tv.svg",
-      sourceSha256: "0c71cfd7f5c25858f2876a85de1bef57f595ad69fa57011f40a87ee86dee6ca5",
-      drawings: [
-        ["path", { d: "M7 21L17 21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-  },
-};
+// Exact official Iconoir 7.12.1 source bytes for the registered icons, independent of the files under test.
 const ADDITIONS: Record<string, string> = {
   devices:
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M2 21L17 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M21 21L22 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
@@ -399,6 +189,14 @@ const ADDITIONS: Record<string, string> = {
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+const APPROVED_TEXT = readFileSync(join(UI, "approved-extensions.json"), "utf8");
+const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
+  designApproval: unknown;
+  icons: Record<
+    "devices" | "apps" | "bulb-off" | "bulb-on" | "tv",
+    { sourceSha256: string; drawings: [string, Record<string, string>][] }
+  >;
+};
 // Recorded from the last absent-pointer commit, 18291e6; never derived with the generator under test.
 const LEGACY_JSON_SHA256 = "3fe0bffbccf8fee5630e762fea71aa5391be5b494c74b70a089e0bbf8db2bbee";
 const LEGACY_MODULES_SHA256 = "419a9455e85d2135b72ab5ed1c1bb765761ecd33bef5602e385a6de839278476";
@@ -456,13 +254,19 @@ function registered() {
   const { files, io } = fixture;
   for (const [name, text] of Object.entries(ADDITIONS)) files.set(`icons/svg/${name}.svg.txt`, text);
   const inventory = JSON.parse(files.get("inventory.json") as string);
-  const pin = (record: unknown = REGISTRATION) => {
-    files.set("approved-extensions.json", JSON.stringify(record));
-    inventory.Icon.extensions = [{ path: "approved-extensions.json", sha256: io.sha256("approved-extensions.json") }];
-    files.set("inventory.json", JSON.stringify(inventory));
-  };
-  pin();
-  return { ...fixture, inventory, pin };
+  files.set("approved-extensions.json", APPROVED_TEXT);
+  inventory.Icon.extensions = [{ path: "approved-extensions.json", sha256: io.sha256("approved-extensions.json") }];
+  files.set("inventory.json", JSON.stringify(inventory));
+  return { ...fixture, inventory };
+}
+
+/** A changed record whose hash is reported as the pin, to reach the checks a reviewed pin bump still meets. */
+function forged(record: unknown) {
+  const fixture = registered();
+  fixture.files.set("approved-extensions.json", JSON.stringify(record));
+  const sha256 = fixture.io.sha256;
+  fixture.io.sha256 = (file) => (file === "approved-extensions.json" ? APPROVED_EXTENSION_SHA256 : sha256(file));
+  return fixture;
 }
 
 function editRecord(path: string, value: unknown): unknown {
@@ -577,56 +381,6 @@ test.each(["missing", "hash", "json"])("icon_present_but_invalid_record_fails_cl
   expect(code(fixture.run())).toEqual(["icons.registration"]);
 });
 
-const PROOF_FIELDS = [
-  "schemaVersion",
-  "baseSheet.version",
-  "baseSheet.iconReadmeSha256",
-  "baseSheet.bundleSha256",
-  "designApproval.by",
-  "designApproval.date",
-  "designApproval.record",
-  "designApproval.scope",
-  "registeredOn",
-  "components.Navigation.figmaUrls",
-  "components.Navigation.requirements",
-  "components.Navigation.api",
-  "components.Navigation.behavior",
-  "components.Header.figmaUrls",
-  "components.Header.requirements",
-  "components.Header.api",
-  "components.Header.behavior",
-  "components.Button.figmaUrls",
-  "components.Button.requirements",
-  "components.Button.api",
-  "components.Button.behavior",
-  "iconoir.version",
-  "iconoir.commit",
-  ...["devices", "apps"].flatMap((name) =>
-    ["iconoirName", "figmaUrl", "sourceUrl", "sourceSha256", "drawings"].map((field) => `icons.${name}.${field}`),
-  ),
-];
-test.each(PROOF_FIELDS)("icon_missing_or_tampered_registration_proof_fails: %s", (path) => {
-  for (const value of [undefined, "changed"]) {
-    const fixture = registered();
-    fixture.pin(editRecord(path, value));
-    expect(code(fixture.run()), `${path}: ${String(value)}`).toEqual(["icons.registration"]);
-  }
-});
-
-test.each([
-  ["extra", true],
-  ["components.Input", {}],
-  ["icons.third", REGISTRATION.icons.apps],
-  ["icons.devices.extra", true],
-  ["icons.devices.iconoirName", "view-grid"],
-  ["icons.apps.drawings.0.1.onload", "alert(1)"],
-  ["icons.devices.drawings.0.1.d", "M0 0"],
-])("icon_unregistered_or_unsafe_record_is_refused: %s", (path, value) => {
-  const fixture = registered();
-  fixture.pin(editRecord(path as string, value));
-  expect(code(fixture.run())).toEqual(["icons.registration"]);
-});
-
 test.each(["devices", "apps"])("icon_extension_source_bytes_are_immutable: %s", (alias) => {
   for (const change of ["\n", "<script>alert(1)</script>", ' onload="alert(1)"']) {
     const fixture = registered();
@@ -643,27 +397,43 @@ test("icon_extension_rejects_extra_or_missing_sources_and_alias_collision", () =
   const missing = registered();
   missing.files.delete("icons/svg/apps.svg.txt");
   expect(code(missing.run())).toEqual(["icons.list_mismatch"]);
-  const collision = registered();
-  const record = structuredClone(REGISTRATION) as unknown as { icons: Record<string, unknown> };
-  record.icons.settings = record.icons.devices;
-  delete record.icons.devices;
-  collision.pin(record);
-  expect(code(collision.run())).toEqual(["icons.registration"]);
+  const collision = forged(editRecord("icons.settings", REGISTRATION.icons.devices));
+  collision.files.set("icons/svg/settings.svg.txt", ADDITIONS.devices as string);
+  expect(code(collision.run())).toEqual(["icons.list_mismatch"]);
 });
 
-test("icon_component_api_prose_can_record_reviewed_packaging_without_changing_proof", () => {
-  const fixture = registered();
-  const record = structuredClone(REGISTRATION);
-  record.components.Header.api.push("Pure presentation package entry exposes the registered components");
-  record.components.Header.behavior.push("Package entry reaches only presentation code");
-  fixture.pin(record);
-  expect(fixture.run()).toEqual({ code: 0, lines: [] });
+test("icon_extension_bytes_match_the_reviewed_pin", () => {
+  expect(sha256(APPROVED_TEXT)).toBe(APPROVED_EXTENSION_SHA256);
+  const pointer = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8")).Icon.extensions;
+  expect(pointer).toEqual([{ path: "approved-extensions.json", sha256: APPROVED_EXTENSION_SHA256 }]);
 });
 
-test("icon_registration_key_order_has_no_effect_on_proof", () => {
-  const fixture = registered();
-  fixture.pin(Object.fromEntries(Object.entries(REGISTRATION).reverse()));
-  expect(fixture.run()).toEqual({ code: 0, lines: [] });
+test.each([0, Math.floor(APPROVED_TEXT.length / 2), APPROVED_TEXT.length - 1])(
+  "icon_one_byte_change_to_the_approved_record_fails_closed: offset %i",
+  (offset) => {
+    const fixture = registered();
+    const flipped = APPROVED_TEXT[offset] === " " ? "\t" : " ";
+    const changed = `${APPROVED_TEXT.slice(0, offset)}${flipped}${APPROVED_TEXT.slice(offset + 1)}`;
+    fixture.files.set("approved-extensions.json", changed);
+    fixture.inventory.Icon.extensions[0].sha256 = sha256(changed);
+    fixture.files.set("inventory.json", JSON.stringify(fixture.inventory));
+    const result = fixture.run();
+    expect(code(result)).toEqual(["icons.registration"]);
+    expect(result.lines[0]).toContain("shared/ui/approved-extensions.json");
+    expect(result.lines[0]).toContain(sha256(changed));
+    expect(result.lines[0]).toContain(APPROVED_EXTENSION_SHA256);
+  },
+);
+
+test.each([
+  ["icons.apps.drawings.0.1.onload", "alert(1)", "icons.parse"],
+  ["icons.apps.drawings.0.0", "script", "icons.parse"],
+  ["icons.devices.sourceSha256", "changed", "icons.registration"],
+  ["icons.devices.iconoirName", undefined, "icons.registration"],
+  ["icons", undefined, "icons.registration"],
+  ["icons.devices.drawings.0.1.d", "M0 0", "icons.drawing_mismatch"],
+])("icon_pinned_record_shape_is_still_checked: %s", (path, value, expected) => {
+  expect(code(forged(editRecord(path, value)).run())).toEqual([expected]);
 });
 
 test.each(["devices", "apps"])("icon_registered_source_still_passes_the_existing_svg_parser: %s", (alias) => {
@@ -693,21 +463,3 @@ test("icon_extension_pins_the_actual_base_not_only_its_source_record", () => {
   fixture.files.set("sheet/source.json", JSON.stringify(source));
   expect(code(fixture.run())).toEqual(["icons.source_mismatch"]);
 });
-
-test.each(["devices", "apps"])("icon_duplicate_json_alias_is_refused_before_keys_can_be_overwritten: %s", (alias) => {
-  const fixture = registered();
-  const text = fixture.files.get("approved-extensions.json") as string;
-  fixture.files.set("approved-extensions.json", text.replace(`"${alias}":`, `"${alias}":{},"${alias}":`));
-  fixture.inventory.Icon.extensions[0].sha256 = fixture.io.sha256("approved-extensions.json");
-  fixture.files.set("inventory.json", JSON.stringify(fixture.inventory));
-  expect(code(fixture.run())).toEqual(["icons.registration"]);
-});
-
-test.each([[], [""], [" "], [17], [null]].map((value) => ({ value })))(
-  "icon_empty_or_nontext_component_prose_is_refused: %j",
-  ({ value }) => {
-    const fixture = registered();
-    fixture.pin(editRecord("components.Header.api", value));
-    expect(code(fixture.run())).toEqual(["icons.registration"]);
-  },
-);

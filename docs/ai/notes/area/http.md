@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-23
+checked: 2026-10-28
 ---
 # http
 
@@ -38,8 +38,8 @@ book's `/__test/` paths fail the kit's path template, which refuses a leading un
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
-identity network and DID resolver, and the one OAuth client over them, and returns it as `oauth` for the sign-in
-routes; building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
+itself (compose returns only `server` and `boot`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
 which writes the secrets to files; the runtime image copies each package the server imports, and
@@ -164,5 +164,10 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 **In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
 signed-in browser to `/did` (the box posts from public pages, which never vary on the cookie).
+
+**Silent sign-in (P2.05s).** POST /login asks with `prompt=none` (appState `silent: true`) unless `__Host-signed_out`
+is set. The callback asks once more with a page only for a silent appState whose nonce cookie matches, through the
+same `authorizationTarget` POST /login uses, and 303s straight to the PDS. POST /signed-out ("No thanks") clears the
+marker; CSRF-gated, in the route manifest.
 
 **Links.** [[web]], [[config]], [[errors]].

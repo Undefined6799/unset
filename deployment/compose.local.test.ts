@@ -5,16 +5,7 @@
 // (item 11 holds over item 14: step book 03:46Z, book edit 2026-10-14-p134d-split, "verify-903-8b2abfc S1"). A
 // local-only service has no dev twin, so its environment and env_file are pinned here instead (P1.35r I-2).
 import { execFileSync } from "node:child_process";
-import {
-  lstatSync,
-  mkdtempSync,
-  readFileSync,
-  readlinkSync,
-  realpathSync,
-  rmSync,
-  type Stats,
-  statSync,
-} from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -37,6 +28,7 @@ import {
   LOCAL_ONLY_NETWORKS,
   LOCAL_ONLY_SERVICES,
 } from "./preflight/local-only.ts";
+import { type VirtualEntry, virtualCheckout } from "./preflight/virtual-checkout.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const parse = (file: string): Compose => parseCompose(readFileSync(join(DEPLOYMENT, file), "utf8"), file);
@@ -966,7 +958,7 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
   const DEPLOY_UID = 4242;
   const DEV = 0x7fff0002;
   let pki = "";
-  const files = new Map<string, { kind: "dir" | "file"; mode: number; uid: number; text?: string; names?: string[] }>();
+  const files = new Map<string, VirtualEntry>();
 
   beforeAll(() => {
     pki = mkdtempSync(join(tmpdir(), "compose-local-"));
@@ -1028,39 +1020,7 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
   });
   afterAll(() => rmSync(pki, { recursive: true, force: true }));
 
-  const inCheckout = (path: string) => path === CHECKOUT || path.startsWith(`${CHECKOUT}/`);
-  const aboveCheckout = (path: string) => path === "/" || CHECKOUT.startsWith(`${path}/`);
-  /** A stat of a virtual entry; a copy of a real one, so the methods are Node's. */
-  const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
-    Object.assign(lstatSync(DEPLOYMENT), {
-      mode: (kind === "dir" ? 0o040000 : 0o100000) | mode,
-      uid,
-      size: kind === "dir" ? 4096 : 24,
-      nlink: kind === "dir" ? 2 : 1,
-      dev: DEV,
-      ino,
-    });
-  const look = (read: (path: string) => Stats) => (path: string) => {
-    const entry = files.get(path);
-    if (entry !== undefined) return made(entry.kind, entry.mode, entry.uid, 1 + [...files.keys()].indexOf(path));
-    if (aboveCheckout(path)) return made("dir", 0o755, 0, 100 + path.length);
-    if (!inCheckout(path)) return null;
-    try {
-      const info = read(path);
-      // The checkout as the deploy user's, with no group or other write.
-      return Object.assign(info, { uid: DEPLOY_UID, mode: info.mode & ~0o022 });
-    } catch {
-      return null;
-    }
-  };
-  const real = <T>(path: string, read: () => T): T | null => {
-    if (!inCheckout(path)) return null;
-    try {
-      return read();
-    } catch {
-      return null;
-    }
-  };
+  const { aboveCheckout, look, real } = virtualCheckout({ checkout: CHECKOUT, files, deployUid: DEPLOY_UID, dev: DEV });
 
   const realLocalArgs = () => [
     "--env",

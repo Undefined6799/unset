@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { safeReturnPath } from "@unset/shared-http";
-import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
@@ -16,7 +15,7 @@ import { config } from "../config.ts";
 import { THEME_COOKIE } from "../prefs/theme.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements } from "../web/fixtures/html.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 
 const ORIGIN = "https://unset.test";
 const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
@@ -166,32 +165,14 @@ describe("POST /prefs/theme", () => {
   // browser would, lands on that page with its checked next and handle; the server re-checks whatever it is sent.
   test("prefs_sign_in_round_trip_keeps_next_and_handle", async () => {
     const rendered = async (path: string): Promise<string | undefined> => {
-      const response = pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
-        },
-        {
-          group: "app",
-          request: new Request(`${ORIGIN}${path}`),
-          title: "Sign in",
-          body: null,
-          islands: "off",
-          shell: {},
-        },
-      );
+      const response = testPage()({
+        group: "app",
+        request: new Request(`${ORIGIN}${path}`),
+        title: "Sign in",
+        body: null,
+        islands: "off",
+        shell: {},
+      });
       const forms = elements(parse(await response.text()), "form", { method: "post", action: "/prefs/theme" });
       const input = elements(forms[0], "input", { type: "hidden", name: "return" })[0];
       return input?.attrs?.find((attribute) => attribute.name === "value")?.value;

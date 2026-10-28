@@ -136,3 +136,40 @@ test("run_ignores_other_workflows_and_rejects_two_pull_requests", async () => {
   expect(await runAutoMerge({ ...env, PR_NUMBERS: "[7, 8]" }, github)).toBe(1);
   expect(await runAutoMerge({ ...env, HEAD_SHA: "nope" }, github)).toBe(1);
 });
+
+test("run_turns_auto_merge_off_on_every_pull_request_when_two_match", async () => {
+  const disabled: string[] = [];
+  const github: MergeClient = {
+    pullsForCommit: async () => [7, 8],
+    pull: async (number) => ({ ...pull, number, nodeId: `PR_${number}`, autoMerge: number === 7 ? "squash" : "off" }),
+    files: async () => [{ path: "README.md" }],
+    check: async () => "success",
+    enable: async () => {
+      throw new Error("should not enable");
+    },
+    disable: async (id) => {
+      disabled.push(id);
+    },
+  };
+  expect(await runAutoMerge({ ...env, PR_NUMBERS: "[7, 8]" }, github)).toBe(1);
+  expect(disabled).toEqual(["PR_7"]);
+});
+
+test("run_keeps_turning_auto_merge_off_when_one_read_fails", async () => {
+  const disabled: string[] = [];
+  const github: MergeClient = {
+    pullsForCommit: async () => [7, 8],
+    pull: async (number) => {
+      if (number === 7) throw new Error("github 502 /pulls/7");
+      return { ...pull, number, nodeId: `PR_${number}`, autoMerge: "squash" };
+    },
+    files: async () => [{ path: "README.md" }],
+    check: async () => "success",
+    enable: async () => undefined,
+    disable: async (id) => {
+      disabled.push(id);
+    },
+  };
+  expect(await runAutoMerge({ ...env, PR_NUMBERS: "[7, 8]" }, github)).toBe(1);
+  expect(disabled).toEqual(["PR_8"]);
+});

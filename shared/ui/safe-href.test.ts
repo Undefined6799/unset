@@ -17,6 +17,10 @@ describe("safeHref.table", () => {
     ["\\\\evil.example/", ALL],
     ["/\t/evil.example/", ALL],
     ["/\n/evil.example/", ALL],
+    ["/.//evil.example/", ALL],
+    ["/a/..//evil.example/x", ALL],
+    ["/%2e//evil.example/", ALL],
+    ["/./%2e//evil.example/", ["path"] as HrefScheme[]],
     ["https://user:pass@a.example/", ALL],
     ["https://user@a.example/", ALL],
     ["http://:pass@a.example/", ALL],
@@ -44,6 +48,7 @@ describe("safeHref.table", () => {
     ["mailto:hello@a.example", ["mailto:"], "mailto:hello@a.example"],
     ["/settings", ["path"], "/settings"],
     ["/a/../b?c=d#e", ["path"], "/b?c=d#e"],
+    ["/a//b", ["path"], "/a//b"],
     ["/@alice", ["path"], "/@alice"],
     ["/", ["path"], "/"],
   ] as [string, HrefScheme[], string][])("%j is %j", (raw, allow, expected) => {

@@ -168,7 +168,7 @@ async function setup(world: World = {}) {
     ownIssuer: world.ownIssuer ?? PDS,
     log,
   });
-  const run = (input: string, prompt?: "login") =>
+  const run = (input: string, prompt?: "login" | "none") =>
     authorize(client, input, {
       appState: APP_STATE,
       ...(prompt ? { prompt } : {}),
@@ -204,6 +204,9 @@ describe("authorize", () => {
     expect([...states.values()].map((state) => state.appState)).toEqual([APP_STATE]);
     expect((await run(PDS)).ok).toBe(true);
     expect(pars[1]?.has("prompt")).toBe(false);
+    // P2.05s: the silent attempt asks for no page at all.
+    expect((await run(PDS, "none")).ok).toBe(true);
+    expect(pars[2]?.get("prompt")).toBe("none");
   });
 
   test("authorize_set_unresolvable_falls_back", async () => {
@@ -354,6 +357,18 @@ describe("completeAuthorization", () => {
     expect(posts).toEqual([]);
   });
 
+  test("callback_silent_refusal_hands_back_the_app_state", async () => {
+    // P2.05s: a prompt=none request the server cannot answer without a page comes back as one of these errors
+    // (@atproto/oauth-provider 0.23.1, oauth-provider.js:291-305), with the state, so the route can ask again.
+    for (const error of ["login_required", "consent_required", "interaction_required", "account_selection_required"]) {
+      const { started, complete, posts, logged } = await setup();
+      const query = await started({ error, iss: PDS });
+      expect(await complete(query), error).toEqual({ ok: false, reason: "interaction_required", appState: APP_STATE });
+      expect(posts).toEqual([]);
+      expect(logged).toEqual([]);
+    }
+  });
+
   test("callback_mixup_iss", async () => {
     // A callback naming another issuer is refused before any token request (oauth-client.js:184-194).
     const { started, complete, posts, logged } = await setup();
@@ -407,6 +422,18 @@ describe("completeAuthorization", () => {
     expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
     // verify-1131 N5: the refusal is logged as a fixed kind, never the DID, handle or host (SE-7).
     expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "account_elsewhere" } });
+  });
+
+  test("callback_without_app_state_revokes_the_grant", async () => {
+    // P1.36x red: a callback the library completes but that this app cannot use leaves no grant behind. The stored
+    // state loses its appState here, so the library hands back `state: null` after it has stored the token set.
+    const { started, complete, states, sessions, posts, logged } = await setup();
+    const query = await started();
+    for (const [key, { appState: _dropped, ...saved }] of states) states.set(key, saved);
+    expect(await complete(query)).toEqual({ ok: false, reason: "failed" });
+    expect(sessions.size).toBe(0);
+    expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
+    expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "no_app_state" } });
   });
 
   test("callback_second_login_replaces_the_set", async () => {

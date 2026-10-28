@@ -5,7 +5,7 @@
 // comment that is not one of these files. No guard-allow: the allowlist below is the only exception.
 import { type Finding, PRODUCT_DIRS, scanFiles, sourceFiles } from "./files.ts";
 
-export const SCANNED_DIRS = PRODUCT_DIRS;
+const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "also-known-as";
 const NAME = /alsoknownas/i;
 

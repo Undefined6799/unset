@@ -64,13 +64,11 @@ test("http_policies_match_limits_ts", async () => {
   expect(loaded.ok).toBe(true);
   if (!loaded.ok) return;
   const http = loaded.model.processes.find((process) => process.name === "http");
-  const indexer = loaded.model.processes.find((process) => process.name === "indexer");
   expect(http?.policies?.get("default")).toEqual([
     { scope: "ip", capacity: 60, refillPerSec: 5 },
     { scope: "global", capacity: 3000, refillPerSec: 50 },
   ]);
   expect(http?.policies?.get("login")).toEqual([{ scope: "ip", capacity: 10, refillPerSec: 10 / 60 }]);
-  expect(indexer?.policies).toBeNull();
 });
 
 describe("endpoint cells", () => {
@@ -156,6 +154,16 @@ describe("endpoint inputs", () => {
     const page = join(root, "docs/site/content/endpoints/demo.md");
     writeFileSync(page, readFileSync(page, "utf8").replace("probe", "changed"));
     expect(await checkEndpoints(root)).toEqual(["docs/site/content/endpoints/demo.md differs from the generator"]);
+  });
+
+  test("a_process_without_limits_ts_has_no_policies", async () => {
+    const root = tempRepo();
+    writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([HEALTH]));
+    writeFileSync(join(root, "docs/site/data/endpoints/demo.yaml"), '"GET /health": {}\n');
+    const loaded = await loadEndpointModel(root);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.model.processes.map((process) => [process.name, process.policies])).toEqual([["demo", null]]);
   });
 
   test("a_named_policy_without_limits_ts_fails", async () => {

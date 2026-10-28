@@ -67,7 +67,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V1.4.2 | Sign, range, and input validation techniques are used to prevent integer overflows | n/a | n/a: memory-safe runtime (Node.js); no native addon of ours, pg-native refused (ADR 0014) | — |
 | V1.4.3 | Dynamically allocated memory and resources are released, and that references or pointers … | n/a | n/a: memory-safe runtime (Node.js); no native addon of ours, pg-native refused (ADR 0014) | — |
 | V1.5.1 | The application configures XML parsers to use a restrictive configuration and that unsafe … | open |  | — |
-| V1.5.2 | Deserialization of untrusted data enforces safe input handling, such as using an … | partial | `test:shared/islands/readProps.test.ts#read_props_survives_dom_clobbering`, `test:shared/islands/props.review.test.ts#accessors_are_refused_and_never_read_twice` | — |
+| V1.5.2 | Deserialization of untrusted data enforces safe input handling, such as using an … | partial | `test:shared/islands/readProps.test.ts#read_props_survives_dom_clobbering`, `test:shared/islands/props.test.ts#accessors_are_refused_and_never_read_twice` | — |
 
 ## V2 Validation and Business Logic
 
@@ -339,7 +339,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V15.3.3 | The application has countermeasures to protect against mass assignment attacks by … | partial | `test:shared/lexicons/src/validate.test.ts#validate_write_rejects_unknown_field`, `step:P2.23` | P2.23 |
 | V15.3.4 | All proxying and middleware components transfer the user's original IP address correctly … | covered | `test:shared/http/trustedProxy.test.ts#header_rightmost`, `test:shared/http/trustedProxy.test.ts#header_ignored_from_untrusted_peer`, `test:shared/http/server.test.ts#trusted_proxy_on_every_route_but_health`, `test:deployment/local-stack.test.ts#pds_device_row_has_no_client_ip` | P1.28 |
 | V15.3.5 | The application explicitly ensures that variables are of the correct type and performs … | partial | `lint:noExplicitAny`, `test:shared/config/schema.test.ts#int_and_url_refuse_lax_forms`, `test:scripts/workspace/references.test.ts#nested_project_red_fixtures` | — |
-| V15.3.6 | JavaScript code is written in a way that prevents prototype pollution, for example, by … | partial | `test:shared/islands/props.test.ts#proto_key_roundtrip`, `test:shared/islands/props.keys.test.ts#escaped_keys_are_refused` | — |
+| V15.3.6 | JavaScript code is written in a way that prevents prototype pollution, for example, by … | partial | `test:shared/islands/props.test.ts#proto_key_roundtrip`, `test:shared/islands/props.test.ts#escaped_keys_are_refused` | — |
 | V15.3.7 | The application has defenses against HTTP parameter pollution attacks, particularly if … | open |  | — |
 
 ## V16 Security Logging and Error Handling

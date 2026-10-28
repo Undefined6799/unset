@@ -3,7 +3,7 @@
 // it (shared/ui/safe-href.ts, P1.24h). A hole is {{name}} and is substituted later, never concatenated into HTML.
 import { type SafeHref, safeHref } from "@unset/shared-ui";
 
-export const LEGAL_HOLES = ["privacyOfficerTitle", "privacyOfficerContact", "supportEmail", "pdsHost"] as const;
+const LEGAL_HOLES = ["privacyOfficerTitle", "privacyOfficerContact", "supportEmail", "pdsHost"] as const;
 export type LegalHole = (typeof LEGAL_HOLES)[number];
 export type LegalValues = Record<LegalHole, string>;
 

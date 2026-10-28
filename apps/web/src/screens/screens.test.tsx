@@ -118,9 +118,9 @@ describe("signed-out screen", () => {
       "You are going to pds.example, our sign-in server; it is the only place you type your password",
     );
     expect(page).toContain(">Your account on pds.example<span");
-    // The sheet's standalone Link, like the account choice above it (Link README).
-    expect(page).toMatch(/href="\/"[^>]*>No thanks<svg/);
-    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account", "/"]);
+    // P2.05s: "No thanks" posts, so it can end the password ask; it keeps the standalone look (Button README).
+    expect(page).toMatch(/<form action="\/signed-out" method="post"><button[^>]*type="submit"[^>]*>No thanks<svg/);
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
     expect(page).not.toContain("<script");
   });
 
@@ -130,7 +130,7 @@ describe("signed-out screen", () => {
     expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
     expect(own).toContain(">Your account on pds.test<span");
     const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
-    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/"]);
+    expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
     expect(foreign).not.toContain("only place you type your password");
   });
@@ -143,15 +143,14 @@ describe("signed-out screen", () => {
       expect(account).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
       expect(page).toContain('<span class="visually-hidden"> (opens in a new tab)</span>');
     }
-    expect(tags(html(screens.signedOut({ issuer: "https://pds.example", ours: true })), "a")[1]).not.toHaveProperty(
-      "target",
-    );
+    // P2.05s: "No thanks" is a form in this tab, not a link, so nothing else opens a new tab.
+    expect(html(screens.signedOut({ issuer: "https://pds.example", ours: true }))).not.toMatch(/<form[^>]*target=/);
   });
 
   test("pdsAccountLink_refuses_a_non_https_issuer", () => {
     for (const issuer of ["http://pds.example", "javascript:alert(1)", "not a url"]) {
       const page = html(screens.signedOut({ issuer, ours: false }));
-      expect(tags(page, "a").map((a) => a.href)).toEqual(["/"]);
+      expect(tags(page, "a").map((a) => a.href)).toEqual([]);
     }
   });
 });
