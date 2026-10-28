@@ -107,7 +107,9 @@ jobs:
             cosign sign --yes "$ref" < /dev/null
             cosign attest --yes --type slsaprovenance1 --predicate "$RUNNER_TEMP/provenance.json" "$ref" < /dev/null
             cosign attest --yes --type spdxjson --predicate "$RUNNER_TEMP/sbom.json" "$ref" < /dev/null
-            jq --arg name "$name" --arg ref "$ref" '.[$name] = {ref: $ref, origin: "first-party", verify: "cosign-keyless"}' \
+            # The entry names the commit the provenance attests, so verify-images binds the two (P2.26h).
+            jq --arg name "$name" --arg ref "$ref" --arg sha "$GITHUB_SHA" \
+              '.[$name] = {ref: $ref, origin: "first-party", gitCommit: $sha, verify: "cosign-keyless"}' \
               "$RUNNER_TEMP/images.lock.json" > "$RUNNER_TEMP/lock.next" && mv "$RUNNER_TEMP/lock.next" "$RUNNER_TEMP/images.lock.json"
             echo "- $ref" >> "$GITHUB_STEP_SUMMARY"
           done < "$RUNNER_TEMP/images"
