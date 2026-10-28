@@ -49,3 +49,6 @@ sign-in page once staging runs the new edge.
 **Edge Dockerfile rules (P1.34j).** `edge.test.ts#edge_dockerfile_only_what_the_rules_read` refuses any `--mount`,
 heredoc, parser directive or non-ASCII byte, and pins the only build-stage copy to the Caddy binary. Fonts reach the
 image only through a plain `COPY` from the build context, never through a builder stage.
+
+Re-checked at P1.27h (#691), which changed only the edge image tests' docker budgets and helper; the font path, the
+CSP rule and the Caddy shape above are unchanged.

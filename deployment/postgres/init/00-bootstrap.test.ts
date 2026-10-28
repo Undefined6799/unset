@@ -5,7 +5,12 @@ import { randomPassword, runUntilExit, startPostgres, stopAllPostgres } from "..
 
 const initDir = import.meta.dirname;
 
-afterAll(stopAllPostgres);
+// The hook removes the three containers this file starts: two runUntilExit runs and one startPostgres, whose names
+// tests/support/postgres.ts keeps until stopAllPostgres removes them. Each removal is killed at that helper's 60 s
+// (CALL_MS), plus 5 s for the hook's own cleanup; vitest's 10 s hook default is shorter than one killed removal
+// (P1.27h, Amendment 1).
+const STOP_THREE_MS = 3 * 60_000 + 5_000;
+afterAll(stopAllPostgres, STOP_THREE_MS);
 
 describe("00-bootstrap.sh", () => {
   test("bootstrap_script_fails_closed", { timeout: 120_000 }, () => {
