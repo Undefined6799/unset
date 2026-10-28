@@ -36,7 +36,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
-`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`.
+`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`. Each `first-party` entry also names its `gitCommit`, the commit publish-images built it from. `verify-images.ts` checks that it equals the one source commit in the image's signed provenance (P2.26h). An `upstream` entry has none.
 
 | Name | `origin` | Image |
 | --- | --- | --- |
