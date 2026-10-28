@@ -118,7 +118,10 @@ describe("GET /settings/profile", () => {
       { href: "/settings/account", current: false },
     ]);
     expect(html).toContain("Set up your profile");
-    expect(elements(parse(html), "script")).toHaveLength(0);
+    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    expect(
+      elements(parse(html), "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value),
+    ).toEqual(["application/json", "module"]);
   });
 });
 
@@ -139,7 +142,9 @@ describe("GET /settings/account", () => {
     expect(values).toEqual(["alice.pds.unset.test", DID]);
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).toContain("Signs this browser out of unset.sh.");
-    expect(elements(document, "form", { method: "post", action: "/logout" })).toHaveLength(1);
+    // One in the page, one in the menu drawer (P2.13e).
+    const main = elements(document, "main")[0];
+    expect(elements(main, "form", { method: "post", action: "/logout" })).toHaveLength(1);
     expect(html).not.toContain("getBlob");
     expect(checked).toEqual([DID]);
   });

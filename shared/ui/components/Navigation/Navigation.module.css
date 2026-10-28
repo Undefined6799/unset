@@ -1,69 +1,117 @@
 @layer components {
-  .rail,
-  .phone {
+  /* The drawer: full height from the left, over a scrim, 320px wide (Figma 135:858 desktop, 135:935 phone). */
+  .drawer {
+    --surface: var(--color-ground);
     position: fixed;
-    z-index: var(--z-menu);
-    background: var(--color-surface-raised);
-    outline: 1px solid var(--color-line);
-  }
-  .rail {
-    inset: calc(var(--space-8) * 2) auto 0 0;
-    width: 72px;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding-block: var(--space-4);
+    inset: 0 auto 0 0;
     box-sizing: border-box;
+    width: min(320px, calc(100vw - var(--space-12)));
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0 var(--space-4) var(--space-4);
+    border: 0;
+    border-right: 1px solid var(--color-line-strong);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-1);
+    flex-direction: column;
+    overflow-y: auto;
   }
-  .inline {
-    position: static;
+  .drawer:popover-open {
+    display: flex;
   }
-  .items {
+  .drawer::backdrop {
+    background: var(--color-scrim);
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    flex: none;
+  }
+  .close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin-right: calc(-1 * var(--space-3));
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-    margin-top: auto;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
   }
-  .start {
-    margin-top: 0;
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    box-sizing: border-box;
+    height: 48px;
+    padding-inline: var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .row:hover {
+    background: var(--color-surface-raised);
+  }
+  .current {
+    border-color: var(--color-line-strong);
+  }
+  .actions {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-line);
   }
   .extra {
-    margin-top: auto;
-    width: 100%;
-    flex: none;
-    box-sizing: border-box;
-    padding: var(--space-2) var(--space-1) var(--space-2);
-  }
-  .rail .extra label {
-    flex-direction: column;
+    display: flex;
     justify-content: center;
+    margin-top: auto;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-line);
+  }
+  /* The theme picker (ThemePicker.tsx; Figma 151:939): one outlined group of three 32px icon buttons, the chosen one boxed. */
+  .themes {
+    display: inline-flex;
+    margin: 0;
+    min-inline-size: 0;
     gap: var(--space-1);
-    text-align: center;
+    padding: var(--space-1);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
   }
-  .panel .extra {
-    margin-top: var(--space-2);
-    padding: var(--space-3);
+  .theme {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-ink-muted);
+    cursor: pointer;
   }
-  .label {
-    visibility: hidden;
-    position: absolute;
-    left: calc(var(--space-12) + var(--space-3));
-    top: var(--space-1);
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-xs);
-    background: var(--color-ink);
-    color: var(--color-on-ink);
-    white-space: nowrap;
+  .theme:hover {
+    color: var(--color-ink);
   }
-  .label::before {
-    content: "";
-    position: absolute;
-    left: calc(-1 * var(--space-3));
-    top: calc(-1 * var(--space-1));
-    width: var(--space-3);
-    height: 48px;
-  }
-  .enhanced:not(.labelsDismissed) .control:is(:hover, :focus-visible) .label {
-    visibility: visible;
+  .theme[aria-pressed="true"] {
+    border-color: var(--color-line-strong);
+    color: var(--color-ink);
   }
   .control {
     position: relative;
@@ -73,80 +121,51 @@
     height: 48px;
     padding: 0;
   }
-  .panel {
+  .menuButton {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    border: 0;
+    background: none;
     color: var(--color-ink);
-    background: var(--color-ground);
-    box-sizing: border-box;
-    outline: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-menu);
-    inset: auto var(--space-4) calc(var(--space-12) + var(--space-4) + var(--safe));
-    margin: 0;
-    width: auto;
-    border: 1px solid var(--color-line-strong);
-    padding: var(--space-2);
-    max-height: calc(100dvh - 168px);
-    & > div {
-      margin-bottom: var(--space-1);
-      padding-left: var(--space-3);
-      height: 44px;
-      color: var(--color-ink-muted);
-    }
-    & a {
-      gap: var(--space-3);
-      height: 48px;
-      padding-inline: var(--space-3);
-      color: inherit;
-    }
+    cursor: pointer;
   }
-  .row {
-    display: block;
-    & + .row {
-      margin-top: var(--space-1);
-    }
-  }
-  .rail .control[aria-current]::after {
-    content: "";
-    position: absolute;
-    bottom: var(--space-1);
-    width: 24px;
-    border-bottom: 2px solid;
-  }
-  .phone,
-  .panel {
-    --safe: max(20px, env(safe-area-inset-bottom));
-  }
+  /* Phones: a floating bar, menu, home and account in equal thirds. It hides while the drawer is open. */
   .phone {
+    --safe: max(20px, env(safe-area-inset-bottom));
+    position: fixed;
+    z-index: var(--z-menu);
+    inset: auto var(--space-4) var(--safe);
     display: none;
-  }
-  @media (min-width: 768px) {
-    .panel {
-      display: none;
+    grid-template-columns: repeat(3, 1fr);
+    justify-items: center;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-1);
+    & button {
+      border: 0;
+      background: none;
+      color: var(--color-ink);
+      cursor: pointer;
     }
+  }
+  .inline {
+    position: static;
+  }
+  .drawer:popover-open ~ .phone {
+    visibility: hidden;
   }
   @media (max-width: 767px) {
-    .rail {
+    .menuButton {
       display: none;
     }
-    .phone .control:is([aria-current], [data-current]) > :first-child {
-      transform: translateY(-2px);
-      filter: drop-shadow(0 2px 1px var(--color-shadow-hard));
-    }
-    .phone .control svg {
-      width: 24px;
-      height: 24px;
+    .phone {
+      display: grid;
     }
     .phone .control > svg {
       width: 28px;
       height: 28px;
-    }
-    .phone {
-      inset: auto var(--safe) var(--safe);
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      justify-items: center;
-      border-radius: var(--radius-xs);
-      box-shadow: var(--shadow-menu);
     }
   }
 }

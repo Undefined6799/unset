@@ -10,16 +10,16 @@ importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-23
+checked: 2026-10-27
 ---
-**What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
+**What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.12.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
-applies its `NODE_OPTIONS` before the script runs (src/node.cc:982-1003). A line such as
+applies its `NODE_OPTIONS` before the script runs (src/node.cc:990-1011). A line such as
 `NODE_OPTIONS=--import=data:text/javascript,process.exit(0)` then runs code inside a CLI that was meant to judge the
 file. #677's verifier reproduced it as exit 0 on a file the preflight refuses.
 
 **Why tests missed it.** A real `NODE_OPTIONS` in the environment, even an empty one, wins over the file's
-(node.cc:996-998). A developer or CI shell that sets it hides the hole, so a test of it must spawn with only `PATH`
+(node.cc:1004-1006). A developer or CI shell that sets it hides the hole, so a test of it must spawn with only `PATH`
 and `HOME`.
 
 **The rule.** No CLI of ours takes a flag named `--env-file*`, `--require` or `--import`; callers write
@@ -63,3 +63,10 @@ Re-checked at P2.26b, which runs verify-images as `/usr/bin/env PATH=<cosign's f
 narrows to the pinned cosign's folder, so the rules above still hold.
 Re-checked at P2.26v, which adds an optional `arch` dep to `inputs.ts` for picking the pinned cosign; no flag
 changed, and the rules above still hold.
+
+Re-checked at P1.37u (#1114), which added the wait for `docker info` in `stack.ts`; the child environment, the
+leading `--` and the three rules above are unchanged.
+Re-checked at P1.34r, which gives env files their own reader in `inputs.ts` (walk, then `O_NOFOLLOW|O_NONBLOCK` open,
+fstat, 64 KiB cap; `regular-file.ts` now serves C18 only) and moves `cli.test.ts`'s fixtures out of `/tmp` into the
+user's `~/.cache`, since the walk refuses a world-writable parent; the two tests still spawn with only `PATH` and
+`HOME`, no flag or argv form changed, and the rules above still hold.

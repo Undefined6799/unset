@@ -17,7 +17,10 @@ describe("restyle 2026-10-21", () => {
     const select = css("./Select/Select.module.css");
     expect(rule(select, ".combobox")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
     expect(rule(select, ".list")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
-    expect(rule(css("./Navigation/Navigation.module.css"), ".panel")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
+    // P2.13e: the menu drawer comes out of the left edge, so only its right corners are rounded.
+    expect(rule(css("./Navigation/Navigation.module.css"), ".drawer")).toMatch(
+      /border-radius:\s*0 var\(--radius-sm\) var\(--radius-sm\) 0/,
+    );
     expect(rule(css("./Header/Header.module.css"), ".panel")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
     expect(rule(css("./Modal/Modal.module.css"), ".root")).toMatch(/border-radius:\s*var\(--radius-sm\)/);
   });

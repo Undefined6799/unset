@@ -68,6 +68,19 @@ test("header_action_matches_button", () => {
   expect(html).toContain(button);
 });
 
+test("header_action_opens_a_dialog_in_place", () => {
+  const html = renderToStaticMarkup(
+    <NavLinks nav={[]} action={{ label: "Sign in", href: href("/login"), dialog: "sign-in" }} />,
+  );
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const button = doc.querySelector("nav > button");
+  expect(button?.getAttribute("type")).toBe("button");
+  expect(button?.getAttribute("commandfor")).toBe("sign-in");
+  expect(button?.getAttribute("command")).toBe("show-modal");
+  expect(button?.textContent).toBe("Sign in");
+  expect(doc.querySelector("nav > a")).toBeNull();
+});
+
 test("header_menu_props_schema", () => {
   expect(isHeaderMenuProps(PROPS)).toBe(true);
   expect(isHeaderMenuProps({ label: "menu", nav: [] })).toBe(true);
@@ -77,8 +90,11 @@ test("header_menu_props_schema", () => {
     { label: "menu", nav: [{ label: "x", href: "javascript:alert(1)" }] },
     { label: "menu", nav: [{ label: "x", href: "/", current: "yes" }] },
     { label: "menu", nav: [], action: { label: "x", href: "data:text/html,x" } },
+    { label: "menu", nav: [], action: { label: "x", href: "/login", dialog: "a b" } },
+    { label: "menu", nav: [], action: { label: "x", href: "/login", dialog: 1 } },
   ]) {
     expect(isHeaderMenuProps(bad), JSON.stringify(bad)).toBe(false);
   }
+  expect(isHeaderMenuProps({ ...PROPS, action: { label: "x", href: "/login", dialog: "sign-in" } })).toBe(true);
   expect(headerMenu.propsSchema(PROPS)).toBe(true);
 });

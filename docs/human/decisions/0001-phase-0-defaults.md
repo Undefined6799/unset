@@ -531,3 +531,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   fixed unsigned line. Production stays CI-built, keyless-signed and digest-pinned (ADR 0033, unchanged), and main
   changes only by PR. Accepted costs: untested code on an isolated, invite-only staging; a build can fill its disk.
   Proposed, awaiting Alex.
+- **ADR 0036 accepted (Alex, 2026-10-28 02:04:07Z, against d118587; own record:
+  [0036](0036-staging-builds-from-source.md)):** staging (VM 315) may run images built from its checkout under
+  `--env dev --source` so a change is tried there first and committed after; a service still naming an image must be
+  a lock digest and every such run ends with the fixed unsigned line; production stays CI-built, keyless-signed and
+  digest-pinned (ADR 0033 unchanged) and main changes only by PR; the accepted costs are untested code on an
+  isolated, invite-only staging and a build filling its disk.
