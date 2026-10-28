@@ -28,8 +28,11 @@ checked: 2026-10-23
 - `components/<Name>/`: the kit, one folder per sheet component (TSX, `.module.css` in `@layer components`, test).
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
-  for P1.26's axe and target-size checks. `index.ts` exports only what the screens use: Button, Callout, Input, Link (P2.05),
-  Checkbox (P2.12, server-rendered, no island), RadioGroup (P1.25f's footer theme form), Avatar and Card (P2.13c's account and settings pages) and the shell's Footer, Header, SkipLink (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
+  for P1.26's axe and target-size checks. `index.ts` exports Avatar, Button, Callout, Card,
+  Checkbox (P2.12, server-rendered, no island), DescriptionList, Footer, BrandHeader, Header, Icon, Input, Link (P2.05),
+  Navigation, NavigationMenuButton, ThemePickerSlot, RadioGroup (P1.25f's footer theme form), SkipLink and Switch, plus
+  `safeHref` and the font-metrics types (`FallbackFace`, `FontMetrics`). Avatar and Card are P2.13c's account and
+  settings pages; Footer, Header and SkipLink are the shell (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
   after an earlier re-export pulled the kit into boot (P1.25h; architecture record 2026-10-07-p125h-boot-chunk.md).
   Re-measure with `scripts/budgets/island.ts` before exporting more components.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,
@@ -54,7 +57,7 @@ checked: 2026-10-23
   refs and ARIA/title props keep action/pending state in the caller. Input is unchanged.
 - `approved-extensions.json`: P2.24f's bounded component/API/icon record, hash-pinned on existing Navigation,
   Header, Button and Icon inventory rows; imported sheet bytes/metadata stay immutable. The generator verifies the
-  exact two additional copied sources and records separate extensionProvenance in the 38-name output.
+  exact two additional copied sources and records separate extensionProvenance in the 41-name output.
 
 **Rules worth knowing.** `shared/ui` imports no Node built-in (dependency-cruiser). Node never loads `index.ts`:
 [[ui-build]] imports it for types only (P1.25h). The 0x40 "v2e" look is superseded; follow only

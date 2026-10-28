@@ -43,6 +43,8 @@ The confirmed-email cache is rechecked at the next gated page view, at most `EMA
 
 Screens are `apps/web`. The loader requires `renderPage`, `islandName`, `screens` and `safeHref`.
 
+`pageResponse` uses `islands: "on"` when the route omits `islands` (`interfaces/http/web/page.ts`). `GET /:did` (`routes/me.ts`) and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`) omit it, so the drawer's theme picker can hydrate. The routes that pass `"off"` are `GET /` (`routes/home.ts`), the legal pages (`routes/legal.ts`), `GET /login` (`routes/login.ts`) and the welcome pages (`routes/welcome.ts`).
+
 ## May import
 
 The [`interface` row](../) on the section page, plus:

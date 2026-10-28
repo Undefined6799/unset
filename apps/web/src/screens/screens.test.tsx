@@ -128,11 +128,24 @@ describe("signed-out screen", () => {
     const own = html(screens.signedOut({ issuer: "https://pds.test", ours: true }));
     expect(own).toContain("https://pds.test/account");
     expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
-    expect(own).toContain(">Your account on pds.test<svg");
+    expect(own).toContain(">Your account on pds.test<span");
     const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
     expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
     expect(foreign).not.toContain("only place you type your password");
+  });
+
+  test("pdsAccountLink_opens_the_sign_in_server_in_a_new_tab", () => {
+    // P2.08k (Alex, 2026-10-28: "when we go on the pds it just opens another tab"): unset.sh stays open behind it.
+    for (const ours of [true, false]) {
+      const page = html(screens.signedOut({ issuer: "https://pds.example", ours }));
+      const [account] = tags(page, "a");
+      expect(account).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
+      expect(page).toContain('<span class="visually-hidden"> (opens in a new tab)</span>');
+    }
+    expect(tags(html(screens.signedOut({ issuer: "https://pds.example", ours: true })), "a")[1]).not.toHaveProperty(
+      "target",
+    );
   });
 
   test("pdsAccountLink_refuses_a_non_https_issuer", () => {
@@ -158,7 +171,7 @@ describe("me screen", () => {
     expect(page).not.toContain("Sign out everywhere");
     // P2.13c: the Edit profile link, then the account link.
     expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile", "https://pds.example/account"]);
-    expect(page).toContain(">Your account on pds.example<svg");
+    expect(page).toContain(">Your account on pds.example<span");
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");
   });
@@ -197,5 +210,15 @@ describe("verify email screen", () => {
   test("confirmed_email_continues_to_the_self_profile_shortcut", () => {
     const page = html(screens.verifyEmail({ state: "confirmed", pdsHost: "pds.example" }));
     expect(tags(page, "a").map((a) => a.href)).toEqual(["/did"]);
+  });
+
+  test("unconfirmed_email_opens_the_account_in_a_new_tab_and_checks_here", () => {
+    // P2.08k: the member confirms in the new tab, then comes back to this one to check again.
+    const page = html(screens.verifyEmail({ state: "unconfirmed", pdsHost: "pds.example" }));
+    const links = tags(page, "a");
+    expect(links.map((a) => a.href)).toEqual(["https://pds.example/account", "/verify-email"]);
+    expect(links[0]).toMatchObject({ target: "_blank" });
+    expect(links[1]).not.toHaveProperty("target");
+    expect(page).toContain("Confirm your email in the new tab, then come back here.");
   });
 });

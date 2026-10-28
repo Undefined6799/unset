@@ -181,13 +181,17 @@ export function permissionSetProblems(set: doc.LexiconPermissionSet): string[] {
   return problems;
 }
 
-/** Runs `lex build` and biome's formatter into a fresh folder; returns its files by relative path. */
+/**
+ * Runs `lex build` in a fresh folder under the OS temp folder, outside the repository, then formats each file with
+ * biome; returns the files by relative path. Nothing is written in the repository: a docs test walks shared/ while
+ * this runs, and an entry that appears and vanishes there broke its walk (verify-1113-931b44c).
+ */
 function generate(): Map<string, string> {
-  const work = mkdtempSync(join(tmpdir(), "lexicons-"));
+  const work = mkdtempSync(join(tmpdir(), "unset-lexicons-"));
   try {
     const input = join(work, "in");
     for (const dir of ["schemas", "vendor"]) cpSync(join(PACKAGE, dir), input, { recursive: true });
-    const out = join(PACKAGE, `.generated-${process.pid}`);
+    const out = join(work, "out");
     execFileSync(
       join(REPO, "node_modules", ".bin", "lex"),
       [
@@ -209,20 +213,25 @@ function generate(): Map<string, string> {
       ],
       { stdio: "pipe" },
     );
-    try {
-      writeFileSync(join(out, "tsconfig.json"), GENERATED_TSCONFIG);
-      // Formatted (and imports sorted) in place, so biome reads the repository's biome.json as biome ci will.
-      execFileSync(join(REPO, "node_modules", ".bin", "biome"), ["check", "--write", "--linter-enabled=false", out], {
-        cwd: REPO,
-        stdio: "pipe",
-      });
-      return new Map(listFiles(out).map((file) => [relative(out, file), withSuppression(readFileSync(file, "utf8"))]));
-    } finally {
-      rmSync(out, { recursive: true, force: true });
-    }
+    writeFileSync(join(out, "tsconfig.json"), GENERATED_TSCONFIG);
+    return new Map(listFiles(out).map((file) => [relative(out, file), formatted(relative(out, file), file)]));
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
+}
+
+/**
+ * biome's formatter (imports sorted) on one built file, read as if it sat at generated/<path>, so the repository's
+ * biome.json and its overrides apply as biome ci will. biome refuses paths outside its root, so the file goes in on
+ * stdin (`--stdin-file-path`, @biomejs/biome 2.5.15) and the result comes back on stdout.
+ */
+function formatted(path: string, file: string): string {
+  const source = execFileSync(
+    join(REPO, "node_modules", ".bin", "biome"),
+    ["check", "--write", "--linter-enabled=false", `--stdin-file-path=${relative(REPO, join(GENERATED, path))}`],
+    { cwd: REPO, input: readFileSync(file), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+  );
+  return withSuppression(source);
 }
 
 function withSuppression(source: string): string {
