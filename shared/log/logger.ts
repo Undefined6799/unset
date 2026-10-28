@@ -61,6 +61,8 @@ const EVENTS = [
   "oauth.callback_failed",
   "auth.login_succeeded",
   "auth.login_denied",
+  // P2.05s: a silent sign-in the server could not answer without a page, so it was asked again with one. No field.
+  "auth.login_silent_refused",
   // P2.07, a PDS call: a 401 while the token set is still stored (not a logout), and a failure whose class
   // was not one of the expected ones. `kind` is the class name, never the message (it can carry a DID).
   "pds.401_with_live_set",
