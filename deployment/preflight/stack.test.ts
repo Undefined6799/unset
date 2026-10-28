@@ -626,6 +626,23 @@ describe("stack wrapper (P1.27w)", () => {
     for (const ms of [...deadlines, ...never.slept]) {
       expect(Number.isInteger(ms) && ms > 0, `${ms}`).toBe(true);
     }
+    // The budget is read once per try: 1 ms left when the loop checks, none when the try starts, never becomes a
+    // deadline of 0 (fail closed: the wait ends with the timeout instead).
+    const ticks = [0, DOCKER_WAIT_MS - 1, DOCKER_WAIT_MS];
+    const edge: number[] = [];
+    const lastMs: Runner = {
+      ...lateDaemon(Number.POSITIVE_INFINITY).runner,
+      now: () => ticks.shift() ?? DOCKER_WAIT_MS,
+      capture: (_file, _args, _env, timeoutMs) => {
+        edge.push(timeoutMs);
+        return { status: null, signal: "SIGKILL", stdout: "", stderr: "", error: timedOut };
+      },
+    };
+    expect(() => run(plan(UP, {}), lastMs)).toThrow(StackError);
+    expect(
+      edge.every((ms) => ms > 0),
+      `${edge}`,
+    ).toBe(true);
   });
 
   test("any_answer_is_judged_at_once", () => {

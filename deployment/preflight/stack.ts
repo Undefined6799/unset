@@ -210,10 +210,12 @@ function askDaemon(env: Record<string, string>, runner: Runner): Captured {
   const started = runner.now();
   // Whole milliseconds: spawnSync takes only an unsigned integer timeout, and performance.now() is fractional.
   const left = () => Math.floor(DOCKER_WAIT_MS - (runner.now() - started));
-  for (let pause = 1_000; left() > 0; pause = Math.min(pause * 2, MAX_PAUSE_MS)) {
-    const info = runner.capture("docker", args, env, Math.min(DOCKER_INFO_DEADLINE_MS, left()));
+  // Each budget is read once and used only when positive: a deadline of 0 would turn the spawnSync timeout off.
+  for (let pause = 1_000, budget = left(); budget > 0; pause = Math.min(pause * 2, MAX_PAUSE_MS), budget = left()) {
+    const info = runner.capture("docker", args, env, Math.min(DOCKER_INFO_DEADLINE_MS, budget));
     if (!noAnswer(info)) return info;
-    if (left() > 0) runner.sleep(Math.min(pause, left()));
+    const rest = left();
+    if (rest > 0) runner.sleep(Math.min(pause, rest));
   }
   const waited = Math.round((runner.now() - started) / 1_000);
   throw new StackError(`docker did not answer in time (waited ${waited} s)`);
