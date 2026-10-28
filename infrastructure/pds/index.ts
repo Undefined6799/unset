@@ -33,4 +33,4 @@ export {
   type PdsResult,
   type SessionInfo,
 } from "./pds-call.ts";
-export { isAuthFatal, isDpopNonceHandshake } from "./pds-errors.ts";
+export { isDpopNonceHandshake } from "./pds-errors.ts";
