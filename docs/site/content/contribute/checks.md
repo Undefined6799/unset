@@ -13,7 +13,7 @@ npm run typecheck && npm run lint && npm run guards && npm test
 | --- | --- | --- |
 | `typecheck` | `tsc -b` | The composite TypeScript build |
 | `lint` | `biome ci .` | Format and lint. Biome `2.5.15` |
-| `lint` | `depcruise --config scripts/lint/.dependency-cruiser.cjs .` | Import boundaries. dependency-cruiser `18.5.0` |
+| `lint` | `depcruise --config scripts/lint/.dependency-cruiser.cjs .` | Import boundaries. dependency-cruiser `18.6.0` |
 | `guards` | `vitest run scripts/guards` | The guards under `scripts/guards/`, including [notes](../docs-rules/) |
 | `test` | `node scripts/test/run.ts` | The test runner below. Vitest `5.0.5`, TypeScript `7.0.2` |
 
@@ -39,7 +39,7 @@ Versions are the root `devDependencies`.
 | Job | What it runs |
 | --- | --- |
 | `code` | Includes typecheck, lint, guards, then `npm test -- --units` |
-| `image-tests` | `npm run test:images` |
+| `image-tests` | `npm run test:images` on builder `images` (`docker-container`, `default-load=true`, `BUILDKIT_IMAGE` `moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c` in [`.github/workflows/ci.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/ci.yml) and [`.github/workflows/publish-images.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/publish-images.yml)) |
 | `check` | No tests. Fails unless `code` and `image-tests` both succeeded |
 
 Postgres tests run with the non-image projects. They start the pinned image themselves. [Setup](../setup/) names that path. Image tests (`*.image.test.ts`) are the `images` project. Local and units leave them out.

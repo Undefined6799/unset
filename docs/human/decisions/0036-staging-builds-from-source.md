@@ -1,7 +1,8 @@
 # 0036 — Staging builds its images from the checkout
 
-Status: Proposed (awaiting Alex in the P1.37y pull request). Departs from P1.37n and P2.26b for staging only; ADR
-0033 is unchanged.
+Status: Accepted by Alex, 2026-10-28 02:04:07Z, against d118587 (the line below, typed in the plan thread). From
+here the record changes only to be marked superseded. Departs from P1.37n and P2.26b for staging only; ADR 0033 is
+unchanged.
 
 ## Context
 Staging (VM 315, the `dev` profile of ADR 0025) runs only the images `deployment/images.lock.json` names, by digest:
@@ -62,3 +63,5 @@ is refused under prod and local, C3 to C5 are unchanged, the wrapper passes `--b
 the source compose file equals compose.dev.yaml except for the five build blocks, and the final line prints on every
 `--source` run (Decisions 1 and 2). ADR 0033 stays accepted and unchanged: it governs what is signed, and nothing here
 signs. Acceptance of this record is Alex's typed line naming it and a sha; ADR 0001 gains its one-paragraph entry then.
+- Accepted by Alex on 2026-10-28 at 02:04:07Z with the line "accept ADR 0036 at d118587", typed in the plan thread,
+  against d118587, the revision #1308 squashed onto main with this text unchanged.

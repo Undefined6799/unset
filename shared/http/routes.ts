@@ -14,6 +14,11 @@ export type RouteContext = Readonly<{
   params: Readonly<Record<string, string>>;
   /** Fires at the route's deadline. Pass it as the `signal` of every outbound call. */
   deadline: AbortSignal;
+  /**
+   * When `deadline` fires, as a `performance.now()` value taken with the signal (P2.08j): budget a step as
+   * `deadlineAt - performance.now()`, never from the handler's own start. Monotonic, so never compare it with wall time.
+   */
+  deadlineAt: number;
   reqId: string;
 }>;
 
