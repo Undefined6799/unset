@@ -56,7 +56,8 @@ checked: 2026-10-23
   for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
   refs and ARIA/title props keep action/pending state in the caller. Input is unchanged.
 - `approved-extensions.json`: P2.24f's bounded component/API/icon record, hash-pinned on existing Navigation,
-  Header, Button and Icon inventory rows; imported sheet bytes/metadata stay immutable. The generator verifies the
+  Header, Button and Icon inventory rows and by `APPROVED_EXTENSION_SHA256` in `shared/ui-build/icons.ts` (any byte
+  change needs a reviewed bump); imported sheet bytes/metadata stay immutable. The generator verifies the
   exact two additional copied sources and records separate extensionProvenance in the 41-name output.
 
 **Rules worth knowing.** `shared/ui` imports no Node built-in (dependency-cruiser). Node never loads `index.ts`:
