@@ -200,12 +200,26 @@ describe("the client_id probe (items 3, 4)", () => {
 });
 
 describe("the workflow (items 1, 2, 5, 6)", () => {
+  test("workflow_runs_green_and_red_as_one_matrix_job", () => {
+    // One job, two cases, each named after itself so the check names stay green and red; neither cancels the other.
+    const workflow = parse(WORKFLOW) as { jobs: Record<string, Record<string, unknown>> };
+    expect(Object.keys(workflow.jobs)).toEqual(["stack"]);
+    const stack = workflow.jobs.stack;
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a JS template.
+    expect(stack?.name).toBe("${{ matrix.case }}");
+    expect(stack?.strategy).toEqual({ "fail-fast": false, matrix: { case: ["green", "red"] } });
+    // Each case starts and stops its own stack, and an unknown case fails rather than running neither.
+    for (const command of ["npm run local:up", "-- red-up", "npm run local:down", "-- red-down", "*) exit 1 ;;"])
+      expect(WORKFLOW).toContain(command);
+    expect(WORKFLOW).toContain('node scripts/ci/local-stack.ts -- probe "$CASE"');
+  });
+
   test("workflow_is_pull_request_only_and_read_only", () => {
     expect(WORKFLOW).toMatch(/^on:\n {2}pull_request:\n {4}types: \[[^\]]+\]\n\n/m);
     expect(WORKFLOW).not.toMatch(/pull_request_target|workflow_run|push:|workflow_dispatch/);
     expect(WORKFLOW).toMatch(/^permissions: \{\}$/m);
-    expect(WORKFLOW.match(/^ {4}permissions:\n {6}contents: read$/gm)?.length).toBe(2);
-    expect(WORKFLOW.match(/permissions:/g)?.length).toBe(3);
+    expect(WORKFLOW.match(/^ {4}permissions:\n {6}contents: read$/gm)?.length).toBe(1);
+    expect(WORKFLOW.match(/permissions:/g)?.length).toBe(2);
     expect(WORKFLOW).not.toMatch(/secrets\.|vars\.|environment:|id-token|continue-on-error|privileged|cap_add/);
     expect(WORKFLOW).not.toMatch(/actions\/cache|cache-to|cache-from|upload-artifact/);
     expect(WORKFLOW).not.toMatch(/compose config|docker inspect|printenv|\benv\b *$/m);
@@ -213,9 +227,9 @@ describe("the workflow (items 1, 2, 5, 6)", () => {
 
   test("workflow_drops_credentials_and_always_cleans_up", () => {
     const checkouts = WORKFLOW.match(/uses: actions\/checkout@/g) ?? [];
-    expect(checkouts.length).toBe(2);
-    expect(WORKFLOW.match(/persist-credentials: false/g)?.length).toBe(2);
-    expect(WORKFLOW.match(/node scripts\/ci\/local-stack\.ts -- clean/g)?.length).toBe(2);
+    expect(checkouts.length).toBe(1);
+    expect(WORKFLOW.match(/persist-credentials: false/g)?.length).toBe(1);
+    expect(WORKFLOW.match(/node scripts\/ci\/local-stack\.ts -- clean/g)?.length).toBe(1);
     for (const block of WORKFLOW.split(/\n(?= {6}- )/).filter((b) => /-- clean|local:down|red-down/.test(b))) {
       expect(block).toMatch(/if: always\(\)/);
     }
