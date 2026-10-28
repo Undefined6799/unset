@@ -17,6 +17,8 @@ import { defineRoute, type Route, type SafePath, safeReturnPath } from "@unset/s
 import type { Logger } from "@unset/shared-log";
 // A whole-statement type import: Node erases it, so the server never loads the kit (its index reaches .tsx files).
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
+import { single } from "../form-field.ts";
+import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
@@ -50,18 +52,6 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-
-/** The one value of `name` in the form, or null when it is missing or repeated. */
-function single(form: URLSearchParams, name: string): string | null {
-  const values = form.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
-
-const redirect = (location: string, setCookies: readonly string[] = []): Response => {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of setCookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
-};
 
 /** Back to the form with an error, keeping a valid return path. */
 const back = (code: ErrorCode, next: SafePath | null): Response =>

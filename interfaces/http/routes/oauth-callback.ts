@@ -15,6 +15,7 @@ import { type CallbackResult, grantCovers } from "@unset/infrastructure-pds";
 import type { ErrorCode } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
+import { redirect } from "../redirect.ts";
 import { sessionCookieValue, sessionSetCookie } from "../session-cookie.ts";
 import type { AuthorizationTarget } from "./login.ts";
 import {
@@ -44,12 +45,6 @@ export type CallbackDeps = {
   /** Our PDS's issuer: what the chooser asks again when the form named no account. */
   pdsIssuer: string;
   log: Logger;
-};
-
-const redirect = (location: string, setCookies: readonly string[]): Response => {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of setCookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
 };
 
 /** Equal nonces, compared in constant time; both are 43 characters once parsed, so lengths differ only for junk. */

@@ -9,6 +9,7 @@ import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import { redirectFor } from "../app-gate.ts";
+import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
@@ -36,12 +37,6 @@ export type VerifyEmailDeps = {
 };
 
 const FORM = "application/x-www-form-urlencoded";
-
-function redirect(location: string, cookies: readonly string[] = []): Response {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of cookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
-}
 
 const login = (next: string): Response => redirect(`/login?${new URLSearchParams({ next })}`);
 
