@@ -453,7 +453,11 @@ describe("the app gate", () => {
       elements(elements(document, "nav")[0], "a", { href: "/settings/profile", "aria-current": "page" }),
     ).toHaveLength(1);
     expect(elements(elements(document, "nav")[0], "a", { href: `/${DID}` })).toHaveLength(1);
-    expect(elements(document, "script")).toHaveLength(0);
+    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    expect(elements(document, "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value)).toEqual([
+      "application/json",
+      "module",
+    ]);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("vary")).toBe("Cookie");
     const refused = await setup({ session: null }).send("/settings/profile");

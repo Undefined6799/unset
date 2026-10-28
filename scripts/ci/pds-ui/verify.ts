@@ -2,16 +2,12 @@ import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { archive, type Entry, pathName, requireThat, sha256 } from "./archive.ts";
+import { type Pair, packagesOf } from "./contract.ts";
 
 export { archive } from "./archive.ts";
-export { compareImages, UI_DIRECTORY } from "./images.ts";
-export const PACKAGES = {
-  "packages/pds": ["@atproto/pds", "0.5.37"],
-  "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-  "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
-} as const;
+export { compareImages } from "./images.ts";
 export type SourceLock = { revision: string; archiveSha256: string; lockSha256: string };
-export async function verifySource(bytes: Buffer, lock: SourceLock): Promise<void> {
+export async function verifySource(bytes: Buffer, lock: SourceLock, pair: Pair): Promise<void> {
   requireThat(
     /^[0-9a-f]{40}$/.test(lock.revision) && bytes.length <= 512 * 1024 * 1024 && sha256(bytes) === lock.archiveSha256,
     "source archive/revision drift",
@@ -22,7 +18,7 @@ export async function verifySource(bytes: Buffer, lock: SourceLock): Promise<voi
   validateSourceTree(files, root);
   const frozen = files.get(`${root}/pnpm-lock.yaml`);
   requireThat(frozen?.header.type === "file" && sha256(frozen.data) === lock.lockSha256, "upstream lock drift");
-  for (const [path, [name, version]] of Object.entries(PACKAGES)) {
+  for (const [path, name, version] of packagesOf(pair)) {
     const entry = files.get(`${root}/${path}/package.json`);
     requireThat(entry?.header.type === "file", "missing source package");
     const pkg = JSON.parse(entry.data.toString());

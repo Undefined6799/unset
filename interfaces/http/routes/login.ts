@@ -163,6 +163,9 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       mutates: true,
       session: "none",
       handler: async ({ request, deadline }) => {
+        // P2.05p: the in-place box posts here from public pages too, which cannot vary on the session cookie. A
+        // signed-in browser goes to its profile, as on GET, and no authorization starts to replace its session.
+        if ((await deps.readSession(request, deadline)).session !== null) return redirect("/did");
         const form = new URLSearchParams(await request.text());
         const next = safeReturnPath(single(form, "next"));
         const account = await chooseAccount(form);

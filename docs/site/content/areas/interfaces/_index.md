@@ -27,7 +27,7 @@ The six folders under `interfaces/` on this tree. Each one is its own package an
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.6.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
 
 The `interface` row matches `interfaces/<name>/` except the paths `ADMIN_SERVICES` names (`interfaces/pds-admin/` and `interfaces/chat-admin/`). Those paths are strings in `scripts/lint/.dependency-cruiser.cjs`.
 
