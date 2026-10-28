@@ -117,7 +117,7 @@ describe("signed-out screen", () => {
     expect(page).toContain(
       "You are going to pds.example, our sign-in server; it is the only place you type your password",
     );
-    expect(page).toContain(">Your account on pds.example<svg");
+    expect(page).toContain(">Your account on pds.example<span");
     // P2.05s: "No thanks" posts, so it can end the password ask; it keeps the standalone look (Button README).
     expect(page).toMatch(/<form action="\/signed-out" method="post"><button[^>]*type="submit"[^>]*>No thanks<svg/);
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
@@ -143,9 +143,8 @@ describe("signed-out screen", () => {
       expect(account).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
       expect(page).toContain('<span class="visually-hidden"> (opens in a new tab)</span>');
     }
-    expect(tags(html(screens.signedOut({ issuer: "https://pds.example", ours: true })), "a")[1]).not.toHaveProperty(
-      "target",
-    );
+    // P2.05s: "No thanks" is a form in this tab, not a link, so nothing else opens a new tab.
+    expect(html(screens.signedOut({ issuer: "https://pds.example", ours: true }))).not.toMatch(/<form[^>]*target=/);
   });
 
   test("pdsAccountLink_refuses_a_non_https_issuer", () => {
