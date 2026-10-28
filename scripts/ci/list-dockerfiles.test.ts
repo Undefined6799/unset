@@ -7,7 +7,14 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { entryProblems, IGNOREFILES, listDockerfiles, PDS_IGNOREFILE, PDS_RECIPE } from "./list-dockerfiles.ts";
+import {
+  APP_IGNOREFILE,
+  entryProblems,
+  IGNOREFILES,
+  listDockerfiles,
+  PDS_IGNOREFILE,
+  PDS_RECIPE,
+} from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
@@ -66,10 +73,17 @@ describe("list dockerfiles", () => {
     // The book named {edge, node-app} on 2026-10-07. migrate.Dockerfile has since landed, so this
     // checks the live walk. A later Dockerfile is covered without editing this check (SE-6).
     // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
-    // P2.24t: the one exception is the pds-ui recipe, which reads the PDS image's file.
-    expect(IGNOREFILES).toEqual({});
+    // P2.24t: the pds-ui recipe reads the PDS image's file. P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the
+    // two app images read the app file, which holds only the zod finding.
+    expect(IGNOREFILES).toEqual({ "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE });
     for (const image of listed) {
-      expect(image.ignorefile, image.name).toBe(image.dockerfile === PDS_RECIPE ? PDS_IGNOREFILE : "/dev/null");
+      const expected =
+        image.dockerfile === PDS_RECIPE
+          ? PDS_IGNOREFILE
+          : Object.hasOwn(IGNOREFILES, image.name)
+            ? APP_IGNOREFILE
+            : "/dev/null";
+      expect(image.ignorefile, image.name).toBe(expected);
     }
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
@@ -190,7 +204,7 @@ describe("the pds-ui recipe's ignore file (P2.24t)", () => {
       "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     });
     expect(listDockerfiles(accepted).map((image) => [image.dockerfile, image.ignorefile])).toEqual([
-      ["deployment/images/node-app.Dockerfile", "/dev/null"],
+      ["deployment/images/node-app.Dockerfile", APP_IGNOREFILE],
       [PDS_RECIPE, PDS_IGNOREFILE],
     ]);
 
