@@ -10,7 +10,7 @@ import { docker, killBefore, withCleanup } from "../support/docker.ts";
 import { buildTestImage, removeTestImage } from "../support/image-build.ts";
 
 const TEST_MS = 120_000;
-// A pull of the node base when it is not cached yet, as edge-container.ts allows it.
+// A pull of the node base when it is not cached yet, as edge-handle.ts allows it.
 const FAILING_TEST_MS = 300_000;
 // Two builds, two removals and an inspect fit inside the test.
 const CALL_MS = killBefore(TEST_MS) / 5;

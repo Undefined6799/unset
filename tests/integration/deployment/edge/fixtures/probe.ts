@@ -1,6 +1,6 @@
 // A client inside the edge container's network namespace (P1.28 tests), so it can send from a chosen loopback
 // address (127.0.0.2, 127.0.0.3, …): each address is its own rate-limit key, and the log tests know exactly which
-// address to look for. Run by edge-container.ts in the pinned node image as `node probe.ts '<steps JSON>'`, with the
+// address to look for. Run by edge-handle.ts in the pinned node image as `node probe.ts '<steps JSON>'`, with the
 // edge's internal CA root in $CA. Node built-ins only; it prints one JSON result per step.
 import { request as httpRequest } from "node:http"; // guard-allow: egress local edge test only
 import { Agent, request as httpsRequest } from "node:https"; // guard-allow: egress local edge test only

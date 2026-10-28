@@ -66,3 +66,7 @@ changed, and the rules above still hold.
 
 Re-checked at P1.37u (#1114), which added the wait for `docker info` in `stack.ts`; the child environment, the
 leading `--` and the three rules above are unchanged.
+Re-checked at P1.34r, which gives env files their own reader in `inputs.ts` (walk, then `O_NOFOLLOW|O_NONBLOCK` open,
+fstat, 64 KiB cap; `regular-file.ts` now serves C18 only) and moves `cli.test.ts`'s fixtures out of `/tmp` into the
+user's `~/.cache`, since the walk refuses a world-writable parent; the two tests still spawn with only `PATH` and
+`HOME`, no flag or argv form changed, and the rules above still hold.
