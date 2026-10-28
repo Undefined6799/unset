@@ -2,14 +2,13 @@
 # scan, SPDX SBOM, and the runtime checks (non-root, no dev dependencies, healthy). Nothing is pushed or signed yet:
 # the push-and-sign job needs `packages: write` and the `signing` environment, which wait on Alex (see the P1.27q PR).
 #
-# Until P1.27 adds the Dockerfile the job prints a notice and passes; the skip is tied to exactly that file being
-# absent (images_skip_only_without_dockerfile in scripts/ci/image-workflows.test.ts), so P1.27's own PR is the first
-# one built here. Any later cost saving is change detection inside the job, never a `paths:` filter, because a
-# required check that never starts blocks the PR.
+# No step is skipped: a missing or renamed Dockerfile fails the job (image_jobs_never_skip in
+# scripts/ci/image-workflows.test.ts). Any later cost saving is change detection inside the job, never a `paths:`
+# filter, because a required check that never starts blocks the PR.
 #
 # The `edge` job (P1.28q) does the same for the edge image, deployment/edge/Dockerfile (Caddy plus one plugin, P1.28):
-# hadolint, build, Trivy and the image's own health check. It skips only while that file is absent, so P1.28's own PR
-# is the first one built there. Its Trivy scan reads no ignore file: an edge finding is fixed, never accepted.
+# hadolint, build, Trivy and the image's own health check. Its Trivy scan reads no ignore file: an edge finding is
+# fixed, never accepted.
 #
 # Tool images are pinned by index digest (scripts/guards/workflows.ts). The image under test is referenced by the
 # content id `docker build --iidfile` wrote, so it too is pinned by digest.
@@ -59,21 +58,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Skip until the Dockerfile exists
-        id: dockerfile
-        run: |
-          if [ -e "$DOCKERFILE" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=images::skipped, no Dockerfile yet (lands in P1.27)"
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
       # hadolint v2.15.1 README: `--config` file, non-zero exit at or above failure-threshold.
       - name: Lint the Dockerfile
-        if: steps.dockerfile.outputs.present == 'true'
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo "$HADOLINT_IMAGE" /bin/hadolint --config .github/hadolint.yaml "$DOCKERFILE"
       - name: Build
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
@@ -86,25 +74,21 @@ jobs:
       # Secrets are not: inspect disables the secret analyzer on layers guessBaseLayers treats as the base
       # (pkg/fanal/artifact/image/image.go:401-405, tag v0.75.0). Those files are scan-export (P1.33s).
       - name: Scan
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
             image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .github/trivyignore.app.yaml \
             --timeout 10m "$APP_IMAGE"
       - name: SBOM
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$SYFT_IMAGE" "docker:$APP_IMAGE" -o spdx-json > "$RUNNER_TEMP/sbom.spdx.json"
           test -s "$RUNNER_TEMP/sbom.spdx.json"
       - name: Runs as 65532
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           test "$(docker run --rm --entrypoint id "$APP_IMAGE" -u)" = "65532"
       - name: Holds no dev dependencies
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm --network none -v "$PWD/package.json:/check/package.json:ro" --entrypoint node "$APP_IMAGE" -e '
@@ -119,7 +103,6 @@ jobs:
       # (`*_FILE`, as in production). A throwaway Postgres runs as `web` on a job network the app joins; the keys that
       # describe this setup are set here, and the app's own settings stay in its test env.
       - name: Becomes healthy
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           secrets="$RUNNER_TEMP/secrets"
@@ -171,20 +154,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Skip until the edge Dockerfile exists
-        id: dockerfile
-        run: |
-          if [ -e "$DOCKERFILE" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=edge::skipped, no edge Dockerfile yet (lands in P1.28)"
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
       - name: Lint the Dockerfile
-        if: steps.dockerfile.outputs.present == 'true'
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo "$HADOLINT_IMAGE" /bin/hadolint --config .github/hadolint.yaml "$DOCKERFILE"
       - name: Build
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
@@ -194,7 +166,6 @@ jobs:
       # /dev/null, so neither .trivyignore nor .github/trivyignore.yaml is read); the gobinary analyser covers the
       # built Caddy binary.
       - name: Scan
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           EDGE_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
@@ -203,7 +174,6 @@ jobs:
       # The image's own HEALTHCHECK must report healthy within 20 s, on a read-only root with Caddy's data and config
       # directories on tmpfs, started with the edge's test env.
       - name: Becomes healthy
-        if: steps.dockerfile.outputs.present == 'true'
         run: |
           EDGE_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           ENV_FILE=deployment/edge/edge.test.env

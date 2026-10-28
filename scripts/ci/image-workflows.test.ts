@@ -1,6 +1,6 @@
 // The image workflows' own rules (P1.27q; keyless signing since P1.27s, ADR 0033), on top of the repository-wide
 // workflow guard (scripts/guards/workflows.ts).
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
@@ -151,29 +151,22 @@ describe("image workflows", () => {
     expect(raw).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
   });
 
-  test("images_skip_only_without_dockerfile", () => {
+  test("image_jobs_never_skip", () => {
     const wf = workflow("images.yml");
     // A required check must start on every ready PR: no path filter may keep it from running.
     expect(JSON.stringify(wf.on)).not.toMatch(/paths/);
-    const job = wf.jobs.images;
-    expect(job?.env?.DOCKERFILE).toBe("deployment/images/node-app.Dockerfile");
-    const [checkout, skip, ...rest] = job?.steps ?? [];
-    expect(checkout?.run).toBeUndefined();
-    expect(skip?.id).toBe("dockerfile");
-    expect(skip?.if).toBeUndefined();
-    expect(skip?.run).toBe(
-      [
-        'if [ -e "$DOCKERFILE" ]; then',
-        '  echo "present=true" >> "$GITHUB_OUTPUT"',
-        "else",
-        '  echo "::notice title=images::skipped, no Dockerfile yet (lands in P1.27)"',
-        '  echo "present=false" >> "$GITHUB_OUTPUT"',
-        "fi",
-        "",
-      ].join("\n"),
-    );
-    expect(rest.length).toBeGreaterThan(0);
-    for (const step of rest) expect(step.if, step.name).toBe("steps.dockerfile.outputs.present == 'true'");
+    // Both Dockerfiles exist since P1.27 and P1.28, so a missing one is a rename or a deletion: the build step fails
+    // on it. No step is gated, so hadolint, Trivy and the build cannot pass by being skipped.
+    const dockerfiles = { images: "deployment/images/node-app.Dockerfile", edge: "deployment/edge/Dockerfile" };
+    for (const [id, dockerfile] of Object.entries(dockerfiles)) {
+      const job = wf.jobs[id];
+      expect(job?.env?.DOCKERFILE, id).toBe(dockerfile);
+      expect(existsSync(join(ROOT, dockerfile)), dockerfile).toBe(true);
+      for (const step of job?.steps ?? []) {
+        expect(step.if, `${id} ${step.name}`).toBeUndefined();
+        expect(step.run ?? "", `${id} ${step.name}`).not.toContain("skipped");
+      }
+    }
   });
 
   test("image_checks_present", () => {
