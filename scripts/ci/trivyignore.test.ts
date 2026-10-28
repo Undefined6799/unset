@@ -208,35 +208,11 @@ function pdsOverlaps(shared: readonly IgnoreEntry[], pds: readonly IgnoreEntry[]
     .map((item) => item.id ?? "");
 }
 
-/** P1.37x: Alex's typed line 2026-10-21T00:17:36Z, "yes waive CVE-2026-78667 CVE-2026-78669 CVE-2026-97031 for
- * fosrl/newt 1.18.1 until 2026-10-28 in .github/trivyignore.yaml". Nothing else, nowhere else, no later. */
-describe(".github/trivyignore.yaml Newt waiver", () => {
-  const NEWT_IDS = ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"];
-  const sharedText = (): string => readFileSync(SHARED_FILE, "utf8");
-  const shared = (): IgnoreEntry[] =>
-    (parse(sharedText()) as { vulnerabilities?: IgnoreEntry[] }).vulnerabilities ?? [];
-
-  test("newt_waiver_exactly_three_ids_on_the_newt_binary", () => {
-    expect(shared().map((item) => item.id)).toEqual(NEWT_IDS);
-    for (const item of shared()) {
-      expect(item.paths, item.id).toEqual(["usr/local/bin/newt"]);
-      expect(dayOf(item.expired_at), item.id).toBe("2026-10-28");
-      expect(item.statement, item.id).toMatch(
-        /^fosrl\/newt 1\.18\.1 sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f: denial of service only, /,
-      );
-    }
-    const purls = Object.fromEntries(shared().map((item) => [item.id, item.purls]));
-    expect(purls).toEqual({
-      "CVE-2026-78667": ["pkg:golang/stdlib@v1.26.8"],
-      "CVE-2026-78669": ["pkg:golang/stdlib@v1.26.8", "pkg:golang/golang.org/x/net@v0.59.0"],
-      "CVE-2026-97031": ["pkg:golang/stdlib@v1.26.8"],
-    });
-  });
-
-  test("newt_waiver_red_once_expired", () => {
-    expect(trivyIgnoreProblems(sharedText(), new Date("2026-10-27T23:59:59Z"))).toEqual([]);
-    expect(trivyIgnoreProblems(sharedText(), new Date("2026-10-28T00:00:00Z"))).toEqual(
-      NEWT_IDS.map((id) => `vulnerabilities ${id}: expired on 2026-10-28`),
-    );
+/** P1.37q: the P1.37x Newt 1.18.1 waivers ended with Newt 1.19.0 (P1.37z). The shared file accepts nothing; a new
+ * entry needs Alex's typed line and its own test. */
+describe(".github/trivyignore.yaml holds no waiver", () => {
+  test("shared_ignore_file_is_empty", () => {
+    const doc = parse(readFileSync(SHARED_FILE, "utf8")) as { vulnerabilities?: IgnoreEntry[] };
+    expect(doc.vulnerabilities).toEqual([]);
   });
 });

@@ -42,4 +42,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0033](0033-image-signing-keyless.md) | Image signing: keyless cosign with our exact workflow identity (P1.27s) | Accepted 2026-10-20 |
 | [0034](0034-docs-only-auto-merge.md) | Docs-only pull requests auto-merge when CI is green (P0.07e) | Proposed (awaiting Alex) |
 | [0035](0035-web-search-searxng.md) | Web search through our own SearXNG, queried by the server through net-guard (P3.14s) | Proposed (awaiting Alex) |
-| [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Proposed (awaiting Alex) |
+| [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Accepted 2026-10-28 |

@@ -10,7 +10,7 @@ importance: high
 related: ["[[identity]]", "[[pds]]"]
 replaced_by: null
 tags: [area, lexicons]
-checked: 2026-10-12
+checked: 2026-10-27
 ---
 # lexicons
 
@@ -35,6 +35,9 @@ apps rely on it, so a change is close to permanent.
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
 - Blob fields validate only after `jsonToLex` (`@atproto/lex-json`); raw JSON `{$link}` fails.
+- `generate()` builds in `mkdtemp(<os tmpdir>/unset-lexicons-)` and writes nothing in the repository
+  (P1.38a): a folder that appeared and vanished in shared/ broke the docs test's walk. biome panics on
+  paths outside its root, so each built file is formatted through `--stdin-file-path=` its generated/ path.
 - `NSID.authApp` repeats `PERMISSION_SET_NSID` in shared/config; step P1.31c adds the test that holds them equal.
 
 **Links.** [[identity]], [[pds]].
