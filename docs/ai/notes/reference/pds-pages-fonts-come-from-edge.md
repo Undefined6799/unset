@@ -10,7 +10,7 @@ importance: high
 related: ["[[pds]]", "[[deployment]]"]
 replaced_by: null
 tags: [reference, pds, deployment]
-checked: 2026-10-27
+checked: 2026-10-28
 ---
 # PDS sign-in pages get their fonts from the edge (P2.24d spike)
 

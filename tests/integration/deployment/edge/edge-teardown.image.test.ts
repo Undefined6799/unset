@@ -6,7 +6,8 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { type Edge, startEdge, stopEdgeAndRemoveImage } from "./edge-container.ts";
+import { startEdge, stopEdgeAndRemoveImage } from "./edge-container.ts";
+import type { Edge } from "./edge-handle.ts";
 import { registerEdgeSuite } from "./edge-suite.ts";
 
 // One `docker rmi`, killed at the edge helper's 60 s call budget.
