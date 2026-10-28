@@ -1,5 +1,6 @@
 // The link to the sign-in server's account page (P2.08, P2.08b; plan §5.3 "Logout"). The href is the issuer the OAuth
 // library recorded, passed in by the server, never a DID-document field. safeHref drops anything that is not https.
+// It opens a new tab, so unset.sh stays open behind it (P2.08k; Alex, 2026-10-28).
 import { Link, safeHref } from "@unset/shared-ui";
 import { ACCOUNT_LINK } from "./messages.ts";
 
@@ -26,7 +27,7 @@ export function PdsAccountLink({ issuer, ours }: PdsAccountLinkProps) {
   return (
     <>
       {ours ? <p>{withHost(ACCOUNT_LINK.interstitial, host)}</p> : null}
-      <Link href={href} variant="standalone">
+      <Link href={href} variant="standalone" newTab={ACCOUNT_LINK.newTab}>
         {withHost(ours ? ACCOUNT_LINK.ours : ACCOUNT_LINK.foreign, host)}
       </Link>
     </>

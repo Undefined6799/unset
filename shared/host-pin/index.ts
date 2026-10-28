@@ -8,5 +8,6 @@ export {
   WALK_REASONS,
   type WalkInputs,
   type WalkProblem,
+  walkTo,
   within,
 } from "./walk.ts";
