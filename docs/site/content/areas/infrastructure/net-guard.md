@@ -36,7 +36,7 @@ Policies `policies.ts` exports:
 
 The [`net-guard` row](../), not the `infrastructure` row. No `shared/`, no `domains/`, no `seal`.
 
-Declared in `infrastructure/net-guard/package.json`: `undici` 8.11.2. `request.ts` imports `Agent`, `buildConnector` and `request` from it.
+Declared in `infrastructure/net-guard/package.json`: `undici` 8.12.2. `request.ts` imports `Agent`, `buildConnector` and `request` from it.
 
 `vendor-sdk-one-adapter` confines `undici` to this folder. `net-guard-leaf` is the same set for non-test files, plus `fast-check` and `vitest` for a `*.test.ts`.
 

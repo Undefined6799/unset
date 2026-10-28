@@ -90,7 +90,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # npm audit --audit-level=high, minus the expiring entries in .github/npm-audit-ignore.yaml (P0.07i).
+      - run: node scripts/ci/npm-audit.ts
       # The @unset scope override applies only to this signature-key fetch: npm prefetches keys for every
       # registry any edge uses, workspace edges included, but never verifies or downloads a workspace. .npmrc
       # stays fail-closed for every install, and the dependency guard (scripts/guards/dependencies.ts) keeps every
