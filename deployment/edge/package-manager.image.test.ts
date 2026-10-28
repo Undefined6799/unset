@@ -107,6 +107,15 @@ describe("edge image package manager", () => {
     );
   });
 
+  // Its one docker call after the build: inspect (1).
+  test("edge_image_default_user_is_caddy", { timeout: buildTestBudget(1) }, () => {
+    // P1.34j item 1: the user Docker recorded for the built image, whatever spelling, case or continuation the
+    // Dockerfile used, is caddy's uid and gid (images.test.ts reads the Dockerfile; this reads what the build made).
+    const image = buildEdgeImage();
+    const user = docker(["image", "inspect", "--format", "{{.Config.User}}", image], CALL_MS);
+    expect({ code: user.code, user: user.out.trim() }, user.err).toEqual({ code: 0, user: "65532:65532" });
+  });
+
   // Its docker calls after the build: the base's bundle, the image's bundle, then stat (3).
   test("edge_image_keeps_ca_bundle", { timeout: buildTestBudget(3) }, () => {
     const image = buildEdgeImage();
