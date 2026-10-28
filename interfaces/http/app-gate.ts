@@ -16,6 +16,7 @@ import type { Session, SessionRead } from "@unset/infrastructure-session";
 import { withErrorParam } from "@unset/shared-errors";
 import { safeReturnPath } from "@unset/shared-http";
 import type { ReactNode } from "react";
+import { redirect } from "./redirect.ts";
 import { sessionClearCookie } from "./session-cookie.ts";
 import type { PageSpec } from "./web/page.ts";
 
@@ -56,12 +57,6 @@ export function redirectFor(decision: OnboardingDecision, next: string): string 
   }
 }
 
-function redirect(location: string, clearCookie: boolean): Response {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  if (clearCookie) headers.append("set-cookie", sessionClearCookie());
-  return new Response(null, { status: 303, headers });
-}
-
 /**
  * The PDS-unavailable page, the same screen verify-email renders for a transient read. Callers pass that screen's
  * `unavailable` state; this only fixes the page around it.
@@ -88,11 +83,12 @@ export async function openApp(
   next: string,
 ): Promise<Response | OpenedApp> {
   const { session, clearCookie } = await gate.readSession(request, deadline);
-  if (session === null) return redirect(`/login?${new URLSearchParams({ next })}`, clearCookie);
+  if (session === null)
+    return redirect(`/login?${new URLSearchParams({ next })}`, clearCookie ? [sessionClearCookie()] : []);
   const account = await gate.loadAccount(session.did, deadline);
   const decision = requireOnboarded(account, gate.versions);
   const away = redirectFor(decision, next);
-  if (away !== null) return redirect(away, false);
+  if (away !== null) return redirect(away);
   const now = gate.now();
   const cache = await gate.emailCache(session, deadline);
   const email = emailGate(cache, now, gate.emailRecheckS);
@@ -102,7 +98,7 @@ export async function openApp(
   });
   switch (email) {
     case "verify":
-      return redirect("/verify-email", false);
+      return redirect("/verify-email");
     case "pass":
       return opened();
     case "refresh": {
@@ -114,11 +110,11 @@ export async function openApp(
         case "pass":
           return opened();
         case "verify":
-          return redirect("/verify-email", false);
+          return redirect("/verify-email");
         case "ended":
           // P2.11a: the grant was revoked at the PDS, and pdsCall has already ended every session of the DID. This
           // browser signs in again on the page respondToPdsFailure uses for auth_dead (pds-call.ts:232-234).
-          return redirect(withErrorParam("/login", "login.session_ended"), true);
+          return redirect(withErrorParam("/login", "login.session_ended"), [sessionClearCookie()]);
         case "unavailable":
           return gate.unavailablePage(request);
         default: {
