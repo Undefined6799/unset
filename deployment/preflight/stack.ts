@@ -208,7 +208,8 @@ function noAnswer({ status, signal, error, stderr }: Captured): boolean {
 function askDaemon(env: Record<string, string>, runner: Runner): Captured {
   const args = ["info", "--format", "{{.OperatingSystem}}|{{.Name}}"];
   const started = runner.now();
-  const left = () => DOCKER_WAIT_MS - (runner.now() - started);
+  // Whole milliseconds: spawnSync takes only an unsigned integer timeout, and performance.now() is fractional.
+  const left = () => Math.floor(DOCKER_WAIT_MS - (runner.now() - started));
   for (let pause = 1_000; left() > 0; pause = Math.min(pause * 2, MAX_PAUSE_MS)) {
     const info = runner.capture("docker", args, env, Math.min(DOCKER_INFO_DEADLINE_MS, left()));
     if (!noAnswer(info)) return info;

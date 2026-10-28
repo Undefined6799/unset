@@ -606,6 +606,28 @@ describe("stack wrapper (P1.27w)", () => {
     }
   });
 
+  test("every_deadline_and_pause_is_a_whole_positive_ms", () => {
+    // spawnSync refuses a timeout that is not an unsigned integer (node lib/child_process.js validateTimeout), and 0
+    // turns the deadline off; performance.now() is fractional, so the remaining budget must be rounded down and the
+    // wait must stop when it reaches zero.
+    const never = lateDaemon(Number.POSITIVE_INFINITY);
+    const deadlines: number[] = [];
+    let drift = 0;
+    const fractional: Runner = {
+      ...never.runner,
+      now: () => never.runner.now() + drift,
+      capture: (...call) => {
+        deadlines.push(call[3]);
+        drift += 0.37;
+        return never.runner.capture(...call);
+      },
+    };
+    expect(() => run(plan(UP, {}), fractional)).toThrow(StackError);
+    for (const ms of [...deadlines, ...never.slept]) {
+      expect(Number.isInteger(ms) && ms > 0, `${ms}`).toBe(true);
+    }
+  });
+
   test("any_answer_is_judged_at_once", () => {
     // P1.37u red 3: a remote daemon is refused on its first answer, with no wait, and so is any other failed answer.
     const remote = lateDaemon(0, { answer: "x|elsewhere" });
