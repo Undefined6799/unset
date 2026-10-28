@@ -1419,6 +1419,29 @@ Done when `header_action_opens_a_dialog_in_place`, `sign_in_opens_in_place_with_
 `default_shell_signs_in_in_place`, `login_post_signed_in_goes_to_the_profile` and `sign_in_opens_over_the_page`
 (nojs.spec.ts) pass and check is green.
 
+### P2.05s — Sign in silently when the PDS already knows you
+Tags: (none)            Depends on: P2.05p, P2.08s
+Alex, 2026-10-23 16:52Z: "if you already signed in to an account, maybe it should allow you to just authorize the app
+to use it"; asked "Shall I build silent-first, with that 'No thanks' rule?", he answered "yes" (2026-10-28 02:01Z).
+
+**What:** POST /login asks the PDS with `prompt=none` unless the browser carries the `__Host-signed_out` marker (then
+`prompt=login`, as P2.08). A browser with one active PDS session that already allowed unset gets a code with no PDS
+page (@atproto/oauth-provider 0.23.1, oauth-provider.js:291-305). Otherwise the PDS answers `login_required`,
+`consent_required`, `interaction_required` or `account_selection_required` with our state;
+`completeAuthorization` returns `interaction_required` with the appState, and the callback, for a flow whose appState
+says `silent` and whose nonce cookie matches, asks once more with no prompt and 303s straight to the PDS (the
+`/login/continue` page's Strict cookie is not sent on this cross-site chain). The second ask is not silent, so it
+cannot loop; its nonce is the first one's, still unspent. The count `auth.login_silent_refused` has no field.
+
+"No thanks" on the signed-out box becomes a standalone Button in a form to POST /signed-out (CSRF gate), which clears
+the marker and goes home, so the next sign-in may go straight through. Leaving the page, or following the account
+link, keeps it, so a shared computer still asks for the password.
+
+Done when `callback_silent_refusal_hands_back_the_app_state`, `login_tries_silent_first`,
+`callback_silent_refusal_asks_with_a_page`, `callback_silent_refusal_is_asked_again_only_once`,
+`callback_silent_refusal_needs_this_browser`, `signed_out_no_thanks_ends_the_password_ask` and
+`signed_out_no_thanks_posts_home` (nojs.spec.ts) pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`

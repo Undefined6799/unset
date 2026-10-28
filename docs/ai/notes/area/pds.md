@@ -47,7 +47,10 @@ issuer. It returns the DID, issuer, appState and the granted scope (read from th
 `revoke`; failures are `consent_denied`, `expired` (no stored state: unknown, expired or replayed), `pds_unreachable`
 and `failed`. The interface decides the rest (nonce, expected account, grant, session). `sign-in.test.ts` also pins
 the PKCE verifier against the PAR challenge, a `sub` whose issuer is not the token server, a replayed callback that
-sends no second token request, and a second login replacing the stored token set.
+sends no second token request, and a second login replacing the stored token set. P2.05s: `authorize` also takes
+`prompt: "none"`; a callback error that means the server needs a page (`login_required`, `consent_required`,
+`interaction_required`, `account_selection_required`) returns `interaction_required` with the appState, so the route
+can ask again. The library skips its `iss` check on an error response, so nothing is trusted from it but the state.
 
 **PDS calls (P2.07).** `pds-call.ts` is the only place that calls `client.restore(` or `new Agent(`. It classifies
 failures into `ok`, `transient`, `auth_dead`, `scope_missing` and `rejected`. A dead grant ends the DID's sessions
