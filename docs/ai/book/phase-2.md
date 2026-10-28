@@ -1365,6 +1365,37 @@ continue page are unchanged, so one click reaches the PDS's sign-in page.
 
 Done when `login_form_posts_only_the_chooser` and `login_get_renders_no_state` pass and check is green.
 
+### P2.05m — Show sign-in as one modal dialog
+Tags: (none)            Depends on: P2.05r
+Alex, 2026-10-23: "the sign in should only be a modal", then "have the button be @ Sign in with AtProto", "the @ being
+atproto logo", and "the sign in is still not a pop up modal like we said". Mock: Figma 166:867 (desktop), 166:883
+(phone).
+
+**What:** `GET /login` renders the sign-in box alone, with no shell and islands off: a section named by its `h1`, in
+the kit Modal's look, drawn over the scrim with no script, so every way in (the header's Sign in, a protected page's
+redirect) lands on the same box. With no script it cannot trap focus or close on Escape, so it is a named region, not
+an `aria-modal` dialog (Codex on #1313). Close goes to `/`, because `next` is often the protected page that sent the
+visitor here. The checked `?error=` shows inside the box. The button reads "Sign in with AtProto" and still posts
+`intent=chooser`; the PDS host stays in the text. The atproto mark before the label waits for Alex's approval of the
+drawing (CLAUDE.md icon rule: Iconoir only). `/login` moves to the zero-script Lighthouse row, and the no-JS header
+menu test moves to `/signed-out`.
+
+Done when `login_is_one_modal_box`, `login_get_shows_only_a_catalog_error` and `login_box_without_js` pass and check
+is green.
+
+### P2.05n — Close the sign-in box to the page before
+Tags: (none)            Depends on: P2.05m
+Alex, 2026-10-23 12:23Z: the X "just does not do anything. It should probably go back to the page to which I came
+from." Staging's build sent Close to `next`, the protected page, which redirected straight back; P2.05m's `/` left
+him at home instead.
+
+**What:** GET /login works out Close from the Referer: if it is our origin (Referrer-Policy `same-origin` sends it only
+between our pages, and a 303 keeps it), not a `/login` page, passes `safeReturnPath`, and is not `next`, Close goes
+there; otherwise `/`. No state, no new input stored.
+
+Done when `login_close_goes_back_to_the_page_before` and `login_close_returns_to_the_page_before` (nojs.spec.ts, the
+browser's own Referer) pass and check is green.
+
 ### P2.06 — Callback
 Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`

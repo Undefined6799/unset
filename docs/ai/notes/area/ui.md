@@ -21,7 +21,7 @@ checked: 2026-10-23
 - The build code for the generated files (tokens, contrast, font metrics, icons) lives in [[ui-build]]; the Node
   entries that run it are in `scripts/ui/`. `tokens/font-metrics.ts` owns the shape of `font-metrics.json`.
 - `src/tokens.css`, `src/base.css`, `src/layers.css`: generated tokens and base styles.
-- `icons/`: the 36 imported plus two hash-registered Iconoir 7.12.1 icons, copied byte for byte, plus the generated `icons.json` allowlist and one
+- `icons/`: the 36 imported plus five hash-registered Iconoir 7.12.1 icons (P2.24f: devices, apps; P2.13e: bulb-off, bulb-on, tv), copied byte for byte, plus the generated `icons.json` allowlist and one
   generated `drawings/<name>.generated.ts` per icon. `components/Icon/` renders them: pages use `<Icon name>`;
   islands use `IconDrawing` with the one drawing module they need, because `icons.json` is about 5 KB gzip and would
   not fit the island budget. No icon npm package and nothing fetched at runtime (decision 33).
@@ -39,8 +39,9 @@ checked: 2026-10-23
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
-- `components/Navigation/`: the approved core rail and phone bar, composed from Avatar and Icon with a native
-  popover. Its local README records the Figma extension without changing the imported sheet snapshot. Header's
+- `components/Navigation/`: the core shell's left drawer (P2.13e replaced the rail and phone popup) and the phone
+  floating bar, composed from Avatar, Icon and Mark with one native popover; `NavigationMenuButton` opens it from
+  Header's `start` slot. Its local README records the Figma extension without changing the imported sheet snapshot. Header's
   `brandOnly` mode delegates to pure BrandHeader for the 64px/56px top logo bar and localized home name; Avatar
   accepts anonymous fallback artwork. Generic link rendering, start/end item placement and an explicit committed
   navigation key support hydrated consumers without importing their routing/state. Hydrated labels appear on

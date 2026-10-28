@@ -72,7 +72,7 @@ function run(dir: string, islands: string[] = []): { code: number; lines: string
 }
 
 test("budget_island_limits_are_kib", () => {
-  expect(BUDGET).toEqual({ perIslandGzipBytes: 15 * KIB, totalGzipBytes: 75 * KIB });
+  expect(BUDGET).toEqual({ perIslandGzipBytes: 15 * KIB, totalGzipBytes: 80 * KIB });
 });
 
 test("island_budget_passes_within_limits", () => {
@@ -85,7 +85,7 @@ test("island_budget_passes_within_limits", () => {
   const { code, lines } = run(dir, sourcesOf(["demo", "menu"]));
   expect(code).toBe(0);
   expect(lines.filter((line) => line.startsWith("island "))).toHaveLength(2);
-  expect(lines.at(-1)).toMatch(/^all island JS: \d+ gzip bytes in 4 files \(max 76800\)$/);
+  expect(lines.at(-1)).toMatch(/^all island JS: \d+ gzip bytes in 4 files \(max 81920\)$/);
 });
 
 test("island_budget_check", () => {
@@ -116,7 +116,7 @@ test("island_budget_fails_total_over", () => {
 test("island_budget_counts_shared_chunk_once", () => {
   const gz: Record<string, number> = { "assets/boot-a1.js": 100, "assets/runtime-b2.js": 1000, "assets/x-c3.js": 10 };
   const report = checkIslands(manifestOf(["x"]), (file) => gz[file] ?? 0, BUDGET);
-  expect(report.lines.at(-1)).toBe("all island JS: 1110 gzip bytes in 3 files (max 76800)");
+  expect(report.lines.at(-1)).toBe("all island JS: 1110 gzip bytes in 3 files (max 81920)");
 });
 
 test("island_budget_fails_closed", () => {

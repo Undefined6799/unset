@@ -11,6 +11,7 @@ export {
   Navigation,
   type NavigationAnchorProps,
   type NavigationLinkRenderer,
+  NavigationMenuButton,
   type NavigationProps,
 } from "./components/Navigation/Navigation.tsx";
 export { Progress, type ProgressProps } from "./components/Progress/Progress.tsx";

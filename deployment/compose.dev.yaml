@@ -76,7 +76,12 @@ services:
     pids_limit: 64
     restart: "no"
 
-  # Bluesky's PDS, unmodified (@atproto/pds 0.5.37 in image 0.4.5037). Its image sets no USER, so it runs here as the
+  # The first-party PDS image. deployment/images.lock.json pins ghcr.io/undefined6799/unset/pds by digest, with origin
+  # first-party and verify cosign-keyless. deployment/compose.dev.test.ts (pds_runs_the_locked_image) requires that
+  # origin and compose.dev.yaml's pds image to be that ref, with no build on that service.
+  # .github/workflows/publish-images.yml, on a push to main, builds each Dockerfile scripts/ci/list-dockerfiles.ts
+  # lists, including deployment/pds/Dockerfile, pushes it by digest, scans it, signs it and attests it. Its image sets
+  # no USER, so it runs here as the
   # base's node user (uid 1000, nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), with its data in a named volume at
   # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
   # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
@@ -227,9 +232,9 @@ services:
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
   # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
-  # listener (newt 1.18.1 newtconfig/newtconfig.go:452-503).
+  # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
   newt:
-    image: ghcr.io/undefined6799/mirror/newt@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f
+    image: ghcr.io/undefined6799/mirror/newt@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]

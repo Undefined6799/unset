@@ -17,6 +17,27 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // P2.05m: the sign-in page is one box over the scrim, with nothing behind it to tab into; with no Referer, Close goes home.
+  test("login_box_without_js", async ({ page }) => {
+    await page.goto("/login?next=/did");
+    const dialog = page.getByRole("region", { name: "Sign in" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
+    await expect(page.locator("header, footer")).toHaveCount(0);
+  });
+
+  // P2.05n: the browser's own Referer (Referrer-Policy same-origin) brings Close back to the page the visitor left.
+  test("login_close_returns_to_the_page_before", async ({ page }) => {
+    await page.goto("/legal/terms");
+    await page.locator('footer a[href="/login"]').click();
+    await expect(page).toHaveURL(/\/login$/);
+    const close = page.getByRole("region", { name: "Sign in" }).getByRole("link", { name: "Close" });
+    await expect(close).toHaveAttribute("href", "/legal/terms");
+    await close.click();
+    await expect(page).toHaveURL(/\/legal\/terms$/);
+  });
+
   // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
   test.describe("phone", () => {
     test.use({ viewport: { width: 375, height: 800 } });
@@ -25,19 +46,23 @@ test.describe("javascript disabled", () => {
     // algorithm", focusPreviousElement for a close request).
     test("navigation_popover_without_js", async ({ page }) => {
       await page.goto("/");
-      const toggle = page.locator('button[popovertargetaction="toggle"]');
+      // P2.13e: the floating bar's menu button opens the drawer, and the bar hides while it is open.
+      const bar = page.locator('nav:has(> button[popovertargetaction="toggle"])');
+      const toggle = bar.locator('button[popovertargetaction="toggle"]');
       const panel = page.locator("[popover]");
       await expect(panel).toBeHidden();
       await toggle.press("Enter");
       await expect(panel).toBeVisible();
+      await expect(bar).toBeHidden();
       await expect(panel.getByRole("link", { name: "Settings" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
+      await expect(bar).toBeVisible();
       await expect(toggle).toBeFocused();
     });
 
     test("default_shell_details_menu_without_js", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/signed-out");
       const menu = page.locator("header details");
       const summary = menu.locator("summary");
       await expect(summary).toBeVisible();
@@ -48,6 +73,18 @@ test.describe("javascript disabled", () => {
       await summary.press("Enter");
       await expect(menu).not.toHaveAttribute("open");
     });
+  });
+
+  // P2.13e: on desktop the header's menu button opens the drawer and its X closes it, with no script.
+  test("navigation_drawer_without_js", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.locator('header button[popovertargetaction="toggle"]');
+    const panel = page.locator("[popover]");
+    await toggle.click();
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Close menu" }).click();
+    await expect(panel).toBeHidden();
   });
 
   // P1.22's test, its theme half (the French half is P1.22b's): the footer form on an app page sets the theme.

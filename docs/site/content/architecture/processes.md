@@ -15,10 +15,10 @@ Every service drops all capabilities, sets `no-new-privileges`, uses a read-only
 | --- | --- | --- | --- | --- |
 | postgres | `deployment/images/postgres.Dockerfile` | 999:999 | db | bootstrap superuser; init creates `migrator` and `tap` |
 | migrate | `deployment/images/migrate.Dockerfile` | 65532:65532 | db | `migrator` on database `unset`; `restart: "no"` |
-| pds | `ghcr.io/bluesky-social/pds:0.4.5037` (digest-pinned) | 1000:1000 | edge, pds_egress | its own volume, not our Postgres |
+| pds | `ghcr.io/undefined6799/unset/pds` (digest-pinned): the official `0.4.5037` image with its OAuth UI dist replaced (P2.24y) | 1000:1000 | edge, pds_egress | its own volume, not our Postgres |
 | edge | `deployment/edge` | 65532:65532 | edge, app, newt_edge `10.250.37.3` | none |
 | web | `deployment/images/node-app.Dockerfile` | 65532:65532 | db, app, web_egress | `web` |
-| newt | `docker.io/fosrl/newt:1.18.1` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
+| newt | `docker.io/fosrl/newt:1.19.0` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
 
 Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending).
 
@@ -50,7 +50,7 @@ Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/
 
 ## Database roles
 
-`deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates `migrator` (login, owns database `unset`) and `tap` (login, owns database `tap`). Those two are not in `roles.json`. `deployment/compose.local.yaml` mounts `./postgres/init` on postgres and nothing else there, the same init directory `deployment/compose.dev.yaml` mounts. The phase-1 book still describes a local read-only `init-local/` mount (`docs/ai/book/phase-1.md`, the P1.34d difference list and P1.34u). That passage is superseded by [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md) (no PLC of our own; both decided (0001 log), acceptance pending). `deployment/postgres/init-local/10-local-plc.sh` still creates a `plc` role. Neither compose file mounts it.
+`deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates `migrator` (login, owns database `unset`) and `tap` (login, owns database `tap`). Those two are not in `roles.json`. `deployment/compose.local.yaml` mounts `./postgres/init` on postgres and nothing else there, the same init directory `deployment/compose.dev.yaml` and `deployment/compose.dev.source.yaml` mount. The phase-1 book still describes a local read-only `init-local/` mount (`docs/ai/book/phase-1.md`, the P1.34d difference list and P1.34u). That passage is superseded by [ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md) and [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md) (no PLC of our own; both decided (0001 log), acceptance pending). `deployment/postgres/init-local/10-local-plc.sh` still creates a `plc` role. None of the three compose files mounts it.
 
 Migration `infrastructure/postgres/migrations/0003_roles_and_grants.sql` creates every `roles.json` role with no table privileges. `infrastructure/postgres/roles.ts` sets a password only when `passwordFrom` is a file name. A login role with `passwordFrom: null` gets no password from that sync.
 
