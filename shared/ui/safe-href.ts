@@ -29,9 +29,9 @@ function hasForbiddenCharacter(text: string): boolean {
 }
 
 /**
- * A path on our origin: exactly one leading `/`, never `//` or `/\\`, before parsing and after it. Dot segments are
- * resolved by the parser, so `/.//x`, `/a/..//x` and `/%2e//x` become `//x`, which a browser reads as another host
- * (P1.24x; `safeReturnPath` checks the same way). The result is the parsed path, query and hash.
+ * A path on our origin: exactly one leading `/`, never `//` or `/\\`, before parsing and after it. The parser
+ * normalises the path, so the result is checked as well as the input (P1.24x; `safeReturnPath` checks the same way).
+ * The result is the parsed path, query and hash.
  */
 function safePath(text: string): SafeHref | null {
   if (text[0] !== "/" || text[1] === "/" || text[1] === "\\") return null;
