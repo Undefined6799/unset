@@ -10,7 +10,7 @@ importance: normal
 related: ["[[ui]]"]
 replaced_by: null
 tags: [pitfall, ui, ci]
-checked: 2026-10-23
+checked: 2026-10-28
 ---
 # Copied SVGs are committed as .svg.txt
 
@@ -31,3 +31,6 @@ P2.13e's drawer included), so a change there edits `icons.ts` without touching a
 SVG added later.
 
 **Repair.** Renaming later is cheap; only the generator and its test name the paths.
+
+Re-checked at the P0.05 cleanup: `icons.ts` now exports only what `scripts/ui/icons.ts` and its tests use; the rule
+is unchanged.

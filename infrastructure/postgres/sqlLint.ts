@@ -36,7 +36,7 @@ const EVENT = "(?:INSERT|UPDATE|DELETE|TRUNCATE)";
  * trigger event, which guards a table rather than emptying it, so the expand rule skips it there and nowhere else
  * (architecture ruling 2026-10-06 23:10Z, P1.15x). A clause that does not match keeps its TRUNCATE reported.
  */
-export const TRIGGER_EVENTS = new RegExp(
+const TRIGGER_EVENTS = new RegExp(
   `\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:CONSTRAINT\\s+)?TRIGGER\\s+(?:\\w+|"[^"]+")\\s+` +
     `(?:BEFORE|AFTER|INSTEAD\\s+OF)\\s+${EVENT}(?:\\s+OR\\s+${EVENT})*\\s+ON\\b`,
   "gi",

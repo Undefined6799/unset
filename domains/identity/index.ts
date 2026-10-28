@@ -3,7 +3,6 @@
 // net-guard.
 export { ageInYears, type BirthDate, parseBirthDate } from "./auth/age.ts";
 export {
-  CACHED_RECHECK_CAP_MULTIPLE,
   cachedRecheckCapS,
   type EmailCache,
   type EmailGate,
@@ -17,7 +16,6 @@ export {
   onboardingStep,
   requireOnboarded,
   verifiedAfterRefresh,
-  withinCachedRecheckCap,
 } from "./auth/gates.ts";
 export type { FetchRequest, FetchTarget, HttpOutcome, IdentityNetwork, TxtOutcome } from "./contract.ts";
 export type { ResolvedDid } from "./did-doc.ts";

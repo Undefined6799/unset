@@ -10,7 +10,7 @@ importance: normal
 related: ["[[tests]]", "[[deployment]]", "[[postgres-tests-need-docker]]"]
 replaced_by: null
 tags: [area, postgres]
-checked: 2026-10-21
+checked: 2026-10-28
 ---
 # postgres
 
@@ -40,7 +40,8 @@ checked: 2026-10-21
   the role's 2 s `statement_timeout` for itself, or Postgres cancels it first with 57014. Never log the key: it is
   usually a DID. A new use adds a `LockNamespace` line with a new number.
 - `sealed-columns.json` and `sealedColumns.ts`: every `types.sealed` column (migration 0007) with the row key its
-  seal context binds; `sealedContext` is the only way to get a context for a stored value. `rewrapAll.ts` and
+  seal context binds; `sealedContext` is the only way to get a context for a stored value, and only this package uses it
+  (not exported from the index since the P0.05 cleanup). `rewrapAll.ts` and
   `unset-rewrap` move stored values to a new seal key; `--check <kid>` says when the old key may go (P1.14d).
 - The browser session store is not here: it is its own trusted workspace, `infrastructure/session/` (P2.03),
   like `infrastructure/audit/`. It never imports this folder; each interface passes it a `withDb` built from

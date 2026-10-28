@@ -52,16 +52,6 @@ export function isDpopNonceHandshake(error: unknown): boolean {
   return authenticate(error)?.includes('error="use_dpop_nonce"') === true;
 }
 
-/**
- * A credential the caller must not keep using. A handshake 401 is not fatal (the book’s cases). Token-refresh
- * classes are decided in `restoreOutcome`, because a refresh can also fail closed as `auth_dead` for other reasons.
- */
-export function isAuthFatal(error: unknown): boolean {
-  if (isDpopNonceHandshake(error)) return false;
-  if (statusOf(error) === 401) return true;
-  return errorCode(error) === "invalid_grant";
-}
-
 export function isLockTimeout(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   if (error.name === "LockTimeout") return true;
