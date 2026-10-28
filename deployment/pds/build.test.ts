@@ -127,9 +127,9 @@ test.each(["none", "package version", "lockfile", "package manager", "source rev
         JSON.stringify({ packageManager: drift === "package manager" ? "pnpm@11.10.0" : "pnpm@11.11.0" }),
       );
       for (const [path, name, version] of [
-        ["packages/pds", "@atproto/pds", "0.5.37"],
-        ["packages/oauth/oauth-provider", "@atproto/oauth-provider", "0.23.1"],
-        ["packages/oauth/oauth-provider-ui", "@atproto/oauth-provider-ui", "0.10.5"],
+        ["packages/pds", "@atproto/pds", "0.5.49"],
+        ["packages/oauth/oauth-provider", "@atproto/oauth-provider", "0.24.3"],
+        ["packages/oauth/oauth-provider-ui", "@atproto/oauth-provider-ui", "0.10.7"],
       ]) {
         const target = join(dir, path as string);
         mkdirSync(target, { recursive: true });
