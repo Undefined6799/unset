@@ -540,6 +540,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **The profile module and page (P2.20; own record: [0037](0037-profile-module-and-page.md)):** the profile is its own
   module, `domains/profile`, beside identity (Alex, 2026-10-23 02:59Z). The `sh.unset.profile` record lives on the
   member's PDS and nowhere else; a save changes only the fields sent, compare-and-swap on the stored CID. The owner's
-  page edits the README with one island; the side column is edited in Settings › Profile with a plain form; visitors
-  get no script. The README is stored as typed blocks and edited with BlockNote, loaded only when the owner edits.
-  Proposed, awaiting Alex.
+  page edits the README in place; the side column is edited in Settings › Profile with a plain form. The README is
+  stored as typed blocks and edited with BlockNote, loaded only on the owner's own page. Proposed, awaiting Alex.

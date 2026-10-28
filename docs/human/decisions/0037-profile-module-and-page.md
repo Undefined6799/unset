@@ -30,19 +30,24 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
    the route, status and error code only (SE-7): never a field value, a DID or a handle.
 4. **The README is typed blocks; BlockNote edits them in the owner's browser** (Alex, 21:08Z: "the real blocknote
    experience", with the logic on the backend). The record stores our own small block model (P2.20w): paragraph,
-   heading, list item, quote, code block and two or three columns, with text runs (bold, italic, underline, strike,
-   code) and link runs. It is not BlockNote's JSON, so any client can read it and the editor can be replaced. The
+   heading, list item, quote, code block, display text and two or three columns, with text runs (bold, italic,
+   underline, strike, code) and link runs; a paragraph, heading, display text or list item may be centred or
+   right-aligned. It is not BlockNote's JSON, so any client can read it and the editor can be replaced. The
    server never trusts the editor: it reads the posted blocks into this model once (DM-1), drops what the model does
    not hold, checks every link with `safeHref`, writes the record as in point 2, and renders visitor HTML itself with
    no script. Raw HTML is never stored or rendered; links carry `rel="nofollow ugc noopener noreferrer"`; no image is
    loaded until uploads go through the media proxy.
-5. **Script only for the owner, and BlockNote only on the owner's editor page.** A profile page, the owner's included,
-   runs no script (its CSP has no `script-src`, plan §5.4), so the README is edited on its own page,
-   `GET /profile/readme`, under the app pages' CSP unchanged: scripts only from our assets, and Trusted Types with no
-   policy at all. That page loads a separate owner-only chunk with BlockNote 0.56.0's core (`@blocknote/core`,
-   MPL-2.0, on TipTap and ProseMirror, MIT), pinned exactly, bundled and served from our origin, never fetched from
-   a CDN. The chunk is outside the 15 KB per-island and 80 KB total island budget, which still holds for every other
-   island and page (Alex, 21:29Z: "approve BlockNote 0.56.0 as an owner-only editor chunk outside the island budget").
+5. **The README is edited in place on the owner's page, and BlockNote loads only there** (Alex, 2026-10-23 23:09Z:
+   edit in place on the profile, no separate editor page). The member's page `/<DID>` is an app page under the app
+   pages' CSP unchanged: scripts only from our assets, and Trusted Types with no policy at all. When the profile was
+   read, the owner's page renders the README inside a plain form that posts to `POST /profile/readme`, and loads a
+   separate owner-only entry with BlockNote 0.56.0's core (`@blocknote/core`, MPL-2.0, on TipTap and ProseMirror,
+   MIT), pinned exactly, bundled and served from our origin, never fetched from a CDN. The pencil, a double click or
+   a double tap opens the editor where the README stood; while it is open, Save and Cancel sit in a bar across the
+   top of the screen. Without script the README only reads. No other page loads the entry, and a page whose profile
+   could not be read never does. The entry is outside the 15 KB per-island and 80 KB total island budget, which
+   still holds for every other island and page (Alex, 21:29Z: "approve BlockNote 0.56.0 as an owner-only editor chunk
+   outside the island budget").
    The exception is a folder, not one file: every browser entry under `apps/web/src/editor/`, with the JS only those
    entries reach, shares one cap of 256 KiB gzip, and only that folder may import BlockNote, TipTap or ProseMirror
    (P2.20z). BlockNote's engine does the editing; its toolbar, slash menu and block handle are our own
@@ -76,11 +81,13 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
   block model maps to it without a lossy text round trip.
 - **Our own BlockNote-style editor, no dependency.** Fits the island budget, but rich text across blocks, paste,
   mobile keyboards and undo are what ProseMirror exists for; Alex wants the real BlockNote experience.
-- **BlockNote's own menus, with a Trusted Types policy on the editor page.** Works (tried in Chromium, 21:31Z), but
+- **BlockNote's own menus, with a Trusted Types policy on the owner's page.** Works (tried in Chromium, 21:31Z), but
   loosens the page's CSP for one library; Alex chose our own menus at 21:40Z.
 - **Store BlockNote's JSON as is.** Less mapping, but ties the record to one editor's internal format and its version.
-- **Edit everything in place on the page.** Tried on staging the same night; Alex moved the side column to Settings
-  at 04:29Z.
+- **A separate README editor page (`GET /profile/readme`).** Kept the profile page free of the editor, but sent the
+  owner away from the page they were editing; Alex chose editing in place at 23:09Z.
+- **Edit the side column in place too.** Tried on staging the same night; Alex moved the side column to Settings at
+  04:29Z.
 
 ## Consequences
 - New folder `domains/profile` (CLAUDE.md "Where does this go" gains the row with the first code PR).
@@ -93,12 +100,12 @@ are not editable, members add their own links; 04:29Z "have all the stuff in the
   never blank a record it could not read.
 
 ## Compliance
-The P2.20 tests hold this record: the profile module's parse and record tests (only sent fields change, a broken
-stored record is refused, a profile needs a display name, links are http(s) and bounded), `POST /profile`'s tests (the
+The P2.20 tests hold this record: the profile module's parse and record tests (only sent fields change, a broken stored
+record is refused, a profile needs a display name, links are http(s) and bounded), `POST /profile`'s tests (the
 session's own DID, CSRF refusal, a repeated field refused, conflict on a swapped record, Settings return), the page
 tests (no script before hydration, unsafe links never linked, an unreadable profile offers no editing), the block
 reader's tests (unknown blocks dropped, unsafe links refused, bounds held) and the island budget test, which fails if
-any chunk outside `apps/web/src/editor/` goes over the island budget or that folder goes over its own cap, and an e2e test that the editor page runs with Trusted Types
-and no policy. Acceptance is Alex's line on the pull request
-that adds this record; ADR 0001 notes the proposal at its end and gains the acceptance paragraph when he accepts. The
-status line stays Proposed until then.
+any chunk outside `apps/web/src/editor/` goes over the island budget or that folder goes over its own cap, and an e2e
+test that the owner's page runs the editor with Trusted Types and no policy. Acceptance is Alex's line on the pull
+request that adds this record; ADR 0001 notes the proposal at its end and gains the acceptance paragraph when he
+accepts. The status line stays Proposed until then.
