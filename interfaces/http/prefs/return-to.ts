@@ -6,15 +6,10 @@
 // home. shared/http's returnPath and DENIED_TARGETS are not changed.
 import { parseDid, parseHandle } from "@unset/domains-identity";
 import { safeReturnPath } from "@unset/shared-http";
+import { single } from "../form-field.ts";
 
 const SIGN_IN_PATHS: ReadonlySet<string> = new Set(["/login", "/login/continue"]);
 const HOME = "/";
-
-/** The one value of `name`, or null when it is missing or repeated. */
-function single(query: URLSearchParams, name: string): string | null {
-  const values = query.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
 
 /** A handle as parseHandle normalises it, or a DID as written (DIDs are case-sensitive); null for anything else. */
 function checkedHandle(raw: string | null): string | null {

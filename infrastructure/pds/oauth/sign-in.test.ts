@@ -168,7 +168,7 @@ async function setup(world: World = {}) {
     ownIssuer: world.ownIssuer ?? PDS,
     log,
   });
-  const run = (input: string, prompt?: "login") =>
+  const run = (input: string, prompt?: "login" | "none") =>
     authorize(client, input, {
       appState: APP_STATE,
       ...(prompt ? { prompt } : {}),
@@ -204,6 +204,9 @@ describe("authorize", () => {
     expect([...states.values()].map((state) => state.appState)).toEqual([APP_STATE]);
     expect((await run(PDS)).ok).toBe(true);
     expect(pars[1]?.has("prompt")).toBe(false);
+    // P2.05s: the silent attempt asks for no page at all.
+    expect((await run(PDS, "none")).ok).toBe(true);
+    expect(pars[2]?.get("prompt")).toBe("none");
   });
 
   test("authorize_set_unresolvable_falls_back", async () => {
@@ -352,6 +355,18 @@ describe("completeAuthorization", () => {
     const query = await started({ error: "access_denied", iss: PDS });
     expect(await complete(query)).toEqual({ ok: false, reason: "consent_denied" });
     expect(posts).toEqual([]);
+  });
+
+  test("callback_silent_refusal_hands_back_the_app_state", async () => {
+    // P2.05s: a prompt=none request the server cannot answer without a page comes back as one of these errors
+    // (@atproto/oauth-provider 0.23.1, oauth-provider.js:291-305), with the state, so the route can ask again.
+    for (const error of ["login_required", "consent_required", "interaction_required", "account_selection_required"]) {
+      const { started, complete, posts, logged } = await setup();
+      const query = await started({ error, iss: PDS });
+      expect(await complete(query), error).toEqual({ ok: false, reason: "interaction_required", appState: APP_STATE });
+      expect(posts).toEqual([]);
+      expect(logged).toEqual([]);
+    }
   });
 
   test("callback_mixup_iss", async () => {

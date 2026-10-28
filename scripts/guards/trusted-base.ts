@@ -93,10 +93,30 @@ export function matchesPattern(path: string, pattern: string): boolean {
   return target.endsWith("/") ? path.startsWith(target) : path === target || path.startsWith(`${target}/`);
 }
 
-/** The folder name a test under tests/ must carry: a folder pattern's last segment, a file pattern's parent. */
-function folderName(pattern: string): string {
-  const segments = pattern.split("/").filter(Boolean);
-  return (pattern.endsWith("/") ? segments.at(-1) : segments.at(-2)) ?? "";
+/**
+ * What a trusted path lets ride under tests/ (P0.09t, #639). A folder pattern names a folder: a test under tests/ in a
+ * folder of that name rides. A file pattern names one file: only that file's own tests ride (`ownTest`), so its
+ * parent folder's name carries nothing.
+ */
+function scopeOf(path: string, pattern: string): { folder: string; file: string } {
+  const target = pattern.replace(/^\//, "");
+  if (path === target) return { folder: "", file: target };
+  return { folder: target.split("/").filter(Boolean).at(-1) ?? "", file: "" };
+}
+
+/**
+ * A trusted `.ts` file's own test: its basename with `.test.ts` for `.ts`, beside it, or under `tests/<suite>/` at a
+ * mirrored path that ends in one or more of the file's own folders. A trusted file of any other kind (a `.json`, a
+ * `.sql`) carries no test: main never let `roles.test.ts` ride beside `roles.json`, and nothing here starts to.
+ */
+function ownTest(path: string, file: string): boolean {
+  if (!file.endsWith(".ts")) return false;
+  const folders = file.split("/");
+  const base = folders.pop() as string;
+  const test = `${base.slice(0, -".ts".length)}.test.ts`;
+  if (path === [...folders, test].join("/")) return true;
+  const rest = /^tests\/[^/]+\/(.+)$/.exec(path)?.[1];
+  return rest !== undefined && folders.some((_, i) => rest === [...folders.slice(i), test].join("/"));
 }
 
 type Kind = "trusted" | "feature" | "mixed";
@@ -138,12 +158,15 @@ function kindOf(
   // A parsed path is judged by its findings first: the grant guard reads every file under migrations/, docs included.
   if (parsedPaths.some((parsed) => matchesPattern(path, parsed))) {
     const kinds = new Set(findings.filter((f) => f.path === path && !isRoleSwitch(f)).map((f) => f.kind === "trusted"));
-    if (kinds.has(true) && kinds.has(false)) return { kind: "mixed" as Kind, folder: "postgres" };
-    return { kind: (kinds.has(true) ? "trusted" : "feature") as Kind, folder: "postgres" };
+    if (kinds.has(true) && kinds.has(false)) return { kind: "mixed" as Kind, folder: "postgres", file: "" };
+    return { kind: (kinds.has(true) ? "trusted" : "feature") as Kind, folder: "postgres", file: "" };
   }
-  if (isDocumentation(path, docs)) return { kind: "feature" as Kind, folder: "" };
+  if (isDocumentation(path, docs)) return { kind: "feature" as Kind, folder: "", file: "" };
   const pattern = patterns.find((p) => matchesPattern(path, p));
-  return { kind: (pattern ? "trusted" : "feature") as Kind, folder: pattern ? folderName(pattern) : "" };
+  return {
+    kind: (pattern ? "trusted" : "feature") as Kind,
+    ...(pattern ? scopeOf(path, pattern) : { folder: "", file: "" }),
+  };
 }
 
 /** Human documentation and the AI working notes (the step book among them) hold no code. */
@@ -245,11 +268,15 @@ function edgeBumpSharesPullRequest(
   return product.every((path) => path === EDGE_DOCKERFILE || edgeBumpCompanion(path, docs));
 }
 
+/** The trusted folders and files this PR changes: what decides which tests under tests/ ride (`scopeOf`). */
+type Scope = { folders: ReadonlySet<string>; files: readonly string[] };
+
 /** A test of a trusted-base file, or documentation of one; either may ride with it. */
-function ridesAlong(path: string, patterns: readonly string[], folders: ReadonlySet<string>, docs: DocFacts) {
+function ridesAlong(path: string, patterns: readonly string[], scope: Scope, docs: DocFacts) {
   const stem = /^(.*)\.test\.ts$/.exec(path)?.[1];
   if (stem !== undefined && patterns.some((p) => matchesPattern(`${stem}.ts`, p))) return true;
-  if (path.startsWith("tests/") && path.split("/").some((segment) => folders.has(segment))) return true;
+  if (path.startsWith("tests/") && path.split("/").some((segment) => scope.folders.has(segment))) return true;
+  if (scope.files.some((file) => ownTest(path, file))) return true;
   return isDocumentation(path, docs) || (isDocs(path) && docs.regular.has(path));
 }
 
@@ -314,7 +341,10 @@ export function checkTrustedBaseIsolation(
   const mixed = kinds.filter((k) => k.kind === "mixed");
   const trusted = kinds.filter((k) => k.kind !== "feature");
   if (trusted.length === 0) return { ok: true, touched: false };
-  const folders = new Set(trusted.map((k) => k.folder).filter(Boolean));
+  const scope: Scope = {
+    folders: new Set(trusted.map((k) => k.folder).filter(Boolean)),
+    files: trusted.map((k) => k.file).filter(Boolean),
+  };
   const strays = lockfileOutsideScope(trusted, parsed.docs);
   const born = newTrustedWorkspaces(trusted, parsed.docs);
   const newReferences = (path: string): boolean =>
@@ -322,7 +352,7 @@ export function checkTrustedBaseIsolation(
   const rides = (path: string): boolean =>
     (path === LOCKFILE && strays?.length === 0) ||
     newReferences(path) ||
-    ridesAlong(path, trustedPatterns, folders, parsed.docs) ||
+    ridesAlong(path, trustedPatterns, scope, parsed.docs) ||
     edgeBumpCompanion(path, parsed.docs) ||
     (parsed.docs.edgeBaseBump != null && EDGE_BUMP_CHECKS.has(path));
   const outside = [

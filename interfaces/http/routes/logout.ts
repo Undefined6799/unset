@@ -16,6 +16,7 @@ import { withRevokeTimeout } from "./revoke.ts";
 import {
   clearIssuerCookie,
   clearNonceCookie,
+  clearSignedOutCookie,
   clearTargetCookie,
   issuerCookie,
   issuerCookieSent,
@@ -160,6 +161,24 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         if (issuerCookieSent(cookie)) response.headers.append("set-cookie", clearIssuerCookie());
         return response;
       },
+    }),
+    defineRoute({
+      method: "POST",
+      path: "/signed-out",
+      group: "app",
+      accepts: [FORM],
+      bodyLimit: 1024,
+      rateLimit: "default",
+      mutates: true,
+      session: "none",
+      // P2.05s (Alex, 2026-10-28 02:01Z): "No thanks" keeps the PDS session, so the next sign-in no longer asks for
+      // the password and may go straight through silently. POST behind the CSRF gate, so no other site can lift a
+      // shared computer's password ask. Nothing else changes: there is no session here to end.
+      handler: () =>
+        new Response(null, {
+          status: 303,
+          headers: { location: "/", "cache-control": "no-store", "set-cookie": clearSignedOutCookie() },
+        }),
     }),
   ];
 }

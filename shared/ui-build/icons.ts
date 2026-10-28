@@ -150,267 +150,56 @@ function checkSource(io: IconsIo): string {
 }
 
 const EXTENSION = "approved-extensions.json";
-// P2.24f: the single approved ADR 0027 / Task 3 registration. This is a closed contract, not a registry.
-// Immutable Iconoir 7.12.1 sources and exact Figma nodes are recorded here alongside their approval evidence.
-const APPROVED_EXTENSION = {
-  schemaVersion: 1,
-  baseSheet: {
-    version: "1792621080-00d4",
-    iconReadmeSha256: "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
-    bundleSha256: "bbd51a646aa5252053779db83c2776b2c6a5d4388bde30b31216ff6818fcbcab",
-  },
-  designApproval: {
-    by: "Alex",
-    date: "2026-10-18",
-    record: "docs/human/decisions/0027-pds-frontend-distribution.md",
-    scope:
-      "Existing approved PDS screens and named components; API entries below implement their recorded requirements.",
-  },
-  registeredOn: "2026-10-21",
-  components: {
-    Navigation: {
-      figmaUrls: [
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=75-3395",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-806",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-858",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=135-935",
-      ],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
-    },
-    Header: {
-      figmaUrls: ["https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=32-2086"],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui-design.md#ownership-and-dependency-boundaries"],
-    },
-    Button: {
-      figmaUrls: [
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=17-456",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1912",
-        "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=49-1978",
-      ],
-      requirements: ["docs/ai/plans/2026-10-18-pds-ui.md#task-3--make-shared-ui-usable-by-the-pds"],
-    },
-  },
-  iconoir: {
-    version: "7.12.1",
-    commit: "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e",
-  },
-  icons: {
-    devices: {
-      iconoirName: "computer",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1906",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/computer.svg",
-      sourceSha256: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
-      drawings: [
-        [
-          "path",
-          {
-            d: "M2 21L17 21",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M21 21L22 21",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-    apps: {
-      iconoirName: "view-grid",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=62-1911",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/view-grid.svg",
-      sourceSha256: "bf364d462e388de5e077cd31107f33f7f52070a96e846a98779252fd79e6b5cd",
-      drawings: [
-        [
-          "path",
-          {
-            d: "M14 20.4V14.6C14 14.2686 14.2686 14 14.6 14H20.4C20.7314 14 21 14.2686 21 14.6V20.4C21 20.7314 20.7314 21 20.4 21H14.6C14.2686 21 14 20.7314 14 20.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M3 20.4V14.6C3 14.2686 3.26863 14 3.6 14H9.4C9.73137 14 10 14.2686 10 14.6V20.4C10 20.7314 9.73137 21 9.4 21H3.6C3.26863 21 3 20.7314 3 20.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M14 9.4V3.6C14 3.26863 14.2686 3 14.6 3H20.4C20.7314 3 21 3.26863 21 3.6V9.4C21 9.73137 20.7314 10 20.4 10H14.6C14.2686 10 14 9.73137 14 9.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-        [
-          "path",
-          {
-            d: "M3 9.4V3.6C3 3.26863 3.26863 3 3.6 3H9.4C9.73137 3 10 3.26863 10 3.6V9.4C10 9.73137 9.73137 10 9.4 10H3.6C3.26863 10 3 9.73137 3 9.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-    "bulb-off": {
-      iconoirName: "light-bulb",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb.svg",
-      sourceSha256: "c2a5d2a7de5a05a81b169f5701f60fef924d05067c4fcd41b18aa78f718621f8",
-      drawings: [
-        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M9.00082 15C9.00098 13 8.50098 12.5 7.50082 11.5C6.50067 10.5 6.02422 9.48689 6.00082 8C5.95284 4.95029 8.00067 3 12.0008 3C16.001 3 18.0488 4.95029 18.0008 8C17.9774 9.48689 17.5007 10.5 16.5008 11.5C15.501 12.5 15.001 13 15.0008 15",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-      ],
-    },
-    "bulb-on": {
-      iconoirName: "light-bulb-on",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/light-bulb-on.svg",
-      sourceSha256: "d1f1ec747dffe741096cb553e6ee82d1df24573547a72201f9c1ffe84832743f",
-      drawings: [
-        ["path", { d: "M21 2L20 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M3 2L4 3", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M21 16L20 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M3 16L4 15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M9 18H15", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        ["path", { d: "M10 21H14", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z",
-            stroke: "currentColor",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-          },
-        ],
-      ],
-    },
-    tv: {
-      iconoirName: "modern-tv",
-      figmaUrl: "https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=151-939",
-      sourceUrl:
-        "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/modern-tv.svg",
-      sourceSha256: "0c71cfd7f5c25858f2876a85de1bef57f595ad69fa57011f40a87ee86dee6ca5",
-      drawings: [
-        ["path", { d: "M7 21L17 21", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" }],
-        [
-          "path",
-          {
-            d: "M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z",
-            stroke: "currentColor",
-            strokeWidth: "1.5",
-          },
-        ],
-      ],
-    },
-  },
-} as const;
+// P2.24f: sha256 of the exact bytes of shared/ui/approved-extensions.json that Alex approved (ADR 0027 / Task 3). Any
+// byte change to that file, prose and key order included, needs a reviewed bump of this hash in the same PR.
+export const APPROVED_EXTENSION_SHA256 = "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4";
 
-/** Exact JSON structure and values, independent of object key order; unknown or missing fields fail. */
-function sameRegistration(actual: unknown, expected: unknown): boolean {
-  if (actual === expected) return true;
-  if (actual === null || expected === null || typeof actual !== "object" || typeof expected !== "object") return false;
-  if (Array.isArray(actual) !== Array.isArray(expected)) return false;
-  const entries = Object.entries(expected);
-  return (
-    Object.keys(actual).length === entries.length &&
-    entries.every(
-      ([key, value]) => Object.hasOwn(actual, key) && sameRegistration((actual as Record<string, unknown>)[key], value),
-    )
-  );
+type RegisteredIcon = { iconoirName: string; sourceSha256: string; drawings: IconElement[] };
+type Registration = {
+  baseSheet: { version: string; iconReadmeSha256: string; bundleSha256: string };
+  designApproval: unknown;
+  registeredOn: string;
+  iconoir: { commit: string };
+  icons: Record<string, RegisteredIcon>;
+};
+
+/** The fields the build reads; the bytes are already pinned, so this only keeps a reviewed bump honest. */
+function checkRegistration(value: unknown): Registration {
+  const record = value as Registration | null;
+  const icons = record?.icons;
+  if (typeof icons !== "object" || icons === null || Array.isArray(icons)) throw new Error("no icons object");
+  for (const [name, icon] of Object.entries(icons))
+    if (typeof icon?.iconoirName !== "string" || !/^[a-f0-9]{64}$/.test(String(icon.sourceSha256)))
+      throw new Error(`icons.${name} lacks iconoirName or sourceSha256`);
+  checkDrawings(Object.fromEntries(Object.entries(icons).map(([name, icon]) => [name, icon.drawings])));
+  return record as Registration;
 }
 
-/** Component prose may evolve during review; its schema and all source/evidence identities stay closed. */
-function approvedRegistration(record: unknown): boolean {
-  const components = (record as { components?: Record<string, { api?: unknown; behavior?: unknown }> } | null)
-    ?.components;
-  const prose = (value: unknown) =>
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((text) => typeof text === "string" && text.trim().length > 0);
-  const expected = Object.fromEntries(
-    Object.entries(APPROVED_EXTENSION.components).map(([name, proof]) => {
-      const entry = components?.[name];
-      return [name, { ...proof, api: entry?.api, behavior: entry?.behavior }];
-    }),
-  );
-  return (
-    Object.values(expected).every((entry) => prose(entry.api) && prose(entry.behavior)) &&
-    sameRegistration(record, { ...APPROVED_EXTENSION, components: expected })
-  );
-}
-
-/** Parse JSON without silently losing duplicate keys (including duplicate icon aliases). */
-function registrationJson(text: string): unknown {
-  const value: unknown = JSON.parse(text);
-  // JSON.parse already proved the grammar. Canonicalize string/number tokens and remove only outside whitespace;
-  // a duplicate key is the only information this round trip can lose in this closed, nonnumeric-keyed schema.
-  const compact = text.replace(/"(?:[^"\\]|\\.)*"|\s+|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (token) =>
-    /^\s/.test(token) ? "" : JSON.stringify(JSON.parse(token)),
-  );
-  if (compact !== JSON.stringify(value)) throw new Error("duplicate registration keys");
-  return value;
-}
-
-/** Only the fixed, hash-pinned optional Icon pointer may extend the immutable 36-icon sheet. */
+/** Only the hash-pinned optional Icon pointer may extend the immutable 36-icon sheet. */
 function registeredIcons(io: IconsIo, sheetVersion: string) {
   try {
-    const inventory = registrationJson(io.readText("inventory.json")) as { Icon?: { extensions?: unknown } } | null;
+    const inventory = JSON.parse(io.readText("inventory.json")) as { Icon?: { extensions?: unknown } } | null;
     const icon = inventory?.Icon;
     if (!icon || typeof icon !== "object" || Array.isArray(icon)) throw new Error("missing Icon inventory");
     if (!Object.hasOwn(icon, "extensions")) return undefined;
-    const pointer = icon.extensions as { path?: unknown; sha256?: unknown }[];
-    const sha256 = Array.isArray(pointer) ? pointer[0]?.sha256 : undefined;
-    if (
-      typeof sha256 !== "string" ||
-      !/^[a-f0-9]{64}$/.test(sha256) ||
-      !sameRegistration(pointer, [{ path: EXTENSION, sha256 }])
-    )
+    // Only the fixed path is ever read; the pointer cannot name another file.
+    const actual = io.sha256(EXTENSION);
+    if (actual !== APPROVED_EXTENSION_SHA256)
+      throw new IconsError(
+        "icons.registration",
+        `shared/ui/${EXTENSION} is sha256 ${actual}, expected ${APPROVED_EXTENSION_SHA256} (pinned in shared/ui-build/icons.ts)`,
+      );
+    if (JSON.stringify(icon.extensions) !== JSON.stringify([{ path: EXTENSION, sha256: actual }]))
       throw new Error("invalid Icon pointer");
-    // Never resolve a path supplied by the record, even before its proof has been checked.
-    if (io.sha256(EXTENSION) !== sha256) throw new Error("registration hash mismatch");
-    const record = registrationJson(io.readText(EXTENSION));
-    if (!approvedRegistration(record)) throw new Error("unapproved registration");
-    const base = APPROVED_EXTENSION.baseSheet;
+    const record = checkRegistration(JSON.parse(io.readText(EXTENSION)));
+    const base = record.baseSheet;
     if (
       sheetVersion !== base.version ||
       io.sha256(README) !== base.iconReadmeSha256 ||
       io.sha256(BUNDLE) !== base.bundleSha256
     )
       throw new IconsError("icons.source_mismatch", "registration does not match the immutable base sheet");
-    return { record: APPROVED_EXTENSION, sha256 };
+    return { record, sha256: actual };
   } catch (error) {
     if (error instanceof IconsError) throw error;
     throw new IconsError("icons.registration", `invalid or unreadable ${EXTENSION}: ${String(error)}`);
@@ -426,8 +215,7 @@ function buildIcons(io: IconsIo): string {
   if (JSON.stringify(Object.keys(drawings).sort()) !== JSON.stringify(sheetNames))
     throw new IconsError("icons.list_mismatch", "the sheet's ICONS must hold exactly the README's list");
   const extension = registeredIcons(io, sheetVersion);
-  const additions: Readonly<Record<string, (typeof APPROVED_EXTENSION.icons)[keyof typeof APPROVED_EXTENSION.icons]>> =
-    extension?.record.icons ?? {};
+  const additions: Readonly<Record<string, RegisteredIcon>> = extension?.record.icons ?? {};
   for (const [name, registered] of Object.entries(additions)) {
     if (list.has(name) || [...list.values()].includes(registered.iconoirName))
       throw new IconsError("icons.list_mismatch", `${name} collides with the imported sheet`);

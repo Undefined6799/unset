@@ -265,6 +265,21 @@ test("signed_out_page", async () => {
   expect(html).toContain('href="https://pds.unset.test/account"');
 });
 
+test("signed_out_no_thanks_ends_the_password_ask", async () => {
+  // P2.05s (Alex, 2026-10-28 02:01Z): "No thanks" keeps the PDS session, so the next sign-in may go straight through.
+  // It is a POST behind the CSRF gate: another site must not lift a shared computer's password ask.
+  const { send } = setup({ session: null });
+  const response = await send("/signed-out", { body: "" });
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe("/");
+  expect(response.headers.getSetCookie()).toEqual([
+    "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  ]);
+  const forged = await send("/signed-out", { body: "", site: "cross-site" });
+  expect(forged.status).toBe(403);
+  expect(forged.headers.getSetCookie()).toEqual([]);
+});
+
 test("signed_out_links_the_foreign_issuer_recorded_at_sign_in", async () => {
   // P2.08b, the book's edge case: a user whose PDS is not ours is sent to their own issuer, never our /account.
   const signOut = await setup({ issuer: FOREIGN_ISSUER }).send("/logout");
