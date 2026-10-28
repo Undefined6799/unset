@@ -16,7 +16,8 @@ import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements, textContent } from "../web/fixtures/html.ts";
 import { pageResponse } from "../web/page.ts";
-import { type SettingsDeps, settingsRoutes } from "./settings.ts";
+import type { AccountDeps } from "./account-issuer.ts";
+import { settingsRoutes } from "./settings.ts";
 
 const ORIGIN = "https://unset.test";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
@@ -31,7 +32,7 @@ function setup(world: World = {}) {
   const opened: string[] = [];
   const checked: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
-  const deps: SettingsDeps = {
+  const deps: AccountDeps = {
     open: async (_request, _deadline, next) => {
       opened.push(next);
       if (world.signedIn === false) {

@@ -17,7 +17,8 @@ import { sessionClearCookie } from "../session-cookie.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements, textContent } from "../web/fixtures/html.ts";
 import { pageResponse } from "../web/page.ts";
-import { type MeDeps, meRoutes } from "./me.ts";
+import type { AccountDeps } from "./account-issuer.ts";
+import { meRoutes } from "./me.ts";
 
 const ORIGIN = "https://unset.test";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
@@ -39,7 +40,7 @@ function setup(world: World = {}) {
   const checked: string[] = [];
   const openedPaths: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
-  const deps: MeDeps = {
+  const deps: AccountDeps = {
     open: async (_request, _deadline, next) => {
       openedPaths.push(next);
       const session = world.session === undefined ? SESSION : world.session;
