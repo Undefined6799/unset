@@ -18,7 +18,7 @@ From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reac
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
 | `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, the two compose files |
 
-Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` is the UI in the tree. It holds no product rules and no database access (`app-only-shared`). `interfaces/admin` passes an empty route list (`interfaces/admin/compose.ts`), so the kit serves `GET /health` only (`shared/http/server.ts`). `interfaces/http` is the only interface with routes beyond that. `domains/identity` is the only product-rule package. `infrastructure/session` holds the browser session store and does not import the Postgres driver; `interfaces/http/compose.ts` passes the pool in.
+Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` is the UI in the tree. It holds no product rules and no database access (`app-only-shared`). `interfaces/http` is the only interface in the tree; the other processes the plan names get their folder with their first route. `domains/identity` is the only product-rule package. `infrastructure/session` holds the browser session store and does not import the Postgres driver; `interfaces/http/compose.ts` passes the pool in.
 
 ## Allowlist
 
