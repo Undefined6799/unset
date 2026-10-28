@@ -5,4 +5,5 @@ export const ACCOUNT_LINK = {
   interstitial: "You are going to {pdsHost}, our sign-in server; it is the only place you type your password.",
   ours: "Your account on {pdsHost}",
   foreign: "your sign-in server ({pdsHost})",
+  newTab: "(opens in a new tab)",
 } as const;
