@@ -256,7 +256,7 @@ jobs:
       - run: npm ci
       - name: Duplicate code (advice for the reviewer, never a gate)
         run: |
-          npx jscpd --config .github/.jscpd.json . || true
+          npx jscpd --config .github/.jscpd.json .
           cat jscpd-report/jscpd-report.md >> "$GITHUB_STEP_SUMMARY" || true
 
   # P0.07d: the images project, beside code. `npm run test:images` is scripts/test/run.ts --images: CI's rules (no

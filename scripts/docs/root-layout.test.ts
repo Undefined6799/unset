@@ -98,6 +98,9 @@ test("tools_read_their_moved_config", () => {
   expect(ci.match(/--config \.github\/\.gitleaks\.toml/g)).toHaveLength(scans.length);
   expect(ci).toContain("--config scripts/lint/semgrep/");
   expect(ci).toContain("--config .github/.jscpd.json");
+  // jscpd 5.4.1 exits non-zero only on its own failure or a --threshold (none set), so its exit is not masked: a broken
+  // run turns the advisory job red instead of passing with no report.
+  expect(ci).toMatch(/^ +npx jscpd --config \.github\/\.jscpd\.json \.$/m);
   // Named, so a missing file fails the validator instead of it finding nothing to check (Renovate 44.115.13
   // dist/config-validator.js validates the named files, else whichever default names exist).
   // --no-global: a named file is otherwise validated as global self-hosted config, which allows options a repository
