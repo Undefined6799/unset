@@ -1,0 +1,13 @@
+/* The signed-out box (P2.08s): the sign-in box's look (SignInBox.module.css), centred in the shell's main. */
+@layer screens {
+  .box {
+    margin: var(--space-8) auto;
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+}

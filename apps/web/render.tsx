@@ -12,8 +12,9 @@ import { Legal, type LegalProps } from "./src/screens/Legal.tsx";
 import { Login, type LoginProps } from "./src/screens/Login.tsx";
 import { LoginContinue, type LoginContinueProps } from "./src/screens/LoginContinue.tsx";
 import { Me, type MeProps } from "./src/screens/Me.tsx";
-import { SettingsProfile, type SettingsProfileProps } from "./src/screens/SettingsProfile.tsx";
 import { SignedOut, type SignedOutProps } from "./src/screens/SignedOut.tsx";
+import { SettingsAccount, type SettingsAccountProps } from "./src/screens/settings/SettingsAccount.tsx";
+import { SettingsProfile, type SettingsProfileProps } from "./src/screens/settings/SettingsProfile.tsx";
 import { VerifyEmail, type VerifyEmailProps } from "./src/screens/VerifyEmail.tsx";
 import { Age } from "./src/screens/welcome/Age.tsx";
 import { ChatLater } from "./src/screens/welcome/ChatLater.tsx";
@@ -33,6 +34,7 @@ export type {
   LoginContinueProps,
   LoginProps,
   MeProps,
+  SettingsAccountProps,
   SettingsProfileProps,
   SignedOutProps,
   TermsProps,
@@ -55,6 +57,7 @@ export const screens = {
   welcomeChat: (): ReactNode => <ChatLater />,
   welcomeBlocked: (props: UnderAgeProps): ReactNode => <UnderAge {...props} />,
   settingsProfile: (props: SettingsProfileProps): ReactNode => <SettingsProfile {...props} />,
+  settingsAccount: (props: SettingsAccountProps): ReactNode => <SettingsAccount {...props} />,
   home: (): ReactNode => <Home />,
   legal: (props: LegalProps): ReactNode => <Legal {...props} />,
   errorPage: (props: ErrorPageProps): ReactNode => <ErrorPage {...props} />,

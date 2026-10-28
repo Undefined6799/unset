@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
+import { PAIRS, type Pair, uiDirectoryOf } from "./contract.ts";
 import { artifacts, type Item, image, tar } from "./fixtures/native.ts";
-import { archive, compareImages, UI_DIRECTORY, verifyArtifact } from "./verify.ts";
+import { archive, compareImages, verifyArtifact } from "./verify.ts";
 
-const ui = UI_DIRECTORY;
+const PAIR = PAIRS["0.4.5037"] as Pair;
+const ui = uiDirectoryOf(PAIR);
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
 const config = { Env: ["NODE_ENV=production"], Cmd: ["node", "index.ts"] };
@@ -19,7 +21,7 @@ async function pair(change: Item[], runtime = config, prefix = true) {
 }
 async function check(change: Item[], runtime = config, prefix = true) {
   const { base, candidate } = await pair(change, runtime, prefix);
-  return compareImages(base.bytes, base.digest, candidate.bytes, candidate.digest);
+  return compareImages(base.bytes, base.digest, candidate.bytes, candidate.digest, ui);
 }
 describe("immutable PDS frontend boundary", () => {
   test("accepts real nonempty OCI archives and only logical dist whiteout/replacement", async () => {
@@ -91,7 +93,7 @@ describe("immutable PDS frontend boundary", () => {
     await expect(archive((await tar([file])).subarray(0, 600))).rejects.toThrow();
     const { base, candidate } = await pair([]);
     await expect(
-      compareImages(base.bytes, `sha256:${"0".repeat(64)}`, candidate.bytes, candidate.digest),
+      compareImages(base.bytes, `sha256:${"0".repeat(64)}`, candidate.bytes, candidate.digest, ui),
     ).rejects.toThrow();
   });
   test("validates all native manifest entries and real referenced hashes", () => {

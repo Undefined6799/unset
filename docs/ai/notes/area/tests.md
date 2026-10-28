@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # tests
 
@@ -26,10 +26,11 @@ production stylesheet. The toast fixture's `Island` is the production server bui
 render loader imports, so it shares that build's `IslandRunContext`.
 The welcome screens that need a session at their real paths (age, terms, chat) are fixture pages too,
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
-in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.ts` also drives both menus at a
-375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
+in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). P2.13c adds `/fixture/account` and
+`/fixture/settings-*` the same way, so the account page and both settings pages are in the axe matrix. `nojs.spec.ts` also drives both menus at a
+375 px viewport with script off (the menu drawer from the floating bar on `/`, which hides the bar while open, and the Header `<details>` on `/signed-out`, since P2.05m draws `/login` as the sign-in box with no shell), the drawer from the header's menu button on desktop (P2.13e); P2.05n's `login_close_returns_to_the_page_before` clicks the footer's Sign in on `/legal/terms` so the browser sends its own Referer; P2.05p's `sign_in_opens_over_the_page` opens the Header's modal sign-in dialog there, checks Tab stays out of the page behind, closes it with Close and Escape, and checks a scrim click does nothing and the footer
 theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
-`/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
+`/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.1 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON reports (the checks list already
 covers `scripts/test/`). Since P0.07b, `e2e.yml` runs one `browser` job per Playwright project and an `a11y` job
 (pa11y and Lighthouse) in parallel; the `e2e` gate job takes all three browser reports, so a spec counts as run when

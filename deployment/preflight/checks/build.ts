@@ -130,7 +130,8 @@ export function buildProblem(build: NonNullable<Service["build"]>, inputs: Input
  * Whether `service` runs the image built from `dockerfile` (repository-relative). Under dev and prod the lock's `ref`
  * or the build names it (runsImage). Under --env local there is no lock, so only the build can (P1.27l; record
  * 2026-10-13-p127l-local-gaps, Amendment 1): a build of exactly that Dockerfile, which C26 passes, with no image beside
- * it to disagree with. No name, tag or label stands in for it.
+ * it to disagree with. No name, tag or label stands in for it. A service that builds under dev with --source (P1.37y;
+ * ADR 0036) is judged the same way; its neighbours that still run lock images are judged by the lock.
  */
 export function runsBuilt(
   service: Service,
@@ -139,7 +140,7 @@ export function runsBuilt(
   dockerfile: string,
 ): "yes" | "no" | "mismatch" {
   const path = join(inputs.root, dockerfile);
-  if (inputs.env !== "local") return runsImage(service, ref, path);
+  if (inputs.env !== "local" && !(inputs.source && service.build !== null)) return runsImage(service, ref, path);
   if (service.build === null) return "no";
   if (service.image !== null) return "mismatch";
   return service.build.dockerfile === path && buildProblem(service.build, inputs) === null ? "yes" : "no";

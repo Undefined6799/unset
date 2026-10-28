@@ -24,6 +24,11 @@ export type Run = (
 
 export type Inputs = WalkInputs & {
   env: Env;
+  /**
+   * `--source` (P1.37y, ADR 0036): under dev only, a service may build from the checkout instead of running a lock
+   * image (C2 admits a build C26 passes); a service that names an image must still name a lock digest.
+   */
+  source: boolean;
   /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
   /** The Compose project directory, `dirname(files[0])`, where every relative path in the stack resolves from. */
@@ -56,8 +61,11 @@ export type Inputs = WalkInputs & {
    * FIFO, a folder or a device, which a plain read could block on (P1.35p S2); any other error throws.
    */
   readRegular: (path: string) => string | null | "not a regular file";
-  /** Each env file's `dev:ino` as it was read (P1.34p): C9 fails a file it then finds as another file. */
-  envReads: ReadonlyMap<string, string>;
+  /**
+   * The fstat of every descriptor each env file was read from, in order (P1.34r): C9 judges these, the files the values
+   * came from, and fails a path read from more than one file.
+   */
+  envReads: ReadonlyMap<string, readonly Stats[]>;
   stat: (path: string) => Stats | null;
   /** The path with every link resolved, null when it does not exist, throwing on any other error (C9 fails closed). */
   realpath: (path: string) => string | null;

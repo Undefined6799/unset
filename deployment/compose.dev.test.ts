@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
-import { edgeZones } from "./preflight/checks/edge.ts";
+import { c18, edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c32 } from "./preflight/checks/placeholders.ts";
@@ -36,6 +36,8 @@ const NEWT_SUBNET = "10.250.37.0/29";
 const NEWT_ADDRESS = "10.250.37.2";
 const EDGE_ADDRESS = "10.250.37.3";
 const LOCAL = "compose.local.yaml";
+/** The staging file built from the checkout (P1.37y, ADR 0036): dev's services, five of them built, the rest dev's images. */
+const SOURCE = "compose.dev.source.yaml";
 const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
 const service = (compose: Compose, name: string): Service => {
   const found = compose.services.find((s) => s.name === name);
@@ -150,9 +152,15 @@ describe("compose.dev.yaml (P1.29)", () => {
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
     );
     expect(files).toContain(FILE);
-    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here.
+    // compose.dev.yaml runs only deploy-lock images (compose_dev_images_by_digest); every other file builds here. The
+    // source file keeps dev's image for what it does not build (compose.dev.source.test.ts holds the rest).
+    const devImages = new Map(dev().services.map((s) => [s.name, s.image]));
     for (const file of files.filter((f) => f !== FILE)) {
       for (const s of parseCompose(read(file), file).services) {
+        if (file === SOURCE && s.build === null) {
+          expect(s.image, `${file} ${s.name}`).toBe(devImages.get(s.name));
+          continue;
+        }
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
         // Every service is built here from a scanned Dockerfile, except a run-only image, named exactly as its lock
         // entry, which the mirror workflow scans (P1.29a).
@@ -911,21 +919,21 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
   const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
   const DEPLOY_LOCK = join(CHECKOUT, "deployment/images.lock.json");
   const lockFile = (path: string) => (path === BASES || path === DEPLOY_LOCK ? readFileSync(path, "utf8") : null);
-  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base and deploy locks. */
-  const devInputs = (edit: (text: string) => string = (text) => text) => {
-    const file = join(DEPLOYMENT, FILE);
-    const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
+  /** The preflight's inputs for a compose file's text after `edit`, with the real base and deploy locks. */
+  const inputsFor = (name: string, flags: string[], edit: (text: string) => string = (text) => text) => {
+    const file = join(DEPLOYMENT, name);
+    const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE, ...flags], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : lockFile(path)),
-      readEnv: (path) =>
-        path === ENV_FILE
-          ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
-          : path === join(ENV, "pds.env")
-            ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
-            : path === join(ENV, "newt.env")
-              ? { text: read("env/newt.example.env"), id: `${DEV}:5` }
-              : null,
+      readText: (path) => (path === file ? edit(read(name)) : lockFile(path)),
+      // Each env file as the reader's fstat of it: the virtual file C9 judges (P1.34r).
+      readEnv: (path) => {
+        const file = virtual.get(path);
+        const example = { [ENV_FILE]: "dev-public", [join(ENV, "pds.env")]: "pds", [join(ENV, "newt.env")]: "newt" }[
+          path
+        ];
+        return file === undefined || example === undefined ? null : { text: read(`env/${example}.example.env`), file };
+      },
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,
@@ -936,6 +944,9 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     });
     return inputs;
   };
+  const devInputs = (edit?: (text: string) => string) => inputsFor(FILE, [], edit);
+  /** compose.dev.source.yaml under --source (P1.37y). */
+  const sourceInputs = (edit?: (text: string) => string) => inputsFor(SOURCE, ["--source"], edit);
   /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
   const outcomes = async (edit?: (text: string) => string): Promise<Outcome[]> => {
     const inputs = devInputs(edit);
@@ -954,6 +965,50 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
     // Renamed, the PDS is still known by its image.
     expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
+  });
+
+  test("source_stack_pds_and_edge_are_known_by_their_dockerfiles", async () => {
+    // Codex on #1309 (P1.37y): under --source the PDS and the edge build, so C17 and C18 know them by the Dockerfile,
+    // not the lock's image. The real source file passes both; a renamed built PDS is still a PDS.
+    const inputs = sourceInputs();
+    expect(inputs.compose.services.find((s) => s.name === "pds")?.build).not.toBeNull();
+    expect(pdsNeighbours(inputs)).toEqual([]);
+    const webOnEdge = (text: string) =>
+      text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
+    const renamed = (text: string) =>
+      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+    expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([
+      "web shares a network with the pds",
+    ]);
+    // C18 on the built edge: the lock's ref is not consulted, the dev site rules still are.
+    const signal = new AbortController().signal;
+    const c18Outcome = await c18.run(inputs, signal);
+    expect(c18Outcome.reason).not.toMatch(/edge image|not built from/);
+    const env = new SecretMap([
+      ["PDS_HOST", "staging.unset.ac"],
+      ["PDS_UPSTREAM", "pds:3000"],
+      ["ACME_EMAIL", "edge@example.test"],
+      ["APP_HOST", "staging.unset.sh"],
+      ["APP_UPSTREAM", "web:8080"],
+    ]);
+    const compose: Compose = {
+      ...inputs.compose,
+      services: inputs.compose.services.map((s) =>
+        s.name !== "edge"
+          ? s
+          : {
+              ...s,
+              mounts: s.mounts.map((m) =>
+                m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
+              ),
+            },
+      ),
+    };
+    expect(edgeZones(compose, join(DEPLOYMENT, "edge"), env, undefined, "dev", true)).toEqual(pass());
+    const ref = "registry.example.test/edge@sha256:" + "0".repeat(64);
+    expect(edgeZones(compose, join(DEPLOYMENT, "edge"), env, ref, "dev")).toEqual(
+      fail("the edge service does not run the lock's edge image"),
+    );
   });
 
   test("c32_passes_on_the_dev_stack", async () => {
@@ -1051,7 +1106,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
   test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
     const newt = service(dev(), "newt");
     expect(newt.image).toBe(`ghcr.io/undefined6799/mirror/newt@${readLock().newt?.digest}`);
-    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
+    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.19\.0@sha256:[0-9a-f]{64}$/);
     expect(newt.build).toBeNull();
     expect(newt.hardening).toMatchObject({
       readOnly: true,
@@ -1063,7 +1118,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     expect([newt.ports, newt.mounts, newt.secrets]).toEqual([[], [], []]);
     expect(newt.envFiles).toEqual(["../../unset-dev-env/newt.env"]);
     // Every setting a literal: no SSH, no client access, no Docker socket, no metrics or pprof listener, and its saved
-    // credentials on its tmpfs (newt 1.18.1 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
+    // credentials on its tmpfs (newt 1.19.0 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
     expect(Object.fromEntries(newt.environment)).toEqual({
       CONFIG_FILE: { literal: "/tmp/newt.json" },
       DISABLE_SSH: { literal: "true" },

@@ -1,7 +1,7 @@
 // P1.30: the strict Compose subset the preflight reads (architecture record 2026-10-07-p130-preflight-location-and-yaml):
 // anything Compose could read differently from us is refused rather than guessed.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -1025,6 +1025,9 @@ describe("compose agreement", () => {
         root: dir,
         run: async () => ({ code: 0, stdout: "", stderr: "" }),
         environment,
+        // The env reader walks from / (P1.34r); the shared temporary folder above the fixture reads as the fixture's.
+        lstat: (path) =>
+          lstatSync(dir.startsWith(`${path}/`) || path === "/" ? dir : path, { throwIfNoEntry: false }) ?? null,
         checks: [
           { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
         ],

@@ -34,6 +34,7 @@ const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = {
   welcomeChat: true,
   welcomeBlocked: true,
   settingsProfile: true,
+  settingsAccount: true,
   home: true,
   legal: true,
   errorPage: true,

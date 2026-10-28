@@ -2088,6 +2088,23 @@ const runtimeStage = (text: string): string[] =>
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"));
 
+/**
+ * Why a Dockerfile's final stage does not run as exactly `user`: its USER lines, or a RUN after the first (P1.29d).
+ * Read from instructions(), as BuildKit joins them: a continuation joins the next line (`user\` then ` 0:0` is one
+ * USER), a trailing escaped backslash joins nothing (moby/buildkit master frontend/dockerfile/parser/parser.go:168,
+ * setEscapeToken's lineContinuationRegex, and :532, trimContinuationCharacter; read 2026-10-27), and keywords match in
+ * any case at any indentation (P1.34j).
+ */
+function runtimeUserProblems(text: string, user: string): string[] {
+  const all = instructions(text).map((step) => step.text);
+  const stage = all.slice(all.findLastIndex((step) => /^FROM\s/i.test(step)) + 1);
+  const at = stage.findIndex((step) => /^USER(?:\s|$)/i.test(step));
+  const users = stage.filter((step) => /^USER(?:\s|$)/i.test(step));
+  const problems = users.length === 1 && users[0] === user ? [] : [`USER lines ${JSON.stringify(users)}, not ${user}`];
+  if (at !== -1 && stage.slice(at).some((step) => /^RUN(?:\s|$)/i.test(step))) problems.push("a RUN follows USER");
+  return problems;
+}
+
 describe("runtime stage", () => {
   const runtime = runtimeStage(dockerfile);
 
@@ -2096,19 +2113,24 @@ describe("runtime stage", () => {
     // official image's postgres user, which owns its data directories).
     expect([...USER_BY_KIND.keys()].sort()).toEqual([...new Set(KIND_BY_FINAL_ENTRY.values())].sort());
     for (const file of dockerfiles) {
-      const stage = runtimeStage(read(file));
       const user = USER_BY_KIND.get(kindOf(read(file), lock) as Kind);
       expect(user, file).toBeDefined();
-      expect(
-        stage.filter((line) => line.startsWith("USER ")),
-        file,
-      ).toEqual([user]);
       // Nothing runs as root once the user is set: no RUN follows it.
-      expect(
-        stage.slice(stage.indexOf(user as string)).filter((line) => line.startsWith("RUN ")),
-        file,
-      ).toEqual([]);
+      expect(runtimeUserProblems(read(file), user as string), file).toEqual([]);
     }
+    // P1.34j (#768): USER in any case and indentation, joined across a continuation, and an escaped backslash that
+    // ends a line joins nothing, so the USER after it still counts.
+    const edge = read("edge/Dockerfile");
+    for (const tail of [
+      "user 0:0",
+      "  USER root",
+      "user\\\n 0:0",
+      "LABEL x=\\\\\nUSER 0:0",
+      "USER 65532:65532\nrun true",
+    ]) {
+      expect(runtimeUserProblems(`${edge}${tail}\n`, "USER 65532:65532"), tail).not.toEqual([]);
+    }
+    expect(instructions("LABEL x=\\\\\nUSER 0:0").map((step) => step.text)).toEqual(["LABEL x=\\\\", "USER 0:0"]);
   });
 
   test("prod_image_has_ssr_build_only", () => {
@@ -2217,7 +2239,7 @@ describe("postgres image", () => {
     // The official docker-entrypoint.sh is inherited unchanged. Only our pg_hba.conf is copied in, and the CMD points the
     // server at it (P1.11y): the entrypoint passes the CMD's arguments to initdb's temporary server and to the real one.
     expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([
-      "COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
+      "COPY --chmod=0555 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf",
       'CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]',
     ]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");

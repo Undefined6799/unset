@@ -6,9 +6,10 @@
 > (Alex, 2026-10-17, `docs/ai/book/alex-answers.md` row `p137-legal-placeholder`).
 
 What to do when personal information we hold may have been accessed, used or disclosed without authority, or lost.
-Plan §6 ("Canadian law"). P1.35's `permission-set-changed.md` and `plc-nullification.md` hand over here when an
-integrity incident may have exposed users. Child sexual abuse material follows
-[`cybertip-runbook.md`](cybertip-runbook.md) instead; if an incident involves both, run both. The law below was read on
+Plan §6 ("Canadian law"). When P1.35 lands, its `permission-set-changed.md` and `plc-nullification.md` runbooks will
+hand over here. Neither exists yet, so an integrity incident that may have exposed users starts at section 1 below.
+Child sexual abuse material follows [`cybertip-runbook.md`](cybertip-runbook.md) instead; if an incident involves both,
+run both. The law below was read on
 2026-10-12; every citation is marked for the lawyer hour and listed in [`legal-status.md`](legal-status.md). This is
 an operating runbook, not legal advice.
 

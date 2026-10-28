@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-22
+checked: 2026-10-23
 ---
 # http
 
@@ -45,7 +45,8 @@ the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-cl
 which writes the secrets to files; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
 
-**Signing in (P2.05).** `routes/login.ts`: GET /login renders the form; POST /login (rate limit `login`, CSRF gate)
+**Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
+Referer's path when the Referer's host is the request's host-checked Host, never a `/login` page or `next`, else `/`); POST /login (rate limit `login`, CSRF gate)
 resolves the handle, issues a P1.16 `login.nonce`, calls `authorize` (infrastructure/pds) with the nonce, expected DID
 and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600 s) and `__Host-login_target`
 (Strict, 120 s, the authorization URL in base64url) and answers 303 to GET /login/continue, which renders a meta
@@ -115,7 +116,11 @@ repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:2
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
 birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
-`GET /settings/profile` is a placeholder page so the gate has an app route to refuse.
+**Settings (P2.13c).** `routes/settings.ts`: GET `/settings` answers 303 to `/settings/profile`, keeping only the
+query, without opening the gate. `/settings/profile` (the "Set up your profile" card until P2.21) and
+`/settings/account` (handle, DID, the sign-in server link, the sign-out form) open the app gate, then render inside
+the settings side list. Account takes the same deps as `meRoutes`; compose builds them once as `accountDeps`, and both
+read the recorded issuer through `routes/account-issuer.ts`.
 
 **The signed-in account (P2.13).** `routes/me.ts`: GET `/did` and legacy `/me` open the existing app gate, then 303
 to the session's `/<DID>` (private/no-store, Vary Cookie). GET `/:did` validates with identity's `parseDid`, opens
@@ -138,8 +143,8 @@ or startup fails on the missing build. `main.test.ts` fails if `main.ts` statica
 hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLimit, rateLimitIp, csrf. Also:
 - `routes.ts`: `defineRoute`, the only way to register a route; it refuses a route without limits or a deadline.
 - `csrf/gate.ts`: the one CSRF gate (Sec-Fetch-Site, then exact Origin, then exact Referer, else deny).
-- `csp/`: the Content-Security-Policy per route group. `public` (P1.25k) is for our own zero-JS pages (`/`, `/terms`,
-  `/privacy`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
+- `csp/`: the Content-Security-Policy per route group. `public` (P1.25k) is for our own zero-JS pages (`/`, `/legal/terms`,
+  `/legal/privacy`, `/legal/domains`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
 - `health.ts`: `/health`, which reveals only status and commit.
@@ -150,5 +155,9 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
 **Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+
+**In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
+sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
+signed-in browser to `/did` (the box posts from public pages, which never vary on the cookie).
 
 **Links.** [[web]], [[config]], [[errors]].

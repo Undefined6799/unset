@@ -161,7 +161,17 @@
     },
     {
       "method": "GET",
+      "path": "/settings",
+      "status": 303
+    },
+    {
+      "method": "GET",
       "path": "/settings/profile",
+      "status": 303
+    },
+    {
+      "method": "GET",
+      "path": "/settings/account",
       "status": 303
     }
   ]

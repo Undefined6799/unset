@@ -29,6 +29,14 @@ import { FIXTURES, PROD_ORIGIN, PROD_PUBLIC_ORIGIN, TEST_ORIGIN } from "../pages
 const ROOT = join(import.meta.dirname, "../../..");
 const BUILD = join(ROOT, "apps/web/dist/client");
 const LOGS = ["e2e-prod.log", "e2e-test.log"] as const;
+/** The signed-in account the account and settings fixtures show. */
+const ACCOUNT = {
+  handle: "alice.pds.unset.test",
+  did: `did:plc:${"a".repeat(24)}`,
+  handleUnavailable: false,
+  issuer: "https://pds.unset.test",
+  ours: true,
+};
 
 // The wait process probes both listeners. scripts/guards/egress.ts scans tests/ and refuses a
 // dynamic fetch, so the probe is guardedFetch. An internal policy allows these exact http origins,
@@ -244,6 +252,47 @@ async function serveTest(): Promise<void> {
         session: "none",
         handler: ({ request }) =>
           pageResponse(deps, { group: "app", request, title, body: body(), islands: "off", shell: { noindex: true } }),
+      }),
+    ),
+    // P2.13c: the account page and the settings pages inside the core shell, as their routes render them.
+    ...[
+      {
+        path: FIXTURES.account,
+        title: "alice.pds.unset.test",
+        active: "account" as const,
+        body: () => render.screens.me(ACCOUNT),
+      },
+      {
+        path: FIXTURES.settingsProfile,
+        title: "Profile",
+        active: "settings" as const,
+        body: () => render.screens.settingsProfile({ privacyNotice: false }),
+      },
+      {
+        path: FIXTURES.settingsAccount,
+        title: "Account",
+        active: "settings" as const,
+        body: () => render.screens.settingsAccount({ ...ACCOUNT, privacyNotice: false }),
+      },
+    ].map(({ path, title, active, body }) =>
+      defineRoute({
+        method: "GET",
+        path,
+        group: "app",
+        rateLimit: "default",
+        session: "none",
+        handler: ({ request }) =>
+          pageResponse(deps, {
+            group: "app",
+            request,
+            title,
+            body: body(),
+            islands: "off",
+            shell: {
+              noindex: true,
+              navigation: { active, accountPath: `/${ACCOUNT.did}`, accountName: ACCOUNT.handle },
+            },
+          }),
       }),
     ),
     htmlRoute(FIXTURES.unlabeled, "public", `<input name="name">`),

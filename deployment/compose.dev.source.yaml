@@ -1,0 +1,335 @@
+# The staging stack built from the checkout (P1.37y; ADR 0036): compose.dev.yaml with postgres, migrate, the PDS, the
+# edge and web built from the same Dockerfiles and contexts compose.local.yaml builds, for `npm run dev:source:up`,
+# which runs the wrapper under `--env dev --source`. Newt stays the mirror's digest. The project name is still
+# unset-dev, so the data volumes are the ones dev:up uses. compose.dev.source.test.ts derives this file from the two
+# others and fails on any other difference: compose.dev.yaml stays the one place a dev service is written.
+#
+# The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
+# migrate, the PDS, the edge in front of it, web, and Newt in front of the edge (P1.37v), for the homelab, through the
+# wrapper (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose
+# alike.
+# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts, and
+# builds its images from the checkout. This stack builds nothing (P2.26b): every service runs exactly its
+# deployment/images.lock.json ref, by digest, which the preflight verifies keyless and offline (C2 to C5; ADR 0033).
+# postgres, migrate, the edge and web are publish-images.yml's builds; the PDS, Bluesky's own image run as shipped
+# (Alex, "Allow pinned", 2026-10-07T13:00:19Z), and Newt (ADR 0030 Decision 2) are mirror.yml's copies of their
+# upstream images, at the upstream digest.
+#
+# Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
+# `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
+# capability, cannot gain privileges, runs as its image's non-root user on a read-only root, and has memory, CPU and
+# process limits; a Node service's heap cap is at most 75 % of its memory limit (findings F-32).
+#
+# The secret files live in unset-dev-secrets/, a sibling of the repository checkout, never inside it: compose.local.yaml
+# builds from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
+# 2026-10-12-p127u-bind-ancestors-and-build-context (b); a .dockerignore entry does not count). `file:` paths resolve
+# from this file's folder, so ../../ is the checkout's parent. The interpolation file lives the same way in
+# unset-dev-env/, beside the checkout, and the checkout keeps only its template, deployment/env/dev-public.example.env
+# (Amendments 2 and 3 of the same record).
+name: unset-dev
+
+services:
+  postgres:
+    build:
+      context: ..
+      dockerfile: deployment/images/postgres.Dockerfile
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # The socket directory and /tmp on tmpfs owned by the image's postgres user; the data on a named volume at the PG 18
+    # image's VOLUME (docker-library/postgres 18/trixie/Dockerfile: `VOLUME /var/lib/postgresql`).
+    tmpfs:
+      - /var/run/postgresql:uid=999,gid=999,mode=0755
+      - /tmp:uid=999,gid=999,mode=1777
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+    secrets: [pg_superuser_password, pg_migrator_password, pg_tap_password]
+    networks: [db]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deployment/images/migrate.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: migrator
+      PG_PASSWORD_FILE: /run/secrets/migrate_pg_password
+      PG_SSLMODE: disable
+      NODE_OPTIONS: --max-old-space-size=192
+    # The migrator's own password and the role passwords syncRolePasswords sets (infrastructure/postgres/roles.json
+    # passwordFrom), nothing else. Its copy of the migrator password is its own file: each mounted secret is owned by
+    # the one uid that reads it, and postgres (999) reads the bootstrap copy (docs/human/runbooks/dev-stack-secrets.md).
+    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [db]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    restart: "no"
+
+  # The first-party PDS image. deployment/images.lock.json pins ghcr.io/undefined6799/unset/pds by digest, with origin
+  # first-party and verify cosign-keyless. deployment/compose.dev.test.ts (pds_runs_the_locked_image) requires that
+  # origin and compose.dev.yaml's pds image to be that ref, with no build on that service.
+  # .github/workflows/publish-images.yml, on a push to main, builds each Dockerfile scripts/ci/list-dockerfiles.ts
+  # lists, including deployment/pds/Dockerfile, pushes it by digest, scans it, signs it and attests it. Its image sets
+  # no USER, so it runs here as the
+  # base's node user (uid 1000, nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), with its data in a named volume at
+  # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
+  # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
+  # ones are literals here, which Compose prefers over env_file, and pds.env holds only its secrets, its recovery key
+  # and the two SMTP URLs, which carry the mail key (deployment/env/pds.example.env; P1.36g, P1.36q). The from
+  # addresses are literals (P1.36g); preflight C11 and C19 refuse a missing URL or address. Not set, on purpose:
+  # PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25) or any other PDS DISABLE switch but C16's
+  # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
+  # the AppView and report service (optional, dist/config/config.js:162-189).
+  pds:
+    build:
+      context: ./pds
+      dockerfile: Dockerfile
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # /tmp is capped (P1.36p). C22 checks only that PDS_BLOBSTORE_DISK_TMP_LOCATION stays unset, so temporary
+    # blobs follow PDS_BLOBSTORE_DISK_LOCATION into its tempt folder; that location is not pinned yet (P1.37t).
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777,size=20m
+    volumes:
+      - pdsdata:/home/node
+    env_file: ../../unset-dev-env/pds.env
+    environment:
+      PDS_HOSTNAME: ${PDS_HOSTNAME}
+      PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
+      PDS_PORT: "3000"
+      PDS_DATA_DIRECTORY: /home/node
+      PDS_BLOBSTORE_DISK_LOCATION: /home/node/blocks
+      PDS_BLOB_UPLOAD_LIMIT: "5242880"
+      PDS_DID_PLC_URL: https://plc.directory
+      PDS_INVITE_REQUIRED: "true"
+      PDS_CRAWLERS: ""
+      PDS_RATE_LIMITS_ENABLED: "false"
+      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
+      PDS_EMAIL_FROM_ADDRESS: noreply@staging.unset.sh
+      PDS_MODERATION_EMAIL_ADDRESS: moderation@staging.unset.sh
+      LOG_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=768
+    networks: [edge, pds_egress]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  # The edge (P1.28 image). Under dev it publishes nothing: Newt alone reaches it, on newt_edge at its fixed address
+  # (ADR 0030 Decision 2, ADR 0031 Decision 2), and compose.local.yaml keeps the loopback publish. Its sites are the
+  # repository's deployment/edge/dev/app.caddy and dev/pds.caddy, each mounted read-only where the image imports them,
+  # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
+  # 0700 (P1.27o).
+  edge:
+    build:
+      context: ./edge
+      dockerfile: Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
+    # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
+    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
+    volumes:
+      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
+      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
+      - edgedata:/data
+      - edgeconfig:/config
+    secrets: [dev_tls_cert, dev_tls_key]
+    environment:
+      PDS_HOST: ${PDS_HOSTNAME}
+      PDS_UPSTREAM: pds:3000
+      ACME_EMAIL: ${EDGE_ACME_EMAIL}
+      APP_HOST: ${APP_HOST}
+      APP_UPSTREAM: web:8080
+    depends_on:
+      pds:
+        condition: service_started
+    # No aliases under dev: the PDS and web resolve both staging names through public DNS to Pangolin, and reach them
+    # through Newt and this edge (ADR 0031, Decision 3). compose.local.yaml keeps them for its own stack.
+    networks:
+      edge:
+      app:
+      newt_edge:
+        ipv4_address: 10.250.37.3
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/images/node-app.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: http
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8080"
+      PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN}
+      HTTP_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS}
+      MEDIA_ORIGIN: ${WEB_MEDIA_ORIGIN}
+      # Only the edge sends web HTTP, on the app network. Under local and from Phase 2, its app site's upstream snippet
+      # drops the client's address, so the address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
+      TRUSTED_PROXY_MODE: socket
+      # The OAuth client (P2.04c, P2.04w): Postgres as web, whose pools must fit the role's 40 connections across three
+      # replicas with the 8-connection lock pool (checkConnectionBudget), so 5; the seal keyring and the client keys as
+      # mounted files; no internal host for net-guard, since web reaches our own PDS through Pangolin like any other
+      # server (ADR 0031, Decision 3); the key new sign-ins sign with. PLC_URL is the shared public directory: we run no
+      # PLC of our own, and web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: web
+      PG_PASSWORD_FILE: /run/secrets/pg_web_password
+      PG_SSLMODE: disable
+      PG_POOL_MAX: "5"
+      SEAL_KEYRING_FILE: /run/secrets/web_seal_keyring
+      PLC_URL: https://plc.directory
+      OAUTH_CLIENT_KEYS_FILE: /run/secrets/web_oauth_client_keys
+      OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
+      PDS_HOSTNAME: ${PDS_HOSTNAME}
+      HANDLE_SUFFIX: ${PDS_SERVICE_HANDLE_DOMAINS}
+      # Legal contacts (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
+      # and these are not secrets. Alex's values for staging (2026-10-20T23:09:25Z); compose.local.yaml keeps the
+      # tokens. security.txt points at the privacy page.
+      PRIVACY_OFFICER_TITLE: Privacy Officer
+      PRIVACY_OFFICER_CONTACT: contact@staging.unset.sh
+      SUPPORT_EMAIL: support@staging.unset.sh
+      SECURITY_CONTACT: privacy-page
+      SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
+      NODE_OPTIONS: --max-old-space-size=384
+    # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [db, app, web_egress]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    restart: unless-stopped
+
+  # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
+  # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
+  # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
+  # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
+  # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
+  # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
+  newt:
+    image: ghcr.io/undefined6799/mirror/newt@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777,size=1m
+    env_file: ../../unset-dev-env/newt.env
+    environment:
+      CONFIG_FILE: /tmp/newt.json
+      DISABLE_SSH: "true"
+      DISABLE_CLIENTS: "true"
+      NEWT_METRICS_PROMETHEUS_ENABLED: "false"
+      NEWT_PPROF_ENABLED: "false"
+      LOG_LEVEL: WARN
+    depends_on:
+      edge:
+        condition: service_started
+    networks:
+      newt_egress:
+      newt_edge:
+        ipv4_address: 10.250.37.2
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+
+networks:
+  db:
+    internal: true
+  # web's only way to the edge. web reaches the PDS only through the edge's aliases on this network, never directly.
+  # Internal: web's one way out is web_egress below. Record: the 02:05Z (option C) and 02:21Z sections of
+  # unset-plan/book-edits/2026-10-14-p134d-split.md, and ADR 0022 for web_egress.
+  app:
+    internal: true
+  # Only the edge shares a network with the PDS's HTTP port: the PDS trusts every private address as a proxy (step book
+  # P1.29, "Networks"). pds_egress is the PDS's own way out (PLC, DID and handle resolution, client metadata).
+  edge:
+  pds_egress:
+  # web's own way out (ADR 0022): the shared PLC, handle resolution and other servers' OAuth metadata. Only web joins
+  # it, and every request web makes goes through net-guard (resolve, vet, pin, no redirects, private ranges refused).
+  web_egress:
+  # Newt to the edge and nothing else (ADR 0030, Decision 2): internal, a fixed subnet, Newt at .2 and the edge at .3.
+  # The edge's sites bind .3 (P1.36b) and trust .2 alone as a proxy (P1.36j); compose.dev.test.ts ties the three.
+  newt_edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.250.37.0/29
+  # Newt's own way out: its tunnel to Pangolin.
+  newt_egress:
+
+volumes:
+  pgdata:
+  pdsdata:
+  edgedata:
+  edgeconfig:
+
+secrets:
+  pg_superuser_password:
+    file: ../../unset-dev-secrets/pg_superuser_password
+  pg_migrator_password:
+    file: ../../unset-dev-secrets/pg_migrator_password
+  pg_tap_password:
+    file: ../../unset-dev-secrets/pg_tap_password
+  migrate_pg_password:
+    file: ../../unset-dev-secrets/migrate_pg_password
+  pg_web_password:
+    file: ../../unset-dev-secrets/pg_web_password
+  pg_api_password:
+    file: ../../unset-dev-secrets/pg_api_password
+  pg_indexer_password:
+    file: ../../unset-dev-secrets/pg_indexer_password
+  web_seal_keyring:
+    file: ../../unset-dev-secrets/web_seal_keyring
+  web_oauth_client_keys:
+    file: ../../unset-dev-secrets/web_oauth_client_keys
+  # The dev edge's self-signed leaf and its key (P1.36c; ADR 0032), made on the host by the runbook's OpenSSL command;
+  # the edge alone reads them.
+  dev_tls_cert:
+    file: ../../unset-dev-secrets/dev_tls_cert
+  dev_tls_key:
+    file: ../../unset-dev-secrets/dev_tls_key

@@ -332,7 +332,25 @@
   },
   {
     "method": "GET",
+    "path": "/settings",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
     "path": "/settings/profile",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/settings/account",
     "group": "app",
     "accepts": [],
     "rateLimit": "default",

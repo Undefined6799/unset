@@ -26,7 +26,7 @@
     "assert": {
       "assertMatrix": [
         {
-          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/(legal/[a-z]+|welcome/blocked)?$",
+          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/(legal/[a-z]+|login|welcome/blocked)?$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],
@@ -37,7 +37,7 @@
           }
         },
         {
-          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/(login|signed-out)$",
+          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/signed-out$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],

@@ -4,8 +4,8 @@
 // preflight judges must never reach it under that name. Each run gets only PATH and HOME: a real NODE_OPTIONS, even an
 // empty one, wins over the file's (node.cc:996-998) and would hide the hole.
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { CLI_OPTIONS, preflight } from "./index.ts";
@@ -14,7 +14,11 @@ const CLI = join(import.meta.dirname, "index.ts");
 // One run reads two small files and exits before any check; 20 s kills a hung one inside the test's 30 s.
 const RUN_MS = 20_000;
 const TEST_MS = 30_000;
-const dir = mkdtempSync(join(tmpdir(), "preflight-cli-"));
+// The env reader walks every folder from / before it reads (P1.34r), and a shared temporary folder such as /tmp is one
+// another user can change, so the fixtures sit in the running user's own cache folder instead.
+const CACHE = join(homedir(), ".cache");
+mkdirSync(CACHE, { recursive: true });
+const dir = mkdtempSync(join(CACHE, "unset-preflight-cli-"));
 const compose = join(dir, "compose.yaml");
 writeFileSync(compose, "name: unset-prod\nservices:\n  pds:\n    image: x\n");
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -64,7 +68,7 @@ describe("preflight CLI", () => {
   test("cli_flags_are_not_ones_node_reads", () => {
     // Node scans the `--env-file` family after the script name; `--require` and `--import` are banned as well.
     const names = Object.keys(CLI_OPTIONS);
-    expect(names).toEqual(["env", "compose", "interpolation-env"]);
+    expect(names).toEqual(["env", "compose", "interpolation-env", "source"]);
     for (const name of names) expect(name, name).not.toMatch(/^(env-file|require|import)/);
   });
 
@@ -94,7 +98,7 @@ describe("preflight CLI", () => {
     const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
     expect((await preflight(["--bogus"], deps)).lines).toEqual([
       "ERROR usage: --env dev|prod|local --compose <absolute file> [--compose <absolute file>...] " +
-        "[--interpolation-env <absolute file>]",
+        "[--interpolation-env <absolute file>] [--source]",
     ]);
   });
 });

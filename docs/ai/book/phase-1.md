@@ -9212,6 +9212,8 @@ tightening, so it needs no card or typed line.
   under dev runs `up -d` with no `--build`. Green: under local, dev:up keeps `--build`.
 Threats: a digest pin that doesn't hold, because the bytes come from the checkout and not the registry. It fails
 closed under dev and prod.
+Narrowed by P1.37y (ADR 0036): under dev with `--source`, a build C26 passes is admitted; without the flag, and
+under prod, this step's rule holds unchanged.
 G1 is unchanged and waits on P1.27s and P2.26b. Done when the reds and the green are shown and check is green.
 
 ---
@@ -9290,6 +9292,39 @@ Threats: temporary blobs moved to RAM or another path unreviewed (red 1); an upl
 Uploads that are never committed pile up on disk, bounded by the volume and watched by the existing `disk` alert
 class. P1.37g follows up.
 Done when the reds are shown and check is green.
+
+### P1.37y — Build staging from the checkout under dev `--source`
+Tags: [SEC] [ALEX] (ADR 0036, typed line)            Depends on: P1.37n, P1.27l
+Plan: ADR 0036 (proposed), Alex 2026-10-23 00:47:01Z and 00:48:58Z (alex-answers `staging-builds-from-source`).
+Product (`deployment/`, `scripts/dev-precheck.ts`, `package.json` scripts). Staging may run images built from its
+checkout so a change is tried there first and committed after; production and the no-flag dev path are unchanged.
+Where: `deployment/compose.dev.source.yaml` (+ `compose.dev.source.test.ts`), `deployment/preflight/inputs.ts`,
+`index.ts`, `stack.ts`, `checks/images.ts`, `checks/build.ts`, `scripts/dev-precheck.ts`, `package.json`
+(`dev:source:up`, `dev:source:down`), `docs/ai/notes/area/deployment.md`, `docs/human/runbooks/dev-stack-secrets.md`.
+1. **Compose file:** `compose.dev.source.yaml` is `compose.dev.yaml` with postgres, migrate, pds, edge and web built
+   as `compose.local.yaml` builds them (same `context`, same `dockerfile`), Newt unchanged. A test derives it from
+   the two files and fails on any other difference, so the dev file stays the source of truth.
+2. **Preflight `--source`:** a boolean flag, accepted only with `--env dev` (refused with prod or local, and when
+   repeated). C2 under dev with it: a service with a `build:` passes when it has no `image:` and C26 passes the
+   build (`buildProblem`); a service with an `image:` keeps dev's rule (ours, by digest, in the lock). `runsBuilt`
+   judges a built service by its build, as under local, so C25 and C27 and the pds-neighbour rule keep working.
+   C3 to C5 unchanged. The run's last line is fixed: `SOURCE built from the checkout, unsigned: staging only`.
+3. **Wrapper and precheck:** `stack.ts` takes `--source` (dev only), passes it to the precheck, which passes it to
+   the preflight, and runs `up -d --build` instead of `--no-build`. `down` is unchanged.
+4. **Scripts and docs:** `dev:source:up` / `dev:source:down` on `compose.dev.source.yaml`; the deployment note's
+   "Deploy only CI-built images" sentence scoped to production; the runbook gains the `docker builder prune` line.
+- Reds: (1) dev `--source`, build plus image, fails C2; (2) dev `--source`, build from a Dockerfile C26 refuses,
+  fails C2; (3) dev without `--source`, build only, still fails C2 (P1.37n red 3 unchanged); (4) prod `--source`
+  refused as usage; (5) local `--source` refused; (6) `--source` repeated refused; (7) wrapper `--env local
+  --source` refused. Greens: (8) dev `--source`, build only from a scanned Dockerfile, C2 passes and the last line
+  prints; (9) wrapper dev `--source` runs the precheck with `--source` and Compose with `--build`; (10) the source
+  compose file equals the dev file except the five build blocks.
+Threats: unsigned bytes face the internet on staging (accepted, ADR 0036 Decision 4; isolated VM, invite-only, no
+important data); the flag must never reach prod or the no-flag path (reds 3 to 7); a build context that reaches a
+secret or the dev CA folder (C26, unchanged, still runs). ASVS V14 (configuration), V1 (secure SDLC).
+Done when the reds and greens are shown, `npm run check` is green, and Alex's typed line accepts ADR 0036.
+
+---
 
 ### P1.37g — Check whether the PDS sweeps temporary blobs
 Tags: [SEC]            Depends on: P1.36p

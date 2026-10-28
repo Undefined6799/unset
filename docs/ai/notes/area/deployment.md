@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, deployment]
-checked: 2026-10-19
+checked: 2026-10-27
 ---
 # deployment
 
@@ -29,8 +29,15 @@ checked: 2026-10-19
   (`unset.ac`) and a foreign describeServer DID, then the preflight. It creates no account and writes no `.seeded.json`.
   P1.29t's stack tests refuse to probe under `dev`; `dev:up` still has no client_id probe child.
 - `dev:up` runs `up -d --no-build` (P1.37n): dev runs the registry images C2 pinned, and C2 fails any service
-  with a `build:` under dev and prod, even beside a locked digest. Only `local:up` keeps `--build`.
+  with a `build:` under dev and prod, even beside a locked digest. Only `local:up` keeps `--build`, and
+  `dev:source:up` (P1.37y, ADR 0036): `compose.dev.source.yaml` under `--env dev --source` builds the five
+  first-party services from the checkout on staging; C2 admits a build C26 passes, the run ends with a fixed
+  `SOURCE` line, and the flag is refused under prod and local.
+- `preflight/stack.ts` waits for a daemon still starting before anything runs (P1.37u): it asks `docker info` for up
+  to 60 s in all, each try killed at 10 s, and only no answer or a refused connection waits. Any answer, a remote
+  daemon included, is judged at once; after the bound it fails with `docker did not answer in time (waited 60 s)`.
 
-Deploy only CI-built images of merged commits. Terraform and Ansible arrive at P5.00, once hosting is chosen.
+Production deploys only CI-built images of merged commits; staging may build from its checkout (ADR 0036). Terraform
+and Ansible arrive at P5.00, once hosting is chosen.
 
 **Links.** [[postgres]].

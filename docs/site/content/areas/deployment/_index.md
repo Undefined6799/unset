@@ -14,7 +14,7 @@ What puts the system on machines: Compose, the edge, images and the preflight. D
 
 | Piece | Path | Page |
 | --- | --- | --- |
-| compose | `deployment/compose.dev.yaml`, `deployment/compose.local.yaml` | [compose](compose/) |
+| compose | `deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml`, `deployment/compose.local.yaml` | [compose](compose/) |
 | edge | `deployment/edge/` | [edge](edge/) |
 | images | `deployment/images/`, `deployment/images.lock.json`, `deployment/mirror.list.json`, `deployment/sigstore/` | [images](images/) |
 | pds recipe | `deployment/pds/` | [images](images/) |
@@ -43,7 +43,7 @@ The preflight is product. The edge is trusted base. [architecture.md](https://gi
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and `edge-not-preflight`). dependency-cruiser 18.5.0 is pinned in `package.json`. The config states that an edge no row lists fails as `not-in-allowed`. The checked-rule table is [architecture.md](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and `edge-not-preflight`). dependency-cruiser 18.6.0 is pinned in `package.json`. The config states that an edge no row lists fails as `not-in-allowed`. The checked-rule table is [architecture.md](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
 
 The only product row whose `from` is under `deployment/` is `deployment-preflight`. A `*.test.ts` is the tooling row, which allows every target. `deployment/edge/caddyfile.ts`, `deployment/edge/image-cleanup.ts` and `deployment/images/vendor.ts` have no import.
 

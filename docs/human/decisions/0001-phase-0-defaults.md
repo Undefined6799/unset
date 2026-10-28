@@ -524,3 +524,16 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   never a log, audit or metric field (SE-7), the instance gets no client address, result links carry no referrer;
   our `search` and a global `web_search` limit, the engine's limiter off; a failed or slow engine leaves the page
   up with the directory results. No public instance and no search API vendor. Proposed, awaiting Alex.
+- **Staging builds from the checkout (P1.37y; own record: [0036](0036-staging-builds-from-source.md)):** VM 315 may
+  run images built from its checkout, `npm run dev:source:up` on `compose.dev.source.yaml` under `--env dev --source`,
+  so a change is tried on staging first and committed and pushed after (Alex, 2026-10-23 00:47:01Z and 00:48:58Z).
+  C2 admits a build C26 passes under that flag only; images still named must be lock digests; the run ends with a
+  fixed unsigned line. Production stays CI-built, keyless-signed and digest-pinned (ADR 0033, unchanged), and main
+  changes only by PR. Accepted costs: untested code on an isolated, invite-only staging; a build can fill its disk.
+  Proposed, awaiting Alex.
+- **ADR 0036 accepted (Alex, 2026-10-28 02:04:07Z, against d118587; own record:
+  [0036](0036-staging-builds-from-source.md)):** staging (VM 315) may run images built from its checkout under
+  `--env dev --source` so a change is tried there first and committed after; a service still naming an image must be
+  a lock digest and every such run ends with the fixed unsigned line; production stays CI-built, keyless-signed and
+  digest-pinned (ADR 0033 unchanged) and main changes only by PR; the accepted costs are untested code on an
+  isolated, invite-only staging and a build filling its disk.

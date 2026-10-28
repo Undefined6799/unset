@@ -392,6 +392,18 @@ npm run dev:up
 npm run dev:down
 ```
 
+To run what the checkout holds instead of the lock's images (P1.37y, ADR 0036), staging only:
+
+```sh
+npm run dev:source:up
+npm run dev:source:down
+```
+
+It builds the five first-party images on the VM, so the preflight's last line says `SOURCE built from the checkout,
+unsigned`. Builds fill the disk over time (the reason rule 23 forbade them); when `df -h /` runs low, prune the
+builder cache with `docker builder prune -f`, which touches no volume. Commit and push what you tried afterwards;
+main still changes only by PR.
+
 The local stack (P1.34d) is `deployment/compose.local.yaml`, with the same wrapper under `--env local`:
 
 ```sh

@@ -27,7 +27,11 @@ RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/c
 # socket, every other role by SCRAM over TCP, no trust line. The official entrypoint passes the CMD's arguments to
 # initdb's temporary server and to the real one (docker-entrypoint.sh in this base, `docker_temp_server_start "$@"` at
 # line 360 and `exec "$@"`), so a new data directory and one initialised before both read it.
-COPY --chmod=0444 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf
+# P1.11z: the publish builder (pinned BuildKit v0.34.0 on a docker-container builder, publish-images.yml) gives the
+# folder COPY creates the --chmod mode too, so 0444 left /etc/unset without its x bit and 999 could not open the file
+# (staging, 2026-10-23); image-tests' own builder did not. 0555 is read-only for everyone on both builders, and the
+# folder stays traversable. A final-stage RUN mkdir or chmod is refused by images.test.ts, so the mode is set here.
+COPY --chmod=0555 deployment/postgres/pg_hba.conf /etc/unset/pg_hba.conf
 USER 999:999
 CMD ["postgres", "-c", "hba_file=/etc/unset/pg_hba.conf"]
 # Ready once the server accepts connections on its own socket (P1.29; Compose's `depends_on: service_healthy` waits on

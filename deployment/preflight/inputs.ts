@@ -2,10 +2,15 @@
 // service env files, and the readers and runners the checks use. Anything that keeps the preflight from judging the
 // stack throws CannotRun or ParseError; index.ts turns either into exit 2.
 import {
+  closeSync,
+  constants,
+  fstatSync,
   lstatSync,
+  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  readSync,
   realpathSync,
   type Stats,
   statfsSync,
@@ -13,6 +18,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { WALK_REASONS, type WalkInputs, walkTo } from "@unset/shared-host-pin";
 import { undeclaredNetworks } from "./checks/networks.ts";
 import type { Check, Env, Inputs, ManifestKind, MountedSecret, Run, Verifier } from "./checks/types.ts";
 import {
@@ -27,7 +33,7 @@ import {
   type Service,
 } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
-import { NOT_REGULAR, readRegular, UnreadableFile } from "./regular-file.ts";
+import { NOT_REGULAR, readRegular } from "./regular-file.ts";
 import { ConfiguredValues, SecretMap } from "./secret-map.ts";
 
 export type Deps = {
@@ -37,7 +43,7 @@ export type Deps = {
   /** The host's architecture, picking the pinned cosign (P2.26v); `process.arch` unless a test passes one. */
   arch?: string;
   readText?: (path: string) => string | null;
-  /** How an env file Compose reads values from is read; `readEnvOrNull` unless a test passes one. */
+  /** How an env file Compose reads values from is read; `readEnvOrNull` on the walk's deps unless a test passes one. */
   readEnv?: (path: string) => EnvRead | null;
   /** How C18 reads the dev root and leaf copies (Inputs.readRegular); regular-file.ts unless a test passes one. */
   readRegular?: Inputs["readRegular"];
@@ -73,11 +79,17 @@ const statOrNull = (path: string): Stats | null => {
   }
 };
 
-const lstatOrNull = (path: string): Stats | null => {
+/**
+ * Null only when nothing is there (ENOENT, ENOTDIR); any other error (EACCES, ENAMETOOLONG) throws, so the walk never
+ * reads an entry it cannot look at as absent (Codex on #1405), as realpathOrNull below.
+ */
+export const lstatOrNull = (path: string): Stats | null => {
   try {
     return lstatSync(path);
-  } catch {
-    return null;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
   }
 };
 
@@ -100,8 +112,11 @@ const realpathOrNull = (path: string): string | null => {
 
 export class CannotRun extends Error {}
 
-/** An env file's text and the `dev:ino` of the file it came from, which C9 matches against what it judges. */
-export type EnvRead = { text: string; id: string };
+/** An env file's text and the fstat of the descriptor it was read from: the file C9 judges (P1.34r). */
+export type EnvRead = { text: string; file: Stats };
+
+/** The most of an env file the reader takes (P1.34r, architecture Amendment 9 B1, step 4). */
+const ENV_FILE_CAP = 64 * 1024;
 
 /** A file's text, read only as a regular file (P1.35p S2); any error but its absence throws. */
 const readRegularText: Inputs["readRegular"] = (path) => {
@@ -109,17 +124,60 @@ const readRegularText: Inputs["readRegular"] = (path) => {
   return read === null || read === NOT_REGULAR ? read : read.text;
 };
 
-/** An env file, read only as a regular file (P1.34p, Amendment 2); anything else stops the run. */
-function readEnvOrNull(path: string): EnvRead | null {
-  let read: ReturnType<typeof readRegular>;
+/**
+ * An env file, read in the ruled order and no other (P1.34r; architecture Amendment 9, B1, of record
+ * 2026-10-12-p127u-bind-ancestors-and-build-context), so nothing at a refused path is ever read:
+ * 1. the walk from `/` (resolveChecked's), whose final entry must be a regular file;
+ * 2. an open of the walk's end with O_RDONLY|O_NOFOLLOW|O_NONBLOCK, so a link swapped in fails and a FIFO cannot block
+ *    (Node v26.12.0 doc/api/fs.md, File open constants: O_NOFOLLOW "should fail if the path is a symbolic link",
+ *    O_NONBLOCK "open the file in nonblocking mode when possible");
+ * 3. fstat on that descriptor: a regular file, the walk's (dev, ino), one hard link;
+ * 4. the 64 KiB cap, from the fstat size and again while reading;
+ * 5. a read from that descriptor only.
+ * Null only when the walk finds nothing there; anything else stops the run, an unreadable `.env` too (mutant M17),
+ * and one the walk could not look at (Codex on #1405).
+ */
+function readEnvOrNull(path: string, walk: WalkInputs): EnvRead | null {
+  let end: ReturnType<typeof walkTo>;
   try {
-    read = readRegular(path);
-  } catch (error) {
-    if (error instanceof UnreadableFile) throw new CannotRun(error.message);
-    throw error;
+    end = walkTo(path, walk);
+  } catch {
+    throw new CannotRun(`cannot read ${path}`);
   }
-  if (read === NOT_REGULAR) throw new CannotRun(`${path} is not a regular file`);
-  return read;
+  if (end === "missing") return null;
+  if (end === "kind" || (typeof end !== "string" && !end.info.isFile())) {
+    throw new CannotRun(`${path} is not a regular file`);
+  }
+  if (typeof end === "string") throw new CannotRun(`${path} lies on a path ${WALK_REASONS[end]}`);
+  let fd: number;
+  try {
+    fd = openSync(end.path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    throw new CannotRun(`cannot read ${path}`);
+  }
+  try {
+    const file = fstatSync(fd);
+    if (!file.isFile()) throw new CannotRun(`${path} is not a regular file`);
+    if (file.dev !== end.info.dev || file.ino !== end.info.ino) {
+      throw new CannotRun(`${path} changed while the preflight read it`);
+    }
+    if (file.nlink !== 1) throw new CannotRun(`${path} has more than one hard link`);
+    if (file.size > ENV_FILE_CAP) throw new CannotRun(`${path} is larger than 64 KiB`);
+    return { text: readCapped(fd, path), file };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** The descriptor's bytes as UTF-8, refusing once more than the cap arrives (a file that grew since its fstat). */
+function readCapped(fd: number, path: string): string {
+  const buffer = Buffer.alloc(ENV_FILE_CAP + 1);
+  let length = 0;
+  for (let got = -1; got !== 0 && length <= ENV_FILE_CAP; length += got) {
+    got = readSync(fd, buffer, length, buffer.length - length, null);
+  }
+  if (length > ENV_FILE_CAP) throw new CannotRun(`${path} is larger than 64 KiB`);
+  return buffer.toString("utf8", 0, length);
 }
 
 /**
@@ -130,20 +188,21 @@ export const CLI_OPTIONS = {
   env: { type: "string", multiple: true },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
+  source: { type: "boolean", multiple: true },
 } as const;
 const USAGE =
   "usage: --env dev|prod|local --compose <absolute file> [--compose <absolute file>...] " +
-  "[--interpolation-env <absolute file>]";
+  "[--interpolation-env <absolute file>] [--source]";
 
 const ENVS: readonly string[] = ["dev", "prod", "local"] satisfies Env[];
 const isEnv = (value: string | undefined): value is Env => value !== undefined && ENVS.includes(value);
 
-function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
+function parseCli(argv: string[]): { env: Env; source: boolean; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
   // other `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
   const args = argv[0] === "--" ? argv.slice(1) : argv;
   if (args.includes("--")) throw new CannotRun(USAGE);
-  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[] };
+  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[]; source?: boolean[] };
   try {
     ({ values } = parseArgs({ args, options: CLI_OPTIONS, strict: true, allowPositionals: false }));
   } catch {
@@ -153,6 +212,11 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   const [env, ...more] = values.env ?? [];
   if (more.length > 0) throw new CannotRun("--env may be given once");
   if (!isEnv(env)) throw new CannotRun("--env must be dev, prod or local");
+  // --source builds staging from the checkout (P1.37y, ADR 0036 Decision 2): dev only, so prod and local never take it.
+  const sources = values.source ?? [];
+  if (sources.length > 1) throw new CannotRun("--source may be given once");
+  const source = sources.length === 1;
+  if (source && env !== "dev") throw new CannotRun("--source is for --env dev only");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
   // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
   // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
@@ -161,7 +225,7 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
     throw new CannotRun("--compose must be an absolute, normalised path");
   }
-  return { env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
+  return { env, source, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
 }
 
 /**
@@ -273,12 +337,12 @@ function resolveBuild(build: Build, projectDir: string): Build {
   return { context, dockerfile: resolve(context, build.dockerfile) };
 }
 
-/** Reads env files and remembers the `dev:ino` each one was read from. */
+/** Reads env files and remembers every file each path was read from, not only the last (P1.34r). */
 function envReader(readEnv: (path: string) => EnvRead | null) {
-  const ids = new Map<string, string>();
+  const ids = new Map<string, Stats[]>();
   const read = (path: string): EnvRead | null => {
     const result = readEnv(path);
-    if (result !== null) ids.set(path, result.id);
+    if (result !== null) ids.set(path, [...(ids.get(path) ?? []), result.file]);
     return result;
   };
   const parse = (path: string): [string, string][] => {
@@ -298,9 +362,15 @@ export type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 /** Inputs for the checks; anything that keeps the preflight from judging the stack throws CannotRun or ParseError. */
 export function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
-  const envFiles = envReader(deps.readEnv ?? readEnvOrNull);
+  const walk: WalkInputs = {
+    lstat: deps.lstat ?? lstatOrNull,
+    readlink: deps.readlink ?? ((path) => readlinkSync(path)),
+    statfs: deps.statfs ?? ((path) => statfsSync(path)),
+    uid: deps.uid ?? process.getuid?.() ?? -1,
+  };
+  const envFiles = envReader(deps.readEnv ?? ((path) => readEnvOrNull(path, walk)));
   const environment = deps.environment ?? process.env;
-  const { env, files, envFile } = parseCli(argv);
+  const { env, source, files, envFile } = parseCli(argv);
   refuseWhenSet(composeNames(Object.keys(environment)), environment);
   const { compose, mountedSecrets, interpolated } = loadCompose(files, readText);
   // Compose takes a shell value over the env file (Docker docs, "Interpolation"; compose-go Mapping.Merge).
@@ -341,6 +411,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
   }
   const inputs: Inputs = {
     env,
+    source,
     root: resolve(deps.root),
     projectDir: dirname(files[0] as string),
     compose,
@@ -360,12 +431,12 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     readText,
     readRegular: deps.readRegular ?? readRegularText,
     stat: deps.stat ?? statOrNull,
-    lstat: deps.lstat ?? lstatOrNull,
+    lstat: walk.lstat,
     realpath: deps.realpath ?? realpathOrNull,
-    readlink: deps.readlink ?? ((path) => readlinkSync(path)),
+    readlink: walk.readlink,
     readdir: deps.readdir ?? ((path) => readdirSync(path, { encoding: "buffer" })),
-    statfs: deps.statfs ?? ((path) => statfsSync(path)),
-    uid: deps.uid ?? process.getuid?.() ?? -1,
+    statfs: walk.statfs,
+    uid: walk.uid,
   };
   return { inputs, configured: new ConfiguredValues(values) };
 }

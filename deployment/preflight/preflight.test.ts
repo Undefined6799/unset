@@ -17,8 +17,10 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statfsSync,
   statSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,8 +35,8 @@ import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
-import { type Deps, type Run, preflight as runPreflight } from "./index.ts";
-import { loadInputs } from "./inputs.ts";
+import { type Deps, type Run, preflight as runPreflight, SOURCE_LAST_LINE } from "./index.ts";
+import { loadInputs, lstatOrNull } from "./inputs.ts";
 import { printable } from "./printable.ts";
 import { SecretMap } from "./secret-map.ts";
 
@@ -411,6 +413,48 @@ const as4242 =
     const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
+/**
+ * fakeFs, with a statfs that runs `act` once, right after the walk first judged `target`: its statfs is the walk's last
+ * look at an entry (shared/host-pin walk.ts), so `act` lands between the walk and the open.
+ */
+function afterWalk(root: string, target: string, act: () => void): Pick<Deps, "lstat" | "statfs"> {
+  let done = false;
+  return {
+    ...fakeFs(root),
+    statfs: (path) => {
+      const info = statfsSync(path);
+      if (path === target && !done) {
+        done = true;
+        act();
+      }
+      return info;
+    },
+  };
+}
+/** fakeFs's lstat, which runs `act` once, just before it looks at `target` the second time. */
+function beforeSecondLook(root: string, target: string, act: () => void): Pick<Deps, "lstat"> {
+  const { lstat } = fakeFs(root);
+  let looks = 0;
+  return {
+    lstat: (path) => {
+      if (path === target && ++looks === 2) act();
+      return lstat?.(path) ?? null;
+    },
+  };
+}
+/**
+ * An env reader with no walk, for tests of C9's own rules on the folders the env files share with the secrets folder:
+ * the real reader walks first and would stop the run there before C9 runs (P1.34r).
+ */
+const unwalkedEnv: Pick<Deps, "readEnv"> = {
+  readEnv: (path) => {
+    try {
+      return { text: readFileSync(path, "utf8"), file: statSync(path) };
+    } catch {
+      return null;
+    }
+  },
+};
 /** A complete retirement report (C21): prod and local on the old host need one; dev is waived (Alex, 2026-10-21). */
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
@@ -714,23 +758,20 @@ describe("preflight", () => {
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
     expect(failed(absent.lines)).toEqual(["C9"]);
     // Every file Compose reads is judged hop by hop too, and a second hard link would carry it past C26's path test
-    // (Amendment 6).
+    // (Amendment 6). The reader now walks and fstats before it reads (P1.34r), so these stop the run unread.
     const { root, file } = stack();
     const pdsEnv = join(envOf(root), "pds.env");
     const run = (uids: Record<string, number> = {}) =>
       preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root, WEB_UID, uids) });
+    const stopped = (why: string) => ({ code: 2, lines: [`ERROR ${pdsEnv} ${why}`] });
     linkSync(pdsEnv, join(dirname(root), "pds.env.copy"));
-    expect((await run()).lines).toContain(`FAIL C9 ${pdsEnv} has more than one hard link`);
+    expect(await run()).toEqual(stopped("has more than one hard link"));
     rmSync(join(dirname(root), "pds.env.copy"));
-    expect((await run({ [envOf(root)]: 2000 })).lines).toContain(
-      `FAIL C9 ${pdsEnv} lies on a path that another user can change`,
-    );
+    expect(await run({ [envOf(root)]: 2000 })).toEqual(stopped("lies on a path that another user can change"));
     renameSync(pdsEnv, join(envOf(root), "real.env"));
     symlinkSync("real.env", pdsEnv);
     expect(failed((await run()).lines)).toEqual([]);
-    expect((await run({ [pdsEnv]: 2000 })).lines).toContain(
-      `FAIL C9 ${pdsEnv} lies on a path that another user can change`,
-    );
+    expect(await run({ [pdsEnv]: 2000 })).toEqual(stopped("lies on a path that another user can change"));
   });
 
   // P1.34p: no file Compose reads values or secrets from sits inside the project directory, where the checkout's
@@ -742,8 +783,8 @@ describe("preflight", () => {
     expect((await check({ compose: envInside, files: fixture })).lines).toContain(inside);
     // The same file reached through a link that lives outside the project.
     const viaLink = stack({ files: fixture });
-    symlinkSync(join(viaLink.root, "deployment/edge/edge.test.env"), join(envOf(viaLink.root), "dev.env"));
-    writeFileSync(viaLink.file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"));
+    symlinkSync(join(viaLink.root, "deployment/edge/edge.test.env"), join(envOf(viaLink.root), "dev-public.env"));
+    writeFileSync(viaLink.file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev-public.env"));
     const linked = await preflight(["--env", "prod", "--compose", viaLink.file], {
       root: viaLink.root,
       run: fakeRun().run,
@@ -755,11 +796,11 @@ describe("preflight", () => {
     expect((await check({ compose: secretInside, files: fixture })).lines).toContain(inside);
     // A real env file beside the checkout passes.
     const { root, file } = stack();
-    writeFileSync(join(envOf(root), "dev.env"), readFileSync(join(envOf(root), "pds.env")));
-    chmodSync(join(envOf(root), "dev.env"), 0o600);
+    writeFileSync(join(envOf(root), "dev-public.env"), readFileSync(join(envOf(root), "pds.env")));
+    chmodSync(join(envOf(root), "dev-public.env"), 0o600);
     writeFileSync(
       file,
-      readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"),
+      readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev-public.env"),
     );
     const beside = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(failed(beside.lines)).toEqual([]);
@@ -791,45 +832,154 @@ describe("preflight", () => {
     expect(inFolder.lines).toContain(reach);
   });
 
-  // P1.34p Amendment 2, item 2: an env file is read only as a regular file, and only as the file C9 then judges.
-  test("c9_env_file_read_safely", { timeout: 10_000 }, async () => {
+  // P1.34p Amendment 2, item 2, and P1.34r (architecture Amendment 9, B1): an env file is walked, then opened, then
+  // fstat'ed, and read only from that descriptor, so nothing at a refused path is ever read.
+  test("c9_env_file_read_safely", async () => {
     const { root, file } = stack();
     const pdsEnv = join(envOf(root), "pds.env");
     rmSync(pdsEnv);
     execFileSync("mkfifo", ["-m", "600", pdsEnv]);
-    // A FIFO with no writer would block a plain read for ever; the preflight stops instead.
+    // A FIFO with no writer would block a plain read for ever; the preflight stops instead, by the suite's own limit.
     const fifo = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(fifo).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is not a regular file`] });
-    // A file swapped after it was read: C9 sees another (dev, ino) than the one the values came from.
+    // A real swap between the walk and the open: the walk met one file, the descriptor holds another. The reader is the
+    // real one; only the walk's statfs is the hook that renames the other file into place once the walk has judged it.
     const swapped = stack();
     const swappedEnv = join(envOf(swapped.root), "pds.env");
-    const readEnv = (path: string) => (path === swappedEnv ? { text: readFileSync(path, "utf8"), id: "0:0" } : null);
+    const other = join(envOf(swapped.root), "other.env");
+    writeFileSync(other, readFileSync(swappedEnv));
+    chmodSync(other, 0o600);
     const result = await preflight(["--env", "prod", "--compose", swapped.file], {
       root: swapped.root,
       run: fakeRun().run,
-      ...fakeFs(swapped.root),
-      readEnv,
+      ...afterWalk(swapped.root, swappedEnv, () => renameSync(other, swappedEnv)),
     });
-    expect(result.lines).toContain(`FAIL C9 ${swappedEnv} changed after the preflight read it`);
+    expect(result).toEqual({ code: 2, lines: [`ERROR ${swappedEnv} changed while the preflight read it`] });
+  });
+
+  // P1.34r step 4: a 64 KiB cap from the fstat size, so a huge file is refused before any of it is read.
+  test("env_reader_refuses_an_oversize_file_unread", async () => {
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    const run = () => preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    const text = readFileSync(pdsEnv, "utf8");
+    // Exactly the cap is read; one byte more is refused. Comment lines keep the values as they were.
+    const padded = (size: number) => `${text}${"#".repeat(size - Buffer.byteLength(text) - 1)}\n`;
+    writeFileSync(pdsEnv, padded(64 * 1024));
+    expect((await run()).code).not.toBe(2);
+    writeFileSync(pdsEnv, padded(64 * 1024 + 1));
+    expect(await run()).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is larger than 64 KiB`] });
+    // A sparse 3 GiB file: a reader that read it in full would fail on its size or run out of memory, not refuse it.
+    truncateSync(pdsEnv, 3 * 1024 ** 3);
+    expect(await run()).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is larger than 64 KiB`] });
+  });
+
+  // P1.34r step 2 (mutant M6, an open without O_NOFOLLOW): the walk met the file, and a link to that same file then
+  // took its name. Followed, the link would reach the walk's (dev, ino); O_NOFOLLOW refuses it instead.
+  test("env_reader_opens_without_following_a_link", async () => {
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    const moved = join(envOf(root), "moved.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...afterWalk(root, pdsEnv, () => {
+        renameSync(pdsEnv, moved);
+        symlinkSync(moved, pdsEnv);
+      }),
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${pdsEnv}`] });
+  });
+
+  // Mutant M17: the project's .env may be absent, but one the walk found and the reader then cannot open is an ERROR,
+  // never read as absent (which would interpolate every name as empty).
+  test("env_reader_errors_on_an_unreadable_dot_env", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...afterWalk(root, dotEnv, () => rmSync(dotEnv)),
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${dotEnv}`] });
+  });
+
+  // P1.34r: the reader keeps every (dev, ino) a path was read from. The .env is read twice; a whole file swapped in
+  // between, itself walked, opened and fstat'ed as one file, still means the values came from two files.
+  test("env_reader_keeps_every_read_of_a_path", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const other = join(root, "deployment/.env.other");
+    writeFileSync(other, readFileSync(dotEnv));
+    chmodSync(other, 0o600);
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...beforeSecondLook(root, dotEnv, () => renameSync(other, dotEnv)),
+    });
+    expect(result.lines).toContain(`FAIL C9 ${dotEnv} changed after the preflight read it`);
+  });
+
+  // Codex on #1405: every read of a path is judged, not only the first, so a chmod between reads of the same file fails.
+  test("env_reader_judges_every_read_of_a_path", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...beforeSecondLook(root, dotEnv, () => chmodSync(dotEnv, 0o644)),
+    });
+    expect(result.lines).toContain(`FAIL C9 ${dotEnv} must have exactly owner read and write permissions`);
+  });
+
+  // Codex on #1405: the walk's lstat answers null only for absence (ENOENT, ENOTDIR), so an entry it cannot look at
+  // (EACCES under a folder the deploy user cannot search; here ENAMETOOLONG, which root meets too) is never absent.
+  test("env_reader_lstat_is_null_only_for_absence", () => {
+    const { root } = stack();
+    const file = join(root, "deployment/.env.file");
+    writeFileSync(file, "");
+    expect(lstatOrNull(join(root, "deployment/absent.env"))).toBeNull();
+    expect(lstatOrNull(join(file, "x"))).toBeNull();
+    expect(() => lstatOrNull(join(root, "x".repeat(256)))).toThrow(/ENAMETOOLONG/);
+  });
+
+  // Codex on #1405: a project .env the walk cannot look at stops the run, naming it, and is never read as absent.
+  test("env_reader_errors_when_the_walk_cannot_look", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const { lstat } = fakeFs(root);
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      lstat: (path) => {
+        if (path === dotEnv) throw denied;
+        return lstat?.(path) ?? null;
+      },
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${dotEnv}`] });
   });
 
   // P1.34p Amendment 2, item 3: FUSE (FUSE_SUPER_MAGIC, linux/magic.h) is refused beside procfs.
   test("c9_fuse_refused", async () => {
     const FUSE = 0x65735546;
     const { root, file } = stack();
-    const onFuse = (where: string) =>
+    const onFuse = (where: string, reader: Partial<Deps> = {}) =>
       preflight(["--env", "prod", "--compose", file], {
         root,
         run: fakeRun().run,
         ...fakeFs(root),
+        ...reader,
         statfs: (path) => ({ type: path === where ? FUSE : 0xef53 }),
       });
     for (const where of [secretsOf(root), dirname(secretsOf(root))]) {
-      expect((await onFuse(where)).lines, where).toContain("FAIL C9 the secrets folder is on FUSE");
+      expect((await onFuse(where, unwalkedEnv)).lines, where).toContain("FAIL C9 the secrets folder is on FUSE");
     }
-    expect((await onFuse(envOf(root))).lines).toContain(
-      `FAIL C9 ${join(envOf(root), "pds.env")} lies on a path through a FUSE file system`,
-    );
+    // An env file on FUSE stops the run in the reader's walk, before any of it is read (P1.34r).
+    expect(await onFuse(envOf(root))).toEqual({
+      code: 2,
+      lines: [`ERROR ${join(envOf(root), "pds.env")} lies on a path through a FUSE file system`],
+    });
     expect((await onFuse(join(root, "deployment/edge/sites/enabled"))).lines).toContain(
       "FAIL C9 edge binds a path through a FUSE file system",
     );
@@ -856,7 +1006,12 @@ describe("preflight", () => {
     const { root, file } = stack();
     const dir = secretsOf(root);
     const run = (uids: Record<string, number> = {}) =>
-      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root, WEB_UID, uids) });
+      preflight(["--env", "prod", "--compose", file], {
+        root,
+        run: fakeRun().run,
+        ...fakeFs(root, WEB_UID, uids),
+        ...unwalkedEnv,
+      });
     const locked = `FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`;
     // Group or other access, and the setgid or sticky bit, on the folder itself.
     for (const mode of [0o755, 0o710, 0o2700, 0o1700]) {
@@ -887,6 +1042,7 @@ describe("preflight", () => {
         root,
         run: fakeRun().run,
         ...fakeFs(root),
+        ...unwalkedEnv,
         statfs: (path) => ({ type: path === onProc ? 0x9fa0 : 0xef53 }),
       });
       expect(procfs.lines).toContain("FAIL C9 the secrets folder is on procfs");
@@ -896,7 +1052,7 @@ describe("preflight", () => {
     expect((await run({ "/": 4242 })).lines).toContain(
       `FAIL C9 parent ${depth} of the secrets folder can be changed by another user`,
     );
-    const other = await check({}, "prod", { uid: 4242 });
+    const other = await check({}, "prod", { uid: 4242, ...unwalkedEnv });
     expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
       /must be a directory with mode 0700 owned by the deploy user$/,
     );
@@ -1384,9 +1540,11 @@ describe("preflight", () => {
       const statfs = (path: string) => ({ type: path.endsWith(onProc) ? PROC : 0xef53 });
       expect((await run("./data/shared", () => undefined, { statfs })).lines).toContain(underProc);
     }
+    // Thrown on the bind source's walk only: the env reader walks with the same statfs, and stops the run first.
     const throwing = {
-      statfs: () => {
-        throw Object.assign(new Error("denied"), { code: "EACCES" });
+      statfs: (path: string) => {
+        if (path.includes("/deployment/data")) throw Object.assign(new Error("denied"), { code: "EACCES" });
+        return { type: 0xef53 };
       },
     };
     expect((await run("./data/shared", () => undefined, throwing)).lines).toContain("FAIL C9 check error");
@@ -1514,7 +1672,7 @@ describe("preflight", () => {
     );
     // In Compose's list form a repeated name's last value wins, so a second spelling of a setting is refused.
     const listed = DEV.replace(
-      /    environment:\n      CONFIG_FILE[\s\S]*?      LOG_LEVEL: WARN\n/,
+      / {4}environment:\n {6}CONFIG_FILE[\s\S]*? {6}LOG_LEVEL: WARN\n/,
       "    environment:\n" +
         ["CONFIG_FILE=/tmp/newt.json", "DISABLE_SSH=true", "DISABLE_CLIENTS=true"]
           .concat(["NEWT_METRICS_PROMETHEUS_ENABLED=false", "NEWT_PPROF_ENABLED=false", "LOG_LEVEL=WARN"])
@@ -2129,7 +2287,19 @@ describe("preflight", () => {
       run: fakeRun().run,
       ...fakeFs(root, WEB_UID, { [linked]: 2000 }),
     });
-    expect(viaLink.lines).toContain("FAIL C9 edge binds a path that another user can change");
+    // The project's .env is looked for through that link, so the env reader's walk stops the run first (P1.34r).
+    expect(viaLink).toEqual({
+      code: 2,
+      lines: [`ERROR ${join(linked, ".env")} lies on a path that another user can change`],
+    });
+    // With an interpolation env file named outright, no .env is read, and C9 judges the bind source as written.
+    const flag = join(envOf(root), "flag.env");
+    writeFileSync(flag, "");
+    const viaLinkWithFlag = await preflight(
+      ["--env", "prod", "--compose", join(linked, "compose.yaml"), "--interpolation-env", flag],
+      { root, run: fakeRun().run, ...fakeFs(root, WEB_UID, { [linked]: 2000 }) },
+    );
+    expect(viaLinkWithFlag.lines).toContain("FAIL C9 edge binds a path that another user can change");
   });
 
   test("no_repository_script_passes_project_directory", () => {
@@ -3062,11 +3232,20 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     expect((await run("../../envlink", "../repo/deployment/images/node-app.Dockerfile", envLink)).lines).toContain(
       "FAIL C26 web builds from a context that holds an env file",
     );
-    // The context is judged hop by hop like a bind source (Amendment 6): a group-writable checkout fails.
-    const open = (root: string) => chmodSync(root, 0o775);
-    expect((await run("..", "deployment/images/node-app.Dockerfile", open)).lines).toContain(
+    // The context is judged hop by hop like a bind source (Amendment 6): a group-writable context fails.
+    const open = (root: string) => {
+      mkdirSync(join(dirname(root), "ctx"));
+      chmodSync(join(dirname(root), "ctx"), 0o775);
+    };
+    expect((await run("../../ctx", "../repo/deployment/images/node-app.Dockerfile", open)).lines).toContain(
       "FAIL C26 web builds from a context that another user can change",
     );
+    // A group-writable checkout: the env reader's walk of the project's .env, absent or not, stops the run first,
+    // since another user could put one there (P1.34r).
+    const checkout = await run("..", "deployment/images/node-app.Dockerfile", (root) => chmodSync(root, 0o775));
+    expect(checkout.lines).toEqual([
+      expect.stringMatching(/^ERROR \S+\/deployment\/\.env lies on a path that another user can change$/),
+    ]);
     // The sibling layout passes.
     expect(failedBesideBuild((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
   });
@@ -3423,7 +3602,14 @@ describe("compose inputs (P1.30a)", () => {
     const flag = envFile(root, "flag.env", "HOST_NAME=flag.example.test\n");
     const other = envFile(root, "other.env", "OTHER=x\n");
     const run = (extra: string[], want: string) =>
-      preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {}, checks: [hostnameIs(want)] });
+      preflight(argv(file, ...extra), {
+        root,
+        run: fakeRun().run,
+        environment: {},
+        checks: [hostnameIs(want)],
+        // The env reader walks with the run's lstat (P1.34r), so the parents above the temporary folder are faked.
+        ...fakeFs(root),
+      });
     expect(await run([], "dot.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
     expect(await run(["--interpolation-env", flag], "flag.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
     // The flag replaces the .env whole: a name only the .env holds is empty, as in Compose.
@@ -3468,7 +3654,7 @@ describe("compose inputs (P1.30a)", () => {
     const { root, file } = stack();
     const flag = envFile(root, "flag.env", "");
     const refusal = async (extra: string[]) =>
-      (await preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {} })).lines;
+      (await preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {}, ...fakeFs(root) })).lines;
     expect(await refusal(["--interpolation-env", flag, "--interpolation-env", flag])).toEqual([
       "ERROR --interpolation-env may be given once",
     ]);
@@ -3531,13 +3717,14 @@ describe("compose inputs (P1.30a)", () => {
     // Amendment 1 of the ruling: any COMPOSE_* key, so COMPOSE_PROJECT_NAME too.
     for (const name of ["COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_DISABLE_ENV_FILE", "COMPOSE_PROJECT_NAME"]) {
       const { root, file } = stack({ dotEnv: `${name}=${SENTINEL}\n` });
-      const fromDotEnv = await preflight(argv(file), { root, run: fakeRun().run, environment: {} });
+      const fromDotEnv = await preflight(argv(file), { root, run: fakeRun().run, environment: {}, ...fakeFs(root) });
       expect(fromDotEnv, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
       const flag = envFile(root, "flag.env", `${name}=\n`);
       const fromFlag = await preflight(argv(file, "--interpolation-env", flag), {
         root,
         run: fakeRun().run,
         environment: {},
+        ...fakeFs(root),
       });
       expect(fromFlag, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
     }
@@ -3547,7 +3734,7 @@ describe("compose inputs (P1.30a)", () => {
     // Compose takes a shell value over the env file (Docker docs "Interpolation"; compose-go Mapping.Merge), so a name
     // the files interpolate must not be set where the preflight runs.
     const { root, file } = stack({ compose: REF, dotEnv: "HOST_NAME=pds.example.test\n" });
-    const deps = { root, run: fakeRun().run, checks: [hostnameIs("pds.example.test")] };
+    const deps = { root, run: fakeRun().run, checks: [hostnameIs("pds.example.test")], ...fakeFs(root) };
     expect(await preflight(argv(file), { ...deps, environment: { HOST_NAME: SENTINEL } })).toEqual({
       code: 2,
       lines: ["ERROR HOST_NAME is set in the environment"],
@@ -5339,5 +5526,82 @@ networks:
     for (const args of [[], ["--env", ""], ["--env", "LOCAL"], ["--env", "Prod"], ["--env", "staging"]]) {
       expect(await run(args), JSON.stringify(args)).toEqual(["ERROR --env must be dev, prod or local"]);
     }
+  });
+});
+
+// P1.37y (ADR 0036 Decision 2): under dev with --source, a service may build from the checkout instead of running a
+// lock image; C2 admits the build when C26 passes it and nothing stands beside it. Nothing changes without the flag.
+describe("--source builds staging from the checkout (P1.37y)", () => {
+  const BUILD = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+  const DOCKERFILE = { "deployment/images/node-app.Dockerfile": "FROM scratch\n" };
+  /** A dev stack whose web service is written as `edit` makes it, run with `flags` after the usual arguments. */
+  async function source(
+    edit: (dev: string) => string,
+    flags: string[] = ["--source"],
+    files: Record<string, string> = DOCKERFILE,
+  ) {
+    const { root, file } = stack({
+      compose: edit(DEV),
+      pdsEnv: DEV_ENV,
+      report: PART_A_DONE,
+      networks: DEV_TABLE,
+      files,
+    });
+    return runPreflight(["--env", "dev", "--compose", file, ...flags], { root, run: fakeRun().run, ...fakeFs(root) });
+  }
+  const builtWeb = (dev: string) => dev.replace(`    image: ${WEB}\n`, BUILD);
+
+  test("source_admits_a_build_c26_passes_and_says_so", async () => {
+    const result = await source(builtWeb);
+    expect(failed(result.lines)).toEqual([]);
+    expect(result.lines).toContain("PASS C2 ok");
+    expect(result.lines.at(-1)).toBe(SOURCE_LAST_LINE);
+    expect(result.code).toBe(0);
+    // The flag changes nothing else: C3 to C5 still verify the lock (no UNSIGNED line).
+    expect(result.lines.some((line) => line.startsWith("UNSIGNED"))).toBe(false);
+  });
+
+  test("source_judges_a_built_edge_by_its_dockerfile", async () => {
+    // Codex on #1309: C18 took the edge by the lock's image only, so a built edge failed every --source run. Built
+    // from deployment/edge/Dockerfile it passes; built from another scanned Dockerfile it fails C18 by name.
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    const files = { "deployment/edge/Dockerfile": "FROM scratch\n" };
+    const ok = await source((dev) => dev.replace(`    image: ${EDGE}\n`, edgeBuild), ["--source"], files);
+    expect(failed(ok.lines)).toEqual([]);
+    expect(ok.lines).toContain("PASS C18 ok");
+    const other = await source((dev) => dev.replace(`    image: ${EDGE}\n`, BUILD), ["--source"], DOCKERFILE);
+    expect(other.lines).toContain("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  test("source_refuses_a_build_beside_an_image", async () => {
+    const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, `$&${BUILD}`));
+    expect(result.lines).toContain("FAIL C2 web has both an image and a build");
+    expect(result.lines.at(-1)).toBe(SOURCE_LAST_LINE);
+  });
+
+  test("source_refuses_a_build_c26_refuses", async () => {
+    // A Dockerfile the images workflow does not scan fails C26, and so C2 under --source.
+    const other = BUILD.replace("deployment/images/node-app.Dockerfile", "deployment/images/node-app.txt");
+    const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, other), ["--source"], {
+      "deployment/images/node-app.txt": "FROM scratch\n",
+    });
+    expect(result.lines).toContain("FAIL C2 web builds from a Dockerfile C26 refuses");
+    expect(failed(result.lines)).toContain("C26");
+  });
+
+  test("without_source_a_build_still_fails_c2_and_no_source_line_prints", async () => {
+    const result = await source(builtWeb, []);
+    expect(result.lines).toContain("FAIL C2 web has a build; dev and prod run only registry images");
+    expect(result.lines).not.toContain(SOURCE_LAST_LINE);
+  });
+
+  test("source_is_dev_only_and_given_once", async () => {
+    const { root, file } = stack({});
+    const run = async (env: string, flags: string[]) =>
+      (await runPreflight(["--env", env, "--compose", file, ...flags], { root, run: fakeRun().run, ...fakeFs(root) }))
+        .lines;
+    expect(await run("prod", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
+    expect(await run("local", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
+    expect(await run("dev", ["--source", "--source"])).toEqual(["ERROR --source may be given once"]);
   });
 });

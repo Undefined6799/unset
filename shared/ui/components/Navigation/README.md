@@ -1,5 +1,20 @@
 # Navigation
 
+**P2.13e (Alex, 2026-10-23; Figma 135:806, 135:858, 135:935, 151:939) supersedes the rail and popup below.**
+One left drawer replaces the desktop rail and the phone popup. It is a native `popover="auto"` `<nav>` with the
+caller's `menuId`, 320px wide (at most the viewport less 48px), full height from the left edge over the `scrim`,
+ground background, a 1px `line-strong` right edge, `radius-sm` on its right corners and `shadow-1`. Its head is the
+mark linking home with a 48px close button (`popovertargetaction="hide"`, `closeLabel`) on the same line; then the
+destinations as 48px rows with icon and visible label in the order primary, account (24px avatar), items, the current
+one boxed in `line-strong` with `aria-current="page"`; then the caller's `actions` under a `line` (the app puts this
+browser's sign-out form there); then the caller's `extra` centered at the very bottom under a `line` (the theme
+picker). No Legal links: they stay in the footers. On desktop `NavigationMenuButton` (48px, menu icon) sits before
+the mark in the brand header (`Header`'s `start`) and toggles the drawer. On phones (up to 767px) that button is
+hidden and the floating bar keeps menu, home and account in equal thirds: inset 16px from the sides and
+`max(20px, safe area)` from the bottom, 1px `line-strong` edge, `radius-sm`, `shadow-1`, no underline. Its menu
+button toggles the same drawer, and the bar is hidden while the drawer is open (`.drawer:popover-open ~ .phone`),
+back when it closes. `itemsPlacement`, the hover labels and the rail's current line are removed with the rail.
+
 Approved core-shell composition, 2026-10-17. Figma source:
 https://www.figma.com/design/4hrOlzQ1d0lA8Acm4KyLVf?node-id=0-1
 Uses the pinned sheet's Avatar, Icon, Menu surface and label typography; the imported sheet snapshot stays immutable.

@@ -109,7 +109,7 @@ titled as in Delivery.
 - Branch from a freshly fetched `origin/main`, in your own worktree: `git fetch origin main && git worktree add
   .worktrees/<task> -b claude/<task> origin/main`.
 - Never checkout, reset, rebase or force-push a branch you did not create.
-- Land via PR only (see Delivery). Deploy only CI-built images of merged commits.
+- Land via PR only (see Delivery). Production runs only CI-built images of merged commits; staging may build (ADR 0036).
 
 ## Commands
 ```sh

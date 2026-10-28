@@ -15,6 +15,7 @@ import {
   parse,
   pdsHostnameFromEnv,
   precheck,
+  preflightFlags,
   UNKNOWN_DID_CODE,
 } from "./dev-precheck.ts";
 
@@ -120,7 +121,7 @@ describe("dev-precheck (P1.29s)", () => {
 
   test("cli_flags_are_not_ones_node_reads", () => {
     const names = Object.keys(CLI_OPTIONS);
-    expect(names).toEqual(["env", "compose", "interpolation-env"]);
+    expect(names).toEqual(["env", "compose", "interpolation-env", "source"]);
     for (const name of names) expect(name, name).not.toMatch(/^(env-file|require|import)/);
     expect(parse(["--", "--env", "local", "--compose", "c.yaml", "--interpolation-env", "e.env"])).toEqual(
       parse(["--env", "local", "--compose", "c.yaml", "--interpolation-env", "e.env"]),
@@ -131,6 +132,19 @@ describe("dev-precheck (P1.29s)", () => {
     expect(() => parse(["--env", "prod", "--compose", "c.yaml", "--interpolation-env", "e.env"])).toThrow(
       PrecheckError,
     );
+  });
+
+  test("source_is_dev_only_and_reaches_the_preflight", () => {
+    // P1.37y (ADR 0036): --source is passed through unchanged, and only dev may carry it.
+    const given = ["--env", "dev", "--compose", "c.yaml", "--interpolation-env", "e.env", "--source"];
+    const options = parse(given);
+    expect(options.source).toBe(true);
+    expect(preflightFlags(options).at(-1)).toBe("--source");
+    expect(preflightFlags(parse(given.slice(0, -1)))).not.toContain("--source");
+    expect(() => parse(["--env", "local", "--compose", "c.yaml", "--interpolation-env", "e.env", "--source"])).toThrow(
+      PrecheckError,
+    );
+    expect(() => parse([...given, "--source"])).toThrow(PrecheckError);
   });
 
   test("main_prints_only_the_fixed_code", async () => {

@@ -34,7 +34,7 @@ The packages in the table. `LEAF_SHARED` in `scripts/lint/.dependency-cruiser.cj
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`. The config states that an edge no row lists fails as `not-in-allowed`.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.6.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`. The config states that an edge no row lists fails as `not-in-allowed`.
 
 `shared-leaf`: `shared/` imports nothing under `apps/`, `interfaces/`, `domains/` or `infrastructure/`.
 

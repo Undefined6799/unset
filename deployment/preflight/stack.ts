@@ -2,14 +2,15 @@
 // items F3.1, F3.3 and F3.5 and Amendment 3, and 2026-10-12-stack-wrapper-location):
 //
 //   node deployment/preflight/stack.ts up|down --env dev|local --compose <file> [--compose <file>...]
-//     --interpolation-env <file>
+//     --interpolation-env <file> [--source]
 //
 // `up` runs the local precheck (P1.29s, scripts/dev-precheck.ts) as a child process with exactly these compose files
 // and interpolation env file, all after a `--` so Node reads none of them as its own flags (Node loads an --env-file
 // it finds in argv, Amendment 3), and stops on any non-zero exit. The precheck refuses a production host and a foreign
 // describeServer DID, then runs the deploy preflight as its own child. It then runs
 // `docker compose … --env-file <file> up -d` with the same files in the same order, adding `--build` under local and
-// `--no-build` under dev (P1.37n), so only a local stack builds from the checkout. `down` stops the stack and
+// `--no-build` under dev (P1.37n), so only a local stack builds from the checkout, or staging under `--env dev
+// --source` (P1.37y; ADR 0036), which passes the flag on to the precheck and builds. `down` stops the stack and
 // never passes -v, so the data volumes survive. A COMPOSE_* variable in the caller's shell is refused outright, and
 // both children get an environment built from an allowlist only, so no interpolated name in the shell can change what
 // the precheck read or what Compose runs. Both children talk to a Docker daemon on this host only: C9, C18 and C26
@@ -17,6 +18,10 @@
 // 2026-10-12-workspace-imports-and-remote-daemon (2)). It lives beside the preflight under that folder's import row
 // (P1.27w), and runs the precheck as a process, never by import, so its exit code is the gate. Nothing in this
 // wrapper creates a PDS account.
+//
+// Before anything runs, the wrapper asks the daemon its name (refuseRemoteDaemon). A daemon still starting gets up to
+// 60 s in all to answer (P1.37u; book edit 2026-10-19-staging-tailnet-rulings): only no answer, or a refused
+// connection, waits; the first answer of any kind is judged at once.
 //
 // Under --env local (P1.34d item 15), `up` then runs served-leaf.ts, also as a process, to prove the edge serves the
 // leaf copy the preflight judged; if that check does not pass, the wrapper runs `down` and fails.
@@ -40,27 +45,50 @@ const SERVED_LEAF = resolve(import.meta.dirname, "served-leaf.ts");
 export type Command = { name: string; file: string; args: string[]; undo?: Command };
 /** What spawnSync reports about a finished child: a missing program is `error`, a kill is `signal`. */
 export type Exit = { status: number | null; signal: NodeJS.Signals | null; error?: Error };
-/** How `run` starts a command and asks the daemon its name; the one double in the tests. */
+/** What a captured child printed; `stderr` is also passed on to the caller's terminal by the real runner. */
+export type Captured = Exit & { stdout: string; stderr?: string };
+/**
+ * How `run` starts a command, asks the daemon its name, and waits between asks (a monotonic clock in ms and a blocking
+ * pause); the one double in the tests.
+ */
 export type Runner = {
   spawn: (file: string, args: string[], env: Record<string, string>) => Exit;
-  capture: (file: string, args: string[], env: Record<string, string>, timeoutMs: number) => Exit & { stdout: string };
+  capture: (file: string, args: string[], env: Record<string, string>, timeoutMs: number) => Captured;
   hostname: string;
+  now: () => number;
+  sleep: (ms: number) => void;
 };
 
-/** How long `docker info` may take before the wrapper gives up on the daemon (RE-1). */
+/** How long one `docker info` may take before the wrapper gives up on that try (RE-1). */
 export const DOCKER_INFO_DEADLINE_MS = 10_000;
+/**
+ * How long, in all, the wrapper waits for a daemon that is still starting (P1.37u): at least 3 times the slowest first
+ * Docker answer seen in a week of green local-stack runs (4.8 s at most, 2026-10-20..27). Every try's deadline and
+ * every pause end inside it.
+ */
+export const DOCKER_WAIT_MS = 60_000;
+/** The longest pause between two tries; the pauses double from 1 s up to it. */
+const MAX_PAUSE_MS = 5_000;
+/**
+ * The Docker CLI's line when the socket refuses the connection or the dial times out (docker/cli v29.9.2,
+ * vendor/github.com/moby/moby/client/errors.go:35-43 via request.go:184-192). A missing socket or a permission error
+ * prints other lines, so those are judged at once.
+ */
+const NOT_YET_LISTENING = "Cannot connect to the Docker daemon";
 export type Plan = { env: Record<string, string>; commands: Command[] };
 /** The wrapper's own flags: none of them is one Node also reads (`--env-file*`, `--require*`, `--import*`). */
 export const WRAPPER_OPTIONS = {
   env: { type: "string" },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
+  source: { type: "boolean", multiple: true },
 } as const;
-type Options = { action: "up" | "down"; env: "dev" | "local"; files: string[]; envFile: string };
+type Options = { action: "up" | "down"; env: "dev" | "local"; source: boolean; files: string[]; envFile: string };
 
 export { UsageError };
 
-const USAGE = "usage: up|down --env dev|local --compose <file> [--compose <file>...] --interpolation-env <file>";
+const USAGE =
+  "usage: up|down --env dev|local --compose <file> [--compose <file>...] --interpolation-env <file> [--source]";
 
 /** A child that could not start or was killed: a fixed reason naming the program, never its arguments (DC-4). */
 export class StackError extends Error {}
@@ -99,6 +127,10 @@ function parse(argv: string[]): Options {
   const [action, ...rest] = positionals;
   if ((action !== "up" && action !== "down") || rest.length > 0) throw new UsageError("the action is up or down");
   if (values.env !== "dev" && values.env !== "local") throw new UsageError("--env must be dev or local");
+  const sources = (values.source as boolean[] | undefined) ?? [];
+  if (sources.length > 1) throw new UsageError("--source may be given once");
+  const source = sources.length === 1;
+  if (source && values.env !== "dev") throw new UsageError("--source is for --env dev only");
   const files = (values.compose as string[] | undefined) ?? [];
   if (files.length === 0) throw new UsageError("--compose is required");
   const envFiles = (values["interpolation-env"] as string[] | undefined) ?? [];
@@ -106,7 +138,7 @@ function parse(argv: string[]): Options {
   // Resolved once against the physical cwd (getcwd), never $PWD, and that one string goes to both children (C9 record,
   // Amendment 3 and its addendum).
   const physical = (path: string): string => resolve(process.cwd(), path);
-  return { action, env: values.env, files: files.map(physical), envFile: physical(envFiles[0] as string) };
+  return { action, env: values.env, source, files: files.map(physical), envFile: physical(envFiles[0] as string) };
 }
 
 /** Refuses a caller who set any COMPOSE_* variable, naming it (never its value), rather than dropping it unseen. */
@@ -122,7 +154,7 @@ export function plan(
   inputs: WalkInputs = hostWalk,
 ): Plan {
   refuseComposeVariables(from);
-  const { action, env, files, envFile } = parse(argv);
+  const { action, env, source, files, envFile } = parse(argv);
   const compose = ["compose", ...files.flatMap((f) => ["-f", f]), "--env-file", envFile];
   const down: Command = { name: "docker", file: "docker", args: [...compose, "down"] };
   const leafCheck: Command = {
@@ -145,14 +177,16 @@ export function plan(
               ...files.flatMap((f) => ["--compose", f]),
               "--interpolation-env",
               envFile,
+              ...(source ? ["--source"] : []),
             ],
           },
-          // Only a local stack builds from the checkout. Dev runs the registry images C2 pinned, and --no-build stops
-          // Compose building even a build key added after C2 read the files (P1.37n; docs.docker.com compose up).
+          // Only a local stack builds from the checkout, or staging under --source (P1.37y). Dev runs the registry images
+          // C2 pinned, and --no-build stops Compose building even a build key added after C2 read the files (P1.37n;
+          // docs.docker.com compose up).
           {
             name: "docker",
             file: "docker",
-            args: [...compose, "up", "-d", env === "local" ? "--build" : "--no-build"],
+            args: [...compose, "up", "-d", env === "local" || source ? "--build" : "--no-build"],
           },
           ...(env === "local" ? [leafCheck] : []),
         ]
@@ -160,13 +194,39 @@ export function plan(
   return { env: childEnv(from, inputs), commands };
 }
 
+/** True when `docker info` got no answer at all: killed at its deadline, or the socket refused the connection. */
+function noAnswer({ status, signal, error, stderr }: Captured): boolean {
+  if ((error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") return true;
+  return error === undefined && signal === null && status !== 0 && (stderr ?? "").startsWith(NOT_YET_LISTENING);
+}
+
+/**
+ * Asks the daemon its name until it answers, for DOCKER_WAIT_MS in all (P1.37u): a readiness probe on a precondition,
+ * not a retry. Only no answer waits; the first answer of any kind is returned at once to be judged. After the bound,
+ * the timeout names the time waited.
+ */
+function askDaemon(env: Record<string, string>, runner: Runner): Captured {
+  const args = ["info", "--format", "{{.OperatingSystem}}|{{.Name}}"];
+  const started = runner.now();
+  // Whole milliseconds: spawnSync takes only an unsigned integer timeout, and performance.now() is fractional.
+  const left = () => Math.floor(DOCKER_WAIT_MS - (runner.now() - started));
+  // Each budget is read once and used only when positive: a deadline of 0 would turn the spawnSync timeout off.
+  for (let pause = 1_000, budget = left(); budget > 0; pause = Math.min(pause * 2, MAX_PAUSE_MS), budget = left()) {
+    const info = runner.capture("docker", args, env, Math.min(DOCKER_INFO_DEADLINE_MS, budget));
+    if (!noAnswer(info)) return info;
+    const rest = left();
+    if (rest > 0) runner.sleep(Math.min(pause, rest));
+  }
+  const waited = Math.round((runner.now() - started) / 1_000);
+  throw new StackError(`docker did not answer in time (waited ${waited} s)`);
+}
+
 /**
  * Refuses a daemon that names another machine: a unix socket forwarded from elsewhere passes localDockerHost. An
- * operator misconfiguration, not an attacker defence (record (2), belt). A daemon that does not answer stops the run.
+ * operator misconfiguration, not an attacker defence (record (2), belt). A daemon that never answers stops the run.
  */
 function refuseRemoteDaemon(env: Record<string, string>, runner: Runner): number {
-  const args = ["info", "--format", "{{.OperatingSystem}}|{{.Name}}"];
-  const info = runner.capture("docker", args, env, DOCKER_INFO_DEADLINE_MS);
+  const info = askDaemon(env, runner);
   const status = exitCode("docker", info);
   if (status !== 0) return status;
   const name = info.stdout.trim().split("|").at(-1);
@@ -214,7 +274,13 @@ function exitCode(name: string, { status, signal, error }: Exit): number {
   return status ?? 1;
 }
 
-/** Real child processes, with no shell. A capture past its deadline is killed with SIGKILL, which no child can trap. */
+/** A blocking pause: Atomics.wait on a value nothing changes returns "timed-out" after `ms` (ECMA-262 Atomics.wait). */
+const PAUSE = new Int32Array(new SharedArrayBuffer(4));
+
+/**
+ * Real child processes, with no shell. A capture past its deadline is killed with SIGKILL, which no child can trap; its
+ * stderr is read, to tell a refused connection from an answer, and then passed on to ours unchanged.
+ */
 export const processRunner: Runner = {
   spawn: (file, args, env) => {
     const result = spawnSync(file, args, { env, stdio: "inherit", shell: false });
@@ -224,16 +290,22 @@ export const processRunner: Runner = {
   capture: (file, args, env, timeoutMs) => {
     const result = spawnSync(file, args, {
       env,
-      stdio: ["ignore", "pipe", "inherit"],
+      stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf8",
       shell: false,
       timeout: timeoutMs,
       killSignal: "SIGKILL",
     });
-    const exit = { status: result.status, signal: result.signal, stdout: result.stdout ?? "" };
+    const stderr = result.stderr ?? "";
+    if (stderr !== "") process.stderr.write(stderr);
+    const exit = { status: result.status, signal: result.signal, stdout: result.stdout ?? "", stderr };
     return result.error === undefined ? exit : { ...exit, error: result.error };
   },
   hostname: hostname(),
+  now: () => performance.now(),
+  sleep: (ms) => {
+    Atomics.wait(PAUSE, 0, 0, ms);
+  },
 };
 
 /** Runs the wrapper; a refusal or a failed child prints one fixed line and exits 2. */
