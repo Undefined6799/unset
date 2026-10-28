@@ -18,9 +18,12 @@ ENV GOFLAGS=-mod=readonly
 # golang.org/x/net v0.59.0, so --replace pins v0.60.0 (proxy.golang.org, 2026-10-08T17:22:58Z),
 # the fixed module for CVE-2026-78669. xcaddy v0.4.7 writes it as `go mod edit -replace`
 # (github.com/caddyserver/xcaddy blob/v0.4.7/environment.go) and does not add an import.
+# go-jose/v4 is pinned the same way to v4.1.6 (proxy.golang.org, 2026-10-14T22:46:21Z), the fixed module for
+# CVE-2026-116587 (Trivy 0.75.0 on 2026-10-28: v4.1.5 in Caddy v2.11.7's build, HIGH).
 RUN xcaddy build v2.11.7 \
       --with github.com/mholt/caddy-ratelimit@v0.1.1-0.20260612195517-5625512f24f6 \
       --replace golang.org/x/net=golang.org/x/net@v0.60.0 \
+      --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 \
       --output /out/caddy
 
 # Upstream base until P1.27s mirrors it (book edits 2026-10-06-p127-upstream-base-by-digest, 2026-10-07-p128-edge-bases-and-ratelimit-adr); removed by P1.27s.
