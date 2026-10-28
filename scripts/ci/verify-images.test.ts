@@ -10,8 +10,9 @@ const MIRROR = `https://github.com/${REPO}/.github/workflows/mirror.yml@refs/hea
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const WEB = `ghcr.io/undefined6799/unset/web@${DIGEST}`;
 const POSTGRES = `ghcr.io/undefined6799/mirror/postgres@${DIGEST}`;
+const COMMIT = "c".repeat(40);
 const LOCK: ImageLock = {
-  web: { ref: WEB, origin: "first-party", verify: "cosign-keyless" },
+  web: { ref: WEB, origin: "first-party", gitCommit: COMMIT, verify: "cosign-keyless" },
   postgres: {
     ref: POSTGRES,
     origin: "upstream",
@@ -21,11 +22,16 @@ const LOCK: ImageLock = {
 };
 
 /** An in-toto statement as cosign verify-attestation prints it: one DSSE envelope per line. */
-function provenance(workflow: { repository: string; ref: string; path: string }): string {
+function provenance(
+  workflow: { repository: string; ref: string; path: string },
+  resolvedDependencies: unknown = [
+    { uri: `git+https://github.com/${REPO}@refs/heads/main`, digest: { gitCommit: COMMIT } },
+  ],
+): string {
   const statement = {
     _type: "https://in-toto.io/Statement/v1",
     predicateType: "https://slsa.dev/provenance/v1",
-    predicate: { buildDefinition: { externalParameters: { workflow } } },
+    predicate: { buildDefinition: { externalParameters: { workflow }, resolvedDependencies } },
   };
   return JSON.stringify({ payload: Buffer.from(JSON.stringify(statement)).toString("base64") });
 }
@@ -163,6 +169,57 @@ describe("verify-images", () => {
       const other = provenance({ ...workflow, [field]: value });
       expect(await verify(LOCK, cosign(SIGNED, other).run), field).toEqual({ ok: false, failures: [failure] });
     }
+  });
+
+  test("verify_images_binds_each_first_party_entry_to_its_commit", async () => {
+    // P2.26h (Codex on #1301): the lock names the commit, and the signed provenance must name that same commit, so a
+    // lock edit cannot pick another signed build from main without saying which revision it was built from.
+    const other = provenance(workflow, [
+      { uri: `git+https://github.com/${REPO}@refs/heads/main`, digest: { gitCommit: "d".repeat(40) } },
+    ]);
+    expect(await verify(LOCK, cosign(SIGNED, other).run)).toEqual({
+      ok: false,
+      failures: [`web: provenance names commit ${"d".repeat(40)}, not ${COMMIT}`],
+    });
+    // The commit must come from the source this repository's main names, and be the only source.
+    for (const deps of [
+      [],
+      [{ uri: "git+https://github.com/x/y@refs/heads/main", digest: { gitCommit: COMMIT } }],
+      [{ uri: `git+https://github.com/${REPO}@refs/heads/dev`, digest: { gitCommit: COMMIT } }],
+      [
+        { uri: `git+https://github.com/${REPO}@refs/heads/main`, digest: { gitCommit: COMMIT } },
+        { uri: `git+https://github.com/${REPO}@refs/heads/main`, digest: { gitCommit: "d".repeat(40) } },
+      ],
+      "not a list",
+    ]) {
+      const odd = provenance(workflow, deps);
+      expect(await verify(LOCK, cosign(SIGNED, odd).run), JSON.stringify(deps)).toEqual({
+        ok: false,
+        failures: ["web: provenance does not name one source commit on main"],
+      });
+    }
+  });
+
+  test("verify_images_needs_a_commit_on_first_party_entries_only", async () => {
+    const { gitCommit: _, ...unbound } = LOCK.web as LockEntry;
+    for (const web of [
+      unbound,
+      { ...LOCK.web, gitCommit: "C".repeat(40) },
+      { ...LOCK.web, gitCommit: "c".repeat(7) },
+    ]) {
+      const { run, calls } = cosign();
+      expect(await verify({ web: web as LockEntry }, run)).toEqual({
+        ok: false,
+        failures: ["web: a first-party entry names its full lowercase gitCommit"],
+      });
+      expect(calls).toEqual([]);
+    }
+    // A mirror is built upstream, so a commit of ours would claim something nothing checks.
+    const mirror = { postgres: { ...LOCK.postgres, gitCommit: COMMIT } as LockEntry };
+    expect(await verify(mirror, cosign().run)).toEqual({
+      ok: false,
+      failures: ["postgres: an upstream entry names no gitCommit"],
+    });
   });
 
   test("verify_images_rejects_empty_lock_and_other_refs", async () => {

@@ -6,15 +6,16 @@
 // the shared cluster does not hand out, and the owner's view of the side tables.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createPool, migrate, type Pool, withClient } from "@unset/infrastructure-postgres";
-import { createLogger } from "@unset/shared-log";
+import { type Pool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  migrateAsMigrator,
   type PostgresContainer,
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
   stopAllPostgresAfter,
+  testPools,
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -28,7 +29,7 @@ const WRITERS = ["web", "indexer", "admin"] as const;
 type Writer = (typeof WRITERS)[number];
 const migratorPassword = randomPassword();
 const passwords = Object.fromEntries(WRITERS.map((role) => [role, randomPassword()])) as Record<Writer, string>;
-const pools: Pool[] = [];
+const pools = testPools("audit-test");
 let postgres: PostgresContainer;
 let as: Record<Writer, Pool>;
 
@@ -37,43 +38,14 @@ beforeAll(async () => {
     initDir: join(REPOSITORY, "deployment", "postgres", "init"),
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
-  const result = await migrate({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database: "unset",
-      user: "migrator",
-      password: migratorPassword,
-      ssl: false,
-    },
-    dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
-    root: REPOSITORY,
-    checkQueryFiles: true,
-    log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
-    retryDelaysMs: [],
-  });
-  if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+  await migrateAsMigrator(postgres, migratorPassword);
   for (const role of WRITERS) postgres.sql("postgres", `ALTER ROLE ${role} PASSWORD '${passwords[role]}'`);
   as = { web: poolAs("web"), indexer: poolAs("indexer", 8), admin: poolAs("admin") };
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
 function poolAs(role: Writer, max = 1): Pool {
-  const pool = createPool({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database: "unset",
-      user: role,
-      password: passwords[role],
-      ssl: false,
-    },
-    service: "audit-test",
-    max,
-    connectTimeoutMs: 5000,
-  });
-  pools.push(pool);
-  return pool;
+  return pools.open(postgres, "unset", role, passwords[role], { max });
 }
 
 const ACTOR = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";

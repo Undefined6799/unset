@@ -45,7 +45,7 @@ const value = fc.oneof(
 /** JSON has no negative zero: it serialises as `0`, so compare with it normalised. */
 const normalise = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 const BREAKER_KEY = new RegExp(`[${String.fromCharCode(0x2028, 0x2029)}]`);
-/** A key JSON would escape (props.ts refuses these; see props.keys.test.ts), found via the key JSON.stringify writes. */
+/** A key JSON would escape (props.ts refuses these; see props.test.ts), found via the key JSON.stringify writes. */
 const hasEscapedKey = (v: unknown): boolean =>
   typeof v === "object" &&
   v !== null &&

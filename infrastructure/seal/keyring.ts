@@ -75,7 +75,7 @@ export function parseKeyring(raw: string): Keyring | undefined {
 }
 
 /** The keyring as a config field: read from the file named by `<KEY>_FILE`, like any `secretFile`. */
-export const keyringFile = (): Field<Keyring> => ({ kind: "secretFile", parse: parseKeyring });
+const keyringFile = (): Field<Keyring> => ({ kind: "secretFile", parse: parseKeyring });
 
 /** What a process that seals merges into its config schema. */
 export const sealFields = { SEAL_KEYRING: keyringFile() };

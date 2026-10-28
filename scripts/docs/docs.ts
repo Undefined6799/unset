@@ -43,7 +43,7 @@ const V2E_WORDS = /v2e|amber|chamfer|serif|\bUiIcon\b|iconoir-react/i;
 const V2E_SUPERSEDED =
   '- The 0x40 "v2e" visual direction (vault note `v2e-visual-direction-locked`) is **superseded** by the design sheet; follow nothing from it.';
 const ICONOIR_LINE =
-  "- **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list and rendered by the `shared/ui` `Icon` component from the copied, pinned SVG data. No icon npm package (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.";
+  "- **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in `shared/ui/approved-extensions.json`, rendered by the `shared/ui` `Icon` component from the copied, pinned SVG data. No icon npm package (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.";
 
 const readText = (root: string, file: string): string => readFileSync(join(root, file), "utf8");
 

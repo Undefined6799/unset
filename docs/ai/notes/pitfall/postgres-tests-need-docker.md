@@ -10,7 +10,7 @@ importance: high
 related: ["[[tests]]", "[[postgres]]"]
 replaced_by: null
 tags: [pitfall, tests, postgres]
-checked: 2026-10-21
+checked: 2026-10-28
 ---
 # Postgres tests need Docker and never skip
 
@@ -44,3 +44,6 @@ path, fail-not-skip rule, and cleanup helpers are unchanged.
 
 Re-checked at P2.08g: the opt-in auditor login (`asAuditor`) adds a role password in the same setup, not a second
 start path.
+
+Re-checked at the P1.11 test cleanup: `migrateAsMigrator` and `testPools` only share the migrate call and the pool
+setup the per-file containers repeated; the start path is unchanged.

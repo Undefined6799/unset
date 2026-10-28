@@ -51,7 +51,6 @@ export {
   type SealedRegistry,
   type SealedRow,
   sealedColumns,
-  sealedContext,
 } from "./sealedColumns.ts";
 export {
   createSingleUseStore,

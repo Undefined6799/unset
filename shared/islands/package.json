@@ -8,12 +8,9 @@
     ".": "./index.ts"
   },
   "peerDependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.0"
   },
-  "peerDependenciesMeta": {
-    "react-dom": {
-      "optional": true
-    }
+  "devDependencies": {
+    "react-dom": "19.3.1"
   }
 }

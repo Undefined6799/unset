@@ -93,12 +93,14 @@ The trusted-base list is the `# checks:` and trusted-base sections of `.github/C
 | Path | Allowed |
 | --- | --- |
 | `README.md` | yes |
-| `docs/site/**` | yes |
-| `docs/ai/notes/**` | yes |
-| `docs/human/**` other than `docs/human/decisions/**` | yes |
-| `docs/human/decisions/**`, `CLAUDE.md`, `AGENTS.md`, `docs/ai/PLAN.md`, the step book, `.github/**`, `scripts/**`, a manifest, a lockfile | no |
+| `docs/site/**/*.md` | yes |
+| `docs/ai/notes/**/*.md` | yes |
+| `docs/human/**/*.md` other than the four folders below | yes |
+| `docs/human/decisions/**`, `docs/human/engineering/**`, `docs/human/runbooks/**`, `docs/human/legal/**` | no |
+| any file that is not `.md`, such as site config, `go.mod`, `go.sum`, vendored scripts, data files and images | no |
+| `CLAUDE.md`, `AGENTS.md`, `docs/ai/PLAN.md`, the step book, `.github/**`, `scripts/**`, a manifest, a lockfile | no |
 
-`docs/human/decisions` is matched without regard to case.
+The four `docs/human` folders are matched without regard to case. `CLAUDE.md` imports `docs/human/engineering`, so a change there changes every agent's rules and is reviewed like code.
 
 [`.github/workflows/docs-only.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/docs-only.yml) runs `scripts/guards/docs-only.ts` when the pull request is not a draft and has `kind/docs`. [`.github/workflows/docs-auto-merge.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/docs-auto-merge.yml) runs [`scripts/guards/docs-auto-merge.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/docs-auto-merge.ts) from the default branch. `decide` enables squash auto-merge when the head repository is this one, the pull request is not a draft, the file list is allowed, `kind/docs` is present, and GitHub Actions reports the `docs-only` check as success. A failed gate disables an auto-merge that is already on. A closed pull request, or a head that has moved, is left as it is. The record is [ADR 0034](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0034-docs-only-auto-merge.md). Its status line says Proposed (awaiting Alex).
 

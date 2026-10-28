@@ -30,7 +30,7 @@ export function cachedRecheckCapS(recheckS: number): number {
  * `emailGate` uses. A missing or future timestamp is not served: a clock-ahead `email_checked_at` would otherwise
  * pass for the whole skew.
  */
-export function withinCachedRecheckCap(cache: EmailCache, nowMs: number, recheckS: number): boolean {
+function withinCachedRecheckCap(cache: EmailCache, nowMs: number, recheckS: number): boolean {
   if (cache.checkedAt === null) return false;
   const ageS = (nowMs - cache.checkedAt.getTime()) / 1000;
   return ageS >= 0 && ageS <= cachedRecheckCapS(recheckS);

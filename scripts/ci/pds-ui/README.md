@@ -64,9 +64,11 @@ files and 32 directory levels. Larger/unsupported inputs fail for review.
 The source archive must have the exact `atproto-<revision>` root and locked `pnpm-lock.yaml`; its real package JSON
 and the immutable image's package JSON must agree on the `@atproto/pds`, `@atproto/oauth-provider` and
 `@atproto/oauth-provider-ui` versions that `PAIRS` in `contract.ts` lists for the lock's base tag, and `uiDirectory`
-must name that pair's `oauth-provider-ui` version. A new upstream tag needs a reviewed `PAIRS` row first (trusted
-base), then the re-pin. Today `PAIRS` holds 0.4.5037 (0.5.37, 0.23.1, 0.10.5) and 0.4.5049 (0.5.49, 0.24.3, 0.10.7)
-while P1.38h lands; the next tightening drops 0.4.5037.
+must name that pair's `oauth-provider-ui` version. `builder.ref` and `builder.node` must equal the pair's exact
+builder. A new upstream tag needs a reviewed `PAIRS` row first (trusted base), then the re-pin. Today `PAIRS` holds
+0.4.5037 (0.5.37, 0.23.1, 0.10.5; builder `node:26-trixie-slim@sha256:930557a2…`, Node 26.10.0) and 0.4.5049
+(0.5.49, 0.24.3, 0.10.7; builder `node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because atproto at 0.5.49
+requires Node ^26.12.1) while P1.38h lands; the next tightening drops 0.4.5037.
 
 The Dockerfile has exactly three stages: `FROM <builder.ref> AS ui-build`, `FROM scratch AS ui-artifact`, and
 `FROM <base.ref>`. Its one ADD is exactly:

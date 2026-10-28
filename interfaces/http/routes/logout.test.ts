@@ -13,7 +13,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 import { ISSUER_READ_MS, type LogoutDeps, logoutRoutes } from "./logout.ts";
 
 const ORIGIN = "https://unset.test";
@@ -76,26 +76,7 @@ function setup(world: World = {}) {
       calls.push("deleteTokenSet");
       if (!world.revokeFails) throw new Error("token delete is not this test");
     },
-    page: (page) =>
-      pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log,
-        },
-        page,
-      ),
+    page: testPage(log),
     screens: web.screens,
     pdsIssuer: OUR_ISSUER,
     log,
@@ -282,6 +263,21 @@ test("signed_out_page", async () => {
   expect(html).toContain("You are signed out of unset");
   expect(html).toContain("Also sign out of your atproto account?");
   expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_no_thanks_ends_the_password_ask", async () => {
+  // P2.05s (Alex, 2026-10-28 02:01Z): "No thanks" keeps the PDS session, so the next sign-in may go straight through.
+  // It is a POST behind the CSRF gate: another site must not lift a shared computer's password ask.
+  const { send } = setup({ session: null });
+  const response = await send("/signed-out", { body: "" });
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe("/");
+  expect(response.headers.getSetCookie()).toEqual([
+    "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  ]);
+  const forged = await send("/signed-out", { body: "", site: "cross-site" });
+  expect(forged.status).toBe(403);
+  expect(forged.headers.getSetCookie()).toEqual([]);
 });
 
 test("signed_out_links_the_foreign_issuer_recorded_at_sign_in", async () => {
