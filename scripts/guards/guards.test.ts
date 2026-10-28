@@ -137,6 +137,14 @@ describe("css-layers", () => {
     expect(findings.map((f) => f.text)).toEqual([`layer screens is not declared in ${cssLayers.LAYERS_FILE}`]);
   });
 
+  test("css_layers_owner_editor_is_a_screen", () => {
+    // The owner's README editor (ADR 0037 point 5) styles a page of its own, so its CSS sits in the screens layer.
+    expect(cssLayers.layerFor("apps/web/src/editor/ReadmeEditor.module.css")).toBe("screens");
+    expect(cssLayers.layerFor("apps/web/src/editor/nested/A.module.css")).toBe("screens");
+    expect(cssLayers.layerFor("apps/web/src/editor/a.css")).toBeUndefined();
+    expect(cssLayers.layerFor("apps/admin/src/editor/A.module.css")).toBeUndefined();
+  });
+
   test("css_layers_unbalanced_fails_closed", () => {
     const ctx = { layers: ["screens"], tokens: new Set<string>() };
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {\n.a {\n", ctx)).toHaveLength(1);
