@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type LookupAnswer, pinnedLookup } from "./resolve.ts";
 
-export const TEST_HOSTS = ["unset.ac", "bsky.social", "plc.directory", "pds.example", "files.example"];
+const TEST_HOSTS = ["unset.ac", "bsky.social", "plc.directory", "pds.example", "files.example"];
 
 /** A key and self-signed certificate for TEST_HOSTS, made with the openssl CLI. */
 export function testCertificate(): { key: string; cert: string } {
