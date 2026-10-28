@@ -68,17 +68,13 @@ import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { welcomeRoutes } from "./routes/welcome.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
-import { errorPageHook, type PageDeps, pageResponse } from "./web/page.ts";
+import { errorPageHook, type PageDeps, type PageSpec, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
 
 export type Services = {
   server: ReturnType<typeof createServer>;
-  /** Renders a page; the page routes (P1.25 onwards) call it. */
-  page: (page: Parameters<typeof pageResponse>[1]) => Response;
-  /** The OAuth client the sign-in routes (P2.05, P2.06) take. */
-  oauth: Awaited<ReturnType<typeof createOAuthClient>>["client"];
   /** Boot checks that need the database, run once before the server listens. */
   boot: () => Promise<void>;
 };
@@ -159,7 +155,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsHost: cfg.PDS_HOSTNAME,
   };
   const oauth = await composeOAuth(cfg, log);
-  const page: Services["page"] = (input) => pageResponse(deps, input);
+  const page = (input: PageSpec): Response => pageResponse(deps, input);
   const nonces = createSingleUseStore({ log });
   // One object for the store and the sign-out count (P2.08c), so the two cannot read different idle limits.
   const sessionLimits = {
@@ -366,8 +362,6 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       onClose: oauth.onClose,
       errorPage,
     }),
-    page,
-    oauth: oauth.client,
     boot: oauth.boot,
   };
 }

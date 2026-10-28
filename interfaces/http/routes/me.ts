@@ -1,30 +1,13 @@
 // The signed-in account (P2.13) lives at /<DID>; /did and legacy /me resolve the caller's own destination.
 // This is still an owner-only app page, not a public profile: the gate runs before the ownership check and
 // handle verification. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
-import { type Did, displayHandle, type HandleVerdict, parseDid } from "@unset/domains-identity";
+import { parseDid } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
-import type { Logger } from "@unset/shared-log";
-import type { OpenedApp } from "../app-gate.ts";
-import type { PageSpec } from "../web/page.ts";
-import type { WebRender } from "../web/render-entry.ts";
-import { recordedIssuer } from "./account-issuer.ts";
+import { type AccountDeps, accountProps } from "./account-issuer.ts";
 
-export type MeDeps = {
-  /** Session, then onboarding, then a confirmed email (P2.12). A Response is the redirect. */
-  open: (request: Request, deadline: AbortSignal, next: string) => Promise<Response | OpenedApp>;
-  verifyHandle: (did: Did, signal: AbortSignal) => Promise<HandleVerdict>;
-  page: (page: PageSpec) => Response;
-  screens: WebRender["screens"];
-  /** The issuer OAuth recorded at sign-in (the stored token set's `iss`), or null. Never a DID-document field. */
-  issuerOf: (did: Did) => Promise<string | null>;
-  /** Our PDS's issuer origin, to tell our sign-in server from another. */
-  pdsIssuer: string;
-  log: Logger;
-};
-
-export function meRoutes(deps: MeDeps): Route[] {
-  const issuerFor = recordedIssuer(deps.issuerOf, deps.log);
+export function meRoutes(deps: AccountDeps): Route[] {
+  const accountOf = accountProps(deps);
 
   return [
     ...["/did", "/me"].map((path) =>
@@ -59,19 +42,12 @@ export function meRoutes(deps: MeDeps): Route[] {
         const opened = await deps.open(request, deadline, accountPath);
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
-        const [verdict, issuer] = await Promise.all([deps.verifyHandle(did, deadline), issuerFor(did)]);
-        const body = deps.screens.me({
-          handle: displayHandle(verdict),
-          did,
-          handleUnavailable: verdict.status === "unavailable",
-          privacyNotice: opened.privacyNotice,
-          issuer,
-          ours: issuer === deps.pdsIssuer,
-        });
+        const { verdict, props } = await accountOf(opened, deadline);
+        const body = deps.screens.me(props);
         return deps.page({
           group: "app",
           request,
-          title: displayHandle(verdict),
+          title: props.handle,
           body,
           // Islands on (the default): the menu drawer's theme picker hydrates so a choice leaves it open (P2.13e).
           shell: {
