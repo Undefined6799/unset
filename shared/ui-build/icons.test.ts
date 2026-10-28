@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { ICONOIR_VERSION, type IconsIo, parseSvg, runIcons, sheetDrawings } from "./icons.ts";
+import { APPROVED_EXTENSION_SHA256, ICONOIR_VERSION, type IconsIo, parseSvg, runIcons, sheetDrawings } from "./icons.ts";
 
 const UI = join(import.meta.dirname, "..", "ui");
 const temps: string[] = [];
@@ -399,6 +399,7 @@ const ADDITIONS: Record<string, string> = {
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+const APPROVED_TEXT = readFileSync(join(UI, "approved-extensions.json"), "utf8");
 // Recorded from the last absent-pointer commit, 18291e6; never derived with the generator under test.
 const LEGACY_JSON_SHA256 = "3fe0bffbccf8fee5630e762fea71aa5391be5b494c74b70a089e0bbf8db2bbee";
 const LEGACY_MODULES_SHA256 = "419a9455e85d2135b72ab5ed1c1bb765761ecd33bef5602e385a6de839278476";
@@ -456,8 +457,8 @@ function registered() {
   const { files, io } = fixture;
   for (const [name, text] of Object.entries(ADDITIONS)) files.set(`icons/svg/${name}.svg.txt`, text);
   const inventory = JSON.parse(files.get("inventory.json") as string);
-  const pin = (record: unknown = REGISTRATION) => {
-    files.set("approved-extensions.json", JSON.stringify(record));
+  const pin = (record?: unknown) => {
+    files.set("approved-extensions.json", record === undefined ? APPROVED_TEXT : JSON.stringify(record));
     inventory.Icon.extensions = [{ path: "approved-extensions.json", sha256: io.sha256("approved-extensions.json") }];
     files.set("inventory.json", JSON.stringify(inventory));
   };
@@ -651,20 +652,28 @@ test("icon_extension_rejects_extra_or_missing_sources_and_alias_collision", () =
   expect(code(collision.run())).toEqual(["icons.registration"]);
 });
 
-test("icon_component_api_prose_can_record_reviewed_packaging_without_changing_proof", () => {
-  const fixture = registered();
-  const record = structuredClone(REGISTRATION);
-  record.components.Header.api.push("Pure presentation package entry exposes the registered components");
-  record.components.Header.behavior.push("Package entry reaches only presentation code");
-  fixture.pin(record);
-  expect(fixture.run()).toEqual({ code: 0, lines: [] });
+test("icon_extension_bytes_match_the_reviewed_pin", () => {
+  expect(sha256(APPROVED_TEXT)).toBe(APPROVED_EXTENSION_SHA256);
+  const pointer = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8")).Icon.extensions;
+  expect(pointer).toEqual([{ path: "approved-extensions.json", sha256: APPROVED_EXTENSION_SHA256 }]);
 });
 
-test("icon_registration_key_order_has_no_effect_on_proof", () => {
-  const fixture = registered();
-  fixture.pin(Object.fromEntries(Object.entries(REGISTRATION).reverse()));
-  expect(fixture.run()).toEqual({ code: 0, lines: [] });
-});
+test.each([0, Math.floor(APPROVED_TEXT.length / 2), APPROVED_TEXT.length - 1])(
+  "icon_one_byte_change_to_the_approved_record_fails_closed: offset %i",
+  (offset) => {
+    const fixture = registered();
+    const flipped = APPROVED_TEXT[offset] === " " ? "\t" : " ";
+    const changed = `${APPROVED_TEXT.slice(0, offset)}${flipped}${APPROVED_TEXT.slice(offset + 1)}`;
+    fixture.files.set("approved-extensions.json", changed);
+    fixture.inventory.Icon.extensions[0].sha256 = sha256(changed);
+    fixture.files.set("inventory.json", JSON.stringify(fixture.inventory));
+    const result = fixture.run();
+    expect(code(result)).toEqual(["icons.registration"]);
+    expect(result.lines[0]).toContain("shared/ui/approved-extensions.json");
+    expect(result.lines[0]).toContain(sha256(changed));
+    expect(result.lines[0]).toContain(APPROVED_EXTENSION_SHA256);
+  },
+);
 
 test.each(["devices", "apps"])("icon_registered_source_still_passes_the_existing_svg_parser: %s", (alias) => {
   for (const change of ['onload="x" ', 'style="fill:red" ', 'd="M0 0" ']) {

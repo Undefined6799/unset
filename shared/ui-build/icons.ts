@@ -150,6 +150,9 @@ function checkSource(io: IconsIo): string {
 }
 
 const EXTENSION = "approved-extensions.json";
+// P2.24f: sha256 of the exact bytes of shared/ui/approved-extensions.json that Alex approved (ADR 0027 / Task 3). Any
+// byte change to that file, prose and key order included, needs a reviewed bump of this hash in the same PR.
+export const APPROVED_EXTENSION_SHA256 = "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4";
 // P2.24f: the single approved ADR 0027 / Task 3 registration. This is a closed contract, not a registry.
 // Immutable Iconoir 7.12.1 sources and exact Figma nodes are recorded here alongside their approval evidence.
 const APPROVED_EXTENSION = {
@@ -400,7 +403,13 @@ function registeredIcons(io: IconsIo, sheetVersion: string) {
     )
       throw new Error("invalid Icon pointer");
     // Never resolve a path supplied by the record, even before its proof has been checked.
-    if (io.sha256(EXTENSION) !== sha256) throw new Error("registration hash mismatch");
+    const actual = io.sha256(EXTENSION);
+    if (actual !== APPROVED_EXTENSION_SHA256)
+      throw new IconsError(
+        "icons.registration",
+        `shared/ui/${EXTENSION} is sha256 ${actual}, expected ${APPROVED_EXTENSION_SHA256} (pinned in shared/ui-build/icons.ts)`,
+      );
+    if (actual !== sha256) throw new Error("registration hash mismatch");
     const record = registrationJson(io.readText(EXTENSION));
     if (!approvedRegistration(record)) throw new Error("unapproved registration");
     const base = APPROVED_EXTENSION.baseSheet;
