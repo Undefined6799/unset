@@ -41,7 +41,27 @@ const PDS_FILE = join(ROOT, ".github", "trivyignore.pds.yaml");
 const SHARED_FILE = join(ROOT, ".github", "trivyignore.yaml");
 /** P1.38k: the 0.4.5049 re-pin (P1.38h, digest cca85fd0), scanned by #1371's pins job (run 40622622906). Four ids
  * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. P1.38l: the
- * 0.4.5037 (3a8feb34) entries ended with the re-pin, so these are the whole file. */
+ * 0.4.5037 (3a8feb34) entries ended with the re-pin, so these and KEPT_ENTRIES are the whole file. */
+/** P1.38l: the five 0.4.5037 nodemailer 6.10.1 entries that 0.4.5049 still needs, kept unchanged by Alex's line of
+ * 2026-10-28T22:38:42Z. */
+const KEPT_STATEMENT = [
+  "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
+  "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
+  "removed on re-pin or before P1.34",
+].join(" ");
+const KEPT_ENTRIES = [
+  "CVE-2025-14874",
+  "CVE-2026-82659",
+  "CVE-2026-82662",
+  "GHSA-2x7j-588g-ccc2",
+  "GHSA-v53p-9fqp-m79j",
+].map((id) => ({
+  id,
+  paths: ["app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"],
+  purls: ["pkg:npm/nodemailer@6.10.1"],
+  statement: KEPT_STATEMENT,
+  expired_at: "2026-11-13",
+}));
 const REPIN_STATEMENT = [
   "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
   "0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z,",
@@ -94,7 +114,10 @@ describe(".github/trivyignore.pds.yaml", () => {
     expect(PDS_MAX_DAYS).toBeLessThan(MAX_DAYS);
     expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
     const entries = pdsEntries();
-    expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual(REPIN_ENTRIES);
+    expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual([
+      ...KEPT_ENTRIES,
+      ...REPIN_ENTRIES,
+    ]);
     for (const item of entries) {
       // Exact names only: a glob would also cover images nobody reviewed.
       for (const path of item.paths ?? []) expect(path, item.id).not.toMatch(/[*?[{\\]/);

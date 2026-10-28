@@ -6,8 +6,50 @@
 # .github/trivyignore.yaml or /dev/null. caddy:2.11.7-alpine is not listed here.
 # Ids are those #1371's pins job (run 40622622906) reported for the pinned 0.4.5049
 # image (cca85fd0), scoped with the paths and PURLs Trivy v0.75.0 reports. The
-# 0.4.5037 (3a8feb34) entries ended with that re-pin (P1.38l).
+# 0.4.5037 (3a8feb34) entries ended with that re-pin (P1.38l), except the five
+# below.
 vulnerabilities:
+  # P1.38l: 0.4.5049 still ships nodemailer 6.10.1 at the same path, so these five
+  # 0.4.5037 entries also cover cca85fd0 (scan pds on #1445, run 40780273224). Kept
+  # unchanged until 2026-11-13 by Alex's line of 2026-10-28T22:38:42Z.
+  - id: CVE-2025-14874
+    paths:
+      - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
+    purls:
+      - "pkg:npm/nodemailer@6.10.1"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
+  - id: CVE-2026-82659
+    paths:
+      - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
+    purls:
+      - "pkg:npm/nodemailer@6.10.1"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
+  - id: CVE-2026-82662
+    paths:
+      - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
+    purls:
+      - "pkg:npm/nodemailer@6.10.1"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
+  - id: GHSA-2x7j-588g-ccc2
+    paths:
+      - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
+    purls:
+      - "pkg:npm/nodemailer@6.10.1"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
+  - id: GHSA-v53p-9fqp-m79j
+    paths:
+      - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
+    purls:
+      - "pkg:npm/nodemailer@6.10.1"
+    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
+    expired_at: 2026-11-13
+  # P1.38k: the 0.4.5049 re-pin (P1.38h) at cca85fd0, as #1371's pins job (run 40622622906) reported it. Four ids are
+  # re-stated for 0.4.5049's package versions and four are new; Alex's line 2026-10-28T03:36:24Z; each expires
+  # 2026-11-27, 30 days from 2026-10-28.
   # P1.38k: the 0.4.5049 re-pin (P1.38h) at cca85fd0, as #1371's pins job (run 40622622906) reported it. Four ids are
   # re-stated for 0.4.5049's package versions and four are new; Alex's line 2026-10-28T03:36:24Z; each expires
   # 2026-11-27, 30 days from 2026-10-28.
