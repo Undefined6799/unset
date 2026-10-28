@@ -1,6 +1,6 @@
 // Link (P1.24): the sheet's Link (components/Link/README.md, index.d.ts) as built. Differences from the sheet's d.ts:
-// `href` is a `SafeHref`; `target` and `rel` are not props (the kit sets rel and never opens a new tab); a standalone
-// link ends in the `next` or `external` Icon instead of a typed "→".
+// `href` is a `SafeHref`; `target` and `rel` are not props (the kit sets rel, and opens a new tab only through
+// `newTab`, for a link off our origin); a standalone link ends in the `next` or `external` Icon instead of a typed "→".
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { type SafeHref, safeHref } from "../../safe-href.ts";
@@ -51,5 +51,27 @@ describe("Link", () => {
     );
     expect(external).toMatch(/rel="noopener noreferrer"/);
     expect(external.replace(/^.*?<svg/, "<svg")).not.toBe(next.replace(/^.*?<svg/, "<svg"));
+  });
+
+  it("link_new_tab_only_leaves_our_origin_and_says_so", () => {
+    // P2.08k: a link off our origin can open a new tab, and says so to a screen reader in the words it is given.
+    const away = renderToStaticMarkup(
+      <Link href={href("https://pds.example/account")} variant="standalone" newTab="(opens in a new tab)">
+        Your account
+      </Link>,
+    );
+    expect(away).toMatch(
+      new RegExp(
+        `^<a href="https://pds.example/account" target="_blank" rel="noopener noreferrer" class="${styles.standalone}">` +
+          `Your account<span class="visually-hidden"> \\(opens in a new tab\\)</span><svg`,
+      ),
+    );
+    // A path on our origin never opens a new tab, so the words would be false and are left out too.
+    const home = renderToStaticMarkup(
+      <Link href={href("/did")} newTab="(opens in a new tab)">
+        home
+      </Link>,
+    );
+    expect(home).toBe(`<a href="/did" class="${styles.inline}">home</a>`);
   });
 });

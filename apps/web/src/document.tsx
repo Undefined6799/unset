@@ -26,6 +26,8 @@ export type ShellOptions = Readonly<{
   navigation?: NonNullable<AppShellProps["navigation"]>;
   /** A feed page: no footer (AppShellProps["feed"]). */
   feed?: true;
+  /** Sign in opens in place (AppShellProps["signIn"]). */
+  signIn?: NonNullable<AppShellProps["signIn"]>;
   /** The footer's theme form, on app pages only. */
   prefs?: NonNullable<AppShellProps["prefs"]>;
 }>;
@@ -66,6 +68,7 @@ export function Document(props: {
         error={shell.error}
         {...(shell.navigation === undefined ? {} : { navigation: shell.navigation })}
         {...(shell.feed === undefined ? {} : { feed: shell.feed })}
+        {...(shell.signIn === undefined ? {} : { signIn: shell.signIn })}
         {...(shell.prefs === undefined ? {} : { prefs: shell.prefs })}
       >
         {props.children}

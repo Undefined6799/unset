@@ -131,7 +131,7 @@ describe("GET /verify-email", () => {
   test("verify.query_ignored", async () => {
     const { send } = setup({ info: info(false) });
     const html = await (await send("/verify-email?confirmed=1")).text();
-    expect(html).toContain("Confirm your email there");
+    expect(html).toContain("Confirm your email in the new tab");
     expect(html).not.toContain("Your email is confirmed");
   });
 

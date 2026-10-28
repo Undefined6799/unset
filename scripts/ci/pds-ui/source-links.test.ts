@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { PAIRS, type Pair } from "./contract.ts";
 import { type Item, sha, tar } from "./fixtures/native.ts";
 import { verifySource } from "./verify.ts";
 
@@ -19,7 +20,11 @@ const records: Item[] = [
 ];
 async function verify(extra: Item[]) {
   const bytes = await tar([...records, ...extra]);
-  return verifySource(bytes, { revision, archiveSha256: sha(bytes), lockSha256: sha("frozen") });
+  return verifySource(
+    bytes,
+    { revision, archiveSha256: sha(bytes), lockSha256: sha("frozen") },
+    PAIRS["0.4.5037"] as Pair,
+  );
 }
 describe("source archive root and link containment", () => {
   test("accepts contained relative symlinks and regular-file hardlink chains", async () => {

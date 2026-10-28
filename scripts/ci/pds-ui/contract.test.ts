@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { parseLock, recipeContract, UI_DIRECTORY } from "./contract.ts";
+import { PAIRS, type Pair, parseLock, recipeContract, uiDirectoryOf } from "./contract.ts";
+
+const UI_DIRECTORY = uiDirectoryOf(PAIRS["0.4.5037"] as Pair);
 
 const locked = {
   schema: 1,
@@ -49,6 +51,28 @@ describe("derived PDS recipe contract", () => {
       { builder: { ...locked.builder, pnpm: "latest" } },
     ])
       expect(() => parseLock(JSON.stringify({ ...locked, ...delta }))).toThrow();
+  });
+  test("pds_lock_accepts_each_reviewed_pair_only_with_its_ui_directory", () => {
+    const next = PAIRS["0.4.5049"] as Pair;
+    const repinned = {
+      ...locked,
+      base: { ...locked.base, ref: `ghcr.io/bluesky-social/pds:0.4.5049@sha256:${"c".repeat(64)}` },
+      uiDirectory: uiDirectoryOf(next),
+    };
+    expect(parseLock(JSON.stringify(repinned))).toEqual(repinned);
+    expect(() => parseLock(JSON.stringify({ ...repinned, uiDirectory: UI_DIRECTORY }))).toThrow();
+    expect(() => parseLock(JSON.stringify({ ...locked, uiDirectory: uiDirectoryOf(next) }))).toThrow();
+    const unreviewed = { ...locked.base, ref: `ghcr.io/bluesky-social/pds:0.4.5040@sha256:${"c".repeat(64)}` };
+    expect(() => parseLock(JSON.stringify({ ...locked, base: unreviewed }))).toThrow();
+    const dir = root();
+    writeFileSync(join(dir, "deployment/pds/source.lock.json"), JSON.stringify(repinned));
+    writeFileSync(join(dir, "deployment/pds/Dockerfile"), recipe.replace(locked.base.ref, repinned.base.ref));
+    expect(() => recipeContract(dir)).toThrow();
+    writeFileSync(
+      join(dir, "deployment/pds/Dockerfile"),
+      recipe.replace(locked.base.ref, repinned.base.ref).replaceAll(UI_DIRECTORY, repinned.uiDirectory),
+    );
+    expect(recipeContract(dir)).toEqual(repinned);
   });
   test("rejects unexported UI stage and any runtime command outside exact replacement", () => {
     for (const text of [

@@ -45,7 +45,8 @@ export const httpKitConfig = {
     hostAllowed(new URL(String(config.PUBLIC_ORIGIN)).hostname, config.HTTP_ALLOWED_HOSTS as readonly string[]),
   ),
   SHUTDOWN_GRACE_MS: int({ min: 1000, max: 30000, default: 10000 }),
-  REQUEST_DEADLINE_MS: int({ min: 1000, max: 60000, default: 30000 }),
+  /** At least 5 s (P2.08j), so a route's last step, such as logout's token drop, keeps its reserve. */
+  REQUEST_DEADLINE_MS: int({ min: 5000, max: 60000, default: 30000 }),
   /** Where the client address comes from (P1.05): the edge's header, or the socket where there is no edge (admin). */
   TRUSTED_PROXY_MODE: oneOf(["header", "socket"]),
   /** The one header the edge sets, lowercase (`x-forwarded-for`). Required in header mode. */

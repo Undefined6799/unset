@@ -6,11 +6,18 @@ const MAX_LENGTH = 200;
 const SCAN_LENGTH = 1000;
 const REDACTED = "[redacted]";
 
+/**
+ * An email address. The lookbehind starts a match only where a run of non-space, non-@ characters starts, which is
+ * where the leftmost match already starts, so the output is unchanged; it stops the retry at every later position of
+ * a run with no @, which made the scrub quadratic (P1.37o).
+ */
+export const EMAIL = /(?<![^\s@])[^\s@]+@[^\s@]+\.[^\s@]+/g;
+
 /** Shapes that never belong in a log, most specific first. Each match becomes `[redacted]`. */
 const SENSITIVE: readonly RegExp[] = [
   /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*/g, // JWT
   /\b(?:Bearer|Basic)\s+\S+/gi, // HTTP credentials
-  /[^\s@]+@[^\s@]+\.[^\s@]+/g, // email address
+  EMAIL,
   // Any DID (before IPv6, whose pattern would eat its colons). Each separator may come as `:`, or percent-encoded once
   // or twice in either hex case (`%3A`, `%253a`; RFC 3986 2.1), as a client may send it in a path. The method may hold
   // digits (W3C did-core method-char). No word boundary, so `%22did:…` and `user_did:…` match too (P1.37h).

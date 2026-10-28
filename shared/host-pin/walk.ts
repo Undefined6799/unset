@@ -37,19 +37,34 @@ export type WalkInputs = {
  * any hop owns a directory or link on this walk. readlink and statfs errors throw, so C9 fails closed.
  */
 export function resolveChecked(path: string, inputs: WalkInputs): WalkProblem | null {
+  const end = walkTo(path, inputs);
+  return typeof end === "string" ? end : null;
+}
+
+/**
+ * Where the walk ends: the last entry it judged, as the walk's lstat saw it, and its path. A reader opens that path and
+ * holds its descriptor to the entry's (dev, ino). The entry is a link only when the path ends on a link whose target
+ * names no component (`/`); it is never a regular file then.
+ */
+export type WalkEnd = { path: string; info: Stats };
+
+/** resolveChecked's walk, answering where it ended when it found no problem. */
+export function walkTo(path: string, inputs: WalkInputs): WalkProblem | WalkEnd {
   const pending = components(path);
   let at: string = sep;
   let links = 0;
   for (;;) {
     const info = inputs.lstat(at);
-    const problem = info === null ? "missing" : entryProblem(at, info, pending.length > 0, inputs);
+    if (info === null) return "missing";
+    const problem = entryProblem(at, info, pending.length > 0, inputs);
     if (problem !== null) return problem;
-    if (info?.isSymbolicLink() === true) {
+    const judged = { path: at, info };
+    if (info.isSymbolicLink()) {
       if (++links > MAX_LINKS) return "loop";
       at = followLink(at, pending, inputs);
     }
     const next = pending.shift();
-    if (next === undefined) return null;
+    if (next === undefined) return judged;
     at = stepTo(at, next);
   }
 }
