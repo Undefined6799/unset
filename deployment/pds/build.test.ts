@@ -29,12 +29,14 @@ test("paired_recipe_matches_the_locked_official_and_builder_images", () => {
   const paired = recipeContract(root);
   expect(paired).not.toBeNull();
   const bases = JSON.parse(readFileSync(join(root, "deployment/images/bases.lock.json"), "utf8"));
-  for (const [input, base] of [
-    [paired?.base, bases.pds],
-    [paired?.builder, bases.node],
-  ]) {
-    expect(input?.ref).toBe(`${base.ref}:${base.tag}@${base.digest}`);
-  }
+  expect(paired?.base.ref).toBe(`${bases.pds.ref}:${bases.pds.tag}@${bases.pds.digest}`);
+  // P1.38j: recipeContract holds the builder to its pair's exact ref; 0.4.5049 needs Node 26.12.1, newer than the app
+  // images' locked node base, so the builder no longer equals bases.node.
+  expect(paired?.builder).toEqual({
+    ref: "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec",
+    node: "26.12.1",
+    pnpm: "11.11.0",
+  });
   expect(paired?.base.platform).toBe("linux/amd64");
 });
 
