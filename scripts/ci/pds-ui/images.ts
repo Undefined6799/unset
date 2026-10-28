@@ -4,11 +4,8 @@ import { posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { gunzipSync } from "node:zlib";
 import { archive, type Entry, linkTarget, metadata, pathName, requireThat, sha256 } from "./archive.ts";
-import { UI_DIRECTORY } from "./contract.ts";
 
-export { UI_DIRECTORY } from "./contract.ts";
-
-const inside = (p: string): boolean => p === UI_DIRECTORY || p.startsWith(`${UI_DIRECTORY}/`);
+const inside = (ui: string, p: string): boolean => p === ui || p.startsWith(`${ui}/`);
 type Descriptor = { digest: string; size: number; mediaType: string; platform?: { os: string; architecture: string } };
 type Manifest = { config: Descriptor; layers: Descriptor[] };
 type Configuration = {
@@ -131,22 +128,23 @@ function checkAncestors(tree: Map<string, Entry>, layer: Map<string, Entry>, pat
       "archive writes through non-directory ancestor",
     );
 }
-function whiteout(tree: Map<string, Entry>, path: string, entry: Entry, added: boolean): void {
+/** `ui` is the one mutable directory for a candidate layer, or null for an official base layer. */
+function whiteout(tree: Map<string, Entry>, path: string, entry: Entry, ui: string | null): void {
   requireThat(entry.header.type === "file" && entry.data.length === 0, "invalid whiteout");
   const leaf = posix.basename(path);
   const parent = posix.dirname(path);
   const opaque = leaf === ".wh..wh..opq";
   const target = opaque ? parent : pathName(posix.join(parent, leaf.slice(4)));
-  requireThat(!added || inside(target), "whiteout escapes UI directory");
+  requireThat(ui === null || inside(ui, target), "whiteout escapes UI directory");
   requireThat(![".", "..", ""].includes(leaf.slice(4)), "ambiguous whiteout target");
   if (opaque) {
     for (const key of tree.keys()) if (key.startsWith(`${target}/`)) tree.delete(key);
   } else remove(tree, target);
 }
-function install(tree: Map<string, Entry>, path: string, entry: Entry, added: boolean): void {
-  if (added && !inside(path))
+function install(tree: Map<string, Entry>, path: string, entry: Entry, ui: string | null): void {
+  if (ui !== null && !inside(ui, path))
     requireThat(
-      UI_DIRECTORY.startsWith(`${path}/`) &&
+      ui.startsWith(`${path}/`) &&
         entry.header.type === "directory" &&
         tree.has(path) &&
         metadata(tree.get(path) as Entry) === metadata(entry),
@@ -154,7 +152,7 @@ function install(tree: Map<string, Entry>, path: string, entry: Entry, added: bo
     );
   if (["link", "symlink"].includes(entry.header.type)) {
     const target = linkTarget(path, entry.header.linkname, entry.header.type === "link");
-    requireThat(!added || !inside(path) || inside(target), "link escapes UI directory");
+    requireThat(ui === null || !inside(ui, path) || inside(ui, target), "link escapes UI directory");
     if (entry.header.type === "link") {
       const referent = tree.get(target);
       requireThat(referent && ["file", "link"].includes(referent.header.type), "unresolved hardlink");
@@ -164,15 +162,15 @@ function install(tree: Map<string, Entry>, path: string, entry: Entry, added: bo
   if (entry.header.type !== "directory" && tree.get(path)?.header.type === "directory") remove(tree, path);
   tree.set(path, entry);
 }
-function apply(tree: Map<string, Entry>, layer: Map<string, Entry>, added: boolean): void {
+function apply(tree: Map<string, Entry>, layer: Map<string, Entry>, ui: string | null): void {
   for (const [path, entry] of layer) {
     checkAncestors(tree, layer, path);
-    if (posix.basename(path).startsWith(".wh.")) whiteout(tree, path, entry, added);
+    if (posix.basename(path).startsWith(".wh.")) whiteout(tree, path, entry, ui);
   }
   for (const [path, entry] of layer) {
     if (posix.basename(path).startsWith(".wh.")) continue;
     checkAncestors(tree, layer, path);
-    install(tree, path, entry, added);
+    install(tree, path, entry, ui);
   }
 }
 export async function compareImages(
@@ -180,6 +178,7 @@ export async function compareImages(
   basePin: string | ImagePin,
   candidateArchive: Buffer,
   candidateDigest: string,
+  uiDirectory: string,
   platform = "linux/arm64",
 ) {
   const base = await load(baseArchive, typeof basePin === "string" ? { digest: basePin } : basePin, platform);
@@ -201,12 +200,12 @@ export async function compareImages(
     "official stored layer prefix drift",
   );
   const baseline = new Map<string, Entry>();
-  for (const layer of base.layers) apply(baseline, layer, false);
+  for (const layer of base.layers) apply(baseline, layer, null);
   const tree = new Map(baseline);
-  for (const layer of candidate.layers.slice(base.layers.length)) apply(tree, layer, true);
-  const outside = [...baseline].filter(([path]) => !inside(path));
+  for (const layer of candidate.layers.slice(base.layers.length)) apply(tree, layer, uiDirectory);
+  const outside = [...baseline].filter(([path]) => !inside(uiDirectory, path));
   requireThat(
-    outside.length > 0 && outside.length === [...tree.keys()].filter((p) => !inside(p)).length,
+    outside.length > 0 && outside.length === [...tree.keys()].filter((p) => !inside(uiDirectory, p)).length,
     "outside tree entry drift",
   );
   for (const [path, entry] of outside)
@@ -215,7 +214,7 @@ export async function compareImages(
       "outside tree metadata/content drift",
     );
   const ui = new Map(
-    [...tree].filter(([p]) => p.startsWith(`${UI_DIRECTORY}/`)).map(([p, e]) => [p.slice(UI_DIRECTORY.length + 1), e]),
+    [...tree].filter(([p]) => p.startsWith(`${uiDirectory}/`)).map(([p, e]) => [p.slice(uiDirectory.length + 1), e]),
   );
   requireThat(ui.size > 0, "missing UI artifact");
   return { outsideEntries: outside.length, ui, packages: tree };

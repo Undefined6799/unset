@@ -329,8 +329,8 @@ function pinDrift(s: Service, environment: Record<string, string>, envFiles: str
 
 /**
  * The closed list of words that make a key secret-bearing, each matched as a whole word of the key, in any case. A key
- * splits into words on `_`, `-` and `.`, and at each lower-to-upper boundary (P1.35v; book edit 2026-10-15-verify-903-
- * info-items, clause (a)), so `Db.apiToken`, `db-password` and `dbPassword` all hold a listed word.
+ * splits into words as `keyWords` says (P1.35v, P1.36t; book edit 2026-10-15-verify-903-info-items, clause (a) and
+ * architecture 05:00Z M1), so `Db.apiToken`, `db-password`, `dbPassword`, `PASSWORD2` and `APIKey` all hold one.
  */
 const SECRET_WORDS = new Set([
   "PASSWORD",
@@ -376,8 +376,31 @@ function secretRefusal(key: string, value: string | null): string | null {
   return accepted ? null : `${key} carries a secret other than as a /run/secrets file or a required reference`;
 }
 
-/** The words of a key: split on `_`, `-` and `.`, then before each upper-case letter that follows a lower-case one. */
-const keyWords = (key: string): string[] => key.replaceAll(/([a-z])([A-Z])/g, "$1_$2").split(/[_.-]/);
+/**
+ * The words of a key: split on `_`, `-` and `.`, before each upper-case letter that follows a lower-case one, between a
+ * letter and a digit either way, and at the end of an acronym, so `APIKey` gives `API`, `Key` (P1.36t M1; book edit
+ * 2026-10-15-verify-903-info-items, architecture 05:00Z).
+ */
+const keyWords = (key: string): string[] =>
+  key
+    .replaceAll(/([a-z])([A-Z])/g, "$1_$2")
+    .replaceAll(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .replaceAll(/([A-Za-z])([0-9])/g, "$1_$2")
+    .replaceAll(/([0-9])([A-Za-z])/g, "$1_$2")
+    .split(/[_.-]/);
+
+/**
+ * Each `environment` entry of every service in one compose file that carries a secret as refused, named by file, service
+ * and key, never by value (P1.36t M3: architecture 12:40Z, "the same predicate applies in compose", reaches every
+ * service, not only the local-only ones and their pins).
+ */
+const environmentSecretRefusals = (compose: Compose, file: string): string[] =>
+  compose.services.flatMap((s) =>
+    s.environment.flatMap(([key, value]) => {
+      const why = secretRefusal(key, asWritten(value));
+      return why === null ? [] : [`${file}: ${s.name}: environment ${why}`];
+    }),
+  );
 
 /** A `*_FILE` key whose literal value names a file under /run/secrets/, with no `.`, `..` or empty segment. */
 const secretFile = (key: string, value: string): boolean =>
@@ -416,6 +439,10 @@ function drift(dev: Compose, local: Compose): string[] {
   if (!same(devShared, shared)) problems.push("the networks or their internal flags differ");
   for (const { name } of local.networks) if (DEV_ONLY_NETWORKS.has(name)) problems.push(`${name} is in the local file`);
   problems.push(...localOnlyNetworkDrift(local), ...localOnlyDrift(local));
+  problems.push(
+    ...environmentSecretRefusals(dev, "compose.dev.yaml"),
+    ...environmentSecretRefusals(local, "compose.local.yaml"),
+  );
   return problems;
 }
 
@@ -702,6 +729,27 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
     expect(drift(dev, bare)).toEqual([]);
   });
 
+  test("a_secret_on_any_service_is_refused", () => {
+    // P1.36t M3: the secret-bearing predicate reaches every service's environment in both files, not only the
+    // local-only services and their pins. A literal dbPassword or PLC_DB_PASSWORD on postgres, in each file, is named
+    // by file, service and key, never by value.
+    const value = "hunter2-literal";
+    for (const file of ["compose.dev.yaml", "compose.local.yaml"]) {
+      for (const key of ["dbPassword", "PLC_DB_PASSWORD"]) {
+        const onPostgres = (compose: Compose): Compose =>
+          editService(compose, "postgres", (s) => ({
+            ...s,
+            environment: [...s.environment, [key, { literal: value }]],
+          }));
+        const problems = file === "compose.dev.yaml" ? drift(onPostgres(dev), local) : drift(dev, onPostgres(local));
+        expect(problems, `${key} on postgres in ${file}`).toContain(
+          `${file}: postgres: environment ${key} carries a secret other than as a /run/secrets file or a required reference`,
+        );
+        expect(problems.join("\n")).not.toContain(value);
+      }
+    }
+  });
+
   test("a_command_with_use_system_ca_is_refused_before_any_comparison", () => {
     // `command` is not a key compose-parse reads, so it is refused by name and never reaches the drift test.
     const text = readFileSync(join(DEPLOYMENT, "compose.local.yaml"), "utf8").replace(
@@ -815,6 +863,8 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
       // P1.35v: words split on `_`, `-`, `.` and each lower-to-upper boundary; none of these is a listed word.
       ["keyboardLayout", "literal"],
       ["app.passage-count", "literal"],
+      // P1.36t: a digit is a boundary too, and a key with a digit and no listed word stays accepted.
+      ["S3_BUCKET", "literal"],
     ];
     for (const [key, value] of accepted) expect(secretRefusal(key, value), `${key}=${value}`).toBeNull();
   });
@@ -863,6 +913,20 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
     { name: "a literal under a dotted mixed-case word", key: "Db.apiToken", value: "literal" },
     { name: "a literal under a hyphenated word", key: "db-password", value: "literal" },
     { name: "a literal under a camel-case word", key: "dbPassword", value: "literal" },
+    // P1.36t M2: a listed word after a `.` alone, and after a second lower-to-upper boundary.
+    { name: "a literal under a dotted lower-case word", key: "db.password", value: "literal" },
+    { name: "a literal under a word after two camel-case boundaries", key: "myDbPassword", value: "literal" },
+    // P1.36t M1: a listed word next to a digit, or after an acronym, is still the word.
+    ...["db2Password", "apiKey2", "token1", "PASSWORD2", "DB_PASSWORD2"].map((key) => ({
+      name: `${key}, a word beside a digit`,
+      key,
+      value: "literal",
+    })),
+    ...["APIKey", "DBPassword", "JWTSecret", "PGPassword"].map((key) => ({
+      name: `${key}, a word after an acronym`,
+      key,
+      value: "literal",
+    })),
     // What the URL reading must not miss: a reference elsewhere, a question mark in a message, a URL in a message.
     {
       name: "a userinfo URL with an unbraced reference",
