@@ -91,12 +91,13 @@ on the signed-out page; the account page, which reads the same `issuerOf`, shows
 the 503 `logout.failed`.
 
 **Sign-in against sign-out (P1.36y; security review 2026-10-28).** `sign-in-lock.ts` wraps the OAuth library's
-session store. Inside `/oauth/callback` (`signInScope`), the first token-set write or delete takes the account's
-`LockNamespace.signIn` advisory lock and holds it until the session row exists; a delete inside the scope waits for
-the end and is dropped when a store follows it, so the old set is replaced in place. When POST /logout finds no other
-session, `whenLastBrowser` takes the same lock, counts again, and revokes only if the count is still zero; a lock
-failure falls back to revoking. Only writes and deletes take this lock, never the library's reads under its refresh
-lock, so the order is always sign-in lock then refresh lock.
+session store and its `requestLock`. Inside `/oauth/callback` (`signInScope`), the first use of the account's OAuth
+lock (the one the library takes around token reads) holds it until the session row exists; the library's later lock
+calls for that account reuse it, so a scope takes one lock-pool client (Codex on #1441: a nested second client from
+the same bounded pool could wait on itself). A delete inside the scope waits for the end and is dropped when a store
+follows it, so the old set is replaced in place. When POST /logout finds no other session, `whenLastBrowser` holds
+the same lock (`exclusive`), counts again, and revokes only if the count is still zero; a lock failure falls back to
+revoking.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The

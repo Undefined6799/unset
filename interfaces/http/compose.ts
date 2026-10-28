@@ -38,9 +38,7 @@ import {
   createPool,
   createRequestLock,
   createSingleUseStore,
-  LockNamespace,
   PURPOSES,
-  withAdvisoryLock,
   withClient,
   withTransaction,
 } from "@unset/infrastructure-postgres";
@@ -69,7 +67,7 @@ import { settingsRoutes } from "./routes/settings.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { welcomeRoutes } from "./routes/welcome.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
-import { createSignInLock, type DidLock } from "./sign-in-lock.ts";
+import { createSignInLock } from "./sign-in-lock.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { errorPageHook, type PageDeps, type PageSpec, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
@@ -112,16 +110,15 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     cacheMax: cfg.DID_DOC_CACHE_MAX,
   });
   const sessionStore = createOAuthSessionStore<SavedSession>({ pool, sealer, log });
-  // P1.36y: a sign-in's token-set writes hold the account's sign-in lock until its session row exists (sign-in-lock.ts).
-  const lockDid: DidLock = (did, fn) => withAdvisoryLock(lockPool, LockNamespace.signIn, did, fn);
-  const signIn = createSignInLock({ store: sessionStore, lockDid });
+  // P1.36y: a sign-in or last-browser sign-out holds the account's OAuth lock for its whole run (sign-in-lock.ts).
+  const signIn = createSignInLock({ store: sessionStore, lock: createRequestLock(lockPool) });
   const { client } = await createOAuthClient({
     origin: cfg.PUBLIC_ORIGIN,
     keys: cfg.OAUTH_CLIENT_KEYS,
     activeKid: cfg.OAUTH_ACTIVE_KID,
     stateStore: createOAuthStateStore({ pool, sealer, log }),
     sessionStore: signIn.tokenSets,
-    requestLock: createRequestLock(lockPool),
+    requestLock: signIn.requestLock,
     fetch: libraryFetch(guard),
     network,
     resolveDid,
@@ -140,7 +137,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     pool,
     sessionStore,
     signInScope: signIn.during,
-    lockDid,
+    lockDid: signIn.exclusive,
     boot,
     onClose: [() => pool.end(), () => lockPool.pool.end()],
   };

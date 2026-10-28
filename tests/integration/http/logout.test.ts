@@ -10,8 +10,7 @@ import {
   createLockPool,
   createOAuthSessionStore,
   createPool,
-  LockNamespace,
-  withAdvisoryLock,
+  createRequestLock,
   withClient,
   withTransaction,
 } from "@unset/infrastructure-postgres";
@@ -35,7 +34,7 @@ const webPool = createPool({
   connectTimeoutMs: 5000,
 });
 afterAll(() => webPool.end());
-// P1.36y: the real sign-in lock, as compose builds it, so sign-out recounts under a Postgres advisory lock.
+// P1.36y: the real account lock, as compose builds it, so sign-out recounts under a Postgres advisory lock.
 const lockPool = createLockPool({
   connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
   service: "logout-http-lock",
@@ -106,6 +105,7 @@ let remainingSessions: (db: SessionDb, did: Did, idleS: number) => Promise<numbe
 beforeAll(async () => {
   const [
     { browserLogout, remainingSessions: counted },
+    { createSignInLock },
     { logoutRoutes },
     { meRoutes },
     { policies },
@@ -115,6 +115,7 @@ beforeAll(async () => {
     web,
   ] = await Promise.all([
     import(join(HTTP, "logout-sessions.ts")),
+    import(join(HTTP, "sign-in-lock.ts")),
     import(join(HTTP, "routes/logout.ts")),
     import(join(HTTP, "routes/me.ts")),
     import(join(HTTP, "limits.ts")),
@@ -143,8 +144,7 @@ beforeAll(async () => {
             if (mode === "keep") throw new Error("RevokeDown");
             await tokenSets.del(owner);
           },
-          lockDid: <T>(owner: string, fn: () => Promise<T>) =>
-            withAdvisoryLock(lockPool, LockNamespace.signIn, owner, fn),
+          lockDid: createSignInLock({ store: tokenSets, lock: createRequestLock(lockPool) }).exclusive,
         }),
         // P2.08b: these sets carry no recorded issuer; the route tests cover a foreign one.
         issuerOf: async () => null,
