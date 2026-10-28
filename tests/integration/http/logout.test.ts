@@ -95,7 +95,7 @@ beforeAll(async () => {
     { policies },
     { config },
     { webTestEnv },
-    { pageResponse },
+    { testPage },
     web,
   ] = await Promise.all([
     import(join(HTTP, "logout-sessions.ts")),
@@ -104,30 +104,11 @@ beforeAll(async () => {
     import(join(HTTP, "limits.ts")),
     import(join(HTTP, "config.ts")),
     import(join(HTTP, "test-env.ts")),
-    import(join(HTTP, "web/page.ts")),
+    import(join(HTTP, "web/fixtures/page.ts")),
     import(join(REPO, "apps/web/render.tsx")),
   ]);
   remainingSessions = counted;
-  const page = (input: Parameters<typeof pageResponse>[1]) =>
-    pageResponse(
-      {
-        build: {
-          manifest: {
-            boot: "assets/boot.js",
-            styles: [],
-            fonts: [],
-            icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-            islands: new Map(),
-          },
-          files: new Map(),
-        },
-        render: web.renderPage,
-        assetsOrigin: ORIGIN,
-        env: "test",
-        log,
-      },
-      input,
-    );
+  const page = testPage(log);
   server = createServer({
     // The schema arrives through a path import, so its field types do not survive; the value is the web config.
     config: loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN })) as Parameters<

@@ -8,14 +8,13 @@ import type { Did, HandleVerdict } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
-import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements, textContent } from "../web/fixtures/html.ts";
-import { pageResponse } from "../web/page.ts";
+import { silentLog, testPage } from "../web/fixtures/page.ts";
 import type { AccountDeps } from "./account-issuer.ts";
 import { settingsRoutes } from "./settings.ts";
 
@@ -31,7 +30,7 @@ type World = { signedIn?: boolean; verdict?: HandleVerdict; issuer?: string | nu
 function setup(world: World = {}) {
   const opened: string[] = [];
   const checked: string[] = [];
-  const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
+  const log = silentLog();
   const deps: AccountDeps = {
     open: async (_request, _deadline, next) => {
       opened.push(next);
@@ -47,26 +46,7 @@ function setup(world: World = {}) {
       checked.push(did);
       return world.verdict ?? { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
     },
-    page: (page) =>
-      pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log,
-        },
-        page,
-      ),
+    page: testPage(log),
     screens: web.screens,
     issuerOf: async () => (world.issuer === undefined ? "https://pds.unset.test" : world.issuer),
     pdsIssuer: "https://pds.unset.test",

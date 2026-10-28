@@ -20,7 +20,7 @@ import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 import { meRoutes } from "./me.ts";
 
 const ORIGIN = "https://unset.test";
@@ -62,26 +62,7 @@ function accountServer(signedOut = false) {
       resolved.push(did);
       return { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
     },
-    page: (page) =>
-      pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log,
-        },
-        page,
-      ),
+    page: testPage(log),
     screens: web.screens,
     issuerOf: async () => "https://pds.unset.test",
     pdsIssuer: "https://pds.unset.test",
