@@ -67,6 +67,26 @@ const redirect = (location: string, setCookies: readonly string[] = []): Respons
 const back = (code: ErrorCode, next: SafePath | null): Response =>
   redirect(withErrorParam(next === null ? "/login" : `/login?${new URLSearchParams({ next })}`, code));
 
+export type TargetDeps = Pick<LoginDeps, "authorize" | "safeHref" | "allowHttp" | "log">;
+export type AuthorizationTarget =
+  | { readonly ok: true; readonly target: SafeHref }
+  | { readonly ok: false; readonly code: ErrorCode };
+
+/** The authorization URL for `input`, as a link of an allowed kind, or the code the sign-in form shows. */
+export function authorizationTarget(deps: TargetDeps) {
+  const schemes: readonly HrefScheme[] = deps.allowHttp ? ["https:", "http:"] : ["https:"];
+  return async (input: string, options: Parameters<LoginDeps["authorize"]>[1]): Promise<AuthorizationTarget> => {
+    const result = await deps.authorize(input, options);
+    if (!result.ok) return { ok: false, code: `login.${result.reason}` };
+    const target = deps.safeHref(result.url.href, schemes);
+    if (target === null) {
+      deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
+      return { ok: false, code: "login.failed" };
+    }
+    return { ok: true, target };
+  };
+}
+
 export function loginRoutes(deps: LoginDeps): Route[] {
   const issuer = `https://${deps.pdsHost}`;
   const schemes: readonly HrefScheme[] = deps.allowHttp ? ["https:", "http:"] : ["https:"];
@@ -92,20 +112,17 @@ export function loginRoutes(deps: LoginDeps): Route[] {
     return { input: handle, expectedDid: found.did };
   }
 
+  const target = authorizationTarget(deps);
+
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
   async function startAuth(request: Request, account: Account, next: SafePath | null, deadline: AbortSignal) {
     const nonce = await deps.issueNonce(deadline);
     const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
     const prompt = signedOutFrom(request.headers.get("cookie")) ? ({ prompt: "login" } as const) : {};
-    const result = await deps.authorize(account.input, { appState, ...prompt, deadline });
+    const sent = await target(account.input, { appState, ...prompt, deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
-    if (!result.ok) return back(`login.${result.reason}`, next);
-    const target = deps.safeHref(result.url.href, schemes);
-    if (target === null) {
-      deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
-      return back("login.failed", next);
-    }
-    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(target)]);
+    if (!sent.ok) return back(sent.code, next);
+    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(sent.target)]);
   }
 
   /** The target this browser's POST stored, if it is still a link of an allowed kind. */
