@@ -1106,7 +1106,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
   test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
     const newt = service(dev(), "newt");
     expect(newt.image).toBe(`ghcr.io/undefined6799/mirror/newt@${readLock().newt?.digest}`);
-    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.18\.1@sha256:[0-9a-f]{64}$/);
+    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.19\.0@sha256:[0-9a-f]{64}$/);
     expect(newt.build).toBeNull();
     expect(newt.hardening).toMatchObject({
       readOnly: true,
@@ -1118,7 +1118,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     expect([newt.ports, newt.mounts, newt.secrets]).toEqual([[], [], []]);
     expect(newt.envFiles).toEqual(["../../unset-dev-env/newt.env"]);
     // Every setting a literal: no SSH, no client access, no Docker socket, no metrics or pprof listener, and its saved
-    // credentials on its tmpfs (newt 1.18.1 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
+    // credentials on its tmpfs (newt 1.19.0 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
     expect(Object.fromEntries(newt.environment)).toEqual({
       CONFIG_FILE: { literal: "/tmp/newt.json" },
       DISABLE_SSH: { literal: "true" },
