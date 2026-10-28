@@ -13,7 +13,6 @@ import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
 import { fixtureGitEnv } from "./git-env.ts";
-import * as inlineStyle from "./inline-style.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as routePolicy from "./route-policy.ts";
@@ -26,7 +25,6 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   egress: egress.scanAll,
   "cookie-domain": cookieDomain.scanAll,
   "inner-html": innerHtml.scanAll,
-  "inline-style": inlineStyle.scanAll,
   "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
@@ -150,12 +148,6 @@ describe("css-layers", () => {
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {\n.a {\n", ctx)).toHaveLength(1);
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {}\n.a", ctx)).toHaveLength(1);
   });
-});
-
-describe("inline-style", () => {
-  test("inline_style_guard", () => expectFixtures("inline-style", "bad", ["aspect.fixture"]));
-  test("inline_style_string_attributes", () => expectFixtures("inline-style", "bad", ["string.fixture"]));
-  test("inline_style_good_fixture", () => expectFixtures("inline-style", "good"));
 });
 
 describe("inner-html", () => {

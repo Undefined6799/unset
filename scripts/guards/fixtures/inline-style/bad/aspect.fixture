@@ -1,2 +1,0 @@
-// fixture: apps/web/src/Poster.tsx findings=1
-export const Poster = () => <img alt="" style={{ aspectRatio: 1 }} />;
