@@ -49,6 +49,14 @@ describe("httpKitConfig", () => {
     });
   });
 
+  test("request_deadline_floor", () => {
+    // P2.08j: at least 5 s, so a route's last step (logout's token drop) keeps its reserve inside the deadline.
+    expect(problems({ ...ENV, REQUEST_DEADLINE_MS: "4000" }, load)).toEqual([
+      { key: "REQUEST_DEADLINE_MS", reason: "invalid" },
+    ]);
+    expect(load({ ...ENV, REQUEST_DEADLINE_MS: "5000" }).REQUEST_DEADLINE_MS).toBe(5000);
+  });
+
   test("limit_keys_bounded", () => {
     expect(problems({ ...ENV, HTTP_BODY_LIMIT_BYTES: "1023" }, load)).toEqual([
       { key: "HTTP_BODY_LIMIT_BYTES", reason: "invalid" },

@@ -1,5 +1,5 @@
-/* The sign-in dialog (P2.05m): the kit Modal's look (Modal.module.css: at most 440px, space-6 padding, a 1px `ink`
-   border, `radius-sm`, on `ground`), drawn open over the `scrim` with no script, because the page is the dialog. */
+/* The sign-in page (P2.05m): the shell's sign-in box (SignInBox.module.css), centred over the `scrim` with no
+   script, because the page is the box. */
 @layer screens {
   .scrim {
     display: grid;
@@ -8,37 +8,5 @@
     min-height: 100dvh;
     padding: var(--space-4);
     background-color: var(--color-scrim);
-  }
-
-  .dialog {
-    --surface: var(--color-ground);
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 440px;
-    padding: var(--space-6);
-    border: 1px solid var(--color-ink);
-    border-radius: var(--radius-sm);
-    background-color: var(--color-ground);
-    color: var(--color-ink);
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .title {
-    margin: 0;
-  }
-
-  .close {
-    color: var(--color-ink);
-  }
-
-  .body {
-    margin: var(--space-3) 0 var(--space-6);
-    color: var(--color-ink-muted);
   }
 }
