@@ -14,7 +14,7 @@ checked: 2026-10-06
 ---
 # dns.lookup and dns.resolve behave differently
 
-Read from the Node.js v26.10.0 `node:dns` docs, "Implementation considerations", `dns.lookup()`, `Resolver` and
+Read from the Node.js v26.12.0 `node:dns` docs, "Implementation considerations", `dns.lookup()`, `Resolver` and
 "Error codes" (https://nodejs.org/docs/latest-v26.x/api/dns.html), as cited in ADR 0013.
 
 **What Node does.**

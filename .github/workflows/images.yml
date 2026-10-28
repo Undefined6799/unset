@@ -80,8 +80,9 @@ jobs:
           docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
             --build-arg APP="$APP" --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" .
       # Vulnerability scan, Trivy 0.75.0 `image`: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed); a DB
-      # download failure or the timeout exits non-zero. --ignorefile /dev/null and no --skip-dirs or --skip-files, so
-      # vulnerabilities are covered in every layer (P1.29v; Alex's card "Skip stripped files", 2026-10-07T18:56:42Z).
+      # download failure or the timeout exits non-zero. No --skip-dirs or --skip-files, so vulnerabilities are covered
+      # in every layer (P1.29v; Alex's card "Skip stripped files", 2026-10-07T18:56:42Z). The ignore file is the app one
+      # from scripts/ci/list-dockerfiles.ts, holding only the zod 3.25.76 finding (Alex's card 2026-10-28T01:40:52Z).
       # Secrets are not: inspect disables the secret analyzer on layers guessBaseLayers treats as the base
       # (pkg/fanal/artifact/image/image.go:401-405, tag v0.75.0). Those files are scan-export (P1.33s).
       - name: Scan
@@ -89,7 +90,7 @@ jobs:
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
-            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /dev/null \
+            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .github/trivyignore.app.yaml \
             --timeout 10m "$APP_IMAGE"
       - name: SBOM
         if: steps.dockerfile.outputs.present == 'true'
