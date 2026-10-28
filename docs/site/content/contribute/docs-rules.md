@@ -76,8 +76,6 @@ docker run --rm --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.
 | `scripts/docs/triage.ts` | Parses the severity triage comment |
 | `scripts/docs/endpoints.ts` | Writes `docs/site/content/endpoints/`. [Endpoint pages](#endpoint-pages) |
 
-`scripts/docs/glue-spike.ts` recomputes the framework-glue measurements. It does not write this site.
-
 ## Endpoint pages
 
 [`scripts/docs/endpoints.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.ts) reads `interfaces/<process>/routes.manifest.json`, the `policies` export of `interfaces/<process>/limits.ts` when that file exists, and `docs/site/data/endpoints/<process>.yaml`.
