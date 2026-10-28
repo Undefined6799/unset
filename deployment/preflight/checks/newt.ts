@@ -12,10 +12,10 @@ import type { SecretMap } from "../secret-map.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
-/** What newt.env holds: Pangolin's address and the site's two credentials (newt 1.18.1 newtconfig/newtconfig.go). */
+/** What newt.env holds: Pangolin's address and the site's two credentials (newt 1.19.0 newtconfig/newtconfig.go). */
 const NEWT_ENV = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
 /**
- * The newt service's compose settings, each a literal of exactly this value (compose.dev.yaml; newt 1.18.1
+ * The newt service's compose settings, each a literal of exactly this value (compose.dev.yaml; newt 1.19.0
  * newtconfig/newtconfig.go:452-503 reads each from the environment, and DISABLE_SSH and DISABLE_CLIENTS default to
  * false). Any other name is refused: a Newt feature flag set here would be unreviewed.
  */
@@ -98,7 +98,7 @@ function valuesProblem(env: SecretMap | undefined): Outcome | null {
   if (env === undefined) return null;
   const example = NEWT_ENV.find((name) => env.use(name, (value) => value === EXAMPLE_VALUE));
   if (example !== undefined) return fail(`${example} is still the example file's placeholder`);
-  // Newt 1.18.1 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr),
+  // Newt 1.19.0 applies a string setting only when it is non-empty (newtconfig/newtconfig.go:191-196, applyEnvStr),
   // and for NEWT_ID and NEWT_SECRET then falls back to SITE_ID and SITE_SECRET (:207-217, applyEnvStrAlias), which no
   // file here may set; blank is as unusable as empty, so both are refused.
   const empty = NEWT_ENV.find((name) => env.use(name, (value) => value?.trim() === ""));
