@@ -43,10 +43,6 @@ jobs:
         # `bash -e {0}`, and the HIGH run's status would be tee's (P1.28w; docs.github.com workflow syntax, "shell").
         shell: bash
         run: |
-          if [ ! -e "$MIRROR_LIST" ]; then
-            echo "::notice title=mirror::skipped, no mirror list yet (lands in P1.27)"
-            exit 0
-          fi
           jq -r '.[] | [.source, (.stage // "none")] | @tsv' "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
           test -s "$RUNNER_TEMP/entries"
           # The lock is read for every entry, so a missing lock, or one that is not an object, fails here (P1.29v).
