@@ -45,7 +45,7 @@ An app has no `main.ts`. `app-render-entry-only` allows an interface to import o
 | Interface | Path `RENDER_ENTRIES` names | On this tree |
 | --- | --- | --- |
 | `interfaces/http` | `apps/web/render.tsx` | [web](web/) |
-| `interfaces/admin` | `apps/admin/render.tsx` | `interfaces/admin` does not import an app. |
+| `interfaces/admin` | `apps/admin/render.tsx` | Neither folder is on this tree yet. |
 
 `interfaces/http/web/render-entry.ts` and `tests/e2e/fixtures/servers.ts` are the two files allowed to import the unresolved specifier `@unset/apps-web/server` (`RENDER_BUILD_MODULE`). Tests and `scripts/` are the tooling row, which `app-render-entry-only` excludes.
 
