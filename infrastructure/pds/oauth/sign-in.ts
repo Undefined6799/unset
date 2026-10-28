@@ -167,10 +167,13 @@ export async function completeAuthorization(
     scope = (await session.getTokenInfo(false)).scope;
   } catch (error) {
     log.warn("oauth.callback_failed", { kind: kindOf(error) });
+    await revoke();
     return { ok: false, reason: "failed" };
   }
+  // P1.36x: every refusal after the library stored the set revokes it, so no grant outlives a failed sign-in.
   if (state === null || did === null) {
     log.warn("oauth.callback_failed", { kind: state === null ? "no_app_state" : "bad_sub" });
+    await revoke();
     return { ok: false, reason: "failed" };
   }
   return { ok: true, did, issuer: session.serverMetadata.issuer, appState: state, scope, revoke };

@@ -409,6 +409,18 @@ describe("completeAuthorization", () => {
     expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "account_elsewhere" } });
   });
 
+  test("callback_without_app_state_revokes_the_grant", async () => {
+    // P1.36x red: a callback the library completes but that this app cannot use leaves no grant behind. The stored
+    // state loses its appState here, so the library hands back `state: null` after it has stored the token set.
+    const { started, complete, states, sessions, posts, logged } = await setup();
+    const query = await started();
+    for (const [key, { appState: _dropped, ...saved }] of states) states.set(key, saved);
+    expect(await complete(query)).toEqual({ ok: false, reason: "failed" });
+    expect(sessions.size).toBe(0);
+    expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
+    expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "no_app_state" } });
+  });
+
   test("callback_second_login_replaces_the_set", async () => {
     // A second browser's callback revokes the stored grant and keeps the new one (oauth-client.js:196-209).
     let issued = 0;
