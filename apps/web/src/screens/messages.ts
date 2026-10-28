@@ -7,3 +7,10 @@ export const ACCOUNT_LINK = {
   foreign: "your sign-in server ({pdsHost})",
   newTab: "(opens in a new tab)",
 } as const;
+
+export const SIGNED_OUT = {
+  title: "You are signed out of unset",
+  ask: "Also sign out of your atproto account?",
+  otherApps: "Apps you allowed stay signed in until you remove them there.",
+  noThanks: "No thanks",
+} as const;
