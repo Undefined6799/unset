@@ -290,6 +290,38 @@ describe("deadline", () => {
     expect(records().some((r) => r.event === "http.deadline" && r.route === "/slow")).toBe(true);
   });
 
+  test("deadline_at_counts_from_admission", async () => {
+    // P2.08j: deadlineAt is when the signal fires, on performance.now()'s clock, so time spent admitting the request
+    // (here a 300 ms session read) is already gone when the handler starts, not budgeted again from its own start.
+    let left = Number.NaN;
+    let late = Number.NaN;
+    const session = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { did: "did:plc:alice" };
+    };
+    const slow = page({
+      method: "GET",
+      path: "/slow",
+      deadlineMs: 1000,
+      session: "required",
+      handler: ({ deadline, deadlineAt }) => {
+        left = deadlineAt - performance.now();
+        return new Promise<Response>((_, reject) => {
+          deadline.addEventListener("abort", () => {
+            late = performance.now() - deadlineAt;
+            reject(deadline.reason);
+          });
+        });
+      },
+    });
+    const { request } = kit({ routes: [slow], session });
+    expect((await request("/slow")).status).toBe(503);
+    expect(left).toBeGreaterThan(600);
+    expect(left).toBeLessThan(705);
+    expect(late).toBeGreaterThan(-20);
+    expect(late).toBeLessThan(100);
+  });
+
   test("route_deadline_bounds", () => {
     for (const deadlineMs of [130_000, 400_000, 0, 999, 1.5]) {
       expect(() => page({ method: "GET", path: "/", deadlineMs })).toThrow(/deadlineMs/);

@@ -534,6 +534,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.05r | Sign in with one button to our PDS | — | P2.05, P1.36v | `phase-2.md` |
 | P2.05m | Show sign-in as one modal dialog | — | P2.05r | `phase-2.md` |
 | P2.05n | Close the sign-in box to the page before | — | P2.05m | `phase-2.md` |
+| P2.05p | Open sign-in over the page | — | P2.05n | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
 | P2.08 | Logout | [SEC] | P2.06, P2.04s | `phase-2.md` |
@@ -544,6 +545,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08f | Mark sign out everywhere unused in session | trusted | P2.08d | `phase-2.md` |
 | P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
 | P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
+| P2.08s | Ask about the PDS after signing out | — | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
 | P2.11b | ~~Count sessions ended on a revoked grant~~ **Retired** (moved to P3.20c, architecture 07:08Z) | [SEC] | P2.11a | `phase-2.md` |
