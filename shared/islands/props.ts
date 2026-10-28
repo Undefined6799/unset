@@ -15,7 +15,6 @@ export class SerializeError extends Error {
 /** Props get the same 15 KB bound as an island's code (§6.1), so a page cannot bloat silently. */
 const DEFAULT_MAX_BYTES = 15_360;
 const MAX_DEPTH = 32;
-const ID_PATTERN = /^[a-z][a-z0-9-]{0,40}$/;
 
 /**
  * Less-than, greater-than, ampersand, line separator, paragraph separator. Written as escapes only: a literal U+2028
@@ -120,10 +119,4 @@ export function serializeProps(value: JsonValue, opts: { maxBytes?: number } = {
   const json = JSON.stringify(copy).replace(HTML_BREAKERS, (ch) => ESCAPES[ch] ?? ch);
   if (new TextEncoder().encode(json).length > max) throw new SerializeError("islands.props_too_large");
   return json;
-}
-
-/** The id and JSON for `<script type="application/json" id="{id}">{json}</script>`. */
-export function renderPropsTag(id: string, value: JsonValue): { id: string; json: string } {
-  if (!ID_PATTERN.test(id)) throw new Error(`island props id is not valid: ${JSON.stringify(id)}`);
-  return { id, json: serializeProps(value) };
 }

@@ -12,7 +12,7 @@ An island is a component plus a props check. Both run on the server before rende
 | File | Role |
 | --- | --- |
 | `shared/islands/define.ts` | `defineIsland`. `ISLAND_MAX_PROPS_BYTES` is 15360. A smaller `maxPropsBytes` is allowed; a larger one throws. |
-| `shared/islands/props.ts` | `serializeProps`, `renderPropsTag` |
+| `shared/islands/props.ts` | `serializeProps` |
 | `shared/islands/readProps.ts` | `readProps` in the browser. Imports `./props.ts`. |
 | `shared/islands/slot.ts` | `IslandSlot`, the server placeholder |
 
@@ -41,7 +41,7 @@ On this tree: `apps/web` (`render.tsx`, `src/document.tsx`, `src/islands/runtime
 | --- | --- |
 | Package export `.` | `shared/islands/index.ts` |
 | `defineIsland`, `ISLAND_MAX_PROPS_BYTES` | `shared/islands/define.ts` |
-| `serializeProps`, `renderPropsTag` | `shared/islands/props.ts` |
+| `serializeProps` | `shared/islands/props.ts` |
 | `readProps` | `shared/islands/readProps.ts` |
 | `IslandSlot` | `shared/islands/slot.ts` |
 

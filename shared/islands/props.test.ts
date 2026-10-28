@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { renderPropsTag, SerializeError, serializeProps } from "./props.ts";
+import { SerializeError, serializeProps } from "./props.ts";
 
 /** The five code points the serialiser must never emit, compared by number so this file holds none of them. */
 const BREAKERS = new Set([0x3c, 0x3e, 0x26, 0x2028, 0x2029]);
@@ -96,17 +96,5 @@ describe("serializeProps", () => {
   test("null_prototype_objects_allowed", () => {
     const value = Object.assign(Object.create(null) as Record<string, number>, { a: 1 });
     expect(serializeProps(value)).toBe('{"a":1}');
-  });
-});
-
-describe("renderPropsTag", () => {
-  test("id_validation", () => {
-    for (const id of ["A b", "", "1a", "a_b", `a${"b".repeat(41)}`, 'a"><script>']) {
-      expect(() => renderPropsTag(id, {}), id).toThrow();
-    }
-    expect(renderPropsTag(`a${"b".repeat(40)}`, { a: "<" })).toEqual({
-      id: `a${"b".repeat(40)}`,
-      json: '{"a":"\\u003c"}',
-    });
   });
 });
