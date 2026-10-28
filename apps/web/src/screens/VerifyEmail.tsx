@@ -32,7 +32,7 @@ export function VerifyEmail({ state, pdsHost, issuer, ours = true }: VerifyEmail
       {state === "unconfirmed" ? (
         <>
           <PdsAccountLink issuer={issuer ?? `https://${pdsHost}`} ours={ours} />
-          <p>Confirm your email there, then come back.</p>
+          <p>Confirm your email in the new tab, then come back here.</p>
           {again === null ? null : (
             <Link href={again} variant="standalone">
               I've confirmed it — check again

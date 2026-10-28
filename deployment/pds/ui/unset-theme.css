@@ -78,6 +78,10 @@
   --unset-hairline: 1px;
   --unset-cut: 10px;
   --unset-cut-fill: 6.66px;
+  /* Its box: 32px tall, space-2 above and below, space-4 either side, space-2 to a trailing icon. */
+  --unset-button-height: 32px;
+  --unset-space-2: 8px;
+  --unset-space-4: 16px;
   --unset-z-edge: -1;
   --unset-z-shadow: -2;
   --unset-focus-width: 2px;
@@ -162,6 +166,16 @@
   letter-spacing: var(--unset-label-tracking);
   text-transform: uppercase;
   transition: translate 120ms ease-out;
+}
+
+/* Size: upstream's text buttons are h-8 px-2.5 (default), h-7 (sm) and h-9 (lg) at a7c8604d
+ * (src/components/ui/button.tsx); the sheet has one, so all three take its box. Icon buttons size by size-* and keep
+ * their squares. Codex on #1274. */
+[data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background):is(.h-7, .h-8, .h-9) {
+  height: auto;
+  min-height: var(--unset-button-height);
+  padding: var(--unset-space-2) var(--unset-space-4);
+  gap: var(--unset-space-2);
 }
 
 [data-slot="button"]:is(.bg-primary, .bg-secondary, .bg-background)::before,
