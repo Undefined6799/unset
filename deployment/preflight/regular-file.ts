@@ -1,5 +1,6 @@
-// Reading a file only as a regular file (P1.34p, Amendment 2): the env files Compose reads, and the certificates C18
-// judges (P1.35p S2), so a FIFO, a folder or a device at one of those paths never blocks or misleads the preflight.
+// Reading a file only as a regular file (P1.34p, Amendment 2): the certificates C18 judges (P1.35p S2), so a FIFO, a
+// folder or a device at one of those paths never blocks or misleads the preflight. The env files Compose reads have
+// their own reader in inputs.ts, which walks the path before it opens it (P1.34r).
 import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 
 /** What readRegular answers for a path that holds something other than a regular file. */

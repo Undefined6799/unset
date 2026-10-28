@@ -27,6 +27,7 @@ import {
   type EdgeFiles,
   readEdgeConfig,
 } from "./caddyfile.ts";
+import { BUILD_CALL_MS, buildTestBudget, CALL_MS, removalBudget, runOrKill } from "./docker-call.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
@@ -35,38 +36,14 @@ import { removeEveryTag } from "./image-cleanup.ts";
 // the image itself with node built-ins (architecture amendment 3 to 2026-10-07-p130s-networks-and-caddyfile-reader):
 // a trusted test owns its inputs, and first proves the image holds the repository's config byte for byte.
 const EDGE = import.meta.dirname;
+const docker = (args: readonly string[], timeoutMs: number) => runOrKill(spawnSync, "docker", args, timeoutMs);
 const PDS_HOST = "pds.unset.test";
 const built: string[] = [];
-// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
-// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
-const CONTAINER_MS = 120_000;
-
-// Every docker call is killed at its own budget with SIGKILL (P1.27t, as P1.27k does for tests/support/docker.ts): a
-// blocked spawnSync holds the event loop, so vitest's budget cannot stop it, and a hung daemon would hold the run
-// until scripts/test/run.ts kills it whole at 600 s, failing with no name. A daemon call (run, cat, rmi) gets 50 s, so
-// the afterAll's two removals fit inside CONTAINER_MS; a build gets 300 s inside its test's 600 s. This trusted test
-// keeps its own helper rather than import product test code.
-const CALL_MS = 50_000;
-const BUILD_MS = 300_000;
-
-/** Docker's subcommand in full: up to two leading words (`run`, `image inspect`), never a flag or a reference. */
-function subcommand(args: readonly string[]): string {
-  const end = args.findIndex((arg) => !/^[a-z][a-z-]*$/.test(arg));
-  return args.slice(0, Math.min(end === -1 ? args.length : end, 2)).join(" ");
-}
-
-function docker(args: readonly string[], timeoutMs: number): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: "SIGKILL",
-  });
-  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
-    throw new Error(`docker ${subcommand(args)} killed after ${timeoutMs} ms`);
-  }
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
-}
+// Every docker call is killed at its own budget with SIGKILL by docker-call.ts (P1.27t). Each test's budget is one
+// build slot plus CALL_MS for each other docker call it makes, which keeps the sum of its kills under that budget and
+// the budget under run.ts's 600 s (P1.27h, N1; docker-call.ts buildTestBudget). The afterAll's removals are one `rmi`
+// per tag, one tag per test that builds (BUILDS of them), each killed at CALL_MS.
+const BUILDS = 4;
 
 /**
  * Builds deployment/edge/Dockerfile with deployment/edge as the context under its own tag; the tag (P1.27z, as P1.27x
@@ -76,7 +53,7 @@ function docker(args: readonly string[], timeoutMs: number): { code: number; out
  */
 function buildEdgeImage(): string {
   const tag = `unset-test-${randomBytes(8).toString("hex")}`;
-  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
+  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_CALL_MS);
   if (result.code !== 0) throw new Error(`edge image build failed: ${failedStep(result.err)}`);
   built.push(tag);
   return tag;
@@ -88,7 +65,11 @@ function failedStep(stderr: string): string {
   return (from === -1 ? stderr : stderr.slice(from + 1)).slice(-4_000);
 }
 
-/** The config files the image holds under /etc/caddy, by their repository path under deployment/edge. */
+/**
+ * The config files the image holds under /etc/caddy, by their repository path under deployment/edge, in three calls
+ * whatever the number of snippets (P1.27h, N1): the snippet names, each file's size in bytes (busybox `stat -c %s`, one
+ * line per file in the order given), and every file through one `cat`, cut at those sizes.
+ */
 function imageConfig(image: string): Record<string, string> {
   const listed = docker(["run", "--rm", "--entrypoint", "ls", image, "/etc/caddy/snippets"], CALL_MS);
   if (listed.code !== 0) throw new Error(`listing the image's snippets failed: ${listed.err.slice(-2000)}`);
@@ -100,11 +81,25 @@ function imageConfig(image: string): Record<string, string> {
       .filter((f) => f !== "")
       .map((f) => `snippets/${f}`),
   ];
+  const paths = files.map((file) => `/etc/caddy/${file}`);
+  const stat = docker(["run", "--rm", "--entrypoint", "stat", image, "-c", "%s", ...paths], CALL_MS);
+  if (stat.code !== 0) throw new Error(`sizing the image's config failed: ${stat.err.slice(-2000)}`);
+  const sizes = stat.out
+    .split("\n")
+    .filter((line) => line !== "")
+    .map(Number);
+  if (sizes.length !== files.length) throw new Error(`stat gave ${sizes.length} sizes for ${files.length} files`);
+  const read = docker(["run", "--rm", "--entrypoint", "cat", image, ...paths], CALL_MS);
+  if (read.code !== 0) throw new Error(`reading the image's config failed: ${read.err.slice(-2000)}`);
+  const bytes = Buffer.from(read.out, "utf8");
+  if (bytes.length !== sizes.reduce((sum, size) => sum + size, 0)) throw new Error("cat and stat disagree on the size");
+  let at = 0;
   return Object.fromEntries(
-    files.map((file) => {
-      const read = docker(["run", "--rm", "--entrypoint", "cat", image, `/etc/caddy/${file}`], CALL_MS);
-      if (read.code !== 0) throw new Error(`reading /etc/caddy/${file} failed: ${read.err.slice(-2000)}`);
-      return [file, read.out];
+    files.map((file, index) => {
+      const size = sizes[index] ?? 0;
+      const content = bytes.subarray(at, at + size).toString("utf8");
+      at += size;
+      return [file, content];
     }),
   );
 }
@@ -113,14 +108,16 @@ describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
     // The tag only, never -f: an image another edge test built from the same context stays (P1.27z). Every tag is
-    // tried, even after a removal fails or is killed (P1.11r).
+    // tried, and each result checked, even after a removal fails or is killed (P1.11r).
     removeEveryTag(built, (tag) => {
       const removed = docker(["rmi", tag], CALL_MS);
       if (removed.code !== 0) throw new Error(removed.err.trim().slice(-500));
     });
-  }, CONTAINER_MS);
+    if (built.length > BUILDS) throw new Error(`${built.length} builds, but this hook's budget covers ${BUILDS}`);
+  }, removalBudget(BUILDS));
 
-  test("caddyfile_reader_matches_caddy_adapt", () => {
+  // Its docker calls after the build: ls, stat and cat of the config, then one adapt (4).
+  test("caddyfile_reader_matches_caddy_adapt", { timeout: buildTestBudget(4) }, () => {
     const image = buildEdgeImage();
     const repository = Object.fromEntries(
       [
@@ -164,7 +161,7 @@ describe("caddyfile reader against caddy adapt", () => {
         name,
       ).toEqual({ ...pick(limits[name]), matched: limits[name]?.match !== undefined });
     }
-  }, 600_000);
+  });
 
   // P1.34q (architecture record 2026-10-13-p127l-local-gaps, Amendment 3 S3): each env's served config, adapted by the
   // image, gets its certificates only from Let's Encrypt (dev, prod) or the dev leaf's files (local), and no host
@@ -174,7 +171,8 @@ describe("caddyfile reader against caddy adapt", () => {
   // tlsapp.go:288-320), and at run time skips automating a name a loaded certificate covers (modules/caddyhttp/
   // autohttps.go:208); the internal issuer it would give a non-public name that is not covered (autohttps.go:318-332)
   // never appears in adapt output, which is why P1.33t's C18 rule refuses every other source of certificates.
-  test("each_env_gets_certificates_from_acme_or_the_leaf_files", () => {
+  // Its docker calls after the build: one adapt per env (3).
+  test("each_env_gets_certificates_from_acme_or_the_leaf_files", { timeout: buildTestBudget(3) }, () => {
     const image = buildEdgeImage();
     const acme = {
       automation: {
@@ -219,13 +217,14 @@ describe("caddyfile reader against caddy adapt", () => {
       match: { sni: [local.APP_HOST, local.PDS_HOST] },
       certificate_selection: { any_tag: ["cert0"] },
     });
-  }, 600_000);
+  });
 
   // P1.36b (ADR 0032): the dev sites, mounted as ADR 0032 Decision 3's three file binds (DEV_MOUNTS), adapt
   // to https on the edge's newt_edge address and nothing else: no :80 server and no issuer, only the dev leaf's two
   // files. Caddy's run-time HTTP->HTTPS redirect is added after adapt (caddy v2.11.7
   // modules/caddyhttp/autohttps.go:229-268), so it is not in this config.
-  test("dev_sites_listen_https_with_the_leaf_files", () => {
+  // Its docker calls after the build: one adapt (1).
+  test("dev_sites_listen_https_with_the_leaf_files", { timeout: buildTestBudget(1) }, () => {
     const image = buildEdgeImage();
     const adapted = adapt(image, { ...env, ...DEV_APP, PDS_HOST: "staging.unset.ac" }, DEV_MOUNTS);
     const listens = Object.values(adapted.apps.http.servers).flatMap((server) => server.listen);
@@ -236,13 +235,14 @@ describe("caddyfile reader against caddy adapt", () => {
       certificates: { load_files: [{ certificate: DEV_TLS[0], key: DEV_TLS[1], tags: ["cert0"] }] },
     });
     expect(adaptedHosts(adapted).sort()).toEqual(["127.0.0.1", "staging.unset.ac", "staging.unset.sh"]);
-  }, 600_000);
+  });
 
   // P1.36j (ADR 0030 Decision 2): adapted, the shipped PDS site's server trusts no proxy, and the dev sites' server on
   // DEV_LISTENER trusts Newt's address alone, right to left, from X-Forwarded-For. Caddy applies a listener's
   // `servers` block only to the server bound to exactly that address (caddyserver/caddy v2.11.7
   // caddyconfig/httpcaddyfile/serveroptions.go:427-437).
-  test("only_the_dev_listener_trusts_newt", () => {
+  // Its docker calls after the build: two adapts (2).
+  test("only_the_dev_listener_trusts_newt", { timeout: buildTestBudget(2) }, () => {
     const image = buildEdgeImage();
     const trust = (server: AdaptedServer) => ({
       listen: server.listen,
@@ -266,7 +266,7 @@ describe("caddyfile reader against caddy adapt", () => {
       },
       { listen: ["127.0.0.1:8081"], ...NO_TRUST },
     ]);
-  }, 600_000);
+  });
 });
 
 type AdaptedHandler = { handler: string; routes?: AdaptedRoute[]; rate_limits?: Record<string, AdaptedZone> };

@@ -207,7 +207,8 @@ describe("mirror scan per stage", () => {
   test("shipped_image_scan_fails_on_high", () => {
     const jobs = workflow("images.yml").jobs;
     for (const [id, ignore] of [
-      ["images", "/dev/null"],
+      // P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the app image reads the app file (zod only).
+      ["images", "\\.github/trivyignore\\.app\\.yaml"],
       ["edge", "/dev/null"],
       // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule.
       // The file itself is chosen per source (pds_ignorefile_wired_to_pds_scan_only).
@@ -322,7 +323,7 @@ describe("mirror scan per stage", () => {
     }
     // P1.33u: the secret scan of our own images reads no ignore file.
     expect(runsOf("scan-image")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
-    expect(runsOf("images")).toContain("--ignorefile /dev/null");
+    expect(runsOf("images")).toContain("--ignorefile .github/trivyignore.app.yaml");
     expect(runsOf("edge")).toContain("--ignorefile /dev/null");
   });
 });

@@ -135,3 +135,26 @@ test("pds_theme_button_focus_is_the_sheet_outline", () => {
   expect(focus.get("box-shadow")).toBe("none");
   expect(block(theme, ":root").get("--unset-focus-width")).toBe("2px");
 });
+
+// Codex on #1274: the sheet's Button is 32px tall with space-2 above and below, space-4 either side and space-2
+// between label and icon (shared/ui/sheet/components/Button/README.md, "Use"). Upstream sizes its text buttons with
+// h-7, h-8 and h-9 and its icon buttons with size-*, so the themed text sizes take the sheet's box and icon buttons
+// keep their squares.
+test("pds_theme_text_buttons_take_the_sheet_size", () => {
+  expect(pds.light.get("--unset-space-2")).toBe(sheet.dark.get("--space-2"));
+  expect(pds.light.get("--unset-space-4")).toBe(sheet.dark.get("--space-4"));
+  expect(pds.light.get("--unset-button-height")).toBe("32px");
+  const selector = `${THEMED}:is(.h-7, .h-8, .h-9) {`;
+  const start = theme.indexOf(selector);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const body = theme.slice(start + selector.length, theme.indexOf("}", start));
+  const size = new Map(
+    [...body.matchAll(/([a-z-]+):\s*([^;]+);/g)].map((m): [string, string] => [m[1] ?? "", (m[2] ?? "").trim()]),
+  );
+  expect(Object.fromEntries(size)).toEqual({
+    height: "auto",
+    "min-height": "var(--unset-button-height)",
+    padding: "var(--unset-space-2) var(--unset-space-4)",
+    gap: "var(--unset-space-2)",
+  });
+});

@@ -45,7 +45,7 @@ On this tree: `apps/web` (`render.tsx`, `src/document.tsx`, `src/islands/runtime
 | `readProps` | `shared/islands/readProps.ts` |
 | `IslandSlot` | `shared/islands/slot.ts` |
 
-`apps/web/src/islands/runtime/bootstrap.ts` is the browser entry. It imports this package. It is not a file of this package.
+`apps/web/src/islands/runtime/bootstrap.ts` is the browser entry. It imports this package and calls `closePopoversOnPageHide` (`apps/web/src/islands/runtime/popovers.ts`). It is not a file of this package.
 
 ## Data
 

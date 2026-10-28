@@ -86,7 +86,7 @@ test("inventory_registers_the_approved_navigation_extension", () => {
       .update(readFileSync(join(UI, readme)))
       .digest("hex"),
     props: "NavigationProps",
-    variants: ["desktop rail", "phone bar and popup"],
+    variants: ["left drawer", "phone floating bar"],
     status: "built",
     extensions: [
       {
