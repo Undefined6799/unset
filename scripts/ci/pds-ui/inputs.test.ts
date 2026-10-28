@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { readArtifact, readBounded, verifyInputs } from "./cli.ts";
-import { parseLock, UI_DIRECTORY } from "./contract.ts";
+import { PAIRS, type Pair, parseLock, uiDirectoryOf } from "./contract.ts";
 import { artifacts, image, sha, tar } from "./fixtures/native.ts";
 import { verifySource } from "./verify.ts";
 
-const ui = UI_DIRECTORY;
+const pair = PAIRS["0.4.5037"] as Pair;
+const ui = uiDirectoryOf(pair);
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
 const temporary: string[] = [];
@@ -124,10 +125,10 @@ describe("source and installed artifact coupling", () => {
     global.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148, "ascii");
     const native = Buffer.concat([global, source]);
     await expect(
-      verifySource(native, { revision, archiveSha256: sha(native), lockSha256: sha("frozen") }),
+      verifySource(native, { revision, archiveSha256: sha(native), lockSha256: sha("frozen") }, pair),
     ).resolves.toBeUndefined();
     const lock = { revision, archiveSha256: sha(source), lockSha256: sha("frozen") };
-    await expect(verifySource(source, lock)).resolves.toBeUndefined();
+    await expect(verifySource(source, lock, pair)).resolves.toBeUndefined();
     const badSource = await tar([
       { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
       ...Object.entries(packages).map(([path, [name, version]]) => ({
@@ -135,12 +136,13 @@ describe("source and installed artifact coupling", () => {
         body: JSON.stringify({ name, version: path.endsWith("provider-ui") ? "0.10.6" : version }),
       })),
     ]);
-    await expect(verifySource(badSource, { ...lock, archiveSha256: sha(badSource) })).rejects.toThrow(/version/);
+    await expect(verifySource(badSource, { ...lock, archiveSha256: sha(badSource) }, pair)).rejects.toThrow(/version/);
+    await expect(verifySource(source, lock, PAIRS["0.4.5049"] as Pair)).rejects.toThrow(/version/);
     for (const delta of [
       { revision: "0".repeat(40) },
       { archiveSha256: "0".repeat(64) },
       { lockSha256: "0".repeat(64) },
     ])
-      await expect(verifySource(source, { ...lock, ...delta })).rejects.toThrow();
+      await expect(verifySource(source, { ...lock, ...delta }, pair)).rejects.toThrow();
   });
 });

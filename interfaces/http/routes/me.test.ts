@@ -112,7 +112,11 @@ describe("GET /:did", () => {
     expect(account).toBeDefined();
     const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
     expect(initials).toContain("A");
-    expect(elements(document, "script")).toHaveLength(0);
+    // P2.13e: the only script is the island boot and the drawer's theme-picker props.
+    expect(elements(document, "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value)).toEqual([
+      "application/json",
+      "module",
+    ]);
     expect(checked).toEqual([DID]);
   });
 

@@ -279,7 +279,8 @@ test("signed_out_page", async () => {
   const response = await send("/signed-out", { method: "GET" });
   expect(response.status).toBe(200);
   const html = await response.text();
-  expect(html).toContain("You are signed out");
+  expect(html).toContain("You are signed out of unset");
+  expect(html).toContain("Also sign out of your atproto account?");
   expect(html).toContain('href="https://pds.unset.test/account"');
 });
 

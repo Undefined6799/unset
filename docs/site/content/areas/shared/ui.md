@@ -20,9 +20,9 @@ Generated styles, which `apps/web/src/styles.ts` globs:
 
 `shared/ui/tokens/font-metrics.ts` is the type of `tokens/font-metrics.json`. The build that writes the JSON is [ui-build](../ui-build/).
 
-Icons are Iconoir 7.12.1, copied as `shared/ui/icons/svg/*.svg.txt`. The sheet list is 36 names. `shared/ui/approved-extensions.json`'s `icons` object adds five: `devices` (Iconoir `computer`), `apps` (Iconoir `view-grid`), `bulb-off` (Iconoir `light-bulb`), `bulb-on` (Iconoir `light-bulb-on`) and `tv` (Iconoir `modern-tv`). `icons/svg/` and `icons/drawings/` each hold 41 files. `icons/icons.json` records those 41 names, `iconoirVersion` `7.12.1`, sheet version `1792621080-00d4`, and `extensionProvenance` (`path`, `sha256`, `designApproval`, `registeredOn`, `iconoirCommit`). `components/Icon/Icon.tsx` draws from `icons.json` on the server. Islands use `IconDrawing` and the one drawing module they import. There is no icon npm package. `Icon`, `IconName` and `IconProps` are exports of `./presentation` (`shared/ui/presentation.ts`). Kit components under `shared/ui/components/` import `Icon` by relative path.
+Icons are Iconoir 7.12.1, copied as `shared/ui/icons/svg/*.svg.txt`. The sheet list is 36 names. `shared/ui/approved-extensions.json`'s `icons` object adds five: `devices` (Iconoir `computer`), `apps` (Iconoir `view-grid`), `bulb-off` (Iconoir `light-bulb`), `bulb-on` (Iconoir `light-bulb-on`) and `tv` (Iconoir `modern-tv`). `icons/svg/` and `icons/drawings/` each hold 41 files. `icons/icons.json` records those 41 names, `iconoirVersion` `7.12.1`, sheet version `1792621080-00d4`, and `extensionProvenance` (`path`, `sha256`, `designApproval`, `registeredOn`, `iconoirCommit`). `components/Icon/Icon.tsx` draws from `icons.json` on the server. Islands use `IconDrawing` and the one drawing module they import. There is no icon npm package. `Icon`, `IconName` and `IconProps` are exports of `index.ts` and of `./presentation` (`shared/ui/presentation.ts`). Kit components under `shared/ui/components/` import `Icon` by relative path.
 
-`shared/ui/inventory.json` registers the sheet components. Every entry's `status` is `built`. The Icon, Header, Button and Navigation entries each set `extensions` to `[{ path: "approved-extensions.json", sha256 }]`. A new component is registered on the sheet first.
+`shared/ui/inventory.json` registers the sheet components. Every entry's `status` is `built`. Navigation's `variants` are `left drawer` and `phone floating bar`. The Icon, Header, Button and Navigation entries each set `extensions` to `[{ path: "approved-extensions.json", sha256 }]`. A new component is registered on the sheet first.
 
 `shared/ui/approved-extensions.json` is that registration. Its `components` object is Navigation, Header and Button. Its `icons` object is `devices`, `apps`, `bulb-off`, `bulb-on` and `tv`. [ui-build](../ui-build/) checks it when writing `icons.json`.
 
@@ -38,14 +38,22 @@ Kit islands on the tree (`shared/ui/islands/`):
 | `search.island.tsx` |
 | `select.island.tsx` |
 | `tabs.island.tsx` |
+| `theme-picker.island.tsx` |
 | `toast.island.tsx` |
 
-`index.ts` exports these names. Each component also exports its props type (`ButtonProps`, and the same `Props` suffix on the others):
+`components/Navigation/Navigation.tsx` renders the left drawer as a `popover="auto"` `<nav>`, and the phone floating bar. `NavigationMenuButton` toggles that drawer. `ThemePicker.tsx` is the form placed in the drawer's `extra` slot. `ThemePickerSlot.tsx` mounts it as the `theme-picker` island. `index.ts` exports `ThemePickerSlot` and the types `ThemeChoice` and `ThemePickerProps`. `ThemePicker` stays in `ThemePicker.tsx`.
+
+`index.ts` exports these names:
 
 | Export |
 | --- |
-| `Button`, `Callout`, `Checkbox`, `DescriptionList`, `Footer`, `BrandHeader`, `Header`, `Input`, `Link`, `Navigation`, `RadioGroup`, `SkipLink`, `Switch` |
-| `DescriptionItem`, `NavigationAnchorProps`, `NavigationLinkRenderer` |
+| `Avatar`, `AvatarProps`, `AvatarSize`, `Button`, `ButtonProps`, `Callout`, `CalloutProps`, `Card`, `CardProps` |
+| `Checkbox`, `CheckboxProps`, `DescriptionItem`, `DescriptionList`, `DescriptionListProps` |
+| `Footer`, `FooterProps`, `BrandHeader`, `BrandHeaderProps`, `Header`, `HeaderProps` |
+| `Icon`, `IconName`, `IconProps`, `Input`, `InputProps`, `Link`, `LinkProps` |
+| `Navigation`, `NavigationAnchorProps`, `NavigationLinkRenderer`, `NavigationMenuButton`, `NavigationProps` |
+| `ThemeChoice`, `ThemePickerProps` (types), `ThemePickerSlot` |
+| `RadioGroup`, `RadioGroupProps`, `SkipLink`, `SkipLinkProps`, `Switch`, `SwitchProps` |
 | `safeHref`, `SafeHref`, `HrefScheme` |
 | `FallbackFace`, `FontMetrics` (types) |
 
@@ -57,7 +65,7 @@ Kit islands on the tree (`shared/ui/islands/`):
 | --- |
 | `Avatar`, `AvatarProps`, `AvatarSize`, `Button`, `ButtonProps`, `Checkbox`, `CheckboxProps` |
 | `Icon`, `IconName`, `IconProps`, `Input`, `InputProps`, `Link`, `LinkProps`, `Mark`, `MarkProps` |
-| `Navigation`, `NavigationAnchorProps`, `NavigationLinkRenderer`, `NavigationProps`, `Progress`, `ProgressProps` |
+| `Navigation`, `NavigationAnchorProps`, `NavigationLinkRenderer`, `NavigationMenuButton`, `NavigationProps`, `Progress`, `ProgressProps` |
 | `safeHref`, `SafeHref`, `HrefScheme` |
 
 ## May import

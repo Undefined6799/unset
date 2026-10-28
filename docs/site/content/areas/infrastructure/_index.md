@@ -27,7 +27,7 @@ The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit` and `session`. Thes
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.6.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
 
 | From | May reach |
 | --- | --- |
