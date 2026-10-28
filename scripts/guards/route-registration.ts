@@ -4,7 +4,7 @@
 // Lexical on purpose, and no guard-allow: a route that needs something the kit lacks is a change to the kit.
 import { type Finding, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from "./files.ts";
 
-export const SCANNED_DIRS = PRODUCT_DIRS;
+const SCANNED_DIRS = PRODUCT_DIRS;
 export const KIT_FILES = ["shared/http/server.ts", "shared/http/routes.ts"];
 const RULE = "route-registration";
 

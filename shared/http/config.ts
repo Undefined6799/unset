@@ -12,10 +12,10 @@ const HOST_ENTRY = new RegExp(`\\.?${LABEL}(?:\\.${LABEL})*`);
  * `.ac`, `.me`, `.space`), the media domain's (`.net`), and `.test` for test config. Any other TLD is refused, so
  * the same-site check needs no public-suffix library and never guesses.
  */
-export const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
+const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
 
 /** The site (registrable domain) of a URL's host: an IP or one-label host is its own site; else known TLDs only. */
-export function siteOf(host: string): string | undefined {
+function siteOf(host: string): string | undefined {
   if (host.startsWith("[") || /^[0-9.]+$/.test(host)) return host;
   const labels = host.split(".");
   if (labels.length === 1) return host;

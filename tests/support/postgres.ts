@@ -7,6 +7,8 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createPool, migrate, type Pool, type PoolOptions } from "@unset/infrastructure-postgres";
+import { createLogger } from "@unset/shared-log";
 import { cleanUpAll, docker, failAfterCleanup } from "./docker.ts";
 
 type LockEntry = { ref: string; tag: string; digest: string };
@@ -113,6 +115,66 @@ export async function stopAllPostgresAfter(
     failAfterCleanup(failure, stop);
   }
   stop();
+}
+
+const REPOSITORY = join(import.meta.dirname, "..", "..");
+const MIGRATIONS = join(REPOSITORY, "infrastructure", "postgres", "migrations");
+
+/** Runs `dir` (the real migrations unless given) into `database` as migrator, the role that owns the schemas. */
+export async function migrateAsMigrator(
+  postgres: PostgresContainer,
+  migratorPassword: string,
+  database = "unset",
+  dir = MIGRATIONS,
+): Promise<void> {
+  const result = await migrate({
+    connection: {
+      host: "127.0.0.1",
+      port: postgres.port,
+      database,
+      user: "migrator",
+      password: migratorPassword,
+      ssl: false,
+    },
+    dir,
+    root: REPOSITORY,
+    checkQueryFiles: true,
+    log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
+    retryDelaysMs: [],
+  });
+  if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+}
+
+export interface TestPools {
+  /** A pool on `database`, logged in as `user` itself (TE-2); one connection unless `options` say otherwise. */
+  open(
+    postgres: PostgresContainer,
+    database: string,
+    user: string,
+    password: string,
+    options?: Pick<Partial<PoolOptions>, "max" | "onStatement">,
+  ): Pool;
+  /** Ends every pool `open` made: the `close` for stopAllPostgresAfter. */
+  end(): Promise<unknown>;
+}
+
+/** The pools of one test file, shown in `pg_stat_activity` as `service`. */
+export function testPools(service: string): TestPools {
+  const pools: Pool[] = [];
+  return {
+    open(postgres, database, user, password, options = {}) {
+      const pool = createPool({
+        connection: { host: "127.0.0.1", port: postgres.port, database, user, password, ssl: false },
+        service,
+        max: 1,
+        connectTimeoutMs: 5000,
+        ...options,
+      });
+      pools.push(pool);
+      return pool;
+    },
+    end: () => Promise.all(pools.map((pool) => pool.end())),
+  };
 }
 
 /**

@@ -7,15 +7,16 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createPool, didColumns, migrate, type Pool, withClient } from "@unset/infrastructure-postgres";
-import { createLogger } from "@unset/shared-log";
+import { didColumns, type Pool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  migrateAsMigrator,
   type PostgresContainer,
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
   stopAllPostgresAfter,
+  testPools,
 } from "../../support/postgres.ts";
 
 type Row = { strategy: string; class?: string; reason?: string };
@@ -32,7 +33,7 @@ const SUSPICIOUS_NAME = `'(^|_)did($|_)|_did$|^did|(^|_)(uri|at_uri)$|^(subject|
 
 const migratorPassword = randomPassword();
 const webPassword = randomPassword();
-const pools: Pool[] = [];
+const pools = testPools("did-columns-test");
 let postgres: PostgresContainer;
 
 beforeAll(async () => {
@@ -40,39 +41,13 @@ beforeAll(async () => {
     initDir: join(REPOSITORY, "deployment", "postgres", "init"),
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
-  await migrateInto("unset");
+  await migrateAsMigrator(postgres, migratorPassword);
   postgres.sql("postgres", `ALTER ROLE web PASSWORD '${webPassword}'`);
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
-  const pool = createPool({
-    connection: { host: "127.0.0.1", port: postgres.port, database, user, password, ssl: false },
-    service: "did-columns-test",
-    max: 1,
-    connectTimeoutMs: 5000,
-  });
-  pools.push(pool);
-  return pool;
-}
-
-async function migrateInto(database: string): Promise<void> {
-  const result = await migrate({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database,
-      user: "migrator",
-      password: migratorPassword,
-      ssl: false,
-    },
-    dir: join(POSTGRES, "migrations"),
-    root: REPOSITORY,
-    checkQueryFiles: true,
-    log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
-    retryDelaysMs: [],
-  });
-  if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+  return pools.open(postgres, database, user, password);
 }
 
 /** A database migrated from scratch, then `sql` run as migrator: the "temporary migration" of each case. */
@@ -80,7 +55,7 @@ async function migratedWith(sql: string): Promise<Pool> {
   const name = `d_${randomBytes(6).toString("hex")}`;
   postgres.sql("postgres", `CREATE DATABASE ${name} OWNER migrator`);
   postgres.sql(name, `REVOKE ALL ON DATABASE ${name} FROM PUBLIC; REVOKE ALL ON SCHEMA public FROM PUBLIC`);
-  await migrateInto(name);
+  await migrateAsMigrator(postgres, migratorPassword, name);
   const pool = poolFor(name);
   await withClient(pool, null, (client) => client.query(sql));
   return pool;

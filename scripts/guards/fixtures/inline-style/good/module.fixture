@@ -1,3 +1,0 @@
-// fixture: apps/web/src/Card.tsx findings=0
-import styles from "./Card.module.css";
-export const Card = () => <img alt="" className={styles.poster} width={9} height={16} />;

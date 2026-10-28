@@ -57,6 +57,7 @@ describe("derived PDS recipe contract", () => {
     const repinned = {
       ...locked,
       base: { ...locked.base, ref: `ghcr.io/bluesky-social/pds:0.4.5049@sha256:${"c".repeat(64)}` },
+      builder: { ...locked.builder, ref: next.builder.ref, node: next.builder.node },
       uiDirectory: uiDirectoryOf(next),
     };
     expect(parseLock(JSON.stringify(repinned))).toEqual(repinned);
@@ -66,13 +67,33 @@ describe("derived PDS recipe contract", () => {
     expect(() => parseLock(JSON.stringify({ ...locked, base: unreviewed }))).toThrow();
     const dir = root();
     writeFileSync(join(dir, "deployment/pds/source.lock.json"), JSON.stringify(repinned));
-    writeFileSync(join(dir, "deployment/pds/Dockerfile"), recipe.replace(locked.base.ref, repinned.base.ref));
+    const rebuilt = recipe.replace(locked.base.ref, repinned.base.ref).replace(locked.builder.ref, next.builder.ref);
+    writeFileSync(join(dir, "deployment/pds/Dockerfile"), rebuilt);
     expect(() => recipeContract(dir)).toThrow();
-    writeFileSync(
-      join(dir, "deployment/pds/Dockerfile"),
-      recipe.replace(locked.base.ref, repinned.base.ref).replaceAll(UI_DIRECTORY, repinned.uiDirectory),
-    );
+    writeFileSync(join(dir, "deployment/pds/Dockerfile"), rebuilt.replaceAll(UI_DIRECTORY, repinned.uiDirectory));
     expect(recipeContract(dir)).toEqual(repinned);
+  });
+  test("pds_lock_accepts_only_its_pairs_exact_builder", () => {
+    const next = PAIRS["0.4.5049"] as Pair;
+    const repinned = {
+      ...locked,
+      base: { ...locked.base, ref: `ghcr.io/bluesky-social/pds:0.4.5049@sha256:${"c".repeat(64)}` },
+      builder: { ...locked.builder, ref: next.builder.ref, node: next.builder.node },
+      uiDirectory: uiDirectoryOf(next),
+    };
+    expect(next.builder).toEqual({
+      ref: "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec",
+      node: "26.12.1",
+    });
+    expect(parseLock(JSON.stringify(repinned))).toEqual(repinned);
+    for (const builder of [
+      locked.builder,
+      { ...repinned.builder, node: "26.10.0" },
+      { ...repinned.builder, ref: locked.builder.ref },
+      { ...repinned.builder, ref: `docker.io/library/node:26.12.1-trixie-slim@sha256:${"0".repeat(64)}` },
+    ])
+      expect(() => parseLock(JSON.stringify({ ...repinned, builder }))).toThrow();
+    expect(() => parseLock(JSON.stringify({ ...locked, builder: repinned.builder }))).toThrow();
   });
   test("rejects unexported UI stage and any runtime command outside exact replacement", () => {
     for (const text of [

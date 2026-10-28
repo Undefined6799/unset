@@ -1,4 +1,5 @@
 {
   "perIslandGzipBytes": 15360,
-  "totalGzipBytes": 81920
+  "totalGzipBytes": 81920,
+  "editorGzipBytes": 262144
 }

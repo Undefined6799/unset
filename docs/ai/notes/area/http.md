@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-23
+checked: 2026-10-28
 ---
 # http
 
@@ -38,8 +38,8 @@ book's `/__test/` paths fail the kit's path template, which refuses a leading un
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
-identity network and DID resolver, and the one OAuth client over them, and returns it as `oauth` for the sign-in
-routes; building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
+itself (compose returns only `server` and `boot`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
 which writes the secrets to files; the runtime image copies each package the server imports, and

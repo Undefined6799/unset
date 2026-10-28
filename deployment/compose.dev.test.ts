@@ -101,7 +101,13 @@ const limited = (compose: Compose, name: string, change: Partial<Hardening>): Co
 });
 
 /** One deploy-lock entry (deployment/images.lock.json; scripts/ci/verify-images.ts LockEntry). */
-type DeployEntry = { ref: string; origin: "first-party" | "upstream"; upstreamSource?: string; verify: string };
+type DeployEntry = {
+  ref: string;
+  origin: "first-party" | "upstream";
+  upstreamSource?: string;
+  gitCommit?: string;
+  verify: string;
+};
 const readDeployLock = (): Record<string, DeployEntry> =>
   JSON.parse(read("images.lock.json")) as Record<string, DeployEntry>;
 
@@ -170,6 +176,15 @@ describe("compose.dev.yaml (P1.29)", () => {
           );
         }
       }
+    }
+  });
+
+  test("deploy_lock_names_each_first_party_commit", () => {
+    // P2.26h: verify-images binds each first-party entry to the commit its signed provenance names, so every one carries
+    // a full commit and no mirror claims one of ours.
+    for (const [name, entry] of Object.entries(readDeployLock())) {
+      if (entry.origin === "first-party") expect(entry.gitCommit, name).toMatch(/^[0-9a-f]{40}$/);
+      else expect(entry.gitCommit, name).toBeUndefined();
     }
   });
 
@@ -926,14 +941,14 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
       readText: (path) => (path === file ? edit(read(name)) : lockFile(path)),
-      readEnv: (path) =>
-        path === ENV_FILE
-          ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
-          : path === join(ENV, "pds.env")
-            ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
-            : path === join(ENV, "newt.env")
-              ? { text: read("env/newt.example.env"), id: `${DEV}:5` }
-              : null,
+      // Each env file as the reader's fstat of it: the virtual file C9 judges (P1.34r).
+      readEnv: (path) => {
+        const file = virtual.get(path);
+        const example = { [ENV_FILE]: "dev-public", [join(ENV, "pds.env")]: "pds", [join(ENV, "newt.env")]: "newt" }[
+          path
+        ];
+        return file === undefined || example === undefined ? null : { text: read(`env/${example}.example.env`), file };
+      },
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,

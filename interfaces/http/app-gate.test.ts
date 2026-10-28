@@ -3,11 +3,10 @@
 import * as web from "@unset/apps-web";
 import { cachedRecheckCapS, parseDid } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
-import { createLogger } from "@unset/shared-log";
 import { expect, test } from "vitest";
 import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { sessionClearCookie } from "./session-cookie.ts";
-import { pageResponse } from "./web/page.ts";
+import { testPage } from "./web/fixtures/page.ts";
 
 const NOW = Date.parse("2026-10-19T12:00:00Z");
 const did = parseDid(`did:plc:${"a".repeat(24)}`);
@@ -27,27 +26,7 @@ function gateAnswering(answer: Awaited<ReturnType<AppGate["refreshEmail"]>>, age
     now: () => NOW,
     emailRecheckS: 900,
     unavailablePage: (request) =>
-      pdsUnavailablePage(request, web.screens.verifyEmail({ state: "unavailable", pdsHost: "pds.test" }), (spec) =>
-        pageResponse(
-          {
-            build: {
-              manifest: {
-                boot: "assets/boot.js",
-                styles: [],
-                fonts: [],
-                icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-                islands: new Map(),
-              },
-              files: new Map(),
-            },
-            render: web.renderPage,
-            assetsOrigin: "https://unset.test",
-            env: "test",
-            log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
-          },
-          spec,
-        ),
-      ),
+      pdsUnavailablePage(request, web.screens.verifyEmail({ state: "unavailable", pdsHost: "pds.test" }), testPage()),
   };
 }
 

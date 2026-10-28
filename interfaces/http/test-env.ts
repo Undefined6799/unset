@@ -14,7 +14,7 @@ import {
 } from "./legal-placeholders.ts";
 
 /** One private ES256 client key, as OAUTH_CLIENT_KEYS holds it. */
-export const clientKeyJwk = (kid: string) => ({
+const clientKeyJwk = (kid: string) => ({
   ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
   kid,
   alg: "ES256",
