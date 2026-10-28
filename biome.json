@@ -54,6 +54,10 @@
         "apps/**/*.jsx",
         "interfaces/**/*.tsx",
         "interfaces/**/*.jsx",
+        "domains/**/*.tsx",
+        "domains/**/*.jsx",
+        "infrastructure/**/*.tsx",
+        "infrastructure/**/*.jsx",
         "shared/**/*.tsx",
         "shared/**/*.jsx"
       ],
