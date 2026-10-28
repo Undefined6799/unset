@@ -10,10 +10,12 @@ import { type CallbackResult, SCOPE_METADATA } from "@unset/infrastructure-pds";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
+import type { SafeHref } from "@unset/shared-ui";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
+import type { AuthorizationTarget } from "./login.ts";
 import { type CallbackDeps, oauthCallbackRoutes } from "./oauth-callback.ts";
 
 const ORIGIN = "https://unset.test";
@@ -34,11 +36,17 @@ type World = {
   completed?: Partial<Extract<CallbackResult, { ok: true }>> | Extract<CallbackResult, { ok: false }>;
   consumed?: "ok" | "invalid" | "throws";
   createFails?: boolean;
+  /** What asking again with a page returns (P2.05s); the PDS's authorize URL by default. */
+  asked?: AuthorizationTarget;
 };
+
+const ISSUER = "https://pds.unset.test";
+const AS_URL = `${ISSUER}/oauth/authorize?client_id=c&request_uri=r` as SafeHref;
 
 function setup(world: World = {}) {
   const calls: string[] = [];
   const created: { did: Did; replacing: string | null }[] = [];
+  const asked: { input: string; appState: Record<string, unknown>; prompt?: string }[] = [];
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
     service: "http",
@@ -73,6 +81,16 @@ function setup(world: World = {}) {
       return { cookieValue: SID, expiresAt: new Date(Date.now() + 1000) };
     },
     sessionMaxAgeS: 2_592_000,
+    askWithPage: async (input, { appState, ...options }) => {
+      calls.push("ask");
+      asked.push({
+        input,
+        appState: JSON.parse(appState),
+        ...("prompt" in options ? { prompt: String(options.prompt) } : {}),
+      });
+      return world.asked ?? { ok: true, target: AS_URL };
+    },
+    pdsIssuer: ISSUER,
     log,
   };
   const server = createServer({ config: CONFIG, routes: oauthCallbackRoutes(deps), policies, log });
@@ -81,7 +99,7 @@ function setup(world: World = {}) {
     if (cookie !== undefined) headers.set("cookie", cookie);
     return server.request(new Request(`${ORIGIN}/oauth/callback${query}`, { headers }), "10.0.0.1");
   };
-  return { send, calls, created, lines, routes: server.routeTable() };
+  return { send, calls, created, asked, lines, routes: server.routeTable() };
 }
 
 const NONCE_COOKIE = `__Host-oauth_nonce=${NONCE}`;
@@ -119,6 +137,55 @@ describe("GET /oauth/callback", () => {
     expect(location(await legacy.send(NONCE_COOKIE))).toBe("/me");
     const offsite = setup({ completed: { appState: appState({ next: "//evil.example" }) } });
     expect(location(await offsite.send(NONCE_COOKIE))).toBe("/did");
+  });
+
+  test("callback_silent_refusal_asks_with_a_page", async () => {
+    // P2.05s: the PDS could not answer the silent attempt without a page (not signed in there, or unset never
+    // allowed). The same browser is sent once more, with the page, keeping its nonce and its return path.
+    for (const [expectedDid, input] of [
+      [DID, DID],
+      [null, ISSUER],
+    ] as const) {
+      const silent = appState({ expectedDid, next: "/legal/terms", silent: true });
+      const { send, calls, asked, created } = setup({
+        completed: { ok: false, reason: "interaction_required", appState: silent },
+      });
+      const response = await send(NONCE_COOKIE);
+      expect(response.status).toBe(303);
+      expect(location(response)).toBe(AS_URL);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      // The nonce is not spent: the flow it binds is still running, and the next callback spends it.
+      expect(calls).toEqual(["complete st", "ask"]);
+      expect(cookies(response)).toEqual([]);
+      expect(created).toEqual([]);
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.input).toBe(input);
+      expect(asked[0]?.prompt).toBeUndefined();
+      expect(asked[0]?.appState).toMatchObject({ nonce: NONCE, expectedDid, next: "/legal/terms", silent: false });
+    }
+  });
+
+  test("callback_silent_refusal_is_asked_again_only_once", async () => {
+    // A refusal for a flow that already had its page (or names no silent attempt) is a failure, never a loop.
+    for (const state of [appState({ silent: false }), appState()]) {
+      const { send, calls } = setup({ completed: { ok: false, reason: "interaction_required", appState: state } });
+      expect(location(await send(NONCE_COOKIE))).toBe("/login?error=login.failed");
+      expect(calls).toEqual(["complete st"]);
+    }
+    const junk = setup({ completed: { ok: false, reason: "interaction_required", appState: "{" } });
+    expect(location(await junk.send(NONCE_COOKIE))).toBe("/login?error=login.failed");
+  });
+
+  test("callback_silent_refusal_needs_this_browser", async () => {
+    // Asked again only for the browser that started it: the nonce cookie must match, as for a grant.
+    const refused = { ok: false, reason: "interaction_required", appState: appState({ silent: true }) } as const;
+    for (const cookie of [undefined, `__Host-oauth_nonce=${"m".repeat(43)}`]) {
+      const { send, calls } = setup({ completed: refused });
+      expect(location(await send(cookie))).toBe("/login?error=login.state_mismatch");
+      expect(calls).toEqual(["complete st"]);
+    }
+    const down = setup({ completed: refused, asked: { ok: false, code: "login.pds_unreachable" } });
+    expect(location(await down.send(NONCE_COOKIE))).toBe("/login?error=login.pds_unreachable");
   });
 
   test("callback_no_cookie_or_cookie_mismatch", async () => {

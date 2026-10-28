@@ -34,7 +34,7 @@ export type LoginDeps = {
   issueNonce: (deadline: AbortSignal) => Promise<string>;
   authorize: (
     input: string,
-    options: { appState: string; prompt?: "login"; deadline: AbortSignal },
+    options: { appState: string; prompt?: "login" | "none"; deadline: AbortSignal },
   ) => Promise<AuthorizeResult>;
   /** Our PDS's host: the chooser's authorization server is `https://` and this. */
   pdsHost: string;
@@ -117,9 +117,11 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
   async function startAuth(request: Request, account: Account, next: SafePath | null, deadline: AbortSignal) {
     const nonce = await deps.issueNonce(deadline);
-    const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
-    const prompt = signedOutFrom(request.headers.get("cookie")) ? ({ prompt: "login" } as const) : {};
-    const sent = await target(account.input, { appState, ...prompt, deadline });
+    // P2.05s: silent first, so a browser signed in at the PDS that allowed unset before sees no PDS page. After a
+    // sign-out the server asks for the password instead, until "No thanks" or the next sign-in clears the marker.
+    const signedOut = signedOutFrom(request.headers.get("cookie"));
+    const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next, silent: !signedOut });
+    const sent = await target(account.input, { appState, prompt: signedOut ? "login" : "none", deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
     if (!sent.ok) return back(sent.code, next);
     return redirect("/login/continue", [nonceCookie(nonce), targetCookie(sent.target)]);

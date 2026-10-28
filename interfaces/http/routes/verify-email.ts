@@ -109,7 +109,7 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
         if (away !== null) return away;
         const nonce = await deps.issueNonce(deadline);
         const next = safeReturnPath("/verify-email");
-        const appState = appStateOf({ nonce, expectedDid: session.did, next });
+        const appState = appStateOf({ nonce, expectedDid: session.did, next, silent: false });
         const result = await deps.authorize(session.did, { appState, prompt: "consent", deadline });
         if (!result.ok) return redirect(withErrorParam("/verify-email", `login.${result.reason}`));
         const target = deps.safeHref(result.url.href, schemes);

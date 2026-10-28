@@ -56,7 +56,7 @@ import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
 import { legalRoutes } from "./routes/legal.ts";
-import { loginRoutes } from "./routes/login.ts";
+import { authorizationTarget, type LoginDeps, loginRoutes } from "./routes/login.ts";
 import { logoutRoutes } from "./routes/logout.ts";
 import { meRoutes } from "./routes/me.ts";
 import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
@@ -186,6 +186,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       log.warn("handle.verify_failed", { kind: error instanceof Error ? error.constructor.name : "unknown" }),
   });
   const pdsIssuer = pdsIssuerOf(cfg);
+  const loginAuthorize: LoginDeps["authorize"] = (input, options) =>
+    authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log });
+  const allowHttp = cfg.OAUTH_ALLOW_HTTP;
   const login = loginRoutes({
     page,
     screens: render.screens,
@@ -194,10 +197,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     resolveHandle: (handle) => resolveHandle(oauth.network, handle),
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
-    authorize: (input, options) => authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log }),
+    authorize: loginAuthorize,
     pdsHost: cfg.PDS_HOSTNAME,
     handleDomain: cfg.HANDLE_SUFFIX.slice(1),
-    allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    allowHttp,
     log,
   });
   const callback = oauthCallbackRoutes({
@@ -209,6 +212,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
         sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
       ),
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
+    askWithPage: authorizationTarget({ authorize: loginAuthorize, safeHref: render.safeHref, allowHttp, log }),
+    pdsIssuer,
     log,
   });
   // The issuer the OAuth library recorded for a DID at sign-in (its stored token set, read without a refresh). Never a
