@@ -26,7 +26,9 @@ them against the sheet's ICONS data (or the fixed, hash-pinned registration: P2.
 
 The same hash-pinned registration also carries the approved component extensions (Navigation's Figma nodes,
 P2.13e's drawer included), so a change there edits `shared/ui/approved-extensions.json` and bumps its pinned sha256
-(`APPROVED_EXTENSION_SHA256` in `icons.ts`) without touching any copied SVG.
+(`APPROVED_EXTENSION_SHA256` in `icons.ts`) without touching any copied SVG. `inventory.json`, which holds the
+pointer to that file, is not hash-pinned, so `icons.ts` reads it with a duplicate-key check: a second `Icon` key
+would otherwise hide the pointer from a reader of the file.
 
 **Do not** fix it by excluding the folder in `biome.json`: that is a check-path change and weakens lint for any real
 SVG added later.
