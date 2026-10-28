@@ -36,7 +36,7 @@ import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./ch
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
 import { type Deps, type Run, preflight as runPreflight, SOURCE_LAST_LINE } from "./index.ts";
-import { loadInputs } from "./inputs.ts";
+import { loadInputs, lstatOrNull } from "./inputs.ts";
 import { printable } from "./printable.ts";
 import { SecretMap } from "./secret-map.ts";
 
@@ -930,6 +930,34 @@ describe("preflight", () => {
       ...beforeSecondLook(root, dotEnv, () => chmodSync(dotEnv, 0o644)),
     });
     expect(result.lines).toContain(`FAIL C9 ${dotEnv} must have exactly owner read and write permissions`);
+  });
+
+  // Codex on #1405: the walk's lstat answers null only for absence (ENOENT, ENOTDIR), so an entry it cannot look at
+  // (EACCES under a folder the deploy user cannot search; here ENAMETOOLONG, which root meets too) is never absent.
+  test("env_reader_lstat_is_null_only_for_absence", () => {
+    const { root } = stack();
+    const file = join(root, "deployment/.env.file");
+    writeFileSync(file, "");
+    expect(lstatOrNull(join(root, "deployment/absent.env"))).toBeNull();
+    expect(lstatOrNull(join(file, "x"))).toBeNull();
+    expect(() => lstatOrNull(join(root, "x".repeat(256)))).toThrow(/ENAMETOOLONG/);
+  });
+
+  // Codex on #1405: a project .env the walk cannot look at stops the run, naming it, and is never read as absent.
+  test("env_reader_errors_when_the_walk_cannot_look", async () => {
+    const { root, file } = stack({ dotEnv: "HOST_NAME=pds.example.test\n" });
+    const dotEnv = join(root, "deployment/.env");
+    const { lstat } = fakeFs(root);
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const result = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      lstat: (path) => {
+        if (path === dotEnv) throw denied;
+        return lstat?.(path) ?? null;
+      },
+    });
+    expect(result).toEqual({ code: 2, lines: [`ERROR cannot read ${dotEnv}`] });
   });
 
   // P1.34p Amendment 2, item 3: FUSE (FUSE_SUPER_MAGIC, linux/magic.h) is refused beside procfs.

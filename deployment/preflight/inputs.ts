@@ -79,11 +79,17 @@ const statOrNull = (path: string): Stats | null => {
   }
 };
 
-const lstatOrNull = (path: string): Stats | null => {
+/**
+ * Null only when nothing is there (ENOENT, ENOTDIR); any other error (EACCES, ENAMETOOLONG) throws, so the walk never
+ * reads an entry it cannot look at as absent (Codex on #1405), as realpathOrNull below.
+ */
+export const lstatOrNull = (path: string): Stats | null => {
   try {
     return lstatSync(path);
-  } catch {
-    return null;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
   }
 };
 
@@ -128,10 +134,16 @@ const readRegularText: Inputs["readRegular"] = (path) => {
  * 3. fstat on that descriptor: a regular file, the walk's (dev, ino), one hard link;
  * 4. the 64 KiB cap, from the fstat size and again while reading;
  * 5. a read from that descriptor only.
- * Null only when the walk finds nothing there; anything else stops the run, an unreadable `.env` too (mutant M17).
+ * Null only when the walk finds nothing there; anything else stops the run, an unreadable `.env` too (mutant M17),
+ * and one the walk could not look at (Codex on #1405).
  */
 function readEnvOrNull(path: string, walk: WalkInputs): EnvRead | null {
-  const end = walkTo(path, walk);
+  let end: ReturnType<typeof walkTo>;
+  try {
+    end = walkTo(path, walk);
+  } catch {
+    throw new CannotRun(`cannot read ${path}`);
+  }
   if (end === "missing") return null;
   if (end === "kind" || (typeof end !== "string" && !end.info.isFile())) {
     throw new CannotRun(`${path} is not a regular file`);
