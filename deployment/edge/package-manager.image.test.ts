@@ -26,7 +26,7 @@ const built: string[] = [];
 // build slot plus CALL_MS for each other docker call it makes, which keeps the sum of its kills under that budget and
 // the budget under run.ts's 600 s (P1.27h, N1; docker-call.ts buildTestBudget). The afterAll's removals are one `rmi`
 // per tag, one tag per test that builds (BUILDS of them), each killed at CALL_MS.
-const BUILDS = 2;
+const BUILDS = 3;
 
 /** The edge's runtime base, pinned by index digest in deployment/images/bases.lock.json. */
 function runtimeBase(): string {
