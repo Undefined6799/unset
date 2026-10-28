@@ -18,7 +18,7 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
 - P2.24f adds exactly `devices` (regular `computer`) and `apps` (regular `view-grid`), registered against their
   existing approved Figma nodes in `../approved-extensions.json`, hash-pinned by the Icon inventory row. Their
   immutable source commit is `d7dfa4d0341df0670bfed9fc24221c9d7ef2112e`; both `.svg.txt` files are byte-exact official
-  originals. Generation validates the fixed proof, source hashes and drawings before producing the 38-name union.
+  originals. Generation checks the record against its pinned sha256 (`APPROVED_EXTENSION_SHA256` in `shared/ui-build/icons.ts`), then source hashes and drawings, before producing the 38-name union.
   The imported 36-name sheet and its pins remain unchanged; `extensionProvenance` records the separate registration.
 - P2.13e adds `bulb-off` (regular `light-bulb`), `bulb-on` (`light-bulb-on`) and `tv` (`modern-tv`) for the menu's theme
   picker, approved by Alex on 2026-10-23 (Figma 151:939), from the same commit and pinned the same way: 41 names.

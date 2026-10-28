@@ -9,15 +9,16 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createPool, migrate, type Pool, withClient } from "@unset/infrastructure-postgres";
-import { createLogger } from "@unset/shared-log";
+import { type Pool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  migrateAsMigrator,
   type PostgresContainer,
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
   stopAllPostgresAfter,
+  testPools,
 } from "../../support/postgres.ts";
 import {
   classViolations,
@@ -43,7 +44,7 @@ const SERVICE_OR_JOB = roster.filter((r) => r.class === "service" || r.class ===
 
 let postgres: PostgresContainer;
 const migratorPassword = randomPassword();
-const pools: Pool[] = [];
+const pools = testPools("grants-test");
 
 beforeAll(async () => {
   postgres = await startPostgres({
@@ -52,38 +53,16 @@ beforeAll(async () => {
   });
   await migrated("unset");
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
 /** A pool on `database` as `user`; migrator unless named. */
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
-  const pool = createPool({
-    connection: { host: "127.0.0.1", port: postgres.port, database, user, password, ssl: false },
-    service: "grants-test",
-    max: 1,
-    connectTimeoutMs: 5000,
-  });
-  pools.push(pool);
-  return pool;
+  return pools.open(postgres, database, user, password);
 }
 
 /** Runs `dir` (the real migrations unless given) into `database` as migrator; returns a migrator pool on it. */
 async function migrated(database: string, dir = MIGRATIONS): Promise<Pool> {
-  const result = await migrate({
-    connection: {
-      host: "127.0.0.1",
-      port: postgres.port,
-      database,
-      user: "migrator",
-      password: migratorPassword,
-      ssl: false,
-    },
-    dir,
-    root: REPOSITORY,
-    checkQueryFiles: true,
-    log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
-    retryDelaysMs: [],
-  });
-  if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+  await migrateAsMigrator(postgres, migratorPassword, database, dir);
   return poolFor(database);
 }
 

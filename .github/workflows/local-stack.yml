@@ -9,7 +9,7 @@
 #
 # Every value is generated per run by scripts/ci/local-stack.ts, masked before it is written, kept beside the checkout,
 # never uploaded, and removed in an always() step. No secret, var, environment or OIDC; no image or layer cache. Images
-# come only from the pinned references in compose.local.yaml, the same in both jobs. On failure the only diagnostics
+# come only from the pinned references in compose.local.yaml, the same in both cases. On failure the only diagnostics
 # are `docker compose ps` and each service's last 200 log lines.
 #
 # Secrets and OIDC rule (scripts/guards/workflow-pins.test.ts): every action is GitHub-owned and pinned by commit SHA;
@@ -28,12 +28,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  green:
+  # One job per case, named after it (green, red), as before the matrix. Only the start and stop commands and the
+  # probe's expectation differ; CASE reaches run: through env, never as an expression.
+  stack:
+    name: ${{ matrix.case }}
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
+    # fail-fast off, so a red case does not cancel the green one (workflow-syntax, jobs.<job_id>.strategy.fail-fast).
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [green, red]
+    env:
+      CASE: ${{ matrix.case }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,50 +54,28 @@ jobs:
       - run: npm ci
       - name: Make the sibling folders
         run: node scripts/ci/local-stack.ts -- folders
-      - name: Start the stack
-        run: npm run local:up
+      - name: Start the stack (red without the dev root)
+        run: |
+          case "$CASE" in
+            green) npm run local:up ;;
+            red) node scripts/ci/local-stack.ts -- red-up ;;
+            *) exit 1 ;;
+          esac
       - name: Wait for every container
         run: node scripts/ci/local-stack.ts -- wait
-      - name: Probe client_id from inside the PDS
-        run: node scripts/ci/local-stack.ts -- probe green
+      - name: Probe client_id from inside the PDS (red expects the named TLS error)
+        run: node scripts/ci/local-stack.ts -- probe "$CASE"
       - name: Show ps and logs
         if: failure()
         run: node scripts/ci/local-stack.ts -- diagnose
       - name: Stop the stack
         if: always()
-        run: npm run local:down
-      - name: Remove the sibling folders
-        if: always()
-        run: node scripts/ci/local-stack.ts -- clean
-
-  red:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-      - run: npm ci
-      - name: Make the sibling folders
-        run: node scripts/ci/local-stack.ts -- folders
-      - name: Start the stack without the dev root
-        run: node scripts/ci/local-stack.ts -- red-up
-      - name: Wait for every container
-        run: node scripts/ci/local-stack.ts -- wait
-      - name: Probe client_id and expect the named TLS error
-        run: node scripts/ci/local-stack.ts -- probe red
-      - name: Show ps and logs
-        if: failure()
-        run: node scripts/ci/local-stack.ts -- diagnose
-      - name: Stop the stack
-        if: always()
-        run: node scripts/ci/local-stack.ts -- red-down
+        run: |
+          case "$CASE" in
+            green) npm run local:down ;;
+            red) node scripts/ci/local-stack.ts -- red-down ;;
+            *) exit 1 ;;
+          esac
       - name: Remove the sibling folders
         if: always()
         run: node scripts/ci/local-stack.ts -- clean

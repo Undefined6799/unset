@@ -19,16 +19,11 @@ Sign-in, onboarding and the account page are in [What unset is](../what-is-unset
 
 ## Processes
 
-Every manifest except `interfaces/http/routes.manifest.json` lists one route.
+`interfaces/http` is the only process folder on this tree.
 
 | Folder | Manifest routes |
 | --- | --- |
 | `interfaces/http` | [What unset is](../what-is-unset/) |
-| `interfaces/admin` | `GET /health` |
-| `interfaces/api` | `GET /health` |
-| `interfaces/indexer` | `GET /health` |
-| `interfaces/media` | `GET /health` |
-| `interfaces/review` | `GET /health` |
 
 ## Folders
 
@@ -37,7 +32,7 @@ Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/
 | Boundary | On this tree |
 | --- | --- |
 | `apps/` | `web` |
-| `interfaces/` | `http`, `admin`, `api`, `indexer`, `media`, `review` |
+| `interfaces/` | `http` |
 | `domains/` | `identity` |
 | `infrastructure/` | `audit`, `net-guard`, `pds`, `postgres`, `seal`, `session` |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |

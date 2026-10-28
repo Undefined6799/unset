@@ -10,7 +10,7 @@ importance: normal
 related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, pds]
-checked: 2026-10-17
+checked: 2026-10-28
 ---
 # pds
 
@@ -47,12 +47,18 @@ issuer. It returns the DID, issuer, appState and the granted scope (read from th
 `revoke`; failures are `consent_denied`, `expired` (no stored state: unknown, expired or replayed), `pds_unreachable`
 and `failed`. The interface decides the rest (nonce, expected account, grant, session). `sign-in.test.ts` also pins
 the PKCE verifier against the PAR challenge, a `sub` whose issuer is not the token server, a replayed callback that
-sends no second token request, and a second login replacing the stored token set.
+sends no second token request, and a second login replacing the stored token set. P2.05s: `authorize` also takes
+`prompt: "none"`; a callback error that means the server needs a page (`login_required`, `consent_required`,
+`interaction_required`, `account_selection_required`) returns `interaction_required` with the appState, so the route
+can ask again. The library skips its `iss` check on an error response, so nothing is trusted from it but the state.
 
 **PDS calls (P2.07).** `pds-call.ts` is the only place that calls `client.restore(` or `new Agent(`. It classifies
 failures into `ok`, `transient`, `auth_dead`, `scope_missing` and `rejected`. A dead grant ends the DID's sessions
 through an injected `endSessions` (`destroyAllForDid`); this package cannot import `infrastructure/session`. A
 handshake, a 429 or an outage does not. A DPoP nonce rotation against the dev PDS
 (`pdsCall.dev_pds_nonce_rotation`, book P2.07) is planned and not built; no test on main covers it.
+The book's `isAuthFatal` had no caller and was removed (P0.05 cleanup): `restoreOutcome` classes a refresh and
+`isDpopNonceHandshake` a handshake. `xrpcFromSession` and `PDS_UPLOAD_TIMEOUT_MS` are not exported from the index;
+the book's upload step (phase 2) re-exports the constant when a route first passes it as `timeoutMs`.
 
 **Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].

@@ -3,24 +3,24 @@ id: admin
 type: area
 status: current
 areas: ["[[admin]]"]
-summary: "Hub for interfaces/admin: the admin server, reached only over Tailscale; today a health-only kit server."
-code: [interfaces/admin/compose.ts]
+summary: "Hub for interfaces/admin: the admin server, reached only over Tailscale; folder not created yet."
+code: []
 sources: []
 importance: normal
 related: ["[[http]]"]
 replaced_by: null
 tags: [area, admin]
-checked: 2026-10-06
+checked: 2026-10-28
 ---
 # admin
 
 **What it owns.** The admin server's entry point: gate, session, enrolment and admin actions as they land
 (architecture guideline §1). Its screens will live in `apps/admin`, which does not exist yet.
 
-**Today.** A server-kit server with `/health` and nothing else. Every server is built the same way from the server kit in `shared/http` (see [[http]]): `main.ts` reads
-the config once and starts; `compose.ts` is the composition root and the only file that builds adapters (AB-2);
-`config.ts` merges the kit's keys; `routes.manifest.json` lists every route with its group, limits and middleware,
-and a guard checks it against the code.
+**Today.** No folder. The health-only stub was removed (P1.04 cleanup, 2026-10-28) until the first admin step
+lands (decision 34: folders appear with their first code). When it lands it is built like [[http]] from the server
+kit in `shared/http`: `main.ts` reads the config once and starts; `compose.ts` is the composition root and the only
+file that builds adapters (AB-2); `config.ts` merges the kit's keys; `routes.manifest.json` lists every route.
 
 **Differences from the public servers.**
 - It sits behind Tailscale with no edge proxy, so the trusted proxy runs in `socket` mode: the client address is the

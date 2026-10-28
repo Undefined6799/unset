@@ -3,7 +3,7 @@
 import { OAuthResponseError, TokenRefreshError } from "@atproto/oauth-client-node";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import { describe, expect, test } from "vitest";
-import { isAuthFatal, isDpopNonceHandshake, restoreOutcome } from "./pds-errors.ts";
+import { isDpopNonceHandshake, restoreOutcome } from "./pds-errors.ts";
 
 const http = (status: number, error?: string, headers?: Headers | Record<string, string>) =>
   Object.assign(new Error("http"), { status, ...(error === undefined ? {} : { error }), headers });
@@ -17,17 +17,6 @@ describe("isDpopNonceHandshake", () => {
     expect(isDpopNonceHandshake(http(401, undefined, headers))).toBe(true);
     expect(isDpopNonceHandshake(http(401, undefined, { "WWW-Authenticate": 'error="use_dpop_nonce"' }))).toBe(true);
     expect(isDpopNonceHandshake(http(401, "InvalidToken"))).toBe(false);
-  });
-});
-
-describe("isAuthFatal", () => {
-  test("isAuthFatal.cases", () => {
-    expect(isAuthFatal(http(401))).toBe(true);
-    expect(isAuthFatal(http(400, "invalid_grant"))).toBe(true);
-    expect(isAuthFatal(http(401, "use_dpop_nonce"))).toBe(false);
-    expect(isAuthFatal(http(500))).toBe(false);
-    expect(isAuthFatal(http(503))).toBe(false);
-    expect(isAuthFatal(new NetGuardError("egress.timeout"))).toBe(false);
   });
 });
 

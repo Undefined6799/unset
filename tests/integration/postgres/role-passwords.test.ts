@@ -9,7 +9,6 @@ import { join } from "node:path";
 import {
   createPool,
   type MigrateServiceResult,
-  migrate,
   migrateThenSyncPasswords,
   type PasswordSyncResult,
   syncRolePasswords,
@@ -18,7 +17,13 @@ import {
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { cleanUpAll, docker } from "../../support/docker.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  migrateAsMigrator,
+  type PostgresContainer,
+  randomPassword,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 const migratorPassword = randomPassword();
@@ -97,15 +102,7 @@ describe("role passwords on postgres", () => {
       initDir: join(REPOSITORY, "deployment", "postgres", "init"),
       secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
     });
-    const migrated = await migrate({
-      connection: connection("migrator", migratorPassword),
-      dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
-      root: REPOSITORY,
-      checkQueryFiles: true,
-      log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
-      retryDelaysMs: [],
-    });
-    if (!migrated.ok) throw new Error(`migration failed: ${migrated.reason}`);
+    await migrateAsMigrator(postgres, migratorPassword);
   }, 120_000);
   // One container removal, killed at the helper's 60 s (P1.27k), inside this budget.
   afterAll(() => {

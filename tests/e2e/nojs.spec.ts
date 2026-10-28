@@ -114,6 +114,15 @@ test.describe("javascript disabled", () => {
     await expect(panel).toBeHidden();
   });
 
+  // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.
+  test("signed_out_no_thanks_posts_home", async ({ page }) => {
+    await page.goto("/signed-out");
+    const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/signed-out"));
+    await page.getByRole("button", { name: "No thanks" }).click();
+    expect((await posted).status()).toBe(303);
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   // P1.22's test, its theme half (the French half is P1.22b's): the footer form on an app page sets the theme.
   test("prefs_forms_work_without_js", async ({ page, browserName }) => {
     await page.goto("/signed-out");

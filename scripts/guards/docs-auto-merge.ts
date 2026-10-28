@@ -123,6 +123,7 @@ export async function runAutoMerge(env: AutoMergeEnv, github: MergeClient): Prom
       return 0;
     }
     console.error(`docs-auto-merge: expected one pull request, found ${numbers.length}`);
+    await disableEach(numbers, github);
     return 1;
   }
   const number = numbers[0];
@@ -168,6 +169,20 @@ export async function runAutoMerge(env: AutoMergeEnv, github: MergeClient): Prom
     return 1;
   }
   return pathsError || check === "error" ? 1 : 0;
+}
+
+/** When the run cannot tell which pull request it judged, none of them keeps auto-merge (P0.07k). Best effort. */
+async function disableEach(numbers: readonly number[], github: MergeClient): Promise<void> {
+  for (const number of numbers) {
+    try {
+      const pull = await github.pull(number);
+      if (pull.autoMerge === "off") continue;
+      await github.disable(pull.nodeId);
+      console.log(`docs-auto-merge: #${pull.number} disable`);
+    } catch (error) {
+      console.error(`docs-auto-merge: ${error instanceof Error ? error.message : "auto-merge update failed"}`);
+    }
+  }
 }
 
 type Json = Record<string, unknown>;
