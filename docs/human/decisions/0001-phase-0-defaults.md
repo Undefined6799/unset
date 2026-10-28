@@ -542,3 +542,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   member's PDS and nowhere else; a save changes only the fields sent, compare-and-swap on the stored CID. The owner's
   page edits the README in place; the side column is edited in Settings › Profile with a plain form. The README is
   stored as typed blocks and edited with BlockNote, loaded only on the owner's own page. Proposed, awaiting Alex.
+- **ADR 0037 accepted (Alex, 2026-10-28 22:15:27Z, against 419382d; own record:
+  [0037](0037-profile-module-and-page.md)):** the profile is its own module, `domains/profile`; the `sh.unset.profile`
+  record lives only on the member's PDS and a save is compare-and-swap on the stored CID; the README is stored as our
+  own typed blocks and edited in place on the owner's own page with BlockNote 0.56.0's core, an owner-only entry
+  outside the island budget under its own cap, under the app pages' CSP unchanged; the side column is edited in
+  Settings › Profile with a plain form.

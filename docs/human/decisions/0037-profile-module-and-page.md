@@ -1,6 +1,8 @@
 # 0037 — The profile is its own module, stored on the member's PDS, edited by its owner
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-10-28 22:15:27Z, against 419382d ("accept ADR 0037.", typed in the project chat,
+cmsg_01GKYqaAGu4Vob5JHVyDmG7A6dt2tbLQHj2a4Qv7VbyFS9, on the head the coordinator had verified). From here the
+record changes only to be marked superseded.
 
 ## Context
 On 2026-10-23 Alex designed the profile page in Figma (file 4hrOlzQ1d0lA8Acm4KyLVf, page Profile) and asked for it on
