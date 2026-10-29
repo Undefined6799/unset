@@ -30,7 +30,9 @@ apps rely on it, so a change is close to permanent.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
 - `scripts/breaking-check.ts`: refuses a narrowed limit, a lost value or a changed `default` (an absent
   `listed` must stay not listed) on a published schema; additions to
-  the permission set need Alex's approval and removals are refused.
+  the permission set need Alex's approval and removals are refused. It also holds every `published/<nsid>.json`
+  snapshot with no lock entry yet: `sh.unset.profile` is snapshotted because its records are live before P1.35
+  publishes it (P1.31h).
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
