@@ -26,6 +26,7 @@ import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
+import { Readme } from "../components/Readme/Readme.tsx";
 import { Search } from "../components/Search/Search.tsx";
 import { SectionHeading } from "../components/SectionHeading/SectionHeading.tsx";
 import { Select } from "../components/Select/Select.tsx";
@@ -157,6 +158,41 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
         { label: "Handle", value: "alex.example" },
         { label: "DID", value: "did:plc:eeeeeeeeeeeeeeeeeeeeeeee", mono: true },
         { label: "Joined", value: null },
+      ]}
+    />
+  ),
+  Readme: (
+    <Readme
+      labels={{ done: "Done", notDone: "Not done" }}
+      blocks={[
+        {
+          $type: "sh.unset.profile#heading",
+          level: 1,
+          content: [{ $type: "sh.unset.profile#textRun", text: "About me" }],
+        },
+        {
+          $type: "sh.unset.profile#columns",
+          columns: [
+            {
+              blocks: [
+                {
+                  $type: "sh.unset.profile#paragraph",
+                  content: [{ $type: "sh.unset.profile#textRun", text: "I make small tools." }],
+                },
+              ],
+            },
+            {
+              blocks: [
+                {
+                  $type: "sh.unset.profile#listItem",
+                  style: "check",
+                  checked: true,
+                  content: [{ $type: "sh.unset.profile#textRun", text: "Quiet software" }],
+                },
+              ],
+            },
+          ],
+        },
       ]}
     />
   ),

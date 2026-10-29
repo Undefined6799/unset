@@ -191,6 +191,13 @@
     "variants": [],
     "status": "built"
   },
+  "Readme": {
+    "sheet": "components/Readme/README.md",
+    "sheetSha256": "efb5585df0a35cd24baa87788b3c534f8c788d06e5632ea8e6d0f1668c32464d",
+    "props": "ReadmeProps",
+    "variants": [],
+    "status": "built"
+  },
   "Search": {
     "sheet": "sheet/components/Search/README.md",
     "sheetSha256": "db887055fa1c50d14416e3d8bbbdfe8553e6ca8119dfae8812a3442c89e41698",

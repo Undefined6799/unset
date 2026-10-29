@@ -30,6 +30,13 @@ export {
 export type { ThemeChoice, ThemePickerProps } from "./components/Navigation/ThemePicker.tsx";
 export { ThemePickerSlot } from "./components/Navigation/ThemePickerSlot.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
+export {
+  Readme,
+  type ReadmeBlockData,
+  type ReadmeColumns,
+  type ReadmeProps,
+  type ReadmeRun,
+} from "./components/Readme/Readme.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
