@@ -537,3 +537,14 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   a lock digest and every such run ends with the fixed unsigned line; production stays CI-built, keyless-signed and
   digest-pinned (ADR 0033 unchanged) and main changes only by PR; the accepted costs are untested code on an
   isolated, invite-only staging and a build filling its disk.
+- **The profile module and page (P2.20; own record: [0037](0037-profile-module-and-page.md)):** the profile is its own
+  module, `domains/profile`, beside identity (Alex, 2026-10-23 02:59Z). The `sh.unset.profile` record lives on the
+  member's PDS and nowhere else; a save changes only the fields sent, compare-and-swap on the stored CID. The owner's
+  page edits the README in place; the side column is edited in Settings › Profile with a plain form. The README is
+  stored as typed blocks and edited with BlockNote, loaded only on the owner's own page. Proposed, awaiting Alex.
+- **ADR 0037 accepted (Alex, 2026-10-28 22:15:27Z, against 419382d; own record:
+  [0037](0037-profile-module-and-page.md)):** the profile is its own module, `domains/profile`; the `sh.unset.profile`
+  record lives only on the member's PDS and a save is compare-and-swap on the stored CID; the README is stored as our
+  own typed blocks and edited in place on the owner's own page with BlockNote 0.56.0's core, an owner-only entry
+  outside the island budget under its own cap, under the app pages' CSP unchanged; the side column is edited in
+  Settings › Profile with a plain form.
