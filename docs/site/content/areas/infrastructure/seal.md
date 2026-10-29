@@ -10,9 +10,9 @@ Envelope encryption for values the process stores and reads back. Package `@unse
 | Module | What it holds |
 | --- | --- |
 | `infrastructure/seal/seal.ts` | `encrypt` and `decrypt` via `node:crypto` `createCipheriv("aes-256-gcm", ...)`. `seal` writes `s1.<kid>.<wrapIv>.<wrappedDek+tag>.<iv>.<ciphertext+tag>`. Plaintext cap `MAX_PLAINTEXT` is 1 MiB. |
-| `infrastructure/seal/sealStream.ts` | `sealStream` and `unsealStream`. `CHUNK_BYTES` is exported from `index.ts`. |
+| `infrastructure/seal/sealStream.ts` | `sealStream` and `unsealStream`. `CHUNK_BYTES` (64 KiB) is defined here and not exported from `index.ts`. |
 | `infrastructure/seal/context.ts` | `sealContext(column, rowKey)`. `checkContext` refuses a string that is not that shape. |
-| `infrastructure/seal/keyring.ts` | `Keyring`, `parseKeyring`, `sealFields`, `keyringFile`. Keys are read from `SEAL_KEYRING_FILE`. `toString`, `toJSON` and `inspect` return `[keyring]`. |
+| `infrastructure/seal/keyring.ts` | `Keyring`, `parseKeyring`, `sealFields`. `keyringFile` is the private field reader behind `sealFields`. Keys are read from `SEAL_KEYRING_FILE`. `toString`, `toJSON` and `inspect` return `[keyring]`. |
 | `infrastructure/seal/sealer.ts` | `createSealer`. `seal`, `unseal`, `sealJson`, `unsealJson`, the two stream methods, `rewrap`, `countByKid`. |
 | `infrastructure/seal/rewrap.ts` | `rewrap` of one value onto the active key. |
 | `infrastructure/seal/error.ts` | `SealError`. |
