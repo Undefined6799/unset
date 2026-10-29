@@ -552,3 +552,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0038](0038-profile-save-keeps-unknown-fields.md)):** a save checks the merged record in read mode, so a field
   another client or a newer release added is kept, not refused; a defined field that is invalid is still refused.
   Supersedes ADR 0037 Decision 2's strict-validator clause once accepted. Proposed, awaiting Alex.
+- **ADR 0038 accepted (Alex, 2026-10-29 22:32:00Z, against bb57238; own record:
+  [0038](0038-profile-save-keeps-unknown-fields.md)):** a profile save checks the merged record in read mode, so a
+  stored field the lexicon does not define is kept and never blocks a save; a defined field that is invalid is still
+  refused. Supersedes ADR 0037 Decision 2's strict-validator clause.

@@ -1,6 +1,8 @@
 # 0038 — A profile save keeps stored fields the lexicon does not define
 
-Status: Proposed (awaiting Alex). Supersedes one clause of ADR 0037 Decision 2 ("validates the result with the
+Status: Accepted by Alex, 2026-10-29 22:32:00Z, against bb57238 ("Accept ADR 0038.", typed in the review thread,
+cmsg_01GKYqaAGu4Vob5JHVyDmG7AB5vxkDtjiE5vqS5WS3vn9y, on the head the coordinator had verified). From here the record
+changes only to be marked superseded. Supersedes one clause of ADR 0037 Decision 2 ("validates the result with the
 lexicon's strict validator"); the rest of ADR 0037 is unchanged.
 
 ## Context
@@ -36,4 +38,4 @@ no output surface.
 ## Compliance
 `domains/profile/profile.test.ts`: "a stored field this version does not know is kept and the save goes through"
 (red before the change) and "a stored record another client broke is refused, never written back" (still green).
-Acceptance is Alex's line on the pull request that adds this record.
+Acceptance is Alex's line on the pull request that adds this record (given 2026-10-29, above).
