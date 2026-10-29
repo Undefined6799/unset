@@ -25,10 +25,13 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/oauth-callback.ts` | Authorization callback. |
 | `interfaces/http/routes/logout.ts` | Sign-out for this browser. Session count: `interfaces/http/logout-sessions.ts`. |
 | `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: `interfaces/http/account.ts`. |
+| `interfaces/http/routes/revoke.ts` | `withRevokeTimeout`, the 10 s grant-revocation limit shared by `logout.ts` and `welcome.ts`. |
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |
+| `interfaces/http/routes/profile.ts` | `POST /profile`, the owner's profile save. Body limit `PROFILE_BODY_LIMIT_BYTES` is 96 KiB. The DID comes from the session. `domains/profile` reads the fields. `infrastructure/pds/profile-record.ts` writes the record. |
 | `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
+| `interfaces/http/sign-in-lock.ts` | Holds the account's OAuth lock during a sign-in and a last-browser sign-out, so one can't revoke the token set the other just stored. |
 | `interfaces/http/app-gate.ts` | Page gate `openApp`: session, then onboarding, then a confirmed email. |
 | `interfaces/http/redirect.ts` | `redirect`: the 303, `no-store` answer the forms and the page gate send, with any cookies. |
 | `interfaces/http/form-field.ts` | `single`: one value of a form or query field, or null when missing or repeated. |
