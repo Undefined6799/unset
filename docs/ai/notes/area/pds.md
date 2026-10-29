@@ -61,4 +61,9 @@ The book's `isAuthFatal` had no caller and was removed (P0.05 cleanup): `restore
 `isDpopNonceHandshake` a handshake. `xrpcFromSession` and `PDS_UPLOAD_TIMEOUT_MS` are not exported from the index;
 the book's upload step (phase 2) re-exports the constant when a route first passes it as `timeoutMs`.
 
+**The profile record (Alex 2026-10-23).** `profile-record.ts` reads the member's `sh.unset.profile` record (rkey
+`self`) from their own repo over `pdsCall`, as an idempotent read. `RecordNotFound` means no profile yet and returns
+`null`, never a failure; any other refusal stays a failure, so an outage never reads as an empty profile. The value
+comes back unparsed: `domains/profile` reads it field by field.
+
 **Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].
