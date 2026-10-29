@@ -101,6 +101,35 @@ const PDS_IDS = [
   "GHSA-v53p-9fqp-m79j",
 ] as const;
 
+/** P1.38k: the 0.4.5049 re-pin (P1.38h, digest cca85fd0), scanned by #1371's pins job (run 40622622906). Four ids
+ * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. */
+const REPIN_STATEMENT = [
+  "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
+  "0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z,",
+  "removed on the next re-pin or before P1.34",
+].join(" ");
+const NPM = "usr/local/lib/node_modules/npm/node_modules";
+const REPIN_ENTRIES = [
+  {
+    id: "CVE-2026-59892",
+    paths: [
+      "app/node_modules/.pnpm/@opentelemetry+propagator-jaeger@2.8.0_@opentelemetry+api@1.10.0/node_modules/@opentelemetry/propagator-jaeger/package.json",
+    ],
+    purls: ["pkg:npm/%40opentelemetry/propagator-jaeger@2.8.0"],
+  },
+  { id: "CVE-2026-102276", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
+  { id: "CVE-2026-102278", paths: [`${NPM}/brace-expansion/package.json`], purls: ["pkg:npm/brace-expansion@5.0.9"] },
+  { id: "CVE-2026-19534", paths: [`${NPM}/undici/package.json`], purls: ["pkg:npm/undici@6.28.0"] },
+  { id: "CVE-2026-109383", paths: [`${NPM}/undici/package.json`], purls: ["pkg:npm/undici@6.28.0"] },
+  { id: "CVE-2026-109869", paths: [`${NPM}/undici/package.json`], purls: ["pkg:npm/undici@6.28.0"] },
+  { id: "CVE-2026-87018", paths: [`${NPM}/undici/package.json`], purls: ["pkg:npm/undici@6.28.0"] },
+  {
+    id: "CVE-2023-54404",
+    paths: ["app/node_modules/.pnpm/zod@3.25.76/node_modules/zod/package.json"],
+    purls: ["pkg:npm/zod@3.25.76"],
+  },
+].map((entry) => ({ ...entry, statement: REPIN_STATEMENT, expired_at: "2026-11-27" }));
+
 type IgnoreEntry = { id?: string; statement?: string; expired_at?: unknown; paths?: string[]; purls?: string[] };
 
 function pdsEntries(): IgnoreEntry[] {
@@ -125,8 +154,12 @@ describe(".github/trivyignore.pds.yaml", () => {
     ]);
     expect(PDS_MAX_DAYS).toBeLessThan(MAX_DAYS);
     expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
-    const entries = pdsEntries();
+    const all = pdsEntries();
+    const entries = all.slice(0, PDS_IDS.length);
     expect(entries.map((item) => item.id)).toEqual([...PDS_IDS]);
+    expect(all.slice(PDS_IDS.length).map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual(
+      REPIN_ENTRIES,
+    );
     for (const item of entries) {
       expect(dayOf(item.expired_at), item.id).toBe("2026-11-13");
       expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id ?? ""] ?? STATEMENT);

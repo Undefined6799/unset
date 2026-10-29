@@ -94,6 +94,11 @@
       "status": 200
     },
     {
+      "method": "POST",
+      "path": "/signed-out",
+      "status": 415
+    },
+    {
       "method": "GET",
       "path": "/verify-email",
       "status": 303

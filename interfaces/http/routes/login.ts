@@ -17,6 +17,8 @@ import { defineRoute, type Route, type SafePath, safeReturnPath } from "@unset/s
 import type { Logger } from "@unset/shared-log";
 // A whole-statement type import: Node erases it, so the server never loads the kit (its index reaches .tsx files).
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
+import { single } from "../form-field.ts";
+import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
@@ -34,7 +36,7 @@ export type LoginDeps = {
   issueNonce: (deadline: AbortSignal) => Promise<string>;
   authorize: (
     input: string,
-    options: { appState: string; prompt?: "login"; deadline: AbortSignal },
+    options: { appState: string; prompt?: "login" | "none"; deadline: AbortSignal },
   ) => Promise<AuthorizeResult>;
   /** Our PDS's host: the chooser's authorization server is `https://` and this. */
   pdsHost: string;
@@ -51,21 +53,29 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
 
-/** The one value of `name` in the form, or null when it is missing or repeated. */
-function single(form: URLSearchParams, name: string): string | null {
-  const values = form.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
-
-const redirect = (location: string, setCookies: readonly string[] = []): Response => {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of setCookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
-};
-
 /** Back to the form with an error, keeping a valid return path. */
 const back = (code: ErrorCode, next: SafePath | null): Response =>
   redirect(withErrorParam(next === null ? "/login" : `/login?${new URLSearchParams({ next })}`, code));
+
+export type TargetDeps = Pick<LoginDeps, "authorize" | "safeHref" | "allowHttp" | "log">;
+export type AuthorizationTarget =
+  | { readonly ok: true; readonly target: SafeHref }
+  | { readonly ok: false; readonly code: ErrorCode };
+
+/** The authorization URL for `input`, as a link of an allowed kind, or the code the sign-in form shows. */
+export function authorizationTarget(deps: TargetDeps) {
+  const schemes: readonly HrefScheme[] = deps.allowHttp ? ["https:", "http:"] : ["https:"];
+  return async (input: string, options: Parameters<LoginDeps["authorize"]>[1]): Promise<AuthorizationTarget> => {
+    const result = await deps.authorize(input, options);
+    if (!result.ok) return { ok: false, code: `login.${result.reason}` };
+    const target = deps.safeHref(result.url.href, schemes);
+    if (target === null) {
+      deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
+      return { ok: false, code: "login.failed" };
+    }
+    return { ok: true, target };
+  };
+}
 
 export function loginRoutes(deps: LoginDeps): Route[] {
   const issuer = `https://${deps.pdsHost}`;
@@ -92,20 +102,19 @@ export function loginRoutes(deps: LoginDeps): Route[] {
     return { input: handle, expectedDid: found.did };
   }
 
+  const target = authorizationTarget(deps);
+
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
   async function startAuth(request: Request, account: Account, next: SafePath | null, deadline: AbortSignal) {
     const nonce = await deps.issueNonce(deadline);
-    const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
-    const prompt = signedOutFrom(request.headers.get("cookie")) ? ({ prompt: "login" } as const) : {};
-    const result = await deps.authorize(account.input, { appState, ...prompt, deadline });
+    // P2.05s: silent first, so a browser signed in at the PDS that allowed unset before sees no PDS page. After a
+    // sign-out the server asks for the password instead, until "No thanks" or the next sign-in clears the marker.
+    const signedOut = signedOutFrom(request.headers.get("cookie"));
+    const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next, silent: !signedOut });
+    const sent = await target(account.input, { appState, prompt: signedOut ? "login" : "none", deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
-    if (!result.ok) return back(`login.${result.reason}`, next);
-    const target = deps.safeHref(result.url.href, schemes);
-    if (target === null) {
-      deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
-      return back("login.failed", next);
-    }
-    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(target)]);
+    if (!sent.ok) return back(sent.code, next);
+    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(sent.target)]);
   }
 
   /** The target this browser's POST stored, if it is still a link of an allowed kind. */

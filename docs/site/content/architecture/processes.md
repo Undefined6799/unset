@@ -73,12 +73,4 @@ Every roster role gets `idle_in_transaction_session_timeout=10s`, `lock_timeout=
 
 ## Interface processes not in Compose
 
-These folders start a server. `compose.ts` passes an empty route list, so the kit serves `GET /health` and nothing else (`shared/http/server.ts` adds that route).
-
-| Folder | Entry | Routes today |
-| --- | --- | --- |
-| `interfaces/admin` | `main.ts` | `GET /health` |
-| `interfaces/api` | `main.ts` | `GET /health` |
-| `interfaces/indexer` | `main.ts` | `GET /health` |
-| `interfaces/media` | `main.ts` | `GET /health` |
-| `interfaces/review` | `main.ts` | `GET /health` |
+None. `interfaces/http` is the only process folder on this tree. The other processes in guideline §1 get their folder with their first route (decision 34).

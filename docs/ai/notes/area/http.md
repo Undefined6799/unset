@@ -169,4 +169,9 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
 signed-in browser to `/did` (the box posts from public pages, which never vary on the cookie).
 
+**Silent sign-in (P2.05s).** POST /login asks with `prompt=none` (appState `silent: true`) unless `__Host-signed_out`
+is set. The callback asks once more with a page only for a silent appState whose nonce cookie matches, through the
+same `authorizationTarget` POST /login uses, and 303s straight to the PDS. POST /signed-out ("No thanks") clears the
+marker; CSRF-gated, in the route manifest.
+
 **Links.** [[web]], [[config]], [[errors]].

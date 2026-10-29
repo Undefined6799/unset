@@ -429,6 +429,55 @@ describe("trusted base (SE-6)", () => {
     });
   });
 
+  // P0.09t (#639): a trusted file pattern carries only its own tests, the same basename with `.test.ts` beside it or
+  // under the mirrored tests/ path. Its parent folder's name no longer lets every tests/**/<folder>/** file ride. A
+  // trusted folder pattern keeps its folder rule.
+  test("trusted_file_pattern_carries_only_its_own_tests", () => {
+    const filePatterns = ["/interfaces/http/session-cookie.ts", "/infrastructure/postgres/roles.json", "/shared/http/"];
+    const isolateFiles = (paths: string[]) =>
+      checkTrustedBaseIsolation(paths, filePatterns, { parsedPaths: [], findings: [], docs: docsFor(paths) });
+    const COOKIE = "interfaces/http/session-cookie.ts";
+    // Red: an unrelated test under a folder named like the file's parent.
+    expect(isolateFiles([COOKIE, "tests/integration/http/unrelated.test.ts"])).toEqual({
+      ok: false,
+      outside: ["tests/integration/http/unrelated.test.ts"],
+    });
+    expect(isolateFiles(["infrastructure/postgres/roles.json", "tests/integration/postgres/schemas.test.ts"])).toEqual({
+      ok: false,
+      outside: ["tests/integration/postgres/schemas.test.ts"],
+    });
+    // The same basename in a folder that is not the mirrored path, or a different suffix, does not ride either.
+    for (const stray of [
+      "tests/integration/media/session-cookie.test.ts",
+      "tests/integration/session-cookie.test.ts",
+      "tests/session-cookie.test.ts",
+      "tests/integration/other/http/session-cookie.test.ts",
+      "tests/integration/http/session-cookie.spec.ts",
+      "tests/integration/http/session-cookie.ts",
+      "interfaces/http/other/session-cookie.test.ts",
+    ]) {
+      expect(isolateFiles([COOKIE, stray])).toEqual({ ok: false, outside: [stray] });
+    }
+    // Green: the file's own test beside it, or under the mirrored tests/ path.
+    for (const own of [
+      "interfaces/http/session-cookie.test.ts",
+      "tests/integration/http/session-cookie.test.ts",
+      "tests/integration/interfaces/http/session-cookie.test.ts",
+      "tests/e2e/http/session-cookie.test.ts",
+    ]) {
+      expect(isolateFiles([COOKIE, own])).toEqual({ ok: true, touched: true });
+    }
+    // Red: a trusted file that is not .ts carries no test, beside it or mirrored (main refused the beside one).
+    for (const stray of ["infrastructure/postgres/roles.test.ts", "tests/integration/postgres/roles.test.ts"]) {
+      expect(isolateFiles(["infrastructure/postgres/roles.json", stray])).toEqual({ ok: false, outside: [stray] });
+    }
+    // Green: a folder pattern's tests/**/<folder>/** file still rides.
+    expect(isolateFiles(["shared/http/csp/build.ts", "tests/integration/http/unrelated.test.ts"])).toEqual({
+      ok: true,
+      touched: true,
+    });
+  });
+
   // P1.28a. The bump procedure puts the lock and the mirror list in the same PR as the FROM line. They ride only
   // for a digest substitution on deployment/edge/Dockerfile, and the check that recognizes that may share the PR.
   test("edge_digest_bump_carries_only_its_pins", () => {
