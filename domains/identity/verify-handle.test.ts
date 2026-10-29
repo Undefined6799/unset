@@ -120,6 +120,16 @@ describe("verifyHandle", () => {
     expect(w.calls.txt).toEqual(["_atproto.alice.example.com"]);
   });
 
+  test("first_valid_aka_is_the_claim_even_on_a_disallowed_tld", async () => {
+    // atproto.com/specs/did: "The first syntactically valid handle found in the ordered list is treated as the claimed
+    // handle ... Any other handle URIs should be ignored." A disallowed TLD fails that claim; it never moves to the next.
+    const w = world();
+    w.answers.plc = json(doc(A, ["at://alice.local", "at://alice.example.com"]));
+    w.answers.txt["_atproto.alice.example.com"] = records(`did=${A}`);
+    expect((await w.verifier().verifyHandle(A)).status).toBe("invalid");
+    expect(w.calls.txt).toEqual([]);
+  });
+
   test("claimed_handle_is_normalised", async () => {
     const w = world();
     w.answers.plc = json(doc(A, ["at://ALICE.Example.com"]));
