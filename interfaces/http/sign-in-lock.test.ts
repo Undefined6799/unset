@@ -137,6 +137,22 @@ describe("signInLock", () => {
     expect(log).toEqual(["lock", "get", "del", "unlock"]);
   });
 
+  test("a_store_call_that_outlives_its_scope_goes_straight_to_the_store", async () => {
+    // Codex review on #1441: a revoke the logout deadline gave up on can still finish after the scope has ended.
+    const { log, rows, tokenSets, requestLock, exclusive } = world();
+    let late: Promise<void> = Promise.resolve();
+    await exclusive(DID, async () => {
+      late = (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await requestLock(NAME, () => tokenSets.get(DID));
+        await tokenSets.del(DID);
+      })();
+    });
+    await late;
+    expect(rows.has(DID)).toBe(false);
+    expect(log).toEqual(["lock", "unlock", "lock", "get", "unlock", "del"]);
+  });
+
   test("one_scope_holds_one_account", async () => {
     const { tokenSets, during } = world();
     await expect(

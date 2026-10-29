@@ -27,7 +27,7 @@ export type TokenSetStore<V> = {
 const lockName = (did: string): string => `@atproto-oauth-client-${did}`;
 
 type Held = { readonly name: string; readonly release: () => void; ended: Promise<unknown> };
-type Scope = { held: Promise<Held> | null; deleteAtEnd: string | null };
+type Scope = { held: Promise<Held> | null; deleteAtEnd: string | null; open: boolean };
 
 export function createSignInLock<V>(options: { readonly store: TokenSetStore<V>; readonly lock: NamedLock }): {
   tokenSets: TokenSetStore<V>;
@@ -37,6 +37,12 @@ export function createSignInLock<V>(options: { readonly store: TokenSetStore<V>;
 } {
   const { store, lock } = options;
   const scopes = new AsyncLocalStorage<Scope>();
+  // Work the scope started can outlive it (a revoke the logout deadline gave up on, Codex review on #1441); once the
+  // scope has ended, that work reaches the store and the lock directly, as outside any scope.
+  const live = (): Scope | undefined => {
+    const scope = scopes.getStore();
+    return scope?.open === true ? scope : undefined;
+  };
 
   /** Resolves once the lock is held; the lock is let go when `release` is called. A failed wait rejects. */
   function take(name: string): Promise<Held> {
@@ -62,32 +68,34 @@ export function createSignInLock<V>(options: { readonly store: TokenSetStore<V>;
   const tokenSets: TokenSetStore<V> = {
     get: (did, read) => store.get(did, read),
     async set(did, value) {
-      const scope = scopes.getStore();
+      const scope = live();
       if (scope !== undefined) await hold(scope, lockName(did));
       await store.set(did, value);
       // Only a stored replacement cancels the pending delete: a failed write leaves the old set to be deleted.
       if (scope !== undefined) scope.deleteAtEnd = null;
     },
     async del(did) {
-      const scope = scopes.getStore();
+      const scope = live();
       if (scope === undefined) return store.del(did);
       await hold(scope, lockName(did));
-      scope.deleteAtEnd = did;
+      if (scope.open) scope.deleteAtEnd = did;
+      else await store.del(did);
     },
   };
 
   async function requestLock<T>(name: string, fn: () => T | PromiseLike<T>): Promise<T> {
-    const scope = scopes.getStore();
+    const scope = live();
     if (scope === undefined) return lock(name, fn);
     await hold(scope, name);
     return await fn();
   }
 
   async function during<T>(fn: () => Promise<T>): Promise<T> {
-    const scope: Scope = { held: null, deleteAtEnd: null };
+    const scope: Scope = { held: null, deleteAtEnd: null, open: true };
     try {
       return await scopes.run(scope, fn);
     } finally {
+      scope.open = false;
       const held = scope.held === null ? null : await scope.held.catch(() => null);
       if (held !== null) {
         try {
