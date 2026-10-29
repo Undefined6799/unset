@@ -209,6 +209,19 @@ describe("authorize", () => {
     expect(pars[2]?.get("prompt")).toBe("none");
   });
 
+  test("authorize_without_par_is_refused", async () => {
+    // atproto.com/specs/oauth: every client must use PAR. Without it the library would put the whole request in the
+    // browser's URL (oauth-client.js:122-133), so a server that offers no PAR endpoint is refused.
+    const { pushed_authorization_request_endpoint: _, ...withoutPar } = metadata(PDS);
+    const server = (url: URL) =>
+      url.pathname === "/.well-known/oauth-authorization-server"
+        ? json({ ...withoutPar, require_pushed_authorization_requests: false })
+        : (advertisedMetadata(url) ?? json({ error: "not_found" }, 404));
+    const { run, logged } = await setup({ server });
+    expect(await run(PDS)).toEqual({ ok: false, reason: "failed" });
+    expect(logged).toContainEqual({ event: "oauth.authorize_failed", fields: { kind: "ParMissingError" } });
+  });
+
   test("authorize_set_unresolvable_falls_back", async () => {
     const refused = () => json({ error: "invalid_scope", error_description: "Unable to resolve permission set" }, 400);
     const { run, pars, logged } = await setup({
