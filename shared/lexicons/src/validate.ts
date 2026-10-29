@@ -14,7 +14,8 @@ export type ValidationResult = { ok: true; value: Record<string, unknown> } | { 
 export type RecordNsid = keyof typeof RECORDS;
 
 type Validator = { $safeValidate(value: unknown): { success: true } | { success: false; reason: Error } };
-type Props = Record<string, { type: string; ref?: string; items?: { type: string; ref?: string } }>;
+type Field = { type: string; ref?: string; refs?: string[] };
+type Props = Record<string, Field & { items?: Field }>;
 type Defs = Record<string, { type: string; record?: { properties: Props }; properties?: Props }>;
 
 const RECORDS = {
@@ -49,7 +50,9 @@ function toLex(value: Record<string, unknown>): unknown {
 /**
  * Fields of `value` that the def does not define, following local `#refs` into nested objects and array items. A
  * nested object may name its own def in `$type` (atproto.com/specs/lexicon, "$type"); the root's was checked already.
- * Properties are looked up as own keys only, so a field named `constructor` is unknown like any other.
+ * A union member is followed through the local ref its `$type` names; the generated validator has already refused a
+ * member a closed union does not list. Properties are looked up as own keys only, so a field named `constructor` is
+ * unknown like any other.
  */
 function unknownFields(nsid: string, defs: Defs, name: string, value: Record<string, unknown>, path: string): string[] {
   const def = defs[name];
@@ -58,21 +61,22 @@ function unknownFields(nsid: string, defs: Defs, name: string, value: Record<str
     if (key === "$type" && (path === "$" || child === `${nsid}#${name}`)) return [];
     const prop = Object.hasOwn(props, key) ? props[key] : undefined;
     if (!prop) return [`${path}.${key}: unknown field`];
-    const ref = prop.type === "array" ? prop.items?.ref : prop.ref;
-    if (!ref?.startsWith("#")) return [];
+    const field = prop.type === "array" ? prop.items : prop;
     const items = prop.type === "array" && Array.isArray(child) ? child : [child];
-    return items.flatMap((item, i) =>
-      isObject(item)
-        ? unknownFields(
-            nsid,
-            defs,
-            ref.slice(1),
-            item,
-            prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`,
-          )
-        : [],
-    );
+    return items.flatMap((item, i) => {
+      const ref = isObject(item) && field !== undefined ? localRef(nsid, field, item) : undefined;
+      if (ref === undefined || !isObject(item)) return [];
+      return unknownFields(nsid, defs, ref, item, prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`);
+    });
   });
+}
+
+/** The local def an object at `field` follows: its ref, or the union member its `$type` names; undefined for none. */
+function localRef(nsid: string, field: Field, item: Record<string, unknown>): string | undefined {
+  if (field.type === "ref") return field.ref?.startsWith("#") ? field.ref.slice(1) : undefined;
+  if (field.type !== "union" || typeof item.$type !== "string") return undefined;
+  const member = item.$type.startsWith(`${nsid}#`) ? item.$type.slice(nsid.length) : undefined;
+  return member !== undefined && field.refs?.includes(member) ? member.slice(1) : undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

@@ -17,6 +17,22 @@ const blob = (size: number) => ({
 });
 const stats = (n: number) => Array.from({ length: n }, () => ({ label: "a", value: "1" }));
 const items = (n: number) => Array.from({ length: n }, () => ({ title: "a" }));
+// README blocks: unions carry their def's $type (https://atproto.com/specs/lexicon#union).
+const DEFS = "sh.unset.profile#";
+const [PARAGRAPH, HEADING, LIST_ITEM, CODE, COLUMNS, RUN, LINK] = [
+  "paragraph",
+  "heading",
+  "listItem",
+  "codeBlock",
+  "columns",
+  "textRun",
+  "linkRun",
+].map((def) => `${DEFS}${def}`);
+const run = (t: string) => ({ $type: RUN, text: t });
+const paragraph = (content: unknown[]) => ({ $type: PARAGRAPH, content });
+const para = paragraph([run("a")]);
+const readme = (block: unknown) => ({ blocks: [block] });
+const columns = (n: number) => Array.from({ length: n }, () => ({ blocks: [para] }));
 
 // One record per limit: the value exactly at the limit passes and one past it fails, which proves LIMITS equals the
 // schema's constraint. A new LIMITS entry without a row here fails `every_limit_has_a_fixture`.
@@ -31,7 +47,25 @@ const FIXTURES: Record<string, Build> = {
   "profile.displayName": P((n) => ({ displayName: text(n) })),
   "profile.headline": P((n) => ({ headline: text(n) })),
   "profile.bio": P((n) => ({ bio: text(n) })),
-  "profile.readme": P((n) => ({ readme: text(n) })),
+  "profile.readmeBlocksMax": P((n) => ({ readme: { blocks: Array.from({ length: n }, () => para) } })),
+  "profile.readmeColumnsMax": P((n) => ({ readme: readme({ $type: COLUMNS, columns: columns(n) }) })),
+  "profile.readmeColumnBlocksMax": P((n) => ({
+    readme: readme({ $type: COLUMNS, columns: [{ blocks: Array.from({ length: n }, () => para) }, { blocks: [] }] }),
+  })),
+  "profile.readmeRunsMax": P((n) => ({ readme: readme(paragraph(Array.from({ length: n }, () => run("a")))) })),
+  "profile.readmeLinkRunsMax": P((n) => ({
+    readme: readme(paragraph([{ $type: LINK, uri: ORIGIN, content: Array.from({ length: n }, () => run("a")) }])),
+  })),
+  "profile.readmeRunText": P((n) => ({ readme: readme(paragraph([run(text(n))])) })),
+  "profile.readmeHeadingLevelMax": P((n) => ({ readme: readme({ $type: HEADING, level: n, content: [] }) })),
+  "profile.readmeIndentMax": P((n) => ({
+    readme: readme({ $type: LIST_ITEM, style: "bullet", indent: n, content: [] }),
+  })),
+  "profile.readmeCode": P((n) => ({ readme: readme({ $type: CODE, text: text(n) }) })),
+  "profile.readmeCodeLanguageBytes": P((n) => ({ readme: readme({ $type: CODE, text: "", language: text(n) }) })),
+  "profile.readmeLinkUriBytes": P((n) => ({
+    readme: readme(paragraph([{ $type: LINK, uri: url(n), content: [run("a")] }])),
+  })),
   "profile.location": P((n) => ({ location: text(n) })),
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
   "profile.linksMax": P((n) => ({ links: Array.from({ length: n }, () => ({ uri: ORIGIN })) })),
@@ -77,5 +111,15 @@ describe("LIMITS", () => {
       expect(validateRecord(at.nsid, at.value, "write").ok, `${key} at ${limit}`).toBe(true);
       expect(validateRecord(over.nsid, over.value, "write").ok, `${key} over ${limit}`).toBe(false);
     }
+  });
+
+  test("a_columns_block_needs_two_columns", () => {
+    const value = (n: number) => ({ ...profile, readme: readme({ $type: COLUMNS, columns: columns(n) }) });
+    expect(validateRecord("sh.unset.profile", value(2), "write").ok).toBe(true);
+    expect(validateRecord("sh.unset.profile", value(1), "write").ok).toBe(false);
+  });
+
+  test("a_readme_string_is_refused", () => {
+    expect(validateRecord("sh.unset.profile", { ...profile, readme: "## Hi" }, "write").ok).toBe(false);
   });
 });
