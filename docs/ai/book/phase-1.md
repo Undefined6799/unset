@@ -14735,8 +14735,10 @@ grant, without the reviewed path.
 - `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (empty
   until P1.35 fills it).
 - `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
-  snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
-  value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the
+  snapshot; any of: removed field, changed type, new required field, any changed, added or dropped size or length
+  limit, an enum or `accept` value removed or added, a closed union's refs changed (knownValues and an open union's
+  new refs are fine; P1.31j, P1.31k after atproto.com/specs/lexicon "Lexicon Evolution"), changed `key` type → exit
+  1 "breaking: publish a new NSID". For the
   **permission set** P1.31's rules apply instead (add with Alex's flag; never remove; never a new NSID).
   Consent-text edits also need the flag (users see them).
 - The breaking-check runs as a test. An absent `listed` means not listed (fails closed).

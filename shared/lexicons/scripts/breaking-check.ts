@@ -44,7 +44,7 @@ function compareDef(at: string, nowValue: unknown, beforeValue: unknown): string
       (key) => `${at}: ${key} changed from ${String(before[key])} to ${String(now[key])}`,
     ),
     ...changedLimits(at, now, before),
-    ...lostValues(at, now, before),
+    ...changedValues(at, now, before),
   ];
   if (now.closed === true && before.closed !== true) problems.push(`${at}: union became closed`);
   if (before.items) problems.push(...compareDef(`${at}[]`, now.items, before.items));
@@ -58,12 +58,21 @@ function changedLimits(at: string, now: Def, before: Def): string[] {
   );
 }
 
-function lostValues(at: string, now: Def, before: Def): string[] {
+/**
+ * A lost value breaks old data; a gained one (or a dropped list, which allows any value) lets new data fail readers on
+ * the old schema. An open union may gain refs: its readers already take an unknown type.
+ */
+function changedValues(at: string, now: Def, before: Def): string[] {
   return ["enum", "accept", "refs"].flatMap((key) => {
     const was = before[key] as unknown[] | undefined;
     const is = now[key] as unknown[] | undefined;
     const lost = is === undefined ? [] : (was ?? ["any value"]).filter((value) => !is.includes(value));
-    return lost.length > 0 ? [`${at}: ${key} no longer allows ${lost.join(", ")}`] : [];
+    const mayGain = was === undefined || (key === "refs" && before.closed !== true);
+    const gained = mayGain ? [] : is === undefined ? ["any value"] : is.filter((value) => !was.includes(value));
+    return [
+      ...(lost.length > 0 ? [`${at}: ${key} no longer allows ${lost.join(", ")}`] : []),
+      ...(gained.length > 0 ? [`${at}: ${key} now also allows ${gained.join(", ")}`] : []),
+    ];
   });
 }
 
