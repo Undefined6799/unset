@@ -175,10 +175,22 @@ function checkRegistration(value: unknown): Registration {
   return record as Registration;
 }
 
+/** inventory.json is not hash-pinned, so a duplicate key (which JSON.parse silently drops) could hide a pointer. */
+function uniqueKeysJson(text: string): unknown {
+  const value: unknown = JSON.parse(text);
+  // JSON.parse already proved the grammar. Canonicalize string/number tokens and remove only outside whitespace;
+  // a duplicate key is the only information this round trip can lose in this closed, nonnumeric-keyed schema.
+  const compact = text.replace(/"(?:[^"\\]|\\.)*"|\s+|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (token) =>
+    /^\s/.test(token) ? "" : JSON.stringify(JSON.parse(token)),
+  );
+  if (compact !== JSON.stringify(value)) throw new Error("duplicate inventory keys");
+  return value;
+}
+
 /** Only the hash-pinned optional Icon pointer may extend the immutable 36-icon sheet. */
 function registeredIcons(io: IconsIo, sheetVersion: string) {
   try {
-    const inventory = JSON.parse(io.readText("inventory.json")) as { Icon?: { extensions?: unknown } } | null;
+    const inventory = uniqueKeysJson(io.readText("inventory.json")) as { Icon?: { extensions?: unknown } } | null;
     const icon = inventory?.Icon;
     if (!icon || typeof icon !== "object" || Array.isArray(icon)) throw new Error("missing Icon inventory");
     if (!Object.hasOwn(icon, "extensions")) return undefined;

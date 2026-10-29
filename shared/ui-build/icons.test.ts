@@ -368,6 +368,14 @@ test("icon_duplicate_extension_pointer_is_refused", () => {
   expect(code(fixture.run())).toEqual(["icons.registration"]);
 });
 
+test("icon_duplicate_inventory_key_is_refused_before_it_can_hide_a_pointer", () => {
+  const fixture = registered();
+  // JSON.parse keeps the last "Icon", so a reader of the file sees the first one and the build the second.
+  const text = JSON.stringify(fixture.inventory);
+  fixture.files.set("inventory.json", text.replace(/^\{/, '{"Icon":{},'));
+  expect(code(fixture.run())).toEqual(["icons.registration"]);
+});
+
 test.each(["missing", "hash", "json"])("icon_present_but_invalid_record_fails_closed: %s", (fault) => {
   const fixture = registered();
   if (fault === "missing") fixture.files.delete("approved-extensions.json");
