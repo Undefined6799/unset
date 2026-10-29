@@ -8,9 +8,9 @@ const root = `atproto-${revision}`;
 const records: Item[] = [
   { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
   ...Object.entries({
-    "packages/pds": ["@atproto/pds", "0.5.37"],
-    "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-    "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
+    "packages/pds": ["@atproto/pds", "0.5.49"],
+    "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.24.3"],
+    "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.7"],
   }).map(([path, [name, version]]) => ({
     name: `${root}/${path}/package.json`,
     body: JSON.stringify({ name, version }),
@@ -23,7 +23,7 @@ async function verify(extra: Item[]) {
   return verifySource(
     bytes,
     { revision, archiveSha256: sha(bytes), lockSha256: sha("frozen") },
-    PAIRS["0.4.5037"] as Pair,
+    PAIRS["0.4.5049"] as Pair,
   );
 }
 describe("source archive root and link containment", () => {
