@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -30,7 +30,11 @@ describe("breaking-check", () => {
     writeFileSync(join(root, "schemas", "sh.unset.profile.json"), JSON.stringify(next));
     writeFileSync(join(root, "published", "sh.unset.profile.json"), JSON.stringify(original("sh.unset.profile")));
     writeFileSync(join(root, "published.lock.json"), "{}");
-    expect(publishedProblems({}, root)).toEqual(["sh.unset.profile#main.bio: field removed"]);
+    try {
+      expect(publishedProblems({}, root)).toEqual(["sh.unset.profile#main.bio: field removed"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("live_profile_snapshot_is_held", () => {
