@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-28
+checked: 2026-10-29
 ---
 # http
 
@@ -118,7 +118,7 @@ lands, accounts on other PDSes are refused at sign-in until P1.33p, which must f
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
 client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capped_at_900` pins the cap. Nothing in the
-repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:276, stateful access tokens) and
+repository pins the PDS side; it rests on @atproto/pds 0.5.49 (dist/context.js:276, stateful access tokens) and
 @atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
 `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 

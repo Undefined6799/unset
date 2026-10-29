@@ -5,16 +5,16 @@ status: current
 areas: ["[[pds]]", "[[deployment]]"]
 summary: The PDS sign-in pages cannot load our fonts by themselves; the edge must serve them and widen only the HTML CSP.
 code: [deployment/edge]
-sources: [https://www.npmjs.com/package/@atproto/oauth-provider/v/0.23.1, https://caddyserver.com/docs/caddyfile/directives/header, https://github.com/Undefined6799/unset/actions/runs/39781097971]
+sources: [https://www.npmjs.com/package/@atproto/oauth-provider/v/0.24.3, https://caddyserver.com/docs/caddyfile/directives/header, https://github.com/Undefined6799/unset/actions/runs/39781097971]
 importance: high
 related: ["[[pds]]", "[[deployment]]"]
 replaced_by: null
 tags: [reference, pds, deployment]
-checked: 2026-10-28
+checked: 2026-10-29
 ---
 # PDS sign-in pages get their fonts from the edge (P2.24d spike)
 
-Read from `@atproto/oauth-provider` 0.23.1 (the version inside the pinned PDS 0.4.5037 image, ADR 0027) and Caddy
+Read from `@atproto/oauth-provider` 0.24.3 (the version inside the pinned PDS 0.4.5049 image, ADR 0027) and Caddy
 v2.11.7 (`modules/caddyhttp/headers/caddyfile.go` and `headers.go`).
 
 **What the PDS does.**
