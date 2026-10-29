@@ -62,7 +62,7 @@ describe("breaking-check", () => {
     const next = original("sh.unset.profile");
     Object.assign(record(next).properties.displayName ?? {}, { maxGraphemes: 32 });
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
-      "sh.unset.profile#main.displayName: maxGraphemes narrowed from 64 to 32",
+      "sh.unset.profile#main.displayName: maxGraphemes changed from 64 to 32",
     ]);
   });
 
@@ -75,7 +75,7 @@ describe("breaking-check", () => {
     expect(breakingProblems(next, original("sh.unset.section"), {})).toEqual([
       "sh.unset.section#main: record key changed from tid to literal:self",
       "sh.unset.section#main.type: type changed from string to integer",
-      "sh.unset.section#main.position: minimum narrowed from 0 to 1",
+      "sh.unset.section#main.position: minimum changed from 0 to 1",
     ]);
   });
 
@@ -90,8 +90,20 @@ describe("breaking-check", () => {
   test("breaking_check_allows_new_optional", () => {
     const next = original("sh.unset.profile");
     record(next).properties.pronouns = { type: "string", maxGraphemes: 20, maxLength: 200 };
-    Object.assign(record(next).properties.bio ?? {}, { maxGraphemes: 800, maxLength: 8000 });
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([]);
+  });
+
+  test("breaking_check_detects_widened_or_dropped_limit", () => {
+    // atproto.com/specs/lexicon, "Lexicon Evolution": size and length limits can not be added, removed or changed,
+    // because new data must stay valid under the old schema that other readers still hold.
+    const next = original("sh.unset.profile");
+    const props = record(next).properties;
+    Object.assign(props.bio ?? {}, { maxGraphemes: 800 });
+    delete props.displayName?.maxLength;
+    expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
+      "sh.unset.profile#main.displayName: maxLength changed from 640 to none",
+      "sh.unset.profile#main.bio: maxGraphemes changed from 600 to 800",
+    ]);
   });
 
   test("breaking_check_permission_set_add_requires_flag", () => {

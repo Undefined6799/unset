@@ -1,5 +1,7 @@
-// Breaking-change check (P1.31g). A published record or query schema may only gain optional fields or widen limits;
-// anything else needs a new NSID, because records already in users' repositories must stay valid. The permission
+// Breaking-change check (P1.31g). A published record or query schema may only gain optional fields; anything else
+// needs a new NSID, because records already in users' repositories must stay valid under the new schema and new
+// records under the old one (atproto.com/specs/lexicon, "Lexicon Evolution": limits can not be added, removed or
+// changed). The permission
 // set follows its own rules: the authorization server rebuilds every token's scope from the current set at refresh
 // (@atproto/oauth-provider, token/token-manager.ts:255-260), so an addition widens every grant within minutes and
 // needs Alex's approval, and a removal breaks running features and is refused.
@@ -14,9 +16,8 @@ type Doc = { id: string; defs: Record<string, Def> };
 type Options = { approvedByAlex?: number };
 type Lock = Record<string, { cid: string; schemaRecordCid: string; publishedAt: string }>;
 
-/** Limits that may only grow, and limits that may only shrink, in a published schema. */
-const MAXIMA = ["maxLength", "maxGraphemes", "maxSize", "maximum"];
-const MINIMA = ["minLength", "minGraphemes", "minimum"];
+/** Size and length limits, fixed once published: widening one lets new data fail readers on the old schema. */
+const LIMITS = ["maxLength", "maxGraphemes", "maxSize", "maximum", "minLength", "minGraphemes", "minimum"];
 /** `default` decides what an absent field means, so an absent `listed` stays not listed (fails closed). */
 const FIXED = ["type", "format", "const", "ref", "default"];
 const CONSENT = ["title", "title:lang", "detail", "detail:lang"];
@@ -42,7 +43,7 @@ function compareDef(at: string, nowValue: unknown, beforeValue: unknown): string
     ...FIXED.filter((key) => now[key] !== before[key]).map(
       (key) => `${at}: ${key} changed from ${String(before[key])} to ${String(now[key])}`,
     ),
-    ...narrowedLimits(at, now, before),
+    ...changedLimits(at, now, before),
     ...lostValues(at, now, before),
   ];
   if (now.closed === true && before.closed !== true) problems.push(`${at}: union became closed`);
@@ -51,16 +52,10 @@ function compareDef(at: string, nowValue: unknown, beforeValue: unknown): string
   return problems;
 }
 
-function narrowedLimits(at: string, now: Def, before: Def): string[] {
-  const narrower = (key: string, isNarrower: (is: number, was: number) => boolean): string[] => {
-    const [was, is] = [before[key], now[key]] as (number | undefined)[];
-    const narrowed = is !== undefined && (was === undefined || isNarrower(is, was));
-    return narrowed ? [`${at}: ${key} narrowed from ${was ?? "none"} to ${is}`] : [];
-  };
-  return [
-    ...MAXIMA.flatMap((key) => narrower(key, (is, was) => is < was)),
-    ...MINIMA.flatMap((key) => narrower(key, (is, was) => is > was)),
-  ];
+function changedLimits(at: string, now: Def, before: Def): string[] {
+  return LIMITS.filter((key) => now[key] !== before[key]).map(
+    (key) => `${at}: ${key} changed from ${String(before[key] ?? "none")} to ${String(now[key] ?? "none")}`,
+  );
 }
 
 function lostValues(at: string, now: Def, before: Def): string[] {
