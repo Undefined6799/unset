@@ -9,7 +9,7 @@ import type { ResolvedDid } from "./did-doc.ts";
 import { awaitFlight, createInFlight, type MayWrite } from "./in-flight.ts";
 import { type Consistency, IdentityError } from "./resolve-did.ts";
 import { resolveHandle } from "./resolve-handle.ts";
-import { type Did, type Handle, parseHandle } from "./syntax.ts";
+import { type Did, type Handle, isHandleSyntax, parseHandle } from "./syntax.ts";
 
 export type HandleVerdict =
   | { readonly status: "verified"; readonly handle: Handle; readonly checkedAt: number }
@@ -40,14 +40,17 @@ export function displayHandle(verdict: HandleVerdict): string {
   return verdict.status === "verified" ? verdict.handle : INVALID_HANDLE;
 }
 
-/** `at://` plus a handle and nothing else (no path, no `@`, no whitespace); parseHandle then lowercases it. */
+/**
+ * The first `at://` entry that is a handle and nothing else (no path, no `@`, no whitespace) is the claim, and every
+ * later one is ignored (atproto.com/specs/did, "DID Documents"); parseHandle then lowercases it, and a claim on a TLD
+ * we never resolve is no handle at all.
+ */
 function claimedHandle(resolved: ResolvedDid): Handle | null {
   for (const uri of resolved.rawAlsoKnownAs) {
     if (!uri.startsWith(AT_PREFIX)) continue;
     const rest = uri.slice(AT_PREFIX.length);
-    if (rest.startsWith("@") || rest.trim() !== rest) continue;
-    const handle = parseHandle(rest);
-    if (handle !== null) return handle;
+    if (rest.startsWith("@") || rest.trim() !== rest || !isHandleSyntax(rest)) continue;
+    return parseHandle(rest);
   }
   return null;
 }
