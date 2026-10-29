@@ -192,6 +192,13 @@ function ownIssuerOnly(send: typeof fetch, ownIssuer: string): typeof fetch {
   };
 }
 
+/** A cache that never holds anything, so every identity lookup reaches the domain's resolvers. */
+const NO_CACHE = {
+  get: async () => undefined,
+  set: async () => undefined,
+  del: async () => undefined,
+};
+
 /**
  * Builds the client; a failure fails boot. The library fires `onSessionDeleted` on every callback (it revokes the
  * previous set first, even when there was none) and on sign-out, so the hook writes nothing and ends no app session:
@@ -213,6 +220,11 @@ export async function createOAuthClient(options: OAuthClientOptions) {
     fetch: ownIssuerOnly(options.fetch, options.ownIssuer),
     handleResolver: handleResolverForOAuth(options.network),
     didResolver: didResolverForOAuth(options.resolveDid, options.ownIssuer),
+    // No library cache in front of ours: by default it keeps DID documents an hour and handles ten minutes
+    // (@atproto-labs/did-resolver 0.3.10 did-cache-memory.js, @atproto-labs/handle-resolver cached-handle-resolver.js),
+    // longer than atproto.com/specs/oauth allows for auth and past our own "fresh" lookup (ADR 0021 §3).
+    didCache: NO_CACHE,
+    handleCache: NO_CACHE,
     allowHttp: options.allowHttp,
     onSessionDeleted,
   });

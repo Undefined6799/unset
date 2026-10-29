@@ -76,16 +76,33 @@ export async function authorize(
       ...(options.prompt ? { prompt: options.prompt } : {}),
     });
   try {
-    return { ok: true, url: await request(scopeString()) };
+    return pushed(await request(scopeString()), options.log);
   } catch (error) {
     if (!(error instanceof OAuthResponseError && error.error === "invalid_scope")) return failure(error, options.log);
   }
   options.log.info("oauth.scope_fallback_used");
   try {
-    return { ok: true, url: await request(scopeStringFallback()) };
+    return pushed(await request(scopeStringFallback()), options.log);
   } catch (error) {
     return failure(error, options.log);
   }
+}
+
+/** A server that offered no PAR endpoint; the library then puts the whole request in the browser's URL. */
+class ParMissingError extends Error {
+  constructor() {
+    super("authorization server offers no PAR endpoint");
+    this.name = "ParMissingError";
+  }
+}
+
+/**
+ * Every client must use PAR (atproto.com/specs/oauth). The library uses it when the server offers it, and otherwise
+ * falls back to a URL with the request in its query (oauth-client.js:115-133), so only a URL carrying a `request_uri`
+ * is sent to the browser.
+ */
+function pushed(url: URL, log: Logger): AuthorizeResult {
+  return url.searchParams.has("request_uri") ? { ok: true, url } : failure(new ParMissingError(), log);
 }
 
 function failure(error: unknown, log: Logger): AuthorizeResult {
