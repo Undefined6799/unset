@@ -39,70 +39,29 @@ describe(".github/trivyignore.yaml", () => {
 
 const PDS_FILE = join(ROOT, ".github", "trivyignore.pds.yaml");
 const SHARED_FILE = join(ROOT, ".github", "trivyignore.yaml");
-const STATEMENT = [
+/** P1.38k: the 0.4.5049 re-pin (P1.38h, digest cca85fd0), scanned by #1371's pins job (run 40622622906). Four ids
+ * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. P1.38l: the
+ * 0.4.5037 (3a8feb34) entries ended with the re-pin, so these and KEPT_ENTRIES are the whole file. */
+/** P1.38l: the five 0.4.5037 nodemailer 6.10.1 entries that 0.4.5049 still needs, kept unchanged by Alex's line of
+ * 2026-10-28T22:38:42Z. */
+const KEPT_STATEMENT = [
   "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
   "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
   "removed on re-pin or before P1.34",
 ].join(" ");
-/** Ids Alex accepted after that run, each with its own statement. */
-const LATER_STATEMENTS: Readonly<Record<string, string>> = {
-  "CVE-2026-111943": [
-    "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
-    "newest upstream release, goat CLI only, never run by the PDS server, accepted by Alex 2026-10-22T12:25:20Z,",
-    "removed on re-pin or before P1.34",
-  ].join(" "),
-};
-/** Ids mirror run 38952734875 reported for the pinned PDS image, plus LATER_STATEMENTS. Nothing else. */
-const PDS_IDS = [
+const KEPT_ENTRIES = [
   "CVE-2025-14874",
-  "CVE-2025-47913",
-  "CVE-2026-102276",
-  "CVE-2026-102278",
-  "CVE-2026-106445",
-  "CVE-2026-106446",
-  "CVE-2026-111943",
-  "CVE-2026-12151",
-  "CVE-2026-13149",
-  "CVE-2026-14257",
-  "CVE-2026-14456",
-  "CVE-2026-19534",
-  "CVE-2026-27145",
-  "CVE-2026-33818",
-  "CVE-2026-39821",
-  "CVE-2026-39822",
-  "CVE-2026-39828",
-  "CVE-2026-39829",
-  "CVE-2026-39830",
-  "CVE-2026-39831",
-  "CVE-2026-39832",
-  "CVE-2026-39835",
-  "CVE-2026-42504",
-  "CVE-2026-42508",
-  "CVE-2026-46595",
-  "CVE-2026-46597",
-  "CVE-2026-56853",
-  "CVE-2026-56854",
-  "CVE-2026-56858",
-  "CVE-2026-56859",
-  "CVE-2026-56860",
-  "CVE-2026-56862",
-  "CVE-2026-59873",
-  "CVE-2026-59874",
-  "CVE-2026-59892",
-  "CVE-2026-69152",
-  "CVE-2026-69192",
-  "CVE-2026-73566",
-  "CVE-2026-78667",
-  "CVE-2026-78669",
   "CVE-2026-82659",
   "CVE-2026-82662",
-  "CVE-2026-97031",
   "GHSA-2x7j-588g-ccc2",
   "GHSA-v53p-9fqp-m79j",
-] as const;
-
-/** P1.38k: the 0.4.5049 re-pin (P1.38h, digest cca85fd0), scanned by #1371's pins job (run 40622622906). Four ids
- * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. */
+].map((id) => ({
+  id,
+  paths: ["app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"],
+  purls: ["pkg:npm/nodemailer@6.10.1"],
+  statement: KEPT_STATEMENT,
+  expired_at: "2026-11-13",
+}));
 const REPIN_STATEMENT = [
   "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
   "0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z,",
@@ -154,24 +113,14 @@ describe(".github/trivyignore.pds.yaml", () => {
     ]);
     expect(PDS_MAX_DAYS).toBeLessThan(MAX_DAYS);
     expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
-    const all = pdsEntries();
-    const entries = all.slice(0, PDS_IDS.length);
-    expect(entries.map((item) => item.id)).toEqual([...PDS_IDS]);
-    expect(all.slice(PDS_IDS.length).map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual(
-      REPIN_ENTRIES,
-    );
+    const entries = pdsEntries();
+    expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual([
+      ...KEPT_ENTRIES,
+      ...REPIN_ENTRIES,
+    ]);
     for (const item of entries) {
-      expect(dayOf(item.expired_at), item.id).toBe("2026-11-13");
-      expect(item.statement, item.id).toBe(LATER_STATEMENTS[item.id ?? ""] ?? STATEMENT);
-      expect((item.paths?.length ?? 0) + (item.purls?.length ?? 0), item.id).toBeGreaterThan(0);
       // Exact names only: a glob would also cover images nobody reviewed.
       for (const path of item.paths ?? []) expect(path, item.id).not.toMatch(/[*?[{\\]/);
-    }
-    // The Caddy Alpine binary's HIGH ids are accepted only on the PDS goat binary.
-    for (const id of ["CVE-2026-78667", "CVE-2026-78669", "CVE-2026-97031"]) {
-      const item = entries.find((candidate) => candidate.id === id);
-      expect(item?.paths, id).toEqual(["usr/local/bin/goat"]);
-      expect(item?.purls, id).toEqual(["pkg:golang/stdlib@v1.25.10"]);
     }
   });
 
@@ -180,7 +129,7 @@ describe(".github/trivyignore.pds.yaml", () => {
     const sharedDoc = parse(shared) as { vulnerabilities?: IgnoreEntry[] };
     expect(pdsOverlaps(sharedDoc.vulnerabilities ?? [], pdsEntries())).toEqual([]);
     expect(shared).not.toContain("ghcr.io/bluesky-social/pds");
-    expect(shared).not.toContain("3a8feb34");
+    expect(shared).not.toContain("cca85fd0");
     expect(shared).not.toContain("trivyignore.pds.yaml");
   });
 
