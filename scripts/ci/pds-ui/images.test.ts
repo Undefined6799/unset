@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { PAIRS, type Pair, uiDirectoryOf } from "./contract.ts";
 import { image, sha, tar } from "./fixtures/native.ts";
-import { compareImages, manifestConfig, platformManifest, UI_DIRECTORY } from "./images.ts";
+import { compareImages, manifestConfig, platformManifest } from "./images.ts";
 
 const MANIFEST = "application/vnd.oci.image.manifest.v1+json";
 function index(manifests: { digest: string; platform: string }[]) {
@@ -18,37 +19,40 @@ function index(manifests: { digest: string; platform: string }[]) {
 }
 async function images() {
   const baseLayer = await tar([{ name: "app/provider.js", body: "original" }]);
-  const uiLayer = await tar([{ name: `${UI_DIRECTORY}/new.js`, body: "new" }]);
+  const uiLayer = await tar([{ name: `${ui}/new.js`, body: "new" }]);
   // A classic-store save: the archive's own manifest, never the registry index the lock pins.
   const base = await image([baseLayer]);
   const candidate = await image([baseLayer, uiLayer]);
   return { base, candidate, pinned: `sha256:${"a".repeat(64)}` };
 }
 
+const pair = PAIRS["0.4.5049"] as Pair;
+const ui = uiDirectoryOf(pair);
+
 describe("pinned base saved by a classic image store", () => {
   test("accepts a saved manifest whose config the pinned index names", async () => {
     const { base, candidate, pinned } = await images();
     const pin = { digest: pinned, config: base.config };
-    const result = await compareImages(base.bytes, pin, candidate.bytes, candidate.digest);
+    const result = await compareImages(base.bytes, pin, candidate.bytes, candidate.digest, ui);
     expect(result.ui.get("new.js")?.data.toString()).toBe("new");
   });
   test("rejects a saved manifest with any other config", async () => {
     const { base, candidate, pinned } = await images();
     const pin = { digest: pinned, config: `sha256:${"b".repeat(64)}` };
-    await expect(compareImages(base.bytes, pin, candidate.bytes, candidate.digest)).rejects.toThrow(
+    await expect(compareImages(base.bytes, pin, candidate.bytes, candidate.digest, ui)).rejects.toThrow(
       "immutable image config drift",
     );
   });
   test("keeps the exact digest rule when no pinned config is given", async () => {
     const { base, candidate, pinned } = await images();
-    await expect(compareImages(base.bytes, pinned, candidate.bytes, candidate.digest)).rejects.toThrow(
+    await expect(compareImages(base.bytes, pinned, candidate.bytes, candidate.digest, ui)).rejects.toThrow(
       "immutable image digest drift",
     );
   });
   test("never relaxes the candidate's digest", async () => {
     const { base, candidate } = await images();
     const pin = { digest: base.digest, config: base.config };
-    await expect(compareImages(base.bytes, pin, candidate.bytes, `sha256:${"c".repeat(64)}`)).rejects.toThrow(
+    await expect(compareImages(base.bytes, pin, candidate.bytes, `sha256:${"c".repeat(64)}`, ui)).rejects.toThrow(
       "immutable image digest drift",
     );
   });

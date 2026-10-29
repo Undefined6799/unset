@@ -26,6 +26,7 @@ function route(over: Pick<RouteRecord, "method" | "path"> & Partial<RouteRecord>
   return {
     group: "app",
     requiresSession: null,
+    handlerSession: null,
     middleware: ["requestId", "methodCheck"],
     rateLimit: "default",
     accepts: [],
@@ -64,13 +65,11 @@ test("http_policies_match_limits_ts", async () => {
   expect(loaded.ok).toBe(true);
   if (!loaded.ok) return;
   const http = loaded.model.processes.find((process) => process.name === "http");
-  const indexer = loaded.model.processes.find((process) => process.name === "indexer");
   expect(http?.policies?.get("default")).toEqual([
     { scope: "ip", capacity: 60, refillPerSec: 5 },
     { scope: "global", capacity: 3000, refillPerSec: 50 },
   ]);
   expect(http?.policies?.get("login")).toEqual([{ scope: "ip", capacity: 10, refillPerSec: 10 / 60 }]);
-  expect(indexer?.policies).toBeNull();
 });
 
 describe("endpoint cells", () => {
@@ -85,6 +84,13 @@ describe("endpoint cells", () => {
           path: "/closed",
           requiresSession: true,
           middleware: ["requestId", "session"],
+          rateLimit: "exempt",
+        }),
+        route({
+          method: "GET",
+          path: "/gated",
+          handlerSession: true,
+          middleware: ["requestId"],
           rateLimit: "exempt",
         }),
         route({
@@ -109,6 +115,8 @@ describe("endpoint cells", () => {
     const open = rowFor(page, "GET", "/open");
     expect(open).toContain(`| ${NOT_RECORDED} | no | default | ip: capacity 60, refillPerSec 5 |`);
     expect(rowFor(page, "GET", "/closed")).toContain("| required | no | exempt | not recorded |");
+    // #1279: the handler, not the kit, sends a signed-out visitor to /login.
+    expect(rowFor(page, "GET", "/gated")).toContain("| required (handler) | no | exempt | not recorded |");
     expect(rowFor(page, "POST", "/save")).toContain("| yes | default |");
     expect(rowFor(page, "POST", "/save")).toContain("| 2048 | yes |");
     const bare = rowFor(page, "GET", "/bare");
@@ -148,6 +156,25 @@ describe("endpoint inputs", () => {
     ]);
   });
 
+  test("handler_session_is_read_only_as_true", async () => {
+    const root = tempRepo();
+    const gated = { ...HEALTH, path: "/gated", handlerSession: true };
+    const bad = { ...HEALTH, path: "/bad", handlerSession: "yes" };
+    const both = { ...HEALTH, path: "/both", handlerSession: true, requiresSession: true };
+    writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([gated, bad, both]));
+    writeFileSync(
+      join(root, "docs/site/data/endpoints/demo.yaml"),
+      '"GET /gated": {}\n"GET /bad": {}\n"GET /both": {}\n',
+    );
+    const loaded = await loadEndpointModel(root);
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.problems).toEqual([
+      "interfaces/demo/routes.manifest.json: GET /bad handlerSession is not true",
+      "interfaces/demo/routes.manifest.json: GET /both sets both requiresSession and handlerSession",
+    ]);
+  });
+
   test("check_fails_when_a_page_is_edited", async () => {
     const root = tempRepo();
     writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([HEALTH]));
@@ -156,6 +183,16 @@ describe("endpoint inputs", () => {
     const page = join(root, "docs/site/content/endpoints/demo.md");
     writeFileSync(page, readFileSync(page, "utf8").replace("probe", "changed"));
     expect(await checkEndpoints(root)).toEqual(["docs/site/content/endpoints/demo.md differs from the generator"]);
+  });
+
+  test("a_process_without_limits_ts_has_no_policies", async () => {
+    const root = tempRepo();
+    writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([HEALTH]));
+    writeFileSync(join(root, "docs/site/data/endpoints/demo.yaml"), '"GET /health": {}\n');
+    const loaded = await loadEndpointModel(root);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.model.processes.map((process) => [process.name, process.policies])).toEqual([["demo", null]]);
   });
 
   test("a_named_policy_without_limits_ts_fails", async () => {

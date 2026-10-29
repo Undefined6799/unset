@@ -2,32 +2,37 @@
   "postgres": {
     "ref": "ghcr.io/undefined6799/unset/postgres@sha256:f0810f91197d282eb63d52b4ba05598fca19f13421bfe2d3155678ea53884891",
     "origin": "first-party",
+    "gitCommit": "d09fea153c69911deefd3affa1d8bfdda3e489da",
     "verify": "cosign-keyless"
   },
   "migrate": {
     "ref": "ghcr.io/undefined6799/unset/migrate@sha256:89237144d08eebe4c8b4a31f2b7847eceba851a4645dca1c33e6f624703bec0a",
     "origin": "first-party",
+    "gitCommit": "d09fea153c69911deefd3affa1d8bfdda3e489da",
     "verify": "cosign-keyless"
   },
   "pds": {
     "ref": "ghcr.io/undefined6799/unset/pds@sha256:c0f26b546f613428127f7768e04fbc0cd76e823d175695d2fc36b8acc82c3bbd",
     "origin": "first-party",
+    "gitCommit": "d09fea153c69911deefd3affa1d8bfdda3e489da",
     "verify": "cosign-keyless"
   },
   "edge": {
     "ref": "ghcr.io/undefined6799/unset/edge@sha256:bfcbb99c39340108bf8175b745ce66654ef90e9781b52034f237799c95d6c2bb",
     "origin": "first-party",
+    "gitCommit": "d09fea153c69911deefd3affa1d8bfdda3e489da",
     "verify": "cosign-keyless"
   },
   "web": {
     "ref": "ghcr.io/undefined6799/unset/web@sha256:a3ded8242d56e88e208980ab7c79b31d21b7875402035959b1f055da13525dfc",
     "origin": "first-party",
+    "gitCommit": "d09fea153c69911deefd3affa1d8bfdda3e489da",
     "verify": "cosign-keyless"
   },
   "newt": {
-    "ref": "ghcr.io/undefined6799/mirror/newt@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f",
+    "ref": "ghcr.io/undefined6799/mirror/newt@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319",
     "origin": "upstream",
-    "upstreamSource": "docker.io/fosrl/newt:1.18.1@sha256:7fed6605e0a104a337e1cb903bbb1225f80c7f6e5e56ff1eb1d70c57740d8e0f",
+    "upstreamSource": "docker.io/fosrl/newt:1.19.0@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319",
     "verify": "cosign-keyless"
   }
 }

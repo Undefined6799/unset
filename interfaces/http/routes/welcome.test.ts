@@ -19,7 +19,7 @@ import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements } from "../web/fixtures/html.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 import { meRoutes } from "./me.ts";
 import { settingsRoutes } from "./settings.ts";
 import { welcomeRoutes } from "./welcome.ts";
@@ -126,26 +126,7 @@ function setup(world: World = {}) {
     emailRecheckS: 900,
     unavailablePage: () => new Response("unavailable", { status: 200 }),
   };
-  const page = (input: Parameters<typeof pageResponse>[1]) =>
-    pageResponse(
-      {
-        build: {
-          manifest: {
-            boot: "assets/boot.js",
-            styles: [],
-            fonts: [],
-            icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-            islands: new Map(),
-          },
-          files: new Map(),
-        },
-        render: web.renderPage,
-        assetsOrigin: ORIGIN,
-        env: "test",
-        log,
-      },
-      input,
-    );
+  const page = testPage(log);
   const server = createServer({
     config: CONFIG,
     routes: [

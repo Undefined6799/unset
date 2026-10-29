@@ -39,7 +39,7 @@ jobs:
     env:
       # The notes guard's code-moved rule diffs BASE_SHA...HEAD; a missing base fails it (P0.09d).
       BASE_SHA: ${{ github.event.before }}
-      RENOVATE_IMAGE: renovate/renovate:44.164.10@sha256:a1a928e6680df73474a2408620374bfd397a38b7adbc74d4d5ffe4c7a03e3c2b
+      RENOVATE_IMAGE: renovate/renovate:44.176.2@sha256:1ffc71775d95bd2233bf5a867744c5a92d845b5928dee93f5bb22ced956e4e38
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -158,7 +158,7 @@ jobs:
     permissions:
       contents: read
     env:
-      SEMGREP_IMAGE: semgrep/semgrep:1.181.0@sha256:81474464c1f07483ba0682a44787fd93c91397419762a04abe2bafaae396304b
+      SEMGREP_IMAGE: semgrep/semgrep:1.182.0@sha256:4a34048c04fef049f71665047f074cffb00cc3d89482f965a5cd151d589237af
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,7 +256,7 @@ jobs:
       - run: npm ci
       - name: Duplicate code (advice for the reviewer, never a gate)
         run: |
-          npx jscpd --config .github/.jscpd.json . || true
+          npx jscpd --config .github/.jscpd.json .
           cat jscpd-report/jscpd-report.md >> "$GITHUB_STEP_SUMMARY" || true
 
   # P0.07d: the images project, beside code. `npm run test:images` is scripts/test/run.ts --images: CI's rules (no

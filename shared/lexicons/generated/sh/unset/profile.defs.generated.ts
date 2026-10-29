@@ -29,11 +29,7 @@ type Main = {
    * About text: paragraphs, bold, italic and http(s) links (a small markdown subset), never HTML.
    */
   bio?: string;
-
-  /**
-   * Free-form page body in a small markdown subset (headings, lists, quotes, code, links, rows and columns), never HTML.
-   */
-  readme?: string;
+  readme?: Readme;
 
   /**
    * Free-text place, as the member writes it.
@@ -98,7 +94,7 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     displayName: /*#__PURE__*/ l.string({ maxGraphemes: 64, maxLength: 640 }),
     headline: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 120, maxLength: 1200 })),
     bio: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 600, maxLength: 6000 })),
-    readme: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 10000, maxLength: 100000 })),
+    readme: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<Readme>((() => readme) as any)),
     location: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
     email: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxLength: 254 })),
@@ -141,6 +137,335 @@ export const $parse = /*#__PURE__*/ main.parse.bind(main);
 export const $safeParse = /*#__PURE__*/ main.safeParse.bind(main);
 export const $validate = /*#__PURE__*/ main.validate.bind(main);
 export const $safeValidate = /*#__PURE__*/ main.safeValidate.bind(main);
+
+/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total. */
+type Readme = {
+  $type?: "sh.unset.profile#readme";
+
+  /**
+   * Blocks in reading order. A block type this app does not know is skipped.
+   */
+  blocks: (
+    | l.$Typed<Paragraph>
+    | l.$Typed<Heading>
+    | l.$Typed<ListItem>
+    | l.$Typed<Quote>
+    | l.$Typed<CodeBlock>
+    | l.$Typed<Columns>
+    | l.Unknown$TypedObject
+  )[];
+};
+
+export type { Readme };
+
+/** Free-form page body as typed blocks (the owner edits it with a block editor), never HTML. At most 100000 bytes as JSON; a reader refuses a larger README, since a schema cannot state a total. */
+const readme = /*#__PURE__*/ l.typedObject<Readme>(
+  $nsid,
+  "readme",
+  /*#__PURE__*/ l.object({
+    blocks: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<Paragraph>((() => paragraph) as any),
+          /*#__PURE__*/ l.typedRef<Heading>((() => heading) as any),
+          /*#__PURE__*/ l.typedRef<ListItem>((() => listItem) as any),
+          /*#__PURE__*/ l.typedRef<Quote>((() => quote) as any),
+          /*#__PURE__*/ l.typedRef<CodeBlock>((() => codeBlock) as any),
+          /*#__PURE__*/ l.typedRef<Columns>((() => columns) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { readme };
+
+/** A run of text with one set of styles. */
+type TextRun = {
+  $type?: "sh.unset.profile#textRun";
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+
+  /**
+   * Inline code.
+   */
+  code?: boolean;
+};
+
+export type { TextRun };
+
+/** A run of text with one set of styles. */
+const textRun = /*#__PURE__*/ l.typedObject<TextRun>(
+  $nsid,
+  "textRun",
+  /*#__PURE__*/ l.object({
+    text: /*#__PURE__*/ l.string({ maxGraphemes: 2000, maxLength: 20000 }),
+    bold: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    italic: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    underline: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    strike: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    code: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+  }),
+);
+
+export { textRun };
+
+/** Linked text. */
+type LinkRun = {
+  $type?: "sh.unset.profile#linkRun";
+
+  /**
+   * An http or https URL. A schema cannot state the scheme; a reader keeps the text and drops the link for any other.
+   */
+  uri: l.UriString;
+  content: TextRun[];
+};
+
+export type { LinkRun };
+
+/** Linked text. */
+const linkRun = /*#__PURE__*/ l.typedObject<LinkRun>(
+  $nsid,
+  "linkRun",
+  /*#__PURE__*/ l.object({
+    uri: /*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 }),
+    content: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<TextRun>((() => textRun) as any), { maxLength: 50 }),
+  }),
+);
+
+export { linkRun };
+
+/** A paragraph. */
+type Paragraph = {
+  $type?: "sh.unset.profile#paragraph";
+
+  /**
+   * The block's text, as runs in reading order.
+   */
+  content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
+};
+
+export type { Paragraph };
+
+/** A paragraph. */
+const paragraph = /*#__PURE__*/ l.typedObject<Paragraph>(
+  $nsid,
+  "paragraph",
+  /*#__PURE__*/ l.object({
+    content: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<TextRun>((() => textRun) as any),
+          /*#__PURE__*/ l.typedRef<LinkRun>((() => linkRun) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { paragraph };
+
+/** A heading. */
+type Heading = {
+  $type?: "sh.unset.profile#heading";
+  level: number;
+
+  /**
+   * The block's text, as runs in reading order.
+   */
+  content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
+};
+
+export type { Heading };
+
+/** A heading. */
+const heading = /*#__PURE__*/ l.typedObject<Heading>(
+  $nsid,
+  "heading",
+  /*#__PURE__*/ l.object({
+    level: /*#__PURE__*/ l.integer({ minimum: 1, maximum: 3 }),
+    content: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<TextRun>((() => textRun) as any),
+          /*#__PURE__*/ l.typedRef<LinkRun>((() => linkRun) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { heading };
+
+/** One list item; consecutive items of one style form a list. */
+type ListItem = {
+  $type?: "sh.unset.profile#listItem";
+
+  /**
+   * An unknown value renders as bullet.
+   */
+  style: "bullet" | "numbered" | "check" | l.UnknownString;
+
+  /**
+   * Nesting depth, from 0.
+   */
+  indent?: number;
+
+  /**
+   * For check items: ticked.
+   */
+  checked?: boolean;
+
+  /**
+   * The block's text, as runs in reading order.
+   */
+  content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
+};
+
+export type { ListItem };
+
+/** One list item; consecutive items of one style form a list. */
+const listItem = /*#__PURE__*/ l.typedObject<ListItem>(
+  $nsid,
+  "listItem",
+  /*#__PURE__*/ l.object({
+    style: /*#__PURE__*/ l.string<{ maxLength: 16; knownValues: ["bullet", "numbered", "check"] }>({ maxLength: 16 }),
+    indent: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.integer({ minimum: 0, maximum: 3 })),
+    checked: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
+    content: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<TextRun>((() => textRun) as any),
+          /*#__PURE__*/ l.typedRef<LinkRun>((() => linkRun) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { listItem };
+
+/** A quote. */
+type Quote = {
+  $type?: "sh.unset.profile#quote";
+
+  /**
+   * The block's text, as runs in reading order.
+   */
+  content: (l.$Typed<TextRun> | l.$Typed<LinkRun> | l.Unknown$TypedObject)[];
+};
+
+export type { Quote };
+
+/** A quote. */
+const quote = /*#__PURE__*/ l.typedObject<Quote>(
+  $nsid,
+  "quote",
+  /*#__PURE__*/ l.object({
+    content: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<TextRun>((() => textRun) as any),
+          /*#__PURE__*/ l.typedRef<LinkRun>((() => linkRun) as any),
+        ],
+        false,
+      ),
+      { maxLength: 200 },
+    ),
+  }),
+);
+
+export { quote };
+
+/** Preformatted code, shown as written. */
+type CodeBlock = {
+  $type?: "sh.unset.profile#codeBlock";
+  text: string;
+
+  /**
+   * Language name, for display only.
+   */
+  language?: string;
+};
+
+export type { CodeBlock };
+
+/** Preformatted code, shown as written. */
+const codeBlock = /*#__PURE__*/ l.typedObject<CodeBlock>(
+  $nsid,
+  "codeBlock",
+  /*#__PURE__*/ l.object({
+    text: /*#__PURE__*/ l.string({ maxGraphemes: 10000, maxLength: 100000 }),
+    language: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxLength: 32 })),
+  }),
+);
+
+export { codeBlock };
+
+/** Two or three columns side by side; they stack on narrow screens. */
+type Columns = { $type?: "sh.unset.profile#columns"; columns: Column[] };
+
+export type { Columns };
+
+/** Two or three columns side by side; they stack on narrow screens. */
+const columns = /*#__PURE__*/ l.typedObject<Columns>(
+  $nsid,
+  "columns",
+  /*#__PURE__*/ l.object({
+    columns: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Column>((() => column) as any), { minLength: 2, maxLength: 3 }),
+  }),
+);
+
+export { columns };
+
+/** One column: blocks in reading order, no nested columns. */
+type Column = {
+  $type?: "sh.unset.profile#column";
+  blocks: (
+    | l.$Typed<Paragraph>
+    | l.$Typed<Heading>
+    | l.$Typed<ListItem>
+    | l.$Typed<Quote>
+    | l.$Typed<CodeBlock>
+    | l.Unknown$TypedObject
+  )[];
+};
+
+export type { Column };
+
+/** One column: blocks in reading order, no nested columns. */
+const column = /*#__PURE__*/ l.typedObject<Column>(
+  $nsid,
+  "column",
+  /*#__PURE__*/ l.object({
+    blocks: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<Paragraph>((() => paragraph) as any),
+          /*#__PURE__*/ l.typedRef<Heading>((() => heading) as any),
+          /*#__PURE__*/ l.typedRef<ListItem>((() => listItem) as any),
+          /*#__PURE__*/ l.typedRef<Quote>((() => quote) as any),
+          /*#__PURE__*/ l.typedRef<CodeBlock>((() => codeBlock) as any),
+        ],
+        false,
+      ),
+      { maxLength: 100 },
+    ),
+  }),
+);
+
+export { column };
 
 /** One link elsewhere. */
 type Link = {

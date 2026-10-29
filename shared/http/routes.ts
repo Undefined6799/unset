@@ -14,6 +14,11 @@ export type RouteContext = Readonly<{
   params: Readonly<Record<string, string>>;
   /** Fires at the route's deadline. Pass it as the `signal` of every outbound call. */
   deadline: AbortSignal;
+  /**
+   * When `deadline` fires, as a `performance.now()` value taken with the signal (P2.08j): budget a step as
+   * `deadlineAt - performance.now()`, never from the handler's own start. Monotonic, so never compare it with wall time.
+   */
+  deadlineAt: number;
   reqId: string;
 }>;
 
@@ -29,10 +34,12 @@ export type RouteSpec = {
   rateLimit: string;
   mutates?: boolean;
   /**
-   * Whether the route needs a signed-in session, stated on every route with no default (architecture, 2026-10-05);
-   * a policy with a per-DID entry needs `"required"` (P1.06).
+   * Whether the route needs a signed-in session, stated on every route with no default (architecture, 2026-10-05):
+   * `"required"` has the kit read it and refuse the request without one, and a policy with a per-DID entry needs it
+   * (P1.06). `"handler"` means the handler reads the session itself and sends a signed-out visitor to /login; the kit
+   * only records it, so the manifest shows the route's real need (#1279, rule SE-4). `"none"` needs no session.
    */
-  session: "required" | "none";
+  session: "required" | "handler" | "none";
   deadlineMs?: number;
   handler: Handler;
 };
@@ -47,6 +54,8 @@ export type Route = Readonly<{
   mutates: boolean;
   /** `true` for `session: "required"`, else absent, so a route that needs none keeps its committed manifest entry. */
   requiresSession: true | undefined;
+  /** `true` for `session: "handler"`, else absent: recorded for the manifest, never enforced by the kit. */
+  handlerSession: true | undefined;
   deadlineMs: number | undefined;
   handler: Handler;
 }>;
@@ -77,8 +86,8 @@ function checkPath(path: string): void {
 /** Startup checks of the identity options: method, path template, group, session need and rate-limit policy. */
 function checkIdentity(spec: RouteSpec): void {
   if (!METHODS.includes(spec.method)) throw new Error(`route method is not GET, HEAD or POST: ${spec.method}`);
-  if (spec.session !== "required" && spec.session !== "none") {
-    throw new Error(`${spec.path}: session must be "required" or "none"`);
+  if (spec.session !== "required" && spec.session !== "handler" && spec.session !== "none") {
+    throw new Error(`${spec.path}: session must be "required", "handler" or "none"`);
   }
   checkPath(spec.path);
   if (!GROUPS.includes(spec.group)) throw new Error(`route group is unknown: ${spec.group}`);
@@ -123,6 +132,7 @@ export function defineRoute(spec: RouteSpec): Route {
     rateLimit: spec.rateLimit,
     mutates,
     requiresSession: spec.session === "required" ? true : undefined,
+    handlerSession: spec.session === "handler" ? true : undefined,
     deadlineMs: spec.deadlineMs,
     handler: spec.handler,
   });

@@ -37,7 +37,7 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 | Config fragment | `shared/http/config.ts` | `httpKitConfig`, merged into each entrypoint schema |
 | Shutdown | `shared/http/shutdown.ts` | Drain on SIGTERM |
 
-`defineRoute` accepts methods `GET`, `HEAD` and `POST`, and groups `app`, `public`, `profile`, `static`, `media`, `admin`, `api`. `rateLimit` is required. `exempt` is allowed only for group `static`. `session` is `required` or `none`, with no default. A per-DID policy requires `session: "required"` (`checkRoutes` in `server.ts`). A route's deadline is its `deadlineMs` or `REQUEST_DEADLINE_MS`. A set `deadlineMs` is an integer from 1000 to 120000.
+`defineRoute` accepts methods `GET`, `HEAD` and `POST`, and groups `app`, `public`, `profile`, `static`, `media`, `admin`, `api`. `rateLimit` is required. `exempt` is allowed only for group `static`. `session` is `"required"`, `"handler"` or `"none"`, with no default. `"required"` sets `requiresSession`. `"handler"` sets `handlerSession` and leaves `requiresSession` unset, so `middlewareOf` does not add `session` or `rateLimitDid`, and a per-DID policy still requires `session: "required"` (`checkRoutes` and `middlewareOf` in `server.ts`). A route's deadline is its `deadlineMs` or `REQUEST_DEADLINE_MS`. A set `deadlineMs` is an integer from 1000 to 120000.
 
 `defineRoute` refuses `{ mutates: true }` on a non-POST unless the path is in `GET_MUTATION_EXCEPTIONS`. The only entry is `GET /oauth/callback`. The CSRF gate still runs only for `POST` (`csrfDenied`).
 

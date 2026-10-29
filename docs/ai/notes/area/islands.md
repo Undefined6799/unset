@@ -10,7 +10,7 @@ importance: normal
 related: ["[[ui]]", "[[web]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-17
+checked: 2026-10-28
 ---
 # islands
 
@@ -23,6 +23,9 @@ MIT-licensed. `safeHref` stays in [[ui]].
   `props.ts` and `readProps.ts` with their tests, plus this workspace's parity test (`docs/ai/book/phase-1.md`).
 - `index.ts`: the only file another workspace may import (DC-2). The kit, each `*.island.tsx`, `hydrate.ts` and
   apps/web import this index, never a subpath.
+- `props.test.ts` holds every props case, the escaped-key and review-found ones included, with one `codeOf`.
+  `renderPropsTag` is gone: callers use `serializeProps` (P1.10 cleanup). react-dom is a devDependency, for
+  `slot.test.tsx` only.
 
 **How data flows.** An island's props are serialised here and read back in the browser by `readProps`.
 

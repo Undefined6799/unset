@@ -4,26 +4,32 @@
 // old path and a deletion. Anything else, an empty list, or an unreadable
 // status fails closed.
 //
-// Allowed: docs/human/** except docs/human/decisions/** (that prefix compared
-// case-insensitively, because the parent is allowed), docs/site/**,
-// docs/ai/notes/**, and README.md. The lexicon generator
+// Allowed: Markdown (`.md`) files under docs/human/** except
+// docs/human/decisions/**, docs/human/engineering/** (CLAUDE.md imports it),
+// docs/human/runbooks/** and docs/human/legal/** (those prefixes compared
+// case-insensitively, because the parent is allowed), under docs/site/** and
+// docs/ai/notes/**, and README.md. Nothing else: no site config, module
+// manifest, vendored script or image (P0.07k). The lexicon generator
 // (shared/lexicons/scripts/build.ts and shared/lexicons/generated/) is not
 // allowed, nor is CLAUDE.md, AGENTS.md, the plan, the step book, .github/,
 // scripts/, or a manifest or lockfile.
 
 export type ChangedPath = { path: string; previous?: string };
 
-const DECISIONS = "docs/human/decisions";
+const HUMAN = "docs/human/";
+/** Under docs/human/ but reviewed as code: ADRs, the rules every agent loads, operator and legal procedure. */
+const REVIEWED = ["decisions", "engineering", "runbooks", "legal"].map((folder) => `${HUMAN}${folder}`);
 const MAX_PATH = 4096;
 
 /** A single relative path git or the pulls files API can name. `..` and odd forms fail. */
 export function pathAllowed(path: string): boolean {
   if (!safeRelative(path)) return false;
   if (path === "README.md") return true;
+  if (!path.endsWith(".md")) return false;
   if (path.startsWith("docs/site/") || path.startsWith("docs/ai/notes/")) return true;
-  const decisions = path.toLowerCase();
-  if (decisions === DECISIONS || decisions.startsWith(`${DECISIONS}/`)) return false;
-  return path.startsWith("docs/human/");
+  const lower = path.toLowerCase();
+  if (REVIEWED.some((folder) => lower === folder || lower.startsWith(`${folder}/`))) return false;
+  return path.startsWith(HUMAN);
 }
 
 function safeRelative(path: string): boolean {

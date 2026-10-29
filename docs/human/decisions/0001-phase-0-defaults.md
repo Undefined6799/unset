@@ -531,3 +531,28 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   fixed unsigned line. Production stays CI-built, keyless-signed and digest-pinned (ADR 0033, unchanged), and main
   changes only by PR. Accepted costs: untested code on an isolated, invite-only staging; a build can fill its disk.
   Proposed, awaiting Alex.
+- **ADR 0036 accepted (Alex, 2026-10-28 02:04:07Z, against d118587; own record:
+  [0036](0036-staging-builds-from-source.md)):** staging (VM 315) may run images built from its checkout under
+  `--env dev --source` so a change is tried there first and committed after; a service still naming an image must be
+  a lock digest and every such run ends with the fixed unsigned line; production stays CI-built, keyless-signed and
+  digest-pinned (ADR 0033 unchanged) and main changes only by PR; the accepted costs are untested code on an
+  isolated, invite-only staging and a build filling its disk.
+- **The profile module and page (P2.20; own record: [0037](0037-profile-module-and-page.md)):** the profile is its own
+  module, `domains/profile`, beside identity (Alex, 2026-10-23 02:59Z). The `sh.unset.profile` record lives on the
+  member's PDS and nowhere else; a save changes only the fields sent, compare-and-swap on the stored CID. The owner's
+  page edits the README in place; the side column is edited in Settings › Profile with a plain form. The README is
+  stored as typed blocks and edited with BlockNote, loaded only on the owner's own page. Proposed, awaiting Alex.
+- **ADR 0037 accepted (Alex, 2026-10-28 22:15:27Z, against 419382d; own record:
+  [0037](0037-profile-module-and-page.md)):** the profile is its own module, `domains/profile`; the `sh.unset.profile`
+  record lives only on the member's PDS and a save is compare-and-swap on the stored CID; the README is stored as our
+  own typed blocks and edited in place on the owner's own page with BlockNote 0.56.0's core, an owner-only entry
+  outside the island budget under its own cap, under the app pages' CSP unchanged; the side column is edited in
+  Settings › Profile with a plain form.
+- **A profile save keeps stored fields the lexicon does not define (P2.20f; own record:
+  [0038](0038-profile-save-keeps-unknown-fields.md)):** a save checks the merged record in read mode, so a field
+  another client or a newer release added is kept, not refused; a defined field that is invalid is still refused.
+  Supersedes ADR 0037 Decision 2's strict-validator clause once accepted. Proposed, awaiting Alex.
+- **ADR 0038 accepted (Alex, 2026-10-29 22:32:00Z, against bb57238; own record:
+  [0038](0038-profile-save-keeps-unknown-fields.md)):** a profile save checks the merged record in read mode, so a
+  stored field the lexicon does not define is kept and never blocks a save; a defined field that is invalid is still
+  refused. Supersedes ADR 0037 Decision 2's strict-validator clause.

@@ -13,14 +13,15 @@ Product rules. Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/
 | Domain | Path | Page |
 | --- | --- | --- |
 | identity | `domains/identity` | [identity](identity/) |
+| profile | `domains/profile` | [profile](profile/) |
 
 ## Owns
 
-Product rules, in product words. A domain defines the contracts it needs. An interface's composition root wires the implementations. [identity](identity/) is the only domain folder on the tree.
+Product rules, in product words. A domain defines the contracts it needs. An interface's composition root wires the implementations. The table lists the domain folders on the tree.
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`. The checked-rule table is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.7.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`. The checked-rule table is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
 
 The `domain` row:
 
@@ -39,13 +40,18 @@ Rules that refuse an edge the row would otherwise allow:
 | `domain-no-io-builtins` | No `node:fs`, `node:net`, `node:http`, `node:https`, `node:http2`, `node:dgram`, `node:dns`, `node:tls`, `node:child_process` or `node:worker_threads`. The prefix `node:` is optional in the rule. A test file under `domains/` is included. |
 | `infra-shared-via-index` | From outside, `shared/<name>/` is reached through its `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
-| `vendor-sdk-one-adapter` | `pg`, `undici`, `@atproto/oauth-client-node`, `@atproto/api`, `age-encryption` and `@atproto/lex*` are imported only in their adapter folders. `SDK_ADAPTERS` also names the path `infrastructure/storage/` for `@aws-sdk/client-s3` and the path `apps/chat/matrix/` for `matrix-js-sdk`. |
+| `vendor-sdk-one-adapter` | `pg`, `undici`, `@atproto/oauth-client-node`, `@atproto/api`, `age-encryption` and `@atproto/lex*` are imported only in their adapter folders. `SDK_ADAPTERS` also names the path `infrastructure/storage/` for `@aws-sdk/client-s3`, the path `apps/chat/matrix/` for `matrix-js-sdk`, and the path `apps/web/src/editor/` for `@blocknote/[^/]+`, `prosemirror-[^/]+` and `@tiptap/[^/]+`. |
 
 `node:crypto` is a built-in the `domain` row allows and `domain-no-io-builtins` does not name. The fixture is `scripts/lint/depcruise.test.ts`.
 
 ## Entry points
 
-No `main.ts` and no `compose.ts`. A domain is a library. Its package export is `index.ts`. The only package on the tree is `@unset/domains-identity`. Its exports are on [identity](identity/).
+No `main.ts` and no `compose.ts`. A domain is a library. Its package export is `index.ts`.
+
+| Package | Page |
+| --- | --- |
+| `@unset/domains-identity` | [identity](identity/) |
+| `@unset/domains-profile` | [profile](profile/) |
 
 ## Data
 

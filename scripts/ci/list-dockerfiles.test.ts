@@ -7,7 +7,14 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { entryProblems, IGNOREFILES, listDockerfiles, PDS_IGNOREFILE, PDS_RECIPE } from "./list-dockerfiles.ts";
+import {
+  APP_IGNOREFILE,
+  entryProblems,
+  IGNOREFILES,
+  listDockerfiles,
+  PDS_IGNOREFILE,
+  PDS_RECIPE,
+} from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
@@ -66,10 +73,17 @@ describe("list dockerfiles", () => {
     // The book named {edge, node-app} on 2026-10-07. migrate.Dockerfile has since landed, so this
     // checks the live walk. A later Dockerfile is covered without editing this check (SE-6).
     // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
-    // P2.24t: the one exception is the pds-ui recipe, which reads the PDS image's file.
-    expect(IGNOREFILES).toEqual({});
+    // P2.24t: the pds-ui recipe reads the PDS image's file. P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the
+    // two app images read the app file, which holds only the zod finding.
+    expect(IGNOREFILES).toEqual({ "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE });
     for (const image of listed) {
-      expect(image.ignorefile, image.name).toBe(image.dockerfile === PDS_RECIPE ? PDS_IGNOREFILE : "/dev/null");
+      const expected =
+        image.dockerfile === PDS_RECIPE
+          ? PDS_IGNOREFILE
+          : Object.hasOwn(IGNOREFILES, image.name)
+            ? APP_IGNOREFILE
+            : "/dev/null";
+      expect(image.ignorefile, image.name).toBe(expected);
     }
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
@@ -192,20 +206,20 @@ describe("native realpath containment (P0.09v)", () => {
 
 describe("the pds-ui recipe's ignore file (P2.24t)", () => {
   const BASE =
-    "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4";
+    "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf";
   const BUILDER =
-    "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33";
-  const REVISION = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
-  const ARCHIVE = "706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c0805b0555";
-  const UI = "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist";
+    "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec";
+  const REVISION = "5d6febdd96671891bd82f07fece7eb089c6fe931";
+  const ARCHIVE = "d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be";
+  const UI = "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist";
   const lock = JSON.stringify({
     schema: 1,
     base: { ref: BASE, platform: "linux/amd64" },
-    builder: { ref: BUILDER, node: "26.10.0", pnpm: "11.11.0" },
+    builder: { ref: BUILDER, node: "26.12.1", pnpm: "11.11.0" },
     source: {
       revision: REVISION,
       archiveSha256: ARCHIVE,
-      lockSha256: "d56b93f5fe51bbad31919df7039be088e9e61f80f57017a188f02e35f2ca16f8",
+      lockSha256: "b03bf840f28d91bb69a06b6252e61904611c104adc4d69e2282b2c866158cf07",
     },
     uiDirectory: UI,
   });
@@ -227,7 +241,7 @@ describe("the pds-ui recipe's ignore file (P2.24t)", () => {
       "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     });
     expect(listDockerfiles(accepted).map((image) => [image.dockerfile, image.ignorefile])).toEqual([
-      ["deployment/images/node-app.Dockerfile", "/dev/null"],
+      ["deployment/images/node-app.Dockerfile", APP_IGNOREFILE],
       [PDS_RECIPE, PDS_IGNOREFILE],
     ]);
 

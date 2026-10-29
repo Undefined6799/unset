@@ -5,22 +5,14 @@
 // report: C21 is waived under --env dev (P1.30s); preflight.test.ts keeps prod and local requiring it. The network
 // checks answer through a fake runner: the pinned cosign, verify-images passing, OCI indexes and a synchronised clock.
 import { execFileSync } from "node:child_process";
-import {
-  lstatSync,
-  mkdtempSync,
-  readFileSync,
-  readlinkSync,
-  realpathSync,
-  rmSync,
-  type Stats,
-  statSync,
-} from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN } from "./cosign.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
+import { type VirtualEntry, virtualCheckout } from "./virtual-checkout.ts";
 
 const DEPLOYMENT = resolve(import.meta.dirname, "..");
 const CHECKOUT = resolve(DEPLOYMENT, "..");
@@ -47,7 +39,7 @@ function recoveryKey(): string {
 
 describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   let pki = "";
-  const files = new Map<string, { kind: "dir" | "file"; mode: number; uid: number; text?: string; names?: string[] }>();
+  const files = new Map<string, VirtualEntry>();
 
   beforeAll(() => {
     pki = mkdtempSync(join(tmpdir(), "compose-dev-"));
@@ -105,39 +97,7 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   });
   afterAll(() => rmSync(pki, { recursive: true, force: true }));
 
-  const inCheckout = (path: string) => path === CHECKOUT || path.startsWith(`${CHECKOUT}/`);
-  const aboveCheckout = (path: string) => path === "/" || CHECKOUT.startsWith(`${path}/`);
-  /** A stat of a virtual entry; a copy of a real one, so the methods are Node's. */
-  const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
-    Object.assign(lstatSync(DEPLOYMENT), {
-      mode: (kind === "dir" ? 0o040000 : 0o100000) | mode,
-      uid,
-      size: kind === "dir" ? 4096 : 24,
-      nlink: kind === "dir" ? 2 : 1,
-      dev: DEV,
-      ino,
-    });
-  const look = (read: (path: string) => Stats) => (path: string) => {
-    const entry = files.get(path);
-    if (entry !== undefined) return made(entry.kind, entry.mode, entry.uid, 1 + [...files.keys()].indexOf(path));
-    if (aboveCheckout(path)) return made("dir", 0o755, 0, 100 + path.length);
-    if (!inCheckout(path)) return null;
-    try {
-      const info = read(path);
-      // The checkout as the deploy user's, with no group or other write.
-      return Object.assign(info, { uid: DEPLOY_UID, mode: info.mode & ~0o022 });
-    } catch {
-      return null;
-    }
-  };
-  const real = <T>(path: string, read: () => T): T | null => {
-    if (!inCheckout(path)) return null;
-    try {
-      return read();
-    } catch {
-      return null;
-    }
-  };
+  const { aboveCheckout, look, real } = virtualCheckout({ checkout: CHECKOUT, files, deployUid: DEPLOY_UID, dev: DEV });
 
   /** The pinned cosign, verify-images passing, an OCI index for every ref, and a synchronised clock. */
   const run: Run = async (file) => {
@@ -157,11 +117,11 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     arch: "x64",
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
+    // The reader's fstat of each env file is the virtual file C9 judges (P1.34r).
     readEnv: (path) => {
       const entry = files.get(path);
-      return entry?.text === undefined
-        ? null
-        : { text: entry.text, id: `${DEV}:${[...files.keys()].indexOf(path) + 1}` };
+      const file = look(statSync)(path);
+      return entry?.text === undefined || file === null ? null : { text: entry.text, file };
     },
     readdir: (path) => {
       const names = files.get(path)?.names;

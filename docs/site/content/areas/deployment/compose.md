@@ -15,7 +15,7 @@ The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file.
 | --- | --- | --- | --- |
 | `postgres` | lock ref, image | same build as local | `deployment/images/postgres.Dockerfile` |
 | `migrate` | lock ref, image | same build as local | `deployment/images/migrate.Dockerfile` |
-| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5037` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | built from `deployment/pds/Dockerfile` |
+| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5049` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | built from `deployment/pds/Dockerfile` |
 | `edge` | lock ref, image | same build as local | `deployment/edge/Dockerfile`, context `deployment/edge` |
 | `web` | lock ref, image | same build as local | `deployment/images/node-app.Dockerfile` |
 | `newt` | lock ref, image. Address `10.250.37.2` on `newt_edge` | same image as dev | absent |

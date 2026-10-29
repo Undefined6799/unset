@@ -94,6 +94,11 @@
       "status": 200
     },
     {
+      "method": "POST",
+      "path": "/signed-out",
+      "status": 415
+    },
+    {
       "method": "GET",
       "path": "/verify-email",
       "status": 303
@@ -152,6 +157,11 @@
     {
       "method": "POST",
       "path": "/welcome/chat",
+      "status": 415
+    },
+    {
+      "method": "POST",
+      "path": "/profile",
       "status": 415
     },
     {

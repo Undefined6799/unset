@@ -76,15 +76,18 @@ const SOURCE = { builder: `docker.io/library/b${digest(1)}`, runtime: `docker.io
 
 type Entry = { source: string; stage?: string };
 type LockEntry = { ref: string; tag: string; digest: string; stripped?: string[] };
-/** Runs the workflow's scan script on `entries` with `findings` and `lock`, under the shell Actions uses for the step. */
-function scan(entries: Entry[], findings: string[][], lock: Record<string, LockEntry> | unknown[] | null = {}) {
+/**
+ * Runs the workflow's scan script on `entries` with `findings` and `lock`, under the shell Actions uses for the step.
+ * A null `entries` writes no mirror list.
+ */
+function scan(entries: Entry[] | null, findings: string[][], lock: Record<string, LockEntry> | unknown[] | null = {}) {
   const dir = mkdtempSync(join(tmpdir(), "mirror-scan-"));
   const bin = join(dir, "bin");
   spawnSync("mkdir", [bin]);
   writeFileSync(join(bin, "docker"), FAKE_DOCKER);
   chmodSync(join(bin, "docker"), 0o755);
-  const list = entries.map((entry) => ({ ...entry, mirror: "ghcr.io/example/mirror" }));
-  writeFileSync(join(dir, "mirror.list.json"), JSON.stringify(list));
+  const list = entries?.map((entry) => ({ ...entry, mirror: "ghcr.io/example/mirror" }));
+  if (list !== undefined) writeFileSync(join(dir, "mirror.list.json"), JSON.stringify(list));
   if (lock !== null) writeFileSync(join(dir, "bases.lock.json"), JSON.stringify(lock));
   writeFileSync(join(dir, "findings"), findings.map((pair) => `${pair.join(" ")}\n`).join(""));
   writeFileSync(join(dir, "calls"), "");
@@ -207,7 +210,8 @@ describe("mirror scan per stage", () => {
   test("shipped_image_scan_fails_on_high", () => {
     const jobs = workflow("images.yml").jobs;
     for (const [id, ignore] of [
-      ["images", "/dev/null"],
+      // P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the app image reads the app file (zod only).
+      ["images", "\\.github/trivyignore\\.app\\.yaml"],
       ["edge", "/dev/null"],
       // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule.
       // The file itself is chosen per source (pds_ignorefile_wired_to_pds_scan_only).
@@ -267,6 +271,13 @@ describe("mirror scan per stage", () => {
       expect(missing.calls).toEqual([]);
     }
   });
+  test("mirror_scan_fails_without_list", () => {
+    // The list exists since P1.27, so a missing one is a rename or a deletion: red, never a passing notice.
+    const missing = scan(null, []);
+    expect(missing.code, missing.out).not.toBe(0);
+    expect(missing.out).not.toContain("skipped");
+    expect(missing.calls).toEqual([]);
+  });
   test("mirror_scan_build_stage_scans_whole_base", () => {
     // P1.29b (architecture ruling 1, 2026-10-12): a build-only base is scanned in full, its lock's `stripped` paths
     // included, in the HIGH report run and in the failing CRITICAL run; only the runtime-stage run skips them.
@@ -322,7 +333,7 @@ describe("mirror scan per stage", () => {
     }
     // P1.33u: the secret scan of our own images reads no ignore file.
     expect(runsOf("scan-image")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
-    expect(runsOf("images")).toContain("--ignorefile /dev/null");
+    expect(runsOf("images")).toContain("--ignorefile .github/trivyignore.app.yaml");
     expect(runsOf("edge")).toContain("--ignorefile /dev/null");
   });
 });

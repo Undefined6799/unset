@@ -46,6 +46,16 @@ export function parseDid(raw: string): Did | null {
   return null;
 }
 
+/**
+ * Whether `raw` has handle syntax (atproto.com/specs/handle, "Handle Identifier Syntax"), before the TLD rule: a DID
+ * document's first such handle is its claim even when its TLD may not be resolved (atproto.com/specs/did).
+ */
+export function isHandleSyntax(raw: string): boolean {
+  if (!PRINTABLE_ASCII.test(raw)) return false;
+  const name = raw.toLowerCase();
+  return name.length <= MAX_HOSTNAME && HOSTNAME.test(name);
+}
+
 /** A handle typed by a person: trimmed, one leading `@` removed, lowercased. Null when it may not be resolved. */
 export function parseHandle(raw: string): Handle | null {
   const trimmed = raw.trim();

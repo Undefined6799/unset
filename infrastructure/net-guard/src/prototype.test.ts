@@ -4,7 +4,8 @@
 // and a refusal is a NetGuardError code. Each case keeps its inputs and what it proves.
 import { isIP } from "node:net";
 import { describe, expect, test } from "vitest";
-import { classifyAddress, isInternalName, NetGuardError, normaliseHost, pinnedLookup } from "../index.ts";
+import { classifyAddress, isInternalName, NetGuardError, pinnedLookup } from "../index.ts";
+import { normaliseHost } from "./classify.ts";
 // The seamed entry: these cases stub the resolver, which the package entry no longer accepts (P2.01m).
 import { resolveVettedWith as resolveVetted } from "./resolve.ts";
 

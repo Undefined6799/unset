@@ -3,8 +3,8 @@ import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { requireThat, sha256 } from "./archive.ts";
-import { type Lock, parseLock } from "./contract.ts";
-import { compareImages, PACKAGES, verifyArtifact, verifySource } from "./verify.ts";
+import { type Lock, packagesOf, pairOf, parseLock } from "./contract.ts";
+import { compareImages, verifyArtifact, verifySource } from "./verify.ts";
 export const ROOT = resolve(import.meta.dirname, "../../..");
 export function readBounded(path: string): Buffer {
   const stat = lstatSync(path);
@@ -51,11 +51,12 @@ export async function verifyInputs(
   /** The config digest the pinned base index names for the platform, for a classic-store base archive. */
   baseConfig?: string,
 ) {
-  await verifySource(source, lock.source);
+  const pair = pairOf(lock);
+  await verifySource(source, lock.source, pair);
   const pinned = lock.base.ref.slice(lock.base.ref.lastIndexOf("@") + 1);
   const basePin = baseConfig === undefined ? pinned : { digest: pinned, config: baseConfig };
-  const result = await compareImages(base, basePin, candidate, candidateDigest, lock.base.platform);
-  for (const [name, version] of Object.values(PACKAGES)) {
+  const result = await compareImages(base, basePin, candidate, candidateDigest, lock.uiDirectory, lock.base.platform);
+  for (const [, name, version] of packagesOf(pair)) {
     const path = `app/node_modules/.pnpm/${name.replace("/", "+")}@${version}/node_modules/${name}/package.json`;
     const entry = result.packages.get(path);
     requireThat(entry?.header.type === "file" || entry?.header.type === "link", "missing image package");

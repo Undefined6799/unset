@@ -29,20 +29,20 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `caddy-builder` | `docker.io/library/caddy` | `2.11.7-builder-alpine` | build |
 | `caddy` | `docker.io/library/caddy` | `2.11.7-alpine` | runtime |
 | `postgres` | `docker.io/library/postgres` | `18-trixie` | runtime |
-| `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5037` | runtime |
-| `newt` | `docker.io/fosrl/newt` | `1.18.1` | runtime |
+| `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5049` | runtime |
+| `newt` | `docker.io/fosrl/newt` | `1.19.0` | runtime |
 
 `deployment/mirror.list.json` lists the same six sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>`.
 
 `deployment/images/node-app.Dockerfile`, `deployment/images/migrate.Dockerfile` and `deployment/images/postgres.Dockerfile` build `FROM ghcr.io/undefined6799/mirror/<name>@sha256:<digest>` with the same digests as `bases.lock.json` (`deployment/edge/Dockerfile` still builds `FROM docker.io/library/caddy` by those digests). `deployment/images/images.test.ts` and `deployment/images/package-manager.image.test.ts` map a mirror spelling back to its `mirror.list.json` source and check that source against the lock. While `recipeContract` returns a lock, both tests leave `pds/Dockerfile` out of that set. The load runs `recipeContract` through `execFileSync`. A missing or malformed member throws. Every other Dockerfile stays in the set.
 
-`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`.
+`deployment/images.lock.json` is what `compose.dev.yaml` and a prod stack run, and what `newt` runs under `compose.dev.source.yaml`. Every entry has `verify: cosign-keyless`. Each `first-party` entry also names its `gitCommit`, the commit publish-images built it from. `verify-images.ts` checks that it equals the one source commit in the image's signed provenance (P2.26h). An `upstream` entry has none.
 
 | Name | `origin` | Image |
 | --- | --- | --- |
 | `postgres`, `migrate`, `edge`, `web` | `first-party` | `ghcr.io/undefined6799/unset/<name>@sha256:…` |
-| `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5037` image (P2.24y) |
-| `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.18.1` |
+| `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5049` image (P2.24y) |
+| `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.19.0` |
 
 The digest strings live in the lock. This page does not copy them.
 

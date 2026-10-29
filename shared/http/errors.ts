@@ -16,7 +16,7 @@ export function groupForPath(path: string): RouteGroup {
 
 /** The groups whose errors are HTML pages, and the only ones an interface's error page renders for. */
 export type PageGroup = "app" | "public" | "profile" | "admin";
-export const isPageGroup = (group: RouteGroup): group is PageGroup =>
+const isPageGroup = (group: RouteGroup): group is PageGroup =>
   group === "app" || group === "public" || group === "profile" || group === "admin";
 
 /**

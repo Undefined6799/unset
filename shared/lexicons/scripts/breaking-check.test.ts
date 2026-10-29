@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { breakingProblems, publishedProblems } from "./breaking-check.ts";
 import { readSchemas } from "./build.ts";
@@ -15,6 +18,24 @@ const set = (doc: Doc) => doc.defs.main as { permissions: Record<string, unknown
 describe("breaking-check", () => {
   test("published_lock_has_no_breaks", () => {
     expect(publishedProblems({})).toEqual([]);
+  });
+
+  test("breaking_check_compares_a_live_snapshot_before_publication", () => {
+    // Records already sit in members' repos before P1.35 publishes the schema, so a snapshot in published/ is held
+    // even while the lock has no entry for it.
+    const root = mkdtempSync(join(tmpdir(), "unset-breaking-"));
+    const next = original("sh.unset.profile");
+    delete record(next).properties.bio;
+    for (const dir of ["schemas", "published"]) mkdirSync(join(root, dir));
+    writeFileSync(join(root, "schemas", "sh.unset.profile.json"), JSON.stringify(next));
+    writeFileSync(join(root, "published", "sh.unset.profile.json"), JSON.stringify(original("sh.unset.profile")));
+    writeFileSync(join(root, "published.lock.json"), "{}");
+    expect(publishedProblems({}, root)).toEqual(["sh.unset.profile#main.bio: field removed"]);
+  });
+
+  test("live_profile_snapshot_is_held", () => {
+    expect(readSchemas().some((s) => s.file === "schemas/sh.unset.profile.json")).toBe(true);
+    expect(existsSync(join(import.meta.dirname, "..", "published", "sh.unset.profile.json"))).toBe(true);
   });
 
   test("breaking_check_detects_removed_field", () => {

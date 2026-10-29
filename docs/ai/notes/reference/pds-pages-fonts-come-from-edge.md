@@ -5,16 +5,16 @@ status: current
 areas: ["[[pds]]", "[[deployment]]"]
 summary: The PDS sign-in pages cannot load our fonts by themselves; the edge must serve them and widen only the HTML CSP.
 code: [deployment/edge]
-sources: [https://www.npmjs.com/package/@atproto/oauth-provider/v/0.23.1, https://caddyserver.com/docs/caddyfile/directives/header, https://github.com/Undefined6799/unset/actions/runs/39781097971]
+sources: [https://www.npmjs.com/package/@atproto/oauth-provider/v/0.24.3, https://caddyserver.com/docs/caddyfile/directives/header, https://github.com/Undefined6799/unset/actions/runs/39781097971]
 importance: high
 related: ["[[pds]]", "[[deployment]]"]
 replaced_by: null
 tags: [reference, pds, deployment]
-checked: 2026-10-22
+checked: 2026-10-29
 ---
 # PDS sign-in pages get their fonts from the edge (P2.24d spike)
 
-Read from `@atproto/oauth-provider` 0.23.1 (the version inside the pinned PDS 0.4.5037 image, ADR 0027) and Caddy
+Read from `@atproto/oauth-provider` 0.24.3 (the version inside the pinned PDS 0.4.5049 image, ADR 0027) and Caddy
 v2.11.7 (`modules/caddyhttp/headers/caddyfile.go` and `headers.go`).
 
 **What the PDS does.**
@@ -45,3 +45,10 @@ written by the same `write-html.js`, so the CSP shape is the same as on the sign
 sign-in page once staging runs the new edge.
 
 **Rule.** Do not ask the PDS to serve fonts or relax its CSP. Fonts are an edge concern (P2.24e).
+
+**Edge Dockerfile rules (P1.34j).** `edge.test.ts#edge_dockerfile_only_what_the_rules_read` refuses any `--mount`,
+heredoc, parser directive or non-ASCII byte, and pins the only build-stage copy to the Caddy binary. Fonts reach the
+image only through a plain `COPY` from the build context, never through a builder stage.
+
+Re-checked at P1.27h (#691), which changed only the edge image tests' docker budgets and helper; the font path, the
+CSP rule and the Caddy shape above are unchanged.

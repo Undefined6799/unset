@@ -299,6 +299,12 @@ describe("boundary rules", () => {
     await expectFail("vendor-sdk-one-adapter", edge("infrastructure/storage/a.ts", "pg"));
     await expectFail("vendor-sdk-one-adapter", edge("apps/web/a.ts", "matrix-js-sdk"));
     await expectPass(edge("apps/chat/matrix/a.ts", "matrix-js-sdk"));
+    // The owner's README editor (ADR 0037 point 5): BlockNote and its ProseMirror stay in apps/web/src/editor/.
+    for (const sdk of ["@blocknote/core", "prosemirror-state", "@tiptap/core"]) {
+      await expectFail("vendor-sdk-one-adapter", edge("apps/web/src/islands/a.island.tsx", sdk));
+      await expectFail("vendor-sdk-one-adapter", edge("apps/web/src/screens/a.tsx", sdk));
+      await expectPass(edge("apps/web/src/editor/a.tsx", sdk));
+    }
   });
 
   test("depcruise_forbidden_edges", async () => {

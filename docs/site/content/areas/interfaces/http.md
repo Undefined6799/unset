@@ -25,23 +25,32 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/oauth-callback.ts` | Authorization callback. |
 | `interfaces/http/routes/logout.ts` | Sign-out for this browser. Session count: `interfaces/http/logout-sessions.ts`. |
 | `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: `interfaces/http/account.ts`. |
+| `interfaces/http/routes/revoke.ts` | `withRevokeTimeout`, the 10 s grant-revocation limit shared by `logout.ts` and `welcome.ts`. |
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |
-| `interfaces/http/routes/account-issuer.ts` | `recordedIssuer`: the issuer origin recorded at sign-in. `settings.ts` and `me.ts` call it. |
+| `interfaces/http/routes/profile.ts` | `POST /profile`, the owner's profile save. Body limit `PROFILE_BODY_LIMIT_BYTES` is 96 KiB. The DID comes from the session. `domains/profile` reads the fields. `infrastructure/pds/profile-record.ts` writes the record. |
+| `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
+| `interfaces/http/sign-in-lock.ts` | Holds the account's OAuth lock during a sign-in and a last-browser sign-out, so one can't revoke the token set the other just stored. |
 | `interfaces/http/app-gate.ts` | Page gate `openApp`: session, then onboarding, then a confirmed email. |
+| `interfaces/http/redirect.ts` | `redirect`: the 303, `no-store` answer the forms and the page gate send, with any cookies. |
+| `interfaces/http/form-field.ts` | `single`: one value of a form or query field, or null when missing or repeated. |
 | `interfaces/http/web/page.ts` | Page responses and the kit error-page hook. |
 | `interfaces/http/web/render-entry.ts` | Loads `@unset/apps-web/server`. |
 | `interfaces/http/routes/test-routes.ts` | Test-only pages. `compose.ts` imports this module only when `TEST_ROUTES` is on. `config.ts` allows that only when `UNSET_ENV` is `test`. |
 | `interfaces/http/limits.ts` | Rate-limit policy names `default`, `login`, `search`, `report`, `follow`, `like`, `upload`. Which route uses which name is on [Endpoints](/endpoints/). |
 
-Every route in this process sets `session: "none"`. `defineRoute` writes `requiresSession` only for `"required"`, so `interfaces/http/routes.manifest.json` has no session field (`shared/http/routes.ts`). That is not "no auth". Page gating is `openApp` (`interfaces/http/app-gate.ts`). `interfaces/http/routes/welcome.ts`, `interfaces/http/routes/verify-email.ts` and `interfaces/http/routes/logout.ts` read the session in the handler. `GET /login` reads it to send a signed-in visitor to `/did` (`interfaces/http/routes/login.ts`).
+Routes in this process set `session` to `"handler"` or `"none"`. None set `"required"`. `defineRoute` writes `requiresSession` only for `"required"` and `handlerSession` only for `"handler"` (`shared/http/routes.ts`). The kit adds its `session` middleware only when `requiresSession` is set (`shared/http/server.ts`). `interfaces/http/routes.manifest.json` therefore has `handlerSession: true` on the fifteen `"handler"` routes and no `requiresSession` field. Those routes are `GET /did`, `GET /me` and `GET /:did` (`routes/me.ts`), `POST /profile` (`routes/profile.ts`), `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`), `GET /verify-email` and `POST /verify-email/reconsent` (`routes/verify-email.ts`), and `GET /welcome`, `GET` and `POST /welcome/age`, `GET` and `POST /welcome/terms`, and `GET` and `POST /welcome/chat` (`routes/welcome.ts`). The [Endpoints](/endpoints/http/) session column shows `required (handler)` for them. Once the handler reads the session, a missing session is a 303 to `/login` with `next`: `openApp` for the account, settings and profile routes (`interfaces/http/app-gate.ts`), `located` for the welcome routes, and `login` in `verify-email.ts`. `GET /:did` parses the path first, and a segment that is not a DID is `http.not_found` before `openApp` (`routes/me.ts`). `interfaces/http/routes.session.test.ts` calls every composed route with no cookie and fails when the routes that answer 303 to `/login` with `next` and no `error` differ from the routes with `handlerSession: true`.
+
+The other routes set `"none"`, which omits both manifest fields. `GET /welcome/blocked`, `POST /logout`, `GET /signed-out`, `GET /login` and `POST /login` still read the session in the handler. `GET /login` and `POST /login` send a signed-in visitor to `/did` (`interfaces/http/routes/login.ts`). `GET /settings` returns 303 to `/settings/profile` and does not read a session.
 
 The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS. The maximum is 900 in `interfaces/http/config.ts`. While the PDS can't be reached, that cached confirmation is served for at most 4 × `EMAIL_RECHECK_S`. After that, the gated page shows the PDS-unavailable page and the session stays.
 
 `compose.ts` keeps `meRoutes` last so the one-segment DID route does not shadow the explicit paths.
 
 Screens are `apps/web`. The loader requires `renderPage`, `islandName`, `screens` and `safeHref`.
+
+`pageResponse` uses `islands: "on"` when the route omits `islands` (`interfaces/http/web/page.ts`). `GET /:did` (`routes/me.ts`) and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`) omit it, so the drawer's theme picker can hydrate. The routes that pass `"off"` are `GET /` (`routes/home.ts`), the legal pages (`routes/legal.ts`), `GET /login` (`routes/login.ts`) and the welcome pages (`routes/welcome.ts`).
 
 ## May import
 

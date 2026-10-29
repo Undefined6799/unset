@@ -18,7 +18,9 @@ checked: 2026-10-23
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under
 `src/screens/` (P1.25: `Home`, `Legal`; P2.15: `src/legal/` parses the build-inlined English markdown once;
 P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink` (P2.08b: the recorded issuer, its copy in
-`screens/messages.ts`, also on `Me`);
+`screens/messages.ts`, also on `Me`; P2.08s: one box asking whether to sign out of the atproto account too, which
+says other apps stay signed in until removed there; P2.05s: its "No thanks" is a standalone Button posting to
+`/signed-out`);
 P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
 `SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner; P2.13c: `settings/`, the
 side list `SettingsShell`, `SettingsProfile` with the "Set up your profile" card, and `SettingsAccount`, with the
@@ -86,5 +88,11 @@ failed island stays as its server markup and only logs to the console.
 - CSS combines tokens, base and the kit. Do not trim unrelated shared sheets to fit the budget, or duplicate
   a rule the kit already provides. The cap is 52 KiB (53,248 bytes) unminified and 12 KiB gzip (#965).
   Measure both builds with `scripts/budgets/css.ts`; those limits live in a check path (SE-6).
+
+**Sign in opens in place (P2.05p).** With `PageDeps.pdsHost` set, the default shell's Header Sign in is a button
+that opens `#sign-in`, a modal `<dialog>` (invoker commands, no script) holding the same `screens/SignInBox` the
+/login page draws. Escape and its Close button hide it; the page behind is inert. Not a popover: its `::backdrop`
+passes clicks through and Tab leaves it. `next` is the page's path only. The footer's Sign in
+and protected pages' redirects still use /login.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].

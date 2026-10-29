@@ -5,7 +5,7 @@
 // a computed import(); dependency-cruiser's net-guard-leaf and vendor-sdk-one-adapter rules and review cover those.
 import { allowed, type Finding, isTestFile, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from "./files.ts";
 
-export const SCANNED_DIRS = PRODUCT_DIRS;
+const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "egress";
 const EXEMPT_PREFIX = "infrastructure/net-guard/";
 

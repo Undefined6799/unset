@@ -15,10 +15,10 @@ Every service drops all capabilities, sets `no-new-privileges`, uses a read-only
 | --- | --- | --- | --- | --- |
 | postgres | `deployment/images/postgres.Dockerfile` | 999:999 | db | bootstrap superuser; init creates `migrator` and `tap` |
 | migrate | `deployment/images/migrate.Dockerfile` | 65532:65532 | db | `migrator` on database `unset`; `restart: "no"` |
-| pds | `ghcr.io/undefined6799/unset/pds` (digest-pinned): the official `0.4.5037` image with its OAuth UI dist replaced (P2.24y) | 1000:1000 | edge, pds_egress | its own volume, not our Postgres |
+| pds | `ghcr.io/undefined6799/unset/pds` (digest-pinned): the official `0.4.5049` image with its OAuth UI dist replaced (P2.24y) | 1000:1000 | edge, pds_egress | its own volume, not our Postgres |
 | edge | `deployment/edge` | 65532:65532 | edge, app, newt_edge `10.250.37.3` | none |
 | web | `deployment/images/node-app.Dockerfile` | 65532:65532 | db, app, web_egress | `web` |
-| newt | `docker.io/fosrl/newt:1.18.1` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
+| newt | `docker.io/fosrl/newt:1.19.0` (digest-pinned) | 65532:65532 | newt_egress, newt_edge `10.250.37.2` | none |
 
 Newt is Pangolin's connector ([ADR 0030](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0030-pangolin-checks-at-our-edge.md)). Under dev the edge publishes no port. `PLC_URL` on web is `https://plc.directory` ([ADR 0022](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0022-web-egress-and-shared-plc.md), decided (0001 log), acceptance pending).
 
@@ -73,12 +73,4 @@ Every roster role gets `idle_in_transaction_session_timeout=10s`, `lock_timeout=
 
 ## Interface processes not in Compose
 
-These folders start a server. `compose.ts` passes an empty route list, so the kit serves `GET /health` and nothing else (`shared/http/server.ts` adds that route).
-
-| Folder | Entry | Routes today |
-| --- | --- | --- |
-| `interfaces/admin` | `main.ts` | `GET /health` |
-| `interfaces/api` | `main.ts` | `GET /health` |
-| `interfaces/indexer` | `main.ts` | `GET /health` |
-| `interfaces/media` | `main.ts` | `GET /health` |
-| `interfaces/review` | `main.ts` | `GET /health` |
+None. `interfaces/http` is the only process folder on this tree. The other processes in guideline §1 get their folder with their first route (decision 34).

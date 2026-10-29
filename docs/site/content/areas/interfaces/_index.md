@@ -14,20 +14,15 @@ Route tables are on [Endpoints](/endpoints/). This section does not list paths.
 
 ## Owns
 
-The six folders under `interfaces/` on this tree. Each one is its own package and its own process. `interfaces/http` is the web server. The other five start the server kit and register no routes of their own.
+One folder under `interfaces/` on this tree: `interfaces/http`, the web server, its own package and its own process. The other processes in guideline §1 (admin, api, indexer, media, review and the rest) get their folder with their first route (decision 34).
 
 | Process | Path | Page |
 | --- | --- | --- |
 | http | `interfaces/http` | [http](./http/) |
-| admin | `interfaces/admin` | [admin](admin/) |
-| api | `interfaces/api` | [api](api/) |
-| indexer | `interfaces/indexer` | [indexer](indexer/) |
-| media | `interfaces/media` | [media](media/) |
-| review | `interfaces/review` | [review](review/) |
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.5.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.7.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
 
 The `interface` row matches `interfaces/<name>/` except the paths `ADMIN_SERVICES` names (`interfaces/pds-admin/` and `interfaces/chat-admin/`). Those paths are strings in `scripts/lint/.dependency-cruiser.cjs`.
 
@@ -58,13 +53,8 @@ No `index.ts` under `interfaces/`. Each process starts at `main.ts`, which calls
 | Process | Start | Composition root | In a container today |
 | --- | --- | --- | --- |
 | http | `interfaces/http/main.ts` | `interfaces/http/compose.ts` | Yes. `deployment/images/node-app.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/http/main.ts"]`. Compose service `web` runs that image (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`). |
-| admin | `interfaces/admin/main.ts` | `interfaces/admin/compose.ts` | No image entrypoint and no Compose service names this process. |
-| api | `interfaces/api/main.ts` | `interfaces/api/compose.ts` | No image entrypoint and no Compose service names this process. |
-| indexer | `interfaces/indexer/main.ts` | `interfaces/indexer/compose.ts` | No image entrypoint and no Compose service names this process. |
-| media | `interfaces/media/main.ts` | `interfaces/media/compose.ts` | No image entrypoint and no Compose service names this process. |
-| review | `interfaces/review/main.ts` | `interfaces/review/compose.ts` | No image entrypoint and no Compose service names this process. |
 
-`main.ts` for http also runs `boot()` before `listen`. The other five call `listen` on the composed server and do not run a database boot check.
+`main.ts` for http also runs `boot()` before `listen`.
 
 Dev stack, from the repository root (`package.json`):
 
@@ -72,7 +62,7 @@ Dev stack, from the repository root (`package.json`):
 npm run dev:up
 ```
 
-That starts Compose service `web` (`UNSET_SERVICE: http`). It does not start the other five processes.
+That starts Compose service `web` (`UNSET_SERVICE: http`).
 
 ## Data
 
@@ -80,6 +70,6 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 `infrastructure/postgres/roles.ts` syncs passwords only when `passwordFrom` is not null.
 
-Only [http](./http/) opens a pool. The other five `compose.ts` files build the server kit and nothing else. Per-role grants are on each page.
+Only [http](./http/) opens a pool. Roles for the processes without a folder yet are in `roles.json` ahead of their code. Per-role grants for `web` are on its page.
 
 `review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2).

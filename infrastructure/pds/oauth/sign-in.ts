@@ -30,7 +30,8 @@ export type AuthorizeResult =
 export type AuthorizeOptions = {
   /** Handed back at the callback; the server never sees it (the library sends its own random `state`). */
   readonly appState: string;
-  readonly prompt?: "login" | "create" | "consent";
+  /** P2.05s: "none" asks the server for no page at all, and it answers with an error when it would need one. */
+  readonly prompt?: "login" | "create" | "consent" | "none";
   /** The request's deadline; the 10 s limit nests inside it (RE-1). */
   readonly deadline: AbortSignal | null;
   /** Our PDS's issuer (P1.36v): the chooser's input must be exactly it; a handle or DID must resolve to it. */
@@ -75,16 +76,33 @@ export async function authorize(
       ...(options.prompt ? { prompt: options.prompt } : {}),
     });
   try {
-    return { ok: true, url: await request(scopeString()) };
+    return pushed(await request(scopeString()), options.log);
   } catch (error) {
     if (!(error instanceof OAuthResponseError && error.error === "invalid_scope")) return failure(error, options.log);
   }
   options.log.info("oauth.scope_fallback_used");
   try {
-    return { ok: true, url: await request(scopeStringFallback()) };
+    return pushed(await request(scopeStringFallback()), options.log);
   } catch (error) {
     return failure(error, options.log);
   }
+}
+
+/** A server that offered no PAR endpoint; the library then puts the whole request in the browser's URL. */
+class ParMissingError extends Error {
+  constructor() {
+    super("authorization server offers no PAR endpoint");
+    this.name = "ParMissingError";
+  }
+}
+
+/**
+ * Every client must use PAR (atproto.com/specs/oauth). The library uses it when the server offers it, and otherwise
+ * falls back to a URL with the request in its query (oauth-client.js:115-133), so only a URL carrying a `request_uri`
+ * is sent to the browser.
+ */
+function pushed(url: URL, log: Logger): AuthorizeResult {
+  return url.searchParams.has("request_uri") ? { ok: true, url } : failure(new ParMissingError(), log);
 }
 
 function failure(error: unknown, log: Logger): AuthorizeResult {
@@ -129,7 +147,21 @@ export type CompletedSignIn = {
   /** Revokes this grant and drops its token set; errors are swallowed only after being logged. */
   readonly revoke: () => Promise<void>;
 };
-export type CallbackResult = CompletedSignIn | { readonly ok: false; readonly reason: CallbackFailure };
+/**
+ * P2.05s: the server could not answer a prompt=none request without a page. It names a reason (login_required,
+ * consent_required, interaction_required, account_selection_required; @atproto/oauth-provider 0.23.1,
+ * oauth-provider.js:291-305) and gives the state back, so the route can ask once more, with a page.
+ */
+export type SilentRefusal = { readonly ok: false; readonly reason: "interaction_required"; readonly appState: string };
+export type CallbackResult = CompletedSignIn | SilentRefusal | { readonly ok: false; readonly reason: CallbackFailure };
+
+/** The OIDC prompt=none errors (https://openid.net/specs/openid-connect-core-1_0.html#AuthError). */
+const NEEDS_A_PAGE: ReadonlySet<string> = new Set([
+  "login_required",
+  "consent_required",
+  "interaction_required",
+  "account_selection_required",
+]);
 
 /**
  * `query` is the callback URL's whole query, passed to the library as it came. `ownIssuer` is our PDS's issuer
@@ -145,6 +177,14 @@ export async function completeAuthorization(
   try {
     completed = await client.callback(query);
   } catch (error) {
+    // The library spent the state before throwing (oauth-client.js:169-178), so this flow is over either way.
+    if (
+      error instanceof OAuthCallbackError &&
+      error.state !== undefined &&
+      NEEDS_A_PAGE.has(error.params.get("error") ?? "")
+    ) {
+      return { ok: false, reason: "interaction_required", appState: error.state };
+    }
     const reason = callbackReason(error);
     // A grant for an account on another PDS is a refusal worth seeing, logged by its fixed kind only (SE-7).
     if (reason === "failed" || reason === "account_elsewhere") {
@@ -167,10 +207,13 @@ export async function completeAuthorization(
     scope = (await session.getTokenInfo(false)).scope;
   } catch (error) {
     log.warn("oauth.callback_failed", { kind: kindOf(error) });
+    await revoke();
     return { ok: false, reason: "failed" };
   }
+  // P1.36x: every refusal after the library stored the set revokes it, so no grant outlives a failed sign-in.
   if (state === null || did === null) {
     log.warn("oauth.callback_failed", { kind: state === null ? "no_app_state" : "bad_sub" });
+    await revoke();
     return { ok: false, reason: "failed" };
   }
   return { ok: true, did, issuer: session.serverMetadata.issuer, appState: state, scope, revoke };

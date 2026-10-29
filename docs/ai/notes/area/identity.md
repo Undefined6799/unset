@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, identity]
-checked: 2026-10-22
+checked: 2026-10-28
 ---
 # identity
 
@@ -20,7 +20,8 @@ network itself.
 **Files.**
 - `syntax.ts`: parses DIDs and handles into branded types; nothing unparsed reaches the network.
 - `resolve-did.ts`: DID to DID document. "Does not exist" and "could not tell" stay apart; only successes are cached.
-- `resolve-handle.ts`: handle to DID, by TXT record first, then the well-known HTTPS path.
+- `resolve-handle.ts`: handle to DID, by TXT record first, then the well-known HTTPS path; TXT records naming two
+  different DIDs fail as `unavailable` without asking HTTPS (spec, "DNS TXT Method").
 - `did-doc.ts`: reads the atproto fields of a DID document; `alsoKnownAs` is passed on raw.
 - `verify-handle.ts`: shows a handle only when it resolves back to the same DID. Trusted base.
 - `contract.ts`: the `IdentityNetwork` port, one GET and one TXT lookup, with three failures.
@@ -28,7 +29,8 @@ network itself.
   is done with the current terms (`requireOnboarded`, P2.12). A privacy-version difference is a notice, not a redirect.
   After a stale cache, `verifiedAfterRefresh` turns the PDS's answer (`EmailRefresh`) into pass, verify, `ended` or
   `unavailable`. `ended` is a revoked grant (P2.11a). `unavailable` is a transient answer past 4 × the recheck
-  interval; the session stays (P2.11d).
+  interval; the session stays (P2.11d). The 4 (`CACHED_RECHECK_CAP_MULTIPLE`) and `withinCachedRecheckCap` stay
+  inside the package (P0.05 cleanup); the index exports `cachedRecheckCapS`.
 - `auth/age.ts`: parses a birth date and counts full years (P2.12). The date is not stored here.
 - `legal/versions.ts`: `TERMS_VERSION` and `PRIVACY_VERSION`, the date strings P2.12 compares (P2.15).
 

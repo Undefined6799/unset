@@ -4,292 +4,19 @@
 # `expired_at` is yyyy-mm-dd. Passed with --ignorefile only when the source is
 # ghcr.io/bluesky-social/pds, in mirror.yml and images.yml. Every other scan keeps
 # .github/trivyignore.yaml or /dev/null. caddy:2.11.7-alpine is not listed here.
-# Ids are those mirror run 38952734875 reported for this digest, scoped with the
-# paths and PURLs Trivy v0.75.0 reports for the same image. Each entry expires
-# 2026-11-13, 30 days from Alex's tap at 2026-10-14T20:34:16Z. CVE-2026-111943 was published later and accepted by
-# Alex at 2026-10-22T12:25:20Z with the same expiry.
+# Ids are those #1371's pins job (run 40622622906) reported for the pinned 0.4.5049
+# image (cca85fd0), scoped with the paths and PURLs Trivy v0.75.0 reports. The
+# 0.4.5037 (3a8feb34) entries ended with that re-pin (P1.38l), except the five
+# below.
 vulnerabilities:
+  # P1.38l: 0.4.5049 still ships nodemailer 6.10.1 at the same path, so these five
+  # 0.4.5037 entries also cover cca85fd0 (scan pds on #1445, run 40780273224). Kept
+  # unchanged until 2026-11-13 by Alex's line of 2026-10-28T22:38:42Z.
   - id: CVE-2025-14874
     paths:
       - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
     purls:
       - "pkg:npm/nodemailer@6.10.1"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2025-47913
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-102276
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
-    purls:
-      - "pkg:npm/brace-expansion@5.0.6"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-102278
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
-    purls:
-      - "pkg:npm/brace-expansion@5.0.6"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-106445
-    paths:
-      - "app/node_modules/.pnpm/handlebars@4.7.9/node_modules/handlebars/package.json"
-    purls:
-      - "pkg:npm/handlebars@4.7.9"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-106446
-    paths:
-      - "app/node_modules/.pnpm/handlebars@4.7.9/node_modules/handlebars/package.json"
-    purls:
-      - "pkg:npm/handlebars@4.7.9"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-111943
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, goat CLI only, never run by the PDS server, accepted by Alex 2026-10-22T12:25:20Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-12151
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
-    purls:
-      - "pkg:npm/undici@6.26.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-13149
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
-    purls:
-      - "pkg:npm/brace-expansion@5.0.6"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-14257
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
-    purls:
-      - "pkg:npm/brace-expansion@5.0.6"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-14456
-    paths:
-      - "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4 (alpine 3.23.5)"
-      # The pds-ui candidate's scan target (images.yml tags each scanned build unset-scan/<name>:ci).
-      - "unset-scan/pds:ci (alpine 3.23.5)"
-    purls:
-      - "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64&distro=3.23.5"
-      - "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64&distro=3.23.5"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-19534
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
-    purls:
-      - "pkg:npm/undici@6.26.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-27145
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-33818
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39821
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39822
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39828
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39829
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39830
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39831
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39832
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-39835
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-42504
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-42508
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-46595
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-46597
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56853
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56854
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.41.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56858
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56859
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56860
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-56862
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-59873
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/tar/package.json"
-    purls:
-      - "pkg:npm/tar@7.5.16"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-59874
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/tar/package.json"
-    purls:
-      - "pkg:npm/tar@7.5.16"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-59892
-    paths:
-      - "app/node_modules/.pnpm/@opentelemetry+propagator-jaeger@2.8.0_@opentelemetry+api@1.9.1/node_modules/@opentelemetry/propagator-jaeger/package.json"
-    purls:
-      - "pkg:npm/%40opentelemetry/propagator-jaeger@2.8.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-69152
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
-    purls:
-      - "pkg:npm/brace-expansion@5.0.6"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-69192
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/ip-address/package.json"
-    purls:
-      - "pkg:npm/ip-address@10.2.0"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-73566
-    paths:
-      - "usr/local/lib/node_modules/npm/node_modules/tar/package.json"
-    purls:
-      - "pkg:npm/tar@7.5.16"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-78667
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
-  - id: CVE-2026-78669
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
     statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-11-13
   - id: CVE-2026-82659
@@ -306,13 +33,6 @@ vulnerabilities:
       - "pkg:npm/nodemailer@6.10.1"
     statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-11-13
-  - id: CVE-2026-97031
-    paths:
-      - "usr/local/bin/goat"
-    purls:
-      - "pkg:golang/stdlib@v1.25.10"
-    statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
-    expired_at: 2026-11-13
   - id: GHSA-2x7j-588g-ccc2
     paths:
       - "app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"
@@ -327,3 +47,65 @@ vulnerabilities:
       - "pkg:npm/nodemailer@6.10.1"
     statement: "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4: newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34"
     expired_at: 2026-11-13
+  # P1.38k: the 0.4.5049 re-pin (P1.38h) at cca85fd0, as #1371's pins job (run 40622622906) reported it. Four ids are
+  # re-stated for 0.4.5049's package versions and four are new; Alex's line 2026-10-28T03:36:24Z; each expires
+  # 2026-11-27, 30 days from 2026-10-28.
+  # P1.38k: the 0.4.5049 re-pin (P1.38h) at cca85fd0, as #1371's pins job (run 40622622906) reported it. Four ids are
+  # re-stated for 0.4.5049's package versions and four are new; Alex's line 2026-10-28T03:36:24Z; each expires
+  # 2026-11-27, 30 days from 2026-10-28.
+  - id: CVE-2026-59892
+    paths:
+      - "app/node_modules/.pnpm/@opentelemetry+propagator-jaeger@2.8.0_@opentelemetry+api@1.10.0/node_modules/@opentelemetry/propagator-jaeger/package.json"
+    purls:
+      - "pkg:npm/%40opentelemetry/propagator-jaeger@2.8.0"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-102276
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
+    purls:
+      - "pkg:npm/brace-expansion@5.0.9"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-102278
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json"
+    purls:
+      - "pkg:npm/brace-expansion@5.0.9"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-19534
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
+    purls:
+      - "pkg:npm/undici@6.28.0"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-109383
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
+    purls:
+      - "pkg:npm/undici@6.28.0"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-109869
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
+    purls:
+      - "pkg:npm/undici@6.28.0"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2026-87018
+    paths:
+      - "usr/local/lib/node_modules/npm/node_modules/undici/package.json"
+    purls:
+      - "pkg:npm/undici@6.28.0"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27
+  - id: CVE-2023-54404
+    paths:
+      - "app/node_modules/.pnpm/zod@3.25.76/node_modules/zod/package.json"
+    purls:
+      - "pkg:npm/zod@3.25.76"
+    statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
+    expired_at: 2026-11-27

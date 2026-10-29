@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-23
+checked: 2026-10-29
 ---
 # http
 
@@ -38,8 +38,8 @@ book's `/__test/` paths fail the kit's path template, which refuses a leading un
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
-identity network and DID resolver, and the one OAuth client over them, and returns it as `oauth` for the sign-in
-routes; building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
+itself (compose returns only `server` and `boot`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
 which writes the secrets to files; the runtime image copies each package the server imports, and
@@ -90,6 +90,15 @@ string equality with our issuer, and neither the value nor a refusal is logged. 
 on the signed-out page; the account page, which reads the same `issuerOf`, shows no link. A failed session delete is
 the 503 `logout.failed`.
 
+**Sign-in against sign-out (P1.36y; security review 2026-10-28).** `sign-in-lock.ts` wraps the OAuth library's
+session store and its `requestLock`. Inside `/oauth/callback` (`signInScope`), the first use of the account's OAuth
+lock (the one the library takes around token reads) holds it until the session row exists; the library's later lock
+calls for that account reuse it, so a scope takes one lock-pool client (Codex on #1441: a nested second client from
+the same bounded pool could wait on itself). A delete inside the scope waits for the end and is dropped when a store
+follows it, so the old set is replaced in place. When POST /logout finds no other session, `whenLastBrowser` holds
+the same lock (`exclusive`), counts again, and revokes only if the count is still zero; a lock failure falls back to
+revoking.
+
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
@@ -109,7 +118,7 @@ lands, accounts on other PDSes are refused at sign-in until P1.33p, which must f
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
 client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capped_at_900` pins the cap. Nothing in the
-repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:276, stateful access tokens) and
+repository pins the PDS side; it rests on @atproto/pds 0.5.49 (dist/context.js:276, stateful access tokens) and
 @atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
 `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
@@ -130,6 +139,11 @@ Foreign DIDs return 404. Owner pages show the handle only when P2.02's `verifyHa
 unindexed and zero JS. GET /login sends a signed-in visitor to `/did`. P2.12's `openApp` still requires onboarding
 and email confirmation. Public profile content, editing and invite blocks remain separate work.
 
+**Saving the profile (P2.20p).** `routes/profile.ts`: POST `/profile` (form, 96 KiB body limit, CSRF) opens the
+app gate, reads only the fields sent through `domains/profile`, and writes the session's own `sh.unset.profile`
+with a compare-and-swap (`infrastructure/pds/profile-record.ts`). A field left out keeps its stored value. It
+returns 303 to `/<DID>`, or to `/settings/profile` only when `next` is exactly that path.
+
 Keep `meRoutes` last in composition so the one-segment DID parameter cannot shadow explicit GET routes. Invalid
 DID segments return 404 before any gate or lookup. The shared router's existing candidate matching means GET
 `/logout` now returns 404 and an unsupported POST to a one-segment path returns 405; trusted routing is unchanged.
@@ -143,8 +157,8 @@ or startup fails on the missing build. `main.test.ts` fails if `main.ts` statica
 hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLimit, rateLimitIp, csrf. Also:
 - `routes.ts`: `defineRoute`, the only way to register a route; it refuses a route without limits or a deadline.
 - `csrf/gate.ts`: the one CSRF gate (Sec-Fetch-Site, then exact Origin, then exact Referer, else deny).
-- `csp/`: the Content-Security-Policy per route group. `public` (P1.25k) is for our own zero-JS pages (`/`, `/terms`,
-  `/privacy`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
+- `csp/`: the Content-Security-Policy per route group. `public` (P1.25k) is for our own zero-JS pages (`/`, `/legal/terms`,
+  `/legal/privacy`, `/legal/domains`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
 - `health.ts`: `/health`, which reveals only status and commit.
@@ -155,5 +169,21 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
 **Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+
+**In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
+sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
+signed-in browser to `/did` (the box posts from public pages, which never vary on the cookie).
+
+**Silent sign-in (P2.05s).** POST /login asks with `prompt=none` (appState `silent: true`) unless `__Host-signed_out`
+is set. The callback asks once more with a page only for a silent appState whose nonce cookie matches, through the
+same `authorizationTarget` POST /login uses, and 303s straight to the PDS. POST /signed-out ("No thanks") clears the
+marker; CSRF-gated, in the route manifest.
+
+**Session in the manifest (#1279, P1.04s/u).** The web routes gate in their handlers (`openApp`, or
+`readSession` then a 303 to `/login?next=`), never in the kit, so they declare `session: "handler"`: the manifest
+shows `handlerSession: true` and the kit enforces nothing. `"required"` would have the kit read a session, and no
+reader is wired, so it answers 500. `routes.session.test.ts` calls every route signed out and fails when the routes
+that send to sign-in and the declared ones differ. A route that only peeks (GET /login, POST /logout, GET and POST
+/signed-out, /welcome/blocked, /settings's redirect) stays `"none"`. A new path parameter needs a sample value in that test.
 
 **Links.** [[web]], [[config]], [[errors]].

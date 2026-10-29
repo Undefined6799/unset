@@ -9,12 +9,11 @@ import type { PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
-import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { pageResponse } from "../web/page.ts";
+import { silentLog, testPage } from "../web/fixtures/page.ts";
 import { verifyEmailRoutes } from "./verify-email.ts";
 
 const ORIGIN = "https://unset.test";
@@ -42,7 +41,7 @@ function setup(
   const saved: boolean[] = [];
   const calls: string[] = [];
   const authorized: { prompt?: string; input: string }[] = [];
-  const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
+  const log = silentLog();
   const server = createServer({
     config: CONFIG,
     routes: verifyEmailRoutes({
@@ -63,26 +62,7 @@ function setup(
       },
       safeHref: (value) => value as never,
       allowHttp: false,
-      page: (page) =>
-        pageResponse(
-          {
-            build: {
-              manifest: {
-                boot: "assets/boot.js",
-                styles: [],
-                fonts: [],
-                icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-                islands: new Map(),
-              },
-              files: new Map(),
-            },
-            render: web.renderPage,
-            assetsOrigin: ORIGIN,
-            env: "test",
-            log,
-          },
-          page,
-        ),
+      page: testPage(log),
       screens: web.screens,
       pdsHost: "pds.unset.test",
       log,
@@ -131,7 +111,7 @@ describe("GET /verify-email", () => {
   test("verify.query_ignored", async () => {
     const { send } = setup({ info: info(false) });
     const html = await (await send("/verify-email?confirmed=1")).text();
-    expect(html).toContain("Confirm your email there");
+    expect(html).toContain("Confirm your email in the new tab");
     expect(html).not.toContain("Your email is confirmed");
   });
 

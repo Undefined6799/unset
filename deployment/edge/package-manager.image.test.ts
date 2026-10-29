@@ -15,41 +15,18 @@ import { randomBytes, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { BUILD_CALL_MS, buildTestBudget, CALL_MS, removalBudget, runOrKill } from "./docker-call.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
 const EDGE = import.meta.dirname;
+const docker = (args: readonly string[], timeoutMs: number) => runOrKill(spawnSync, "docker", args, timeoutMs);
 const CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
 const built: string[] = [];
-// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
-// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
-const CONTAINER_MS = 120_000;
-
-// Every docker call is killed at its own budget with SIGKILL (P1.27t, as P1.27k does for tests/support/docker.ts): a
-// blocked spawnSync holds the event loop, so vitest's budget cannot stop it, and a hung daemon would hold the run
-// until scripts/test/run.ts kills it whole at 600 s, failing with no name. A daemon call (run, cat, rmi) gets 50 s, so
-// the afterAll's two removals fit inside CONTAINER_MS; a build gets 300 s inside its test's 600 s. This trusted test
-// keeps its own helper rather than import product test code.
-const CALL_MS = 50_000;
-const BUILD_MS = 300_000;
-
-/** Docker's subcommand in full: up to two leading words (`run`, `image inspect`), never a flag or a reference. */
-function subcommand(args: readonly string[]): string {
-  const end = args.findIndex((arg) => !/^[a-z][a-z-]*$/.test(arg));
-  return args.slice(0, Math.min(end === -1 ? args.length : end, 2)).join(" ");
-}
-
-function docker(args: readonly string[], timeoutMs: number): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: "SIGKILL",
-  });
-  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
-    throw new Error(`docker ${subcommand(args)} killed after ${timeoutMs} ms`);
-  }
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
-}
+// Every docker call is killed at its own budget with SIGKILL by docker-call.ts (P1.27t). Each test's budget is one
+// build slot plus CALL_MS for each other docker call it makes, which keeps the sum of its kills under that budget and
+// the budget under run.ts's 600 s (P1.27h, N1; docker-call.ts buildTestBudget). The afterAll's removals are one `rmi`
+// per tag, one tag per test that builds (BUILDS of them), each killed at CALL_MS.
+const BUILDS = 3;
 
 /** The edge's runtime base, pinned by index digest in deployment/images/bases.lock.json. */
 function runtimeBase(): string {
@@ -89,7 +66,7 @@ function bundleProblems(bundle: string): string[] {
  */
 function buildEdgeImage(): string {
   const tag = `unset-test-${randomBytes(8).toString("hex")}`;
-  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
+  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_CALL_MS);
   if (result.code !== 0) throw new Error(`edge image build failed: ${failedStep(result.err)}`);
   built.push(tag);
   return tag;
@@ -104,14 +81,16 @@ function failedStep(stderr: string): string {
 describe("edge image package manager", () => {
   afterAll(() => {
     // The tag only, never -f: an image another edge test built from the same context stays (P1.27z). Every tag is
-    // tried, even after a removal fails or is killed (P1.11r).
+    // tried, and each result checked, even after a removal fails or is killed (P1.11r).
     removeEveryTag(built, (tag) => {
       const removed = docker(["rmi", tag], CALL_MS);
       if (removed.code !== 0) throw new Error(removed.err.trim().slice(-500));
     });
-  }, CONTAINER_MS);
+    if (built.length > BUILDS) throw new Error(`${built.length} builds, but this hook's budget covers ${BUILDS}`);
+  }, removalBudget(BUILDS));
 
-  test("edge_image_has_no_apk", () => {
+  // Its docker calls after the build: apk by path, then on PATH (2).
+  test("edge_image_has_no_apk", { timeout: buildTestBudget(2) }, () => {
     const image = buildEdgeImage();
     // Docker exits 127 when the entrypoint cannot be found; the message says whether by path or on PATH.
     const byPath = docker(
@@ -126,9 +105,19 @@ describe("edge image package manager", () => {
     expect({ code: onPath.code, missing: /executable file not found in \$PATH/i.test(onPath.err) }, onPath.out).toEqual(
       { code: 127, missing: true },
     );
-  }, 600_000);
+  });
 
-  test("edge_image_keeps_ca_bundle", () => {
+  // Its one docker call after the build: inspect (1).
+  test("edge_image_default_user_is_caddy", { timeout: buildTestBudget(1) }, () => {
+    // P1.34j item 1: the user Docker recorded for the built image, whatever spelling, case or continuation the
+    // Dockerfile used, is caddy's uid and gid (images.test.ts reads the Dockerfile; this reads what the build made).
+    const image = buildEdgeImage();
+    const user = docker(["image", "inspect", "--format", "{{.Config.User}}", image], CALL_MS);
+    expect({ code: user.code, user: user.out.trim() }, user.err).toEqual({ code: 0, user: "65532:65532" });
+  });
+
+  // Its docker calls after the build: the base's bundle, the image's bundle, then stat (3).
+  test("edge_image_keeps_ca_bundle", { timeout: buildTestBudget(3) }, () => {
     const image = buildEdgeImage();
     const base = fileIn(runtimeBase(), CA_BUNDLE);
     const shipped = fileIn(image, CA_BUNDLE);
@@ -147,5 +136,5 @@ describe("edge image package manager", () => {
     expect(bundleProblems(`${one}\n-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n`)).toEqual([
       "block 2 does not parse",
     ]);
-  }, 600_000);
+  });
 });

@@ -13,7 +13,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { pageResponse } from "../web/page.ts";
+import { testPage } from "../web/fixtures/page.ts";
 import { ISSUER_READ_MS, type LogoutDeps, logoutRoutes } from "./logout.ts";
 
 const ORIGIN = "https://unset.test";
@@ -31,6 +31,8 @@ type World = {
   issuer?: string | null | Error | "stall";
   /** The last browser's revocation fails at the PDS (P2.08g). */
   revokeFails?: boolean;
+  /** P1.36y: what the recount under the account's lock finds: a sign-in finished meanwhile, or the lock failed. */
+  underLock?: "still_last" | "signed_in_meanwhile" | "lock_fails";
 };
 
 function setup(world: World = {}) {
@@ -76,26 +78,13 @@ function setup(world: World = {}) {
       calls.push("deleteTokenSet");
       if (!world.revokeFails) throw new Error("token delete is not this test");
     },
-    page: (page) =>
-      pageResponse(
-        {
-          build: {
-            manifest: {
-              boot: "assets/boot.js",
-              styles: [],
-              fonts: [],
-              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
-              islands: new Map(),
-            },
-            files: new Map(),
-          },
-          render: web.renderPage,
-          assetsOrigin: ORIGIN,
-          env: "test",
-          log,
-        },
-        page,
-      ),
+    whenLastBrowser: async (_did, _deadline, fn) => {
+      calls.push("lock");
+      if (world.underLock === "lock_fails") throw new Error("LockTimeout");
+      if (world.underLock === "signed_in_meanwhile") return;
+      await fn();
+    },
+    page: testPage(log),
     screens: web.screens,
     pdsIssuer: OUR_ISSUER,
     log,
@@ -182,7 +171,7 @@ describe("POST /logout", () => {
     const { send, calls } = setup({ remaining: 0 });
     const response = await send("/logout");
     expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
-    expect(calls).toEqual(["issuerOf", "destroy", "revoke"]);
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke"]);
   });
 
   test("logout_double_click_ends_at_the_fallback_link", async () => {
@@ -212,10 +201,29 @@ describe("POST /logout", () => {
     const { send, calls, lines } = setup({ remaining: 0, revokeFails: true });
     const response = await send("/logout");
     expect(response.headers.get("location")).toBe("/signed-out");
-    expect(calls).toEqual(["issuerOf", "destroy", "revoke", "deleteTokenSet"]);
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke", "deleteTokenSet"]);
     expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toEqual([
       expect.objectContaining({ kind: "Error" }),
     ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
+  });
+
+  test("logout.last_browser_keeps_a_grant_a_new_sign_in_took", async () => {
+    // P1.36y: the count said last browser, but under the account's lock a sign-in elsewhere had already finished, so
+    // the grant it stored stays.
+    const { send, calls } = setup({ remaining: 0, underLock: "signed_in_meanwhile" });
+    expect((await send("/logout")).headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["issuerOf", "destroy", "lock"]);
+  });
+
+  test("logout.last_browser_revokes_when_the_lock_fails", async () => {
+    // P1.36y: no lock is no reason to keep a grant nobody uses (review F13); the revoke runs without it.
+    const { send, calls, lines } = setup({ remaining: 0, underLock: "lock_fails", revokeFails: true });
+    expect((await send("/logout")).headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["issuerOf", "destroy", "lock", "revoke", "deleteTokenSet"]);
+    expect(lines.filter((line) => line.event === "oauth.revoke_failed")[0]).toEqual(
+      expect.objectContaining({ kind: "Error" }),
+    );
     expect(JSON.stringify(lines)).not.toContain(DID);
   });
 
@@ -279,8 +287,24 @@ test("signed_out_page", async () => {
   const response = await send("/signed-out", { method: "GET" });
   expect(response.status).toBe(200);
   const html = await response.text();
-  expect(html).toContain("You are signed out");
+  expect(html).toContain("You are signed out of unset");
+  expect(html).toContain("Also sign out of your atproto account?");
   expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_no_thanks_ends_the_password_ask", async () => {
+  // P2.05s (Alex, 2026-10-28 02:01Z): "No thanks" keeps the PDS session, so the next sign-in may go straight through.
+  // It is a POST behind the CSRF gate: another site must not lift a shared computer's password ask.
+  const { send } = setup({ session: null });
+  const response = await send("/signed-out", { body: "" });
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe("/");
+  expect(response.headers.getSetCookie()).toEqual([
+    "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  ]);
+  const forged = await send("/signed-out", { body: "", site: "cross-site" });
+  expect(forged.status).toBe(403);
+  expect(forged.headers.getSetCookie()).toEqual([]);
 });
 
 test("signed_out_links_the_foreign_issuer_recorded_at_sign_in", async () => {

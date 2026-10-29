@@ -290,6 +290,38 @@ describe("deadline", () => {
     expect(records().some((r) => r.event === "http.deadline" && r.route === "/slow")).toBe(true);
   });
 
+  test("deadline_at_counts_from_admission", async () => {
+    // P2.08j: deadlineAt is when the signal fires, on performance.now()'s clock, so time spent admitting the request
+    // (here a 300 ms session read) is already gone when the handler starts, not budgeted again from its own start.
+    let left = Number.NaN;
+    let late = Number.NaN;
+    const session = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { did: "did:plc:alice" };
+    };
+    const slow = page({
+      method: "GET",
+      path: "/slow",
+      deadlineMs: 1000,
+      session: "required",
+      handler: ({ deadline, deadlineAt }) => {
+        left = deadlineAt - performance.now();
+        return new Promise<Response>((_, reject) => {
+          deadline.addEventListener("abort", () => {
+            late = performance.now() - deadlineAt;
+            reject(deadline.reason);
+          });
+        });
+      },
+    });
+    const { request } = kit({ routes: [slow], session });
+    expect((await request("/slow")).status).toBe(503);
+    expect(left).toBeGreaterThan(600);
+    expect(left).toBeLessThan(705);
+    expect(late).toBeGreaterThan(-20);
+    expect(late).toBeLessThan(100);
+  });
+
   test("route_deadline_bounds", () => {
     for (const deadlineMs of [130_000, 400_000, 0, 999, 1.5]) {
       expect(() => page({ method: "GET", path: "/", deadlineMs })).toThrow(/deadlineMs/);
@@ -385,7 +417,7 @@ describe("startup checks", () => {
     expect(() => defineRoute(spec)).toThrow(/session/);
     expect(() => defineRoute({ ...spec, session: "maybe" as "none" })).toThrow(/session/);
     // As the committed manifest stores it (JSON), where an unset option is absent.
-    const table = (session: "required" | "none") =>
+    const table = (session: "required" | "handler" | "none") =>
       JSON.parse(
         JSON.stringify(
           kit({ routes: [page({ method: "GET", path: "/x", session })] })
@@ -395,6 +427,23 @@ describe("startup checks", () => {
       );
     expect(table("none")).not.toHaveProperty("requiresSession");
     expect(table("required")).toMatchObject({ requiresSession: true });
+    expect(table("none")).not.toHaveProperty("handlerSession");
+    expect(table("required")).not.toHaveProperty("handlerSession");
+  });
+
+  test("handler_session_is_recorded_not_enforced", async () => {
+    // #1279: a route whose handler sends a signed-out visitor to /login records that in the manifest, and the kit
+    // neither reads a session for it nor adds its session or DID-limit middleware.
+    const seen: string[] = [];
+    const route = page({ method: "GET", path: "/x", session: "handler", handler: () => (seen.push("ran"), ok()) });
+    const { server, request } = kit({ routes: [route] });
+    const entry = JSON.parse(JSON.stringify(server.routeTable().find((r) => r.path === "/x")));
+    expect(entry).toMatchObject({ handlerSession: true });
+    expect(entry).not.toHaveProperty("requiresSession");
+    expect(entry.middleware).not.toContain("session");
+    expect(entry.middleware).not.toContain("rateLimitDid");
+    expect((await request("/x")).status).toBe(200);
+    expect(seen).toEqual(["ran"]);
   });
 
   test("route_table_lists_every_option", () => {
@@ -617,6 +666,12 @@ describe("limits", () => {
 
   test("did_policy_requires_session", () => {
     const follow = page({ method: "POST", path: "/follow", rateLimit: "follow" });
+    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
+  });
+
+  test("did_policy_needs_the_kit_session_not_the_handlers", () => {
+    // A handler-gated route never gives the kit a DID, so a per-DID bucket could not apply (#1279).
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "handler" });
     expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
   });
 

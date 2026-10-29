@@ -1,5 +1,5 @@
 // No JSX `style` prop (P1.23r; plan §5.1, step book P1.23 "Lint"). Loaded by biome.json for every .tsx and .jsx file in
-// apps/, interfaces/ and shared/. The app CSP's style-src has no 'unsafe-inline', so a server-rendered style=""
+// apps/, interfaces/, domains/, infrastructure/ and shared/. The app CSP's style-src has no 'unsafe-inline', so a server-rendered style=""
 // attribute is blocked in the browser (P1.20 measured it); this rule catches it before the browser does.
 //
 // GritQL as Biome 2.5.15 runs it (biomejs.dev/linter/plugins, read 2026-10-06; behaviour checked against the pinned

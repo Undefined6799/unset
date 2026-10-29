@@ -10,7 +10,7 @@ importance: high
 related: ["[[identity]]", "[[pds]]"]
 replaced_by: null
 tags: [area, lexicons]
-checked: 2026-10-12
+checked: 2026-10-27
 ---
 # lexicons
 
@@ -30,11 +30,16 @@ apps rely on it, so a change is close to permanent.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
 - `scripts/breaking-check.ts`: refuses a narrowed limit, a lost value or a changed `default` (an absent
   `listed` must stay not listed) on a published schema; additions to
-  the permission set need Alex's approval and removals are refused.
+  the permission set need Alex's approval and removals are refused. It also holds every `published/<nsid>.json`
+  snapshot with no lock entry yet: `sh.unset.profile` is snapshotted because its records are live before P1.35
+  publishes it (P1.31h).
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
 - Blob fields validate only after `jsonToLex` (`@atproto/lex-json`); raw JSON `{$link}` fails.
+- `generate()` builds in `mkdtemp(<os tmpdir>/unset-lexicons-)` and writes nothing in the repository
+  (P1.38a): a folder that appeared and vanished in shared/ broke the docs test's walk. biome panics on
+  paths outside its root, so each built file is formatted through `--stdin-file-path=` its generated/ path.
 - `NSID.authApp` repeats `PERMISSION_SET_NSID` in shared/config; step P1.31c adds the test that holds them equal.
 
 **Links.** [[identity]], [[pds]].

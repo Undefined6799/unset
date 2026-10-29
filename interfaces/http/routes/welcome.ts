@@ -13,9 +13,12 @@ import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
 import type { AccountStore } from "../account.ts";
+import { single } from "../form-field.ts";
+import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
+import { withRevokeTimeout } from "./revoke.ts";
 
 export type WelcomeDeps = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
@@ -39,34 +42,15 @@ export type WelcomeDeps = {
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY = 2048;
-const REVOKE_MS = 10_000;
 const EMAIL = /^[^\s@]+@[^\s@]+$/;
-
-class RevokeTimeout extends Error {
-  constructor() {
-    super("revoke timed out");
-    this.name = "RevokeTimeout";
-  }
-}
 
 function termsPath(next: string | null, code?: ErrorCode): string {
   const path = next === null ? "/welcome/terms" : `/welcome/terms?${new URLSearchParams({ next })}`;
   return code === undefined ? path : withErrorParam(path, code);
 }
 
-function redirect(location: string, cookies: readonly string[] = []): Response {
-  const headers = new Headers({ location, "cache-control": "no-store" });
-  for (const cookie of cookies) headers.append("set-cookie", cookie);
-  return new Response(null, { status: 303, headers });
-}
-
 const login = (next: string, clearCookie: boolean): Response =>
   redirect(`/login?${new URLSearchParams({ next })}`, clearCookie ? [sessionClearCookie()] : []);
-
-function single(form: URLSearchParams, name: string): string | null {
-  const values = form.getAll(name);
-  return values.length === 1 ? (values[0] ?? null) : null;
-}
 
 function destination(step: OnboardingStep, emailConfirmed: boolean | null): string {
   switch (step) {
@@ -111,29 +95,6 @@ function failure(error: unknown): { kind: string; sqlstate?: string } {
   const kind = className(error);
   const state = sqlState(error);
   return state === undefined ? { kind } : { kind, sqlstate: state };
-}
-
-function withTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
-  if (deadline.aborted) return Promise.reject(new RevokeTimeout());
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new RevokeTimeout()), REVOKE_MS);
-    const onAbort = () => reject(new RevokeTimeout());
-    deadline.addEventListener("abort", onAbort, { once: true });
-    const finish = () => {
-      clearTimeout(timer);
-      deadline.removeEventListener("abort", onAbort);
-    };
-    work.then(
-      (value) => {
-        finish();
-        resolve(value);
-      },
-      (error: unknown) => {
-        finish();
-        reject(error);
-      },
-    );
-  });
 }
 
 type Located =
@@ -181,7 +142,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (step !== "blocked") return redirect(destination(step, session.emailConfirmed));
     } else if (hosted) deps.log.warn("age_gate.hosted_block", { kind: audit.lane, count: audit.seq });
     try {
-      await withTimeout(deps.revoke(session.did), deadline);
+      await withRevokeTimeout(deps.revoke(session.did), deadline);
     } catch (error) {
       deps.log.warn("oauth.revoke_failed", { kind: className(error) });
     }
@@ -204,7 +165,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/age",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/age");
       if (found.kind === "out") return found.response;
@@ -221,7 +182,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/age");
       if (found.kind === "out") return found.response;
@@ -248,7 +209,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/terms",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/terms");
       if (found.kind === "out") return found.response;
@@ -275,7 +236,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/terms");
       if (found.kind === "out") return found.response;
@@ -310,7 +271,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/chat",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/chat");
       if (found.kind === "out") return found.response;
@@ -327,7 +288,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/chat");
       if (found.kind === "out") return found.response;
@@ -346,7 +307,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome");
       if (found.kind === "out") return found.response;

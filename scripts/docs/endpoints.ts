@@ -33,6 +33,7 @@ const KNOWN_FIELDS = new Set([
   "rateLimit",
   "mutates",
   "requiresSession",
+  "handlerSession",
   "middleware",
   "deadlineMs",
 ]);
@@ -64,6 +65,8 @@ export type RouteRecord = {
   readonly path: string;
   readonly group: string | null;
   readonly requiresSession: true | null;
+  /** The handler reads the session and sends a signed-out visitor to /login; the kit does not (#1279). */
+  readonly handlerSession: true | null;
   readonly middleware: readonly string[] | null;
   readonly rateLimit: string | null;
   readonly accepts: readonly string[] | null;
@@ -170,6 +173,10 @@ function readDraft(file: string, value: unknown, index: number): { draft: Draft 
   if (method === "" || path === "") return { draft: null, problems };
   // Field problems still keep the draft, so a bad cell does not also look like a missing route.
   const at = `${file}: ${routeKey(method, path)}`;
+  // The kit sets at most one of them (shared/http/routes.ts), so both at once is a hand-edited manifest.
+  if (value.requiresSession === true && value.handlerSession === true) {
+    problems.push(`${at} sets both requiresSession and handlerSession`);
+  }
   return {
     draft: {
       method,
@@ -177,6 +184,7 @@ function readDraft(file: string, value: unknown, index: number): { draft: Draft 
       group: readField(value, "group", at, problems, oneLine, "group is not a single-line string"),
       rateLimit: readField(value, "rateLimit", at, problems, oneLine, "rateLimit is not a single-line string"),
       requiresSession: readField(value, "requiresSession", at, problems, sessionFlag, "requiresSession is not true"),
+      handlerSession: readField(value, "handlerSession", at, problems, sessionFlag, "handlerSession is not true"),
       middleware: readField(
         value,
         "middleware",
@@ -389,7 +397,10 @@ const bucketText = (buckets: readonly Bucket[]): string =>
     )
     .join("; ");
 
-const sessionCell = (route: RouteRecord): string => (route.requiresSession === true ? "required" : NOT_RECORDED);
+function sessionCell(route: RouteRecord): string {
+  if (route.requiresSession === true) return "required";
+  return route.handlerSession === true ? "required (handler)" : NOT_RECORDED;
+}
 
 function csrfCell(route: RouteRecord): string {
   if (route.middleware === null) return NOT_RECORDED;
@@ -516,7 +527,7 @@ function indexPage(model: EndpointModel): string {
     "## How a cell is filled",
     "",
     "- **Method, path, group, accepts, body limit, mutates, middleware** are copied from the manifest. An absent field is `not recorded`. An empty `accepts` array is `none`.",
-    '- **Session** is the manifest, unchanged: `required` only when `requiresSession` is true. `shared/http/routes.ts` omits the field otherwise, and these pages do not read that omission as "no session". A manifest session of none is not a claim that the handler does no auth.',
+    '- **Session** is the manifest, unchanged: `required` when `requiresSession` is true (the kit checks it), and `required (handler)` when `handlerSession` is true (the handler sends a signed-out visitor to /login, and the kit only records it). `shared/http/routes.ts` omits both fields otherwise, and these pages do not read that omission as "no session". A manifest session of none is not a claim that the handler does no auth.',
     "- **Auth** is the data file, from the handler, not the manifest. `gate: openApp` when the handler calls `openApp`. `reads session` when it calls `readSession`. `none` otherwise.",
     "- **CSRF** is `yes` when `middleware` includes `csrf`, and `no` when the array is present and does not include it. A missing array is `not recorded`.",
     "- **Rate limit** is the manifest `rateLimit` string. **Buckets** are that name's entries in `interfaces/<process>/limits.ts`. `exempt` is not a key of that table, so its buckets cell is `not recorded`.",

@@ -12,10 +12,10 @@ const HOST_ENTRY = new RegExp(`\\.?${LABEL}(?:\\.${LABEL})*`);
  * `.ac`, `.me`, `.space`), the media domain's (`.net`), and `.test` for test config. Any other TLD is refused, so
  * the same-site check needs no public-suffix library and never guesses.
  */
-export const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
+const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
 
 /** The site (registrable domain) of a URL's host: an IP or one-label host is its own site; else known TLDs only. */
-export function siteOf(host: string): string | undefined {
+function siteOf(host: string): string | undefined {
   if (host.startsWith("[") || /^[0-9.]+$/.test(host)) return host;
   const labels = host.split(".");
   if (labels.length === 1) return host;
@@ -45,7 +45,8 @@ export const httpKitConfig = {
     hostAllowed(new URL(String(config.PUBLIC_ORIGIN)).hostname, config.HTTP_ALLOWED_HOSTS as readonly string[]),
   ),
   SHUTDOWN_GRACE_MS: int({ min: 1000, max: 30000, default: 10000 }),
-  REQUEST_DEADLINE_MS: int({ min: 1000, max: 60000, default: 30000 }),
+  /** At least 5 s (P2.08j), so a route's last step, such as logout's token drop, keeps its reserve. */
+  REQUEST_DEADLINE_MS: int({ min: 5000, max: 60000, default: 30000 }),
   /** Where the client address comes from (P1.05): the edge's header, or the socket where there is no edge (admin). */
   TRUSTED_PROXY_MODE: oneOf(["header", "socket"]),
   /** The one header the edge sets, lowercase (`x-forwarded-for`). Required in header mode. */

@@ -44,26 +44,30 @@ files and 32 directory levels. Larger/unsupported inputs fail for review.
 {
   "schema": 1,
   "base": {
-    "ref": "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "ref": "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf",
     "platform": "linux/amd64"
   },
   "builder": {
-    "ref": "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
-    "node": "26.10.0",
+    "ref": "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec",
+    "node": "26.12.1",
     "pnpm": "11.11.0"
   },
   "source": {
-    "revision": "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12",
-    "archiveSha256": "706ab7fa7410a406ed3d4e67837662e21ade7d4be4f6a33a491703c0805b0555",
-    "lockSha256": "d56b93f5fe51bbad31919df7039be088e9e61f80f57017a188f02e35f2ca16f8"
+    "revision": "5d6febdd96671891bd82f07fece7eb089c6fe931",
+    "archiveSha256": "d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be",
+    "lockSha256": "b03bf840f28d91bb69a06b6252e61904611c104adc4d69e2282b2c866158cf07"
   },
-  "uiDirectory": "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.5/node_modules/@atproto/oauth-provider-ui/dist"
+  "uiDirectory": "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist"
 }
 ```
 
 The source archive must have the exact `atproto-<revision>` root and locked `pnpm-lock.yaml`; its real package JSON
-and the immutable image's package JSON must agree on `@atproto/pds@0.5.37`, `@atproto/oauth-provider@0.23.1` and
-`@atproto/oauth-provider-ui@0.10.5`. A version update requires updating this dedicated checker with the paired lock.
+and the immutable image's package JSON must agree on the `@atproto/pds`, `@atproto/oauth-provider` and
+`@atproto/oauth-provider-ui` versions that `PAIRS` in `contract.ts` lists for the lock's base tag, and `uiDirectory`
+must name that pair's `oauth-provider-ui` version. `builder.ref` and `builder.node` must equal the pair's exact
+builder. A new upstream tag needs a reviewed `PAIRS` row first (trusted base), then the re-pin. Today `PAIRS` holds
+only 0.4.5049 (0.5.49, 0.24.3, 0.10.7; builder `node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because
+atproto at 0.5.49 requires Node ^26.12.1); 0.4.5037 was dropped after the P1.38h re-pin (P1.38m).
 
 The Dockerfile has exactly three stages: `FROM <builder.ref> AS ui-build`, `FROM scratch AS ui-artifact`, and
 `FROM <base.ref>`. Its one ADD is exactly:

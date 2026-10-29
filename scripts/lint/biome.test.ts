@@ -132,11 +132,13 @@ describe("biome", () => {
     expect(biome("shared/ui/src/tokens.css", text)).toEqual({ exitCode: 0, diagnostics: [] });
   });
 
-  // no-style-prop.grit (plan §5.1): the app CSP blocks inline styles, so JSX never sets one.
+  // no-style-prop.grit (plan §5.1): the app CSP blocks inline styles, so JSX never sets one, in any product folder.
   test.each([
     ["apps/web/src/x.tsx", 'export const X = () => <div style={{ color: "red" }} />;\n'],
     ["interfaces/http/web/x.tsx", 'export const X = () => <p style="color: red" />;\n'],
     ["shared/ui/islands/x.island.tsx", "export const X = (p: object) => <Box style={p} />;\n"],
+    ["domains/content/x.tsx", "export const X = () => <span style='color: red' />;\n"],
+    ["infrastructure/email/x.jsx", "export const X = () => <td style={{ padding: 0 }} />;\n"],
   ])("jsx_style_prop_rejected %s", (file, text) => {
     const out = biome(file, text);
     expect(categories(out)).toEqual(["error plugin"]);

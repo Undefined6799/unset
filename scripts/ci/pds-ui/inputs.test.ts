@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { readArtifact, readBounded, verifyInputs } from "./cli.ts";
-import { parseLock, UI_DIRECTORY } from "./contract.ts";
+import { PAIRS, type Pair, parseLock, uiDirectoryOf } from "./contract.ts";
 import { artifacts, image, sha, tar } from "./fixtures/native.ts";
 import { verifySource } from "./verify.ts";
 
-const ui = UI_DIRECTORY;
+const pair = PAIRS["0.4.5049"] as Pair;
+const ui = uiDirectoryOf(pair);
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
 const temporary: string[] = [];
@@ -35,9 +36,9 @@ describe("source and installed artifact coupling", () => {
   test("binds actual source, installed packages and every installed artifact byte", async () => {
     const revision = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
     const packages = {
-      "packages/pds": ["@atproto/pds", "0.5.37"],
-      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
+      "packages/pds": ["@atproto/pds", "0.5.49"],
+      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.24.3"],
+      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.7"],
     };
     const source = await tar([
       { name: `atproto-${revision}/pnpm-lock.yaml`, body: "frozen" },
@@ -60,12 +61,8 @@ describe("source and installed artifact coupling", () => {
     const lock = parseLock(
       JSON.stringify({
         schema: 1,
-        base: { ref: `ghcr.io/bluesky-social/pds:0.4.5037@${base.digest}`, platform: "linux/arm64" },
-        builder: {
-          ref: `docker.io/library/node:26-trixie-slim@sha256:${"0".repeat(64)}`,
-          node: "26.10.0",
-          pnpm: "11.11.0",
-        },
+        base: { ref: `ghcr.io/bluesky-social/pds:0.4.5049@${base.digest}`, platform: "linux/arm64" },
+        builder: { ...pair.builder, pnpm: "11.11.0" },
         source: { revision, archiveSha256: sha(source), lockSha256: sha("frozen") },
         uiDirectory: ui,
       }),
@@ -86,7 +83,7 @@ describe("source and installed artifact coupling", () => {
         {
           ...packageEntries[0],
           name: packageEntries[0]?.name ?? "",
-          body: JSON.stringify({ name: "@atproto/pds", version: "0.5.38" }),
+          body: JSON.stringify({ name: "@atproto/pds", version: "0.5.50" }),
         },
         ...packageEntries.slice(1),
         ...[...artifact].map(([name, body]) => ({ name: `${ui}/${name}`, body })),
@@ -96,7 +93,7 @@ describe("source and installed artifact coupling", () => {
     ]);
     const wrongLock = {
       ...lock,
-      base: { ...lock.base, ref: `ghcr.io/bluesky-social/pds:0.4.5037@${wrongPackage.digest}` },
+      base: { ...lock.base, ref: `ghcr.io/bluesky-social/pds:0.4.5049@${wrongPackage.digest}` },
     };
     await expect(
       verifyInputs(wrongLock, source, wrongPackage.bytes, wrongPackage.bytes, wrongPackage.digest, artifact),
@@ -106,9 +103,9 @@ describe("source and installed artifact coupling", () => {
     const revision = "a7c8604d876a200a1e4fa4aec83d4189ac4f1c12";
     const root = `atproto-${revision}`;
     const packages = {
-      "packages/pds": ["@atproto/pds", "0.5.37"],
-      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.23.1"],
-      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.5"],
+      "packages/pds": ["@atproto/pds", "0.5.49"],
+      "packages/oauth/oauth-provider": ["@atproto/oauth-provider", "0.24.3"],
+      "packages/oauth/oauth-provider-ui": ["@atproto/oauth-provider-ui", "0.10.7"],
     };
     const source = await tar([
       { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
@@ -124,10 +121,10 @@ describe("source and installed artifact coupling", () => {
     global.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148, "ascii");
     const native = Buffer.concat([global, source]);
     await expect(
-      verifySource(native, { revision, archiveSha256: sha(native), lockSha256: sha("frozen") }),
+      verifySource(native, { revision, archiveSha256: sha(native), lockSha256: sha("frozen") }, pair),
     ).resolves.toBeUndefined();
     const lock = { revision, archiveSha256: sha(source), lockSha256: sha("frozen") };
-    await expect(verifySource(source, lock)).resolves.toBeUndefined();
+    await expect(verifySource(source, lock, pair)).resolves.toBeUndefined();
     const badSource = await tar([
       { name: `${root}/pnpm-lock.yaml`, body: "frozen" },
       ...Object.entries(packages).map(([path, [name, version]]) => ({
@@ -135,12 +132,15 @@ describe("source and installed artifact coupling", () => {
         body: JSON.stringify({ name, version: path.endsWith("provider-ui") ? "0.10.6" : version }),
       })),
     ]);
-    await expect(verifySource(badSource, { ...lock, archiveSha256: sha(badSource) })).rejects.toThrow(/version/);
+    await expect(verifySource(badSource, { ...lock, archiveSha256: sha(badSource) }, pair)).rejects.toThrow(/version/);
+    // The dropped 0.4.5037 versions (P1.38m) no longer match the reviewed pair.
+    const dropped = { ...pair, pds: "0.5.37", oauthProvider: "0.23.1", oauthProviderUi: "0.10.5" };
+    await expect(verifySource(source, lock, dropped)).rejects.toThrow(/version/);
     for (const delta of [
       { revision: "0".repeat(40) },
       { archiveSha256: "0".repeat(64) },
       { lockSha256: "0".repeat(64) },
     ])
-      await expect(verifySource(source, { ...lock, ...delta })).rejects.toThrow();
+      await expect(verifySource(source, { ...lock, ...delta }, pair)).rejects.toThrow();
   });
 });

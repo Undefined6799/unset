@@ -7,7 +7,8 @@
 //
 // Ignore files are this map, never "a <name>.trivyignore beside the Dockerfile". P1.29v
 // emptied it, so every shipped image is scanned in full. A later entry is a loosening and
-// needs Alex's card and line.
+// needs Alex's card and line: P1.29v (card 2026-10-28T01:40:52Z) points node-app and migrate
+// at APP_IGNOREFILE, which holds only the zod 3.25.76 finding.
 //
 // The CLI appends one `images=` line to $GITHUB_OUTPUT (GitHub Actions workflow commands:
 // docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands, "Setting an
@@ -23,8 +24,10 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
 const NAME = /^[a-z0-9-]+$/;
 
-/** Images whose scan reads an ignore file: none. Every image gets /dev/null, but for the pds-ui recipe below. */
-export const IGNOREFILES: Readonly<Record<string, string>> = {};
+/** P1.29v: our two app images, which ship the same npm tree. */
+export const APP_IGNOREFILE = ".github/trivyignore.app.yaml";
+/** Images whose scan reads an ignore file. Every other image gets /dev/null, but for the pds-ui recipe below. */
+export const IGNOREFILES: Readonly<Record<string, string>> = { "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE };
 
 /**
  * P2.24t (Alex's line): the pds-ui recipe is the official PDS image with only its frontend replaced (ADR 0027), so

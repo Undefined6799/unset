@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[identity]]"]
 replaced_by: null
 tags: [how-to, pds, identity]
-checked: 2026-10-23
+checked: 2026-10-29
 ---
 # Where the operator types the Alice and Bob PDS password
 
@@ -28,7 +28,9 @@ The runbook's legal-values paragraph (P1.38d) is about the legal pages, its cosi
 since P2.26v) is about image verification, and its `umask 022` paragraph (the C21 follow-up, #1187) is about the
 checkout's file modes; none changes anything here. Its opening warning no longer names a restore runbook (none exists
 yet); that does not change where the password is typed. Its rootless Docker lines (#1266) say the preflight
-does not detect rootless Docker; that does not change where the password is typed.
+does not detect rootless Docker; that does not change where the password is typed. Its version
+citations now name `@atproto/pds` 0.5.49 and bluesky-social/pds v0.4.5049 (#1469); that does not
+change where the password is typed.
 
 **Check.** The PDS login accepts the password you typed. The app still has no password, DID, or mailbox
 store for them.
