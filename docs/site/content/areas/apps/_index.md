@@ -11,7 +11,7 @@ Screens, islands and styles. UI only: no product rules and no database access. D
 
 ## Owns
 
-[web](web/) is the public site, and it is the only app folder on the tree. `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names the path `apps/web/render.tsx` for `interfaces/http` and the path `apps/admin/render.tsx` for `interfaces/admin`. `SDK_ADAPTERS` names the path `apps/chat/matrix/` for `matrix-js-sdk`.
+[web](web/) is the public site, and it is the only app folder on the tree. `RENDER_ENTRIES` in `scripts/lint/.dependency-cruiser.cjs` names the path `apps/web/render.tsx` for `interfaces/http` and the path `apps/admin/render.tsx` for `interfaces/admin`. `SDK_ADAPTERS` names the path `apps/chat/matrix/` for `matrix-js-sdk`, and the path `apps/web/src/editor/` for `@blocknote/[^/]+`, `prosemirror-[^/]+` and `@tiptap/[^/]+`. Neither of those folders is on this tree.
 
 ## May import
 
@@ -35,7 +35,7 @@ Rules that refuse an edge the row would otherwise allow:
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. An app does not import one. |
 | `island-import-boundary` | A `*.island.tsx` may import `shared/ui/`, `shared/islands/`, `react/jsx-runtime`, and type-only modules. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. The Vite config row above is the exception the cruiser states. |
-| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only on the adapter path that list names. The `apps/` entry names the path `apps/chat/matrix/` for `matrix-js-sdk`. |
+| `vendor-sdk-one-adapter` | Each SDK in `SDK_ADAPTERS` is imported only on the adapter path that list names. The `apps/` entries name the path `apps/chat/matrix/` for `matrix-js-sdk`, and the path `apps/web/src/editor/` for `@blocknote/[^/]+`, `prosemirror-[^/]+` and `@tiptap/[^/]+`. Neither of those folders is on this tree. |
 | `web-not-admin` | `apps/web` imports nothing whose path is `admin/…` or contains `/admin/`. |
 
 ## Entry points
