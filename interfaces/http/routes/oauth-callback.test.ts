@@ -45,6 +45,8 @@ const AS_URL = `${ISSUER}/oauth/authorize?client_id=c&request_uri=r` as SafeHref
 
 function setup(world: World = {}) {
   const calls: string[] = [];
+  /** P1.36y: where in `calls` the sign-in scope opened and ended. */
+  const scope: { opened?: number; ended?: number } = {};
   const created: { did: Did; replacing: string | null }[] = [];
   const asked: { input: string; appState: Record<string, unknown>; prompt?: string }[] = [];
   const lines: Record<string, unknown>[] = [];
@@ -91,6 +93,14 @@ function setup(world: World = {}) {
       return world.asked ?? { ok: true, target: AS_URL };
     },
     pdsIssuer: ISSUER,
+    signInScope: async (fn) => {
+      scope.opened = calls.length;
+      try {
+        return await fn();
+      } finally {
+        scope.ended = calls.length;
+      }
+    },
     log,
   };
   const server = createServer({ config: CONFIG, routes: oauthCallbackRoutes(deps), policies, log });
@@ -99,7 +109,7 @@ function setup(world: World = {}) {
     if (cookie !== undefined) headers.set("cookie", cookie);
     return server.request(new Request(`${ORIGIN}/oauth/callback${query}`, { headers }), "10.0.0.1");
   };
-  return { send, calls, created, asked, lines, routes: server.routeTable() };
+  return { send, calls, scope, created, asked, lines, routes: server.routeTable() };
 }
 
 const NONCE_COOKIE = `__Host-oauth_nonce=${NONCE}`;
@@ -109,6 +119,14 @@ const cookies = (response: Response) => response.headers.getSetCookie();
 const events = (lines: Record<string, unknown>[]) => lines.filter((line) => String(line.event).startsWith("auth."));
 
 describe("GET /oauth/callback", () => {
+  test("callback_runs_inside_the_sign_in_scope", async () => {
+    // P1.36y: the token set is stored and the session row created while the account's lock can be held.
+    const { send, calls, scope } = setup();
+    await send(NONCE_COOKIE);
+    expect(calls).toEqual(["complete st", `consume ${NONCE}`, "create"]);
+    expect(scope).toEqual({ opened: 0, ended: 3 });
+  });
+
   test("callback_success_creates_session", async () => {
     const { send, calls, created, lines } = setup();
     const response = await send(NONCE_COOKIE);

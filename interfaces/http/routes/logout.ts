@@ -39,6 +39,12 @@ export type LogoutDeps = {
   revokeGrant: (did: Did) => Promise<void>;
   /** `oauthSessionStore.del`: used when revoke throws, so no grant remains on our side. */
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
+  /**
+   * P1.36y: runs `fn` under the account's sign-in lock only if, counted again there, no session of `did` remains. A
+   * sign-in holds that lock from storing its token set until its session row exists (sign-in-lock.ts). Throws when
+   * the lock or the count fails.
+   */
+  whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
   page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   /** Our PDS's issuer origin: the signed-out page's link when no recorded issuer was carried. */
@@ -80,6 +86,19 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       await deps.deleteTokenSet(did, deadline).catch((drop: unknown) => {
         deps.log.warn("oauth.revoke_failed", { kind: className(drop) });
       });
+    }
+  }
+
+  /**
+   * The last browser's revoke, under the account's lock so it cannot take a grant a concurrent sign-in just stored. If
+   * the lock cannot be had, the revoke still runs: a grant nobody uses is not kept (F13).
+   */
+  async function endGrantIfLast(did: Did, deadline: AbortSignal): Promise<void> {
+    try {
+      await deps.whenLastBrowser(did, deadline, () => revokeOrDrop(did, deadline));
+    } catch (cause: unknown) {
+      deps.log.warn("oauth.revoke_failed", { kind: className(cause) });
+      await revokeOrDrop(did, deadline);
     }
   }
 
@@ -126,7 +145,7 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         });
         deps.log.info("auth.logout_this_browser");
         // Last browser: revoke outside the transaction. The count saw this delete. No unconfirmed notice (F13).
-        if (remaining === 0) await revokeOrDrop(session.did, deadline);
+        if (remaining === 0) await endGrantIfLast(session.did, deadline);
         return finish("/signed-out", issuer);
       },
     }),

@@ -33,12 +33,18 @@ export function browserLogout(options: {
   readonly limits: SessionLimits;
   /** `@atproto/oauth-client` 0.8.9 `OAuthClient.revoke` (dist/oauth-client.js). Deletes the stored set in a `finally`. */
   readonly revoke: (did: Did) => Promise<void>;
+  /**
+   * sign-in-lock.ts `exclusive` (P1.36y): runs `fn` holding the account's OAuth lock, the one a sign-in holds while it
+   * replaces the token set; `revoke`'s own lock call inside reuses it.
+   */
+  readonly lockDid: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
+  whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
 } {
-  const { pool, sessions, limits, revoke } = options;
+  const { pool, sessions, limits, revoke, lockDid } = options;
   return {
     destroySession: (session, deadline) =>
       withTransaction(pool, deadline, async (tx) => {
@@ -46,6 +52,12 @@ export function browserLogout(options: {
         return remainingSessions(tx, session.did, limits.idleS);
       }),
     revokeGrant: revoke,
+    // Counted again under the lock: a sign-in that finished since the delete above has its session row by now.
+    whenLastBrowser: (did, deadline, fn) =>
+      lockDid(did, async () => {
+        const remaining = await withClient(pool, deadline, (db) => remainingSessions(db, did, limits.idleS));
+        if (remaining === 0) await fn();
+      }),
     deleteTokenSet: (did, deadline) =>
       withClient(pool, deadline, (db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did])).then(
         () => undefined,

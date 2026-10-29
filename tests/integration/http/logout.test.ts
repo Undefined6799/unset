@@ -6,7 +6,14 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { AUDIT_ACTIONS } from "@unset/infrastructure-audit";
-import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
+import {
+  createLockPool,
+  createOAuthSessionStore,
+  createPool,
+  createRequestLock,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionDb, type SessionLimits } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
@@ -27,6 +34,14 @@ const webPool = createPool({
   connectTimeoutMs: 5000,
 });
 afterAll(() => webPool.end());
+// P1.36y: the real account lock, as compose builds it, so sign-out recounts under a Postgres advisory lock.
+const lockPool = createLockPool({
+  connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
+  service: "logout-http-lock",
+  max: 2,
+  log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
+});
+afterAll(() => lockPool.pool.end());
 // Reads audit.chain only, to count it (architecture 04:51Z); never handed to the server under test.
 const auditorPool = asAuditor(inject("postgresAuditor"), database);
 afterAll(() => auditorPool.end());
@@ -90,6 +105,7 @@ let remainingSessions: (db: SessionDb, did: Did, idleS: number) => Promise<numbe
 beforeAll(async () => {
   const [
     { browserLogout, remainingSessions: counted },
+    { createSignInLock },
     { logoutRoutes },
     { meRoutes },
     { policies },
@@ -99,6 +115,7 @@ beforeAll(async () => {
     web,
   ] = await Promise.all([
     import(join(HTTP, "logout-sessions.ts")),
+    import(join(HTTP, "sign-in-lock.ts")),
     import(join(HTTP, "routes/logout.ts")),
     import(join(HTTP, "routes/me.ts")),
     import(join(HTTP, "limits.ts")),
@@ -127,6 +144,7 @@ beforeAll(async () => {
             if (mode === "keep") throw new Error("RevokeDown");
             await tokenSets.del(owner);
           },
+          lockDid: createSignInLock({ store: tokenSets, lock: createRequestLock(lockPool) }).exclusive,
         }),
         // P2.08b: these sets carry no recorded issuer; the route tests cover a foreign one.
         issuerOf: async () => null,

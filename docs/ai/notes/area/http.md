@@ -90,6 +90,15 @@ string equality with our issuer, and neither the value nor a refusal is logged. 
 on the signed-out page; the account page, which reads the same `issuerOf`, shows no link. A failed session delete is
 the 503 `logout.failed`.
 
+**Sign-in against sign-out (P1.36y; security review 2026-10-28).** `sign-in-lock.ts` wraps the OAuth library's
+session store and its `requestLock`. Inside `/oauth/callback` (`signInScope`), the first use of the account's OAuth
+lock (the one the library takes around token reads) holds it until the session row exists; the library's later lock
+calls for that account reuse it, so a scope takes one lock-pool client (Codex on #1441: a nested second client from
+the same bounded pool could wait on itself). A delete inside the scope waits for the end and is dropped when a store
+follows it, so the old set is replaced in place. When POST /logout finds no other session, `whenLastBrowser` holds
+the same lock (`exclusive`), counts again, and revokes only if the count is still zero; a lock failure falls back to
+revoking.
+
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
