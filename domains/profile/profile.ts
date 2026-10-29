@@ -138,8 +138,11 @@ function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
 /**
  * The record to write over `existing` (the stored value, or null for a first profile). The fields sent are replaced, an
  * emptied one removed; every other field (one not sent, bio, avatar, listed, ...) is kept as it was, createdAt too.
- * The result passes the lexicon's strict validator or is refused, so a record another client broke is never written
- * back. The lexicon requires a display name, so a profile without one cannot be published.
+ * A stored field the lexicon does not define (another client's, or a newer release's) is kept too: unexpected fields
+ * are ignored and kept, never a reason to refuse (atproto.com/specs/lexicon, "Authority and Control"; ADR 0038).
+ * Every field the lexicon defines must still be valid, so a record another client broke is never written back. The
+ * fields we set come from parseProfileFields, so they are never unknown. The lexicon requires a display name, so a
+ * profile without one cannot be published.
  */
 export function toProfileRecord(
   fields: ProfileEdit,
@@ -162,6 +165,6 @@ export function toProfileRecord(
   }
   const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
   const record: ProfileRecord = { $type: "sh.unset.profile", ...merged, createdAt, updatedAt: now };
-  if (!validateRecord("sh.unset.profile", record, "write").ok) return { ok: false, code: "profile.invalid" };
+  if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
   return { ok: true, record };
 }

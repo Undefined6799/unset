@@ -120,6 +120,16 @@ describe("toProfileRecord", () => {
     expect(toProfileRecord(EMPTY_PROFILE, null, NOW)).toEqual({ ok: false, code: "profile.name_required" });
   });
 
+  test("a stored field this version does not know is kept and the save goes through", () => {
+    // atproto.com/specs/lexicon, "Authority and Control": unexpected fields are ignored and kept, so a field another
+    // client or a newer release added never blocks a save, and is never dropped by one.
+    const existing = { $type: "sh.unset.profile", ...goodStored, pronouns: "they/them", createdAt: NOW };
+    expect(toProfileRecord({ location: "Montréal" }, existing, NOW)).toEqual({
+      ok: true,
+      record: { ...existing, location: "Montréal", updatedAt: NOW },
+    });
+  });
+
   test("a stored record another client broke is refused, never written back", () => {
     expect(toProfileRecord(good, { listed: "yes", createdAt: "2026-10-01T00:00:00.000Z" }, NOW)).toEqual({
       ok: false,

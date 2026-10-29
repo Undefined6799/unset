@@ -548,3 +548,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   own typed blocks and edited in place on the owner's own page with BlockNote 0.56.0's core, an owner-only entry
   outside the island budget under its own cap, under the app pages' CSP unchanged; the side column is edited in
   Settings › Profile with a plain form.
+- **A profile save keeps stored fields the lexicon does not define (P2.20f; own record:
+  [0038](0038-profile-save-keeps-unknown-fields.md)):** a save checks the merged record in read mode, so a field
+  another client or a newer release added is kept, not refused; a defined field that is invalid is still refused.
+  Supersedes ADR 0037 Decision 2's strict-validator clause once accepted. Proposed, awaiting Alex.

@@ -44,3 +44,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0035](0035-web-search-searxng.md) | Web search through our own SearXNG, queried by the server through net-guard (P3.14s) | Proposed (awaiting Alex) |
 | [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Accepted 2026-10-28 |
 | [0037](0037-profile-module-and-page.md) | The profile is its own module, stored on the member's PDS, edited by its owner (P2.20) | Accepted 2026-10-28 |
+| [0038](0038-profile-save-keeps-unknown-fields.md) | A profile save keeps stored fields the lexicon does not define (P2.20f) | Proposed (awaiting Alex) |
