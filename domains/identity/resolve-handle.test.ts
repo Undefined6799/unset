@@ -49,17 +49,12 @@ describe("resolveHandle", () => {
     expect(await resolveHandle(net, HANDLE)).toEqual({ status: "found", did: A, via: "dns" });
   });
 
-  test("dns_conflict_falls_to_https", async () => {
+  test("dns_conflict_fails", async () => {
+    // atproto.com/specs/handle, "DNS TXT Method": "If multiple valid records with different DIDs are present,
+    // resolution should fail", and it may be retried later; so the HTTPS method is not asked to decide.
     const { net, calls } = network(records(`did=${A}`, `did=${B}`), body(B));
-    expect(await resolveHandle(net, HANDLE)).toEqual({ status: "found", did: B, via: "https" });
-    expect(calls.https).toEqual([
-      {
-        url: "https://alice.example.com/.well-known/atproto-did",
-        target: "public",
-        maxBytes: 1024,
-        accept: "text/plain",
-      },
-    ]);
+    expect(await resolveHandle(net, HANDLE)).toEqual({ status: "unavailable" });
+    expect(calls.https).toEqual([]);
   });
 
   test("garbage_txt_is_ignored", async () => {
@@ -82,8 +77,6 @@ describe("resolveHandle", () => {
       const { net } = network(NO_RECORD, https);
       expect(await resolveHandle(net, HANDLE)).toEqual({ status: "not_found" });
     }
-    const { net } = network(records(`did=${A}`, `did=${B}`), status(404));
-    expect(await resolveHandle(net, HANDLE)).toEqual({ status: "not_found" });
   });
 
   test("unavailable_cases", async () => {

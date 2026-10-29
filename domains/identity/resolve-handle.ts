@@ -10,7 +10,9 @@ export type HandleResolution =
   | { readonly status: "not_found" }
   | { readonly status: "unavailable" };
 
-type MethodResult = { readonly kind: "found"; readonly did: Did } | { readonly kind: "none" | "unavailable" };
+type MethodResult =
+  | { readonly kind: "found"; readonly did: Did }
+  | { readonly kind: "none" | "unavailable" | "conflict" };
 
 const TXT_PREFIX = "did=";
 const DNS_PREFIX = "_atproto.";
@@ -19,7 +21,10 @@ const MAX_DNS_NAME = 253;
 const MAX_WELL_KNOWN_BYTES = 1024;
 const ASCII_SPACE = /^[\t\n\r ]+|[\t\n\r ]+$/g;
 
-/** One distinct `did=` DID: found. None: none. Two different ones: none, and HTTPS decides (spec: must not pick). */
+/**
+ * One distinct `did=` DID: found. None: none. Two different ones: conflict, and resolution fails without asking HTTPS
+ * (spec, "DNS TXT Method": "resolution should fail"; it may be retried later).
+ */
 function fromTxt(outcome: TxtOutcome): MethodResult {
   if (outcome.kind === "no_record") return { kind: "none" };
   if (outcome.kind === "unavailable") return { kind: "unavailable" };
@@ -29,7 +34,8 @@ function fromTxt(outcome: TxtOutcome): MethodResult {
     if (did !== null) dids.add(did);
   }
   const [only] = dids;
-  return dids.size === 1 && only !== undefined ? { kind: "found", did: only } : { kind: "none" };
+  if (dids.size > 1) return { kind: "conflict" };
+  return only !== undefined ? { kind: "found", did: only } : { kind: "none" };
 }
 
 function fromWellKnown(outcome: HttpOutcome): MethodResult {
@@ -52,6 +58,7 @@ export async function resolveHandle(network: IdentityNetwork, handle: Handle): P
   const name = `${DNS_PREFIX}${handle}`;
   const dns: MethodResult = name.length > MAX_DNS_NAME ? { kind: "none" } : fromTxt(await network.txt(name));
   if (dns.kind === "found") return { status: "found", did: dns.did, via: "dns" };
+  if (dns.kind === "conflict") return { status: "unavailable" };
   const url = new URL(`https://${handle}/.well-known/atproto-did`);
   const https = fromWellKnown(
     await network.get(url, { target: "public", maxBytes: MAX_WELL_KNOWN_BYTES, accept: "text/plain" }),

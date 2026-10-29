@@ -28,7 +28,7 @@ export {
   type IdentityErrorKind,
 } from "./resolve-did.ts";
 export { type HandleResolution, resolveHandle } from "./resolve-handle.ts";
-export { type Did, type Handle, parseDid, parseHandle } from "./syntax.ts";
+export { type Did, type Handle, isHandleSyntax, parseDid, parseHandle } from "./syntax.ts";
 export {
   createHandleVerifier,
   displayHandle,

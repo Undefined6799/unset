@@ -20,7 +20,8 @@ network itself.
 **Files.**
 - `syntax.ts`: parses DIDs and handles into branded types; nothing unparsed reaches the network.
 - `resolve-did.ts`: DID to DID document. "Does not exist" and "could not tell" stay apart; only successes are cached.
-- `resolve-handle.ts`: handle to DID, by TXT record first, then the well-known HTTPS path.
+- `resolve-handle.ts`: handle to DID, by TXT record first, then the well-known HTTPS path; TXT records naming two
+  different DIDs fail as `unavailable` without asking HTTPS (spec, "DNS TXT Method").
 - `did-doc.ts`: reads the atproto fields of a DID document; `alsoKnownAs` is passed on raw.
 - `verify-handle.ts`: shows a handle only when it resolves back to the same DID. Trusted base.
 - `contract.ts`: the `IdentityNetwork` port, one GET and one TXT lookup, with three failures.
