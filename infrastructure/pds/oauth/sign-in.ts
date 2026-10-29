@@ -99,10 +99,12 @@ class ParMissingError extends Error {
 /**
  * Every client must use PAR (atproto.com/specs/oauth). The library uses it when the server offers it, and otherwise
  * falls back to a URL with the request in its query (oauth-client.js:115-133), so only a URL carrying a `request_uri`
- * is sent to the browser.
+ * and no PKCE challenge is sent to the browser: the fallback always adds `code_challenge`, and a `request_uri` the
+ * server's endpoint already named does not make it pushed.
  */
 function pushed(url: URL, log: Logger): AuthorizeResult {
-  return url.searchParams.has("request_uri") ? { ok: true, url } : failure(new ParMissingError(), log);
+  const isPushed = url.searchParams.has("request_uri") && !url.searchParams.has("code_challenge");
+  return isPushed ? { ok: true, url } : failure(new ParMissingError(), log);
 }
 
 function failure(error: unknown, log: Logger): AuthorizeResult {
