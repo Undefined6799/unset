@@ -4,7 +4,7 @@
 // (@atproto/oauth-provider, token/token-manager.ts:255-260), so an addition widens every grant within minutes and
 // needs Alex's approval, and a removal breaks running features and is refused.
 // Usage: node scripts/breaking-check.ts [--approved-by-alex=<PR number>]
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const PACKAGE = join(import.meta.dirname, "..");
@@ -120,11 +120,20 @@ function scopesOf(doc: Doc): Set<string> {
   );
 }
 
-/** Compares each NSID in published.lock.json with its published/<nsid>.json snapshot. */
+/**
+ * Compares each NSID in published.lock.json, and each published/<nsid>.json snapshot not yet in it, with that snapshot.
+ * A schema whose records are already in members' repositories is snapshotted before P1.35 publishes it (the lock
+ * entry needs the schema record's CID), because those records must stay valid from the first write
+ * (atproto.com/specs/lexicon, "Lexicon Evolution").
+ */
 export function publishedProblems(options: Options, root = PACKAGE): string[] {
   const lock = JSON.parse(readFileSync(join(root, "published.lock.json"), "utf8")) as Lock;
   const read = (dir: string, nsid: string) => JSON.parse(readFileSync(join(root, dir, `${nsid}.json`), "utf8")) as Doc;
-  return Object.keys(lock).flatMap((nsid) => breakingProblems(read("schemas", nsid), read("published", nsid), options));
+  const dir = join(root, "published");
+  const files = existsSync(dir) ? readdirSync(dir) : [];
+  const snapshots = files.filter((file) => file.endsWith(".json")).map((file) => file.slice(0, -".json".length));
+  const nsids = [...new Set([...Object.keys(lock), ...snapshots])].sort();
+  return nsids.flatMap((nsid) => breakingProblems(read("schemas", nsid), read("published", nsid), options));
 }
 
 if (import.meta.main) {
