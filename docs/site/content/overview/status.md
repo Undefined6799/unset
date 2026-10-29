@@ -15,7 +15,7 @@ That runs `typecheck`, `lint`, `guards` and `test`. The README says the Postgres
 
 ## On this tree
 
-Sign-in, onboarding and the account page are in [What unset is](../what-is-unset/). `infrastructure/session` stores the browser session. Table `app.session` is `infrastructure/postgres/migrations/0011_app_session.sql`. OAuth rows `app.oauth_state` and `app.oauth_session` are `infrastructure/postgres/migrations/0013_app_oauth.sql`.
+Sign-in, onboarding and the account page are in [What unset is](../what-is-unset/). A signed-in member's profile fields are saved to their own PDS as `sh.unset.profile` (`POST /profile`). `infrastructure/session` stores the browser session. Table `app.session` is `infrastructure/postgres/migrations/0011_app_session.sql`. OAuth rows `app.oauth_state` and `app.oauth_session` are `infrastructure/postgres/migrations/0013_app_oauth.sql`.
 
 ## Processes
 
@@ -33,7 +33,7 @@ Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/
 | --- | --- |
 | `apps/` | `web` |
 | `interfaces/` | `http` |
-| `domains/` | `identity` |
+| `domains/` | `identity`, `profile` |
 | `infrastructure/` | `audit`, `net-guard`, `pds`, `postgres`, `seal`, `session` |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
 | `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, `compose.dev.yaml`, `compose.dev.source.yaml`, `compose.local.yaml` |
