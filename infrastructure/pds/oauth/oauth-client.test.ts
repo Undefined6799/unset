@@ -195,6 +195,24 @@ describe("client", () => {
     expect(calls).toBe(2);
   });
 
+  test("library_handle_cache_bypassed", async () => {
+    // The library's handle cache (@atproto-labs/handle-resolver cached-handle-resolver.js) keeps a handle ten minutes;
+    // each lookup must reach our resolver too.
+    const options = baseOptions();
+    let lookups = 0;
+    const network: IdentityNetwork = {
+      ...options.network,
+      txt: async () => {
+        lookups += 1;
+        return { kind: "records", records: ["did=did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"] };
+      },
+    };
+    const { client } = await createOAuthClient({ ...options, network });
+    await client.identityResolver.resolve("alice.example.com").catch(() => undefined);
+    await client.identityResolver.resolve("alice.example.com").catch(() => undefined);
+    expect(lookups).toBe(2);
+  });
+
   test("client_constructs_and_logs_deleted_sessions_only", async () => {
     const logged: { event: LogEvent; fields: LogFields }[] = [];
     const record = (event: LogEvent, fields: LogFields = {}) => {

@@ -222,6 +222,22 @@ describe("authorize", () => {
     expect(logged).toContainEqual({ event: "oauth.authorize_failed", fields: { kind: "ParMissingError" } });
   });
 
+  test("authorize_without_par_is_refused_even_if_the_endpoint_names_a_request_uri", async () => {
+    // Without PAR the library copies the authorization endpoint and adds the request to its query
+    // (oauth-client.js:108-133), so a `request_uri` already in the endpoint must not pass as pushed.
+    const { pushed_authorization_request_endpoint: _, ...withoutPar } = metadata(PDS);
+    const server = (url: URL) =>
+      url.pathname === "/.well-known/oauth-authorization-server"
+        ? json({
+            ...withoutPar,
+            authorization_endpoint: `${PDS}/oauth/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`,
+            require_pushed_authorization_requests: false,
+          })
+        : (advertisedMetadata(url) ?? json({ error: "not_found" }, 404));
+    const { run } = await setup({ server });
+    expect(await run(PDS)).toEqual({ ok: false, reason: "failed" });
+  });
+
   test("authorize_set_unresolvable_falls_back", async () => {
     const refused = () => json({ error: "invalid_scope", error_description: "Unable to resolve permission set" }, 400);
     const { run, pars, logged } = await setup({
