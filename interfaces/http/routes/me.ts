@@ -16,7 +16,7 @@ export function meRoutes(deps: AccountDeps): Route[] {
         path,
         group: "app",
         rateLimit: "default",
-        session: "none",
+        session: "handler",
         handler: async ({ request, deadline }) => {
           const opened = await deps.open(request, deadline, "/did");
           if (opened instanceof Response) return opened;
@@ -33,7 +33,7 @@ export function meRoutes(deps: AccountDeps): Route[] {
       path: "/:did",
       group: "app",
       rateLimit: "default",
-      session: "none",
+      session: "handler",
       handler: async ({ request, params, deadline }) => {
         // shared/http decodes path parameters once; identity's parser accepts only supported DID syntax.
         const did = parseDid(params.did ?? "");

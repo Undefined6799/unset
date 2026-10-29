@@ -56,7 +56,7 @@ export const profileRoutes = (deps: ProfileDeps): Route[] => [
     bodyLimit: PROFILE_BODY_LIMIT_BYTES,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const opened = await deps.open(request, deadline, "/did");
       if (opened instanceof Response) return opened;

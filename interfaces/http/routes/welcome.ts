@@ -165,7 +165,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/age",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/age");
       if (found.kind === "out") return found.response;
@@ -182,7 +182,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/age");
       if (found.kind === "out") return found.response;
@@ -209,7 +209,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/terms",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/terms");
       if (found.kind === "out") return found.response;
@@ -236,7 +236,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/terms");
       if (found.kind === "out") return found.response;
@@ -271,7 +271,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome/chat",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/chat");
       if (found.kind === "out") return found.response;
@@ -288,7 +288,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     bodyLimit: BODY,
     rateLimit: "default",
     mutates: true,
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome/chat");
       if (found.kind === "out") return found.response;
@@ -307,7 +307,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     path: "/welcome",
     group: "app",
     rateLimit: "default",
-    session: "none",
+    session: "handler",
     handler: async ({ request, deadline }) => {
       const found = await located(request, deadline, "/welcome");
       if (found.kind === "out") return found.response;

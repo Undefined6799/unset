@@ -10,8 +10,9 @@ import { type AccountDeps, accountProps } from "./account-issuer.ts";
 const PROFILE = "/settings/profile";
 const ACCOUNT = "/settings/account";
 
-const appRoute = (path: string, handler: Route["handler"]): Route =>
-  defineRoute({ method: "GET", path, group: "app", rateLimit: "default", session: "none", handler });
+/** `session` is `"handler"` for a page behind the app gate, which sends a signed-out visitor to /login (#1279). */
+const appRoute = (path: string, session: "handler" | "none", handler: Route["handler"]): Route =>
+  defineRoute({ method: "GET", path, group: "app", rateLimit: "default", session, handler });
 
 export function settingsRoutes(deps: AccountDeps): Route[] {
   const accountOf = accountProps(deps);
@@ -26,7 +27,7 @@ export function settingsRoutes(deps: AccountDeps): Route[] {
     });
 
   return [
-    appRoute("/settings", ({ request }) => {
+    appRoute("/settings", "none", ({ request }) => {
       // Only the query is carried over; the path is fixed, so this cannot send the browser anywhere else.
       const { search } = new URL(request.url);
       return new Response(null, {
@@ -34,13 +35,13 @@ export function settingsRoutes(deps: AccountDeps): Route[] {
         headers: { location: `${PROFILE}${search}`, "cache-control": "private, no-store", vary: "Cookie" },
       });
     }),
-    appRoute(PROFILE, async ({ request, deadline }) => {
+    appRoute(PROFILE, "handler", async ({ request, deadline }) => {
       const opened = await deps.open(request, deadline, PROFILE);
       if (opened instanceof Response) return opened;
       const body = deps.screens.settingsProfile({ privacyNotice: opened.privacyNotice });
       return settingsPage(request, opened, "Profile", body);
     }),
-    appRoute(ACCOUNT, async ({ request, deadline }) => {
+    appRoute(ACCOUNT, "handler", async ({ request, deadline }) => {
       const opened = await deps.open(request, deadline, ACCOUNT);
       if (opened instanceof Response) return opened;
       const body = deps.screens.settingsAccount((await accountOf(opened, deadline)).props);

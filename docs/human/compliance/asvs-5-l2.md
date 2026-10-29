@@ -207,7 +207,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 |---|---|---|---|---|
 | V8.1.1 | Authorization documentation defines rules for restricting function-level and … | open |  | — |
 | V8.1.2 | Authorization documentation defines rules for field-level access restrictions (both read … | open |  | — |
-| V8.2.1 | The application ensures that function-level access is restricted to consumers with … | partial | `test:shared/http/server.test.ts#route_must_declare_session`, `test:shared/http/server.test.ts#session_route_without_session_denies` | P2.03 |
+| V8.2.1 | The application ensures that function-level access is restricted to consumers with … | partial | `test:shared/http/server.test.ts#route_must_declare_session`, `test:shared/http/server.test.ts#session_route_without_session_denies`, `test:interfaces/http/routes.session.test.ts#declared_session_matches_the_handler` | P2.03 |
 | V8.2.2 | The application ensures that data-specific access is restricted to consumers with … | partial | `test:interfaces/http/routes/me.privacy.test.ts#foreign_did_reads_as_missing`, `test:interfaces/http/routes/me.test.ts#another DID cannot expose the caller's account controls or resolve the target` | P1.25m |
 | V8.2.3 | The application ensures that field-level access is restricted to consumers with explicit … | open |  | — |
 | V8.3.1 | The application enforces authorization rules at a trusted service layer and doesn't rely … | partial | `test:shared/http/server.test.ts#session_route_without_session_denies`, `test:shared/http/csrf/coverage.test.ts#every_post_route_gated` | P2.03 |
