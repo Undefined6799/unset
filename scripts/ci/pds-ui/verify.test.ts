@@ -3,7 +3,7 @@ import { PAIRS, type Pair, uiDirectoryOf } from "./contract.ts";
 import { artifacts, type Item, image, tar } from "./fixtures/native.ts";
 import { archive, compareImages, verifyArtifact } from "./verify.ts";
 
-const PAIR = PAIRS["0.4.5037"] as Pair;
+const PAIR = PAIRS["0.4.5049"] as Pair;
 const ui = uiDirectoryOf(PAIR);
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };

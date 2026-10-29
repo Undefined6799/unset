@@ -11,7 +11,7 @@ async function inputs() {
   const uiLayer = await tar([{ name: `${ui}/new.js`, body: "new" }]);
   return { baseLayer, uiLayer, base: await image([baseLayer]) };
 }
-const pair = PAIRS["0.4.5037"] as Pair;
+const pair = PAIRS["0.4.5049"] as Pair;
 const ui = uiDirectoryOf(pair);
 
 describe("exact OCI compression interpretation", () => {

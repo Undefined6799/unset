@@ -18,7 +18,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { withoutGitEnv } from "../guards/git-env.ts";
+import { fixtureGitEnv, withoutGitEnv } from "../guards/git-env.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const CONFIG = join(ROOT, ".github/.gitleaks.toml");
@@ -84,10 +84,10 @@ export type Case = { name: string; expect: Findings; run: (work: string) => Outc
 /** Assigns `value` to a key-named variable, the shape that trips the default generic-api-key rule. */
 const assigned = (value: string, name = "signingKey"): string => `export const ${name} = "${value}";\n`;
 
+/** git in a throwaway repository: no caller GIT_* variable, config, signer, ignore or attributes file (P1.23h). */
 function git(cwd: string, ...args: string[]): string {
-  const env = { ...withoutGitEnv(), GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid" };
-  Object.assign(env, { GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" });
-  return execFileSync("git", ["-C", cwd, ...args], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
+  return execFileSync("git", ["-C", cwd, ...args], { env: fixtureGitEnv(), encoding: "utf8", stdio }).trim();
 }
 
 function commit(repo: string, file: string, text: string, message: string): string {

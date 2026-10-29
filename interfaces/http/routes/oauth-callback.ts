@@ -40,6 +40,11 @@ export type CallbackDeps = {
   ) => Promise<{ cookieValue: string; expiresAt: Date }>;
   /** SESSION_ABSOLUTE_S: the cookie lives as long as the session can. */
   sessionMaxAgeS: number;
+  /**
+   * P1.36y sign-in-lock.ts `during`: from the library storing the token set until the session row exists, the
+   * account's lock is held, so the last browser's sign-out cannot revoke this grant midway.
+   */
+  signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   /** P2.05s: login.ts `authorizationTarget`, the same authorize and link check POST /login uses. */
   askWithPage: (input: string, options: { appState: string; deadline: AbortSignal }) => Promise<AuthorizationTarget>;
   /** Our PDS's issuer: what the chooser asks again when the form named no account. */
@@ -130,10 +135,11 @@ export function oauthCallbackRoutes(deps: CallbackDeps): Route[] {
       rateLimit: "login",
       mutates: true,
       session: "none",
-      handler: async ({ request, deadline }) => {
-        const completed = await deps.complete(new URL(request.url).searchParams);
-        return finish(request, completed, deadline);
-      },
+      handler: ({ request, deadline }) =>
+        deps.signInScope(async () => {
+          const completed = await deps.complete(new URL(request.url).searchParams);
+          return finish(request, completed, deadline);
+        }),
     }),
   ];
 }

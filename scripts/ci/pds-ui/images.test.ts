@@ -26,7 +26,7 @@ async function images() {
   return { base, candidate, pinned: `sha256:${"a".repeat(64)}` };
 }
 
-const pair = PAIRS["0.4.5037"] as Pair;
+const pair = PAIRS["0.4.5049"] as Pair;
 const ui = uiDirectoryOf(pair);
 
 describe("pinned base saved by a classic image store", () => {

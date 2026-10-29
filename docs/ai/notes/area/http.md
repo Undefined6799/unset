@@ -90,6 +90,15 @@ string equality with our issuer, and neither the value nor a refusal is logged. 
 on the signed-out page; the account page, which reads the same `issuerOf`, shows no link. A failed session delete is
 the 503 `logout.failed`.
 
+**Sign-in against sign-out (P1.36y; security review 2026-10-28).** `sign-in-lock.ts` wraps the OAuth library's
+session store and its `requestLock`. Inside `/oauth/callback` (`signInScope`), the first use of the account's OAuth
+lock (the one the library takes around token reads) holds it until the session row exists; the library's later lock
+calls for that account reuse it, so a scope takes one lock-pool client (Codex on #1441: a nested second client from
+the same bounded pool could wait on itself). A delete inside the scope waits for the end and is dropped when a store
+follows it, so the old set is replaced in place. When POST /logout finds no other session, `whenLastBrowser` holds
+the same lock (`exclusive`), counts again, and revokes only if the count is still zero; a lock failure falls back to
+revoking.
+
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
@@ -129,6 +138,11 @@ Foreign DIDs return 404. Owner pages show the handle only when P2.02's `verifyHa
 `handle.invalid`, plus the DID, PDS account link and sign-out form. They are private/no-store, cookie-varying,
 unindexed and zero JS. GET /login sends a signed-in visitor to `/did`. P2.12's `openApp` still requires onboarding
 and email confirmation. Public profile content, editing and invite blocks remain separate work.
+
+**Saving the profile (P2.20p).** `routes/profile.ts`: POST `/profile` (form, 96 KiB body limit, CSRF) opens the
+app gate, reads only the fields sent through `domains/profile`, and writes the session's own `sh.unset.profile`
+with a compare-and-swap (`infrastructure/pds/profile-record.ts`). A field left out keeps its stored value. It
+returns 303 to `/<DID>`, or to `/settings/profile` only when `next` is exactly that path.
 
 Keep `meRoutes` last in composition so the one-segment DID parameter cannot shadow explicit GET routes. Invalid
 DID segments return 404 before any gate or lookup. The shared router's existing candidate matching means GET

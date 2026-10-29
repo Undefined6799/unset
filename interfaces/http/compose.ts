@@ -20,6 +20,7 @@ import {
   resolveHandle,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { toProfileRecord } from "@unset/domains-profile";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
@@ -27,7 +28,9 @@ import {
   createIdentityNetwork,
   createOAuthClient,
   createPdsCall,
+  respondToPdsFailure,
   type SavedSession,
+  saveProfileRecord,
 } from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
@@ -62,11 +65,13 @@ import { meRoutes } from "./routes/me.ts";
 import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
+import { profileRoutes } from "./routes/profile.ts";
 import { securityTxtRoutes } from "./routes/security-txt.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { welcomeRoutes } from "./routes/welcome.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
+import { createSignInLock } from "./sign-in-lock.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { errorPageHook, type PageDeps, type PageSpec, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
@@ -109,13 +114,15 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     cacheMax: cfg.DID_DOC_CACHE_MAX,
   });
   const sessionStore = createOAuthSessionStore<SavedSession>({ pool, sealer, log });
+  // P1.36y: a sign-in or last-browser sign-out holds the account's OAuth lock for its whole run (sign-in-lock.ts).
+  const signIn = createSignInLock({ store: sessionStore, lock: createRequestLock(lockPool) });
   const { client } = await createOAuthClient({
     origin: cfg.PUBLIC_ORIGIN,
     keys: cfg.OAUTH_CLIENT_KEYS,
     activeKid: cfg.OAUTH_ACTIVE_KID,
     stateStore: createOAuthStateStore({ pool, sealer, log }),
-    sessionStore,
-    requestLock: createRequestLock(lockPool),
+    sessionStore: signIn.tokenSets,
+    requestLock: signIn.requestLock,
     fetch: libraryFetch(guard),
     network,
     resolveDid,
@@ -133,6 +140,8 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     resolveDid,
     pool,
     sessionStore,
+    signInScope: signIn.during,
+    lockDid: signIn.exclusive,
     boot,
     onClose: [() => pool.end(), () => lockPool.pool.end()],
   };
@@ -208,6 +217,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
         sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
       ),
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
+    signInScope: oauth.signInScope,
     askWithPage: authorizationTarget({ authorize: loginAuthorize, safeHref: render.safeHref, allowHttp, log }),
     pdsIssuer,
     log,
@@ -227,6 +237,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       limits: sessionLimits,
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
+      lockDid: oauth.lockDid,
     }),
     issuerOf,
     page,
@@ -326,6 +337,19 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   };
   const settings = settingsRoutes(accountDeps);
   const me = meRoutes(accountDeps);
+  const profile = profileRoutes({
+    open: accountDeps.open,
+    saveProfile: async (did, fields, deadline) => {
+      const ctx = { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 };
+      const now = new Date().toISOString();
+      const result = await saveProfileRecord(pds.pdsCall, ctx, did, (existing) =>
+        toProfileRecord(fields, existing, now),
+      );
+      if (result.kind === "ok") return result.value;
+      const failure = respondToPdsFailure("POST", result, cfg.PDS_HOSTNAME);
+      return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
+    },
+  });
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [
@@ -354,6 +378,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...welcome,
     ...verifyEmail,
     ...settings,
+    ...profile,
     ...testPages,
     // The DID parameter route must follow every explicit app/public route.
     ...me,

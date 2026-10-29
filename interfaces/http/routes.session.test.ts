@@ -72,5 +72,6 @@ test("declared_session_matches_the_handler", async () => {
     "POST /welcome/terms",
     "POST /welcome/chat",
     "POST /verify-email/reconsent",
+    "POST /profile",
   ]);
 });

@@ -31,6 +31,16 @@ export {
   type PdsContext,
   type PdsFailure,
   type PdsResult,
+  respondToPdsFailure,
   type SessionInfo,
 } from "./pds-call.ts";
 export { isDpopNonceHandshake } from "./pds-errors.ts";
+export {
+  type BuiltRecord,
+  loadProfileRecord,
+  PROFILE_COLLECTION,
+  PROFILE_RKEY,
+  type SaveOutcome,
+  type StoredRecord,
+  saveProfileRecord,
+} from "./profile-record.ts";

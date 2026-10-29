@@ -160,6 +160,11 @@
       "status": 415
     },
     {
+      "method": "POST",
+      "path": "/profile",
+      "status": 415
+    },
+    {
       "method": "GET",
       "path": "/welcome/blocked",
       "status": 200

@@ -29,6 +29,26 @@ describe("validateRecord", () => {
     }
   });
 
+  test("validate_write_rejects_unknown_field_in_union_member", () => {
+    // README blocks and text runs sit in unions; the member named by `$type` is checked like any nested object.
+    const P = "sh.unset.profile";
+    const run = { $type: `${P}#textRun`, text: "hi" };
+    const readme = (blocks: unknown[]) => ({ ...profile, readme: { blocks } });
+    const block = validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [], unexpected: true }]), "write");
+    expect(block).toEqual({ ok: false, errors: ["$.readme.blocks[0].unexpected: unknown field"] });
+    const inRun = validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [{ ...run, x: 1 }] }]), "write");
+    expect(inRun).toEqual({ ok: false, errors: ["$.readme.blocks[0].content[0].x: unknown field"] });
+    const column = { $type: `${P}#column`, blocks: [{ $type: `${P}#quote`, content: [run], x: 1 }] };
+    const columns = { $type: `${P}#columns`, columns: [column, { $type: `${P}#column`, blocks: [] }] };
+    expect(validateRecord(P, readme([columns]), "write")).toEqual({
+      ok: false,
+      errors: ["$.readme.blocks[0].columns[0].blocks[0].x: unknown field"],
+    });
+    const clean = readme([{ $type: `${P}#paragraph`, content: [run] }]);
+    expect(validateRecord(P, clean, "write")).toEqual({ ok: true, value: clean });
+    expect(validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [], x: 1 }]), "read").ok).toBe(true);
+  });
+
   test("validate_write_accepts_nested_type_discriminator", () => {
     // An object behind a ref may name its def (atproto.com/specs/lexicon, "$type"); the generated validator accepts it.
     const typed = { ...profile, stats: [{ $type: "sh.unset.profile#stat", label: "a", value: "1" }] };

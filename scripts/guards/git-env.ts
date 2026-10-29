@@ -14,12 +14,23 @@ export function withoutGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.Proc
 // throwaway commits with a real key. GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM (git(1) "Environment Variables",
 // git v2.43.0) replace and skip those files; the fixed identity stands in for the user.* they no longer supply.
 
-/** `withoutGitEnv(env)` that reads no global or system git config and commits as a fixed identity. */
+// P1.23h: with no config file at all, git still reads $XDG_CONFIG_HOME/git/ignore and git/attributes (or
+// ~/.config/git/...) as the defaults of core.excludesFile and core.attributesFile (git v2.43.0
+// Documentation/config/core.txt), so a home `*.secret` ignore hid a file from a secrets fixture. GIT_CONFIG_COUNT with
+// GIT_CONFIG_KEY_<n> and GIT_CONFIG_VALUE_<n> add runtime config above every file (Documentation/git-config.txt,
+// "ENVIRONMENT"); the count is set here, never added to a caller's, whose GIT_* variables are already gone.
+
+/** `withoutGitEnv(env)` that reads no global, system or home git file and commits as a fixed identity. */
 export function fixtureGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return {
     ...withoutGitEnv(env),
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "core.excludesFile",
+    GIT_CONFIG_VALUE_0: "/dev/null",
+    GIT_CONFIG_KEY_1: "core.attributesFile",
+    GIT_CONFIG_VALUE_1: "/dev/null",
     GIT_AUTHOR_NAME: "fixture",
     GIT_AUTHOR_EMAIL: "fixture@example.invalid",
     GIT_COMMITTER_NAME: "fixture",
