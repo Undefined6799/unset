@@ -20,7 +20,7 @@ Product rules, in product words. A domain defines the contracts it needs. An int
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.6.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`. The checked-rule table is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.7.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`. The checked-rule table is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
 
 The `domain` row:
 

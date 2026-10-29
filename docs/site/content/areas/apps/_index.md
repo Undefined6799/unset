@@ -15,7 +15,7 @@ Screens, islands and styles. UI only: no product rules and no database access. D
 
 ## May import
 
-Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.6.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`.
+Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbidden` rules named here). dependency-cruiser 18.7.0 is pinned in `package.json`. The checked-rule table that names these rules is `docs/human/architecture.md`.
 
 The `app` row. The config states that an edge no row lists fails as `not-in-allowed`.
 
