@@ -29,7 +29,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `caddy-builder` | `docker.io/library/caddy` | `2.11.7-builder-alpine` | build |
 | `caddy` | `docker.io/library/caddy` | `2.11.7-alpine` | runtime |
 | `postgres` | `docker.io/library/postgres` | `18-trixie` | runtime |
-| `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5037` | runtime |
+| `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5049` | runtime |
 | `newt` | `docker.io/fosrl/newt` | `1.19.0` | runtime |
 
 `deployment/mirror.list.json` lists the same six sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>`.
@@ -41,7 +41,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | Name | `origin` | Image |
 | --- | --- | --- |
 | `postgres`, `migrate`, `edge`, `web` | `first-party` | `ghcr.io/undefined6799/unset/<name>@sha256:…` |
-| `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5037` image (P2.24y) |
+| `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5049` image (P2.24y) |
 | `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.19.0` |
 
 The digest strings live in the lock. This page does not copy them.

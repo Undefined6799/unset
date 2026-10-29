@@ -58,7 +58,7 @@ C3 and C4 call `inputs.verify`, which runs `node scripts/ci/verify-images.ts <lo
 
 ## May import
 
-The `deployment-preflight` row. dependency-cruiser 18.6.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
+The `deployment-preflight` row. dependency-cruiser 18.7.0 is pinned in `package.json`. An edge no row lists fails as `not-in-allowed`.
 
 | From | May reach |
 | --- | --- |

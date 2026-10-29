@@ -13,7 +13,7 @@ npm run typecheck && npm run lint && npm run guards && npm test
 | --- | --- | --- |
 | `typecheck` | `tsc -b` | The composite TypeScript build |
 | `lint` | `biome ci .` | Format and lint. Biome `2.5.15` |
-| `lint` | `depcruise --config scripts/lint/.dependency-cruiser.cjs .` | Import boundaries. dependency-cruiser `18.6.0` |
+| `lint` | `depcruise --config scripts/lint/.dependency-cruiser.cjs .` | Import boundaries. dependency-cruiser `18.7.0` |
 | `guards` | `vitest run scripts/guards` | The guards under `scripts/guards/`, including [notes](../docs-rules/) |
 | `test` | `node scripts/test/run.ts` | The test runner below. Vitest `5.0.5`, TypeScript `7.0.2` |
 
