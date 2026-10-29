@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseDid, parseHandle } from "./index.ts";
+import { isHandleSyntax, parseDid, parseHandle } from "./index.ts";
 
 describe("parseDid", () => {
   test("accepts_plc_and_web", () => {
@@ -75,5 +75,19 @@ describe("parseHandle", () => {
       expect(parseHandle(`alice.${tld}`), tld).toBeNull();
       expect(parseHandle(`alice.${tld.toUpperCase()}`), tld).toBeNull();
     }
+  });
+});
+
+describe("isHandleSyntax", () => {
+  test("judges_syntax_before_the_tld_rule", () => {
+    // atproto.com/specs/did: a DID document's first syntactically valid handle is its claim, so syntax is judged
+    // apart from the TLDs we never resolve.
+    for (const valid of ["alice.example.com", "ALICE.Example.com", "alice.local", "alice.onion"]) {
+      expect(isHandleSyntax(valid)).toBe(true);
+    }
+    for (const invalid of ["", "alice", "not a handle", "@alice.example.com", "alice.example.com/x", "alice.1com"]) {
+      expect(isHandleSyntax(invalid)).toBe(false);
+    }
+    expect(isHandleSyntax(`${"a".repeat(250)}.com`)).toBe(false);
   });
 });
