@@ -101,7 +101,7 @@ PR.
 
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
-The PDS reads its settings only from its environment (`@atproto/pds` 0.5.37, `dist/config/env.js`), so its secrets
+The PDS reads its settings only from its environment (`@atproto/pds` 0.5.49, `dist/config/env.js`), so its secrets
 cannot be mounted files. They go in `unset-dev-env/pds.env`, yours, mode `0600`, which the preflight checks like
 `dev-public.env`. Start it from `deployment/env/pds.example.env`; every other PDS setting is written out in
 `compose.dev.yaml`. One env per host: the same file is loaded by both compose files, and the preflight requires its
@@ -256,7 +256,7 @@ docker compose -f deployment/compose.dev.yaml --env-file ../unset-dev-env/dev-pu
 
 If the PDS refuses the request (a wrong admin password, say), the command prints only the HTTP status and exits
 non-zero, so a failure never looks like a code. The request is the one the PDS's own `pdsadmin create-invite-code`
-sends (bluesky-social/pds v0.4.5037 `pdsadmin/create-invite-code.sh`), aimed at loopback instead of the public name.
+sends (bluesky-social/pds v0.4.5049 `pdsadmin/create-invite-code.sh`), aimed at loopback instead of the public name.
 The code it prints goes to the tester and nowhere else.
 
 ## Creating or rotating a file
