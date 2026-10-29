@@ -51,6 +51,9 @@ checked: 2026-10-23
   hover/focus and dismiss on Escape; SSR/no-JS retains native title and accessible-name fallback. Alex's
   2026-10-21 browser revision removes the popup Close control and lifts only current phone artwork within
   stationary targets; `closeLabel` stays optional/deprecated for callers. Native toggle/dismissal remains intact.
+- `components/Markdown/` (P2.20r, staging preview, not yet on the sheet): `parseMarkdown` turns member text into a
+  small tree (headings, lists, quotes, code, rows and up to three columns) and keeps no HTML; links pass `safeHref`.
+  The README format is open in ADR 0037 (BlockNote may replace it), so keep changes here small.
 - `presentation.ts` / the explicit `./presentation` package export: Navigation, Button, Input, Icon, Avatar,
   safeHref and needed types only. `./brand-header` points directly to the pure BrandHeader module. Use these entries
   for browser presentation: the root barrel still imports full Header and its island runtime. Native Button callbacks,
