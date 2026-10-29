@@ -4730,10 +4730,13 @@ Edge cases and failures:
 Done when (tests):
   - The ten blocks above pass on CI against a production build.
   - `exit.authz_matrix_web` (Vitest integration; findings F-27): generated from `interfaces/http/routes.manifest.json`
-    (P1.04). For every route with `mutates` and `requiresSession`, a fixture gives member A's request; the test sends
+    (P1.04). For every route with `mutates` and either `requiresSession` or `handlerSession` (today `POST /profile`,
+    `POST /verify-email/reconsent`, `POST /welcome/age`, `POST /welcome/terms`, `POST /welcome/chat`), a fixture gives
+    member A's request; the test sends
     it as member B (B's own valid session and CSRF signals) → 303 with an error code, 403 or 404, and a snapshot of A's
     rows (drafts, sections, media, privacy, publish jobs, published snapshot, sessions) is unchanged; sent signed out →
-    303 to `/login` and nothing changes. A manifest route without a fixture fails the test.
+    303 to `/login` and nothing changes. A manifest route without a fixture fails the test. A selector that picks zero
+    routes fails the test.
   - `docs/human/phase-exits/phase-2.md` exists with every listed measurement; Alex approves the PR.
 Reuse (provisional — for reuse review): prototype Playwright smoke and `test/e2e/*` (if present) → LESSON only.
 Not in this step: Tap and the public page (Phase 3); the test track itself (P2.25).
