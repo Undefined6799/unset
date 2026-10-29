@@ -24,7 +24,7 @@ Product rules for those fields. This folder does not open a socket.
 
 | Code | When |
 | --- | --- |
-| `profile.invalid` | A non-string, a line break in a one-line field, or `validateRecord("sh.unset.profile", record, "write")` refuses the built record (`profile.ts`). |
+| `profile.invalid` | A non-string, a line break in a one-line field, or `validateRecord("sh.unset.profile", record, "read")` refuses the built record (`profile.ts`): a defined field is invalid. A stored field the lexicon does not define is kept, never refused (ADR 0038). |
 | `profile.too_long` | Over a grapheme or byte bound, or more links than `LIMITS.profile.linksMax`. |
 | `profile.url_invalid` | `website` or a link is not an `http` or `https` URL with a host and no user or password. |
 | `profile.name_required` | The record to write has no display name. |
