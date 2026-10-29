@@ -22,7 +22,7 @@ import { compileRoute, defineRoute, type Route, type RouteGroup } from "./routes
 import { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
 import { createClientIpResolver } from "./trustedProxy.ts";
 
-/** The signed-in DID for a request, or null. Phase 2's session layer supplies it; until then no session exists. */
+/** The signed-in DID for a request, or null. Only a `session: "required"` route reads it; none is wired in yet. */
 export type SessionReader = (request: Request) => Promise<{ did: string } | null>;
 /** A route as P1.04's committed manifest records it: every `defineRoute` option except the handler, plus its checks. */
 export type RouteInfo = Omit<Route, "handler"> & { middleware: string[] };

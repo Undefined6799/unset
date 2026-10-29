@@ -417,7 +417,7 @@ describe("startup checks", () => {
     expect(() => defineRoute(spec)).toThrow(/session/);
     expect(() => defineRoute({ ...spec, session: "maybe" as "none" })).toThrow(/session/);
     // As the committed manifest stores it (JSON), where an unset option is absent.
-    const table = (session: "required" | "none") =>
+    const table = (session: "required" | "handler" | "none") =>
       JSON.parse(
         JSON.stringify(
           kit({ routes: [page({ method: "GET", path: "/x", session })] })
@@ -427,6 +427,23 @@ describe("startup checks", () => {
       );
     expect(table("none")).not.toHaveProperty("requiresSession");
     expect(table("required")).toMatchObject({ requiresSession: true });
+    expect(table("none")).not.toHaveProperty("handlerSession");
+    expect(table("required")).not.toHaveProperty("handlerSession");
+  });
+
+  test("handler_session_is_recorded_not_enforced", async () => {
+    // #1279: a route whose handler sends a signed-out visitor to /login records that in the manifest, and the kit
+    // neither reads a session for it nor adds its session or DID-limit middleware.
+    const seen: string[] = [];
+    const route = page({ method: "GET", path: "/x", session: "handler", handler: () => (seen.push("ran"), ok()) });
+    const { server, request } = kit({ routes: [route] });
+    const entry = JSON.parse(JSON.stringify(server.routeTable().find((r) => r.path === "/x")));
+    expect(entry).toMatchObject({ handlerSession: true });
+    expect(entry).not.toHaveProperty("requiresSession");
+    expect(entry.middleware).not.toContain("session");
+    expect(entry.middleware).not.toContain("rateLimitDid");
+    expect((await request("/x")).status).toBe(200);
+    expect(seen).toEqual(["ran"]);
   });
 
   test("route_table_lists_every_option", () => {
@@ -649,6 +666,12 @@ describe("limits", () => {
 
   test("did_policy_requires_session", () => {
     const follow = page({ method: "POST", path: "/follow", rateLimit: "follow" });
+    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
+  });
+
+  test("did_policy_needs_the_kit_session_not_the_handlers", () => {
+    // A handler-gated route never gives the kit a DID, so a per-DID bucket could not apply (#1279).
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "handler" });
     expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
   });
 
