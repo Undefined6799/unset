@@ -26,6 +26,7 @@ function route(over: Pick<RouteRecord, "method" | "path"> & Partial<RouteRecord>
   return {
     group: "app",
     requiresSession: null,
+    handlerSession: null,
     middleware: ["requestId", "methodCheck"],
     rateLimit: "default",
     accepts: [],
@@ -86,6 +87,13 @@ describe("endpoint cells", () => {
           rateLimit: "exempt",
         }),
         route({
+          method: "GET",
+          path: "/gated",
+          handlerSession: true,
+          middleware: ["requestId"],
+          rateLimit: "exempt",
+        }),
+        route({
           method: "POST",
           path: "/save",
           middleware: ["requestId", "csrf"],
@@ -107,6 +115,8 @@ describe("endpoint cells", () => {
     const open = rowFor(page, "GET", "/open");
     expect(open).toContain(`| ${NOT_RECORDED} | no | default | ip: capacity 60, refillPerSec 5 |`);
     expect(rowFor(page, "GET", "/closed")).toContain("| required | no | exempt | not recorded |");
+    // #1279: the handler, not the kit, sends a signed-out visitor to /login.
+    expect(rowFor(page, "GET", "/gated")).toContain("| required (handler) | no | exempt | not recorded |");
     expect(rowFor(page, "POST", "/save")).toContain("| yes | default |");
     expect(rowFor(page, "POST", "/save")).toContain("| 2048 | yes |");
     const bare = rowFor(page, "GET", "/bare");
@@ -143,6 +153,25 @@ describe("endpoint inputs", () => {
     expect(loaded.problems).toEqual([
       'docs/site/data/endpoints/demo.yaml: missing key "GET /health"',
       'docs/site/data/endpoints/demo.yaml: orphan key "POST /extra"',
+    ]);
+  });
+
+  test("handler_session_is_read_only_as_true", async () => {
+    const root = tempRepo();
+    const gated = { ...HEALTH, path: "/gated", handlerSession: true };
+    const bad = { ...HEALTH, path: "/bad", handlerSession: "yes" };
+    const both = { ...HEALTH, path: "/both", handlerSession: true, requiresSession: true };
+    writeFileSync(join(root, "interfaces/demo/routes.manifest.json"), JSON.stringify([gated, bad, both]));
+    writeFileSync(
+      join(root, "docs/site/data/endpoints/demo.yaml"),
+      '"GET /gated": {}\n"GET /bad": {}\n"GET /both": {}\n',
+    );
+    const loaded = await loadEndpointModel(root);
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.problems).toEqual([
+      "interfaces/demo/routes.manifest.json: GET /bad handlerSession is not true",
+      "interfaces/demo/routes.manifest.json: GET /both sets both requiresSession and handlerSession",
     ]);
   });
 
