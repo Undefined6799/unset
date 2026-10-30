@@ -254,7 +254,7 @@ Rules for the handle domain:
 - App and index live in separate schemas with **separate roles**, and a role buys isolation only when it maps to a process (review, 2026-10-02):
   - `web`: read/write on app tables, read-only on the index, INSERT-only on audit;
   - `api`: read-only on the index and nothing else, so the public read API cannot select drafts;
-  - `indexer`: read/write on the index, plus the `eraseDid` function (`SECURITY DEFINER`, owned by `migrator`, since `indexer` has no rights on app or plugin schemas);
+  - `indexer`: read/write on the index, plus the `eraseDid` function (`SECURITY DEFINER`, owned by `migrator`, since `indexer` has no rights on app or plugin schemas; ADR 0040, if accepted, adds SELECT (`did`) on `app.account`);
   - `migrator`: owns the schemas and runs migrations; `ALTER DEFAULT PRIVILEGES` grants no table privileges (only sequence use to `web`); every table's creating migration grants explicitly, by column list on any table with an `erasure-registry.json` row, and the grant-matrix test fails a table that lands without its grants (engineering rule SE-6, architecture thread 2026-10-04 16:38Z; defaults dropped by the step book 2026-10-04 because nearly every table carries a DID, so no table qualified for them); `web`, `api` and `indexer` have no DDL rights;
   - `tap`: its own database (Tap runs its own migrations);
   - later, one role per plugin.

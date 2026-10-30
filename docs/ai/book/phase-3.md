@@ -1376,7 +1376,8 @@ and the admitted list; the per-host count is over admitted rows) and the `discov
 grants have something to grant on; `core.deindex_did`; the new `core.erase_did` statements and
 `erasure-registry.json` line for `idx.discovered`; the indexer role's grants in `grant-matrix.json` with their matrix
 test rows: SELECT (`did`) on `app.account` (a column list, P1.12 `personal_data_by_column_list`), read and write on
-`idx.discovered`, EXECUTE on `core.deindex_did` and on `core.did_lock_key`, the per-DID lock-key function `eraseDid` uses (P3.07k);
+`idx.discovered`, EXECUTE on `core.deindex_did` and on `core.did_lock_key`, the per-DID lock-key function `eraseDid` uses (P3.07k,
+added by P4.23b's book edit, which merges first);
 CODEOWNERS' `# trusted functions:` line gains `core.deindex_did` (the line grows in the step that first names a
 function)
 Size: hypothesis, P3.00 sets it (~100 source lines, ~130 test lines)
@@ -1384,7 +1385,8 @@ Size: hypothesis, P3.00 sets it (~100 source lines, ~130 test lines)
 Why a separate step (letter suffix): erasure functions and role grants are trusted base (SE-6, like P3.07k and
 P3.07g), so they are reviewed alone, before the feature code that calls them.
 Goal: the table, function, erasure rows and grants P3.08d's rules need exist, each grant with its denial test.
-`core.deindex_did(did)` takes the same per-DID lock as `eraseDid`, refuses (RAISE) when an `app.account` row exists
+`core.deindex_did(did)` takes the same per-DID lock as `eraseDid`, deletes the DID's `idx.discovered` row (so people
+who left stop counting toward the caps and can be admitted again), refuses (RAISE) when an `app.account` row exists
 or the `discovered` flag is not set, leaves held material where `core.is_held` says so (like `core.erase_did`),
 files `purge({did})` (P3.06) so the media proxy and edge stop serving the blobs, and keeps moderation, label and
 hold rows. (`deindex_refuses_member`, `deindex_keeps_held_and_purges`)
@@ -1417,8 +1419,10 @@ Must hold (each has a named test; the build PR's Threats section covers the rest
      `discovered` flag), then makes Tap backfill again (remove then add, the only re-backfill Tap offers, P3.01).
      While a DID has no `app.account` row, ingest keeps only its `sh.unset.profile` and the blobs it references
      (served through the media proxy); its other collections are dropped, so what we hold matches the RoPA row.
-     When an `app.account` row appears (they sign up), P3.02's track step clears the flag and makes Tap backfill
-     again (remove then add), since `/repos/add` on a repo Tap already tracks backfills nothing.
+     While `DISCOVERY` is on, P3.02's first track for a new member on `tap-relay` always makes Tap backfill again
+     (remove then add), since Tap may already track the repo (discovered, queued, or refused by a cap) and
+     `/repos/add` on a repo Tap already tracks backfills nothing; for a discovered account the same step clears the
+     flag and deletes its `idx.discovered` row under the per-DID lock.
      (`discovered_non_member_indexed`, `discovered_non_member_profile_only`, `discovered_then_signed_up_backfilled`)
   3. **Erased people never reach our tables, not even as a plain DID.** The tombstone check (HMAC, P3.07) runs before
      anything is queued; an erased DID's events are acked as `dropped:erased` (P3.05) and nothing about it is written

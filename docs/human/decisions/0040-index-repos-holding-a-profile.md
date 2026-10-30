@@ -5,7 +5,10 @@ cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR) and, after being shown that
 option "Switch to signal mode" (00:47:06Z, card cmsg_01GKYqaAGu4Vob5JHVyDmG7AG9LygBzMQmD5f2igv9fZCT). Acceptance is
 his typed line on the pull request that adds this record. Once accepted it supersedes, in decision 5 (ADR 0001 log,
 "Indexer source") and plan §5.2's Tap row, the clause "repos are added at first login or signup, never by
-network-wide discovery" and the rejection of collection-signal mode. "No own relay or full-network index" stands.
+network-wide discovery" and the rejection of collection-signal mode. It also narrows plan §5.2's "`indexer` has no
+rights on app or plugin schemas" by one column grant: SELECT (`did`) on `app.account`, so ingest can tell members
+from non-members (P3.02's `app.track_request` grant is the earlier exception). "No own relay or full-network index"
+stands.
 
 ## Context
 Tap (indigo `cmd/tap`, README at 51095ab, "Network Boundary Modes") can track every repo that holds at least one
