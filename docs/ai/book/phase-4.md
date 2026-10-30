@@ -3496,8 +3496,8 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     `idx.label_suppressed`, never `app.label_override`. `web` and `api` gain SELECT on `idx.label_suppressed`;
     `media` gains column-list SELECT on `idx.label` and `idx.label_suppressed` for the hidden-blob check, and P3.03's `media has exactly two grants` test (and P4.16g's
     additions) is updated to the new list in this step.
-  - `mod.open_label_item` takes `core.did_lock_key(did)` and checks `core.is_erased(did)` itself (no item for an
-    erased DID), then opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
+  - `mod.open_label_item` refuses a `uri` whose DID is not `did`, takes `core.did_lock_key(did)` and checks
+    `core.is_erased(did)` itself (no item for an erased DID), then opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
     (`app.submit_report` takes a sealed argument the indexer cannot make); it refuses when the member already has an
     open label item.
   - Erasure (rows matched by the DID in `uri`, `at://<did>` or the bare DID, as for P4.23's `idx.label`, in
@@ -3507,7 +3507,7 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     member row, an override) takes `core.did_lock_key(did)` and checks `core.is_erased(did)` first, like the label
     write, so a write cannot land after an erasure.
 Tests: `bsky_labels_grants_denied`, `bsky_labels_api_reads_no_app`, `open_label_item_one_per_member`,
-`bsky_labels_tables_erased`, `bsky_labels_side_writes_race_erasure`.
+`bsky_labels_tables_erased`, `bsky_labels_side_writes_race_erasure`, `open_label_item_refuses_erased_or_foreign_uri`.
 Not in this step: the poll, alarm and review code (P4.23b).
 Diagram: none.
 
@@ -3561,8 +3561,8 @@ Outputs:
   and that the `idx.account` row exists, skipping the write otherwise. Erasure and a poll's write are then strictly
   ordered, whatever order erasure's statements run in (DA-4: advisory lock plus tombstone check; the network call
   happens before the transaction). A label from this source records `first_seen_at` (our clock) on insert; an upsert
-  of the same `(src, uri, val)` keeps it, except that an upsert whose new `cts` lapses an override (above its
-  `label_cts`) resets it to now; a label issued again after a negation is a new row.
+  of the same `(src, uri, val)` keeps it, except that an upsert that crosses an override (stored `cts` ≤ its `label_cts` <
+  new `cts`) resets it to now, once; a label issued again after a negation is a new row.
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
   timestamptz NULL)`, created with its grants in P4.23k. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
@@ -3578,7 +3578,8 @@ Outputs:
     toward that member. A label "newly lands" by its `first_seen_at`, our own clock, never the labeler's `cts` (a bad
     labeler can backdate it). Labels stored by a member's first complete poll (the whole cursor walk) do not count
     toward these windows but toward their own: if hide-class labels are found on more than `max(3, 10 %)` of the
-    members first polled in any 24 hours, the alarm pages too, so a labeler cannot hide a wave of new signups
+    members first polled in any 24 hours, or on more than `max(5, 5 %)` of those first polled in any 7 days, the alarm
+    pages too and groups them into one bulk review, so a labeler cannot hide a wave of new signups
     silently. The first-poll fact is app-owned (`app.label_first_poll`), so an `idx` rebuild does not reset it, and the labels a
     rebuild stores again may page once, the safe direction. Members are DIDs with an `app.account` row, signed in or
     not, so accounts that are merely indexed can neither trip it nor dilute it. If hide-class labels newly land on
@@ -3592,7 +3593,10 @@ Outputs:
     from our labeler cannot cancel a Bluesky label, since P4.23 step 3c only deletes a row with the same
     `(src, uri, val)`. An override covers only labels with `cts ≤ label_cts`, so a label Bluesky issues again later
     applies again; such a re-issue resets `first_seen_at` to now, so it counts toward the burst windows like a new
-    label and opens a review item again. Reversing `!takedown` or any child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety;
+    label and opens a review item again. `label_cts` is the stored label's `cts`, read in the transaction that
+    writes the override under the per-DID lock (never a snapshot taken when the review opened), and the reset check
+    reads `app.label_override` itself, not the copy in `idx`. Any re-hide of a reversed `(src, uri, val)` pages on
+    its own, outside the windows. Reversing `!takedown` or any child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety;
     the build PR lists them from the labeler's `app.bsky.labeler.service` declaration, DO-3) needs a second moderator
     (`second_by`, P3.20a's two-person pattern) and is never done in bulk; every override is an audit action (P1.15).
     P4.23k creates the tables, the copy and their grants.
@@ -3679,6 +3683,8 @@ Done when (tests):
     takedown and child-safety labels; every override is audited.
   - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues overridden labels on 6 of 100 members with a later
     `cts` → they hide again and the burst alarm pages.
+  - `bsky_labels_reissue_before_reversal_still_reversed`: a re-issue with a later `cts` lands between the burst and
+    the reversal → the reversal covers it (its `label_cts` is the stored one); a re-issue after it pages.
   - `bsky_labels_first_poll_wave_pages`: hide-class labels on 4 of 20 members first polled in a day → the alarm
     pages.
   - `bsky_labels_hidden_not_listed`: an account hidden by a label is absent from `/people`, its search and
