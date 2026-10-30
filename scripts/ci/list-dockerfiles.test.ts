@@ -167,6 +167,43 @@ describe("list dockerfiles", () => {
   });
 });
 
+describe("native realpath containment (P0.09v)", () => {
+  // deployment/x -> <outside>/inner and deployment/y -> "x/..". The kernel follows x before "..",
+  // so deployment/y is <outside>. The JS realpathSync resolves the link text lexically and
+  // collapses "x/.." to deployment/ first (nodejs.org/docs/latest-v26.x/api/fs.html,
+  // fs.realpathSync.native: "Synchronous realpath(3)").
+  function collapsing(withDecoy: boolean): string {
+    const root = tree({ "outside/Dockerfile": "FROM scratch\n", "outside/inner/.keep": "" });
+    mkdirSync(join(root, "deployment"));
+    symlinkSync(join(root, "outside/inner"), join(root, "deployment/x"));
+    symlinkSync("x/..", join(root, "deployment/y"));
+    // The decoy is what the lexical form would find, so only the native form refuses the path.
+    if (withDecoy) writeFileSync(join(root, "deployment/Dockerfile"), "FROM scratch\n");
+    return root;
+  }
+
+  test("dockerfile_reached_through_dotdot_link_resolves_outside_natively", () => {
+    const root = collapsing(true);
+    expect(entryProblems(root, "deployment/y/Dockerfile")).toEqual([
+      "path outside deployment/: deployment/y/Dockerfile",
+    ]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("a_realpath_that_throws_is_refused_not_thrown_past", () => {
+    const root = collapsing(false);
+    expect(entryProblems(root, "deployment/y/Dockerfile")).toEqual([
+      "path outside deployment/: deployment/y/Dockerfile",
+    ]);
+    const dangling = tree({ "deployment/edge/Dockerfile": "FROM scratch\n" });
+    symlinkSync(join(dangling, "missing.Dockerfile"), join(dangling, "deployment/gone.Dockerfile"));
+    expect(entryProblems(dangling, "deployment/gone.Dockerfile")).toEqual([
+      "path outside deployment/: deployment/gone.Dockerfile",
+    ]);
+    for (const dir of [root, dangling]) rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe("the pds-ui recipe's ignore file (P2.24t)", () => {
   const BASE =
     "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf";
