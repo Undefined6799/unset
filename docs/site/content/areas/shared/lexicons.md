@@ -18,7 +18,7 @@ The `sh.unset.*` record schemas, their validator, the field limits and the OAuth
 | `shared/lexicons/src/limits.ts` | `LIMITS` and `IMAGE_ACCEPT`. `limits.test.ts` holds the numbers equal to the schemas. |
 | `shared/lexicons/src/scope.ts` | `scopeString` and `scopeStringFallback` |
 | `shared/lexicons/scripts/build.ts` | Schema checks and generation |
-| `shared/lexicons/scripts/breaking-check.ts` | `publishedProblems` compares `schemas/<nsid>.json` with `published/<nsid>.json` |
+| `shared/lexicons/scripts/breaking-check.ts` | `publishedProblems` runs `breakingProblems` on `schemas/<nsid>.json` against `published/<nsid>.json`. Refusals are in the table under the commands. |
 
 Our schemas:
 
@@ -59,14 +59,27 @@ node shared/lexicons/scripts/build.ts --check
 node shared/lexicons/scripts/breaking-check.ts
 ```
 
-`--check` exits 1 when `generated/` is stale. `publishedProblems` takes every key of `published.lock.json` and every `published/*.json` name, and compares `schemas/<nsid>.json` with `published/<nsid>.json`.
+`--check` exits 1 when `generated/` is stale. `publishedProblems` takes every key of `published.lock.json` and every `published/*.json` name, and runs `breakingProblems` with `schemas/<nsid>.json` as the next document and `published/<nsid>.json` as the published one.
+
+`breakingProblems` walks definitions the published document already has, then each of those objects' fields and each array's `items`. A new optional field is allowed. An open union (`closed` is not `true`) that already has `refs` may add refs, and may drop that list. These changes are refused:
+
+| Change | Result |
+| --- | --- |
+| `maxLength`, `maxGraphemes`, `maxSize`, `maximum`, `minLength`, `minGraphemes` or `minimum` is added, removed or set to another value | refused |
+| An `enum` or `accept` value is added or removed, or that list is added or removed | refused |
+| `closed` becomes `true`, or stops being `true` | refused |
+| A `refs` value is removed; a closed union gains a `refs` value or loses its `refs` list; a `refs` list is added where none was published | refused |
+| `type`, `format`, `const`, `ref` or `default` is added, removed or set to another value | refused |
+| A definition or field is removed, a record `key` changes, or a field is newly `required` | refused |
+
+When the published `defs.main.type` is `permission-set`, scope and consent rules apply instead. A removed scope is refused. An added scope, or a change to `title`, `title:lang`, `detail` or `detail:lang`, needs `--approved-by-alex=` followed by digits that do not start with `0`. Any other value of that flag exits 2.
 
 | NSID source | On this tree |
 | --- | --- |
 | Keys of `published.lock.json` | None. The file is `{}`. |
 | `published/*.json`, name without `.json` | `sh.unset.profile` |
 
-The profile snapshot is compared. The two files have the same contents. `--approved-by-alex=<PR number>` is the flag the permission-set addition path reads.
+The profile snapshot is compared. The two files have the same contents.
 
 ## May import
 
