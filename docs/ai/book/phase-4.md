@@ -3485,10 +3485,13 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     SELECT on `app.labeler_identity`, `app.label_first_poll`, `app.label_bulk_review` and its member list; SELECT on
     `app.label_override`, which it copies into `idx.label_suppressed` (read and write); read and write on
     `idx.label_poll` and column grants for `idx.label.first_seen_at` (P1.12 column-list rule); EXECUTE on
-    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. Grants P3.08k already made (SELECT `did` on
-    `app.account`, EXECUTE on `core.did_lock_key`) are not added twice in `grant-matrix.json`.
+    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. If P3.08k was built first, the grants it already
+    made (SELECT `did` on `app.account`, EXECUTE on `core.did_lock_key`) are not added twice in `grant-matrix.json`.
+    These indexer rights on `app` narrow plan §5.2's "`indexer` has no rights on app or plugin schemas"; this
+    step's PR carries the ADR (D8) that records it, for Alex to accept before it merges.
   - `admin`: writes `app.label_override`, the bulk reviews and their member lists, and UPDATEs
-    `app.labeler_identity` when a moderator accepts a new labeler identity after review.
+    `app.labeler_identity` when a moderator accepts a new labeler identity after review; EXECUTE on
+    `core.did_lock_key` and `core.is_erased` for the race check below.
   - `web`, `api` and `media` read only `idx` as today (P3.03's `api-role-cannot-read-app` holds): the decision reads
     `idx.label_suppressed`, never `app.label_override`. `media` gains column-list SELECT on `idx.label` and
     `idx.label_suppressed` for the hidden-blob check, and P3.03's `media has exactly two grants` test (and P4.16g's
@@ -3496,7 +3499,8 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
   - `mod.open_label_item` opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
     (`app.submit_report` takes a sealed argument the indexer cannot make); it refuses when the member already has an
     open label item.
-  - Erasure: the member's `app.label_override`, `app.label_first_poll`, `app.label_bulk_review_member` and
+  - Erasure (rows matched by the DID in `uri`, `at://<did>` or the bare DID, as for P4.23's `idx.label`, in
+    hand-written `core.erase_did` statements on the trusted functions line): the member's `app.label_override`, `app.label_first_poll`, `app.label_bulk_review_member` and
     `idx.label_suppressed` rows are deleted (`delete_row`), and `idx.label_poll` by cascade; a bulk review itself,
     which groups many members, stays. Every write to these tables about a DID (the first-poll mark, a bulk review
     member row, an override) takes `core.did_lock_key(did)` and checks `core.is_erased(did)` first, like the label
@@ -3583,7 +3587,8 @@ Outputs:
     `moderation.decide` skips a label found there; `idx` stays rebuildable from the app-owned rows (DA-1). A negation
     from our labeler cannot cancel a Bluesky label, since P4.23 step 3c only deletes a row with the same
     `(src, uri, val)`. An override covers only labels with `cts ≤ label_cts`, so a label Bluesky issues again later
-    applies again. Reversing `!takedown` or any child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety;
+    applies again; such a re-issue resets `first_seen_at` to now, so it counts toward the burst windows like a new
+    label and opens a review item again. Reversing `!takedown` or any child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety;
     the build PR lists them from the labeler's `app.bsky.labeler.service` declaration, DO-3) needs a second moderator
     (`second_by`, P3.20a's two-person pattern) and is never done in bulk; every override is an audit action (P1.15).
     P4.23k creates the tables, the copy and their grants.
@@ -3597,7 +3602,9 @@ Outputs:
   - **Statement of reasons, owner only:** to everyone else a hidden profile is `AccountUnavailable`, exactly like a
     missing one, on the page and in the public API (SE-2, D7); no label or source is shown publicly. The signed-in
     owner sees that their account is hidden because of a label from Bluesky's moderation service, the label,
-    Bluesky's appeal route and our contact.
+    Bluesky's appeal route and our contact. Every listing that could reveal the account applies the same decision:
+    the `/people` directory and search (P3.14) and the public `searchProfiles` (P3.11) leave out an account hidden
+    by a label, as they leave out a missing one; this holds for P4.23's own labels too.
 - Health board: `labels.bsky_stale` (no successful poll for an hour), `labels.bsky_burst`,
   `labels.bsky_identity_changed`.
 - GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
@@ -3666,8 +3673,10 @@ Done when (tests):
     dropped.
   - `bsky_labels_takedown_reversal_needs_two`: one moderator cannot reverse a `!takedown`; a bulk reversal skips
     takedown and child-safety labels; every override is audited.
-  - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues an overridden label with a later `cts` → it hides
-    again.
+  - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues overridden labels on 6 of 100 members with a later
+    `cts` → they hide again and the burst alarm pages.
+  - `bsky_labels_hidden_not_listed`: an account hidden by a label is absent from `/people`, its search and
+    `searchProfiles`.
   - `bsky_labels_identity_change_review`: a changed endpoint or key → alert and bulk review; labels still apply.
   - `bsky_labels_review_items_bounded`: ten labels on one member → one open moderation item.
   - `bsky_labels_wildcard_refused_falls_back`: the fixture refuses wildcards → account labels and exact record URIs
@@ -3686,7 +3695,8 @@ Done when (tests):
 Reuse:
   - P4.23's ingest and decision → USE.
   - The vendored `com.atproto.label.queryLabels` lexicon → USE for parsing.
-An ADR comes with the build PR (D8: a second outside source that can hide members, and five new app tables).
+An ADR comes with P4.23k's PR (D8: a second outside source that can hide members, five new app tables, and the
+indexer's rights on `app`).
 Not in this step: our own labeler (P5.07); a WebSocket subscription to Bluesky's whole label stream (it carries the
 whole network's labels; polling only our members is smaller).
 Diagram: none.
