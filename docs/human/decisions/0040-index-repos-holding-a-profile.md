@@ -17,15 +17,18 @@ The atproto review of 2026-10-29 suggested it; decision 5 had rejected it, partl
 by a PDS.
 
 ## Decision
-1. `tap-relay` sets `TAP_SIGNAL_COLLECTION=sh.unset.profile`. The login-triggered queue stays.
-2. Repos the signal finds go through `idx.discovered` and the track loop (book P3.02 "Discovery"): erased DIDs are
-   untracked and never indexed; a DID on our PDS moves to `tap-own`; a non-member who deletes their profile record is
-   untracked and de-indexed without a tombstone.
-3. Caps: at most `DISCOVERY_MAX` non-members (default 50,000) and `DISCOVERY_PER_HOST_DAY` new ones per PDS host per
-   day (default 200); over a cap they wait and an alert fires.
-4. Non-members: lawful basis legitimate interests (GDPR Art. 6(1)(f)), an Art. 14 notice in the privacy policy, a
-   RoPA row, access and erasure through the request route for people who cannot log in. Their public profile renders
-   like a member's.
+1. `tap-relay` sets `TAP_SIGNAL_COLLECTION=sh.unset.profile`, in a step of its own (book P3.08d) after ingest,
+   erasure and the handle rule exist. The login-triggered queue for members is unchanged.
+2. Only a create or update of a DID's own profile record discovers it; the track loop then creates its index row and
+   makes Tap backfill. Membership is an `app.account` row; members are never capped or treated as non-members, and
+   our own PDS's members stay on `tap-own`.
+3. Erased people never reach our tables, not even as a plain DID; the HMAC tombstone is checked first.
+4. Caps bound our index and outbound checks: a total and a per-PDS-host daily cap on non-members, with eviction of
+   long-unchanged non-members so the cap cannot be exhausted for good.
+5. Non-members: lawful basis legitimate interests (GDPR Art. 6(1)(f)), an Art. 14 notice in the privacy policy, a
+   RoPA row, and access and erasure through the request route for people who cannot log in, with proof of control of
+   the DID; that route exists before this reaches production. A non-member who deletes their profile record is
+   de-indexed (moderation and hold rows kept). Their public profile renders like a member's.
 
 ## Alternatives
 - **Login-only tracking (decision 5).** No non-member data, but profiles written elsewhere never show. Rejected by
@@ -36,12 +39,13 @@ by a PDS.
 - New personal data: people who never signed up. The legal docs, RoPA and erasure route must cover them before
   Phase 3 ships to production.
 - Erasure is final in our tables but not in Tap: an erased person who writes a profile record again is tracked by Tap
-  again and untracked again; their events never reach our index. Tap holds only repo metadata in between.
+  again and untracked again; their events never reach our index. In between, Tap holds the repo's metadata and the
+  buffered record bodies until they are acked (P3.01's source table: `remove` does not purge the outbox).
 - P3.01 must show discovery works (M19); if the relay does not serve `listReposByCollection`, only new profile writes
   are discovered until a host that serves it is configured.
-- More outbound handle checks and Tap state, bounded by the caps.
+- More outbound handle checks, bounded by the caps. Tap's own state is not bounded by them (Tap tracks every repo the
+  signal finds before our caps run); its tracked-repo count is watched with an alert.
 
 ## Compliance
-P3.02's tests `tap_relay_signal_collection`, `discovered_non_member_indexed`, `discovered_own_pds_routed_to_tap_own`,
-`track_erased_rediscovered_untracked`, `discovered_left_deindexed`, `discovery_caps_defer_and_alert`; P3.01 M19 and
-M20 in the ingest ADR; the RoPA row "Indexing non-members".
+Book step P3.08d's named tests (one per rule there); P3.01 M19 and M20 in the ingest ADR; the RoPA row "Indexing
+non-members".

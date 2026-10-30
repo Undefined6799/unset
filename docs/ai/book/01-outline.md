@@ -1637,6 +1637,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.07k | `eraseDid` SQL and its storage and untrack hooks (split from P3.07, SE-6) | [SEC] | P3.07g, P3.06, P1.13, P1.15a, P2.18 | `phase-3.md` |
 | P3.07 | `eraseDid`: hand-written `core.erase_did`, the `eraseHooks` list (no registry), `core.erase_pending_hold` for held material | [SEC] | P3.07k, P3.07g, P3.06, P1.13, P1.15a, P2.18 | `phase-3.md` |
 | P3.08 | Handle registry rule | [SEC] | P3.06, P2.02 | `phase-3.md` |
+| P3.08d | Find repos by their profile record (Tap signal collection, ADR 0040) | [SEC] | P3.02, P3.05, P3.07, P3.08 | `phase-3.md` |
 | P3.09 | Media proxy for published blobs | [SEC] | P3.06, P2.19 | `phase-3.md` |
 | P3.10 | `api` entrypoint: public XRPC | [SEC] | P3.05, P1.06 | `phase-3.md` |
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |
@@ -1661,7 +1662,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.21 | Suspend end to end | [SEC] | P3.20, P3.09, P3.06, P3.05 | `phase-3.md` |
 | P3.22g | Grants for the audit verifier and anchoring (SE-6) | [SEC] | P1.15a, P3.20c | `phase-3.md` |
 | P3.22 | Audit chain anchors, nightly verifier and admin runbooks 1–8 | [SEC] [ALEX] | P3.22g, P1.15, P3.16d, P3.20c | `phase-3.md` |
-| P3.23 | Phase 3 exit | — | every Phase 3 step; directly P3.07, P3.13, P3.14s, P3.16c, P3.18a, P3.20a, P3.21, P3.22 | `phase-3.md` |
+| P3.23 | Phase 3 exit | — | every Phase 3 step; directly P3.07, P3.08d, P3.13, P3.14s, P3.16c, P3.18a, P3.20a, P3.21, P3.22 | `phase-3.md` |
 
 ```mermaid
 flowchart TD
@@ -1677,6 +1678,7 @@ flowchart TD
   P3_07k["P3.07k eraseDid SQL and hooks"]
   P3_07g["P3.07g Grant for eraseDid on the audit la"]
   P3_08["P3.08 Handle registry rule"]
+  P3_08d["P3.08d Signal discovery"]
   P3_09["P3.09 Media proxy for published blobs"]
   P3_10["P3.10 api entrypoint"]
   P3_11["P3.11 Service-auth JWT verifier"]
@@ -1712,6 +1714,9 @@ flowchart TD
   P3_05 --> P3_06
   P3_06 --> P3_07
   P3_06 --> P3_08
+  P3_08 --> P3_08d
+  P3_07 --> P3_08d
+  P3_08d --> P3_23
   P3_06 --> P3_09
   P3_05 --> P3_10
   P3_10 --> P3_11
