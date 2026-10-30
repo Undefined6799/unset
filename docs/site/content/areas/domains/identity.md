@@ -12,7 +12,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | Module | What it holds |
 | --- | --- |
 | `domains/identity/index.ts` | Package root. Re-exports the rows below. |
-| `domains/identity/syntax.ts` | `parseDid`, `parseHandle`, and the branded `Did` and `Handle` types. |
+| `domains/identity/syntax.ts` | `parseDid`, `parseHandle`, `isHandleSyntax`, and the branded `Did` and `Handle` types. |
 | `domains/identity/contract.ts` | `IdentityNetwork` and its outcome types. |
 | `domains/identity/did-doc.ts` | `parseDidDoc`. Not a package export. `resolve-did.ts` is the caller. |
 | `domains/identity/resolve-did.ts` | `createDidResolver`, `IdentityError`. |
@@ -23,9 +23,9 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/auth/gates.ts` | `emailGate`, `CACHED_RECHECK_CAP_MULTIPLE`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`. |
 | `domains/identity/legal/versions.ts` | `TERMS_VERSION`, `PRIVACY_VERSION`. |
 
-`parseDid` accepts `did:plc` (24 base32 characters) or `did:web` plus a hostname `isResolvableHostname` accepts. It does not lowercase. `parseHandle` trims, drops one leading `@`, and lowercases. It returns null unless that result is a hostname `isResolvableHostname` accepts. The lists and the spec cites are in `syntax.ts`.
+`parseDid` accepts `did:plc` (24 base32 characters) or `did:web` plus a hostname `isResolvableHostname` accepts. It does not lowercase. `parseHandle` trims, drops one leading `@`, and lowercases. It returns null unless that result is a hostname `isResolvableHostname` accepts. `isHandleSyntax` is that hostname pattern before the disallowed-TLD list: the string must be printable ASCII and at most 253 characters, judged after lowercasing. It does not trim or drop `@`. A name such as `alice.local` passes `isHandleSyntax` and is still null from `parseHandle`. The lists and the spec cites are in `syntax.ts`.
 
-`resolveHandle` tries a `_atproto` TXT record, then `https://<handle>/.well-known/atproto-did`. Statuses: `found`, `not_found`, `unavailable` (`resolve-handle.ts`). A method that returns a DID wins. If neither does, one method that could not tell makes the status `unavailable`, and two methods that found nothing make it `not_found`.
+`resolveHandle` tries a `_atproto` TXT record, then `https://<handle>/.well-known/atproto-did`. Statuses: `found`, `not_found`, `unavailable` (`resolve-handle.ts`). TXT is `found` when the `did=` values `parseDid` accepts are exactly one DID. Repeating that DID is still one DID. A record that does not start with `did=`, or whose remainder `parseDid` rejects, is ignored. Two different DIDs are a conflict: the status is `unavailable` and HTTPS is not asked. Otherwise a method that returns one DID wins, so a `found` TXT answer does not ask HTTPS. If neither method returns a DID, one method that could not tell makes the status `unavailable`, and two methods that found nothing make it `not_found`. A `_atproto.` name longer than 253 characters is not queried; that method counts as `none`.
 
 | Network failure | Raised by | Adapter (`infrastructure/pds/identity-network.ts`) | Status when the other method found nothing |
 | --- | --- | --- | --- |
@@ -36,7 +36,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 
 A handle domain with no DNS record is `egress.dns_no_record` on both methods, so `not_found`. [ADR 0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md) decision 4 said that case was `unavailable` until P2.01m. P2.01m has landed, so that clause has expired. The ADR is still Proposed (awaiting Alex). The ADR file is not edited. An HTTPS status of 429 or 500 and above is `unavailable` from the response (`fromWellKnown`), not from a net-guard code.
 
-`createHandleVerifier` returns `verifyHandle` and `invalidateHandle`. `verifyHandle` returns `verified` when the DID document's first syntactically valid `at://` handle resolves back to that DID. `displayHandle` returns that handle, or the string `handle.invalid`. The other verdicts are `invalid` and `unavailable` (`verify-handle.ts`).
+`createHandleVerifier` returns `verifyHandle` and `invalidateHandle`. The claim is the first string in `rawAlsoKnownAs` that starts with `at://` and whose remainder does not start with `@`, has no surrounding whitespace, and passes `isHandleSyntax`. Every later entry is ignored. `parseHandle` lowercases that remainder. When it returns null, the verdict is `invalid` and nothing is resolved. `verifyHandle` returns `verified` when the claim resolves back to that DID. `displayHandle` returns that handle, or the string `handle.invalid`. The other verdicts are `invalid` and `unavailable` (`verify-handle.ts`).
 
 `emailGate` reads a cache the caller passes. It does not take a handle or an environment.
 
@@ -104,7 +104,7 @@ Re-exports from `index.ts`:
 | `legal/versions.ts` | `PRIVACY_VERSION`, `TERMS_VERSION` |
 | `resolve-did.ts` | `createDidResolver`, `IdentityError`, `Consistency`, `DidResolverOptions`, `IdentityErrorKind` |
 | `resolve-handle.ts` | `resolveHandle`, `HandleResolution` |
-| `syntax.ts` | `parseDid`, `parseHandle`, `Did`, `Handle` |
+| `syntax.ts` | `parseDid`, `parseHandle`, `isHandleSyntax`, `Did`, `Handle` |
 | `verify-handle.ts` | `createHandleVerifier`, `displayHandle`, `HandleVerdict`, `HandleVerifierOptions` |
 
 ## Data
