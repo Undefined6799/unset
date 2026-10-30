@@ -3481,7 +3481,7 @@ Size: hypothesis, P4.00 sets it (~110 source lines, ~150 test lines)
 Why a separate step (letter suffix): role grants, definers and erasure rows are trusted base (SE-6, like P3.07g and
 P3.07k), so they are reviewed alone, before the feature code that uses them.
 Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant with a denial test.
-  - indexer: SELECT (`did`) on `app.account` (a column list, P1.12 `personal_data_by_column_list`); INSERT and
+  - indexer: SELECT (`did`, `first_seen_at`) on `app.account` (the second for the new-members window) (a column list, P1.12 `personal_data_by_column_list`); INSERT and
     SELECT on `app.labeler_identity`, `app.label_first_poll`, `app.label_bulk_review` and its member list; SELECT on
     `app.label_override`, which it copies into `idx.label_suppressed` (read and write); read and write on
     `idx.label_poll` and column grants for `idx.label.first_seen_at` (P1.12 column-list rule); EXECUTE on
@@ -3582,7 +3582,8 @@ Outputs:
     newly land and are not yet in a bulk review:
     - all members: more than `max(5, 1 %)` of members in one hour, `max(10, 2 %)` in any 24 hours or `max(20, 5 %)`
       in any 7 days. Labels stored by a member's first complete poll (the whole cursor walk, not cut by the page
-      limit) are left out here, so the backlog does not count; the first-poll fact is app-owned
+      limit) are left out here, so the backlog does not count, but only when that poll completes within 24 hours of
+      the member's `app.account` row; a later first poll counts like any other; the first-poll fact is app-owned
       (`app.label_first_poll`), so an `idx` rebuild does not reset it, and labels a rebuild stores again may page
       once, the safe direction;
     - new members (an `app.account` row less than 7 days old), every label including first-poll ones: more than
@@ -3594,7 +3595,8 @@ Outputs:
     while it holds labels no moderator has seen; the admin screen marks unseen labels, so a bulk confirm never
     covers them. Besides the windows, three things put labels into a review: any `!takedown` landing on a member,
     any re-hide of a reversed `(src, uri, val)` (below), and labels signed under a new labeler identity (below). So
-    every hide that needs a person reaches one within the hour, and pages never repeat faster than hourly per review.
+    every hide that needs a person reaches one within the hour. These join the one open review of their kind
+    (takedowns, re-hides, an identity change) while it is open, so pages never repeat faster than hourly per kind.
   - **Reversal:** writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
     second_by, decided_at)`. The indexer copies them into `idx.label_suppressed` within a minute, and
     `moderation.decide` skips a label found there; `idx` stays rebuildable from the app-owned rows (DA-1). A negation
@@ -3610,9 +3612,11 @@ Outputs:
   - **Endpoint and key watch:** the labeler's service endpoint and `#atproto_label` key are recorded on first use; a
     change raises `labels.bsky_identity_changed`, and labels signed under the new identity go into one review until
     a moderator decides. Labels keep applying meanwhile. A moderator who accepts the new identity records it
-    (`admin`), so later labels stop re-tripping the watch.
+    (`admin`), so later labels stop re-tripping the watch; until then every label signed under it keeps going into
+    that kind's open review, whatever was decided on earlier ones.
   - **Review item:** a Bluesky hide-class label on a member's account or record that is in no bulk review opens a
-    P3.15 moderation item through `mod.open_label_item`, one open item per member at most, so labels below every
+    P3.15 moderation item through `mod.open_label_item` (a `!takedown` also opens one, besides its review), one open item per member at
+    most, so labels below every
     threshold still reach the queue and a burst cannot flood it.
   - **Statement of reasons, owner only:** to everyone else a hidden profile is `AccountUnavailable`, exactly like a
     missing one, on the page and in the public API (SE-2, D7); no label or source is shown publicly. The signed-in
@@ -3620,7 +3624,7 @@ Outputs:
     Bluesky's appeal route and our contact. Every listing that could reveal the account applies the same decision:
     the `/people` directory and search (P3.14) and the public `searchProfiles` (P3.11) leave out an account hidden
     by a label, as they leave out a missing one; this holds for P4.23's own labels too.
-- Health board: `labels.bsky_stale` (no successful poll for an hour), `labels.bsky_burst`,
+- Health board: `labels.bsky_stale` (no successful poll for an hour, overall or for any member), `labels.bsky_burst`,
   `labels.bsky_identity_changed`, `labels.bsky_page_limit`.
 - GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
   interests, Art. 6(1)(f)); the RoPA moderation row gains "labels from Bluesky's labeler about the member";
@@ -3637,7 +3641,7 @@ Algorithm:
      `Retry-After` (cap 10 min). Other failure → set `failed_since` if empty, back off 1 s doubling to 5 min.
   3. Labels on DIDs or URIs we did not ask about are dropped: the subject must equal a requested DID or start with
      `at://<did>/` for one, never a bare string prefix (`did:plc:abc` must not match `did:plc:abcd`).
-  4. After each batch, evaluate the burst alarm over its three windows.
+  4. After each batch, evaluate the burst alarm over its five windows.
 
 Open for Alex (recommendation below): **what a member's profile shows when Bluesky's labeler cannot be reached.**
   - Recommended, A: keep showing with the last labels stored. Labels already ingested keep applying, a hide stays a
