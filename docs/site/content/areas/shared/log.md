@@ -36,7 +36,7 @@ The non-leaf [`shared` row](../). Declared in `shared/log/package.json`:
 
 `logger.ts` imports `AppError` and `ErrorCode` from that package, and `scrub` from `./scrub.ts`.
 
-Who may import it is the [shared](../) table. On this tree, product importers include `interfaces/{admin,api,http,indexer,media,review}`, `infrastructure/{pds,postgres,session}` and `shared/http`.
+Who may import it is the [shared](../) table. On this tree, product importers are `interfaces/http`, `infrastructure/{pds,postgres,session}` and `shared/http`.
 
 ## Entry points
 

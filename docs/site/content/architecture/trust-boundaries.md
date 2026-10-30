@@ -17,7 +17,7 @@ On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` answers `/_unset/` i
 
 ## One process per container
 
-Each Compose service is one process, with its own user, read-only root and dropped capabilities (`deployment/compose.dev.yaml`). `web` is `interfaces/http`. The other interface folders compose a health-only server and are not services in the file ([Processes](../processes/)).
+Each Compose service is one process, with its own user, read-only root and dropped capabilities (`deployment/compose.dev.yaml`). `web` is `interfaces/http`, the only interface folder in the tree.
 
 Database roles match that split. `web` is the only roster role the dev stack logs in as. Grants are per role in `infrastructure/postgres/grant-matrix.json`; migration 0003 grants schema `USAGE` and no table privileges. Later migrations grant column lists on the tables they create.
 

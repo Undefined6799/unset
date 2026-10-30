@@ -71,7 +71,7 @@ The non-leaf [`shared` row](../). Declared in `shared/http/package.json`:
 | `@unset/shared-errors` | workspace |
 | `@unset/shared-log` | workspace |
 
-Who may import it is the [shared](../) table. On this tree the product importers are `interfaces/{admin,api,http,indexer,media,review}`. `apps/` does not import it.
+Who may import it is the [shared](../) table. On this tree the only product importer is `interfaces/http`. `apps/` does not import it.
 
 ## Entry points
 

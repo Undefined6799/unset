@@ -12,7 +12,7 @@ From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reac
 | Layer | Present |
 | --- | --- |
 | `apps/` | `web` |
-| `interfaces/` | `http`, `admin`, `api`, `indexer`, `media`, `review` |
+| `interfaces/` | `http` |
 | `domains/` | `identity` |
 | `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session` |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
