@@ -3508,6 +3508,7 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     write, so a write cannot land after an erasure.
 Tests: `bsky_labels_grants_denied`, `bsky_labels_api_reads_no_app`, `open_label_item_one_per_member`,
 `bsky_labels_tables_erased`, `bsky_labels_side_writes_race_erasure`, `open_label_item_refuses_erased_or_foreign_uri`.
+The indexer's copy into `idx.label_suppressed` takes the same lock and tombstone check as the other writes.
 Not in this step: the poll, alarm and review code (P4.23b).
 Diagram: none.
 
@@ -3561,8 +3562,8 @@ Outputs:
   and that the `idx.account` row exists, skipping the write otherwise. Erasure and a poll's write are then strictly
   ordered, whatever order erasure's statements run in (DA-4: advisory lock plus tombstone check; the network call
   happens before the transaction). A label from this source records `first_seen_at` (our clock) on insert; an upsert
-  of the same `(src, uri, val)` keeps it, except that an upsert that crosses an override (stored `cts` ≤ its `label_cts` <
-  new `cts`) resets it to now, once; a label issued again after a negation is a new row.
+  of the same `(src, uri, val)` keeps it, except that a write that crosses an override (new `cts` > its `label_cts`, and
+  either no stored row, as after a negation or expiry, or a stored `cts` ≤ `label_cts`) resets it to now, once; a label issued again after a negation is a new row.
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
   timestamptz NULL)`, created with its grants in P4.23k. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
@@ -3585,8 +3586,10 @@ Outputs:
     not, so accounts that are merely indexed can neither trip it nor dilute it. If hide-class labels newly land on
     more than `max(5, 1 %)` of members in one hour, `max(10, 2 %)` in any 24 hours or `max(20, 5 %)` in any 7 days
     (slow bursts), alert `labels.bsky_burst` pages the moderators and the burst's labels are grouped into one bulk
-    review in `admin`, where moderators can confirm them or reverse the burst. Any `!takedown` on a member also
-    pages, outside any burst.
+    review in `admin`, where moderators can confirm them or reverse the burst. Any `!takedown` on a member
+    also pages when it lands, outside any burst. A window pages once when it first crosses its threshold; labels already grouped into a bulk
+    review (open, confirmed or reversed) leave every window's count, so a handled burst does not page again and a
+    later burst is counted on its own.
   - **Reversal:** writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
     second_by, decided_at)`. The indexer copies them into `idx.label_suppressed` within a minute, and
     `moderation.decide` skips a label found there; `idx` stays rebuildable from the app-owned rows (DA-1). A negation
@@ -3683,10 +3686,14 @@ Done when (tests):
     takedown and child-safety labels; every override is audited.
   - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues overridden labels on 6 of 100 members with a later
     `cts` → they hide again and the burst alarm pages.
+  - `bsky_labels_negate_then_reissue_pages`: after a reversal the labeler negates a label and issues it again (or
+    lets it expire and issues it again) → the re-hide pages.
   - `bsky_labels_reissue_before_reversal_still_reversed`: a re-issue with a later `cts` lands between the burst and
     the reversal → the reversal covers it (its `label_cts` is the stored one); a re-issue after it pages.
+  - `bsky_labels_burst_pages_once`: a burst pages once; after its bulk review exists, later batches do not page
+    again for it, and a reversed burst never re-pages; a new burst a day later pages.
   - `bsky_labels_first_poll_wave_pages`: hide-class labels on 4 of 20 members first polled in a day → the alarm
-    pages.
+    pages; 1 a day for 7 days among 70 first polled → the 7-day window pages.
   - `bsky_labels_hidden_not_listed`: an account hidden by a label is absent from `/people`, its search and
     `searchProfiles`.
   - `bsky_labels_identity_change_review`: a changed endpoint or key → alert and bulk review; labels still apply.
