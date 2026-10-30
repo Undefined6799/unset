@@ -34,7 +34,8 @@ session would carry all of it. Statusphere (bluesky-social/statusphere-example-a
 
 ## Consequences
 - A refresh keeps a grant's scope: the authorization server rebuilds it from the scope first granted
-  (@atproto/oauth-provider `token/token-manager.ts`, `rotateToken`), so refreshing never adds a new scope. The PR that
+  (@atproto/oauth-provider `token/token-manager.ts`, `rotateToken`, bluesky-social/atproto main at f5c0473,
+  2026-10-30; the PDS image's pinned version is to be checked on staging), so refreshing never adds a new scope. The PR that
   adds a scope therefore also adds it to `grantCovers`' required grant (infrastructure/pds/oauth/scopes.ts), and a
   member whose grant lacks it is sent through sign-in and sees one consent screen. The Phase 4 and 5 steps that need
   these scopes must plan for it (the book's P2.04 and Phase 4 text carry a note).

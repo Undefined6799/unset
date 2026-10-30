@@ -3242,8 +3242,8 @@ Size: ~320 source lines, ~340 test lines
 Goal: users add, remove and reorder feed tabs; Bluesky feeds load through their own PDS; our "unset.sh latest" feed
 loads from the index; the list is private in the app DB.
 
-Inputs: P4.21 merge/render model, `FeedItem`, moderation hook, cursor helpers; P2.07 (with the `getFeed` and
-`getFeedGenerators` scopes, plan §3 22:49Z); `resolveHandle`, `verifyHandle`; P2.21's atomic-reorder pattern.
+Inputs: P4.21 merge/render model, `FeedItem`, moderation hook, cursor helpers; P2.07 (this step adds the `getFeed` and
+`getFeedGenerators` scopes and their `grantCovers` entries, ADR 0039; plan §3 22:49Z); `resolveHandle`, `verifyHandle`; P2.21's atomic-reorder pattern.
 Outputs:
 - Table `app.saved_feed(did, id uuid, kind ('following' | 'unset_latest' | 'unset_following' | 'bsky'), feed_uri NULL,
   label text, position int, created_at, PRIMARY KEY (did, id), UNIQUE (did, position) DEFERRABLE, UNIQUE (did,
@@ -4278,7 +4278,8 @@ P4.21 stop), **P4b-E14** (default tabs), **P4b-E18** (metric rounding), **P4b-E1
       and `FlipContributor` (P4.11, P4.14, P4.17, P4.17a). Any non-`public` state counts as not public.
     - `upload_day_count` is P2.18's table with `kind = 'video'` rows.
     - `mintDraftUrl`'s `/o/<purpose>/<objectKey>` shape.
-    - The scope row matches plan line 126 (`createReport?aud=*`, `repo:app.bsky.graph.follow`).
+    - The scope row matched plan line 126 (`createReport?aud=*`, `repo:app.bsky.graph.follow`); since ADR 0039
+      (proposed) each scope joins with its step.
 15. **Depth (brief resolution 10).** The header states the detail-by-risk rule and names P4.00 ("Refine Phase 4") as
     an outline row for the lead; no P4.00 step body is written here.
 
