@@ -3501,10 +3501,10 @@ Outputs:
 - Indexer task `bskyLabelPoll`: for indexed accounts, `BSKY_LABEL_BATCH` (default 25) DIDs per call, patterns `<did>`
   and `at://<did>/*`, `sources=[BSKY_LABELER_DID]`, following `cursor`.
 - Each label goes through P4.23's ingest (step 3a with expected source `BSKY_LABELER_DID`, then signature, `neg`,
-  `cts`, `exp`), in one transaction that first checks `core.is_erased(did)` and locks the `idx.account` row `FOR
-  SHARE`, skipping the write if the DID is erased or the row is gone, so a poll in flight never brings labels back
-  whatever order erasure's statements run in (DA-4: tombstone check plus row lock; the network call happens before
-  the transaction).
+  `cts`, `exp`), in one transaction that first takes the same per-DID advisory lock `eraseDid` holds
+  (`pg_advisory_xact_lock` on the DID's key, P3.07), then checks `core.is_erased(did)` and that the `idx.account` row
+  exists, skipping the write otherwise. Erasure and a poll's write are then strictly ordered, whatever order erasure's
+  statements run in (DA-4: advisory lock plus tombstone check; the network call happens before the transaction).
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
   timestamptz NULL)`. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
@@ -3514,17 +3514,22 @@ Outputs:
   other failure, a wrong or taken-over labeler hiding many members, by getting people to it fast:
   - **Burst alarm:** "hide-class" is every value `LABEL_BEHAVIOUR` maps to hide (`!hide`, `!takedown`, `!suspend`,
     `porn`, `sexual`, hide-mapped custom values). If, in one hour, Bluesky hide-class labels newly land on more than
-    `max(5, 1 %)` of **signed-in members** (accounts with a member session record, so throwaway accounts that are
-    merely indexed can neither trip it nor dilute it), alert `labels.bsky_burst` pages the moderators and the burst's
-    labels are grouped into one bulk review in `admin`, where a moderator can confirm them or reverse the whole burst.
-    A reversal writes rows to `app.label_override(src, uri, val, decided_by, decided_at)`, which `moderation.decide`
-    reads first: a negation from our labeler cannot cancel a Bluesky label, since P4.23 step 3c only deletes a row
-    with the same `(src, uri, val)`. Overrides, bulk reviews and the recorded labeler identity live in the app-owned
-    schema (`app.label_override`, `app.label_bulk_review`, `app.labeler_identity`; DA-1), not in `idx`.
+    `max(5, 1 %)` of **members** (DIDs with an `app.account` row, whether or not signed in now, so throwaway
+    accounts that are merely indexed can neither trip it nor dilute it), alert `labels.bsky_burst` pages the moderators and the burst's
+    labels are grouped into one bulk review in `admin`, where moderators can confirm them or reverse the burst.
+    A reversal writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
+    second_by, decided_at)`, which `moderation.decide` reads first: a negation from our labeler cannot cancel a
+    Bluesky label, since P4.23 step 3c only deletes a row with the same `(src, uri, val)`. An override covers only
+    labels with `cts ≤ label_cts`, so a label Bluesky issues again later applies again. Reversing `!takedown` or any
+    child-safety value needs a second moderator (`second_by`, P3.20a's two-person pattern) and is never done in bulk;
+    every override is an audit action (P1.15). Overrides, bulk reviews and the recorded labeler identity live in
+    the app-owned schema (`app.label_override`, `app.label_bulk_review`, `app.labeler_identity`; DA-1), not in
+    `idx`; `admin` writes them, the indexer only reads `app.labeler_identity` and inserts bulk reviews, by grants
+    added in an SE-6 grants step split from this one, like P3.07g.
   - **Endpoint and key watch:** the labeler's service endpoint and `#atproto_label` key are recorded on first use; a
     change raises `labels.bsky_identity_changed` and opens the same kind of bulk review for labels signed under the
     new identity. Labels keep applying meanwhile.
-  - **Review item:** a Bluesky hide-class label on a signed-in member's account opens a P3.15 moderation item, one
+  - **Review item:** a Bluesky hide-class label on a member's account opens a P3.15 moderation item, one
     open item per member at most; during a burst they are grouped into the bulk review instead, so a burst cannot
     flood the queue.
   - **Statement of reasons:** the hidden profile's state page says the account is hidden because of a label from
@@ -3534,8 +3539,10 @@ Outputs:
 - GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
   interests, Art. 6(1)(f)); the RoPA moderation row gains "labels from Bluesky's labeler about the member";
   retention, until the label is negated or expires, or the account is erased; P4.26's export includes the member's
-  `idx.label` rows from either source; erasure deletes the `idx.account` row and then the label rows in one
-  transaction (P4.23 registry), the `idx.label_poll` row by cascade, and the tombstone stops any re-index (P3.05).
+  `idx.label` rows from either source and the overrides about them; erasure deletes the label rows (P4.23
+  registry), the `idx.label_poll` row by cascade, and the member's `app.label_override` and `app.label_bulk_review`
+  rows (new registry rows; moderator DIDs in them are staff data kept under P1.15's audit rule), and the tombstone
+  stops any re-index (P3.05).
 
 Algorithm:
   1. Pick due DIDs (oldest `polled_at` first, one batch per call, at most 4 calls in flight).
@@ -3584,6 +3591,10 @@ Done when (tests):
     members within an hour → all six hide, the alarm pages, one bulk review exists; reversing it un-hides all six.
   - `bsky_labels_burst_counts_members_only`: 50 indexed non-member accounts labelled `!takedown` → no alarm; they
     hide.
+  - `bsky_labels_takedown_reversal_needs_two`: one moderator cannot reverse a `!takedown`; a bulk reversal skips
+    takedown and child-safety labels; every override is audited.
+  - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues an overridden label with a later `cts` → it hides
+    again.
   - `bsky_labels_identity_change_review`: a changed endpoint or key → alert and bulk review; labels still apply.
   - `bsky_labels_review_items_bounded`: ten labels on one member → one open moderation item.
   - `bsky_labels_wildcard_refused_falls_back`: the fixture refuses wildcards → account labels and exact record URIs
@@ -3597,6 +3608,7 @@ Done when (tests):
 Reuse:
   - P4.23's ingest and decision → USE.
   - The vendored `com.atproto.label.queryLabels` lexicon → USE for parsing.
+An ADR comes with the build PR (D8: a second outside source that can hide members, and three new app tables).
 Not in this step: our own labeler (P5.07); a WebSocket subscription to Bluesky's whole label stream (it carries the
 whole network's labels; polling only our members is smaller).
 Diagram: none.
