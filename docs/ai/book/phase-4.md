@@ -3474,7 +3474,7 @@ Tags: [MOD] [SEC]            Depends on: P4.23, P4.26            Plan: as P4.23b
 Where: one migration creating `app.label_override`, `app.label_bulk_review`, its member list
 `app.label_bulk_review_member(review_id, did)`, `app.labeler_identity` and `app.label_first_poll(did PK, done_at)`
 (so the grants have something to grant on), the derived `idx.label_suppressed(src, uri, val, label_cts)`, the
-definer `mod.open_label_item(did, uri, val)`, their grants in `grant-matrix.json` with matrix test rows, and their
+`idx.label_poll` table (below) and the `first_seen_at` column on `idx.label`, the definer `mod.open_label_item(did, uri, val)`, their grants in `grant-matrix.json` with matrix test rows, and their
 `erasure-registry.json` rows; CODEOWNERS' `# trusted functions:` line gains `mod.open_label_item`
 Size: hypothesis, P4.00 sets it (~110 source lines, ~150 test lines)
 
@@ -3483,19 +3483,26 @@ P3.07k), so they are reviewed alone, before the feature code that uses them.
 Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant with a denial test.
   - indexer: SELECT (`did`) on `app.account` (a column list, P1.12 `personal_data_by_column_list`); INSERT and
     SELECT on `app.labeler_identity`, `app.label_first_poll`, `app.label_bulk_review` and its member list; SELECT on
-    `app.label_override`, which it copies into `idx.label_suppressed` (read and write); EXECUTE on
-    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`.
+    `app.label_override`, which it copies into `idx.label_suppressed` (read and write); read and write on
+    `idx.label_poll` and column grants for `idx.label.first_seen_at` (P1.12 column-list rule); EXECUTE on
+    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. Grants P3.08k already made (SELECT `did` on
+    `app.account`, EXECUTE on `core.did_lock_key`) are not added twice in `grant-matrix.json`.
   - `admin`: writes `app.label_override`, the bulk reviews and their member lists, and UPDATEs
     `app.labeler_identity` when a moderator accepts a new labeler identity after review.
   - `web`, `api` and `media` read only `idx` as today (P3.03's `api-role-cannot-read-app` holds): the decision reads
-    `idx.label_suppressed`, never `app.label_override`.
+    `idx.label_suppressed`, never `app.label_override`. `media` gains column-list SELECT on `idx.label` and
+    `idx.label_suppressed` for the hidden-blob check, and P3.03's `media has exactly two grants` test (and P4.16g's
+    additions) is updated to the new list in this step.
   - `mod.open_label_item` opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
     (`app.submit_report` takes a sealed argument the indexer cannot make); it refuses when the member already has an
     open label item.
   - Erasure: the member's `app.label_override`, `app.label_first_poll`, `app.label_bulk_review_member` and
-    `idx.label_suppressed` rows are deleted (`delete_row`); a bulk review itself, which groups many members, stays.
+    `idx.label_suppressed` rows are deleted (`delete_row`), and `idx.label_poll` by cascade; a bulk review itself,
+    which groups many members, stays. Every write to these tables about a DID (the first-poll mark, a bulk review
+    member row, an override) takes `core.did_lock_key(did)` and checks `core.is_erased(did)` first, like the label
+    write, so a write cannot land after an erasure.
 Tests: `bsky_labels_grants_denied`, `bsky_labels_api_reads_no_app`, `open_label_item_one_per_member`,
-`bsky_labels_tables_erased`.
+`bsky_labels_tables_erased`, `bsky_labels_side_writes_race_erasure`.
 Not in this step: the poll, alarm and review code (P4.23b).
 Diagram: none.
 
@@ -3551,7 +3558,7 @@ Outputs:
   happens before the transaction). A label from this source records `first_seen_at` (our clock) on insert; an upsert
   of the same `(src, uri, val)` keeps it, and a label issued again after a negation is a new row.
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
-  timestamptz NULL)`. DID column registered for erasure (cascade) and export.
+  timestamptz NULL)`, created with its grants in P4.23k. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
   the last hour again within 10 minutes.
 - Trust controls (`domains/moderation/labels`). A Bluesky label never applies more weakly than `LABEL_BEHAVIOUR`
@@ -3596,7 +3603,8 @@ Outputs:
 - GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
   interests, Art. 6(1)(f)); the RoPA moderation row gains "labels from Bluesky's labeler about the member";
   retention, until the label is negated or expires, or the account is erased; P4.26's export includes the member's
-  `idx.label` rows from either source, the overrides about them and the bulk reviews they are in, with
+  `idx.label` rows from either source, the overrides about them, and for each bulk review they are in only their
+  own entry and labels (never another member's DID, label or outcome; `export_bulk_review_own_entry_only`), with
   `decided_by` and `second_by` redacted
   (P4.26 redaction; staff data); erasure deletes the label rows (P4.23 registry), the `idx.label_poll` row by
   cascade and the member's rows in P4.23k's tables (its registry rows; moderator DIDs are staff data kept under P1.15's audit rule), and the tombstone stops any re-index (P3.05).
@@ -3678,7 +3686,7 @@ Done when (tests):
 Reuse:
   - P4.23's ingest and decision → USE.
   - The vendored `com.atproto.label.queryLabels` lexicon → USE for parsing.
-An ADR comes with the build PR (D8: a second outside source that can hide members, and three new app tables).
+An ADR comes with the build PR (D8: a second outside source that can hide members, and five new app tables).
 Not in this step: our own labeler (P5.07); a WebSocket subscription to Bluesky's whole label stream (it carries the
 whole network's labels; polling only our members is smaller).
 Diagram: none.
