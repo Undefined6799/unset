@@ -3485,7 +3485,7 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     SELECT on `app.labeler_identity`, `app.label_first_poll`, `app.label_bulk_review` and its member list; SELECT on
     `app.label_override`, which it copies into `idx.label_suppressed` (read and write); read and write on
     `idx.label_poll` and column grants for `idx.label.first_seen_at` (P1.12 column-list rule); EXECUTE on
-    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. If P3.08k was built first, the grants it already
+    `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. If P3.08k (proposed with ADR 0040) was built first, the grants it already
     made (SELECT `did` on `app.account`, EXECUTE on `core.did_lock_key`) are not added twice in `grant-matrix.json`.
     These indexer rights on `app` narrow plan §5.2's "`indexer` has no rights on app or plugin schemas"; this
     step's PR carries the ADR (D8) that records it, for Alex to accept before it merges.
@@ -3493,10 +3493,11 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     `app.labeler_identity` when a moderator accepts a new labeler identity after review; EXECUTE on
     `core.did_lock_key` and `core.is_erased` for the race check below.
   - `web`, `api` and `media` read only `idx` as today (P3.03's `api-role-cannot-read-app` holds): the decision reads
-    `idx.label_suppressed`, never `app.label_override`. `media` gains column-list SELECT on `idx.label` and
-    `idx.label_suppressed` for the hidden-blob check, and P3.03's `media has exactly two grants` test (and P4.16g's
+    `idx.label_suppressed`, never `app.label_override`. `web` and `api` gain SELECT on `idx.label_suppressed`;
+    `media` gains column-list SELECT on `idx.label` and `idx.label_suppressed` for the hidden-blob check, and P3.03's `media has exactly two grants` test (and P4.16g's
     additions) is updated to the new list in this step.
-  - `mod.open_label_item` opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
+  - `mod.open_label_item` takes `core.did_lock_key(did)` and checks `core.is_erased(did)` itself (no item for an
+    erased DID), then opens one P3.15 moderation item for a label with no free text, so nothing needs sealing
     (`app.submit_report` takes a sealed argument the indexer cannot make); it refuses when the member already has an
     open label item.
   - Erasure (rows matched by the DID in `uri`, `at://<did>` or the bare DID, as for P4.23's `idx.label`, in
@@ -3560,7 +3561,8 @@ Outputs:
   and that the `idx.account` row exists, skipping the write otherwise. Erasure and a poll's write are then strictly
   ordered, whatever order erasure's statements run in (DA-4: advisory lock plus tombstone check; the network call
   happens before the transaction). A label from this source records `first_seen_at` (our clock) on insert; an upsert
-  of the same `(src, uri, val)` keeps it, and a label issued again after a negation is a new row.
+  of the same `(src, uri, val)` keeps it, except that an upsert whose new `cts` lapses an override (above its
+  `label_cts`) resets it to now; a label issued again after a negation is a new row.
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
   timestamptz NULL)`, created with its grants in P4.23k. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
@@ -3574,8 +3576,10 @@ Outputs:
   - **Burst alarm:** "hide-class" is every value `LABEL_BEHAVIOUR` maps to hide (`!hide`, `!takedown`, `!suspend`,
     `porn`, `sexual`, hide-mapped custom values). A label on a member's account or on any of their records counts
     toward that member. A label "newly lands" by its `first_seen_at`, our own clock, never the labeler's `cts` (a bad
-    labeler can backdate it). Only labels stored by a member's first complete poll (the whole cursor walk) are
-    exempt; that fact is app-owned (`app.label_first_poll`), so an `idx` rebuild does not reset it, and the labels a
+    labeler can backdate it). Labels stored by a member's first complete poll (the whole cursor walk) do not count
+    toward these windows but toward their own: if hide-class labels are found on more than `max(3, 10 %)` of the
+    members first polled in any 24 hours, the alarm pages too, so a labeler cannot hide a wave of new signups
+    silently. The first-poll fact is app-owned (`app.label_first_poll`), so an `idx` rebuild does not reset it, and the labels a
     rebuild stores again may page once, the safe direction. Members are DIDs with an `app.account` row, signed in or
     not, so accounts that are merely indexed can neither trip it nor dilute it. If hide-class labels newly land on
     more than `max(5, 1 %)` of members in one hour, `max(10, 2 %)` in any 24 hours or `max(20, 5 %)` in any 7 days
@@ -3675,6 +3679,8 @@ Done when (tests):
     takedown and child-safety labels; every override is audited.
   - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues overridden labels on 6 of 100 members with a later
     `cts` → they hide again and the burst alarm pages.
+  - `bsky_labels_first_poll_wave_pages`: hide-class labels on 4 of 20 members first polled in a day → the alarm
+    pages.
   - `bsky_labels_hidden_not_listed`: an account hidden by a label is absent from `/people`, its search and
     `searchProfiles`.
   - `bsky_labels_identity_change_review`: a changed endpoint or key → alert and bulk review; labels still apply.
@@ -3686,7 +3692,7 @@ Done when (tests):
     raised after an hour.
   - `bsky_labels_poll_via_net_guard`: the call goes through `guardedRequest`; a labeler endpoint on a private address
     is refused.
-  - `export_includes_member_labels` (P4.26).
+  - `export_includes_member_labels` (new, against P4.26's export).
   - `bsky_labels_page_and_subject_limits`: endless cursors stop at the page limit with an alert; labels on unindexed
     URIs are dropped.
   - `bsky_labels_hidden_blob_refused`: a hidden record's blob → the media proxy answers as for a missing blob.
