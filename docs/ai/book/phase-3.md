@@ -1376,7 +1376,7 @@ and the admitted list; the per-host count is over admitted rows) and the `discov
 grants have something to grant on; `core.deindex_did`; the new `core.erase_did` statements and
 `erasure-registry.json` line for `idx.discovered`; the indexer role's grants in `grant-matrix.json` with their matrix
 test rows: SELECT (`did`) on `app.account` (a column list, P1.12 `personal_data_by_column_list`), read and write on
-`idx.discovered`, EXECUTE on `core.deindex_did` and on the per-DID lock-key function `eraseDid` uses (P3.07k);
+`idx.discovered`, EXECUTE on `core.deindex_did` and on `core.did_lock_key`, the per-DID lock-key function `eraseDid` uses (P3.07k);
 CODEOWNERS' `# trusted functions:` line gains `core.deindex_did` (the line grows in the step that first names a
 function)
 Size: hypothesis, P3.00 sets it (~100 source lines, ~130 test lines)
@@ -1433,14 +1433,15 @@ Must hold (each has a named test; the build PR's Threats section covers the rest
   5. **Our own PDS's members live on `tap-own` only.** Ingest drops `tap-relay` events for a DID whose `tap_instance`
      is `own`, so a relay that crawls our PDS (if `PDS_CRAWLERS` is ever set, decision Q2b) cannot double-track
      them. (`own_pds_member_ignored_on_relay`)
-  6. **Caps bound what we store and look up, not Tap.** Ingest, in its transaction, inserts a queue row into
-     `idx.discovered` only while the total of queued and admitted non-members is under the total cap; the count and
-     insert run under one transaction-level advisory lock on a fixed `discovery_cap` key (DA-4), so concurrent
-     ingest cannot overshoot. Outside any transaction the track loop then applies a rate limit on DID lookups (did:web
+  6. **Caps bound what we store and look up, not Tap.** Ingest, in its transaction, takes the per-DID lock
+     (`core.did_lock_key`, P3.07k) and checks the tombstone again, then inserts a queue row into `idx.discovered`
+     only while the total of queued and admitted non-members is under the total cap; the count and insert run under
+     one transaction-level advisory lock on a fixed `discovery_cap` key (DA-4), so concurrent ingest cannot
+     overshoot and an erasure cannot slip in between check and insert. Outside any transaction the track loop then applies a rate limit on DID lookups (did:web
      points at any host), resolves the DID document and applies a per-PDS-host cap; a DID refused by either has its
      queue row deleted and its events dropped at ingest (rule 1); a later profile op considers it again. Admission
-     takes the per-DID lock `eraseDid` uses (P3.07), checks the tombstone again, then writes `idx.account`, so an
-     erasure cannot interleave. No eviction, since a rewritten profile would defeat it. The per-host cap is weak
+     takes the same per-DID lock, checks the tombstone again (a hit deletes the queue row), then writes
+     `idx.account`, so an erasure cannot interleave. No eviction, since a rewritten profile would defeat it. The per-host cap is weak
      (wildcard subdomains, a PDS move after admission); the total cap is the real bound, so reaching it raises
      `discovery.cap_reached`, because a full cap stops discovery for everyone until it is raised. Handle checks
      (P3.08) for discovered accounts are rate-limited and coalesced per DID, so identity churn cannot drive unbounded
@@ -1448,11 +1449,13 @@ Must hold (each has a named test; the build PR's Threats section covers the rest
      every signal repo before our caps run. A rebuild of `idx` (DA-1) re-tracks members from `app.account`,
      uncapped; non-members are not app-owned facts, so after a rebuild each returns on their next profile op (the
      ADR states this). (`discovery_caps_before_any_write`, `discovery_cap_concurrent_no_overshoot`,
-     `discovery_admission_races_erasure`, `discovery_handle_checks_rate_limited`, `idx_rebuild_members_uncapped`)
+     `discovery_queue_insert_races_erasure`, `discovery_admission_races_erasure`, `discovery_handle_checks_rate_limited`, `idx_rebuild_members_uncapped`)
   7. **Leaving.** A non-member who deletes their profile record is untracked and de-indexed without a tombstone
      (`core.deindex_did`, P3.08k), which keeps moderation, label and hold rows, so deleting and rewriting a profile
-     never clears a takedown. Events Tap still buffers after the remove find no row and are dropped by rule 1 unless
-     they are a new profile write. (`left_deindexed_moderation_kept`)
+     never clears a takedown. A profile delete for a DID still in the queue deletes its queue row, and a discovered
+     account whose backfill finds no profile record is de-indexed the same way. Events Tap still buffers after the
+     remove find no row and are dropped by rule 1 unless they are a new profile write.
+     (`left_deindexed_moderation_kept`, `queued_then_deleted_never_indexed`)
   8. **Privacy before any real non-member is indexed.** Purpose, showing public profiles people wrote with our
      lexicon; lawful basis, legitimate interests (GDPR Art. 6(1)(f)); an Art. 14 notice in the privacy policy
      (P1.37's legal docs gain a paragraph for people who have not signed up); retention, until the record is deleted
@@ -1462,9 +1465,9 @@ Must hold (each has a named test; the build PR's Threats section covers the rest
      signed request). That route has no step yet (P4.26 serves signed-in members only), so `DISCOVERY` is off by
      default, and off means `TAP_SIGNAL_COLLECTION` is unset, not just our queue paused: preflight fails if the
      variable is set while `DISCOVERY` is off. Turning it off after it was on also untracks and de-indexes every
-     discovered DID (`core.deindex_did`), and ingest admits no one while it is off. It stays off in every environment
-     that follows the public relay, staging included, until a non-member request route is built, Bluesky label
-     polling (P4.23b) covers non-members, and Alex turns it on (P3.23 records this); tests use test DIDs on a dev
+     discovered DID (`core.deindex_did`), empties the queue, and ingest admits no one while it is off. It stays off in every environment
+     that follows the public relay, staging included, until a non-member request route is built, a step after P4.23b
+     polls Bluesky labels for non-members, and Alex turns it on (P3.23 records this); tests use test DIDs on a dev
      relay. (`discovery_off_leaves_tap_signal_unset`, `discovery_turned_off_deindexes`) A non-member's public
      profile renders at `/@handle` like a member's (D7 holds: a private profile is never in the repo); it carries no
      age signal, like any Bluesky content we show.
@@ -3230,7 +3233,8 @@ Inputs: all Phase 3 steps merged; the dev stack for items 1-3 and 5-8, with the 
 ([ALEX] runbook step, local-plc Amendment 6; no seed runs on dev); the local stack for item 4 (book edit
 2026-10-13-verify-814-fixes, N5).
 Also recorded: discovery (P3.08d) stays off, `TAP_SIGNAL_COLLECTION` unset, in every environment that follows the
-public relay until a non-member request route exists, Bluesky label polling covers non-members, and Alex turns it on.
+public relay until a non-member request route exists, a step after P4.23b polls Bluesky labels for non-members, and
+Alex turns it on.
 Outputs: the exit note with links to CI runs, line and dependency counts (plan §7), and Alex's sign-off.
 
 Algorithm (contract: the checks):

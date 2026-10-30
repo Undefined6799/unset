@@ -34,8 +34,8 @@ by a PDS.
    RoPA row, and access and erasure through the request route for people who cannot log in, with proof of control
    of the DID. That route has no step yet, so `DISCOVERY` is off by default, which leaves `TAP_SIGNAL_COLLECTION`
    unset (preflight checks it). Turning it off after it was on untracks and de-indexes every discovered person. It
-   stays off in every environment that follows the public relay, staging included, until the route exists, Bluesky
-   label polling covers non-members, and Alex turns it on (book P3.23 records this). A non-member who deletes their
+   stays off in every environment that follows the public relay, staging included, until the route exists, a later
+   step polls Bluesky labels for non-members, and Alex turns it on (book P3.23 records this). A non-member who deletes their
    profile record is de-indexed (moderation, label and hold rows kept). Their public profile renders like a
    member's.
 

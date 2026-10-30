@@ -1638,7 +1638,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.07 | `eraseDid`: hand-written `core.erase_did`, the `eraseHooks` list (no registry), `core.erase_pending_hold` for held material | [SEC] | P3.07k, P3.07g, P3.06, P1.13, P1.15a, P2.18 | `phase-3.md` |
 | P3.08 | Handle registry rule | [SEC] | P3.06, P2.02 | `phase-3.md` |
 | P3.08k | Trusted base for discovery (split from P3.08d, SE-6) | [SEC] | P3.07, P3.08 | `phase-3.md` |
-| P3.08d | Find repos by their profile record (Tap signal collection, ADR 0040) | [SEC] | P3.02, P3.05, P3.07, P3.08, P3.08k, P3.20c | `phase-3.md` |
+| P3.08d | Find repos by their profile record (Tap signal collection) | [SEC] | P3.02, P3.05, P3.07, P3.08, P3.08k, P3.20c | `phase-3.md` |
 | P3.09 | Media proxy for published blobs | [SEC] | P3.06, P2.19 | `phase-3.md` |
 | P3.10 | `api` entrypoint: public XRPC | [SEC] | P3.05, P1.06 | `phase-3.md` |
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |
