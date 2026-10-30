@@ -143,7 +143,8 @@ flowchart TD
   P305 --> P306[P3.06 account state]
   P306 --> P307[P3.07 eraseDid]
   P306 --> P308[P3.08 handle rule]
-  P308 --> P308d[P3.08d signal discovery]; P307 --> P308d
+  P308 --> P308k[P3.08k discovery trusted base]; P307 --> P308k
+  P308k --> P308d[P3.08d signal discovery]; P308 --> P308d; P307 --> P308d
   P306 --> P309[P3.09 media proxy]
   P305 --> P310[P3.10 api]
   P310 --> P311[P3.11 service auth]
@@ -175,6 +176,7 @@ flowchart TD
   P305 --> P321
   P316d --> P322[P3.22 audit anchors, runbooks]
   P320c --> P322
+  P320c --> P308d; P302 --> P308d; P305 --> P308d
   P307 --> P323[P3.23 exit]
   P313 --> P323
   P321 --> P323
@@ -462,8 +464,8 @@ Algorithm (contract: what is measured and the pass rules; the harness itself is 
   1. Pin the latest indigo commit touching `cmd/tap`; build twice in a clean container; record SHA and image
      index digest (non-reproducible is recorded, not a failure).
   2. Re-read the cited lines at the new commit; mark each table row "confirmed" or "changed (file:line)".
-  3. Setup S1 (public relay, `tap-relay` shape) and S2 (dev PDS as the relay, `tap-own` shape), each with its own
-     database, admin password and `TAP_RETRY_TIMEOUT=30s`.
+  3. Setup S1 (public relay, `tap-relay` shape), S2 (dev PDS as the relay, `tap-own` shape) and S3 (S1 plus the
+     signal collection, M19), each with its own database, admin password and `TAP_RETRY_TIMEOUT=30s`.
   4. A ~150-line harness on `@atproto/tap` appends every event to a file and acks after `fsync`; flags withhold
      acks, crash after N events, or sleep before acking.
   5. Run the measurements; write the ADR; choose the outcome; if not A or B, **stop** for book revision.
@@ -485,8 +487,8 @@ Algorithm (contract: what is measured and the pass rules; the harness itself is 
 | M16 | `@atproto/tap` message types vs the pinned wire | match, or list differences |
 | M17 | S1 behind `egress-public` with no other route out: do the relay WebSocket and every repo and identity fetch go through `HTTPS_PROXY` | all through the proxy; otherwise **stop** for book revision (P3.02's egress design depends on it; editor pass) |
 | M18 | S2 delete while Tap is stopped, then restart | records whether the delete is replayed from the relay cursor (it should be: only resync loses deletes) |
-| M19 | S3 (ADR 0040, proposed): S1's shape plus `TAP_SIGNAL_COLLECTION=sh.unset.profile`, its own database. (a) A test account on a foreign PDS that never signed in here writes its profile record; (b) a test account that already holds one and writes nothing | (a) discovered from the firehose with no `/repos/add`, time recorded; (b) record whether the daily `listReposByCollection` crawl finds it (the indigo relay source does not serve that endpoint; `cmd/collectiondir` does). (a) fails → **stop** for book revision of P3.08d |
-| M20 | S3: `/repos/remove` a signal-discovered test DID, then write its profile record again | expected yes from the source (indigo `cmd/tap/firehose.go`: an op in the signal collection tracks an untracked repo); confirm. Also record what Tap stores per tracked repo (metadata, buffered bodies) |
+| M19 | S3 (ADR 0040, proposed): S1's shape plus `TAP_SIGNAL_COLLECTION=sh.unset.profile`, its own database. (a) A test account on a foreign PDS that never signed in here writes its profile record; (b) a test account that already holds one and writes nothing | (a) discovered from the firehose with no `/repos/add`, time recorded; (b) record whether the daily `listReposByCollection` crawl finds it (the indigo relay source does not serve that endpoint; `cmd/collectiondir` does). Also record that the crawler resumes from its saved cursor (`crawler.go` at 51095ab) and how often it retries when the endpoint fails. (a) fails → **stop** for book revision of P3.08d |
+| M20 | S3: `/repos/remove` a signal-discovered test DID, then write its profile record again | expected yes from the source (indigo `cmd/tap/firehose.go`: any op in the signal collection, deletes included, tracks an untracked repo); confirm. Also record what Tap stores per tracked repo (metadata, buffered bodies) |
 
 Outcomes and what changes:
 
@@ -1368,13 +1370,16 @@ Diagram: none.
 
 ### P3.08k — Trusted base for discovery (split from P3.08d, SE-6)
 Tags: [SEC]            Depends on: P3.07, P3.08            Plan: as P3.08d; §9 trusted base (rule SE-6)
-Where: the migration for `core.deindex_did`, the new `core.erase_did` statements for `idx.discovered`, and the
-indexer role's grants P3.08d needs (SELECT on `app.account`, read and write on `idx.discovered`), with their tests
-Size: hypothesis, P3.00 sets it (~80 source lines, ~100 test lines)
+Where: one migration with the `idx.discovered` table and the `discovered` flag on `idx.account` (so the grants have
+something to grant on), `core.deindex_did`, the new `core.erase_did` statements and `erasure-registry.json` line for
+`idx.discovered`, and the indexer role's grants: SELECT (`did`) on `app.account` (a column list, P1.12
+`personal_data_by_column_list`), read and write on `idx.discovered`, EXECUTE on `core.deindex_did`; CODEOWNERS'
+`# trusted functions:` line gains `core.deindex_did` (phase 0: the line grows in the step that first names a function)
+Size: hypothesis, P3.00 sets it (~90 source lines, ~110 test lines)
 
 Why a separate step (letter suffix): erasure functions and role grants are trusted base (SE-6, like P3.07k and
 P3.07g), so they are reviewed alone, before the feature code that calls them.
-Goal: everything P3.08d's rules 3, 7 and 9 need from the trusted base exists, with each grant's denial test.
+Goal: the table, function, erasure rows and grants P3.08d's rules need exist, each grant with its denial test.
 Not in this step: the track loop, ingest changes and Tap env (P3.08d).
 Diagram: none.
 
@@ -1382,61 +1387,71 @@ Diagram: none.
 
 ### P3.08d — Find repos by their profile record (Tap signal collection)
 Tags: [SEC]            Depends on: P3.02, P3.05, P3.07, P3.08, P3.08k, P3.20c            Plan: §5.2 (as changed by ADR 0040; P3.01 M19 and M20 must pass), §6
-Where: `deployment/` (Tap env), `interfaces/indexer/track.ts` and ingest, the table migration for `idx.discovered`,
-the legal docs and RoPA; its trusted-base parts are P3.08k
+Where: `deployment/` (Tap env and preflight), `interfaces/indexer/track.ts` and ingest, the legal docs and RoPA; its
+trusted-base parts and table are P3.08k
 Size: estimated in P3.00's refinement; this text fixes what must hold, the build PR designs how
 
 Book edit 2026-10-30. Alex: "Yes use sh.unset.profile" (00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR)
 and, told it reverses decision 5, the card choice "Switch to signal mode" (00:47:06Z). ADR 0040 (proposed) records
-the decision. This step comes after ingest, erasure and the handle rule, so everything it needs exists.
+the decision; this step and P3.08k do not start until Alex accepts it. They come after ingest, erasure and the handle
+rule, so everything they need exists.
 
-Goal: `tap-relay` also sets `TAP_SIGNAL_COLLECTION=sh.unset.profile` (indigo `cmd/tap/README.md` at 51095ab, "Network
-Boundary Modes"), and repos it finds are indexed like members' repos, within limits, with the privacy duties that
-come with indexing people who never signed up.
+Goal: when the `DISCOVERY` setting is on, `tap-relay` also sets `TAP_SIGNAL_COLLECTION=sh.unset.profile` (indigo
+`cmd/tap/README.md` at 51095ab, "Network Boundary Modes"), and repos it finds show their profile like members do,
+within limits, with the privacy duties that come with indexing people who never signed up.
 
 Must hold (each has a named test; the build PR's Threats section covers the rest):
-  1. **Only a profile write discovers.** An event from `tap-relay` for a DID with no `idx.account` row queues the DID
-     for tracking only if it is a create or update of that DID's own `sh.unset.profile`; any other such event is
-     dropped as today. Ingest still never inserts `idx.account` and does no network I/O in its transaction.
-     (`discovery_needs_profile_write`)
-  2. **A discovered repo is backfilled and indexed.** The track loop creates the `idx.account` row (with a
+  1. **Only a profile write discovers.** An event from `tap-relay` for a DID with no `idx.account` row is considered
+     only if it is a create or update of that DID's own `sh.unset.profile` record at rkey `self` (Tap tracks on any
+     op and rkey); any other such event is dropped as today. Ingest still never inserts `idx.account` and does no
+     network I/O in its transaction. (`discovery_needs_profile_write`)
+  2. **A non-member is indexed for their profile only.** The track loop creates the `idx.account` row (with the
      `discovered` flag), then makes Tap backfill again (remove then add, the only re-backfill Tap offers, P3.01).
-     (`discovered_non_member_indexed`)
+     For a discovered account ingest keeps only `sh.unset.profile` and the blobs it references (served through the
+     media proxy); its other collections are dropped, so what we hold matches the RoPA row.
+     (`discovered_non_member_indexed`, `discovered_non_member_profile_only`)
   3. **Erased people never reach our tables, not even as a plain DID.** The tombstone check (HMAC, P3.07) runs before
      anything is queued; an erased DID's events are acked as `dropped:erased` (P3.05) and nothing about it is written
      in plain text, dead letters included. Only `core.allow_retrack` (P3.07) lets an erased DID be indexed again. Tap
-     itself re-tracks such a repo on its next profile op and on its daily `listReposByCollection` crawl (M20; indigo
-     `cmd/tap` crawler at 51095ab), so an untrack is never a lasting control; Tap holds the repo's metadata and
-     buffered record bodies until acked, and the ADR states this residue. (`erased_rediscovered_never_stored`)
+     itself re-tracks such a repo on its next op in the collection, deletes included (M20; indigo `cmd/tap`
+     `firehose.go` at 51095ab), and its crawler may list it again (M19 b), so an untrack is never a lasting control;
+     Tap holds the repo's metadata and buffered record bodies until acked, and the ADR states this residue.
+     (`erased_rediscovered_never_stored`)
   4. **Membership is an `app.account` row**, never a live session: a member who is signed out is still a member, and
      is never capped or de-indexed as a non-member. (`signed_out_member_not_treated_as_non_member`)
   5. **Our own PDS's members live on `tap-own` only.** Ingest drops `tap-relay` events for a DID whose `tap_instance`
      is `own`, so a relay that crawls our PDS (if `PDS_CRAWLERS` is ever set, decision Q2b) cannot double-track
      them. (`own_pds_member_ignored_on_relay`)
-  6. **Caps bound our index and outbound checks, not Tap.** In order: the total cap on non-members, then a rate limit
-     on DID lookups (did:web points at any host), then the DID document is resolved and an all-time per-PDS-host cap
-     applies. A DID over a cap is not indexed and its events are dropped at ingest (rule 1); no eviction, since a
-     rewritten profile would defeat it. Untracking is not relied on: Tap's crawl and signal ops re-add the repo
-     (rule 3). Tap's own tracked-repo count is on the P3.20c health board with an alert, since Tap tracks every
-     signal repo before our caps run. A rebuild of `idx` (DA-1) re-tracks members from `app.account`, uncapped.
-     (`discovery_caps_bound_index_and_lookups`, `idx_rebuild_members_uncapped`)
+  6. **Caps bound what we store and look up, not Tap.** In order, before anything is written: the total cap on
+     non-members (`idx.discovered` and its queue are inside it, so spam DIDs cannot grow either), then a rate limit
+     on DID lookups (did:web points at any host), then the DID document is resolved and a per-PDS-host cap applies.
+     A DID refused by any of these is not stored at all and its events are dropped at ingest (rule 1); a later
+     profile op considers it again. No eviction, since a rewritten profile would defeat it. The per-host cap is
+     weak (wildcard subdomains, a PDS move after admission); the total cap is the real bound, so reaching it raises
+     `discovery.cap_reached`, because a full cap stops discovery for everyone until it is raised. Handle checks
+     (P3.08) for discovered accounts are rate-limited and coalesced per DID, so identity churn cannot drive
+     unbounded outbound checks. Tap's own tracked-repo count is on the P3.20c health board with an alert, since Tap
+     tracks every signal repo before our caps run. A rebuild of `idx` (DA-1) re-tracks members from `app.account`,
+     uncapped. (`discovery_caps_before_any_write`, `discovery_handle_checks_rate_limited`,
+     `idx_rebuild_members_uncapped`)
   7. **Leaving.** A non-member who deletes their profile record is untracked and de-indexed without a tombstone
-     (`core.deindex_did`, specified here, trusted base like P3.07k), which keeps moderation, label and hold rows, so
-     deleting and rewriting a profile never clears a takedown. Events Tap still buffers after the remove find no row
-     and are dropped by rule 1 unless they are a new profile write. (`left_deindexed_moderation_kept`)
-  8. **Privacy before production.** Purpose, showing public profiles people wrote with our lexicon; lawful basis,
-     legitimate interests (GDPR Art. 6(1)(f)); an Art. 14 notice in the privacy policy (P1.37's legal docs gain a
-     paragraph for people who have not signed up); retention, until the record is deleted (rule 7) or an erasure
-     request; the RoPA row "Indexing non-members". Access and erasure for people who cannot log in need the plan's
-     request route (§6, `dsar.export`) with a proof of control of the DID (for example a record they write, or a
-     signed request). That route has no step yet (P4.26 serves signed-in members only), so discovery ships behind a
-     setting that is off, and P3.23 records that it stays off in production until a non-member request route is
-     built and Alex turns it on. (`discovery_off_by_default`) A non-member's public profile
-     renders at `/@handle` like a member's (D7 holds: a private profile is never in the repo); it carries no age
-     signal, like any Bluesky content we show.
-  9. **Grants and schema** come with the step: `idx.discovered` (and its columns, `deferred_at` included), the
-     `discovered` flag on `idx.account` and `dropped:discovered` in P3.04's outcome type come with this step; the
-     grants, `core.deindex_did` and the erasure statements come first in P3.08k.
+     (`core.deindex_did`, P3.08k), which keeps moderation, label and hold rows, so deleting and rewriting a profile
+     never clears a takedown. Events Tap still buffers after the remove find no row and are dropped by rule 1 unless
+     they are a new profile write. (`left_deindexed_moderation_kept`)
+  8. **Privacy before any real non-member is indexed.** Purpose, showing public profiles people wrote with our
+     lexicon; lawful basis, legitimate interests (GDPR Art. 6(1)(f)); an Art. 14 notice in the privacy policy
+     (P1.37's legal docs gain a paragraph for people who have not signed up); retention, until the record is deleted
+     (rule 7) or an erasure request; the RoPA row "Indexing non-members". Access and erasure for people who cannot
+     log in need the plan's request route (§6, `dsar.export`) with a proof of control of the DID (for example a
+     record they write, or a signed request). That route has no step yet (P4.26 serves signed-in members only), so
+     `DISCOVERY` is off by default, and off means `TAP_SIGNAL_COLLECTION` is unset, not just our queue paused:
+     preflight fails if the variable is set while `DISCOVERY` is off. It stays off in every environment that follows
+     the public relay, staging included, until a non-member request route is built and Alex turns it on (P3.23
+     records this); tests use test DIDs on a dev relay. (`discovery_off_leaves_tap_signal_unset`) A non-member's
+     public profile renders at `/@handle` like a member's (D7 holds: a private profile is never in the repo); it
+     carries no age signal, like any Bluesky content we show.
+  9. **Schema in this step:** `dropped:discovered` in P3.04's outcome type. The table, flag, grants,
+     `core.deindex_did` and the erasure statements come first in P3.08k.
 
 Not in this step: a full-network index (still rejected); any change to members' tracking (P3.02).
 Diagram: none.
@@ -3196,8 +3211,8 @@ Goal: show, with test runs and recorded checks, that every Phase 3 exit criterio
 Inputs: all Phase 3 steps merged; the dev stack for items 1-3 and 5-8, with the dev test account Alex creates by invite
 ([ALEX] runbook step, local-plc Amendment 6; no seed runs on dev); the local stack for item 4 (book edit
 2026-10-13-verify-814-fixes, N5).
-Also recorded: discovery (P3.08d) stays off in production until a non-member request route exists and Alex turns
-it on.
+Also recorded: discovery (P3.08d) stays off, `TAP_SIGNAL_COLLECTION` unset, in every environment that follows the
+public relay until a non-member request route exists and Alex turns it on.
 Outputs: the exit note with links to CI runs, line and dependency counts (plan §7), and Alex's sign-off.
 
 Algorithm (contract: the checks):

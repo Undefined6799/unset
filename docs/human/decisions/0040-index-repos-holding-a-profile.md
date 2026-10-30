@@ -17,18 +17,20 @@ The atproto review of 2026-10-29 suggested it; decision 5 had rejected it, partl
 by a PDS.
 
 ## Decision
-1. `tap-relay` sets `TAP_SIGNAL_COLLECTION=sh.unset.profile`, in a step of its own (book P3.08d) after ingest,
-   erasure and the handle rule exist. The login-triggered queue for members is unchanged.
+1. `tap-relay` sets `TAP_SIGNAL_COLLECTION=sh.unset.profile` when the `DISCOVERY` setting is on, in steps of their
+   own (book P3.08k, then P3.08d) after ingest, erasure and the handle rule exist. The login-triggered queue for members is unchanged.
 2. Only a create or update of a DID's own profile record discovers it; the track loop then creates its index row and
-   makes Tap backfill. Membership is an `app.account` row; members are never capped or treated as non-members, and
+   makes Tap backfill. For a non-member we keep only that profile record and the blobs it references. Membership is an `app.account` row; members are never capped or treated as non-members, and
    our own PDS's members stay on `tap-own`.
 3. Erased people never reach our tables, not even as a plain DID; the HMAC tombstone is checked first.
-4. Caps bound our index and outbound checks: a total cap on non-members, a rate limit on DID lookups before any
-   resolution, and an all-time per-PDS-host cap. Over a cap, events are dropped at ingest; untracking is not relied
-   on, because Tap re-adds the repo.
+4. Caps bound what we store and look up, checked before anything is written: a total cap on non-members (the real
+   bound, alerting when reached), a rate limit on DID lookups before any resolution, and a per-PDS-host cap (weak:
+   wildcard subdomains). A refused DID is not stored and its events are dropped at ingest; there is no eviction, and
+   untracking is not relied on, because Tap re-adds the repo. Handle checks for non-members are rate-limited.
 5. Non-members: lawful basis legitimate interests (GDPR Art. 6(1)(f)), an Art. 14 notice in the privacy policy, a
    RoPA row, and access and erasure through the request route for people who cannot log in, with proof of control of
-   the DID. That route has no step yet, so discovery ships behind a setting that is off and stays off in production
+   the DID. That route has no step yet, so `DISCOVERY` is off by default, which leaves `TAP_SIGNAL_COLLECTION` unset
+   (preflight checks it), and it stays off in every environment that follows the public relay, staging included,
    until the route exists and Alex turns it on (book P3.23 records this). A non-member who deletes their profile record is
    de-indexed (moderation and hold rows kept). Their public profile renders like a member's.
 
@@ -41,12 +43,15 @@ by a PDS.
 - New personal data: people who never signed up. The legal docs, RoPA and erasure route must cover them before
   Phase 3 ships to production.
 - Erasure is final in our tables but not in Tap: an erased person who writes a profile record again is tracked by Tap
-  again on their next profile op and by its daily `listReposByCollection` crawl (indigo `cmd/tap` at 51095ab); their
+  again on their next op in the collection, deletes included, and its crawler may list them again (indigo `cmd/tap`
+  at 51095ab); their
   events are acked as dropped and never reach our index. In between, Tap holds the repo's metadata and the
   buffered record bodies until they are acked (P3.01's source table: `remove` does not purge the outbox).
 - P3.01 must show discovery works (M19); if the relay does not serve `listReposByCollection`, only new profile writes
   are discovered until a host that serves it is configured.
-- More outbound handle checks, bounded by the caps. Tap's own state is not bounded by them (Tap tracks every repo the
+- A full total cap stops discovery for everyone until it is raised; with no eviction that is the price of a cap a
+  rewritten profile cannot get around. `discovery.cap_reached` alerts.
+- More outbound handle checks, bounded by the caps and a per-DID rate limit. Tap's own state is not bounded by them (Tap tracks every repo the
   signal finds before our caps run); its tracked-repo count is watched with an alert.
 
 ## Compliance
