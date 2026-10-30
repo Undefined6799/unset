@@ -271,7 +271,7 @@ jobs:
     # layout only that builder produces fails here first (staging's Postgres, 2026-10-23: --chmod also reached the
     # folder COPY created, which the runner's own builder did not do). scripts/ci/check-job.test.ts keeps the two equal.
     env:
-      BUILDKIT_IMAGE: moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+      BUILDKIT_IMAGE: moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
