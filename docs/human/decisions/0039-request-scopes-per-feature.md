@@ -33,10 +33,13 @@ session would carry all of it. Statusphere (bluesky-social/statusphere-example-a
   re-run a full authorization for any added scope, so it is the same re-consent with more code. Left for later.
 
 ## Consequences
-- When a feature with a new scope ships, every member sees one consent screen at their next sign-in or token
-  refresh failure. The Phase 4 and 5 steps that need these scopes must plan for it.
-- Existing grants already hold the old, wider scope until they are refreshed into a new sign-in; nothing is revoked
-  early. Narrowing what we ask for never widens a grant.
+- A refresh keeps a grant's scope: the authorization server rebuilds it from the scope first granted
+  (@atproto/oauth-provider `token/token-manager.ts`, `rotateToken`), so refreshing never adds a new scope. The PR that
+  adds a scope therefore also adds it to `grantCovers`' required grant (infrastructure/pds/oauth/scopes.ts), and a
+  member whose grant lacks it is sent through sign-in and sees one consent screen. The Phase 4 and 5 steps that need
+  these scopes must plan for it (the book's P2.04 and Phase 4 text carry a note).
+- Existing grants keep the old, wider scope through every refresh until the member signs in again; nothing is
+  revoked early. Narrowing what we ask for never widens a grant.
 - `grantCovers` (infrastructure/pds/oauth/scopes.ts) already requires only the permission set, image upload and the
   e-mail address, so sign-in behaves the same.
 
