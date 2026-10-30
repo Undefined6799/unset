@@ -3472,7 +3472,9 @@ Diagram: none.
 
 Tags: [MOD] [SEC]            Depends on: P4.23, P4.26            Plan: as P4.23b; §9 trusted base (rule SE-6)
 Where: one migration creating `app.label_override`, `app.label_bulk_review`, its member list
-`app.label_bulk_review_member(review_id, did, src, uri, val)` (one row per grouped label), `app.labeler_identity` and `app.label_first_poll(did PK, done_at)`
+`app.label_bulk_review_member(review_id, did, src, uri, val, seen_at NULL)` (one row per grouped label;
+`app.label_bulk_review` holds the kind, state and `last_paged_at`), `app.labeler_identity` and
+`app.label_first_poll(did PK, done_at)`
 (so the grants have something to grant on), the derived `idx.label_suppressed(src, uri, val, label_cts)`, the
 `idx.label_poll` table (below) and the `first_seen_at` column on `idx.label`, the definer `mod.open_label_item(did, uri, val)`, their grants in `grant-matrix.json` with matrix test rows, and their
 `erasure-registry.json` rows; CODEOWNERS' `# trusted functions:` line gains `mod.open_label_item`
@@ -3481,16 +3483,19 @@ Size: hypothesis, P4.00 sets it (~110 source lines, ~150 test lines)
 Why a separate step (letter suffix): role grants, definers and erasure rows are trusted base (SE-6, like P3.07g and
 P3.07k), so they are reviewed alone, before the feature code that uses them.
 Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant with a denial test.
-  - indexer: SELECT (`did`, `first_seen_at`) on `app.account` (the second for the new-members window) (a column list, P1.12 `personal_data_by_column_list`); INSERT and
-    SELECT on `app.labeler_identity`, `app.label_first_poll`, `app.label_bulk_review` and its member list; SELECT on
+  - indexer: SELECT (`did`, `first_seen_at`) on `app.account` (the second for the new-members window; a column
+    list, P1.12 `personal_data_by_column_list`); INSERT and SELECT on `app.labeler_identity`, `app.label_first_poll`,
+    `app.label_bulk_review` and its member list, and UPDATE (`last_paged_at`) on `app.label_bulk_review` for the
+    hourly page limit; SELECT on
     `app.label_override`, which it copies into `idx.label_suppressed` (read and write); read and write on
     `idx.label_poll` and column grants for `idx.label.first_seen_at` (P1.12 column-list rule); EXECUTE on
     `core.did_lock_key` (P3.07k) and on `mod.open_label_item`. If P3.08k (proposed with ADR 0040) was built first, the grants it already
     made (SELECT `did` on `app.account`, EXECUTE on `core.did_lock_key`) are not added twice in `grant-matrix.json`.
     These indexer rights on `app` narrow plan §5.2's "`indexer` has no rights on app or plugin schemas"; this
     step's PR carries the ADR (D8) that records it, for Alex to accept before it merges.
-  - `admin`: writes `app.label_override`, the bulk reviews and their member lists, and UPDATEs
-    `app.labeler_identity` when a moderator accepts a new labeler identity after review; EXECUTE on
+  - `admin`: writes `app.label_override`, the bulk reviews (state) and their member lists (`seen_at`), and UPDATEs
+    `app.labeler_identity` when a moderator accepts a new labeler identity after review; column-list SELECT on
+    `idx.label` (`src`, `uri`, `val`, `cts`, `first_seen_at`) to show labels and read `label_cts`; EXECUTE on
     `core.did_lock_key` and `core.is_erased` for the race check below.
   - `web`, `api` and `media` read only `idx` as today (P3.03's `api-role-cannot-read-app` holds): the decision reads
     `idx.label_suppressed`, never `app.label_override`. `web` and `api` gain SELECT on `idx.label_suppressed`;
@@ -3589,14 +3594,15 @@ Outputs:
     - new members (an `app.account` row less than 7 days old), every label including first-poll ones: more than
       `max(3, 10 %)` of them in any 24 hours or `max(5, 5 %)` in any 7 days, so a labeler cannot hide a wave of new
       signups silently, on their first poll or a later one.
-    A window that crosses raises `labels.bsky_burst` and puts the labels it counted into one bulk review in
-    `admin`, where moderators confirm them or reverse the burst; once in a review a label leaves every count.
-  - **Paging, one rule:** a bulk review pages the moderators when it is created and again, at most once an hour,
-    while it holds labels no moderator has seen; the admin screen marks unseen labels, so a bulk confirm never
+    A window that crosses raises `labels.bsky_burst` and puts the labels it counted into the open burst review in
+    `admin` (one at a time; a new one opens only after the last is decided), where moderators confirm them or reverse the burst; once in a review a label leaves every count.
+  - **Paging, one rule:** pages from all label reviews are combined: at most one page an hour in total, sent when a
+    review opens or while any review holds labels no moderator has seen, and naming every such review; the admin screen marks unseen labels, so a bulk confirm never
     covers them. Besides the windows, three things put labels into a review: any `!takedown` landing on a member,
     any re-hide of a reversed `(src, uri, val)` (below), and labels signed under a new labeler identity (below). So
     every hide that needs a person reaches one within the hour. These join the one open review of their kind
-    (takedowns, re-hides, an identity change) while it is open, so pages never repeat faster than hourly per kind.
+    (bursts, takedowns, re-hides, an identity change) while it is open, so there are at most four open label
+    reviews and pages never repeat faster than hourly.
   - **Reversal:** writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
     second_by, decided_at)`. The indexer copies them into `idx.label_suppressed` within a minute, and
     `moderation.decide` skips a label found there; `idx` stays rebuildable from the app-owned rows (DA-1). A negation
@@ -3684,7 +3690,8 @@ Done when (tests):
     of 100 members (signed in or not) within an hour → all six hide, the alarm pages, one bulk review exists;
     reversing it un-hides all six.
   - `bsky_labels_burst_ignores_cts`: the same six labels with `cts` a week old → the alarm still pages; labels from
-    a member's first complete poll do not count toward the all-members windows.
+    a member's first complete poll do not count toward the all-members windows, unless that poll completed more than
+    24 hours after sign-up.
   - `bsky_labels_slow_burst_pages`: with 1,000 members, hide-class labels on 15 members a day, spread over each
     day, for 5 days → the 7-day window pages; a single `!takedown` on a member goes into a review that pages.
   - `bsky_labels_poll_members_only`: an indexed account with no `app.account` row is not polled.
@@ -3700,8 +3707,8 @@ Done when (tests):
     the reversal → the reversal covers it (its `label_cts` is the stored one); a re-issue after it pages.
   - `bsky_labels_burst_new_value_counts`: after a reversed `porn` burst on 6 members, `!hide` on the same 6 within
     an hour → pages again.
-  - `bsky_labels_review_pages_hourly_while_unseen`: labels keep joining an open review → it pages at most once an
-    hour while some are unseen, and stops once a moderator has seen them all; a takedown negated and re-issued many
+  - `bsky_labels_review_pages_hourly_while_unseen`: labels keep joining open reviews, and windows cross again and
+    again in one poll pass → at most one page an hour in total while some are unseen, and stops once a moderator has seen them all; a takedown negated and re-issued many
     times in one walk → at most one page an hour.
   - `bsky_labels_new_members_wave_pages`: hide-class labels on 4 of 20 members who joined in the last day, found
     on their first poll or on the poll after it → pages; 1 a day for 7 days among 70 new members → pages.
