@@ -3413,7 +3413,8 @@ Algorithm (subscriber):
   1. Load `seq` for `OUR_LABELER_DID` (absent → 0).
   2. Connect (timeout 10 s). Failure → backoff 1, 2, 4 … 60 s with jitter; never advance the cursor.
   3. For each frame: decode the event-stream frame (header + CBOR body); `#labels` → for each label:
-     a. `src` must equal `OUR_LABELER_DID` → else drop and count `labels.foreign_src`.
+     a. `src` must equal the expected source of this feed (`OUR_LABELER_DID` here; `BSKY_LABELER_DID` for P4.23b's
+        poll) → else drop and count `labels.foreign_src`.
      b. Verify `sig` against the `#atproto_label` key of `src` (resolved via P2.01, cached 10 minutes, refetched once on
         failure) → invalid → drop, count `labels.bad_sig`.
      c. Upsert: if `neg` → delete the row `(src, uri, val)` when its `cts ≤ label.cts`; else upsert with
@@ -3469,8 +3470,9 @@ Diagram: none.
 ### P4.23b — Bluesky's labels on our members' accounts and records
 
 Tags: [MOD] [SEC]            Depends on: P4.23            Plan: §5.8 Labels
-Where: `interfaces/indexer/labels` (a second task beside the subscriber), `domains/moderation/labels` (unchanged decision)
-Size: ~150 source lines, ~200 test lines
+Where: `infrastructure/labeler/` (the `queryLabels` adapter, through `net-guard`), `interfaces/indexer/labels` (the
+poll task), `domains/moderation/labels` (breaker and review rule)
+Size: ~200 source lines, ~260 test lines
 
 Book edit 2026-10-30 (Alex 00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR: "We may use labeler and
 implement our own as well later"; atproto review 2026-10-29). Replaces editor note E13: a takedown or warning label
@@ -3479,29 +3481,54 @@ P4.23 reads Bluesky labels only from hydrated Bluesky views, so our own items ne
 P5.07; this step adds no labeler of ours.
 
 Goal: `idx.label` also holds the labels `BSKY_LABELER_DID` has put on the accounts and records we index, so P4.23's
-decision applies them to our items exactly as it applies our labeler's.
+decision applies them to our items, without letting one outside service hide all our members at once.
 
-Inputs: P4.23 `idx.label`, `LABEL_BEHAVIOUR`, signature check and `labels.forUris`; config `BSKY_LABELER_DID`; P2.01
-DID resolution (the labeler's `#atproto_labeler` service endpoint and `#atproto_label` key); P3.03 `idx.account`;
-`net-guard` (`atproto` policy).
+Inputs: P4.23 `idx.label`, `LABEL_BEHAVIOUR`, signature check, `labels.forUris` and its vendored `com.atproto.label.*`
+lexicons; config `BSKY_LABELER_DID`; P2.01 DID resolution (the labeler's `#atproto_labeler` service endpoint and
+`#atproto_label` key); P3.03 `idx.account`; `net-guard` (`atproto` policy; the indexer's egress, plan §5.2); P3.15
+moderation queue; P4.26 export.
 Outputs:
-- Indexer task `bskyLabelPoll`: for indexed accounts, 25 DIDs per call, `com.atproto.label.queryLabels` on the
-  labeler's service endpoint with `uriPatterns` = each DID and `at://<did>/*` (prefix match, so account and record
-  labels in one query) and `sources=[BSKY_LABELER_DID]`, following `cursor`. The parameters are the pinned lexicon's
-  (`@atproto/api` 0.29.1, `client/types/com/atproto/label/queryLabels.d.ts`: `uriPatterns` OR'd, a trailing `*` is a
-  prefix; `sources`; `limit`; `cursor`).
-- Each label goes through P4.23's ingest path unchanged (source check, signature against the labeler's
-  `#atproto_label` key, `neg` and `cts` rules, `exp`), stored with `src = BSKY_LABELER_DID`.
+- Adapter `infrastructure/labeler/` `queryLabels(endpoint, {uriPatterns, sources, cursor}) → Result<{labels,
+  cursor}>`: one GET through `guardedRequest`, 10 s timeout, `limit=250`, response parsed against the vendored lexicon
+  (no `@atproto/api` import; dependency-cruiser allows that package only in `infrastructure/pds/`). Parameters per the
+  pinned lexicon (`@atproto/api` 0.29.1, `client/types/com/atproto/label/queryLabels.d.ts`: `uriPatterns` OR'd, a
+  trailing `*` is a prefix, a bare DID matches account labels; `sources`; `limit` 1-250; `cursor`). How many patterns
+  Bluesky's labeler takes per call is not in the lexicon: unverified until the build PR's one recorded call (DO-3);
+  the batch size below is a setting.
+- Indexer task `bskyLabelPoll`: for indexed accounts, `BSKY_LABEL_BATCH` (default 25) DIDs per call, patterns `<did>`
+  and `at://<did>/*`, `sources=[BSKY_LABELER_DID]`, following `cursor`.
+- Each label goes through P4.23's ingest (step 3a with expected source `BSKY_LABELER_DID`, then signature, `neg`,
+  `cts`, `exp`), in one transaction that first locks the `idx.account` row `FOR SHARE` and skips the write if the row
+  is gone (erasure deletes that row first, so a poll in flight never brings labels back; DA-4: row lock, and the
+  network call happens before the transaction).
+- Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
+  timestamptz NULL)`. DID column registered for erasure (cascade) and export.
 - Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
-  the last hour again within 10 minutes. The table `idx.label_poll(did PK, polled_at)` holds progress. DID column
-  `did` registered for erasure.
-- `idx.label_poll.failed_since` and the health-board flag `labels.bsky_stale` (no successful poll for an hour).
+  the last hour again within 10 minutes.
+- Trust controls (`domains/moderation/labels`):
+  - **Breaker:** if, in one hour, Bluesky hide-class labels (`!hide`, `!takedown`, `!suspend`) newly land on more than
+    `max(5, 1 %)` of indexed members, new Bluesky hide-class labels are stored but applied as `warn` until a moderator
+    resets the breaker in `admin`; alert `labels.bsky_breaker_open`. Labels that were already applying stay.
+  - **Endpoint and key watch:** the labeler's service endpoint and `#atproto_label` key are recorded on first use; a
+    change raises `labels.bsky_identity_changed` and, like the breaker, holds new hide-class labels at `warn` until a
+    moderator confirms the change.
+  - **Review item:** every Bluesky hide-class label on a member's account opens a P3.15 moderation item, so our own
+    moderators see it and can override it with a negating label from our labeler (P5.07) or note it.
+  - **Statement of reasons:** the hidden profile's state page says the account is hidden because of a label from
+    Bluesky's moderation service, names the label, and links Bluesky's appeal route, plus our own contact.
+- Health board: `labels.bsky_stale` (no successful poll for an hour), `labels.bsky_breaker_open`,
+  `labels.bsky_identity_changed`.
+- GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
+  interests, Art. 6(1)(f)); the RoPA moderation row gains "labels from Bluesky's labeler about the member"; P4.26's
+  export includes the member's `idx.label` rows from either source; erasure removes them (P4.23 registry) and the
+  `idx.label_poll` row (cascade).
 
 Algorithm:
-  1. Pick due DIDs (oldest `polled_at` first, 25 per call, at most 4 calls in flight).
-  2. Call with a 10 s timeout through `net-guard`. 2xx → ingest each label (P4.23 step 3a-3c), set `polled_at`.
-     429 → back off per `Retry-After` (cap 10 min). Other failure → keep `polled_at`, back off 1 s doubling to 5 min.
-  3. Labels on DIDs or URIs we do not index are dropped (only what we asked for is stored).
+  1. Pick due DIDs (oldest `polled_at` first, one batch per call, at most 4 calls in flight).
+  2. Call the adapter. Ok → ingest each label (above), set `polled_at`, clear `failed_since`. 429 → back off per
+     `Retry-After` (cap 10 min). Other failure → set `failed_since` if empty, back off 1 s doubling to 5 min.
+  3. Labels on DIDs or URIs we did not ask about are dropped.
+  4. After each batch, evaluate the breaker over the last hour.
 
 Open for Alex (recommendation below): **what a member's profile shows when Bluesky's labeler cannot be reached.**
   - Recommended, A: keep showing with the last labels stored. Labels already ingested keep applying, a hide stays a
@@ -3512,33 +3539,43 @@ Open for Alex (recommendation below): **what a member's profile shows when Blues
     during a Bluesky outage; existing members behave as in A.
   - C: hide every member while polls fail for over an hour. Fails closed, but a Bluesky outage hides the whole site.
   Until Alex picks, the step is built with A and a test named for it, so changing to B is one branch and its test.
+  The other direction, Bluesky's labeler misbehaving or being taken over, is bounded by the breaker and the endpoint
+  and key watch above: at worst a burst of new hides shows as warnings until a moderator looks.
 
 Edge cases and failures:
-  - Labeler key rotated → refetch once (P4.23); still invalid → drop, count `labels.bad_sig`, alert.
-  - The labeler returns labels from other sources despite `sources` → dropped by P4.23's source check.
-  - An erased DID → no polls (its `idx.account` row is gone); its labels are erased with it (P4.23 registry).
+  - Labeler key rotated → refetch once (P4.23); still invalid → drop, count `labels.bad_sig`, alert; a valid new key
+    trips the identity watch.
+  - The labeler returns labels from other sources despite `sources` → dropped at step 3a.
+  - An erased DID → its `idx.account` row is gone, so no polls and no writes (row lock above).
 
 Threats: a second outside source that can hide our members' content.
-  - S Forged labels → signature and source checks (P4.23 tests reused with `src = BSKY_LABELER_DID`).
-  - D A slow or failing labeler → bounded calls, timeouts and backoff; profiles keep rendering (option A).
-  - I Polling reveals which DIDs we index to Bluesky's labeler → they are public repos on a public network; no
-    viewer or session data is sent.
+  - S Forged labels → expected-source and signature checks (`bsky_labels_poll_bad_sig_dropped`,
+    `bsky_labels_poll_foreign_src_dropped`).
+  - T A compromised or wrong labeler hides everyone → breaker and identity watch (`bsky_labels_breaker_trips`,
+    `bsky_labels_identity_change_holds`).
+  - D A slow or failing labeler → bounded calls, timeouts, backoff; profiles keep rendering (option A).
+  - I Polling tells Bluesky's labeler which DIDs we index → public repos on a public network; no viewer or session
+    data is sent.
+  - R A member hidden with no explanation → statement of reasons and review item.
 
 Done when (tests):
   - `bsky_labels_poll_stores_account_and_record_labels`: fixture labeler returns a `!takedown` on the account and a
     `!warn` on one `sh.unset.profile` record → both stored with Bluesky's `src`; the profile page shows the
-    unavailable state.
-  - `bsky_labels_poll_bad_sig_dropped`, `bsky_labels_poll_foreign_src_dropped`.
-  - `bsky_labels_poll_neg_removes`.
-  - `bsky_labels_poll_follows_cursor`.
-  - `bsky_labels_poll_backoff_on_429_and_errors`.
+    unavailable state with the statement of reasons; a moderation item exists.
+  - `bsky_labels_poll_bad_sig_dropped`, `bsky_labels_poll_foreign_src_dropped`, `bsky_labels_poll_neg_removes`.
+  - `bsky_labels_poll_follows_cursor`, `bsky_labels_poll_backoff_on_429_and_errors`.
+  - `bsky_labels_breaker_trips`: hides on 6 of 100 members within an hour → the sixth and later apply as warn, alert
+    raised; reset in admin restores hide.
+  - `bsky_labels_identity_change_holds`: a changed endpoint or key → new hides apply as warn until confirmed.
+  - `bsky_labels_erasure_race`: erasure commits while a poll is in flight → no label or poll row for the DID remains.
   - `bsky_labels_outage_keeps_last_labels` (option A): labeler down → last stored labels still decide; health flag
     raised after an hour.
-  - `bsky_labels_poll_via_net_guard`: the call goes through `guardedRequest`; a labeler endpoint on a private
-    address is refused.
+  - `bsky_labels_poll_via_net_guard`: the call goes through `guardedRequest`; a labeler endpoint on a private address
+    is refused.
+  - `export_includes_member_labels` (P4.26).
 Reuse:
   - P4.23's ingest and decision → USE.
-  - `@atproto/api` `com.atproto.label.queryLabels` types → USE for the call shape.
+  - The vendored `com.atproto.label.queryLabels` lexicon → USE for parsing.
 Not in this step: our own labeler (P5.07); a WebSocket subscription to Bluesky's whole label stream (it carries the
 whole network's labels; polling only our members is smaller).
 Diagram: none.
