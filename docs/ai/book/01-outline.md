@@ -1798,7 +1798,7 @@ Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a r
 | P4.22 | Feed tabs: saved feeds in the app DB, `getFeed` through the PDS proxy, our own feeds | [SEC] | P4.21 | `phase-4.md` |
 | P4.22a | Our feed generators for third-party unset.sh clients | [SEC] [ALEX] | P4.22, P3.11, P3.10 | `phase-4.md` |
 | P4.23 | Labels: our labeler's stream into `label`, `atproto-accept-labelers`, hide and warn | [MOD] [SEC] | P4.21 | `phase-4.md` |
-| P4.23b | Bluesky's labels on our members' accounts and records | [MOD] [SEC] | P4.23 | `phase-4.md` |
+| P4.23b | Bluesky's labels on our members' accounts and records | [MOD] [SEC] | P4.23, P4.26 | `phase-4.md` |
 | P4.24 | Report button on every post | [MOD] [SEC] | P3.15, P2.07, P4.23 | `phase-4.md` |
 | P4.25g | `retention` grants on existing tables (SE-6) | [SEC] | P4.03, P4.06, P4.07, P4.08, P4.09, P4.13, P4.17, P4.20, P1.12, P2.18 | `phase-4.md` |
 | P4.25 | Draft and upload expiry jobs (30 days) under the `retention` role | [SEC] | P4.25g, P4.03, P4.07, P4.07h, P4.13, P4.17, P4.20, P1.12, P2.18 | `phase-4.md` |
@@ -1890,6 +1890,7 @@ flowchart TD
   P4_21 --> P4_23
   P4_23 --> P4_24
   P4_23 --> P4_23b
+  P4_26 --> P4_23b
   P4_23b --> P4_28
   P4_17 --> P4_25
   P4_20 --> P4_25
