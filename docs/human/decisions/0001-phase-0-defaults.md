@@ -556,3 +556,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0038](0038-profile-save-keeps-unknown-fields.md)):** a profile save checks the merged record in read mode, so a
   stored field the lexicon does not define is kept and never blocks a save; a defined field that is invalid is still
   refused. Supersedes ADR 0037 Decision 2's strict-validator clause.
+- **ADR 0040 proposed (Alex chose the direction 2026-10-30 00:27:43Z and 00:47:06Z; own record:
+  [0040](0040-index-repos-holding-a-profile.md)):** `tap-relay` also tracks any repo holding `sh.unset.profile`, under
+  caps, with non-member notice, lawful basis and erasure. Supersedes decision 5's "never by network-wide discovery"
+  clause once accepted; "no own relay or full-network index" stands. Proposed, awaiting Alex.
