@@ -3579,8 +3579,9 @@ Outputs:
   either no stored row, as after a negation or expiry, or a stored `cts` ≤ `label_cts`) resets it to now, once; a label issued again after a negation is a new row.
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
   timestamptz NULL)`, created with its grants in P4.23k. DID column registered for erasure (cascade) and export.
-- Schedule: after an `idx` rebuild, every member is polled again before the rebuild counts as done (DA-1's
-  rebuild runbook), so a Bluesky hide is not lost in between; a newly indexed account at once; every account again
+- Schedule: after an `idx` rebuild `idx.label_poll` is empty, so every member is polled at once; until those polls
+  land, a hide that only Bluesky's labeler holds is not applied (minutes, or the outage if the labeler is down). The
+  build PR's ADR states this gap; closing it would need app-owned label state. A newly indexed account at once; every account again
   every 6 hours; an account whose record changed in
   the last hour again within 10 minutes.
 - Trust controls (`domains/moderation/labels`). A Bluesky label never applies more weakly than `LABEL_BEHAVIOUR`
