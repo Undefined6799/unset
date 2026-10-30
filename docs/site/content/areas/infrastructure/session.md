@@ -9,7 +9,9 @@ The browser session store. Package `@unset/infrastructure-session`. Decision 34'
 
 `infrastructure/session/store.ts` is the package. `createSessionStore` returns `create`, `read`, `destroy`, `destroyAllForDid`, `setEmailConfirmed` and `sweep`.
 
-`create` draws 32 bytes (`randomBytes`), returns them as unpadded base64url `cookieValue`, and inserts `sha256` of those bytes into `app.session.id_hash`. `read` hashes the cookie the same way. A missing cookie is `session: null` and `clearCookie: false`. Any other value that is not the canonical 43-character form of 32 bytes is `clearCookie`. Expiry uses `now()` in the SQL. A row whose DID has no `app.oauth_session` is destroyed and returned as `clearCookie`.
+`create` draws 32 bytes (`randomBytes`), returns them as unpadded base64url `cookieValue`, and inserts `sha256` of those bytes into `app.session.id_hash`. `read` hashes the cookie the same way. A missing cookie is `session: null` and `clearCookie: false`. Any other value that is not the canonical 43-character form of 32 bytes is `clearCookie`. A row whose DID has no `app.oauth_session` is destroyed and returned as `clearCookie`.
+
+A session ends at whichever limit comes first. `create` sets `absolute_expires_at` to `now()` plus `SESSION_ABSOLUTE_S`. `read` treats the row as expired when `now()` is after `absolute_expires_at` or after `last_seen_at` plus `SESSION_IDLE_S` (`infrastructure/session/store.ts`). When `now()` minus `last_seen_at` is greater than `SESSION_TOUCH_INTERVAL_S`, `read` sets `last_seen_at` to `now()`. A failed touch logs a warning `session.touch_failed` and the read still returns the session. `sweep` deletes rows past either limit and takes no lock. Ranges and defaults are the [http session config](../../interfaces/http/#session). `SESSION_ABSOLUTE_S` is also the session cookie `Max-Age` (`interfaces/http/compose.ts`).
 
 `SessionDb` is a `query` method. `WithSessionDb` is how `read` takes a connection. The composition root passes them. This package does not import `infrastructure/postgres` or `pg`. The [`infrastructure` row](../) does not let it.
 

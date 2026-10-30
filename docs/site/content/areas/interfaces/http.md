@@ -103,6 +103,65 @@ npm run dev:up
 
 That is `node deployment/preflight/stack.ts -- up --env dev --compose deployment/compose.dev.yaml …` (`package.json`). The container runs the entrypoint above. `UNSET_SERVICE` is `http`. `PG_USER` is `web`.
 
+## Config
+
+Keys defined in `interfaces/http/config.ts`.
+
+### Session
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `SESSION_IDLE_S` | integer 300..2592000, at most `SESSION_ABSOLUTE_S` | 604800 | Idle lifetime in seconds. |
+| `SESSION_ABSOLUTE_S` | integer 300..2592000 | 2592000 | Absolute lifetime in seconds, and the session cookie `Max-Age`. |
+| `SESSION_TOUCH_INTERVAL_S` | integer 1..3600, less than `SESSION_IDLE_S` | 300 | Least gap, in seconds, before `last_seen_at` is updated. |
+
+### Identity
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `PLC_URL` | `https` URL, no userinfo | none | PLC directory URL for `did:plc`. Boot also requires its host on net-guard's `plc` policy. |
+| `IDENTITY_HTTP_TIMEOUT_MS` | integer 500..10000 | 3000 | HTTP timeout, in milliseconds, for an identity fetch. |
+| `IDENTITY_DNS_TIMEOUT_MS` | integer 500..10000 | 2000 | DNS timeout, in milliseconds, for an identity TXT lookup. |
+| `DID_DOC_CACHE_TTL_S` | integer 1..3600 | 300 | How long a resolved DID document may be reused, in seconds. |
+| `DID_DOC_CACHE_MAX` | integer 1..100000 | 10000 | Most DID documents held in that cache. |
+| `HANDLE_VERIFY_TTL_S` | integer 1..3600 | 600 | How long a verified handle verdict is kept, in seconds. |
+| `HANDLE_INVALID_TTL_S` | integer 1..3600 | 60 | How long an invalid handle verdict is kept, in seconds. |
+| `HANDLE_CACHE_MAX` | integer 1..100000 | 10000 | Most handle verdicts held. |
+
+### Sign-in
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `PDS_HOSTNAME` | lowercase hostname: labels of 1-63, `[a-z0-9]` and inner hyphens, no scheme, port or trailing dot | none | Host of our PDS. `pdsIssuerOf` builds the sign-in issuer from it. |
+| `HANDLE_SUFFIX` | a leading `.` plus that same hostname | none | Suffix for a sign-in name that contains no dot. |
+| `EMAIL_RECHECK_S` | integer 60..900 | 900 | Seconds a confirmed-email cache is trusted before the PDS is asked again. |
+| `MIN_AGE` | integer 16..120 | 16 | Full years of age required before onboarding continues. |
+| `INVITE_COUNTRY_RULE` | `on` or `off` | `on` | When `on`, `POST /welcome/terms` requires `country=yes`. |
+
+### Legal
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `PRIVACY_OFFICER_TITLE` | 1-200 characters, no C0 control and no DEL | none | Privacy-officer title on the legal pages. Required. |
+| `PRIVACY_OFFICER_CONTACT` | 1-200 characters, no C0 control and no DEL | none | Privacy-officer contact text on the legal pages. Required. |
+| `SUPPORT_EMAIL` | 1-200 characters, no C0 control and no DEL | none | Support contact text on the legal pages and on welcome. Required. |
+| `SECURITY_CONTACT` | `privacy-page`, `mailto:` plus non-space, or `https://` plus non-space on `PUBLIC_ORIGIN` with no userinfo | none | `security.txt` Contact. `privacy-page` is served as this origin's `/legal/privacy`. Required. |
+| `SECURITY_TXT_EXPIRES` | `YYYY-MM-DDTHH:MM:SSZ`, a real UTC instant, after now and at most 365 days ahead; inside 30 days still accepted | none | `security.txt` Expires. Required. |
+
+### Build
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `WEB_BUILD_DIR` | any string | `""` | Directory of the apps/web browser build (`.vite/manifest.json`). Empty uses `apps/web/dist/client`. |
+
+### Test
+
+| Key | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `TEST_ROUTES` | `true` or `false`; `true` only when `UNSET_ENV` is `test` | `false` | Turns on the test-only pages. Any other profile refuses the key. |
+
+`defineEntrypointConfig` also reads `UNSET_ENV`, `UNSET_SERVICE`, `UNSET_COMMIT` and `LISTEN_PORT` ([config](../../shared/config/)). The same object merges `httpKitConfig` ([shared http](../../shared/http/)), `postgresFields`, `poolFields` and `lockPoolFields` ([postgres](../../infrastructure/postgres/)), `sealFields` ([seal](../../infrastructure/seal/)), `netGuardFields` ([net-guard](../../infrastructure/net-guard/)) and `oauthFields` ([pds](../../infrastructure/pds/)). `PG_PASSWORD`, `SEAL_KEYRING` and `OAUTH_CLIENT_KEYS` are required secrets.
+
 ## Data
 
 Role `web` in `infrastructure/postgres/roles.json`: class `service`, login, `connectionLimit` 40, `statement_timeout` `2s`, `passwordFrom` `pg_web_password`.
