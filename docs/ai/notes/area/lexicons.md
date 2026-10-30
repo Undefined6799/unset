@@ -10,7 +10,7 @@ importance: high
 related: ["[[identity]]", "[[pds]]"]
 replaced_by: null
 tags: [area, lexicons]
-checked: 2026-10-27
+checked: 2026-10-29
 ---
 # lexicons
 
@@ -28,7 +28,8 @@ apps rely on it, so a change is close to permanent.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
-- `scripts/breaking-check.ts`: refuses a narrowed limit, a lost value or a changed `default` (an absent
+- `scripts/breaking-check.ts`: refuses any changed, added or dropped size or length limit
+  (atproto.com/specs/lexicon, "Lexicon Evolution"; widening was allowed until P1.31j), a lost value or a changed `default` (an absent
   `listed` must stay not listed) on a published schema; additions to
   the permission set need Alex's approval and removals are refused. It also holds every `published/<nsid>.json`
   snapshot with no lock entry yet: `sh.unset.profile` is snapshotted because its records are live before P1.35
