@@ -1478,7 +1478,8 @@ Must hold (each has a named test; the build PR's Threats section covers the rest
   9. **Schema in this step:** `dropped:discovered` in P3.04's outcome type (tested by the outcome type's exhaustive
      switch). The table, flag, grants, `core.deindex_did` and the erasure statements come first in P3.08k.
 
-Not in this step: a full-network index (still rejected); any change to members' tracking (P3.02).
+Not in this step: a full-network index (still rejected); any change to members' tracking (P3.02) beyond rule 2's
+re-backfill on a new member's first track.
 Diagram: none.
 
 ---
