@@ -23,11 +23,13 @@ by a PDS.
    makes Tap backfill. Membership is an `app.account` row; members are never capped or treated as non-members, and
    our own PDS's members stay on `tap-own`.
 3. Erased people never reach our tables, not even as a plain DID; the HMAC tombstone is checked first.
-4. Caps bound our index and outbound checks: a total and a per-PDS-host daily cap on non-members, with eviction of
-   long-unchanged non-members so the cap cannot be exhausted for good.
+4. Caps bound our index and outbound checks: a total cap on non-members, a rate limit on DID lookups before any
+   resolution, and an all-time per-PDS-host cap. Over a cap, events are dropped at ingest; untracking is not relied
+   on, because Tap re-adds the repo.
 5. Non-members: lawful basis legitimate interests (GDPR Art. 6(1)(f)), an Art. 14 notice in the privacy policy, a
    RoPA row, and access and erasure through the request route for people who cannot log in, with proof of control of
-   the DID; that route exists before this reaches production. A non-member who deletes their profile record is
+   the DID. That route has no step yet, so discovery ships behind a setting that is off and stays off in production
+   until the route exists and Alex turns it on (book P3.23 records this). A non-member who deletes their profile record is
    de-indexed (moderation and hold rows kept). Their public profile renders like a member's.
 
 ## Alternatives
@@ -39,7 +41,8 @@ by a PDS.
 - New personal data: people who never signed up. The legal docs, RoPA and erasure route must cover them before
   Phase 3 ships to production.
 - Erasure is final in our tables but not in Tap: an erased person who writes a profile record again is tracked by Tap
-  again and untracked again; their events never reach our index. In between, Tap holds the repo's metadata and the
+  again on their next profile op and by its daily `listReposByCollection` crawl (indigo `cmd/tap` at 51095ab); their
+  events are acked as dropped and never reach our index. In between, Tap holds the repo's metadata and the
   buffered record bodies until they are acked (P3.01's source table: `remove` does not purge the outbox).
 - P3.01 must show discovery works (M19); if the relay does not serve `listReposByCollection`, only new profile writes
   are discovered until a host that serves it is configured.
@@ -47,5 +50,5 @@ by a PDS.
   signal finds before our caps run); its tracked-repo count is watched with an alert.
 
 ## Compliance
-Book step P3.08d's named tests (one per rule there); P3.01 M19 and M20 in the ingest ADR; the RoPA row "Indexing
+Book step P3.08d's named tests (one per rule there); P3.01's spike record for M19 and M20; the RoPA row "Indexing
 non-members".
