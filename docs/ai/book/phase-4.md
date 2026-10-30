@@ -3467,13 +3467,32 @@ Reuse:
 Not in this step: deploying Ozone and our label definitions (P5.07); labelling actions in `admin` (P5.08); Bluesky's labels on our members' accounts and records (P4.23b); user label preferences (not in plan scope).
 Diagram: none.
 
+### P4.23k — Trusted base for Bluesky's labels (split from P4.23b, SE-6)
+
+Tags: [MOD] [SEC]            Depends on: P4.23, P4.26            Plan: as P4.23b; §9 trusted base (rule SE-6)
+Where: the migration for P4.23b's grants and `core.erase_did` registry rows, with their denial and erasure tests
+Size: hypothesis, P4.00 sets it (~60 source lines, ~120 test lines)
+
+Why a separate step (letter suffix): role grants and erasure rows are trusted base (SE-6, like P3.07g and P3.07k), so
+they are reviewed alone, before the feature code that uses them.
+Goal: the grants P4.23b's Outputs list exist, each with a denial test: the indexer SELECTs `app.account` (member
+count), inserts and reads `app.labeler_identity`, inserts `app.label_bulk_review`, and EXECUTEs P3.15's definer that
+opens a moderation item (today EXECUTE to `web` only); `admin` writes `app.label_override` and the bulk reviews. The
+erasure registry gains `app.label_override` and `app.label_bulk_review`.
+Not in this step: the tables' feature code and the poll (P4.23b).
+Diagram: none.
+
+---
+
 ### P4.23b — Bluesky's labels on our members' accounts and records
 
-Tags: [MOD] [SEC]            Depends on: P4.23, P4.26            Plan: §5.8 Labels
-Where: `infrastructure/labeler/` (the `queryLabels` adapter, through `net-guard`; dependency-cruiser's generic
+Tags: [MOD] [SEC]            Depends on: P4.23, P4.26, P4.23k            Plan: §5.8 Labels
+Where: `apps/web` (the owner's statement-of-reasons view), `infrastructure/labeler/` (the `queryLabels` adapter, through `net-guard`; dependency-cruiser's generic
 infrastructure rule covers it; CLAUDE.md's folder table gains `labeler` in the build PR, with Alex's line), `interfaces/indexer/labels` (the
 poll task), `domains/moderation/labels` (burst alarm, overrides and review rule)
-Size: ~200 source lines, ~260 test lines
+Size: hypothesis ~450 source lines, ~400 test lines, over DL-1's ~400, so the build splits it in two PRs with the
+outline gaining the second id then: P4.23b (adapter, poll, ingest, owner's statement of reasons) and P4.23c (burst
+alarm, bulk review, overrides, identity watch). P4.28 depends on both, so neither half reaches production alone.
 
 Book edit 2026-10-30 (Alex 00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR: "We may use labeler and
 implement our own as well later"; atproto review 2026-10-29). Replaces editor note E13: a takedown or warning label
@@ -3498,11 +3517,11 @@ Outputs:
   call takes (the batch size below is a setting), and whether wildcards are on (Ozone can refuse them with
   `labelQueryWildcardsEnabled` off). If wildcards are refused, the poll falls back to account labels only (bare
   DIDs) plus exact record URIs from our index, and counts `labels.bsky_wildcard_refused`.
-- Indexer task `bskyLabelPoll`: for indexed accounts, `BSKY_LABEL_BATCH` (default 25) DIDs per call, patterns `<did>`
+- Indexer task `bskyLabelPoll`: for every indexed account (members, and non-members once P3.08d discovers them), `BSKY_LABEL_BATCH` (default 25) DIDs per call, patterns `<did>`
   and `at://<did>/*`, `sources=[BSKY_LABELER_DID]`, following `cursor`.
 - Each label goes through P4.23's ingest (step 3a with expected source `BSKY_LABELER_DID`, then signature, `neg`,
   `cts`, `exp`), in one transaction that first takes the same per-DID advisory lock `eraseDid` holds
-  (`pg_advisory_xact_lock` on the DID's key, P3.07), then checks `core.is_erased(did)` and that the `idx.account` row
+  (`pg_advisory_xact_lock(core.did_lock_key(did))`, the function P3.07 uses), then checks `core.is_erased(did)` and that the `idx.account` row
   exists, skipping the write otherwise. Erasure and a poll's write are then strictly ordered, whatever order erasure's
   statements run in (DA-4: advisory lock plus tombstone check; the network call happens before the transaction).
 - Table `idx.label_poll(did PK REFERENCES idx.account ON DELETE CASCADE, polled_at timestamptz, failed_since
@@ -3513,33 +3532,38 @@ Outputs:
   says (zero tolerance: a real takedown, CSAM-related included, always hides at once). The controls bound the
   other failure, a wrong or taken-over labeler hiding many members, by getting people to it fast:
   - **Burst alarm:** "hide-class" is every value `LABEL_BEHAVIOUR` maps to hide (`!hide`, `!takedown`, `!suspend`,
-    `porn`, `sexual`, hide-mapped custom values). If, in one hour, Bluesky hide-class labels newly land on more than
-    `max(5, 1 %)` of **members** (DIDs with an `app.account` row, whether or not signed in now, so throwaway
+    `porn`, `sexual`, hide-mapped custom values). A label "newly lands" when it is first stored and its `cts` is
+    within the last 24 hours, so the first poll's backlog of old labels does not count. If Bluesky hide-class labels
+    newly land on more than `max(5, 1 %)` of **members** in one hour, or on more than `max(10, 2 %)` in any 24 hours
+    (a slow burst) (DIDs with an `app.account` row, whether or not signed in now, so throwaway
     accounts that are merely indexed can neither trip it nor dilute it), alert `labels.bsky_burst` pages the moderators and the burst's
     labels are grouped into one bulk review in `admin`, where moderators can confirm them or reverse the burst.
     A reversal writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
     second_by, decided_at)`, which `moderation.decide` reads first: a negation from our labeler cannot cancel a
     Bluesky label, since P4.23 step 3c only deletes a row with the same `(src, uri, val)`. An override covers only
     labels with `cts ≤ label_cts`, so a label Bluesky issues again later applies again. Reversing `!takedown` or any
-    child-safety value needs a second moderator (`second_by`, P3.20a's two-person pattern) and is never done in bulk;
+    child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety; the build PR lists them from the labeler's
+    `app.bsky.labeler.service` declaration, DO-3) needs a second moderator (`second_by`, P3.20a's two-person pattern) and is never done in bulk;
     every override is an audit action (P1.15). Overrides, bulk reviews and the recorded labeler identity live in
     the app-owned schema (`app.label_override`, `app.label_bulk_review`, `app.labeler_identity`; DA-1), not in
-    `idx`; `admin` writes them, the indexer only reads `app.labeler_identity` and inserts bulk reviews, by grants
-    added in an SE-6 grants step split from this one, like P3.07g.
+    `idx`; `admin` writes overrides, the indexer records the labeler identity, inserts bulk reviews and opens review
+    items, all by P4.23k's grants.
   - **Endpoint and key watch:** the labeler's service endpoint and `#atproto_label` key are recorded on first use; a
     change raises `labels.bsky_identity_changed` and opens the same kind of bulk review for labels signed under the
     new identity. Labels keep applying meanwhile.
   - **Review item:** a Bluesky hide-class label on a member's account opens a P3.15 moderation item, one
     open item per member at most; during a burst they are grouped into the bulk review instead, so a burst cannot
     flood the queue.
-  - **Statement of reasons:** the hidden profile's state page says the account is hidden because of a label from
-    Bluesky's moderation service, names the label, and links Bluesky's appeal route, plus our own contact.
+  - **Statement of reasons, owner only:** to everyone else a hidden profile is `AccountUnavailable`, exactly like a
+    missing one (SE-2, D7); no label or source is shown publicly. The signed-in owner sees that their account is
+    hidden because of a label from Bluesky's moderation service, the label, Bluesky's appeal route and our contact.
 - Health board: `labels.bsky_stale` (no successful poll for an hour), `labels.bsky_burst`,
   `labels.bsky_identity_changed`.
 - GDPR: purpose, keeping members' content moderated as Bluesky's network expects (lawful basis: legitimate
   interests, Art. 6(1)(f)); the RoPA moderation row gains "labels from Bluesky's labeler about the member";
   retention, until the label is negated or expires, or the account is erased; P4.26's export includes the member's
-  `idx.label` rows from either source and the overrides about them; erasure deletes the label rows (P4.23
+  `idx.label` rows from either source and the overrides about them, with `decided_by` and `second_by` redacted
+  (P4.26 redaction; staff data); erasure deletes the label rows (P4.23
   registry), the `idx.label_poll` row by cascade, and the member's `app.label_override` and `app.label_bulk_review`
   rows (new registry rows; moderator DIDs in them are staff data kept under P1.15's audit rule), and the tombstone
   stops any re-index (P3.05).
@@ -3568,7 +3592,7 @@ Edge cases and failures:
   - Labeler key rotated → refetch once (P4.23); still invalid → drop, count `labels.bad_sig`, alert; a valid new key
     trips the identity watch.
   - The labeler returns labels from other sources despite `sources` → dropped at step 3a.
-  - An erased DID → its `idx.account` row is gone, so no polls and no writes (row lock above).
+  - An erased DID → its `idx.account` row is gone, so no polls and no writes (advisory lock and tombstone check above).
 
 Threats: a second outside source that can hide our members' content.
   - S Forged labels → expected-source and signature checks (`bsky_labels_poll_bad_sig_dropped`,
@@ -3583,12 +3607,13 @@ Threats: a second outside source that can hide our members' content.
 
 Done when (tests):
   - `bsky_labels_poll_stores_account_and_record_labels`: fixture labeler returns a `!takedown` on the account and a
-    `!warn` on one `sh.unset.profile` record → both stored with Bluesky's `src`; the profile page shows the
-    unavailable state with the statement of reasons; a moderation item exists.
+    `!warn` on one `sh.unset.profile` record → both stored with Bluesky's `src`; a visitor sees the same
+    `AccountUnavailable` page as for a missing account, the signed-in owner sees the statement of reasons; a
+    moderation item exists.
   - `bsky_labels_poll_bad_sig_dropped`, `bsky_labels_poll_foreign_src_dropped`, `bsky_labels_poll_neg_removes`.
   - `bsky_labels_poll_follows_cursor`, `bsky_labels_poll_backoff_on_429_and_errors`.
-  - `bsky_labels_burst_alarm_and_bulk_reverse`: hide-class labels (a `porn` among them) on 6 of 100 signed-in
-    members within an hour → all six hide, the alarm pages, one bulk review exists; reversing it un-hides all six.
+  - `bsky_labels_burst_alarm_and_bulk_reverse`: hide-class labels (a `porn` among them) on 6 of 100
+    members (signed in or not) within an hour → all six hide, the alarm pages, one bulk review exists; reversing it un-hides all six.
   - `bsky_labels_burst_counts_members_only`: 50 indexed non-member accounts labelled `!takedown` → no alarm; they
     hide.
   - `bsky_labels_takedown_reversal_needs_two`: one moderator cannot reverse a `!takedown`; a bulk reversal skips

@@ -1215,7 +1215,8 @@ Outputs (contract):
 
 Algorithm (contract: the order and the refusals):
   1. Validate the DID; else `RAISE`.
-  2. `pg_advisory_xact_lock` on the DID (one erasure of a DID at a time).
+  2. `pg_advisory_xact_lock(core.did_lock_key(did))` (one erasure of a DID at a time; P4.23b's label poll takes
+     the same key through the same function, never its own derivation).
   3. Run each registry statement in order; `retain_legal_hold` rows only where
      `NOT core.is_held(subject_kind, subject_ref)`; collect
      `counts` and `kept_held`. Any error (including from `core.is_held`) → the transaction rolls back; nothing is
