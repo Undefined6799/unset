@@ -259,6 +259,7 @@ flowchart LR
   P421 --> P422[P4.22 feed tabs]
   P422 --> P422a[P4.22a feed generator endpoint]; P311 --> P422a
   P421 --> P423[P4.23 labels]
+  P423 --> P423b[P4.23b Bluesky labels on members]
   P315 --> P424[P4.24 report button]; P207 --> P424
   P403 --> P425[P4.25 expiry jobs]; P112 --> P425; P407 --> P425; P413 --> P425
   P307 --> P426[P4.26 export]; P218 --> P426
@@ -3462,7 +3463,84 @@ Reuse:
   - `@atproto/api` moderation (`moderatePost`, `LABELS` defaults) → LESSON, provisional — for reuse review: the reference for label semantics; adopting it as a dependency is the reuse reviewer's call (size, pin, fit with `@atproto/lex` types).
   - `@atproto/xrpc` / `@atproto/sync` event-stream frame decoding → USE candidate, provisional — for reuse review (plan pins `@atproto/*` exactly; never a hand-written CBOR frame parser).
   - Prototype has no labels → nothing to salvage.
-Not in this step: deploying Ozone and our label definitions (P5.07); labelling actions in `admin` (P5.08); querying Bluesky's labels on our users' accounts (review 03-data MINOR-2 "lazy `queryLabels`"; not in plan; editor note E13); user label preferences (not in plan scope).
+Not in this step: deploying Ozone and our label definitions (P5.07); labelling actions in `admin` (P5.08); Bluesky's labels on our members' accounts and records (P4.23b); user label preferences (not in plan scope).
+Diagram: none.
+
+### P4.23b — Bluesky's labels on our members' accounts and records
+
+Tags: [MOD] [SEC]            Depends on: P4.23            Plan: §5.8 Labels
+Where: `interfaces/indexer/labels` (a second task beside the subscriber), `domains/moderation/labels` (unchanged decision)
+Size: ~150 source lines, ~200 test lines
+
+Book edit 2026-10-30 (Alex 00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR: "We may use labeler and
+implement our own as well later"; atproto review 2026-10-29). Replaces editor note E13: a takedown or warning label
+Bluesky's labeler puts on one of our members, or on a member's `sh.unset.*` record, must reach `moderation.decide`.
+P4.23 reads Bluesky labels only from hydrated Bluesky views, so our own items never saw them. Our own labeler stays
+P5.07; this step adds no labeler of ours.
+
+Goal: `idx.label` also holds the labels `BSKY_LABELER_DID` has put on the accounts and records we index, so P4.23's
+decision applies them to our items exactly as it applies our labeler's.
+
+Inputs: P4.23 `idx.label`, `LABEL_BEHAVIOUR`, signature check and `labels.forUris`; config `BSKY_LABELER_DID`; P2.01
+DID resolution (the labeler's `#atproto_labeler` service endpoint and `#atproto_label` key); P3.03 `idx.account`;
+`net-guard` (`atproto` policy).
+Outputs:
+- Indexer task `bskyLabelPoll`: for indexed accounts, 25 DIDs per call, `com.atproto.label.queryLabels` on the
+  labeler's service endpoint with `uriPatterns` = each DID and `at://<did>/*` (prefix match, so account and record
+  labels in one query) and `sources=[BSKY_LABELER_DID]`, following `cursor`. The parameters are the pinned lexicon's
+  (`@atproto/api` 0.29.1, `client/types/com/atproto/label/queryLabels.d.ts`: `uriPatterns` OR'd, a trailing `*` is a
+  prefix; `sources`; `limit`; `cursor`).
+- Each label goes through P4.23's ingest path unchanged (source check, signature against the labeler's
+  `#atproto_label` key, `neg` and `cts` rules, `exp`), stored with `src = BSKY_LABELER_DID`.
+- Schedule: a newly indexed account at once; every account again every 6 hours; an account whose record changed in
+  the last hour again within 10 minutes. The table `idx.label_poll(did PK, polled_at)` holds progress. DID column
+  `did` registered for erasure.
+- `idx.label_poll.failed_since` and the health-board flag `labels.bsky_stale` (no successful poll for an hour).
+
+Algorithm:
+  1. Pick due DIDs (oldest `polled_at` first, 25 per call, at most 4 calls in flight).
+  2. Call with a 10 s timeout through `net-guard`. 2xx → ingest each label (P4.23 step 3a-3c), set `polled_at`.
+     429 → back off per `Retry-After` (cap 10 min). Other failure → keep `polled_at`, back off 1 s doubling to 5 min.
+  3. Labels on DIDs or URIs we do not index are dropped (only what we asked for is stored).
+
+Open for Alex (recommendation below): **what a member's profile shows when Bluesky's labeler cannot be reached.**
+  - Recommended, A: keep showing with the last labels stored. Labels already ingested keep applying, a hide stays a
+    hide, and new labels apply on the next good poll. A Bluesky outage then never takes our profiles down
+    (architecture instructions §17, failure isolation), and our own moderation, image checks and P5.07 labeler do not
+    depend on Bluesky. Cost: a takedown Bluesky issues during an outage reaches us up to an outage-length late.
+  - B: hide an account that has never had a successful poll until it has one. New members' profiles then stay hidden
+    during a Bluesky outage; existing members behave as in A.
+  - C: hide every member while polls fail for over an hour. Fails closed, but a Bluesky outage hides the whole site.
+  Until Alex picks, the step is built with A and a test named for it, so changing to B is one branch and its test.
+
+Edge cases and failures:
+  - Labeler key rotated → refetch once (P4.23); still invalid → drop, count `labels.bad_sig`, alert.
+  - The labeler returns labels from other sources despite `sources` → dropped by P4.23's source check.
+  - An erased DID → no polls (its `idx.account` row is gone); its labels are erased with it (P4.23 registry).
+
+Threats: a second outside source that can hide our members' content.
+  - S Forged labels → signature and source checks (P4.23 tests reused with `src = BSKY_LABELER_DID`).
+  - D A slow or failing labeler → bounded calls, timeouts and backoff; profiles keep rendering (option A).
+  - I Polling reveals which DIDs we index to Bluesky's labeler → they are public repos on a public network; no
+    viewer or session data is sent.
+
+Done when (tests):
+  - `bsky_labels_poll_stores_account_and_record_labels`: fixture labeler returns a `!takedown` on the account and a
+    `!warn` on one `sh.unset.profile` record → both stored with Bluesky's `src`; the profile page shows the
+    unavailable state.
+  - `bsky_labels_poll_bad_sig_dropped`, `bsky_labels_poll_foreign_src_dropped`.
+  - `bsky_labels_poll_neg_removes`.
+  - `bsky_labels_poll_follows_cursor`.
+  - `bsky_labels_poll_backoff_on_429_and_errors`.
+  - `bsky_labels_outage_keeps_last_labels` (option A): labeler down → last stored labels still decide; health flag
+    raised after an hour.
+  - `bsky_labels_poll_via_net_guard`: the call goes through `guardedRequest`; a labeler endpoint on a private
+    address is refused.
+Reuse:
+  - P4.23's ingest and decision → USE.
+  - `@atproto/api` `com.atproto.label.queryLabels` types → USE for the call shape.
+Not in this step: our own labeler (P5.07); a WebSocket subscription to Bluesky's whole label stream (it carries the
+whole network's labels; polling only our members is smaller).
 Diagram: none.
 
 ---
@@ -3874,7 +3952,7 @@ Diagram: none.
 
 ### P4.28 — Phase 4 exit: prototype social parity, one regression test per §2 defect, rendition and first-frame budgets
 
-Tags: (none; gate)            Depends on: P4.16, P4.17, P4.18, P4.19, P4.20, P4.21, P4.22, P4.22a, P4.23, P4.24, P4.25, P4.26, P4.27, P4.14a (outline-only: unpublish a video)            Plan: §8 Phase 4 exit, §2 defects list, §6.1 budget table and WCAG
+Tags: (none; gate)            Depends on: P4.16, P4.17, P4.18, P4.19, P4.20, P4.21, P4.22, P4.22a, P4.23, P4.23b, P4.24, P4.25, P4.26, P4.27, P4.14a (outline-only: unpublish a video)            Plan: §8 Phase 4 exit, §2 defects list, §6.1 budget table and WCAG
 Where: `tests/exit/phase-4/` (Playwright and Vitest suites), `tests/regressions/prototype-defects.ts` (registry), `budget.json`
 Size: ~120 source lines (registry, harness), ~500 test lines
 
@@ -4086,7 +4164,7 @@ Plan gaps, outline errors and contradictions found while writing P4.16–P4.28, 
   on P4.23. P4.23 is built and tested against a fixture labeler; the live subscription is configured in P5.07. The
   `atproto-accept-labelers` header names our Ozone DID, which does not exist until P5.07 (config placeholder in dev).
 - **E13 (gap, Bluesky labels on our users).** Review 03-data MINOR-2 suggested lazily querying Bluesky's labels on our
-  members' accounts; the plan does not include it. Not built.
+  members' accounts; the plan did not include it. Settled by Alex 2026-10-30 00:27:43Z: built as P4.23b.
 - **E14 (gap, default tabs).** The plan lists Following plus user-picked feeds; review 07 SERIOUS-2 recommends a "New on
   unset.sh" tab on by default for the cold start. P4.22 defaults to Following + "unset.sh latest". **Settled by Alex
   (2026-10-03 16:42Z, answer 35): Following + unset.sh latest.**
@@ -4169,7 +4247,7 @@ Plan gaps, outline errors and contradictions found while writing P4.16–P4.28, 
 | E10 | Accepted; P4.21 step 11 states the written TTFB budget exception. |
 | E11 | Decided by the plan: caption files are repo blobs plus a served copy. Stated in the P4.02 interface row and in P4.16. |
 | E12, E15, E18 | Accepted as written; no change. |
-| E13 | Not built; not in the plan. |
+| E13 | Accepted 2026-10-30 (Alex): P4.23b. |
 | E17 | Decided by the plan: an open appeal never expires and older than 7 days alerts. P4.25 was rewritten with the shared `expirable` predicate (`appealed` excluded with no time limit), a row-locked expiry so an appeal and an expiry never both win, the `appeal.overdue` flag, and tests `expiry_never_expires_appealed`, `expiry_appeal_filed_during_run`, `expiry_overdue_appeal_flag` and `expiry_predicate_table`. |
 | E20 | Folded into the plan; noted. |
 | Plan 22:49Z: TMK+PDQF dropped | This file computed no video fingerprints. The P2.16 interface row now says PDQ + MD5 only. |
