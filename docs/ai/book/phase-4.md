@@ -3472,7 +3472,7 @@ Diagram: none.
 
 Tags: [MOD] [SEC]            Depends on: P4.23, P4.26            Plan: as P4.23b; §9 trusted base (rule SE-6)
 Where: one migration creating `app.label_override`, `app.label_bulk_review`, its member list
-`app.label_bulk_review_member(review_id, did)`, `app.labeler_identity` and `app.label_first_poll(did PK, done_at)`
+`app.label_bulk_review_member(review_id, did, src, uri, val)` (one row per grouped label), `app.labeler_identity` and `app.label_first_poll(did PK, done_at)`
 (so the grants have something to grant on), the derived `idx.label_suppressed(src, uri, val, label_cts)`, the
 `idx.label_poll` table (below) and the `first_seen_at` column on `idx.label`, the definer `mod.open_label_item(did, uri, val)`, their grants in `grant-matrix.json` with matrix test rows, and their
 `erasure-registry.json` rows; CODEOWNERS' `# trusted functions:` line gains `mod.open_label_item`
@@ -3588,24 +3588,28 @@ Outputs:
     (slow bursts), alert `labels.bsky_burst` pages the moderators and the burst's labels are grouped into one bulk
     review in `admin`, where moderators can confirm them or reverse the burst. Any `!takedown` on a member
     also pages when it lands, outside any burst. A window pages once when it first crosses its threshold; labels already grouped into a bulk
-    review (open, confirmed or reversed) leave every window's count, so a handled burst does not page again and a
-    later burst is counted on its own.
+    review (open, confirmed or reversed; matched by `(src, uri, val)`, not by member) leave every window's count, so a
+    handled burst does not page again, while a new value or record on the same members counts afresh. A new label joins an open
+    review only by paging: the review pages again each time its member count doubles, and the admin screen marks
+    labels added after the first page, so a bulk confirm never covers unseen ones; once confirmed or reversed it takes no new labels, so
+    later ones start a new count. Repeat pages are bounded: a re-hide pages at most once per member per 24 hours,
+    and further re-hides join the member's open review.
   - **Reversal:** writes rows to `app.label_override(src, uri, val, label_cts, reason_code, case_id, decided_by,
     second_by, decided_at)`. The indexer copies them into `idx.label_suppressed` within a minute, and
     `moderation.decide` skips a label found there; `idx` stays rebuildable from the app-owned rows (DA-1). A negation
     from our labeler cannot cancel a Bluesky label, since P4.23 step 3c only deletes a row with the same
     `(src, uri, val)`. An override covers only labels with `cts ≤ label_cts`, so a label Bluesky issues again later
-    applies again; such a re-issue resets `first_seen_at` to now, so it counts toward the burst windows like a new
-    label and opens a review item again. `label_cts` is the stored label's `cts`, read in the transaction that
+    applies again; such a re-issue resets `first_seen_at` to now and opens a review item again. `label_cts` is the stored label's `cts`, read in the transaction that
     writes the override under the per-DID lock (never a snapshot taken when the review opened), and the reset check
-    reads `app.label_override` itself, not the copy in `idx`. Any re-hide of a reversed `(src, uri, val)` pages on
+    reads `app.label_override` itself, not the copy in `idx`. Any re-hide of a reversed `(src, uri, val)`, whatever its review's state, pages on
     its own, outside the windows. Reversing `!takedown` or any child-safety value (the values `LABEL_BEHAVIOUR` marks child-safety;
     the build PR lists them from the labeler's `app.bsky.labeler.service` declaration, DO-3) needs a second moderator
     (`second_by`, P3.20a's two-person pattern) and is never done in bulk; every override is an audit action (P1.15).
     P4.23k creates the tables, the copy and their grants.
   - **Endpoint and key watch:** the labeler's service endpoint and `#atproto_label` key are recorded on first use; a
     change raises `labels.bsky_identity_changed` and opens the same kind of bulk review for labels signed under the
-    new identity. Labels keep applying meanwhile. A moderator who accepts the new identity records it (`admin`), so
+    new identity, paging once per new identity; labels signed under it join that one review until a moderator decides.
+    Labels keep applying meanwhile. A moderator who accepts the new identity records it (`admin`), so
     later labels stop re-tripping the watch.
   - **Review item:** a Bluesky hide-class label on a member's account or record opens a P3.15 moderation item through
     `mod.open_label_item`, one open item per member at most; during a burst they are grouped into the bulk review
@@ -3677,7 +3681,7 @@ Done when (tests):
     reversing it un-hides all six.
   - `bsky_labels_burst_ignores_cts`: the same six labels with `cts` a week old → the alarm still pages; labels from
     a member's first successful poll do not count.
-  - `bsky_labels_slow_burst_pages`: hide-class labels on 1 % of members a day for 5 days → the 7-day window pages;
+  - `bsky_labels_slow_burst_pages`: hide-class labels on 1.5 % of members a day for 5 days → the 7-day window pages;
     a single `!takedown` on a member pages on its own.
   - `bsky_labels_poll_members_only`: an indexed account with no `app.account` row is not polled.
   - `bsky_labels_unasked_subject_dropped`: a label on `did:plc:abcd` in answer to a poll for `did:plc:abc` →
@@ -3685,13 +3689,17 @@ Done when (tests):
   - `bsky_labels_takedown_reversal_needs_two`: one moderator cannot reverse a `!takedown`; a bulk reversal skips
     takedown and child-safety labels; every override is audited.
   - `bsky_labels_override_lapses_on_reissue`: Bluesky re-issues overridden labels on 6 of 100 members with a later
-    `cts` → they hide again and the burst alarm pages.
+    `cts` → they hide again and each re-hide pages (at most once per member per 24 hours).
   - `bsky_labels_negate_then_reissue_pages`: after a reversal the labeler negates a label and issues it again (or
     lets it expire and issues it again) → the re-hide pages.
   - `bsky_labels_reissue_before_reversal_still_reversed`: a re-issue with a later `cts` lands between the burst and
     the reversal → the reversal covers it (its `label_cts` is the stored one); a re-issue after it pages.
+  - `bsky_labels_burst_new_value_counts`: after a reversed `porn` burst on 6 members, `!hide` on the same 6 within
+    an hour → pages again.
+  - `bsky_labels_open_review_growth_pages`: an open review grows from 6 to 12 members → pages again.
   - `bsky_labels_burst_pages_once`: a burst pages once; after its bulk review exists, later batches do not page
-    again for it, and a reversed burst never re-pages; a new burst a day later pages.
+    again for it, a reversed burst does not re-page unless a label in it is issued again, and a new burst a day
+    later pages.
   - `bsky_labels_first_poll_wave_pages`: hide-class labels on 4 of 20 members first polled in a day → the alarm
     pages; 1 a day for 7 days among 70 first polled → the 7-day window pages.
   - `bsky_labels_hidden_not_listed`: an account hidden by a label is absent from `/people`, its search and
