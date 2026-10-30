@@ -34,10 +34,10 @@ Declared in `infrastructure/pds/package.json`:
 
 | Dependency | Version |
 | --- | --- |
-| `@atproto/api` | 0.27.0 |
+| `@atproto/api` | 0.29.1 |
 | `@atproto/jwk-jose` | 0.2.4 |
-| `@atproto/oauth-client-node` | 0.5.9 |
-| `@atproto/oauth-scopes` | 0.5.13 |
+| `@atproto/oauth-client-node` | 0.5.12 |
+| `@atproto/oauth-scopes` | 0.5.14 |
 | `@unset/domains-identity` | workspace |
 | `@unset/infrastructure-net-guard` | workspace |
 | `@unset/shared-config` | workspace |
