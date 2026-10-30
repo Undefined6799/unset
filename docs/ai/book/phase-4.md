@@ -3510,12 +3510,11 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
     `idx.label_suppressed` rows are deleted (`delete_row`), and `idx.label_poll` by cascade; a bulk review itself,
     which groups many members, stays. So erasure and export find the member without parsing `uri`,
     `app.label_override` and `idx.label_suppressed` also carry a `subject_did` column (`types.did`). `decided_by`
-    and `second_by` stay ordinary `types.did` columns with registry rows, using the same strategy as the moderator
-    columns of P4.26's moderation history (no new mechanism; `didColumns()` and P1.13's coverage test unchanged).
+    and `second_by` hold the moderator the same way as `review_decision.decided_by` (P4.11; plain text, not `types.did`), so they are outside
+    `didColumns()`, need no registry row, and a moderator's DSAR export never matches these rows; they are staff data
+    under P1.15's audit rule.
   - Export (`EXPORT_POLICY` rows, in this step, so `export_policy_covers_registry` passes): `app.label_override`
-    redact `decided_by`, `second_by` for a member's export, and, with a `when` predicate for rows matched through
-    `decided_by` or `second_by` (a moderator's own export), redact `subject_did`, `uri` and `val`, so a moderator
-    sees their own decisions but not whom they were about; `app.label_bulk_review_member` include (the member's own rows only);
+    redact `decided_by`, `second_by` (matched by `subject_did`); `app.label_bulk_review_member` include (the member's own rows only);
     `app.label_first_poll` include; `idx.label_poll` include; `idx.label_suppressed` exclude (a derived copy of the
     override rows already exported). Every write to these tables about a DID (the first-poll mark, a bulk review
     member row, an override) takes `core.did_lock_key(did)` and checks `core.is_erased(did)` first, like the label
