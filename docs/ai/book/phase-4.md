@@ -3508,7 +3508,14 @@ Goal: the tables, definer and grants P4.23b's Outputs list exist, each grant wit
   - Erasure (rows matched by the DID in `uri`, `at://<did>` or the bare DID, as for P4.23's `idx.label`, in
     hand-written `core.erase_did` statements on the trusted functions line): the member's `app.label_override`, `app.label_first_poll`, `app.label_bulk_review_member` and
     `idx.label_suppressed` rows are deleted (`delete_row`), and `idx.label_poll` by cascade; a bulk review itself,
-    which groups many members, stays. Every write to these tables about a DID (the first-poll mark, a bulk review
+    which groups many members, stays. So erasure and export find the member without parsing `uri`,
+    `app.label_override` and `idx.label_suppressed` also carry a `subject_did` column (`types.did`), and
+    `decided_by`/`second_by` are registered as staff columns that `didColumns()` skips (P1.15's audit rule covers
+    them), so a moderator's export never lists other members' overrides.
+  - Export (`EXPORT_POLICY` rows, in this step, so `export_policy_covers_registry` passes): `app.label_override`
+    redact `decided_by`, `second_by`; `app.label_bulk_review_member` include (the member's own rows only);
+    `app.label_first_poll` include; `idx.label_poll` include; `idx.label_suppressed` exclude (a derived copy of the
+    override rows already exported). Every write to these tables about a DID (the first-poll mark, a bulk review
     member row, an override) takes `core.did_lock_key(did)` and checks `core.is_erased(did)` first, like the label
     write, so a write cannot land after an erasure.
 Tests: `bsky_labels_grants_denied`, `bsky_labels_api_reads_no_app`, `open_label_item_one_per_member`,
