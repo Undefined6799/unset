@@ -20,7 +20,9 @@ The atproto network adapter. Package `@unset/infrastructure-pds`. Identity looku
 
 `createIdentityNetwork` throws `ConfigError` on `PLC_URL` unless the URL is `https:` and its host is in the `plc` policy's host list. `get` uses policy `plc` when the request target is `plc`, and `atproto` otherwise. A body cap in this file is 64 KiB, and the call also passes `Math.min(request.maxBytes, MAX_BYTES)`. `txt` uses `resolveTxt`. Net-guard errors map through the `FAILURE` record onto `unavailable`, `refused` and `no_such_host`. Any other thrown value is rethrown.
 
-`createOAuthClient` builds `NodeOAuthClient` with the caller's state store, session store, `requestLock`, `fetch`, and the resolvers from `identity-resolvers.ts`. `onSessionDeleted` logs a reason word. `ownIssuerOnly` sends the library's fetch only when the URL origin equals `ownIssuer`.
+`createOAuthClient` builds `NodeOAuthClient` with the caller's state store, session store, `requestLock`, `fetch`, and the resolvers from `identity-resolvers.ts`. It passes `didCache` and `handleCache` as `NO_CACHE`, whose `get`, `set` and `del` each resolve to `undefined`. `onSessionDeleted` logs a reason word. `ownIssuerOnly` sends the library's fetch only when the URL origin equals `ownIssuer`.
+
+`authorize` returns the URL only when its query has `request_uri` and no `code_challenge`. Otherwise it logs `oauth.authorize_failed` with kind `ParMissingError` and returns `{ ok: false, reason: "failed" }`. A URL with no `request_uri` fails that check. A non-PAR URL that already names a `request_uri` fails it too: when the server offers no PAR endpoint and does not require PAR, the library copies the request onto the authorization endpoint, including `code_challenge`.
 
 `oauthFields` allows `OAUTH_ALLOW_HTTP: true` only when `UNSET_ENV` is `dev`. `deployment/preflight/checks/local-only-keys.ts` (C29) refuses that key unless the stage is `local`. `interfaces/http/compose.ts` passes `cfg.OAUTH_ALLOW_HTTP` as `allowHttp`.
 
