@@ -129,6 +129,19 @@ describe("breaking-check", () => {
     ]);
   });
 
+  test("breaking_check_union_rules", () => {
+    // An open union may gain refs (its readers already take an unknown type); a closed one may not open or change.
+    const before = original("sh.unset.profile");
+    const field = (doc: Doc) => record(doc).properties;
+    field(before).open = { type: "union", refs: ["#a"] };
+    field(before).shut = { type: "union", refs: ["#a"], closed: true };
+    const after = structuredClone(before);
+    field(after).open = { type: "union", refs: ["#a", "#b"] };
+    expect(breakingProblems(after, before, {})).toEqual([]);
+    field(after).shut = { type: "union", refs: ["#a"] };
+    expect(breakingProblems(after, before, {})).toEqual(["sh.unset.profile#main.shut: union became open"]);
+  });
+
   test("breaking_check_permission_set_add_requires_flag", () => {
     const next = original("sh.unset.authApp");
     set(next).permissions.push({ type: "permission", resource: "repo", collection: ["sh.unset.video"] });

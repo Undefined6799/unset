@@ -47,6 +47,7 @@ function compareDef(at: string, nowValue: unknown, beforeValue: unknown): string
     ...changedValues(at, now, before),
   ];
   if (now.closed === true && before.closed !== true) problems.push(`${at}: union became closed`);
+  if (before.closed === true && now.closed !== true) problems.push(`${at}: union became open`);
   if (before.items) problems.push(...compareDef(`${at}[]`, now.items, before.items));
   if (before.type === "object") problems.push(...compareObject(at, now, before));
   return problems;
