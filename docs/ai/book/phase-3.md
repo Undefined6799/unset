@@ -484,6 +484,8 @@ Algorithm (contract: what is measured and the pass rules; the harness itself is 
 | M16 | `@atproto/tap` message types vs the pinned wire | match, or list differences |
 | M17 | S1 behind `egress-public` with no other route out: do the relay WebSocket and every repo and identity fetch go through `HTTPS_PROXY` | all through the proxy; otherwise **stop** for book revision (P3.02's egress design depends on it; editor pass) |
 | M18 | S2 delete while Tap is stopped, then restart | records whether the delete is replayed from the relay cursor (it should be: only resync loses deletes) |
+| M19 | S1 with `TAP_SIGNAL_COLLECTION=sh.unset.profile` (book edit 2026-10-30): a test account on a foreign PDS that never signed in to unset writes its profile record | discovered and backfilled with no `/repos/add`; record the time to discovery. Fails → P3.02 keeps login-triggered tracking only (no outcome change) |
+| M20 | S1: `/repos/remove` a signal-discovered test DID, then write its profile record again | record whether Tap tracks it again (informational; P3.02's erased-DID rule handles either answer) |
 
 Outcomes and what changes:
 
@@ -650,7 +652,12 @@ Outputs (contract):
   - **Two Tap services** (provisional P3-A1), same image by digest, each `read_only: true`, non-root, `cap_drop:
     [ALL]`, no published ports, its own database and admin password:
     - `tap-relay`: `TAP_RELAY_URL=https://relay1.us-east.bsky.network`; network `ingest-relay` (shared only with
-      `indexer`) and `tap-egress`; tracks every DID whose PDS is not ours.
+      `indexer`) and `tap-egress`; tracks every DID whose PDS is not ours. It also sets
+      `TAP_SIGNAL_COLLECTION=sh.unset.profile` (book edit 2026-10-30, Alex 00:27:43Z "Yes use sh.unset.profile";
+      indigo `cmd/tap/README.md`, "Network Boundary Modes"), so an account on any PDS that holds a profile record is
+      tracked without signing in here, as plan §5.2 says records from any PDS are indexed. The login-triggered queue
+      below stays: it tracks a member at once and routes our own PDS's members to `tap-own`. If P3.01's M19 fails,
+      the variable is left out.
     - `tap-own`: `TAP_RELAY_URL` = our PDS's internal URL; network `ingest-own` (shared only with `indexer`) and
       the PDS's internal network plus PLC egress only; tracks DIDs hosted on our PDS. In the dev stack this is the
       dev PDS (the dev PDS never sets `PDS_CRAWLERS`).
@@ -707,10 +714,18 @@ Edge cases and failures:
     queue depth is on the health board.
   - Tap down → queue grows; nothing lost; the other Tap instance is unaffected.
   - An erased DID logs in again → step 2a skips it; only an owner action re-allows tracking (P3.07).
+  - An erased DID still holding a profile record is found again by the signal collection (P3.01 M20) → Tap may
+    hold its records again, but the indexer's tombstone check drops every event for it (P3.05, P3.07), the track
+    loop calls `untrack` again and counts `track_erased_rediscovered`; nothing reaches our tables. The ADR states
+    that Tap's own database can briefly hold such a repo until the untrack lands.
   - Events delivered before `/repos/add` returns → the row already exists (step 2b), so they apply.
   - Missing password or empty filter → `indexer` and Tap refuse to boot.
 
 Done when (tests):
+  - `tap_relay_signal_collection`: compose's `tap-relay` sets `TAP_SIGNAL_COLLECTION=sh.unset.profile`, a member of
+    `INGEST_COLLECTIONS`; `tap-own` sets none (book edit 2026-10-30).
+  - `track_erased_rediscovered_untracked`: an event for an erased DID from `tap-relay` is dropped, `untrack` is
+    called, and the counter rises.
   - `tap_edge` (book edit 2026-10-13-p129a-build-rulings, Amendment 3; P1.29's networks table): an internal network
     whose only members are tap and the edge; the edge's attachment carries the `PDS_HOST` alias; the strict parser
     accepts aliases on edge attachments only, with the allowed values listed per network. The alias rule widens by
