@@ -10,13 +10,15 @@ The `sh.unset.*` record schemas, their validator, the field limits and the OAuth
 | Path | Role |
 | --- | --- |
 | `shared/lexicons/schemas/` | Our lexicon JSON |
+| `shared/lexicons/published/` | Snapshot JSON. One file: `sh.unset.profile.json`. |
+| `shared/lexicons/published.lock.json` | `{}`. Names no NSID. |
 | `shared/lexicons/vendor/` | Bluesky lexicons we read, copied from tag `@atproto/api@0.23.0`. Hashes are in `vendor/SOURCE.md`. |
 | `shared/lexicons/generated/` | `lex build` output, checked in. Its `tsconfig.json` sets `exactOptionalPropertyTypes` off. Do not edit it. |
 | `shared/lexicons/src/validate.ts` | `validateRecord`. `write` refuses fields the schema does not name. `read` does not. |
 | `shared/lexicons/src/limits.ts` | `LIMITS` and `IMAGE_ACCEPT`. `limits.test.ts` holds the numbers equal to the schemas. |
 | `shared/lexicons/src/scope.ts` | `scopeString` and `scopeStringFallback` |
 | `shared/lexicons/scripts/build.ts` | Schema checks and generation |
-| `shared/lexicons/scripts/breaking-check.ts` | Compares a published schema with the current one |
+| `shared/lexicons/scripts/breaking-check.ts` | `publishedProblems` compares `schemas/<nsid>.json` with `published/<nsid>.json` |
 
 Our schemas:
 
@@ -26,6 +28,14 @@ Our schemas:
 | `schemas/sh.unset.section.json` | `sh.unset.section` |
 | `schemas/sh.unset.follow.json` | `sh.unset.follow` |
 | `schemas/sh.unset.authApp.json` | `sh.unset.authApp` |
+
+Snapshots:
+
+| File | NSID |
+| --- | --- |
+| `published/sh.unset.profile.json` | `sh.unset.profile` |
+
+`published/sh.unset.profile.json` has the same contents as `schemas/sh.unset.profile.json`. Records of `sh.unset.profile` are already in members' repositories, so this NSID has a snapshot (`publishedProblems` in `breaking-check.ts`).
 
 `NSID` in `shared/lexicons/index.ts` repeats those four. `NSID.authApp` is the same string as `PERMISSION_SET_NSID` in [config](../config/). This package may not import `shared/config`. No file under `shared/config/` imports this package. `permanent.test.ts` pins `PERMISSION_SET_NSID` to the string and to the ADR 0025 row. It does not import `NSID`.
 
@@ -49,7 +59,14 @@ node shared/lexicons/scripts/build.ts --check
 node shared/lexicons/scripts/breaking-check.ts
 ```
 
-`--check` exits 1 when `generated/` is stale. `breaking-check.ts` reads `published.lock.json`. With an empty lock it reports no problem. `--approved-by-alex=<PR number>` is the flag the permission-set addition path reads.
+`--check` exits 1 when `generated/` is stale. `publishedProblems` takes every key of `published.lock.json` and every `published/*.json` name, and compares `schemas/<nsid>.json` with `published/<nsid>.json`.
+
+| NSID source | On this tree |
+| --- | --- |
+| Keys of `published.lock.json` | None. The file is `{}`. |
+| `published/*.json`, name without `.json` | `sh.unset.profile` |
+
+The profile snapshot is compared. The two files have the same contents. `--approved-by-alex=<PR number>` is the flag the permission-set addition path reads.
 
 ## May import
 
@@ -71,7 +88,7 @@ Declared in `shared/lexicons/package.json`:
 | `@atproto/lex` | 0.3.14 | devDependency |
 | `@atproto/lex-document` | 0.1.13 | devDependency |
 
-Who may import the index is the [shared](../) table. The domain row names `shared/lexicons/` specifically. On this tree `domains/` does not import it. Product importers are `infrastructure/pds/oauth/scopes.ts` and `infrastructure/pds/oauth/sign-in.ts`.
+Who may import the index is the [shared](../) table. The domain row names `shared/lexicons/` specifically. On this tree `domains/profile/profile.ts` imports `LIMITS` and `validateRecord`. Product importers are that file, `infrastructure/pds/oauth/scopes.ts` and `infrastructure/pds/oauth/sign-in.ts`.
 
 ## Entry points
 
@@ -84,4 +101,4 @@ Who may import the index is the [shared](../) table. The domain row names `share
 
 ## Data
 
-No Postgres schema, role or table. The record contract is the JSON under `schemas/` and `vendor/`. `published.lock.json` holds no NSID yet.
+No Postgres schema, role or table. The record contract is the JSON under `schemas/` and `vendor/`. `published.lock.json` names no NSID. The snapshot `publishedProblems` compares is `published/sh.unset.profile.json`.
