@@ -172,7 +172,7 @@ Written in parallel with the steps that own them; the editor reconciles names. E
 | P1.19 | `t(key, params)` with EN and FR catalogs. |
 | P2.01 / P2.02 | `resolveHandle(handle) → did`, `resolveDid(did) → {pdsEndpoint, keys}`; `verifyHandle(did) → handle \| 'handle.invalid'`. |
 | P2.03 | `getSession(req) → {did, sid} \| null` (memoised per request). |
-| P2.04 | The requested scope string (plan §3, 22:49Z) includes `rpc:app.bsky.feed.getFeed`, `getTimeline`, `getPosts`, `getFeedGenerators` and `getPostThread` with `aud=did:web:api.bsky.app#bsky_appview`, and `rpc:com.atproto.moderation.createReport?aud=*` (Bluesky's moderation service now, our Ozone in Phase 5), plus `repo:app.bsky.graph.follow`, all requested from day one (exactly the scope at plan line 126). A member who consented to the fallback scope may still lack them, so every `rpc:` call maps a scope refusal to a notice. |
+| P2.04 | The requested scope string (plan §3, 22:49Z) includes `rpc:app.bsky.feed.getFeed`, `getTimeline`, `getPosts`, `getFeedGenerators` and `getPostThread` with `aud=did:web:api.bsky.app#bsky_appview`, and `rpc:com.atproto.moderation.createReport?aud=*` (Bluesky's moderation service now, our Ozone in Phase 5), plus `repo:app.bsky.graph.follow`, all requested from day one (exactly the scope at plan line 126). A member who consented to the fallback scope may still lack them, so every `rpc:` call maps a scope refusal to a notice. **Book edit 2026-10-30 (ADR 0039, proposed):** none of these is requested any more; the Phase 4 step that first calls one adds its scope to `scope.ts` and to `grantCovers`' required grant, so members sign in once more. |
 | P2.07 | `pds.call(did, nsid, params, {method, timeoutMs, headers}) → PdsResult` and `pds.applyWrites(did, ops[≤200]) → {results[{uri, cid}]}`. Errors: `PdsTimeout`, `PdsTransient` (5xx, network), `PdsRateLimited(retryAfterS)`, `PdsAuthLost` (refresh failed: re-login prompt, session kept), `PdsRejected(status, xrpcError)`. A DPoP-nonce 401 is retried inside the wrapper and never surfaces. `pdsAgentFor(did)` restores the member's OAuth session **server-side** from the sealed token store, with no user present, for every publish that runs after an asynchronous review (plan §5.8, 22:49Z). A grant that is gone returns `NeedsReauth`; this file shows it as "Sign in to publish" and never uses another account's session. |
 | P2.16 / P2.17 | Image fingerprint gate and image pipeline: `images.ingest(did, bytes) → DraftImage{key, mime, width, height, bytes}` or `blocked`. The gate runs before anything is stored: it computes PDQ only (no MD5, no TMK+PDQF) and passes the hashes to the `FingerprintCheck` stage (the fake until P5.07b). From P5.07b it also seals the C-16 transmission buffer for the image (P4.03's module) and, at a match, calls P4.07's hold entry point with `subjectKind: 'image'` (decision 23). |
 | P2.18 | Draft store tables `app.draft*`, private object store prefix `drafts/{did}/…`; `draftMedia.listForExport(did) → {key, mime, bytes}[]`. |
@@ -3227,7 +3227,7 @@ Reuse:
   - `appview/src/db.ts:208-233` (`listTimelinePosts` gates: self or followed, active, not hidden, published) → LESSON, provisional — for reuse review.
   - `app/src/lib/social-feed.ts:40-83` (defensive view parsing) → LESSON: replaced by the one lexicon validator (§2 rule 8).
   - `app/src/components/social/SocialTimeline.tsx` (432 lines, Tailwind classes, inline `choose()` strings) → REJECT: no Tailwind, strings go to catalogs (plan §5.1, §8 Phase 1).
-Not in this step: other tabs and saved feeds (P4.22); full label behaviour (P4.23); report button (P4.24); Bluesky thread view (the `getPostThread` scope is requested from day one, plan §3 22:49Z, but no Phase 4 step
+Not in this step: other tabs and saved feeds (P4.22); full label behaviour (P4.23); report button (P4.24); Bluesky thread view (the `getPostThread` scope was requested from day one, plan §3 22:49Z, until ADR 0039 (proposed), but no Phase 4 step
 builds the view; posts link out); reposting (not in plan scope).
 Diagram: see "Loading a feed tab" above.
 
@@ -3242,8 +3242,8 @@ Size: ~320 source lines, ~340 test lines
 Goal: users add, remove and reorder feed tabs; Bluesky feeds load through their own PDS; our "unset.sh latest" feed
 loads from the index; the list is private in the app DB.
 
-Inputs: P4.21 merge/render model, `FeedItem`, moderation hook, cursor helpers; P2.07 (with the `getFeed` and
-`getFeedGenerators` scopes, plan §3 22:49Z); `resolveHandle`, `verifyHandle`; P2.21's atomic-reorder pattern.
+Inputs: P4.21 merge/render model, `FeedItem`, moderation hook, cursor helpers; P2.07 (this step adds the `getFeed` and
+`getFeedGenerators` scopes and their `grantCovers` entries, ADR 0039; plan §3 22:49Z); `resolveHandle`, `verifyHandle`; P2.21's atomic-reorder pattern.
 Outputs:
 - Table `app.saved_feed(did, id uuid, kind ('following' | 'unset_latest' | 'unset_following' | 'bsky'), feed_uri NULL,
   label text, position int, created_at, PRIMARY KEY (did, id), UNIQUE (did, position) DEFERRABLE, UNIQUE (did,
@@ -4062,7 +4062,7 @@ Plan gaps, outline errors and contradictions found while writing P4.16–P4.28, 
   a Bluesky thread view wants `getPostThread`. None is in the §3 scope string, and adding scopes later forces re-consent
   for everyone. Recommend adding `getFeedGenerators` (and deciding on `getPostThread`) to P2.04's scope now. The book
   works around all three (user-supplied label, our queue only, link out). **Round 2:** folded into the plan (22:49Z);
-  all three are requested from day one. P4.22 now names a feed from `getFeedGenerators`, and P4.24 forwards Bluesky
+  all three were requested from day one (until ADR 0039, proposed: each now joins with its step). P4.22 now names a feed from `getFeedGenerators`, and P4.24 forwards Bluesky
   reports with `createReport`. The thread view stays unbuilt (link out).
 - **E7 (ownership gap, rendition readiness).** Nothing in the outline says who records "renditions exist for this master
   CID" in a table that `web`, `api` and `media` can read. Without it, a `sh.unset.video` written by another client (no
@@ -4278,7 +4278,8 @@ P4.21 stop), **P4b-E14** (default tabs), **P4b-E18** (metric rounding), **P4b-E1
       and `FlipContributor` (P4.11, P4.14, P4.17, P4.17a). Any non-`public` state counts as not public.
     - `upload_day_count` is P2.18's table with `kind = 'video'` rows.
     - `mintDraftUrl`'s `/o/<purpose>/<objectKey>` shape.
-    - The scope row matches plan line 126 (`createReport?aud=*`, `repo:app.bsky.graph.follow`).
+    - The scope row matched plan line 126 (`createReport?aud=*`, `repo:app.bsky.graph.follow`); since ADR 0039
+      (proposed) each scope joins with its step.
 15. **Depth (brief resolution 10).** The header states the detail-by-risk rule and names P4.00 ("Refine Phase 4") as
     an outline row for the lead; no P4.00 step body is written here.
 

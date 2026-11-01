@@ -556,3 +556,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0038](0038-profile-save-keeps-unknown-fields.md)):** a profile save checks the merged record in read mode, so a
   stored field the lexicon does not define is kept and never blocks a save; a defined field that is invalid is still
   refused. Supersedes ADR 0037 Decision 2's strict-validator clause.
+- **ADR 0039 proposed (Alex chose the direction 2026-10-30 00:27:43Z; own record:
+  [0039](0039-request-scopes-per-feature.md)):** sign-in asks only for our permission set, image upload and the
+  e-mail address; Bluesky scopes, video upload and reports join with the features that use them, each with one
+  re-consent. Supersedes the "requested from day one" clause of plan §3 once accepted. Proposed, awaiting Alex.

@@ -1,23 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { scopeString, scopeStringFallback } from "./scope.ts";
 
-// Plan §3 (docs/ai/PLAN.md, the "Granular permissions + permission sets" row): every scope the app requests, copied
-// byte for byte. A scope added after launch costs every user a re-consent, so a change here is a plan change first.
-const OUTSIDE_THE_SET = [
-  "repo:app.bsky.feed.like?action=create&action=delete",
-  "repo:app.bsky.feed.post",
-  "repo:app.bsky.graph.follow",
-  "repo:app.bsky.actor.profile",
-  "blob:image/*",
-  "blob:video/*",
-  "account:email?action=read",
-  "rpc:app.bsky.feed.getFeed?aud=did:web:api.bsky.app#bsky_appview",
-  "rpc:app.bsky.feed.getTimeline?aud=did:web:api.bsky.app#bsky_appview",
-  "rpc:app.bsky.feed.getPosts?aud=did:web:api.bsky.app#bsky_appview",
-  "rpc:app.bsky.feed.getFeedGenerators?aud=did:web:api.bsky.app#bsky_appview",
-  "rpc:app.bsky.feed.getPostThread?aud=did:web:api.bsky.app#bsky_appview",
-  "rpc:com.atproto.moderation.createReport?aud=*",
-].join(" ");
+// Every scope the app requests beside its permission set, copied byte for byte. ADR 0039: only what a shipped feature
+// uses; each later feature adds its own scope in its own PR, which costs every member one re-consent.
+const OUTSIDE_THE_SET = ["blob:image/*", "account:email?action=read"].join(" ");
 
 describe("scope strings", () => {
   test("scope_string_pinned", () => {
@@ -29,6 +15,13 @@ describe("scope strings", () => {
     expect(scopeStringFallback()).toBe(
       `atproto repo:sh.unset.profile repo:sh.unset.section repo:sh.unset.follow?action=create&action=delete ${OUTSIDE_THE_SET}`,
     );
+  });
+
+  test("scopes_request_no_bluesky_or_unused_scope", () => {
+    // ADR 0039: no Bluesky collection, AppView call, video upload or report scope until the feature that uses it ships.
+    for (const scope of [scopeString(), scopeStringFallback()]) {
+      expect(scope).not.toMatch(/app\.bsky\.|blob:video|rpc:/);
+    }
   });
 
   test("scopes_never_request_identity_status_or_transition", () => {
