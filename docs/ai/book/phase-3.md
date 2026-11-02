@@ -1100,7 +1100,7 @@ Reuse: none. Not in this step: `core.erase_did` and its grants (P3.07k). Diagram
 Tags: [SEC]            Depends on: P3.07g, P3.06, P1.13, P1.15a, P2.18            Plan: as P3.07; §9 trusted base (`eraseDid`; rule SE-6, plan `6275827` and `badf15a`)
 Where: migration `NNNN_erase_did_functions.sql` (the functions only: `core.erase_did`, `core.erase_outbox_list`,
   `core.erase_outbox_mark`, `core.erase_hook_mark`, `core.erase_report`, `core.is_erased`, `core.allow_retrack`,
-  `mod.erase_foreign_did`, the `core.is_held` placeholder, and their EXECUTE grants), `interfaces/http/jobs/erase-storage.ts`,
+  `mod.erase_foreign_did`, `core.did_lock_key(did) → bigint` (IMMUTABLE; the per-DID advisory-lock key every writer that races erasure uses; on the `# trusted functions:` line), the `core.is_held` placeholder, and their EXECUTE grants), `interfaces/http/jobs/erase-storage.ts`,
   `interfaces/indexer/erase-untrack.ts`, their unit tests
 Size: hypothesis, P3.00 sets it (~170 source lines, ~150 test lines)
 
@@ -1215,7 +1215,8 @@ Outputs (contract):
 
 Algorithm (contract: the order and the refusals):
   1. Validate the DID; else `RAISE`.
-  2. `pg_advisory_xact_lock` on the DID (one erasure of a DID at a time).
+  2. `pg_advisory_xact_lock(core.did_lock_key(did))` (one erasure of a DID at a time; P4.23b's label poll takes
+     the same key through the same function, never its own derivation).
   3. Run each registry statement in order; `retain_legal_hold` rows only where
      `NOT core.is_held(subject_kind, subject_ref)`; collect
      `counts` and `kept_held`. Any error (including from `core.is_held`) → the transaction rolls back; nothing is
