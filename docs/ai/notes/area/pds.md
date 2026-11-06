@@ -7,7 +7,7 @@ summary: "Hub for infrastructure/pds: the atproto network adapter: identity's DI
 code: [infrastructure/pds/index.ts]
 sources: []
 importance: normal
-related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]"]
+related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]", "[[seal]]"]
 replaced_by: null
 tags: [area, pds]
 checked: 2026-10-28
@@ -27,7 +27,7 @@ implements the identity domain's `IdentityNetwork` port on [[net-guard]] (ADR 00
   too.
 
 **The OAuth client (P2.04, ADR 0021).** `oauth/oauth-client.ts` builds the one `@atproto/oauth-client-node` client
-from our pieces only: the sealed stores (`infrastructure/postgres/oauthStores.ts`), the advisory lock, net-guard's
+from our pieces only: the sealed stores (`infrastructure/postgres/oauthStores.ts`; [[seal]]), the advisory lock, net-guard's
 `libraryFetch` and `oauth/identity-resolvers.ts`, which answers the library's handle and DID lookups through the
 identity domain (the one file outside it allowed to name `alsoKnownAs`). `oauth/scopes.ts` decides whether a grant
 covers what a session needs, with the library's matcher. Its `onSessionDeleted` hook only logs: the library fires it
@@ -66,4 +66,4 @@ the book's upload step (phase 2) re-exports the constant when a route first pass
 `null`, never a failure; any other refusal stays a failure, so an outage never reads as an empty profile. The value
 comes back unparsed: `domains/profile` reads it field by field.
 
-**Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].
+**Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]], [[seal]].
