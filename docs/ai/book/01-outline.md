@@ -1547,7 +1547,9 @@ Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices ap
 | P2.16 | Image fingerprint stage (interface, local PDQ, fake check) | [SEC] [MOD] | P2.16b, P1.02, P1.12, P1.15 | `phase-2.md` |
 | P2.17 | Image pipeline | [SEC] | P2.16, P2.16b | `phase-2.md` |
 | P2.18k | `object-store` egress policy in `net-guard` (split from P2.18, SE-6) | [SEC] | P1.18a | `phase-2.md` |
-| P2.18 | Draft store | [SEC] | P2.18k, P1.12, P1.18, P1.24, P2.17 | `phase-2.md` |
+| P2.18s | Object store service and `infrastructure/storage` adapter (ADR 0041) | [SEC] | P2.18k | `phase-2.md` |
+| P2.18p | PDS blobstore in the object store (ADR 0041) | [SEC] | P2.18s | `phase-2.md` |
+| P2.18 | Draft store | [SEC] | P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17 | `phase-2.md` |
 | P2.19 | Draft media preview (minimal `media` entrypoint) | [SEC] | P2.18, P1.08 | `phase-2.md` |
 | P2.20 | `ProfileView` | [SEC] | P1.24 | `phase-2.md` |
 | P2.21 | Profile editor | — | P2.16, P2.18, P2.19, P2.20, P1.23, P1.31 | `phase-2.md` |
@@ -1591,6 +1593,8 @@ flowchart TD
   P2_17["P2.17 Image pipeline"]
   P2_18["P2.18 Draft store"]
   P2_18k["P2.18k object-store egress policy"]
+  P2_18s["P2.18s Object store and adapter"]
+  P2_18p["P2.18p PDS blobstore in the store"]
   P2_19["P2.19 Draft media preview"]
   P2_20["P2.20 ProfileView"]
   P2_21["P2.21 Profile editor"]
@@ -1614,6 +1618,9 @@ flowchart TD
   P2_26a --> P2_25
   P2_10 --> P2_25
   P2_18k --> P2_18
+  P2_18k --> P2_18s
+  P2_18s --> P2_18
+  P2_18s --> P2_18p
   P2_09k --> P2_09
   P2_09 --> P2_09d
   P2_09d --> P2_10

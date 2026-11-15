@@ -180,7 +180,8 @@ flowchart TD
   P125 --> P215[P2.15 legal 2]
   P216b[P2.16b PDQ hasher] --> P216[P2.16 fingerprint stage, fake check]; P112 --> P216; P115 --> P216
   P216 --> P217[P2.17 image pipeline]; P216b --> P217
-  P112 --> P218[P2.18 draft store]; P217 --> P218; P118 --> P218
+  P218k[P2.18k store egress policy] --> P218s[P2.18s object store and adapter]; P218s --> P218p[P2.18p PDS blobstore]
+  P112 --> P218[P2.18 draft store]; P217 --> P218; P118 --> P218; P218s --> P218
   P218 --> P219[P2.19 draft media URLs]; P108 --> P219
   P124 --> P220[P2.20 ProfileView]
   P218 --> P221[P2.21 editor]; P219 --> P221; P220 --> P221; P123 --> P221
@@ -3584,11 +3585,45 @@ Done when (tests): `object_store_policy_exact_origin` (the configured origin →
   `egress.blocked`); `object_store_policy_private_only` (a public answer → `egress.blocked`).
 Reuse: none. Not in this step: the storage client and drafts (P2.18). Diagram: none.
 
+### P2.18s — Object store service and `infrastructure/storage` adapter (ADR 0041)
+Tags: [SEC]            Depends on: P2.18k            Plan: §5.8 drafts store; ADR 0041 (proposed)
+Where: `infrastructure/storage/{index.ts, object-store.ts, README.md}` + tests, `tests/support/objects.ts`,
+  `deployment/compose.{dev,dev.source,local}.yaml` service `objects` and its one-shot setup, `deployment/networks.dev.json`,
+  the image lock and mirror list, the dev-stack secret files' names
+Size: ~200 source lines, ~250 test lines
+
+Book edit 2026-11-15: split out of P2.18 so the store lands before the image pipeline (Alex, 2026-11-15 20:43:46Z,
+"also implement s3 storage for both, the pds and the users."). P2.18 keeps the tables, quota, sweeper and draft media.
+
+Goal: the store runs in the dev and local stacks, and the app has the book's thin client for it.
+Outputs: P2.18's `objectStore` contract (`put`, `get`, `setTags`, `deletePrefix`, `list`; 10 s timeouts; typed
+  `objects.unavailable`), built here on `aws4fetch` signing and net-guard's `object-store` policy; the `objects`
+  service (SeaweedFS by digest), its buckets `unset-private` and `unset-pds`, and one key per process (ADR 0041
+  Decision 3). The adapter is not wired into any composition root yet (P2.18 does that).
+Threats: E a key used outside its prefix (`objects_key_scoped_to_prefix`, against the real store); I a key or DID in a
+  log (`objects_errors_carry_no_key`); E any request leaving through another origin (P2.18k's policy).
+Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`, `objects_list_pages`,
+  `objects_key_scoped_to_prefix`, `objects_unavailable_is_typed`, `objects_errors_carry_no_key`, against SeaweedFS
+  started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres).
+
+### P2.18p — PDS blobstore in the object store (ADR 0041)
+Tags: [SEC]            Depends on: P2.18s            Plan: ADR 0041 Decision 5
+Where: `deployment/compose.{dev,dev.source,local}.yaml` (the PDS's `PDS_BLOBSTORE_S3_*`), `deployment/preflight`
+  (a check on those keys), `tests/support/pds-email-token.ts` (P1.29i's reader accepts exactly this shape), a runbook
+  step that copies existing blobs
+Size: ~80 source lines, ~150 test lines
+
+Goal: the PDS stores blobs in `unset-pds` through the store's internal origin, with its own key, and nothing else.
+Threats: E a PDS S3 setting that leaves the stack (endpoint, region or key missing, or another host) → preflight and
+  the reader refuse it (`pds_s3_only_internal_store`); D blobs lost in the switch → the copy runbook and a count check.
+Done when (tests): `pds_s3_only_internal_store`, `pds_s3_and_disk_refused`, the local stack's upload-then-`getBlob`
+  through the store, and P1.29i's existing refusals still red for every other S3 shape.
+
 ### P2.18 — Draft store
-Tags: [SEC]            Depends on: P2.18k, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
-Where: `domains/identity/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}`,
-  `infrastructure/storage/{object-store.ts, README.md}`, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
-  lines, `deployment/compose.dev.yaml` service `objects` (S3-compatible) and its bucket and credentials
+Tags: [SEC]            Depends on: P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
+Where: `domains/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}` (the profile
+  module's folder since ADR 0037; book edit 2026-11-15), wiring P2.18s's `infrastructure/storage` adapter, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
+  lines (the `objects` service, its buckets and keys come from P2.18s)
 Size: ~330 source lines, ~400 test lines
 
 Goal: Keep every profile edit, section and draft image in the app (Postgres plus the private object store, per-DID
