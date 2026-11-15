@@ -3609,7 +3609,8 @@ Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`
   put) and a forced vacuum at threshold 0 removes a deleted marker (`objects_erase_removes_bytes`); neither bucket
   reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a pinned
   identity, or it is built from tagged source; the admin secret is mounted only into the setup; a rotation, forced
-  vacuum and metadata-log purge runbook; and the filer-store tombstone question settled or carried as the P5.01 gate
+  vacuum and metadata-log purge runbook in Decision 7's order (delete, purge the log, wait for the chunk deletes,
+  vacuum), with the manual takedown of one `unset-private` object; and the filer-store tombstone question settled or carried as the P5.01 gate
   (ADR 0041 Decisions 3, 6, 7).
 
 ### P2.18p — PDS blobstore in the object store (ADR 0041)

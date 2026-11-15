@@ -90,15 +90,24 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
 7. **Erasure, takedown and export.** `drafts/<did>/` and `media/<did>/` join the erasure registry and P3.07's
    outbox; the PDS's own account deletion removes `blocks/<did>/` as it removes the folder today. A delete is a
    tombstone, and vacuum is a rewrite and unlink, not a disk wipe. So:
-   - physical removal is a forced vacuum at threshold 0 (`lock`, `volume.vacuum -garbageThreshold 0`, `unlock`), which
-     compacts every volume holding any garbage. It runs after every erasure batch and every takedown, from the
-     store's one-shot admin job, never on a schedule a small delete could fall under. Until P5.08b automates it, it
-     is a runbook step Alex runs, written in P2.18s. `-master.garbageThreshold=0.01` stays as a backstop only;
-   - the filer's metadata is purged on the same run: the metadata change log under `/topics/.system/log/` is kept
-     for no more than a day: the runbook removes every older day's folder. Forcing LevelDB to compact its tombstones is not
-     solved. It is a named deferral to P2.18s, which must either find the compaction control or move the filer store
-     to one that deletes for real. Until then, a deleted object's name (with its DID) and its chunk key may survive in
-     the filer's files. That is accepted for staging only, and it is a P5.01 gate before real members' drafts;
+   - physical removal runs in this order, from the store's one-shot admin job: delete the objects; purge the
+     filer's metadata change log (below), because its files are themselves stored in volumes; wait until the
+     filer has deleted the objects' chunks, which it does asynchronously, by re-checking that the volumes report
+     the garbage; then a forced vacuum at threshold 0 (`lock`, `volume.vacuum -garbageThreshold 0`, `unlock`),
+     which compacts every volume holding any garbage. It runs after every erasure batch and every takedown,
+     never on a schedule a small delete could fall under. It is manual until P5.08b: a runbook step Alex runs,
+     written in P2.18s. P3.07's automated erasure must not ship to real members unless the vacuum follows it
+     automatically, so P3.07 either runs this sequence itself or waits for P5.08b. `-master.garbageThreshold=0.01`
+     stays as a backstop only;
+   - the filer's metadata change log under `/topics/.system/log/` keeps key names, DIDs included. The runbook
+     removes every day's folder before the current one on each erasure run; between runs, and for the current
+     day, names survive. Forcing LevelDB to compact its tombstones is also not solved: P2.18s must either find
+     the compaction control or move the filer store to one that deletes for real. Both are accepted for staging
+     only, and both are one P5.01 gate before real members' drafts: a deleted object's name and chunk key may
+     survive in the filer's files until then;
+   - interim takedown of a single object in `unset-private` (an illegal draft image, later a rendition) has no
+     automated path either: the P2.18s runbook gives the manual procedure (delete the one key with the setup's
+     admin key, then the sequence above), and P5.08a automates it with the PDS path;
    - freed disk blocks are not overwritten. On staging that rests on the host as it stands (Decision 6). P5.01 puts
      the store on an encrypted disk, so freed blocks are ciphertext under a key that leaves with the disk;
    - PDS blobs: account deletion removes `blocks/<did>/`. Whether the PDS clears stale `tmp/<did>/` uploads itself
@@ -114,7 +123,7 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
      erasure and takedown, and must expire purged objects from backups within its retention window.
 
 ## Alternatives
-- **Garage (AGPL-3.0).** No object tagging or object lock. Rejected.
+- **Garage (AGPL-3.0).** No object tagging, which the lifecycle rules use. Rejected.
 - **MinIO.** Archived community edition, no images. Rejected.
 - **`@aws-sdk/client-s3` in the app.** Full featured, but a large tree and the credential chain P1.29i refused.
   Rejected; a ~120-line SigV4 signer of our own stays the fallback if `aws4fetch` stops being maintained.
