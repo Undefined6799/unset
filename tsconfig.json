@@ -13,6 +13,7 @@
     { "path": "infrastructure/postgres" },
     { "path": "infrastructure/seal" },
     { "path": "infrastructure/session" },
+    { "path": "infrastructure/storage" },
     { "path": "interfaces/http" },
     { "path": "shared/config" },
     { "path": "shared/errors" },

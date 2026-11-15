@@ -8,6 +8,7 @@
     { "path": "../infrastructure/audit" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
+    { "path": "../infrastructure/storage" },
     { "path": "../shared/host-pin" },
     { "path": "../shared/log" }
   ]
