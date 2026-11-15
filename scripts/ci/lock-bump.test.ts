@@ -161,7 +161,8 @@ describe("lock bump cli", () => {
     expect(run(dir, "", "[]", good).code).toBe(1);
     expect(run(dir, "not-a-sha", good).code).toBe(1);
     expect(run(dir, "e".repeat(40), good).code).toBe(1);
-    const env = { ...fixtureGitEnv(), BASE_SHA: commits[2] ?? "" };
+    // No output file: the verdict has nowhere to go. The runner's own GITHUB_OUTPUT must not leak in.
+    const env = { ...fixtureGitEnv(), BASE_SHA: commits[2] ?? "", GITHUB_OUTPUT: undefined };
     expect(main({ root: dir, env, log: (line) => void line })).toBe(1);
   });
 });
