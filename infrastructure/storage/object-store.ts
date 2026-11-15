@@ -88,6 +88,15 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
     }
   }
 
+  /** The body as text, or null when the stream fails after the status line (a cut-off answer, not a throw). */
+  async function text(res: Response): Promise<string | null> {
+    try {
+      return await res.text();
+    } catch {
+      return null;
+    }
+  }
+
   async function listPage(
     prefix: string,
     token: string | null,
@@ -96,7 +105,8 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
     if (token !== null) query.set("continuation-token", token);
     const res = await call("GET", `${bucketUrl}?${query}`);
     if (res?.status !== 200) return null;
-    const xml = await res.text();
+    const xml = await text(res);
+    if (xml === null) return null;
     // A 200 can still carry a cut-off or invalid document (ListObjectsV2 API reference): a page counts only when it is
     // one whole ListBucketResult that says whether it is truncated, so a cleanup never reads a broken page as empty.
     const whole = /^\s*(<\?xml[^>]*\?>\s*)?<ListBucketResult[\s>][\s\S]*<\/ListBucketResult>\s*$/.test(xml);
@@ -131,7 +141,8 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
       "content-type": "application/xml",
     });
     if (res?.status !== 200) return false;
-    return !(await res.text()).includes("<Error>");
+    const answer = await text(res);
+    return answer !== null && !answer.includes("<Error>");
   }
 
   return {

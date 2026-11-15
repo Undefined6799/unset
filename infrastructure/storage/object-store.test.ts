@@ -57,6 +57,24 @@ describe("object store adapter", () => {
     }
   });
 
+  test("objects_cut_off_body_is_unavailable", async () => {
+    const broken = (): Response =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error("connection reset"));
+          },
+        }),
+      );
+    const fetch: typeof globalThis.fetch = async () => broken();
+    expect(await store(fetch).list("drafts/")).toEqual(UNAVAILABLE);
+    expect(await store(fetch).get(`drafts/${DID}/x`)).toEqual(UNAVAILABLE);
+    const listed = "<ListBucketResult><IsTruncated>false</IsTruncated><Key>drafts/a</Key></ListBucketResult>";
+    const deleteBroken: typeof globalThis.fetch = async (input) =>
+      (input as Request).method === "GET" ? new Response(listed) : broken();
+    expect(await store(deleteBroken).deletePrefix("drafts/")).toEqual(UNAVAILABLE);
+  });
+
   test("objects_partial_delete_is_unavailable", async () => {
     const calls: string[] = [];
     const fetch: typeof globalThis.fetch = async (input) => {
