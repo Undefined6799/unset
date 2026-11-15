@@ -1445,6 +1445,11 @@ Edge cases and failures:
 
 Done when (tests): (`scripts/docs/docs.test.ts`)
   - claude_md_short: `CLAUDE.md` has ≤ 120 lines and links `docs/ai/book/`, `docs/ai/PLAN.md` and `docs/human/engineering/`.
+  - **Amended 2026-11-15 (whole-project review, decision 4):** most tests on CLAUDE.md's wording are retired: the
+    precedence line and the Delivery D-number mentions in `claude_md_rules_import`, the ADR 0009 and ADR 0019 names in
+    `claude_md_author_threads_never_merge`, and all of `v2e_superseded`. Still tested: length, the named links, the
+    five imports, the Top 15 comparison, and the two Delivery sentences "author threads never merge" and "never push
+    to `main`". CLAUDE.md cannot auto-merge, so a change to it lands only through a reviewed pull request.
   - claude_md_rules_import: `CLAUDE.md` has exactly five import lines, each resolving to a file: the four guideline
     documents and `@docs/human/engineering/engineering-rules-top-15.md`, **the Top 15 among them** (a fixture without
     it fails); no import of the full `engineering-rules.md`. The Top 15 file has ≤ 25 lines and its numbered rules equal
