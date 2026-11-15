@@ -213,7 +213,7 @@ const AUTO_MERGE_RUN = "node scripts/guards/docs-auto-merge.ts";
 // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a JS template.
 const CHECKOUT_REF = "ref: ${{ github.sha }}";
 
-const SCOPES_JUDGED_ELSEWHERE = new Set(["id-token", "packages", "contents", "pull-requests"]);
+const SCOPES_JUDGED_ELSEWHERE = new Set(["id-token", "packages", "contents", "pull-requests", "issues"]);
 
 function otherWriteProblems(line: string): string[] {
   const found: string[] = [];
@@ -281,6 +281,47 @@ function docsAutoMergeProblems(file: string, lines: string[]): string[] {
   return found;
 }
 
+/**
+ * The one job that may write issues (P1.38r): `notify` in waivers.yml, which tells the owner that the daily waiver
+ * look failed. It holds that one permission, uses no action (so it checks out nothing) and installs or runs no
+ * repository code; it only calls `gh issue`. Every other file and job keeps the ban on write permissions.
+ */
+const WAIVERS_FILE = "waivers.yml";
+const WAIVERS_NOTIFY_JOB = "notify";
+
+/** The scope lines under a job's block-style `permissions:` key. */
+function permissionScopes(body: string[]): string[] {
+  const at = body.findIndex((line) => line.trim() === "permissions:");
+  if (at < 0) return [];
+  const scopes: string[] = [];
+  for (const line of body.slice(at + 1)) {
+    if (line.trim() !== "" && indent(line) <= indent(body[at] ?? "")) break;
+    scopes.push(line.trim());
+  }
+  return scopes;
+}
+
+function waiverNotifyProblems(file: string, lines: string[]): string[] {
+  const isIssuesWrite = (line: string) => /\bissues["']?\s*:\s*["']?write\b/.test(line);
+  const writes = lines.filter(isIssuesWrite);
+  if (file !== WAIVERS_FILE) return writes.map((line) => `write permission: ${line.trim()}`);
+  if (writes.length === 0) return [];
+  const found: string[] = [];
+  const body = jobs(lines).get(WAIVERS_NOTIFY_JOB) ?? [];
+  if (writes.length !== 1 || body.filter(isIssuesWrite).length !== 1) {
+    found.push("waivers issues: write is not exactly once, on the notify job");
+  }
+  const scopes = permissionScopes(body);
+  if (scopes.join() !== "issues: write") found.push("waivers notify job holds more than issues: write");
+  if (body.some((line) => /\buses["']?\s*:/.test(line))) found.push("waivers notify job uses an action");
+  for (const value of runValues(body)) {
+    if (/\b(?:npm|npx|node|git|curl|wget|bash|sh|eval)\b/.test(value)) {
+      found.push("waivers notify job runs something other than gh issue");
+    }
+  }
+  return found;
+}
+
 /** Every rule violation in one workflow file (`file` is its name under .github/workflows/), as readable strings. */
 export function problems(text: string, file = ""): string[] {
   const lines = code(text);
@@ -296,6 +337,7 @@ export function problems(text: string, file = ""): string[] {
     if (ungated(body)) found.push(`job ${id}: secret or OIDC outside an environment-bound main-only job`);
   }
   found.push(...docsAutoMergeProblems(file, lines));
+  found.push(...waiverNotifyProblems(file, lines));
   found.push(...signingProblems(file, lines));
   return found;
 }

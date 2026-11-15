@@ -3,7 +3,11 @@
 # decided before a scan goes red. It is not a required pull-request check: a date passing is nobody's pull request,
 # and the required `check` job judges only what a pull request can change. A passed date is still enforced where the
 # waiver is used: Trivy stops honouring the entry in the image scans, and the audit job refuses an expired npm entry.
-# It reads only, holds no secret and no environment, and never commits, pushes or opens a PR.
+# The `expiry` job reads only, holds no secret and no environment, and never commits, pushes or opens a PR.
+# When it fails, the `notify` job (P1.38r) says so where the owner will see it: one open issue with a fixed title,
+# assigned to the repository owner, with a comment per failed run. That job checks out nothing and runs no repository
+# code, and `issues: write` is its only permission, so the job that runs `npm ci` still cannot write anywhere.
+# (GITHUB_TOKEN with `gh issue`: docs.github.com/en/actions/tutorials/authenticate-with-github_token, read 2026-11-15.)
 
 name: waivers
 
@@ -36,3 +40,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/ci/waiver-expiry.ts
+
+  notify:
+    needs: expiry
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      TITLE: A dated waiver has expired or expires within seven days
+    steps:
+      - run: |
+          body="The daily waivers job failed: ${RUN_URL}. Its log names each entry and its date. Renew the waiver with a reason or land the fix; this issue can be closed once the job is green again."
+          number="$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number,title --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body" --assignee "$OWNER"
+          fi

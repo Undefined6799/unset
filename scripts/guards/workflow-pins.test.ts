@@ -437,3 +437,34 @@ describe("docs auto-merge (P0.07e)", () => {
     expect(problems(unsafe, file).some((problem) => problem.includes("untrusted input"))).toBe(true);
   });
 });
+
+// P1.38r: issues: write exists only on the notify job of waivers.yml, which holds nothing else, uses no action and
+// runs no repository code. The job that runs npm ci stays read-only.
+describe("waivers notify (P1.38r)", () => {
+  const file = "waivers.yml";
+  const text = readFileSync(join(WORKFLOWS, file), "utf8");
+  const NOTIFY_PERMISSIONS = "    permissions:\n      issues: write\n";
+
+  test("issues_write_only_on_the_waivers_notify_job", () => {
+    expect(text).toContain(NOTIFY_PERMISSIONS);
+    expect(problems(text, file)).toEqual([]);
+    expect(problems(text, "ci.yml")).toContain("write permission: issues: write");
+    const onExpiry = text.replace("      contents: read\n", "      contents: read\n      issues: write\n");
+    expect(problems(onExpiry, file)).toContain("waivers issues: write is not exactly once, on the notify job");
+  });
+
+  test("notify_job_holds_one_scope_and_runs_no_repository_code", () => {
+    const wider = text.replace(NOTIFY_PERMISSIONS, `${NOTIFY_PERMISSIONS}      contents: read\n`);
+    expect(problems(wider, file)).toContain("waivers notify job holds more than issues: write");
+    const checkout = text.replace(
+      "    steps:\n      - run: |\n",
+      "    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - run: |\n",
+    );
+    expect(problems(checkout, file)).toContain("waivers notify job uses an action");
+    const script = text.replace(
+      '          body="The daily',
+      '          node scripts/ci/waiver-expiry.ts\n          body="The daily',
+    );
+    expect(problems(script, file)).toContain("waivers notify job runs something other than gh issue");
+  });
+});
