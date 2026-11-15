@@ -32,6 +32,11 @@ export type Session = {
   readonly createdAt: Date;
   /** P2.11's cache of the PDS's answer; null until checked. */
   readonly emailConfirmed: boolean | null;
+  /**
+   * When `emailConfirmed` was last written (P2.11's `email_checked_at`); null until checked. `read` always sets it,
+   * so the gate needs no second query for it (P2.03m). A session built without it reads as never checked.
+   */
+  readonly emailCheckedAt?: Date | null;
 };
 /** One request as read sees it: `key` (the Request) scopes the memo; `cookieValue` is null when none was sent. */
 export type SessionRequest = {
@@ -89,6 +94,7 @@ type SessionRow = {
   did: Did;
   created_at: Date;
   email_confirmed: boolean | null;
+  email_checked_at: Date | null;
   expired: boolean;
   touch_due: boolean;
   has_token_set: boolean;
@@ -142,7 +148,13 @@ export function createSessionStore(options: {
     }).catch(unavailable);
     if (row === undefined || row.expired || !row.has_token_set) return CLEAR;
     if (row.touch_due) await touch(idHash, deadline);
-    const session = { did: row.did, idHash, createdAt: row.created_at, emailConfirmed: row.email_confirmed };
+    const session = {
+      did: row.did,
+      idHash,
+      createdAt: row.created_at,
+      emailConfirmed: row.email_confirmed,
+      emailCheckedAt: row.email_checked_at,
+    };
     return { session, clearCookie: false };
   }
 
@@ -153,7 +165,7 @@ export function createSessionStore(options: {
    */
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(
-      "SELECT s.did, s.created_at, s.email_confirmed, " +
+      "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, " +
         "now() > s.absolute_expires_at OR now() > s.last_seen_at + make_interval(secs => $2) AS expired, " +
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
         "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +
