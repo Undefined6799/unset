@@ -19,7 +19,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/resolve-handle.ts` | `resolveHandle`. |
 | `domains/identity/verify-handle.ts` | `createHandleVerifier`, `displayHandle`. Trusted base in `.github/CODEOWNERS` (`# trusted base (SE-6)`). |
 | `domains/identity/in-flight.ts` | One shared lookup per DID. Not a package export. |
-| `domains/identity/auth/age.ts` | `parseBirthDate`, `ageInYears`, `latestCalendarDay`. |
+| `domains/identity/auth/age.ts` | `parseBirthDate`, `ageInYears`. |
 | `domains/identity/auth/gates.ts` | `emailGate`, `CACHED_RECHECK_CAP_MULTIPLE`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`. |
 | `domains/identity/legal/versions.ts` | `TERMS_VERSION`, `PRIVACY_VERSION`. |
 
@@ -72,7 +72,7 @@ A handle domain with no DNS record is `egress.dns_no_record` on both methods, so
 
 `interfaces/http/app-gate.ts` turns the decision into a redirect. This folder does not.
 
-`parseBirthDate` returns a calendar date or null. `ageInYears` counts full UTC years. `interfaces/http` passes `latestCalendarDay(deps.now())` as `today`. Neither function stores the date.
+`parseBirthDate` returns a calendar date or null. `ageInYears` counts full UTC years. Neither function stores the date.
 
 ## May import
 
@@ -97,7 +97,7 @@ Re-exports from `index.ts`:
 
 | From | Names |
 | --- | --- |
-| `auth/age.ts` | `ageInYears`, `parseBirthDate`, `latestCalendarDay`, `BirthDate` |
+| `auth/age.ts` | `ageInYears`, `parseBirthDate`, `BirthDate` |
 | `auth/gates.ts` | `emailGate`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`, and the types `EmailCache`, `EmailGate`, `EmailRefresh`, `Onboarding`, `OnboardingAccount`, `OnboardingDecision`, `OnboardingStep`, `OnboardingVersions` |
 | `contract.ts` | `FetchRequest`, `FetchTarget`, `HttpOutcome`, `IdentityNetwork`, `TxtOutcome` |
 | `did-doc.ts` | `ResolvedDid` |
