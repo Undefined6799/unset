@@ -229,8 +229,8 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
-    "handlerSession": true,
-    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+    "requiresSession": true,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp", "session", "rateLimitDid"]
   },
   {
     "method": "POST",
@@ -238,9 +238,9 @@
     "group": "app",
     "accepts": ["application/x-www-form-urlencoded"],
     "bodyLimit": 98304,
-    "rateLimit": "default",
+    "rateLimit": "profile",
     "mutates": true,
-    "handlerSession": true,
+    "requiresSession": true,
     "middleware": [
       "requestId",
       "hostCheck",
@@ -249,7 +249,9 @@
       "contentTypeCheck",
       "bodyLimit",
       "rateLimitIp",
-      "csrf"
+      "csrf",
+      "session",
+      "rateLimitDid"
     ]
   },
   {
@@ -269,8 +271,8 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
-    "handlerSession": true,
-    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+    "requiresSession": true,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp", "session", "rateLimitDid"]
   },
   {
     "method": "GET",
@@ -397,8 +399,8 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
-    "handlerSession": true,
-    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+    "requiresSession": true,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp", "session", "rateLimitDid"]
   },
   {
     "method": "GET",
@@ -407,7 +409,7 @@
     "accepts": [],
     "rateLimit": "default",
     "mutates": false,
-    "handlerSession": true,
-    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+    "requiresSession": true,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp", "session", "rateLimitDid"]
   }
 ]

@@ -4,7 +4,7 @@ import * as web from "@unset/apps-web";
 import { cachedRecheckCapS, parseDid } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { expect, test } from "vitest";
-import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
+import { type AppGate, appSessionGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { sessionClearCookie } from "./session-cookie.ts";
 import { testPage } from "./web/fixtures/page.ts";
 
@@ -149,4 +149,40 @@ test("app_gate.unconfirmed_session_goes_to_verify_email_without_the_pds", async 
     expect(response.headers.get("location")).toBe("/verify-email");
     expect(asked()).toBe(0);
   }
+});
+
+/** What the session gate asks `open` for on a route, or the error it throws. */
+async function returnPath(method: string, route: string): Promise<string> {
+  const asked: string[] = [];
+  const gate = appSessionGate(async (_request, _deadline, next) => {
+    asked.push(next);
+    return new Response(null, { status: 303 });
+  });
+  const request = new Request(`https://unset.test/elsewhere?next=/evil`, { method });
+  await gate({ request, route, params: {}, deadline: new AbortController().signal, deadlineAt: 0 });
+  return asked.join();
+}
+
+test("session_gate.return_path_comes_from_the_route_template", async () => {
+  // Never from the request: its path and query are /elsewhere?next=/evil throughout.
+  expect(await returnPath("GET", "/settings/account")).toBe("/settings/account");
+  expect(await returnPath("GET", "/did")).toBe("/did");
+  expect(await returnPath("GET", "/me")).toBe("/did");
+  expect(await returnPath("POST", "/profile")).toBe("/did");
+});
+
+test("session_gate.route_without_a_return_path_denies", async () => {
+  // A POST path or a parameter template is no page to come back to; the kit answers a throwing gate as a denial.
+  await expect(returnPath("POST", "/unlisted")).rejects.toThrow("no return path");
+  await expect(returnPath("GET", "/:did")).rejects.toThrow("no return path");
+  await expect(returnPath("GET", "/files/*")).rejects.toThrow("no return path");
+});
+
+test("session_gate.admits_the_opened_session_under_its_did", async () => {
+  const opened = { session: SESSION, privacyNotice: true };
+  const { did } = SESSION;
+  const gate = appSessionGate(async () => opened);
+  const request = new Request("https://unset.test/did");
+  const deadline = new AbortController().signal;
+  expect(await gate({ request, route: "/did", params: {}, deadline, deadlineAt: 0 })).toEqual({ did, session: opened });
 });
