@@ -23,7 +23,7 @@ function refreshWith(info: PdsResult<SessionInfo>) {
       writes.push(value);
     },
   });
-  return { answer: () => refresh(SESSION, AbortSignal.timeout(1000)), writes };
+  return { answer: () => refresh(SESSION, AbortSignal.timeout(1000), performance.now() + 1000), writes };
 }
 
 test("email_refresh.auth_dead_is_ended", async () => {
@@ -53,4 +53,18 @@ test("email_refresh.ok_caches_the_answer", async () => {
   const { answer, writes } = refreshWith({ kind: "ok", value: { handle: "alice.test", emailConfirmed: false } });
   expect(await answer()).toBe("unconfirmed");
   expect(writes).toEqual([false]);
+});
+
+test("email_refresh.passes_the_route_deadline_to_the_pds_read", async () => {
+  // P2.07a: the PDS read retries only while it fits before the route's own deadlineAt, so it must arrive unchanged.
+  const seen: number[] = [];
+  const refresh = emailRefresh({
+    sessionInfo: async (_did, _deadline, deadlineAt) => {
+      seen.push(deadlineAt);
+      return { kind: "transient", code: "pds_unavailable" };
+    },
+    setEmailConfirmed: async () => undefined,
+  });
+  await refresh(SESSION, AbortSignal.timeout(1000), 12_345);
+  expect(seen).toEqual([12_345]);
 });

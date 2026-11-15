@@ -35,14 +35,14 @@ export function settingsRoutes(deps: AccountDeps): Route[] {
         headers: { location: `${PROFILE}${search}`, "cache-control": "private, no-store", vary: "Cookie" },
       });
     }),
-    appRoute(PROFILE, "handler", async ({ request, deadline }) => {
-      const opened = await deps.open(request, deadline, PROFILE);
+    appRoute(PROFILE, "handler", async ({ request, deadline, deadlineAt }) => {
+      const opened = await deps.open(request, deadline, PROFILE, deadlineAt);
       if (opened instanceof Response) return opened;
       const body = deps.screens.settingsProfile({ privacyNotice: opened.privacyNotice });
       return settingsPage(request, opened, "Profile", body);
     }),
-    appRoute(ACCOUNT, "handler", async ({ request, deadline }) => {
-      const opened = await deps.open(request, deadline, ACCOUNT);
+    appRoute(ACCOUNT, "handler", async ({ request, deadline, deadlineAt }) => {
+      const opened = await deps.open(request, deadline, ACCOUNT, deadlineAt);
       if (opened instanceof Response) return opened;
       const body = deps.screens.settingsAccount((await accountOf(opened, deadline)).props);
       return settingsPage(request, opened, "Account", body);

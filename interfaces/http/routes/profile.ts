@@ -23,8 +23,8 @@ export type ProfileSave =
   | { readonly kind: "redirect"; readonly location: string };
 
 export type ProfileDeps = {
-  open: (request: Request, deadline: AbortSignal, next: string) => Promise<Response | OpenedApp>;
-  saveProfile: (did: Did, fields: ProfileEdit, deadline: AbortSignal) => Promise<ProfileSave>;
+  open: (request: Request, deadline: AbortSignal, next: string, deadlineAt: number) => Promise<Response | OpenedApp>;
+  saveProfile: (did: Did, fields: ProfileEdit, deadline: AbortSignal, deadlineAt: number) => Promise<ProfileSave>;
 };
 
 /**
@@ -57,8 +57,8 @@ export const profileRoutes = (deps: ProfileDeps): Route[] => [
     rateLimit: "default",
     mutates: true,
     session: "handler",
-    handler: async ({ request, deadline }) => {
-      const opened = await deps.open(request, deadline, "/did");
+    handler: async ({ request, deadline, deadlineAt }) => {
+      const opened = await deps.open(request, deadline, "/did", deadlineAt);
       if (opened instanceof Response) return opened;
       const form = new URLSearchParams(await request.text());
       const input = formFields(form);
@@ -66,7 +66,7 @@ export const profileRoutes = (deps: ProfileDeps): Route[] => [
       const parsed = parseProfileFields(input);
       if (!parsed.ok) throw new AppError(parsed.code);
       const did = opened.session.did;
-      const saved = await deps.saveProfile(did, parsed.fields, deadline);
+      const saved = await deps.saveProfile(did, parsed.fields, deadline, deadlineAt);
       if (saved.kind === "saved") return seeOther(form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE : `/${did}`);
       if (saved.kind === "redirect") return seeOther(saved.location);
       if (saved.kind === "conflict") throw new AppError("profile.conflict");

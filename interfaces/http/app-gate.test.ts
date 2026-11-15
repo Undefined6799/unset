@@ -32,7 +32,9 @@ function gateAnswering(answer: Awaited<ReturnType<AppGate["refreshEmail"]>>, age
 
 const pastCapMs = cachedRecheckCapS(900) * 1000 + 1;
 
-const open = (gate: AppGate) => openApp(gate, new Request("https://unset.test/me"), AbortSignal.timeout(1000), "/me");
+const DEADLINE_AT = 54_321;
+const open = (gate: AppGate) =>
+  openApp(gate, new Request("https://unset.test/me"), AbortSignal.timeout(1000), "/me", DEADLINE_AT);
 
 test("app_gate.ended_grant_signs_out_with_the_cookie_cleared", async () => {
   const response = await open(gateAnswering("ended"));
@@ -87,4 +89,18 @@ test("app_gate.ended_grant_past_cap_still_signs_out", async () => {
   if (!(response instanceof Response)) throw new Error("the gate let an ended session through");
   expect(response.headers.get("location")).toBe("/login?error=login.session_ended");
   expect(response.headers.getSetCookie()).toEqual([sessionClearCookie()]);
+});
+
+test("app_gate.refresh_gets_the_route_deadline", async () => {
+  // P2.07a: the gate hands the route's deadlineAt to the refresh, never a budget of its own.
+  const seen: number[] = [];
+  const gate: AppGate = {
+    ...gateAnswering("confirmed"),
+    refreshEmail: async (_session, _deadline, deadlineAt) => {
+      seen.push(deadlineAt);
+      return "confirmed";
+    },
+  };
+  await open(gate);
+  expect(seen).toEqual([DEADLINE_AT]);
 });

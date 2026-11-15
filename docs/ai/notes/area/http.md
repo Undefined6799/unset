@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-30
+checked: 2026-11-15
 ---
 # http
 
@@ -121,6 +121,11 @@ client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capp
 repository pins the PDS side; it rests on @atproto/pds 0.5.49 (dist/context.js:276, stateful access tokens) and
 @atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
 `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
+
+Every PDS call made for a request carries that route handler's own `deadlineAt` (the kit's monotonic clock,
+`shared/http/routes.ts`) in its `PdsContext`: `open`, `refreshEmail`, `sessionInfo` and `saveProfile` pass it through
+unchanged. pdsCall retries an idempotent read once, and only while the backoff and one more call fit before it
+(README rule 8a). compose.ts never invents a budget of its own (P2.07a).
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The

@@ -270,8 +270,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       ? { confirmed: null, checkedAt: null }
       : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
   };
-  const sessionInfo = (did: Did, deadline: AbortSignal) =>
-    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did);
+  // `deadlineAt` is the route handler's own, on the kit's monotonic clock: pdsCall retries a read only while the
+  // wait and one more call fit before it (README rule 8a; P2.07a).
+  const sessionInfo = (did: Did, deadline: AbortSignal, deadlineAt: number) =>
+    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did);
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
   const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed });
@@ -327,7 +329,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   });
   const accountDeps = {
-    open: (request: Request, deadline: AbortSignal, next: string) => openApp(gate, request, deadline, next),
+    open: (request: Request, deadline: AbortSignal, next: string, deadlineAt: number) =>
+      openApp(gate, request, deadline, next, deadlineAt),
     verifyHandle: (did: Did, signal: AbortSignal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
@@ -339,8 +342,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   const me = meRoutes(accountDeps);
   const profile = profileRoutes({
     open: accountDeps.open,
-    saveProfile: async (did, fields, deadline) => {
-      const ctx = { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 };
+    saveProfile: async (did, fields, deadline, deadlineAt) => {
+      const ctx = { memo: new Map(), deadline, deadlineAt };
       const now = new Date().toISOString();
       const result = await saveProfileRecord(pds.pdsCall, ctx, did, (existing) =>
         toProfileRecord(fields, existing, now),
