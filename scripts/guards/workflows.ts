@@ -284,10 +284,22 @@ function docsAutoMergeProblems(file: string, lines: string[]): string[] {
 /**
  * The one job that may write issues (P1.38r): `notify` in waivers.yml, which tells the owner that the daily waiver
  * look failed. It holds that one permission, uses no action (so it checks out nothing) and installs or runs no
- * repository code; it only calls `gh issue`. Every other file and job keeps the ban on write permissions.
+ * repository code: its one script is fixed text, compared whole, that only calls `gh issue`. Every other file and job keeps the ban on write permissions.
  */
 const WAIVERS_FILE = "waivers.yml";
 const WAIVERS_NOTIFY_JOB = "notify";
+/** The notify job's whole script, line by line and trimmed. A change to it is a change to this guard. */
+const WAIVERS_NOTIFY_RUN = [
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: shell text, not a JS template.
+  'body="The daily waivers job failed: ${RUN_URL}. Its log names each entry and its date. Renew the waiver with a reason or land the fix; this issue can be closed once the job is green again."',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: shell text, not a JS template.
+  'number="$(gh issue list --state open --search "in:title \\"${TITLE}\\"" --json number,title --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"',
+  'if [ -n "$number" ]; then',
+  'gh issue comment "$number" --body "$body"',
+  "else",
+  'gh issue create --title "$TITLE" --body "$body" --assignee "$OWNER"',
+  "fi",
+].join("\n");
 
 /** The scope lines under a job's block-style `permissions:` key. */
 function permissionScopes(body: string[]): string[] {
@@ -314,10 +326,16 @@ function waiverNotifyProblems(file: string, lines: string[]): string[] {
   const scopes = permissionScopes(body);
   if (scopes.join() !== "issues: write") found.push("waivers notify job holds more than issues: write");
   if (body.some((line) => /\buses["']?\s*:/.test(line))) found.push("waivers notify job uses an action");
-  for (const value of runValues(body)) {
-    if (/\b(?:npm|npx|node|git|curl|wget|bash|sh|eval)\b/.test(value)) {
-      found.push("waivers notify job runs something other than gh issue");
-    }
+  const runs = runValues(body).map((value) =>
+    value
+      .replace(/^\|\s*\n/, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .join("\n")
+      .trim(),
+  );
+  if (runs.length !== 1 || runs[0] !== WAIVERS_NOTIFY_RUN) {
+    found.push("waivers notify job runs something other than its fixed gh issue script");
   }
   return found;
 }

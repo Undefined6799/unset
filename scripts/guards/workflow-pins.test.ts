@@ -453,7 +453,7 @@ describe("waivers notify (P1.38r)", () => {
     expect(problems(onExpiry, file)).toContain("waivers issues: write is not exactly once, on the notify job");
   });
 
-  test("notify_job_holds_one_scope_and_runs_no_repository_code", () => {
+  test("notify_job_holds_one_scope_and_runs_only_its_fixed_script", () => {
     const wider = text.replace(NOTIFY_PERMISSIONS, `${NOTIFY_PERMISSIONS}      contents: read\n`);
     expect(problems(wider, file)).toContain("waivers notify job holds more than issues: write");
     const checkout = text.replace(
@@ -465,6 +465,15 @@ describe("waivers notify (P1.38r)", () => {
       '          body="The daily',
       '          node scripts/ci/waiver-expiry.ts\n          body="The daily',
     );
-    expect(problems(script, file)).toContain("waivers notify job runs something other than gh issue");
+    const NOT_FIXED = "waivers notify job runs something other than its fixed gh issue script";
+    expect(problems(script, file)).toContain(NOT_FIXED);
+    // Codex on #1539: a denylist of interpreters let any other command through. The script is compared whole.
+    const python = text.replace(
+      '          body="The daily',
+      '          python3 -c "print(1)"\n          body="The daily',
+    );
+    expect(problems(python, file)).toContain(NOT_FIXED);
+    const second = `${text}      - run: gh issue list\n`;
+    expect(problems(second, file)).toContain(NOT_FIXED);
   });
 });
