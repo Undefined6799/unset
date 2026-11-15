@@ -21,7 +21,7 @@ Migrations, the role roster, grants, pools, transactions, and the stores whose S
 | `infrastructure/postgres/tx.ts` | `inTransaction`, `withTransaction`. The file comment says `BEGIN`, `COMMIT` and `ROLLBACK` in TypeScript live only here. `docs/human/architecture.md` row DM-2 names Semgrep `transactions-only-in-tx`. |
 | `infrastructure/postgres/config.ts` | `postgresFields`, `poolFields`, `lockPoolFields`, `connectionOf`. |
 | `infrastructure/postgres/lock.ts` | `withAdvisoryLock`, `createRequestLock`. `LockNamespace.oauth` is `1`. The wait calls `pg_advisory_xact_lock`. |
-| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`. SQL on `app.oauth_state` and `app.oauth_session`. Values go through the sealer. |
+| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`. SQL on `app.oauth_state` and `app.oauth_session`. Values go through the sealer. `createOAuthStateStore`'s `sweep` is run by `interfaces/http/jobs/sweeps.ts` (`sweep.oauth_state`). |
 | `infrastructure/postgres/singleUse/store.ts` | `createSingleUseStore`. SQL on `app.single_use`. `PURPOSES` is the closed list. |
 | `infrastructure/postgres/didColumns.ts` | `didColumns`. One catalog query for columns typed `types.did` or `types.at_uri`, including arrays. |
 | `infrastructure/postgres/sealedColumns.ts` | `sealedColumns`, `sealedContext`. Rows from `sealed-columns.json`. |
