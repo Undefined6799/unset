@@ -172,6 +172,17 @@ describe("image workflows", () => {
     expect(run).toContain('test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"');
     expect(run).toContain('cosign sign --yes "$mirror@$digest"');
     expect(run).toContain('--arg ref "$mirror@$digest"');
+    // P2.18s: SeaweedFS is a base we build on, so its upstream keyless signature is checked before the copy: the
+    // release workflow at exactly the tag we pin, issued by GitHub Actions (seaweedfs/seaweedfs
+    // .github/workflows/container_release_unified.yml at 4.53).
+    const verify = [
+      "cosign verify --trusted-root deployment/sigstore/trusted_root.json",
+      '--certificate-identity "https://github.com/seaweedfs/seaweedfs/.github/workflows/container_release_unified.yml@refs/tags/$tag"',
+      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+      '"$source" < /dev/null > /dev/null',
+    ].join(" \\\n        ");
+    expect(run).toContain(verify);
+    expect(run.indexOf(verify)).toBeLessThan(run.indexOf('crane copy "$source"'));
     expect(job?.steps?.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"');
   });
 
