@@ -30,6 +30,11 @@ checked: 2026-11-16
   is the readiness probe built on it (P1.04x). `tx.ts`: the only place a transaction opens.
 - `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
   lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
+- `migrations/0021_erase_audit_grants.sql`, `0022_erase_did.sql` (P3.07g, P3.07k, brought forward 2026-11-15):
+  `core.erase_did(did, why)` deletes every row naming a DID, one hand-written statement per erasure-registry row, calls
+  `audit.erase_subject` and appends `account.erased` with no DID. No role is granted it; an owner runs it as migrator
+  (`docs/human/runbooks/erasure.md`). Tombstone, outbox, holds and callers' grants stay with P3.07, P4.07h, P3.20a,
+  P5.08b. `tests/integration/postgres/erase-did.test.ts` reads `didColumns` and fails on an unseeded or surviving column.
 - `migrations/0015_app_account.sql`: `app.account` (P2.12). The birth date is not a column; an adult confirmation
   stores `age_confirmed_at` only. Column-list grants for `web`, and `app.account.did` is in the erasure registry.
 - `migrations/0016_audit_actor.sql`: `audit.event_body.actor` (P1.15k, ADR 0043) and `audit.append` replaced to

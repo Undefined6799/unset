@@ -338,7 +338,7 @@ describe("grants", () => {
 
   test("no_ddl_for_services", { timeout: 60_000 }, () => {
     for (const role of SERVICE_OR_JOB)
-      for (const schema of ["app", "idx", "audit", "types", "public"])
+      for (const schema of ["app", "core", "idx", "audit", "types", "public"])
         expect(
           () => postgres.sql("unset", `SET ROLE ${role}; CREATE TABLE ${schema}.ddl_probe (id int)`),
           `${role} ${schema}`,
