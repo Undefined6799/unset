@@ -4,7 +4,7 @@ type: area
 status: current
 areas: ["[[audit]]"]
 summary: "Hub for infrastructure/audit: the TS side of the append-only audit store (appendAudit, rowHash, verifyChain)."
-code: [infrastructure/audit/index.ts, infrastructure/audit/rowHash.ts, infrastructure/audit/verify.ts]
+code: [infrastructure/audit/index.ts, infrastructure/audit/rowHash.ts, infrastructure/audit/verify.ts, infrastructure/audit/segments.ts]
 sources: []
 importance: normal
 related: ["[[postgres]]"]
@@ -47,5 +47,12 @@ make a test pass. Chain tests against real Postgres are in `tests/integration/au
   `event_body.actor` and raises `audit_bad_input` for a `user_triggered` or `operator` action with no actor. Only
   `system` actions may leave it null. `appendAudit` does not repeat the check, so a writer that omits `actorDid`
   fails at the database. Rows older than 0016 have a null column and the actor only in the body.
+- **Retention and erasure (P1.15a, P1.15f).** Migrations 0017 and 0018 add the only ways a row leaves: `audit.redact`
+  (one body row whose class ran out), `audit.erase_subject` (a person's `sec` body rows, as subject or actor; `mod`
+  is never touched) and `seal_segment`, `mark_anchored`, `drop_segment` for whole months. `refuse_change` lets a
+  DELETE through only as `audit_owner` with `audit.maintenance` set by one of them. No role is granted any yet (P3.07g,
+  P3.22). `drop_segment` never drops a lane's last rows, because `audit.append` continues from the newest row.
+  `segments.ts` gives the verifier `chainStart` (start after the newest dropped segment) and `verifySegments`.
+  `tests/integration/audit/retention.test.ts` writes past-dated rows as the superuser, chained with `audit.row_hash`.
 
 **Links.** [[postgres]].
