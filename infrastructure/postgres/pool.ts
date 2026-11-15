@@ -117,6 +117,45 @@ export async function withClient<T>(
 }
 
 /**
+ * The query, or `http.deadline` once `signal` aborts. Abort ends the client first (pg 8.23.1 `Client#end` drops a
+ * socket that still has a query), and the rejection is delivered only after that, so the pool slot is free.
+ */
+export function readUntilAbort<T>(client: PoolClient, signal: AbortSignal | undefined, query: Promise<T>): Promise<T> {
+  if (signal === undefined) return query;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let aborted = false;
+    const finish = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(error);
+    };
+    const onAbort = () => {
+      aborted = true;
+      query.catch(() => undefined);
+      void Promise.resolve(client.end()).then(
+        () => finish(new AppError("http.deadline")),
+        () => finish(new AppError("http.deadline")),
+      );
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+    query.then(
+      (value) => {
+        if (settled || aborted) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (!aborted) finish(error);
+      },
+    );
+  });
+}
+
+/**
  * Boot check, after every pool of the process exists: the pools of all replicas alive during a rollout must fit the
  * role's `rolconnlimit`, so a three-replica `docker-rollout` never meets connection refusals mid-deploy. -1 is no limit.
  */
