@@ -3604,7 +3604,11 @@ Threats: E a key used outside its prefix (`objects_key_scoped_to_prefix`, agains
   log (`objects_errors_carry_no_key`); E any request leaving through another origin (P2.18k's policy).
 Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`, `objects_list_pages`,
   `objects_key_scoped_to_prefix`, `objects_unavailable_is_typed`, `objects_errors_carry_no_key`, against SeaweedFS
-  started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres).
+  started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres). The compose half also pins: the
+  store runs with `-filer.encryptVolumeData` and `-master.garbageThreshold=0.01` (`objects_encrypt_and_vacuum_flags`);
+  neither bucket reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a
+  pinned identity, or it is built from tagged source; the admin secret is mounted only into the setup; and a rotation
+  and forced-vacuum runbook (ADR 0041 Decisions 3, 6, 7).
 
 ### P2.18p — PDS blobstore in the object store (ADR 0041)
 Tags: [SEC]            Depends on: P2.18s            Plan: ADR 0041 Decision 5
