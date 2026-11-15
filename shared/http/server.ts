@@ -18,12 +18,30 @@ import { createHealth, type Readiness } from "./health.ts";
 import { BodyTooLarge, limitBody } from "./limits/bodyLimit.ts";
 import { hasDidEntry, type PolicyTable } from "./limits/policy.ts";
 import { createRateLimiter, type RateLimiter, type RateSubject } from "./limits/rateLimit.ts";
-import { compileRoute, defineRoute, type Route, type RouteGroup } from "./routes.ts";
+import {
+  compileRoute,
+  defineRoute,
+  type Route,
+  type RouteContext,
+  type RouteGroup,
+  type SessionRouteContext,
+} from "./routes.ts";
 import { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
 import { createClientIpResolver } from "./trustedProxy.ts";
 
-/** The signed-in DID for a request, or null. Only a `session: "required"` route reads it; none is wired in yet. */
-export type SessionReader = (request: Request) => Promise<{ did: string } | null>;
+/** What the gate is told: the request, the matched route's template and parameters, and the route's deadline. */
+export type GateRequest = Readonly<
+  Pick<RouteContext, "request" | "params" | "deadline" | "deadlineAt"> & { route: string }
+>;
+/** An admitted request: the DID its per-DID limit counts, and the session its handler receives. */
+export type Admission = Readonly<{ did: string; session: unknown }>;
+/**
+ * The interface's one answer to "may this request use a `session: "required"` route" (ADR 0045). It returns the
+ * admission, or the response that refuses: for a page, the redirect to sign in. The kit runs it after the CSRF gate
+ * and inside the route's deadline; a throw is an error response, never an admission. It reads headers only: the
+ * body is the handler's.
+ */
+export type SessionGate = (request: GateRequest) => Promise<Admission | Response>;
 /** A route as P1.04's committed manifest records it: every `defineRoute` option except the handler, plus its checks. */
 export type RouteInfo = Omit<Route, "handler"> & { middleware: string[] };
 
@@ -32,7 +50,8 @@ export type ServerOptions = {
   routes: readonly Route[];
   /** The interface's own rate-limit table (P1.06p); routes name one of its keys. */
   policies: PolicyTable;
-  session?: SessionReader;
+  /** Needed as soon as one route sets `session: "required"`; the server refuses to start without it. */
+  gate?: SessionGate;
   log: Logger;
   readiness?: readonly Readiness[];
   onClose?: readonly CloseHook[];
@@ -47,8 +66,8 @@ export type ServerOptions = {
 /** Node's HTTP/1.1 server, which `createAdaptorServer` returns when given no other `createServer`. */
 type NodeServer = Extract<ServerType, { closeIdleConnections: unknown }>;
 type Matched = { route: Route; params: Record<string, string> };
-/** A request past the checks, and whether its streamed body has gone over the limit. */
-type Admitted = { request: Request; exceeded: () => boolean };
+/** A request past the checks, whether its streamed body has gone over the limit, and the gate's session if any. */
+type Admitted = { request: Request; exceeded: () => boolean; admission?: Admission };
 /** The bindings `@hono/node-server` 2.1.1 passes to `fetch`: `{ incoming, outgoing }` (its dist/conninfo.mjs). */
 type NodeBindings = { incoming?: { socket?: { remoteAddress?: string } } };
 /** `proxy.untrusted_peer` is logged at most once per this window, so a misrouted flood cannot flood the log. */
@@ -58,12 +77,14 @@ const SWEEP_MS = 10_000;
 
 const LOGGED_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
-function checkRoutes(routes: readonly Route[], policies: PolicyTable): void {
+function checkRoutes(routes: readonly Route[], policies: PolicyTable, gated: boolean): void {
   const seen = new Set<string>();
   for (const route of routes) {
     const key = `${route.method} ${route.path}`;
     if (seen.has(key)) throw new Error(`route defined twice: ${key}`);
     seen.add(key);
+    // Fail closed at startup: a session route with no gate could only refuse every request.
+    if (route.requiresSession && !gated) throw new Error(`${key}: session: "required" needs the server's gate`);
     if (route.rateLimit === "exempt") continue;
     const policy = Object.hasOwn(policies, route.rateLimit) ? policies[route.rateLimit] : undefined;
     if (policy === undefined) {
@@ -128,7 +149,7 @@ export function createServer(options: ServerOptions) {
     handler: () => health.respond(),
   });
   const routes = [healthRoute, ...options.routes];
-  checkRoutes(routes, options.policies);
+  checkRoutes(routes, options.policies, options.gate !== undefined);
   const compiled = routes.map(compileRoute);
   // Built only when a route is limited, so an interface with no routes yet needs no table (its table comes at P1.06p).
   const limiter: RateLimiter | undefined = routes.some((r) => r.rateLimit !== "exempt")
@@ -245,32 +266,32 @@ export function createServer(options: ServerOptions) {
 
   /**
    * Steps 7–11 in order: bodyLimit → rateLimitIp → csrf (P1.07) → session → rateLimitDid. A response means the
-   * request stops here; otherwise the request to hand on, its body counted against the limit.
+   * request stops here; otherwise the request to hand on, its body counted against the limit, and for a
+   * `session: "required"` route the gate's admission (ADR 0045).
    */
-  async function admit(
-    route: Route,
-    request: Request,
-    clientIp: ClientIp | null,
-    reqId: string,
-  ): Promise<Admitted | Response> {
-    let admitted: Admitted = { request, exceeded: () => false };
+  async function admit(route: Route, ctx: RouteContext): Promise<Admitted | Response> {
+    let admitted: Admitted = { request: ctx.request, exceeded: () => false };
     if (route.method === "POST") {
-      const limited = limitBody(request, route.bodyLimit ?? config.HTTP_BODY_LIMIT_BYTES);
+      const limited = limitBody(ctx.request, route.bodyLimit ?? config.HTTP_BODY_LIMIT_BYTES);
       if (!limited.ok) return limited.status === 413 ? tooLarge(route.group) : fail("http.bad_request", route.group);
       admitted = limited;
     }
-    const byIp = rateLimited(route, { ip: clientIp });
+    const byIp = rateLimited(route, { ip: ctx.clientIp });
     if (byIp) return byIp;
-    const crossSite = csrfDenied(route, request);
+    const crossSite = csrfDenied(route, ctx.request);
     if (crossSite) return crossSite;
     if (!route.requiresSession) return admitted;
-    const session = options.session ? await options.session(admitted.request) : null;
-    if (session === null) {
-      // Fail closed: a session-only route never runs, and is never limited as "no DID, no limit".
+    // checkRoutes refused to start without a gate; a missing one here still denies.
+    if (options.gate === undefined) return fail("internal.error", route.group, undefined, ctx.reqId);
+    const { params, deadline, deadlineAt } = ctx;
+    const answer = await options.gate({ request: admitted.request, route: route.path, params, deadline, deadlineAt });
+    if (answer instanceof Response) return answer;
+    // An admission names who is limited; one without a DID is a broken gate and admits nobody.
+    if (typeof answer.did !== "string" || answer.did === "") {
       log.error("ratelimit.no_session", { route: route.path });
-      return fail("internal.error", route.group, undefined, reqId);
+      return fail("internal.error", route.group, undefined, ctx.reqId);
     }
-    return rateLimited(route, { did: session.did }) ?? admitted;
+    return rateLimited(route, { did: answer.did }) ?? { ...admitted, admission: answer };
   }
 
   /** Steps 1 and 7–12: the checks and the handler under the route's deadline; errors render by code. */
@@ -283,10 +304,15 @@ export function createServer(options: ServerOptions) {
     const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
     let exceeded = () => false;
     const admitThenHandle = async (): Promise<Response> => {
-      const admitted = await admit(route, request, clientIp, reqId);
+      const ctx: RouteContext = { request, clientIp, params, deadline, deadlineAt, reqId };
+      const admitted = await admit(route, ctx);
       if (admitted instanceof Response) return admitted;
       exceeded = admitted.exceeded;
-      return route.handler({ request: admitted.request, clientIp, params, deadline, deadlineAt, reqId });
+      const passed: RouteContext = { ...ctx, request: admitted.request };
+      if (admitted.admission === undefined) return route.handler(passed);
+      // Only an admitted request's context carries `session`; a session route's handler refuses any other.
+      const withSession: SessionRouteContext<unknown> = { ...passed, session: admitted.admission.session };
+      return route.handler(withSession);
     };
     const result = admitThenHandle(); // awaited in the race below; after a deadline, its late result is logged
     const timedOut = new Promise<"deadline">((resolve) => {
