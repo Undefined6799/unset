@@ -23,12 +23,13 @@ CREATE TABLE audit.segment (
 );
 
 -- Why a body row is missing: one line per removed row, with the lane, the seq, the function that removed it and the
--- login role that called it. No personal data.
+-- login role that called it. No personal data. It keeps the month only, never the instant: the rows of one erasure
+-- would share an instant, and that would mark which events belonged to one person.
 CREATE TABLE audit.redaction_log (
   lane text NOT NULL,
   seq bigint NOT NULL,
   part text NOT NULL CHECK (part IN ('redact', 'erase', 'drop')),
-  at timestamptz NOT NULL DEFAULT now(),
+  month date NOT NULL DEFAULT (date_trunc('month', now() AT TIME ZONE 'UTC'))::date,
   by name NOT NULL,
   PRIMARY KEY (lane, seq)
 );
