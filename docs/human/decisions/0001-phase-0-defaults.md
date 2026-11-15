@@ -560,3 +560,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0041](0041-object-store.md)):** one SeaweedFS store in the dev and local stacks with two buckets, `unset-private`
   for app media and `unset-pds` for the PDS's blobs, a key per process, and the app's client signing with `aws4fetch`
   through net-guard. Settles P2-A8; production's store stays P5.01's. Proposed, awaiting Alex.
+- **ADR 0047 proposed (Alex chose "All four steps" on the image-publishing card, 2026-11-15; own record:
+  [0047](0047-lock-bump-auto-merge.md)):** the lock-bump pull request that `publish-images.yml` opens turns on squash
+  auto-merge for itself, only while main's ruleset requires the `lock` check. Proposed, awaiting Alex.
