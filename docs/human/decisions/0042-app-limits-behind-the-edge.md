@@ -1,6 +1,8 @@
 # 0042 — Behind the edge, the app's rate limits are site-wide ceilings
 
-Status: Proposed (awaiting Alex in the P1.06s pull request)
+Status: Accepted by Alex, 2026-11-15 22:53:23Z, against d8c8ff8. The coordinator's project-chat post asked for the
+line "accept ADR 0042 at d8c8ff8", on the head it had verified; Alex replied to that post with "go". From here the
+record changes only to be marked superseded.
 
 ## Context
 The edge never passes the client address upstream (plan §5.2; `deployment/edge/snippets/upstream.caddy` removes
