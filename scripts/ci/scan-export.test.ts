@@ -202,7 +202,7 @@ describe("scan-export gates the secret scan", () => {
     expect(runs).not.toMatch(/\|\|\s*true/);
     expect(runs).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
     const scan = wf.jobs.scan;
-    expect(scan?.needs).toEqual(["discover", "scan-image", "pds-ui"]);
+    expect(scan?.needs).toEqual(["changes", "discover", "scan-image", "pds-ui"]);
     expect(runsOf(scan).includes(GH_OPEN)).toBe(false);
     const images = readFileSync(join(ROOT, ".github", "workflows", "images.yml"), "utf8");
     expect(images).not.toContain("v0.74.0");
@@ -285,6 +285,7 @@ describe("scan-export gates the secret scan", () => {
       DISCOVER: gh("needs.discover.result"),
       SCAN_RESULT: gh("needs.scan-image.result"),
       PDS_RESULT: gh("needs.pds-ui.result"),
+      DOCS_ONLY: gh("needs.changes.outputs.docs_only"),
     });
     expect(gate?.if).toBeUndefined();
     expect(gate?.["continue-on-error"]).toBeUndefined();
@@ -313,5 +314,62 @@ describe("scan-export gates the secret scan", () => {
       const pds = gate("success", result);
       expect(pds.status, pds.stdout + pds.stderr).not.toBe(0);
     }
+  });
+
+  // P0.07j: the docs-only skip is the one green skip. The changes job must have said true and all three jobs must be
+  // skipped; a skip with any other verdict, or a partial skip under a true verdict, stays red.
+  test("scan_passes_a_skip_only_for_a_docs_only_change", () => {
+    const step = wf.jobs.scan?.steps?.[0];
+    if (step?.run === undefined) throw new Error("no scan gate");
+    const gate = (docsOnly: string, [discover, scanImage, pds]: [string, string, string]) =>
+      spawnSync("bash", ["-e", "-c", step.run ?? ""], {
+        env: {
+          PATH: process.env.PATH,
+          DOCS_ONLY: docsOnly,
+          DISCOVER: discover,
+          SCAN_RESULT: scanImage,
+          PDS_RESULT: pds,
+        },
+        encoding: "utf8",
+      }).status;
+    const skipped: [string, string, string] = ["skipped", "skipped", "skipped"];
+    expect(gate("true", skipped)).toBe(0);
+    for (const verdict of ["false", "", "TRUE", "true "]) expect(gate(verdict, skipped), verdict).not.toBe(0);
+    for (const other of ["failure", "cancelled"]) {
+      expect(gate("true", [other, "skipped", "skipped"]), other).not.toBe(0);
+      expect(gate("true", ["skipped", other, "skipped"]), other).not.toBe(0);
+      expect(gate("true", ["skipped", "skipped", other]), other).not.toBe(0);
+    }
+    expect(gate("true", ["success", "skipped", "success"])).not.toBe(0);
+    // A true verdict with everything run and green is still green: the ordinary rule decides.
+    expect(gate("true", ["success", "success", "success"])).toBe(0);
+  });
+
+  // Only exit 0 of the docs-only script writes true, and each heavy job runs unless the output is exactly 'true', so a
+  // failed or skipped changes job (a push to main) builds and scans as before.
+  test("docs_only_verdict_fails_closed", () => {
+    const changes = wf.jobs.changes;
+    expect(changes?.if).toBe("github.event_name == 'pull_request' && github.event.pull_request.draft == false");
+    const verdict = changes?.steps?.find((s) => s.id === "verdict")?.run ?? "";
+    expect(verdict).toBe(
+      [
+        "if node scripts/guards/docs-only.ts; then",
+        '  echo "docs_only=true" >> "$GITHUB_OUTPUT"',
+        "else",
+        '  echo "docs_only=false" >> "$GITHUB_OUTPUT"',
+        "fi",
+        "",
+      ].join("\n"),
+    );
+    const heavy = `${gh("!cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true'")}`;
+    for (const id of ["images", "edge", "discover", "pds-ui"]) {
+      expect(wf.jobs[id]?.if, id).toBe(heavy);
+      expect(wf.jobs[id]?.needs, id).toBe("changes");
+    }
+    // scan-image has no status function, so it runs only when discover succeeded.
+    expect(wf.jobs["scan-image"]?.needs).toBe("discover");
+    expect(wf.jobs["scan-image"]?.if).toBe(
+      "github.event_name != 'pull_request' || github.event.pull_request.draft == false",
+    );
   });
 });
