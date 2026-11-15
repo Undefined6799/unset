@@ -164,6 +164,7 @@ flowchart TD
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P208c --> P208e[P2.08e count pinned to store]; P208d --> P208e; P208d --> P208f[P2.08f signout_all marked unused]
   P208e --> P208g[P2.08g revoke failure unit test]; P208b --> P208g; P208b --> P208h[P2.08h issuer read bounded]
+  P208d --> P208j[P2.08j everywhere is back]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
@@ -2025,6 +2026,41 @@ fail closed, to sign-out without a link.
 ASVS 5.0: the PR names its rows, at least the session-termination row and the URL-validation or output-encoding row
 that apply.
 Done when every red is shown and check is green.
+
+### P2.08j — Bring back sign out everywhere
+Tags: [SEC]            Depends on: P2.08d, P2.13c
+Product only, the sign-out lane. Whole-project review 2026-11-15, security finding 5; Alex, 2026-11-15 23:11:42Z,
+"yes 1 3 5" to the coordinator's scope call 1, and at 23:22:23Z "Sign out everywhere, this one too" on the thread's
+card. It reverses P2.08d. P2.08d's reason (the PDS handles sessions and auth) still holds for PDS sessions and other
+apps; what it left open is our own session rows, which only we can end at once.
+**What:** a second form on Settings, Account posts to `POST /logout/everywhere` (CSRF gate, form media type, 1 KB).
+The handler reads this request's session, reads the recorded issuer, revokes the grant (dropping the stored set if the
+revoke fails, as the last browser's sign-out does), then calls `destroyAllForDid(tx, did, "user_signout_all")` and
+answers as `POST /logout` does: cookies cleared, 303 to `/signed-out`. Nothing is read from the body. No confirmation
+box (the old `confirm` field stays removed): a mistaken press costs one sign-in.
+Not in this step: "other browsers only". The definer deletes the token set this browser would still need, and
+`session.end_sessions_single_sql` (trusted base) forbids a second DELETE of a DID's sessions; either change is a
+trusted-base step with Alex's line. A session or device list is not built. The comments in
+`infrastructure/session/store.ts` that call `user_signout_all` unused (P2.08f) are corrected by the next trusted step
+that touches that file.
+Threats:
+- A session the member does not hold (a shared computer, a copied cookie or browser profile) outlives their sign-out
+  for up to 30 days. Answered: every session of the DID ends at once, a copy of this browser's cookie included.
+- Another site, or a link, signs a member out everywhere. Answered: POST only, behind the CSRF gate (red: 403).
+- A caller ends another member's sessions. Answered: the DID comes from the caller's own session (reds: a `did` field
+  in the body is ignored; the integration test leaves a stranger's session and grant alive).
+- A failed revoke leaves a usable grant. Answered: the stored set is deleted, then the sessions (red).
+- The delete fails after the revoke removed the token set (Codex on #1566). A repeat of the POST then reads no
+  session, so it cannot end the rows left behind, and the member's next sign-in would make them valid again. Narrowed,
+  not closed: the request tries the delete three times and logs `auth.logout_everywhere_incomplete` if all fail (reds).
+  Closing it needs sign-in to end a DID's older rows, or rows bound to their token set; that is a trusted-base step,
+  and auth_dead and the age gate share the gap.
+- A sign-in lands between the revoke and the delete and loses a grant nobody revoked. Answered: both run under the
+  account's sign-in lock, and still run if the lock cannot be had (red).
+- A holder of a copied cookie signs the member out. Accepted: the member signs in again, and the copy dies with it.
+- An identity record of the action. Answered: no audit row, and a log line with no field (plan §6).
+ASVS 5.0: V7.4.3 stays partial with the in-app control named; the PR updates the row.
+Done when the reds are shown, the manifest, budget fixture and endpoint page carry the route, and check is green.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"

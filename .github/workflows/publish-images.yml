@@ -1,12 +1,13 @@
 # Publish, sign and attest our first-party images (P1.27s; ADR 0033, keyless). On a push to main, one job builds each
 # image under deployment/ from the checked-out commit, pushes it by digest, scans that digest, signs it and attests its
 # SLSA provenance and SPDX SBOM with keyless cosign (a Fulcio certificate for exactly this workflow on refs/heads/main,
-# recorded in public Rekor), then verifies the lock it just wrote with scripts/ci/verify-images.ts. It never touches a
+# recorded in public Rekor), then verifies the lock it just wrote with scripts/ci/verify-images.ts. A second job, bump,
+# then opens the lock-bump pull request from that lock (P2.26m; see the job). It never runs for a
 # pull request: it has no pull_request trigger (the workflow guard refuses one), and images.yml stays the unprivileged
 # PR check. It has no manual trigger either, since the job's `if:` would skip a dispatched run; a new publish is a push.
 #
 # The gate (scripts/guards/workflows.ts): the job runs in the `signing` environment (main only, Alex as required
-# reviewer, so each run waits for his approval) and its `if:` is exactly the push-to-main condition. Only this job
+# reviewer, so each run waits for his approval) and its `if:` is exactly the push-to-main condition. Only the publish job
 # holds `packages: write`, and only it and mirror.yml's copy-and-sign job hold `id-token: write`. No cache of any kind.
 #
 # cosign v3.1.3 (2026-08-05; v3.1.4 of 2026-10-20 is inside the seven-day rule) is pinned by its release checksum.
@@ -27,6 +28,10 @@ on:
     paths-ignore:
       - "docs/**"
       - "tests/**"
+      # P2.26m: the two files a lock bump changes. Without this, merging a bump would publish again and open the next
+      # bump. The root .dockerignore leaves both out of every build (same test).
+      - "deployment/images.lock.json"
+      - "deployment/compose.dev.yaml"
 
 permissions: {}
 
@@ -44,6 +49,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    outputs:
+      lock: ${{ steps.lock.outputs.lock }}
     env:
       REGISTRY: ghcr.io/undefined6799/unset
       COSIGN_VERSION: v3.1.3
@@ -124,3 +131,52 @@ jobs:
           done < "$RUNNER_TEMP/images"
       - name: Verify what was published
         run: node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"
+      # P2.26m: only a lock that verified is handed on, as one line of JSON. It holds digests and the commit, no secret.
+      - name: Hand the verified lock to the bump job
+        id: lock
+        run: echo "lock=$(jq -c . "$RUNNER_TEMP/images.lock.json")" >> "$GITHUB_OUTPUT"
+
+  # P2.26m: opens the pull request that bumps deployment/images.lock.json and the digests in compose.dev.yaml to what
+  # the job above just published, so nobody types digests by hand. It runs only after publish succeeded, on the same
+  # push-to-main condition, from the checkout of the published commit, and runs one script. It holds contents: write
+  # and pull-requests: write to push a `lock-bump/…` branch and open the pull request; it holds no id-token, no
+  # packages scope and no environment, so it cannot sign or push an image, and the publish job gains nothing. It never
+  # merges: the pull request is judged by lock.yml (P2.26j) and the required checks like any other, and main's ruleset
+  # still refuses a direct push. scripts/guards/workflows.ts pins this job line for line (BUMP_JOB_LINES): an edit
+  # here, an action bump included, edits the guard too.
+  #
+  # Operating it (GitHub docs read 2026-11-15; unverified until the first run on main):
+  # - The repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General,
+  #   Workflow permissions) must be on, or opening the pull request fails. It is off by default for a personal
+  #   repository (docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/
+  #   enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
+  # - The pull request's checks do not start by themselves. A pull request opened with GITHUB_TOKEN creates its
+  #   runs "in an approval-required state"; the owner starts them with "Approve workflows to run" in the pull
+  #   request's merge box (docs.github.com/en/actions/concepts/security/github_token). Should no banner show, closing
+  #   and reopening the pull request as a person starts them.
+  # - Each publish run opens its own pull request. Merge the newest and close older ones: a bump names every
+  #   first-party image, so the newest covers them, and lock.yml refuses an older one once a newer is merged.
+  bump:
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PUBLISHED_LOCK: ${{ needs.publish.outputs.lock }}
+        run: node scripts/ci/lock-bump-pr.ts

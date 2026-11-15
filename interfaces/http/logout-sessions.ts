@@ -1,6 +1,7 @@
 // The session work behind signing out (P2.08a; book phase-2.md "POST /logout" step 4; plan §5.3 "Logout"). P2.08d
-// removed "sign out everywhere" and its destroy-all here. The count (live sessions only since P2.08c) runs in the same
-// transaction as the delete, so a failed count rolls the delete back. It lives here, not on infrastructure/session:
+// removed "sign out everywhere" and its destroy-all here; P2.08j brings both back. The count (live sessions only
+// since P2.08c) runs in the same transaction as the delete, so a failed count rolls the delete back. It lives here,
+// not on infrastructure/session:
 // that folder is trusted base (SE-6, CODEOWNERS) and cannot share a pull request with these routes.
 import type { Did } from "@unset/domains-identity";
 import { type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
@@ -41,6 +42,8 @@ export function browserLogout(options: {
   readonly lockDid: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
+  destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<void>;
+  underAccountLock: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
   whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
@@ -52,6 +55,13 @@ export function browserLogout(options: {
         await sessions.destroy(tx, session.idHash);
         return remainingSessions(tx, session.did, limits.idleS);
       }),
+    // P2.08j: the definer (migration 0014) ends every session of the DID and deletes its token set, in one transaction.
+    destroyAllSessions: (session, deadline) =>
+      withTransaction(pool, deadline, (tx) => sessions.destroyAllForDid(tx, session.did, "user_signout_all")).then(
+        () => undefined,
+      ),
+    // P2.08j: sign-out everywhere revokes and deletes under the lock a sign-in holds, so none lands between the two.
+    underAccountLock: lockDid,
     revokeGrant: revoke,
     // Counted again under the lock: a sign-in that finished since the delete above has its session row by now.
     whenLastBrowser: (did, deadline, fn) =>
