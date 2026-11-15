@@ -50,8 +50,13 @@ make a test pass. Chain tests against real Postgres are in `tests/integration/au
 - **Retention and erasure (P1.15a, P1.15f).** Migrations 0017 and 0018 add the only ways a row leaves: `audit.redact`
   (one body row whose class ran out), `audit.erase_subject` (a person's `sec` body rows, as subject or actor; `mod`
   is never touched) and `seal_segment`, `mark_anchored`, `drop_segment` for whole months. `refuse_change` lets a
-  DELETE through only as `audit_owner` with `audit.maintenance` set by one of them. No role is granted any yet (P3.07g,
-  P3.22). `drop_segment` never drops a lane's last rows, because `audit.append` continues from the newest row.
+  DELETE through only as `audit_owner` with `audit.maintenance` set. That stops every service role, not the owner:
+  migrator or a superuser, acting as `audit_owner`, can set it and delete (they could already drop the triggers);
+  the off-box anchor (P3.22) is what detects that. `audit.segment` and `audit.redaction_log` are append-only too
+  (segment allows only setting `anchored_at` and `dropped_at` once). No role is granted any function yet (P3.07g,
+  P3.22). `drop_segment` never drops a lane's last rows, because `audit.append` continues from the newest row, and
+  never takes the append lock; `seal_segment` takes it with a 2 s `lock_timeout`. `max_class_expiry` is fixed at
+  seal, so P4.07 (legal holds) must make `drop_segment` check holds. `redaction_log` keeps the month only.
   `segments.ts` gives the verifier `chainStart` (start after the newest dropped segment) and `verifySegments`.
   `tests/integration/audit/retention.test.ts` writes past-dated rows as the superuser, chained with `audit.row_hash`.
 

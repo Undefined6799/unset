@@ -20,7 +20,7 @@ import {
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
-const ROLES = ["retention", "auditor", "web"] as const;
+const ROLES = ["retention", "auditor", "web", "admin", "indexer"] as const;
 type Role = (typeof ROLES)[number];
 const migratorPassword = randomPassword();
 const passwords = Object.fromEntries(ROLES.map((role) => [role, randomPassword()])) as Record<Role, string>;
@@ -110,7 +110,8 @@ function asOwner<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
       `CREATE ROLE audit_verifier LOGIN NOINHERIT PASSWORD '${password}'; ` +
         "GRANT audit_owner TO audit_verifier WITH INHERIT FALSE, SET TRUE; GRANT CONNECT ON DATABASE unset TO audit_verifier",
     );
-    ownerPool = pools.open(postgres, "unset", "audit_verifier", password);
+    // Two connections: one test holds a lock on the first while the second waits for it.
+    ownerPool = pools.open(postgres, "unset", "audit_verifier", password, { max: 2 });
   }
   return withClient(ownerPool, null, async (client) => {
     await client.query("SET ROLE audit_owner");
@@ -167,6 +168,24 @@ describe("audit retention", () => {
     expect(bodies("sec")).toEqual(["1", "2", "3"]);
   });
 
+  test("owner_with_the_setting_can_delete", async () => {
+    // The residual the migration states: whoever is audit_owner (migrator or a superuser, who could also drop the
+    // triggers) and sets audit.maintenance deletes outside the functions. Pinned here, then rolled back.
+    const gone = asOwner(async (c) => {
+      await c.query("BEGIN");
+      try {
+        await c.query("SELECT set_config('audit.maintenance', 'segment', true)");
+        const body = await c.query("DELETE FROM audit.event_body WHERE lane = 'sec' AND seq = 3");
+        const chain = await c.query("DELETE FROM audit.chain WHERE lane = 'sec' AND seq = 3");
+        return [body.rowCount, chain.rowCount];
+      } finally {
+        await c.query("ROLLBACK");
+      }
+    });
+    await expect(gone).resolves.toEqual([1, 1]);
+    expect(bodies("sec")).toEqual(["1", "2", "3"]);
+  });
+
   test("redact_refuses_unexpired", async () => {
     // Yesterday's takedown (2 years from the event) and the decision (counted from a case close nobody supplies yet).
     for (const seq of [3, 2]) {
@@ -198,6 +217,10 @@ describe("audit retention", () => {
       "2 erase audit_verifier",
       "3 erase audit_verifier",
     ]);
+    // Only the month is kept, so one erasure's rows do not share an instant that would group one person's events.
+    expect(
+      lines("SELECT DISTINCT month = date_trunc('month', now() AT TIME ZONE 'UTC')::date FROM audit.redaction_log"),
+    ).toEqual(["t"]);
     expect(lines(`SELECT count(*) FROM audit.event_body WHERE lane = 'sec' AND '${X}' IN (subject, actor)`)).toEqual([
       "0",
     ]);
@@ -224,6 +247,20 @@ describe("audit retention", () => {
     await expect(asOwner((c) => one(c, "SELECT audit.redact('sec', 1)"))).resolves.toBe(false);
     await expect(asOwner((c) => one(c, "SELECT audit.redact('sec', 99)"))).resolves.toBe(false);
     await expect(asOwner((c) => verifyChain(c, "sec", "full"))).resolves.toEqual({ ok: true, last: 3 });
+  });
+
+  test("seal_gives_way_to_appends", async () => {
+    // Another session holds the lane's append lock: seal waits 2 s and stops, as audit.append does.
+    const code = await asOwner(async (holder) => {
+      await holder.query("SELECT pg_advisory_lock(hashtext('audit:sec'))");
+      try {
+        return await refusedAsOwner((c) => c.query(`SELECT audit.seal_segment('sec', ${monthOf(OLD)})`), "locked");
+      } finally {
+        await holder.query("SELECT pg_advisory_unlock(hashtext('audit:sec'))");
+      }
+    });
+    expect(code).toBe("55P03");
+    expect(lines("SELECT count(*) FROM audit.segment")).toEqual(["0"]);
   });
 
   test("seal_refuses_open_month_and_resealing", async () => {
@@ -318,10 +355,28 @@ describe("audit retention", () => {
     expect(lines("SELECT part FROM audit.redaction_log WHERE lane = 'mod' AND seq = 1")).toEqual(["drop"]);
   });
 
+  test("segments_and_the_log_are_append_only", async () => {
+    const changes = [
+      "UPDATE audit.segment SET head_hash = decode(repeat('00', 32), 'hex')",
+      "UPDATE audit.segment SET max_class_expiry = now() - interval '1 day'",
+      "UPDATE audit.segment SET anchored_at = NULL",
+      "UPDATE audit.segment SET dropped_at = NULL WHERE dropped_at IS NOT NULL",
+      "DELETE FROM audit.segment",
+      "TRUNCATE audit.segment",
+      "UPDATE audit.redaction_log SET part = 'drop'",
+      "DELETE FROM audit.redaction_log",
+      "TRUNCATE audit.redaction_log",
+    ];
+    for (const change of changes) expect(await refusedAsOwner((c) => c.query(change), change), change).toBe("UA005");
+  });
+
   test("segment_tamper_detected", async () => {
+    // Past the triggers, as someone who dropped them would be: the daily check still sees it.
     postgres.sql(
       "unset",
-      `UPDATE audit.segment SET head_hash = decode(repeat('00', 32), 'hex') WHERE lane = 'mod' AND id = ${monthId(MID)}`,
+      `BEGIN; SET LOCAL session_replication_role = replica;
+       UPDATE audit.segment SET head_hash = decode(repeat('00', 32), 'hex') WHERE lane = 'mod' AND id = ${monthId(MID)};
+       COMMIT;`,
     );
     await expect(withClient(as.auditor, null, (c) => verifySegments(c, "mod"))).resolves.toMatchObject({ ok: false });
   });

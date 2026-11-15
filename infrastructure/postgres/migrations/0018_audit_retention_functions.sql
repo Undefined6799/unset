@@ -12,8 +12,12 @@ SET ROLE audit_owner;
 
 -- The append-only triggers' one exception. A DELETE passes only while it runs as audit_owner, which the functions
 -- below do as definers, with audit.maintenance set for the transaction to 'body' (event_body rows) or 'segment'
--- (event_body and chain rows). UPDATE and TRUNCATE stay refused for everyone. A setting alone opens nothing: no
--- service role holds DELETE on these tables. The return value of a statement-level trigger is ignored.
+-- (event_body and chain rows). UPDATE and TRUNCATE stay refused for everyone. For a service role the setting opens
+-- nothing: none holds DELETE on these tables or can become audit_owner. It is no defence against the owner: a session
+-- that is audit_owner and sets audit.maintenance itself can delete rows outside the functions. Only migrator and a
+-- superuser can become audit_owner (0003), and both could already drop the triggers (0008), so this adds no new
+-- power; it stays the residual until the off-box anchor (P3.22) makes such a delete detectable. The return value of
+-- a statement-level trigger is ignored.
 CREATE OR REPLACE FUNCTION audit.refuse_change() RETURNS trigger
   LANGUAGE plpgsql
   SET search_path = pg_catalog
@@ -29,6 +33,34 @@ BEGIN
   RAISE EXCEPTION 'audit is append-only' USING ERRCODE = 'UA005';
 END
 $$;
+
+-- audit.segment changes only the way the functions below change it: anchored_at and dropped_at are each set once,
+-- and nothing else moves. chainStart trusts a dropped segment's head_hash, so that hash must not be editable.
+CREATE FUNCTION audit.segment_transition() RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog
+AS $$
+BEGIN
+  IF (NEW.lane, NEW.id, NEW.first_seq, NEW.last_seq, NEW.prev_hash, NEW.head_hash, NEW.sealed_at)
+       IS DISTINCT FROM (OLD.lane, OLD.id, OLD.first_seq, OLD.last_seq, OLD.prev_hash, OLD.head_hash, OLD.sealed_at)
+    OR NEW.max_class_expiry IS DISTINCT FROM OLD.max_class_expiry
+    OR (OLD.anchored_at IS NOT NULL AND NEW.anchored_at IS DISTINCT FROM OLD.anchored_at)
+    OR (OLD.dropped_at IS NOT NULL AND NEW.dropped_at IS DISTINCT FROM OLD.dropped_at) THEN
+    RAISE EXCEPTION 'audit is append-only' USING ERRCODE = 'UA005';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+-- Both tables of 0017 are append-only too, even for the owner: no DELETE or TRUNCATE on either (refuse_change's
+-- exception names event_body and chain only), no UPDATE of redaction_log, and only the two transitions above on
+-- segment. The same residual applies: whoever can become audit_owner can drop a trigger.
+CREATE TRIGGER segment_append_only BEFORE DELETE OR TRUNCATE ON audit.segment
+  FOR EACH STATEMENT EXECUTE FUNCTION audit.refuse_change();
+CREATE TRIGGER segment_transitions BEFORE UPDATE ON audit.segment
+  FOR EACH ROW EXECUTE FUNCTION audit.segment_transition();
+CREATE TRIGGER redaction_log_append_only BEFORE UPDATE OR DELETE OR TRUNCATE ON audit.redaction_log
+  FOR EACH STATEMENT EXECUTE FUNCTION audit.refuse_change();
 
 -- Removes one body row whose retention class has run out, and says whether a row went. A class counted from a case's
 -- close is refused until P3 supplies close dates, so it is kept (fail safe).
@@ -92,10 +124,14 @@ $$;
 
 -- Seals every unsealed row of the lane up to the end of a finished month into one segment. Rows are taken by seq, not
 -- by time alone, so segments never leave a gap: the segment starts where the last one ended. Returns false when the
--- lane has no unsealed row in or before that month.
+-- lane has no unsealed row in or before that month. It holds the lane's append lock while it reads one month of
+-- chain rows, and waits at most 2 s for it (55P03, as audit.append does), so it gives way to appends and the caller
+-- tries again. max_class_expiry is fixed here: a legal hold placed later does not move it, so P4.07 must make
+-- drop_segment ask the hold table as well.
 CREATE FUNCTION audit.seal_segment(p_lane text, p_month date) RETURNS boolean
   LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, audit
+  SET lock_timeout = '2s'
 AS $$
 DECLARE
   v_end timestamptz := (p_month + interval '1 month')::timestamp AT TIME ZONE 'UTC';
@@ -131,8 +167,9 @@ BEGIN
 END
 $$;
 
--- Records that a segment's head hash was written off-box. The caller proves it holds the same hash. P3.22 grants
--- it to its anchoring job.
+-- Records that a segment's head hash was written off-box. All it proves is that the caller knew the hash sealed
+-- here, so a stale or wrong copy cannot be marked; it cannot prove the off-box write happened. That is the anchoring
+-- job's duty (P3.22, which gets the grant) and the reason the daily check compares against the off-box copy.
 CREATE FUNCTION audit.mark_anchored(p_lane text, p_id int, p_head_hash bytea) RETURNS void
   LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, audit
@@ -148,7 +185,9 @@ $$;
 
 -- Drops a segment's chain and body rows. Only the oldest segment that still has its rows, only once it is anchored
 -- off-box and every row's class has run out, and never the lane's last rows: audit.append continues the chain from
--- the newest row, so a lane must keep one.
+-- the newest row, so a lane must keep one. It never takes the append lock, so a large drop does not make audited
+-- actions wait: the rows it removes are behind the head, which appends alone read, and once a row exists after the
+-- segment it stays. The segment's row lock serialises two drops.
 CREATE FUNCTION audit.drop_segment(p_lane text, p_id int) RETURNS void
   LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, audit
@@ -156,8 +195,7 @@ AS $$
 DECLARE
   s audit.segment%ROWTYPE;
 BEGIN
-  PERFORM pg_advisory_xact_lock(hashtext('audit:' || p_lane));
-  SELECT * INTO s FROM audit.segment x WHERE x.lane = p_lane AND x.id = p_id AND x.dropped_at IS NULL;
+  SELECT * INTO s FROM audit.segment x WHERE x.lane = p_lane AND x.id = p_id AND x.dropped_at IS NULL FOR UPDATE;
   IF NOT FOUND OR EXISTS (SELECT 1 FROM audit.segment x WHERE x.lane = p_lane AND x.id < p_id AND x.dropped_at IS NULL)
   THEN
     RAISE EXCEPTION 'audit_segment_not_oldest' USING ERRCODE = 'UA007';
