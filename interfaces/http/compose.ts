@@ -54,7 +54,7 @@ import { createAccountStore } from "./account.ts";
 import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
-import { policies } from "./limits.ts";
+import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
@@ -390,7 +390,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     server: createServer({
       config: cfg,
       routes,
-      policies,
+      policies: policiesFor(cfg.TRUSTED_PROXY_MODE),
       log,
       onClose: oauth.onClose,
       errorPage,
