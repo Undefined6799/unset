@@ -2050,6 +2050,13 @@ Threats:
 - A caller ends another member's sessions. Answered: the DID comes from the caller's own session (reds: a `did` field
   in the body is ignored; the integration test leaves a stranger's session and grant alive).
 - A failed revoke leaves a usable grant. Answered: the stored set is deleted, then the sessions (red).
+- The delete fails after the revoke removed the token set (Codex on #1566). A repeat of the POST then reads no
+  session, so it cannot end the rows left behind, and the member's next sign-in would make them valid again. Narrowed,
+  not closed: the request tries the delete three times and logs `auth.logout_everywhere_incomplete` if all fail (reds).
+  Closing it needs sign-in to end a DID's older rows, or rows bound to their token set; that is a trusted-base step,
+  and auth_dead and the age gate share the gap.
+- A sign-in lands between the revoke and the delete and loses a grant nobody revoked. Answered: both run under the
+  account's sign-in lock, and still run if the lock cannot be had (red).
 - A holder of a copied cookie signs the member out. Accepted: the member signs in again, and the copy dies with it.
 - An identity record of the action. Answered: no audit row, and a log line with no field (plan §6).
 ASVS 5.0: V7.4.3 stays partial with the in-app control named; the PR updates the row.

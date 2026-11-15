@@ -81,6 +81,7 @@ function setup(world: World = {}) {
     readSession: async () => (world.signedIn ? ({ did: DID, idHash: Buffer.alloc(32, 7) } as Session) : null),
     destroySession: async () => 1,
     destroyAllSessions: async () => undefined,
+    underAccountLock: async (_did, fn) => fn(),
     issuerOf: async () => `https://${PDS}`,
     revokeGrant: async () => undefined,
     deleteTokenSet: async () => undefined,

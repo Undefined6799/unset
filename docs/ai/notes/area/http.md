@@ -87,7 +87,11 @@ security finding 5): a second form on Settings, Account posts to POST /logout/ev
 (dropping the stored set if that fails) and then calls `destroyAllForDid` with `user_signout_all`, so every browser,
 this one included, is signed out and lands on /signed-out. There is no "other browsers only" variant: the definer also
 deletes the token set, and `session.end_sessions_single_sql` (infrastructure/session, trusted base) allows no second
-DELETE of a DID's sessions. No confirmation box, no audit row (plan §6), and `auth.logout_everywhere` carries no field.
+DELETE of a DID's sessions. The revoke and the delete run under the account's sign-in lock. After the revoke the
+token set is gone, so a repeat of the POST reads no session: the request itself tries the delete three times, and if
+all fail it logs `auth.logout_everywhere_incomplete`, because rows left behind become valid again at the member's next
+sign-in (an open gap shared with auth_dead and the age gate; the fix is in trusted base). No confirmation box, no
+audit row (plan §6), and `auth.logout_everywhere` carries no field.
 `destroyAllForDid` also serves the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would

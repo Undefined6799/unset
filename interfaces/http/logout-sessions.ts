@@ -43,6 +43,7 @@ export function browserLogout(options: {
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
   destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<void>;
+  underAccountLock: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
   whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
@@ -59,6 +60,8 @@ export function browserLogout(options: {
       withTransaction(pool, deadline, (tx) => sessions.destroyAllForDid(tx, session.did, "user_signout_all")).then(
         () => undefined,
       ),
+    // P2.08j: sign-out everywhere revokes and deletes under the lock a sign-in holds, so none lands between the two.
+    underAccountLock: lockDid,
     revokeGrant: revoke,
     // Counted again under the lock: a sign-in that finished since the delete above has its session row by now.
     whenLastBrowser: (did, deadline, fn) =>

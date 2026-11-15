@@ -14,7 +14,7 @@ import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { testPage } from "../web/fixtures/page.ts";
-import { ISSUER_READ_MS, type LogoutDeps, logoutRoutes } from "./logout.ts";
+import { END_ALL_ATTEMPTS, ISSUER_READ_MS, type LogoutDeps, logoutRoutes } from "./logout.ts";
 
 const ORIGIN = "https://unset.test";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
@@ -27,8 +27,8 @@ type World = {
   session?: Session | null;
   destroyFails?: boolean;
   remaining?: number;
-  /** P2.08j: ending every session fails at the database. */
-  destroyAllFails?: boolean;
+  /** P2.08j: how many times ending every session fails at the database before it works; `"always"` never works. */
+  destroyAllFails?: number | "always";
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. `"stall"` never settles. */
   issuer?: string | null | Error | "stall";
   /** The last browser's revocation fails at the PDS (P2.08g). */
@@ -59,8 +59,16 @@ function setup(world: World = {}) {
     },
     destroyAllSessions: async (session) => {
       calls.push("destroyAll");
-      if (world.destroyAllFails) throw new Error("db down");
+      const failures = world.destroyAllFails ?? 0;
+      if (failures === "always" || calls.filter((call) => call === "destroyAll").length <= failures) {
+        throw new Error("db down");
+      }
       destroyed.push(session);
+    },
+    underAccountLock: async (_did, fn) => {
+      calls.push("accountLock");
+      if (world.underLock === "lock_fails") throw new Error("LockTimeout");
+      return fn();
     },
     issuerOf: async (_did, signal?: AbortSignal) => {
       calls.push("issuerOf");
@@ -298,7 +306,8 @@ describe("POST /logout/everywhere", () => {
     // This browser is signed out too, and the page links the issuer read before the revoke deleted its record.
     expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
     // Revoke first: the definer deletes the token set the revocation call needs (migration 0014).
-    expect(calls).toEqual(["everywhere", "issuerOf", "revoke", "destroyAll"]);
+    // Both under the account's sign-in lock, so no sign-in stores a new grant between them.
+    expect(calls).toEqual(["everywhere", "issuerOf", "accountLock", "revoke", "destroyAll"]);
     // The session is the request's own: the caller ends their own account's sessions and nobody else's.
     expect(destroyed).toEqual([SESSION]);
     expect(lines.filter((line) => line.event === "auth.logout_everywhere")).toHaveLength(1);
@@ -316,7 +325,7 @@ describe("POST /logout/everywhere", () => {
     const { send, destroyed, calls, lines } = everywhere({ revokeFails: true });
     const response = await send("/logout/everywhere");
     expect(response.headers.get("location")).toBe("/signed-out");
-    expect(calls).toEqual(["everywhere", "issuerOf", "revoke", "deleteTokenSet", "destroyAll"]);
+    expect(calls).toEqual(["everywhere", "issuerOf", "accountLock", "revoke", "deleteTokenSet", "destroyAll"]);
     expect(destroyed).toEqual([SESSION]);
     expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toHaveLength(1);
   });
@@ -344,13 +353,42 @@ describe("POST /logout/everywhere", () => {
     expect(calls).toEqual(["everywhere"]);
   });
 
-  test("logout_everywhere_db_failure_keeps_the_cookie", async () => {
-    const { send, lines } = everywhere({ destroyAllFails: true });
+  test("logout_everywhere_without_the_lock_still_signs_out", async () => {
+    const { send, destroyed, calls, lines } = everywhere({ underLock: "lock_fails" });
+    const response = await send("/logout/everywhere");
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["everywhere", "issuerOf", "accountLock", "revoke", "destroyAll"]);
+    expect(destroyed).toEqual([SESSION]);
+    expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toEqual([
+      expect.objectContaining({ kind: "Error" }),
+    ]);
+  });
+
+  test("logout_everywhere_retries_the_delete_after_the_revoke", async () => {
+    // Codex on #1566: after the revoke the token set is gone, so a repeat of the POST reads no session and could not
+    // end the rows a failed delete left; a later sign-in would make them valid again. The request itself tries again.
+    const { send, destroyed, calls } = everywhere({ destroyAllFails: END_ALL_ATTEMPTS - 1 });
+    const response = await send("/logout/everywhere");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(calls.filter((call) => call === "revoke")).toHaveLength(1);
+    expect(calls.filter((call) => call === "destroyAll")).toHaveLength(END_ALL_ATTEMPTS);
+    expect(destroyed).toEqual([SESSION]);
+  });
+
+  test("logout_everywhere_db_failure_is_reported", async () => {
+    const { send, calls, lines } = everywhere({ destroyAllFails: "always" });
     const response = await send("/logout/everywhere");
     expect(response.status).toBe(503);
     expect(response.headers.getSetCookie()).toEqual([]);
     expect(await response.text()).toContain("Could not sign you out, try again.");
+    expect(calls.filter((call) => call === "destroyAll")).toHaveLength(END_ALL_ATTEMPTS);
     expect(lines.filter((line) => line.event === "auth.logout_everywhere")).toEqual([]);
+    // Visible to an operator, without the DID: the grant ended but session rows may remain.
+    expect(lines.filter((line) => line.event === "auth.logout_everywhere_incomplete")).toEqual([
+      expect.objectContaining({ kind: "Error" }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
   });
 });
 
