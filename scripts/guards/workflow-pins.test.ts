@@ -438,55 +438,44 @@ describe("docs auto-merge (P0.07e)", () => {
   });
 });
 
-// P1.38r: issues: write exists only on the notify job of waivers.yml. The guard holds that whole job as fixed text,
-// so no permission, action, command or shell setting can be added to it without changing the guard. The job that
-// runs npm ci stays read-only.
+// P1.38r: issues: write exists only in waivers.yml, on its notify job, and only while that file is byte for byte
+// the reviewed one (the guard names it by SHA-256). The job that runs npm ci stays read-only.
 describe("waivers notify (P1.38r)", () => {
   const file = "waivers.yml";
   const text = readFileSync(join(WORKFLOWS, file), "utf8");
-  const NOTIFY_PERMISSIONS = "    permissions:\n      issues: write\n";
-  const NOT_FIXED = "waivers notify job is not its fixed text";
+  const NOT_REVIEWED = "waivers.yml is not the reviewed file (update WAIVERS_SHA256 with the change)";
   const RUN = "      - run: |\n";
 
-  test("issues_write_only_on_the_waivers_notify_job", () => {
-    expect(text).toContain(NOTIFY_PERMISSIONS);
+  test("issues_write_only_in_the_reviewed_waivers_file", () => {
+    expect(text.match(/^\s+issues: write$/gm)).toHaveLength(1);
+    expect(text).toContain("  notify:\n    needs: expiry\n    if: failure()\n");
+    expect(text).toContain("    permissions:\n      issues: write\n    env:\n");
     expect(problems(text, file)).toEqual([]);
     expect(problems(text, "ci.yml")).toContain("write permission: issues: write");
-    const onExpiry = text.replace("      contents: read\n", "      contents: read\n      issues: write\n");
-    expect(problems(onExpiry, file)).toContain("waivers issues: write is not exactly once, on the notify job");
   });
 
-  test("notify_job_is_fixed_text", () => {
+  test("any_edit_to_the_waivers_workflow_fails_the_guard", () => {
     const changed = [
-      text.replace(NOTIFY_PERMISSIONS, `${NOTIFY_PERMISSIONS}      contents: read\n`),
+      text.replace("      contents: read\n", "      contents: read\n      issues: write\n"),
+      text.replace("      issues: write\n", "      issues: write\n      contents: read\n"),
       text.replace(RUN, `      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n${RUN}`),
-      text.replace(
-        '          body="The daily',
-        '          node scripts/ci/waiver-expiry.ts\n          body="The daily',
-      ),
       // Codex on #1539: a list of banned command names let any other command through.
       text.replace('          body="The daily', '          python3 -c "print(1)"\n          body="The daily'),
       `${text}      - run: gh issue list\n`,
       // Codex on #1539: a custom shell runs its own command and ignores the checked script.
       text.replace(RUN, "      - shell: bash -c 'echo other' {0}\n        run: |\n"),
-      text.replace(
-        "    steps:\n      - run: |",
-        "    defaults:\n      run:\n        shell: python3 {0}\n    steps:\n      - run: |",
-      ),
+      text.replace("\njobs:\n", "\ndefaults:\n  run:\n    shell: python3 {0}\n\njobs:\n"),
+      // Codex on #1539: a quoted key is the same key to YAML and was invisible to a key-name rule.
+      text.replace("\njobs:\n", "\n\"defaults\":\n  run:\n    shell: bash -c 'echo other; exit 1' {0}\n\njobs:\n"),
+      text.replace("\njobs:\n", "\nenv:\n  BASH_ENV: /tmp/x\n\njobs:\n"),
+      text.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  issue_comment:\n"),
+      `${text}\n`,
+      // Dropping the permission does not unpin the file: a write spelled so the line rules miss it would otherwise pass.
+      text.replace("      issues: write\n", "      issues: !!str write\n"),
     ];
     for (const workflow of changed) {
       expect(workflow).not.toBe(text);
-      expect(problems(workflow, file)).toContain(NOT_FIXED);
+      expect(problems(workflow, file)).toContain(NOT_REVIEWED);
     }
-  });
-
-  test("workflow_cannot_change_how_the_notify_script_runs", () => {
-    const defaults = text.replace("\njobs:\n", "\ndefaults:\n  run:\n    shell: python3 {0}\n\njobs:\n");
-    expect(problems(defaults, file)).toContain("waivers workflow top-level keys are not the fixed list");
-    const env = text.replace("\njobs:\n", "\nenv:\n  BASH_ENV: /tmp/x\n\njobs:\n");
-    expect(problems(env, file)).toContain("waivers workflow top-level keys are not the fixed list");
-    const trigger = text.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  issue_comment:\n");
-    expect(trigger).not.toBe(text);
-    expect(problems(trigger, file)).toContain("waivers workflow has a trigger beyond schedule and workflow_dispatch");
   });
 });

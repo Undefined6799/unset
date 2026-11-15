@@ -1,5 +1,6 @@
 // The CI supply-chain and privilege rules (P0.07) over one workflow file.
 // Line-based on purpose: the rules are about what the YAML says, and a parser would be one more dependency.
+import { createHash } from "node:crypto";
 
 /** The only shape a secret- or OIDC-using job may have: bound to an environment and run only for pushes to main. */
 export const GATE_IF = "if: github.event_name == 'push' && github.ref == 'refs/heads/main'";
@@ -283,69 +284,22 @@ function docsAutoMergeProblems(file: string, lines: string[]): string[] {
 
 /**
  * The one job that may write issues (P1.38r): `notify` in waivers.yml, which tells the owner that the daily waiver
- * look failed. The whole job is fixed text, compared line by line: its one permission, its env, and its one script,
- * which only calls `gh issue`. So it uses no action, checks out nothing, runs no repository code and sets no shell.
- * The file may hold no top-level key that could change how that script runs (`defaults`, `env`) and no trigger but
- * the schedule and a manual run. A change to the job is a change to this guard. Every other file and job keeps the
- * ban on write permissions.
+ * look failed. It holds that one permission, uses no action, checks out nothing and runs one script that only calls
+ * `gh issue`. Rules read line by line kept missing ways to change what such a job runs (another command, a custom
+ * shell, workflow defaults, a quoted key), so the guard does not judge the file's shape: waivers.yml must be byte
+ * for byte the file that was reviewed, named here by its SHA-256. Any edit to that workflow is therefore also an
+ * edit to this guard. Every other file keeps the ban on write permissions.
  */
 const WAIVERS_FILE = "waivers.yml";
-const WAIVERS_TOP_LEVEL = "name,on,permissions,concurrency,jobs";
-const WAIVERS_TRIGGERS = "schedule,workflow_dispatch";
-/* biome-ignore-start lint/suspicious/noTemplateCurlyInString: GitHub expressions and shell text, not JS templates. */
-const WAIVERS_NOTIFY_JOB = [
-  "    needs: expiry",
-  "    if: failure()",
-  "    runs-on: ubuntu-24.04",
-  "    timeout-minutes: 5",
-  "    permissions:",
-  "      issues: write",
-  "    env:",
-  "      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
-  "      GH_REPO: ${{ github.repository }}",
-  "      OWNER: ${{ github.repository_owner }}",
-  "      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-  "      TITLE: A dated waiver has expired or expires within seven days",
-  "    steps:",
-  "      - run: |",
-  '          body="The daily waivers job failed: ${RUN_URL}. Its log names each entry and its date. Renew the waiver with a reason or land the fix; this issue can be closed once the job is green again."',
-  '          number="$(gh issue list --state open --search "in:title \\"${TITLE}\\"" --json number,title --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"',
-  '          if [ -n "$number" ]; then',
-  '            gh issue comment "$number" --body "$body"',
-  "          else",
-  '            gh issue create --title "$TITLE" --body "$body" --assignee "$OWNER"',
-  "          fi",
-].join("\n");
-/* biome-ignore-end lint/suspicious/noTemplateCurlyInString: as above. */
+const WAIVERS_SHA256 = "3461b5a2943ed81220c40d8ac3de1b916fa53626e3a6c2e91e158ea39586e945";
 
-/** The keys one level under `on:`. */
-function triggerKeys(lines: string[]): string[] {
-  const at = lines.findIndex((line) => /^on:\s*$/.test(line));
-  if (at < 0) return [];
-  const keys: string[] = [];
-  for (const line of lines.slice(at + 1)) {
-    if (/^\S/.test(line)) break;
-    const key = /^ {2}([\w-]+):/.exec(line)?.[1];
-    if (key !== undefined) keys.push(key);
-  }
-  return keys;
-}
-
-function waiverNotifyProblems(file: string, lines: string[]): string[] {
-  const isIssuesWrite = (line: string) => /\bissues["']?\s*:\s*["']?write\b/.test(line);
-  const writes = lines.filter(isIssuesWrite);
+function waiverNotifyProblems(file: string, text: string, lines: string[]): string[] {
+  const writes = lines.filter((line) => /\bissues["']?\s*:\s*["']?write\b/.test(line));
   if (file !== WAIVERS_FILE) return writes.map((line) => `write permission: ${line.trim()}`);
-  if (writes.length === 0) return [];
-  const found: string[] = [];
-  const body = (jobs(lines).get("notify") ?? []).join("\n").trimEnd();
-  if (writes.length !== 1) found.push("waivers issues: write is not exactly once, on the notify job");
-  if (body !== WAIVERS_NOTIFY_JOB) found.push("waivers notify job is not its fixed text");
-  const topLevel = lines.flatMap((line) => /^([\w-]+):/.exec(line)?.[1] ?? []);
-  if (topLevel.join() !== WAIVERS_TOP_LEVEL) found.push("waivers workflow top-level keys are not the fixed list");
-  if (triggerKeys(lines).join() !== WAIVERS_TRIGGERS) {
-    found.push("waivers workflow has a trigger beyond schedule and workflow_dispatch");
-  }
-  return found;
+  const digest = createHash("sha256").update(text).digest("hex");
+  return digest === WAIVERS_SHA256
+    ? []
+    : ["waivers.yml is not the reviewed file (update WAIVERS_SHA256 with the change)"];
 }
 
 /** Every rule violation in one workflow file (`file` is its name under .github/workflows/), as readable strings. */
@@ -363,7 +317,7 @@ export function problems(text: string, file = ""): string[] {
     if (ungated(body)) found.push(`job ${id}: secret or OIDC outside an environment-bound main-only job`);
   }
   found.push(...docsAutoMergeProblems(file, lines));
-  found.push(...waiverNotifyProblems(file, lines));
+  found.push(...waiverNotifyProblems(file, text, lines));
   found.push(...signingProblems(file, lines));
   return found;
 }

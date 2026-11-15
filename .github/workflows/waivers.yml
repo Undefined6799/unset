@@ -8,6 +8,8 @@
 # assigned to the repository owner, with a comment per failed run. That job checks out nothing and runs no repository
 # code, and `issues: write` is its only permission, so the job that runs `npm ci` still cannot write anywhere.
 # (GITHUB_TOKEN with `gh issue`: docs.github.com/en/actions/tutorials/authenticate-with-github_token, read 2026-11-15.)
+# scripts/guards/workflows.ts names this file by its SHA-256: any edit here, a comment included, needs the new hash
+# there, so a change to the job that holds the write token is always a change to the guard too.
 
 name: waivers
 
