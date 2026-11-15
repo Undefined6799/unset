@@ -52,6 +52,8 @@ Screens are `apps/web`. The loader requires `renderPage`, `islandName`, `screens
 
 `pageResponse` uses `islands: "on"` when the route omits `islands` (`interfaces/http/web/page.ts`). `GET /:did` (`routes/me.ts`) and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`) omit it, so the drawer's theme picker can hydrate. The routes that pass `"off"` are `GET /` (`routes/home.ts`), the legal pages (`routes/legal.ts`), `GET /login` (`routes/login.ts`) and the welcome pages (`routes/welcome.ts`).
 
+`GET /` (`interfaces/http/routes/home.ts`) and `GET /legal/terms`, `GET /legal/privacy` and `GET /legal/domains` (`interfaces/http/routes/legal.ts`) send `Cache-Control: public, max-age=300` through `cachedPublicPage` in `interfaces/http/routes/home.ts`, because those pages read no cookie. No other public-group page does; `GET /login` (`interfaces/http/routes/login.ts`) does not.
+
 ## May import
 
 The [`interface` row](../) on the section page, plus:
