@@ -100,7 +100,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | checked: `transactions_only_in_tx` (Semgrep rule transactions-only-in-tx, proven on fixtures by the CI semgrep job) |
 | DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
 | SE-4 | Every route names a rate-limit policy in its own interface's `limits.ts`, or is "exempt" on a static route | checked: `scripts/guards/route-policy.ts`, `every_route_has_policy` |
-| SE-6 | A PR that touches the trusted base touches nothing else, and a PR that changes a check changes no product path | checked: `trusted_base_isolated`, `trusted_base_list_from_codeowners`, `check_plus_product_fails`, `lockfile_rides_with_trusted_dependency_change` |
+| SE-6 | A PR that changes a trusted-base path, a check path among them, carries the `security-review` label (ADR 0044); Alex's line on the reviewed head is review-only | checked: `trusted_path_needs_label`, `trusted_paths_named`, `trusted_base_list_from_codeowners`, `list_is_union_of_base_and_head` |
 
 The docs test (P0.09, `architecture_rule_table_matches_depcruise`) reads this table. It fails if a named check
 does not exist, a `forbidden` rule or `MATRIX` has no row, a planned step has already merged, or a review-only row

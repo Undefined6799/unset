@@ -131,12 +131,12 @@ describe("other documents", () => {
   test("pr_template_headings", () => {
     const template = read(".github/pull_request_template.md");
     expect(prTemplateProblems(template)).toEqual([]);
-    expect(prTemplateProblems(template.replace("## Threats\n", ""))).toHaveLength(1);
+    expect(prTemplateProblems(template.replace("## How to test\n", ""))).toHaveLength(1);
     expect(
       prTemplateProblems(template.replace("## Step\n", "").replace("## What\n", "## What\n\n## Step\n")),
     ).toHaveLength(1);
     expect(prTemplateProblems(template.replace(AI_NOTES_LINE, "AI notes:"))).toHaveLength(1);
-    expect(PR_TEMPLATE_HEADINGS).toHaveLength(16);
+    expect(PR_TEMPLATE_HEADINGS).toHaveLength(5);
   });
 
   test("glossary_canonical", () => {

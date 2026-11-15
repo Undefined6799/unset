@@ -20,24 +20,8 @@ export const AI_NOTES_LINE = "AI notes: updated / none needed / which";
 const DECISIONS = "docs/human/decisions";
 const ADR_HEADINGS = ["Context", "Decision", "Alternatives", "Consequences", "Compliance"];
 export const ENTRYPOINTS = ["web", "api", "indexer", "media", "review", "admin", "pds-admin", "chat-admin"];
-export const PR_TEMPLATE_HEADINGS = [
-  "Step",
-  "What",
-  "Why",
-  "How to test",
-  "Security review",
-  "Ownership path",
-  "Threats",
-  "ASVS rows",
-  "Red evidence",
-  "Behaviour change",
-  "Performance evidence",
-  "Migration or rollback",
-  "Why this works (source read)",
-  "Needs an ADR?",
-  "Branch age",
-  "What I am unsure about",
-];
+/** Five headings (ADR 0044), each one a heading of the template before it, so an older PR body still passes. */
+export const PR_TEMPLATE_HEADINGS = ["Step", "What", "How to test", "Security review", "What I am unsure about"];
 /** Words from the superseded v2e direction or an icon package; only the two bullets below may use them. */
 const V2E_WORDS = /v2e|amber|chamfer|serif|\bUiIcon\b|iconoir-react/i;
 const V2E_SUPERSEDED =

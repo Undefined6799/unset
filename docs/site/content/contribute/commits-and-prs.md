@@ -53,19 +53,8 @@ The kind of change is a label in [`.github/labels.json`](https://github.com/Unde
 | --- |
 | Step |
 | What |
-| Why |
 | How to test |
 | Security review |
-| Ownership path |
-| Threats |
-| ASVS rows |
-| Red evidence |
-| Behaviour change |
-| Performance evidence |
-| Migration or rollback |
-| Why this works (source read) |
-| Needs an ADR? |
-| Branch age |
 | What I am unsure about |
 
 The template then has the line `AI notes: updated / none needed / which`. Keep one of the three. [`scripts/docs/docs.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/docs.ts) checks that the template file still carries these headings, in this order, and that line after them.
@@ -80,11 +69,10 @@ The workflow runs on a pull request that is not a draft. `runChangeShape` report
 | Size | Warning over 400 source lines. Error over 800 without `large-pr` and a `Large PR:` reason |
 | Template headings | Error when one is missing. Renovate is the exception above |
 | `kind/*` | Warning unless there is exactly one |
-| Check path and product path together | Error, tagged `[SE-6]` |
-| Trusted-base files mixed with other paths | Error, tagged `[SE-6]` |
+| A trusted-base or check path without the `security-review` label | Error, tagged `[SE-6]`. With the label, a notice lists those paths. Renovate needs no label |
 | A `-- why: speed` index | Error, tagged `[PF-1]`, when Performance evidence lacks p50, p95 and p99 before and after |
 
-The trusted-base list is the `# checks:` and trusted-base sections of `.github/CODEOWNERS`, read by `scripts/guards/trusted-base.ts`.
+The trusted-base list is the last section of `.github/CODEOWNERS` (its path lines, `# parsed:` and `# checks:`), read by `scripts/guards/trusted-base.ts`. A pull request that changes a listed path merges only on Alex's line for the reviewed head ([ADR 0044](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0044-trusted-paths-labelled-not-isolated.md)).
 
 ## Docs-only allowlist
 

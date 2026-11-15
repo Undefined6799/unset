@@ -1,6 +1,6 @@
 // The wiring of the P0.09c change-shape checks: the CI job, the hook, Renovate's titles and the labels.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -108,13 +108,16 @@ describe("wiring", () => {
     };
     const run = job();
     expect(run.status).toBe(1);
-    // .github/CODEOWNERS is a check path, so both product paths fail; the non-ASCII one matched only through -z.
-    expect(run.out).toContain(
-      "::error::[SE-6] a PR that changes a check path changes no product path: domains/content/x.ts, shared/http/gaté.ts",
+    // A mixed PR is allowed (ADR 0044), but it changes two trusted paths, so it needs the label. The non-ASCII path
+    // matched only through -z, and the feature file beside them is not named.
+    const paths = ".github/CODEOWNERS, shared/http/gaté.ts";
+    expect(run.out).toBe(
+      `::error::[SE-6] a PR that changes a trusted path carries the security-review label: ${paths}\n`,
     );
-    // shared/http/ is trusted base, so the PR's other files are outside it.
-    expect(run.out).toContain(
-      "::error::[SE-6] outside the trusted base in a trusted-base PR: .github/CODEOWNERS, domains/content/x.ts",
+    const labelled = job({ PR_LABELS: '["kind/fix","security-review"]' });
+    expect(labelled.status).toBe(0);
+    expect(labelled.out).toContain(
+      `::notice::[SE-6] trusted paths in this PR, which merge only on Alex's line for this head: ${paths}\n`,
     );
     // With the line on neither side, nothing says which paths are checks: fail closed.
     put(".github/CODEOWNERS", withoutChecks);
@@ -123,142 +126,18 @@ describe("wiring", () => {
       'neither CODEOWNERS section has "# checks:" paths',
     );
     expect(job({ BASE_SHA: "--output=/tmp/x" })).toEqual({ status: 1, out: "::error::BASE_SHA is not a commit id\n" });
-    // Git's mode decides documentation: a regular LICENSE is exempt, a symlink named LICENSE is judged by its location.
-    sh("checkout", "-q", "-b", "licence", base);
+    // A rename out of a trusted folder still names the trusted path it left.
+    sh("checkout", "-q", "-b", "move", base);
     put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
-    put("shared/config/LICENSE", "MIT License\n");
-    execFileSync("mkdir", ["-p", join(dir, "shared/http")]);
-    symlinkSync("../config/LICENSE", join(dir, "shared/http/LICENSE"));
+    put("shared/http/a.ts", "export const a = 1;\n");
     sh("add", "-A");
-    sh("commit", "-q", "-m", "P0.13 Add the licences");
-    expect(job({ HEAD_SHA: sh("rev-parse", "HEAD") }).out).toContain(
-      "::error::[SE-6] a PR that changes a check path changes no product path: shared/http/LICENSE\n",
-    );
-  });
-
-  test("lockfile_rides_end_to_end", () => {
-    // Ruling 2026-10-05 02:50Z through real git: the root lockfile rides only when a trusted package.json's dependency
-    // fields change; a scripts-only or unreadable manifest change leaves it outside the trusted base.
-    const dir = mkdtempSync(join(tmpdir(), "pr-shape-lock-"));
-    temps.push(dir);
-    const sh = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: fixtureGitEnv() }).trim();
-    const put = (path: string, text: string) => {
-      execFileSync("mkdir", ["-p", join(dir, path, "..")]);
-      writeFileSync(join(dir, path), text);
-    };
-    const manifest = (fields: object) => `${JSON.stringify({ name: "@unset/shared-http", ...fields }, null, 2)}\n`;
-    sh("init", "-q", "-b", "main");
-    put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
-    put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
-    put("shared/http/package.json", manifest({ dependencies: { a: "1.0.0" } }));
-    const lockfile = (dependencies: object, extra: object = {}) => {
-      const workspace = { name: "@unset/shared-http", dependencies };
-      const packages = { "shared/http": workspace, "node_modules/a": { version: "1.0.0" }, ...extra };
-      return `${JSON.stringify({ lockfileVersion: 3, packages })}\n`;
-    };
-    put("package-lock.json", lockfile({ a: "1.0.0" }));
-    sh("add", "-A");
-    sh("commit", "-q", "-m", "P0.01 Start");
-    const base = sh("rev-parse", "HEAD");
-    const prWith = (branch: string, manifestText: string) => {
-      sh("checkout", "-q", "-b", branch, base);
-      put("shared/http/package.json", manifestText);
-      put("shared/http/server.ts", "export {};\n");
-      const hono = { "node_modules/hono": { version: "4.0.0" } };
-      put("package-lock.json", lockfile({ a: "1.0.0", hono: "4.0.0" }, hono));
-      sh("add", "-A");
-      sh("commit", "-q", "-m", "P1.04k Add the server kit");
-      try {
-        return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
-          cwd: dir,
-          env: {
-            ...fixtureGitEnv(),
-            PR_TITLE: "P1.04k Add the server kit",
-            PR_BODY: read(".github/pull_request_template.md"),
-            PR_LABELS: '["kind/build"]',
-            PR_AUTHOR: "Undefined6799",
-            PR_AUTHOR_TYPE: "User",
-            BASE_SHA: base,
-            HEAD_SHA: sh("rev-parse", "HEAD"),
-          },
-          encoding: "utf8",
-        });
-      } catch (error) {
-        return (error as { stdout: string }).stdout;
-      }
-    };
-    const outside = "::error::[SE-6] outside the trusted base in a trusted-base PR: package-lock.json";
-    expect(prWith("deps", manifest({ dependencies: { a: "1.0.0", hono: "4.0.0" } }))).not.toContain("[SE-6]");
-    expect(prWith("scripts", manifest({ dependencies: { a: "1.0.0" }, scripts: { x: "y" } }))).toContain(outside);
-    expect(prWith("broken", "{ not json")).toContain(outside);
-  });
-
-  test("new_trusted_workspace_end_to_end", () => {
-    // P1.14q through real git: a PR that creates a trusted package may carry its root tsconfig.json reference and its
-    // own lockfile entries; any other root tsconfig.json change keeps the file outside the trusted base.
-    const dir = mkdtempSync(join(tmpdir(), "pr-shape-born-"));
-    temps.push(dir);
-    const sh = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: fixtureGitEnv() }).trim();
-    const put = (path: string, text: string) => {
-      execFileSync("mkdir", ["-p", join(dir, path, "..")]);
-      writeFileSync(join(dir, path), text);
-    };
-    const json = (value: object) => `${JSON.stringify(value, null, 2)}\n`;
-    const tsconfig = (paths: string[], extra: object = {}) =>
-      json({ files: [], references: paths.map((path) => ({ path })), ...extra });
-    const lockfile = (extra: object = {}) =>
-      json({
-        lockfileVersion: 3,
-        packages: { "": { name: "unset.sh" }, "node_modules/a": { version: "1.0.0" }, ...extra },
-      });
-    sh("init", "-q", "-b", "main");
-    put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
-    put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
-    put("tsconfig.json", tsconfig(["shared/http"]));
-    put("package-lock.json", lockfile());
-    sh("add", "-A");
-    sh("commit", "-q", "-m", "P0.01 Start");
-    const base = sh("rev-parse", "HEAD");
-    const prWith = (branch: string, rootTsconfig: string) => {
-      sh("checkout", "-q", "-b", branch, base);
-      put("infrastructure/seal/package.json", json({ name: "@unset/infrastructure-seal", version: "0.0.0" }));
-      put("infrastructure/seal/index.ts", "export {};\n");
-      put("infrastructure/seal/index.test.ts", "export {};\n");
-      put("tsconfig.json", rootTsconfig);
-      put(
-        "package-lock.json",
-        lockfile({
-          "infrastructure/seal": { name: "@unset/infrastructure-seal", version: "0.0.0" },
-          "node_modules/@unset/infrastructure-seal": { resolved: "infrastructure/seal", link: true },
-        }),
-      );
-      sh("add", "-A");
-      sh("commit", "-q", "-m", "P1.14 Add the seal package");
-      try {
-        return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
-          cwd: dir,
-          env: {
-            ...fixtureGitEnv(),
-            PR_TITLE: "P1.14 Add the seal package",
-            PR_BODY: read(".github/pull_request_template.md"),
-            PR_LABELS: '["kind/feature"]',
-            PR_AUTHOR: "Undefined6799",
-            PR_AUTHOR_TYPE: "User",
-            BASE_SHA: base,
-            HEAD_SHA: sh("rev-parse", "HEAD"),
-          },
-          encoding: "utf8",
-        });
-      } catch (error) {
-        return (error as { stdout: string }).stdout;
-      }
-    };
-    expect(prWith("born", tsconfig(["infrastructure/seal", "shared/http"]))).not.toContain("[SE-6]");
-    const options = tsconfig(["infrastructure/seal", "shared/http"], { compilerOptions: { strict: false } });
-    expect(prWith("options", options)).toContain(
-      "::error::[SE-6] outside the trusted base in a trusted-base PR: tsconfig.json",
+    sh("commit", "-q", "-m", "P1.07 Add a file");
+    const added = sh("rev-parse", "HEAD");
+    execFileSync("mkdir", ["-p", join(dir, "domains/content")]);
+    sh("mv", "shared/http/a.ts", "domains/content/a.ts");
+    sh("commit", "-q", "-m", "P1.07 Move the file");
+    expect(job({ BASE_SHA: added, HEAD_SHA: sh("rev-parse", "HEAD") }).out).toContain(
+      "carries the security-review label: shared/http/a.ts\n",
     );
   });
 });
