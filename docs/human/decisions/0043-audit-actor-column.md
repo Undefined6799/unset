@@ -73,6 +73,10 @@ the body. This record changes where it can be found, not whether it is kept.
   The one writer today passes it.
 - The check lives in SQL only. `appendAudit` does not repeat it, because the TS action list mirrors lanes, not rate
   classes; a refusal there costs one round trip.
+- `report.submitted` is in lane `sec`. So a reporter's erasure removes the side row of their report about someone
+  else, and the reported account's erasure removes it too. What remains is the chain entry: time, action, writer
+  and hashes, with no body and no DID. If moderation needs a report for longer than that, the report's case record
+  must hold it, under its own retention rule; the audit row is not that record.
 - No index on `actor`. P1.15a adds one with its query if erasure needs it.
 - The audit export (P4.26) can find a person's rows as actor as well as subject through the same registry.
 
