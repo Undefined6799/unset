@@ -26,6 +26,8 @@ Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read J
 The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
 public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
+Home and the three legal pages send `Cache-Control: public, max-age=300` (P1.25v, `cachedPublicPage` in
+`routes/home.ts`): they read no cookie, so a browser may keep them five minutes. No other public-group page does.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
 `routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
