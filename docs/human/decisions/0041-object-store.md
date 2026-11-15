@@ -17,13 +17,22 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
   (published 2026-11-08, cosign signature tags beside it), run locally: per-identity actions scoped to a bucket and key
   prefix (`Write:unset-private/drafts/*`) were refused outside the prefix, for PUT, GET, list and each key of a
   multi-object delete; tags, ranged GET and list v2 behaved as S3 does.
-- Garage's S3 compatibility page marks object tagging and object lock missing, so the tag-filtered lifecycle backstop
-  (P2.18, P5.01) cannot run on it. MinIO's community images stopped in October 2025 and its repository is archived.
+- Garage's S3 compatibility page marks object tagging and object lock missing; P2.18 records a draft's state in object
+  tags. Whether SeaweedFS runs a tag-filtered lifecycle rule is not verified, so the P2.18 sweeper, not a store rule,
+  is what expires drafts. MinIO's community images stopped in October 2025 and its repository is archived.
 - SeaweedFS deletes are not immediate. A delete marks the needle deleted; the master vacuums a volume only when its
-  garbage ratio reaches `-master.garbageThreshold` (default 0.3), checking every `-master.vacuumIntervalSeconds`
-  (default 840) (`weed server -h`, 4.53). With `-filer.encryptVolumeData` each chunk is AES-256-GCM encrypted with its
-  own random 256-bit key held in the filer's metadata, so deleting the entry leaves only ciphertext on the volume
-  (wiki "Filer Data Encryption"). The filer's own metadata store also deletes by tombstone until it compacts.
+  garbage ratio exceeds `-master.garbageThreshold` (default 0.3), checking every `-master.vacuumIntervalSeconds`
+  (default 840) (`weed server -h`, 4.53). Vacuum writes a compacted copy of the volume and unlinks the old file; it
+  does not overwrite the freed disk blocks.
+- Tried on 4.53, 2026-11-15, with an incompressible object carrying a plaintext marker: without
+  `-filer.encryptVolumeData` the marker is in the volume's `.dat` file after the S3 PUT; with it, the marker is in no
+  file under the data folder, so the flag is honoured on the S3 write path. Each chunk is AES-256-GCM encrypted with its
+  own random key held in the filer's metadata (wiki "Filer Data Encryption"). After a DELETE the marker stayed in the
+  `.dat` file; `volume.vacuum -garbageThreshold 0` (under `lock`) removed it; a threshold above a volume's garbage
+  ratio leaves that volume alone.
+- The filer keeps deleted entries after the delete: its LevelDB store held the deleted key's name in its write-ahead
+  log, and it persists a metadata change log under `/topics/.system/log/` (both seen on 4.53). A delete therefore does
+  not destroy the chunk's cipher key, and the key names, which hold DIDs, outlive the object there.
 - `aws4fetch` 1.0.20 (MIT, no dependencies, WebCrypto): `AwsClient.sign()` returns a signed `Request` and opens no
   connection (`dist/aws4fetch.esm.mjs:42`), so the request can be sent through net-guard. `@aws-sdk/client-s3`
   3.1160.0 brings the `@smithy` tree and a Node credential chain that reads the environment, `~/.aws` and instance
@@ -44,10 +53,10 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
    else. No bucket is public, and no browser ever reaches the store: no presigned S3 URL is ever sent; members' media
    reaches browsers only through `media` (signed draft URLs, P2.19; the media proxy, P3.09).
 3. **One key per process, least privilege, enforced by the store** and proven by a denial test per key: `web`
-   read-write and tagging on `unset-private/drafts/*`; `media` read-only on `unset-private/drafts/*` and `media/*`;
+   read-write and tagging on `unset-private/drafts/*`, plus `List` on `unset-private` (bucket-wide; see Consequences); `media` read-only on `unset-private/drafts/*` and `media/*`;
    the PDS read-write on `unset-pds` only; later processes get their own key in the step that adds them: renditions
-   in `media/*` are written by the step that makes them (P2.19, Phase 4), and `legal-hold/*` by the legal-hold step
-   (Phase 4). Until then nothing may write those prefixes. Keys are secrets in the dev-stack secret files, never in the
+   in `media/*` are written by the step that makes them (P2.19, Phase 4), and `legal-hold/*` by P4.07 (the sealed
+   legal hold). Until then nothing may write those prefixes. Keys are secrets in the dev-stack secret files, never in the
    checkout or a log. `s3.json`, which holds every key, is mounted only into `objects`. Only the store's one-shot
    setup holds the admin identity, which creates the buckets; its secret file is readable only by the setup's uid,
    and no long-running process mounts it. Rotation is manual: new values in `s3.json` and the client's secret file,
@@ -66,9 +75,10 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
    together. The local stack's token reader (P1.29i) accepts exactly this shape and still refuses any other S3
    setting. Existing blobs on staging are copied from `<location>/<did>/<cid>` to `blocks/<did>/<cid>` before the
    switch, in a runbook step Alex runs.
-6. **Encryption.** At rest the store runs with `-filer.encryptVolumeData`: per-chunk keys, held in the filer
-   metadata on the same volume. That makes a delete a cryptographic erase of the chunk once the metadata is gone; it
-   does not protect against someone who takes the whole volume, because the keys sit beside the data. Against that
+6. **Encryption.** At rest the store runs with `-filer.encryptVolumeData`, so no object's bytes are plaintext in a
+   volume file. It is not an erase mechanism: the per-chunk keys sit in the filer's metadata on the same disk and
+   outlive a delete (Context), so this record makes no "ciphertext without a key" claim. It also
+   does not protect against someone who takes the whole disk, because the keys sit beside the data. Against that
    the only protection is the host's disk encryption, and this record decides it explicitly: staging relies on the
    host as it is, which is not verified to be encrypted, and staging is invite-only test data; before any real
    member's draft is stored, P5.01 must put the store on an encrypted disk or seal `drafts/` with
@@ -79,15 +89,27 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
    becomes required the day the store or a client moves to another machine.
 7. **Erasure, takedown and export.** `drafts/<did>/` and `media/<did>/` join the erasure registry and P3.07's
    outbox; the PDS's own account deletion removes `blocks/<did>/` as it removes the folder today. A delete is a
-   tombstone, so:
-   - the store runs `-master.garbageThreshold=0.01`, so a volume is compacted within about 15 minutes once 1 % of it is
-     garbage; until then the deleted chunks are ciphertext without a key (Decision 6);
-   - a CSAM takedown or an erasure that must be physical runs a forced vacuum (`volume.vacuum
-     -garbageThreshold=0.0001`) as a runbook step Alex runs, until a moderation step (Phase 3) automates it. On the PDS
-     a takedown moves blobs to `quarantine/`, which is not a delete: CSAM blobs are deleted from `quarantine/` as
-     well, then the vacuum runs. That hard-delete path is a named deferral to the moderation steps;
+   tombstone, and vacuum is a rewrite and unlink, not a disk wipe. So:
+   - physical removal is a forced vacuum at threshold 0 (`lock`, `volume.vacuum -garbageThreshold 0`, `unlock`), which
+     compacts every volume holding any garbage. It runs after every erasure batch and every takedown, from the
+     store's one-shot admin job, never on a schedule a small delete could fall under. Until P5.08b automates it, it
+     is a runbook step Alex runs, written in P2.18s. `-master.garbageThreshold=0.01` stays as a backstop only;
+   - the filer's metadata is purged on the same run: the metadata change log under `/topics/.system/log/` is kept
+     for no more than a day: the runbook removes every older day's folder. Forcing LevelDB to compact its tombstones is not
+     solved. It is a named deferral to P2.18s, which must either find the compaction control or move the filer store
+     to one that deletes for real. Until then, a deleted object's name (with its DID) and its chunk key may survive in
+     the filer's files. That is accepted for staging only, and it is a P5.01 gate before real members' drafts;
+   - freed disk blocks are not overwritten. On staging that rests on the host as it stands (Decision 6). P5.01 puts
+     the store on an encrypted disk, so freed blocks are ciphertext under a key that leaves with the disk;
+   - PDS blobs: account deletion removes `blocks/<did>/`. Whether the PDS clears stale `tmp/<did>/` uploads itself
+     is not verified, so every procedure below names `tmp/` explicitly. A takedown moves a blob to `quarantine/`, which is not a delete. P2.18p writes the interim manual
+     procedure: delete the DID's or the CID's objects under `blocks/`, `tmp/` and `quarantine/` with the PDS key,
+     then the forced vacuum. P5.08a (takedown) replaces it with an automated path, and CSAM is always hard-deleted
+     from `quarantine/` too;
    - versioning and object lock stay off on both buckets. The setup never enables them, and a test checks that
      neither bucket reports versioning on, so no older copy survives a delete;
+   - the P2.18s compose step tests erasure itself, not only its flags: after a put, a plaintext marker is in no
+     volume file, and after delete plus the forced vacuum, the object's volume file has been rewritten without it;
    - there are no backups of the store before P5.04. P5.04 must keep the erasure registry so a restore replays every
      erasure and takedown, and must expire purged objects from backups within its retention window.
 

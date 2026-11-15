@@ -3605,10 +3605,12 @@ Threats: E a key used outside its prefix (`objects_key_scoped_to_prefix`, agains
 Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`, `objects_list_pages`,
   `objects_key_scoped_to_prefix`, `objects_unavailable_is_typed`, `objects_errors_carry_no_key`, against SeaweedFS
   started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres). The compose half also pins: the
-  store runs with `-filer.encryptVolumeData` and `-master.garbageThreshold=0.01` (`objects_encrypt_and_vacuum_flags`);
-  neither bucket reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a
-  pinned identity, or it is built from tagged source; the admin secret is mounted only into the setup; and a rotation
-  and forced-vacuum runbook (ADR 0041 Decisions 3, 6, 7).
+  store runs with `-filer.encryptVolumeData` (`objects_no_plaintext_at_rest`: a marker is in no volume file after a
+  put) and a forced vacuum at threshold 0 removes a deleted marker (`objects_erase_removes_bytes`); neither bucket
+  reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a pinned
+  identity, or it is built from tagged source; the admin secret is mounted only into the setup; a rotation, forced
+  vacuum and metadata-log purge runbook; and the filer-store tombstone question settled or carried as the P5.01 gate
+  (ADR 0041 Decisions 3, 6, 7).
 
 ### P2.18p — PDS blobstore in the object store (ADR 0041)
 Tags: [SEC]            Depends on: P2.18s            Plan: ADR 0041 Decision 5
@@ -3621,7 +3623,9 @@ Goal: the PDS stores blobs in `unset-pds` through the store's internal origin, w
 Threats: E a PDS S3 setting that leaves the stack (endpoint, region or key missing, or another host) → preflight and
   the reader refuse it (`pds_s3_only_internal_store`); D blobs lost in the switch → the copy runbook and a count check.
 Done when (tests): `pds_s3_only_internal_store`, `pds_s3_and_disk_refused`, the local stack's upload-then-`getBlob`
-  through the store, and P1.29i's existing refusals still red for every other S3 shape.
+  through the store, and P1.29i's existing refusals still red for every other S3 shape. The runbook also holds the
+  interim hard-delete for a DID or a CID: remove its objects under `blocks/`, `tmp/` and `quarantine/` with the PDS key,
+  then the forced vacuum (ADR 0041 Decision 7), until P5.08a automates takedown.
 
 ### P2.18 — Draft store
 Tags: [SEC]            Depends on: P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
