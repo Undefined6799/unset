@@ -118,7 +118,9 @@ Facts read for this record (rule DO-3), 2026-10-30 and 2026-11-15:
    - versioning and object lock stay off on both buckets. The setup never enables them, and a test checks that
      neither bucket reports versioning on, so no older copy survives a delete;
    - the P2.18s compose step tests erasure itself, not only its flags: after a put, a plaintext marker is in no
-     volume file, and after delete plus the forced vacuum, the object's volume file has been rewritten without it;
+     volume file. Because that already holds before any delete, erasure is checked on the ciphertext: the test
+     reads the object's encrypted chunk bytes from its volume file before the delete, and after delete plus the
+     forced vacuum those bytes are in no volume file. The same test, with the vacuum skipped, must fail;
    - there are no backups of the store before P5.04. P5.04 must keep the erasure registry so a restore replays every
      erasure and takedown, and must expire purged objects from backups within its retention window.
 

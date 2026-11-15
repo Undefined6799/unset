@@ -3606,7 +3606,9 @@ Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`
   `objects_key_scoped_to_prefix`, `objects_unavailable_is_typed`, `objects_errors_carry_no_key`, against SeaweedFS
   started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres). The compose half also pins: the
   store runs with `-filer.encryptVolumeData` (`objects_no_plaintext_at_rest`: a marker is in no volume file after a
-  put) and a forced vacuum at threshold 0 removes a deleted marker (`objects_erase_removes_bytes`); neither bucket
+  put) and erasure removes the ciphertext (`objects_erase_removes_bytes`: the object's encrypted chunk bytes, read
+  from its volume file before the delete, are in no volume file after delete plus forced vacuum, and the test fails
+  with the vacuum skipped); neither bucket
   reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a pinned
   identity, or it is built from tagged source; the admin secret is mounted only into the setup; a rotation, forced
   vacuum and metadata-log purge runbook in Decision 7's order (delete, purge the log, wait for the chunk deletes,

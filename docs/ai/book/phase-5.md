@@ -2154,7 +2154,8 @@ Threats: takedown of a blob or record and everything derived from it.
 
 Done when (tests):
   - `takedown_removes_store_bytes` (ADR 0041 Decision 7): a takedown of a PDS blob or of one `unset-private` object
-    runs the same sequence as erasure and the marker is in no volume file; this replaces both interim runbook procedures.
+    runs the same sequence as erasure and the object's encrypted chunk bytes are in no volume file (the P2.18s
+    `objects_erase_removes_bytes` check, which fails with the vacuum skipped); this replaces both interim runbook procedures.
   - `blob_takedown_stops_bytes`: media 410; the PDS `getBlob` refuses; a placeholder appears.
   - `record_takedown_stops_renditions`: a video record takedown → 360p, 720p, poster and caption all return 410.
   - `illegal_takedown_removes_derived_and_mirror_copy`: the objects are gone from `media/`, the mirror and the mirror's
@@ -2237,7 +2238,7 @@ Threats: access and erasure requests (GDPR).
 
 Done when (tests):
   - `erasure_vacuums_store_bytes` (ADR 0041 Decision 7): an erasure run purges the filer's metadata log, waits for
-    the chunk deletes, then force-vacuums; the erased DID's marker is in no volume file. This replaces the manual runbook step.
+    the chunk deletes, then force-vacuums; the erased DID's encrypted chunk bytes are in no volume file (the same check). This replaces the manual runbook step.
   - `gdpr_case_due_in_one_month`, `digest_flags_day_25`, `alert_day_30`.
   - `identity_code_single_use_and_expires`, `identity_code_attempt_limit`.
   - `erasure_hold_deactivates_not_takedown`, `erasure_executes_after_7_days_with_approval`,
