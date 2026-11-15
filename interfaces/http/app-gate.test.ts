@@ -13,15 +13,16 @@ const did = parseDid(`did:plc:${"a".repeat(24)}`);
 if (did === null) throw new Error("test DID did not parse");
 const SESSION: Session = { did, idHash: Buffer.alloc(32, 1), createdAt: new Date(0), emailConfirmed: true };
 
+const sessionCheckedAt = (ms: number): Session => ({ ...SESSION, emailCheckedAt: new Date(ms) });
+
 const NOTICE = "pds.test is not answering; your session is kept.";
 
 function gateAnswering(answer: Awaited<ReturnType<AppGate["refreshEmail"]>>, ageMs = 901_000): AppGate {
   return {
-    readSession: async () => ({ session: SESSION, clearCookie: false }),
+    // Older than the recheck, so the gate asks the PDS. The default age is still inside the cap.
+    readSession: async () => ({ session: sessionCheckedAt(NOW - ageMs), clearCookie: false }),
     loadAccount: async () => ({ onboarding: "done", termsVersion: "t", privacyVersion: "p" }),
     versions: { terms: "t", privacy: "p" },
-    // Older than the recheck, so the gate asks the PDS. The default age is still inside the cap.
-    emailCache: async () => ({ confirmed: true, checkedAt: new Date(NOW - ageMs) }),
     refreshEmail: async () => answer,
     now: () => NOW,
     emailRecheckS: 900,
@@ -53,7 +54,10 @@ test("app_gate.unconfirmed_goes_to_verify_email_and_keeps_the_cookie", async () 
 });
 
 test("app_gate.transient_keeps_the_cached_pass", async () => {
-  expect(await open(gateAnswering("transient"))).toEqual({ session: SESSION, privacyNotice: false });
+  expect(await open(gateAnswering("transient"))).toEqual({
+    session: sessionCheckedAt(NOW - 901_000),
+    privacyNotice: false,
+  });
 });
 
 test("app_gate.transient_ages_past_the_cap_during_the_pds_call", async () => {
@@ -81,7 +85,10 @@ test("app_gate.transient_past_cap_shows_unavailable_and_keeps_the_cookie", async
 });
 
 test("app_gate.confirmed_after_cap_restores_the_page", async () => {
-  expect(await open(gateAnswering("confirmed", pastCapMs))).toEqual({ session: SESSION, privacyNotice: false });
+  expect(await open(gateAnswering("confirmed", pastCapMs))).toEqual({
+    session: sessionCheckedAt(NOW - pastCapMs),
+    privacyNotice: false,
+  });
 });
 
 test("app_gate.ended_grant_past_cap_still_signs_out", async () => {
@@ -103,4 +110,43 @@ test("app_gate.refresh_gets_the_route_deadline", async () => {
   };
   await open(gate);
   expect(seen).toEqual([DEADLINE_AT]);
+});
+
+// P2.12f: the gate takes the cached answer from the session it was given, with no query of its own.
+function gateCounting(session: Session) {
+  let asked = 0;
+  const gate: AppGate = {
+    ...gateAnswering("unconfirmed"),
+    readSession: async () => ({ session, clearCookie: false }),
+    refreshEmail: async () => {
+      asked += 1;
+      return "confirmed";
+    },
+  };
+  return { gate, asked: () => asked };
+}
+
+test("app_gate.fresh_check_on_the_session_passes_without_the_pds", async () => {
+  const session = sessionCheckedAt(NOW - 899_000);
+  const { gate, asked } = gateCounting(session);
+  expect(await open(gate)).toEqual({ session, privacyNotice: false });
+  expect(asked()).toBe(0);
+});
+
+test("app_gate.session_without_a_check_time_asks_the_pds", async () => {
+  for (const session of [SESSION, { ...SESSION, emailCheckedAt: null }]) {
+    const { gate, asked } = gateCounting(session);
+    await open(gate);
+    expect(asked()).toBe(1);
+  }
+});
+
+test("app_gate.unconfirmed_session_goes_to_verify_email_without_the_pds", async () => {
+  for (const emailConfirmed of [false, null]) {
+    const { gate, asked } = gateCounting({ ...sessionCheckedAt(NOW), emailConfirmed });
+    const response = await open(gate);
+    if (!(response instanceof Response)) throw new Error("the gate let an unconfirmed email through");
+    expect(response.headers.get("location")).toBe("/verify-email");
+    expect(asked()).toBe(0);
+  }
 });

@@ -116,11 +116,17 @@ function setup(world: World = {}) {
     session: world.session === undefined ? sessionOf(null) : world.session,
     clearCookie: world.clearCookie ?? false,
   });
+  // The gate reads the email cache off the session (P2.12f); `world.email` is that cache, confirmed by default.
+  const email = world.email ?? { confirmed: true, checkedAt: NOW };
   const gate: AppGate = {
-    readSession,
+    readSession: async () => {
+      const read = await readSession();
+      if (read.session === null) return read;
+      const session = { ...read.session, emailConfirmed: email.confirmed, emailCheckedAt: email.checkedAt };
+      return { ...read, session };
+    },
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
-    emailCache: async () => world.email ?? { confirmed: true, checkedAt: NOW },
     refreshEmail: async () => "confirmed",
     now: () => NOW.getTime(),
     emailRecheckS: 900,

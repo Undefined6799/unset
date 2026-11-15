@@ -15,7 +15,6 @@ import {
   createDidResolver,
   createHandleVerifier,
   type Did,
-  type EmailCache,
   type IdentityNetwork,
   PRIVACY_VERSION,
   resolveHandle,
@@ -48,7 +47,7 @@ import {
   withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
-import { createSessionStore, type Session } from "@unset/infrastructure-session";
+import { createSessionStore } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
@@ -281,18 +280,6 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
   });
   const accounts = createAccountStore(oauth.pool);
   const versions = { terms: TERMS_VERSION, privacy: PRIVACY_VERSION };
-  const emailCache = async (session: Session, deadline: AbortSignal): Promise<EmailCache> => {
-    const { rows } = await withClient(oauth.pool, deadline, (db) =>
-      db.query<{ email_confirmed: boolean | null; email_checked_at: Date | null }>(
-        "SELECT email_confirmed, email_checked_at FROM app.session WHERE id_hash = $1 AND did = $2",
-        [session.idHash, session.did],
-      ),
-    );
-    const row = rows[0];
-    return row === undefined
-      ? { confirmed: null, checkedAt: null }
-      : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
-  };
   // `deadlineAt` is the route handler's own, on the kit's monotonic clock: pdsCall retries a read only while the
   // wait and one more call fit before it (README rule 8a; P2.07a).
   const sessionInfo = (did: Did, deadline: AbortSignal, deadlineAt: number) =>
@@ -304,7 +291,6 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     readSession,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions,
-    emailCache,
     refreshEmail,
     now: () => Date.now(),
     emailRecheckS: cfg.EMAIL_RECHECK_S,
