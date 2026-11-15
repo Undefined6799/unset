@@ -54,7 +54,7 @@ import { createAccountStore } from "./account.ts";
 import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
-import { policies } from "./limits.ts";
+import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
@@ -395,7 +395,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     server: createServer({
       config: cfg,
       routes,
-      policies,
+      policies: policiesFor(cfg.TRUSTED_PROXY_MODE),
       log,
       // `/health` answers 200 only while Postgres answers (P1.04w): a rollout must not swap in a replica that cannot
       // reach the database. The kit bounds the check at 1 s, caches it for 2 s and reads a throw as not ready

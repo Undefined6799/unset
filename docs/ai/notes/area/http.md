@@ -35,7 +35,9 @@ the module first, before the web build loads, so `main.test.ts` proves a key-off
 import, build or not (P1.25z). A load placed later in compose is caught only when apps/web's server build exists:
 without it the key-off start stops at `loadWebRender`, and the test accepts either stop point. The
 book's `/__test/` paths fail the kit's path template, which refuses a leading underscore. `limits.ts` holds its
-rate-limit policies; a feature step adds its policy in the same PR as its route.
+rate-limit policies; a feature step adds its policy in the same PR as its route. compose passes
+`policiesFor(TRUSTED_PROXY_MODE)`: in `socket` mode (behind the edge, which hides the client address) the table has no
+per-address entry, only site-wide ceilings and per-DID entries; the edge is the per-client limiter (ADR 0042).
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
 identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
