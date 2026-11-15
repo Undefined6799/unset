@@ -113,7 +113,9 @@ revoking.
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
-onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
+onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. The gate takes the cached answer
+and its check time from the session read (`emailConfirmed`, `emailCheckedAt`; P2.03m, P2.12f) and runs no query of
+its own; a session with no check time is asked at the PDS. `/verify-email` checks onboarding
 and then is the email page itself.
 
 **A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through

@@ -24,7 +24,6 @@ export type AppGate = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
   loadAccount: (did: Did, deadline: AbortSignal) => Promise<OnboardingAccount | null>;
   versions: OnboardingVersions;
-  emailCache: (session: Session, deadline: AbortSignal) => Promise<EmailCache>;
   /** `deadlineAt` is the route handler's own (shared/http routes.ts): the PDS read retries only while it fits. */
   refreshEmail: (session: Session, deadline: AbortSignal, deadlineAt: number) => Promise<EmailRefresh>;
   now: () => number;
@@ -92,7 +91,9 @@ export async function openApp(
   const away = redirectFor(decision, next);
   if (away !== null) return redirect(away);
   const now = gate.now();
-  const cache = await gate.emailCache(session, deadline);
+  // The session read already carries the cached answer and when it was written (P2.03m): no second query (P2.12f).
+  // A session without a check time reads as never checked, so the gate asks the PDS.
+  const cache: EmailCache = { confirmed: session.emailConfirmed, checkedAt: session.emailCheckedAt ?? null };
   const email = emailGate(cache, now, gate.emailRecheckS);
   const opened = (): OpenedApp => ({
     session,
