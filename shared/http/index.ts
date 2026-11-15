@@ -14,6 +14,15 @@ export {
   type RouteGroup,
   type RouteMethod,
   type RouteSpec,
+  type SessionHandler,
+  type SessionRouteContext,
 } from "./routes.ts";
-export { createServer, type RouteInfo, type ServerOptions, type SessionReader } from "./server.ts";
+export {
+  type Admission,
+  createServer,
+  type GateRequest,
+  type RouteInfo,
+  type ServerOptions,
+  type SessionGate,
+} from "./server.ts";
 export type { CloseHook } from "./shutdown.ts";
