@@ -223,6 +223,32 @@ describe("guardedRequest", () => {
     );
   });
 
+  test("put_only_on_internal_policy", async () => {
+    // P2.18k: the object store takes PUT (objects and tags); every other policy keeps GET and POST alone.
+    let seen = "";
+    handler = (req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => {
+        seen = `${req.method} ${Buffer.concat(chunks).toString()}`;
+        res.end();
+      });
+    };
+    const policy = objectStore("http://objects:8333");
+    const ok = guardFor({ objects: ["172.20.0.9"] }, servers.http.port);
+    const put = { url: "http://objects:8333/b/k", method: "PUT", body: new TextEncoder().encode("bytes") } as const;
+    expect((await ok.guard.request(policy, put)).status).toBe(200);
+    expect(seen).toBe("PUT bytes");
+    const pub = guardFor({ "bsky.social": [PUBLIC], "plc.directory": [PUBLIC] });
+    await expect(pub.guard.request(atproto, { ...put, url: "https://bsky.social/" })).rejects.toThrow(TypeError);
+    await expect(pub.guard.request(plc, { ...put, url: "https://plc.directory/" })).rejects.toThrow(TypeError);
+    const del = { url: "http://objects:8333/b/k", method: "DELETE" } as unknown as Parameters<
+      typeof ok.guard.request
+    >[1];
+    await expect(ok.guard.request(policy, del)).rejects.toThrow(TypeError);
+    expect(pub.dialled).toEqual([]);
+  });
+
   test("local_plc_is_one_exact_private_origin", async () => {
     // P1.34y (record 2026-10-13-local-plc, Amendment 4): the local stack's PLC by its one internal origin, never a
     // private range; the public `plc` policy keeps plc.directory alone.

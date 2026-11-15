@@ -26,7 +26,8 @@ sends all such traffic through this folder.
 - `src/dns.ts`: TXT lookups on c-ares, bounded by our own timer.
 - `src/policies.ts`: named egress policies; every request names one. There is no model-provider policy in v1.
   `objectStore(origin)` (P2.18k) is the private object store by the one `OBJECT_STORE_URL` origin a composition root
-  passes in.
+  passes in. Only an `internal` policy takes PUT (object and tag writes); every other policy sends GET and POST
+  alone (`put_only_on_internal_policy`).
   `plc` is plc.directory alone. `localPlc` (P1.34y) is dead: we host no PLC (ADRs 0022, 0023), P1.34z was
   dropped, and #1041 removes it. Since the P1.10 cleanup the index no longer exports it, nor `RANGES` or
   `normaliseHost`; the package's own tests import them from their modules.
