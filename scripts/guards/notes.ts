@@ -170,7 +170,10 @@ function noteProblems(root: string, note: Note, ids: ReadonlySet<string>, today:
   return found;
 }
 
-/** Rule 4: every changed file named in a note's `code:` (a file, or a folder it sits in) needs that note changed too. */
+/**
+ * A warning, not an error (P0.09d amendment, 2026-11-15): a changed file named in a note's `code:` (a file, or a folder
+ * it sits in) whose note did not change. As an error it was met by bumping `checked`, which proves no re-read.
+ */
 function codeMovedProblems(notes: readonly Note[], changed: readonly string[]): Finding[] {
   const found: Finding[] = [];
   const touched = new Set(changed);
@@ -180,7 +183,7 @@ function codeMovedProblems(notes: readonly Note[], changed: readonly string[]): 
       note.code.some((c) => file === c || file.startsWith(`${c.replace(/\/$/, "")}/`)),
     );
     if (hit) {
-      const text = `${hit} changed but this note did not; update it or bump checked`;
+      const text = `${hit} changed but this note did not; re-read the note`;
       found.push({ file: note.path, line: note.line.code ?? 1, rule: "notes-code-moved", text });
     }
   }
@@ -236,8 +239,8 @@ export function checkNotes(
   if (findings.length === 0 && committed !== buildIndex(notes)) {
     errors.push({ file: indexPath, line: 1, rule: "notes-index", text: "out of date; run npm run notes:index" });
   }
-  if (opts.changedPaths) errors.push(...codeMovedProblems(notes, opts.changedPaths));
-  return { errors, warnings: warningsFor(root, notes, opts.today), scanned };
+  const moved = opts.changedPaths ? codeMovedProblems(notes, opts.changedPaths) : [];
+  return { errors, warnings: [...moved, ...warningsFor(root, notes, opts.today)], scanned };
 }
 
 const git = (root: string, args: string[]): string =>
@@ -245,10 +248,9 @@ const git = (root: string, args: string[]): string =>
 const lines = (text: string): string[] => text.split("\n").filter(Boolean);
 
 /**
- * The files this change touches. In CI: `BASE_SHA...HEAD`, and no base is an error (fail closed). Locally: the
- * working tree and untracked files against the merge-base with origin/main, a superset of what pre-commit stages;
- * if git cannot answer locally (no origin/main, not a clone) the rule is skipped and a warning says so; CI then
- * enforces it. `--no-renames` lists both sides of a move, so moving a file out of a named folder counts.
+ * The files this change touches. In CI: `BASE_SHA...HEAD`. Locally: the working tree and untracked files against the
+ * merge-base with origin/main, a superset of what pre-commit stages. If git cannot answer, the code-moved warning is
+ * skipped and `problem` says so; the caller reports it as a warning. `--no-renames` lists both sides of a move, so moving a file out of a named folder counts.
  */
 export function changedPaths(root: string, env: NodeJS.ProcessEnv): { paths?: string[]; problem?: Finding } {
   const at = (rule: string, text: string): Finding => ({ file: VAULT, line: 1, rule, text });

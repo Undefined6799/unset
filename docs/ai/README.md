@@ -114,14 +114,14 @@ Enforced by the repo, not by memory. `npm run guards` (CI and the pre-commit hoo
    `[notes-tags]` `tags` are not exactly the type plus the areas.
 2. `[notes-link]` `related` or `replaced_by` names no note, or a `code:` path does not exist.
 3. `[notes-index]` the committed `INDEX.md` differs from the generated one. Run `npm run notes:index`.
-4. `[notes-code-moved]` the change touches a file named in a note's `code:` (or a file inside a
-   named folder) and not that note. Update the note, or bump `checked` if it is still true.
-   In CI the change is `BASE_SHA...HEAD`, and a missing base fails; locally it is the working
-   tree against the merge-base with `origin/main`.
-5. `[notes-handoff-age]` a handoff's `checked` is more than 14 days old. Finish it or delete it.
+4. `[notes-handoff-age]` a handoff's `checked` is more than 14 days old. Finish it or delete it.
 
-It warns, without failing, when a `current` note's `checked` is more than 90 days old, or when
-an area's code folder exists (for example `domains/identity/`) with no `notes/area/<area>.md` hub.
+It warns, without failing, when a `current` note's `checked` is more than 90 days old, when
+an area's code folder exists (for example `domains/identity/`) with no `notes/area/<area>.md` hub,
+or (`[notes-code-moved]`) when the change touches a file named in a note's `code:` (or a file
+inside a named folder) and not that note: re-read the note and correct it if it is no longer true.
+In CI the change is `BASE_SHA...HEAD`; locally it is the working tree against the merge-base with
+`origin/main`. It was a failure until 2026-11-15; bumping `checked` satisfied it without a re-read.
 
 Every PR fills the template line "AI notes: updated / none needed / which", and each step's
 done-check in the book includes "notes updated or none needed". Each phase's refine step runs a

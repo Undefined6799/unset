@@ -7,7 +7,7 @@ Notes, decision records, and the pages on this site. Where a fact already lives 
 
 ## Notes
 
-The vault rules are [`docs/ai/README.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/README.md). [`scripts/guards/notes.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/notes.ts) enforces the header, the links, the index, a moved `code:` path, and handoff age. The header parser is `scripts/guards/notes-header.ts`. Both run under `npm run guards`.
+The vault rules are [`docs/ai/README.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/README.md). [`scripts/guards/notes.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/notes.ts) enforces the header, the links, the index, and handoff age, and warns on a moved `code:` path. The header parser is `scripts/guards/notes-header.ts`. Both run under `npm run guards`.
 
 Five types, one folder each under `docs/ai/notes/`: `area`, `reference`, `pitfall`, `how-to`, `handoff`. Nothing else goes in `notes/`.
 
@@ -16,10 +16,9 @@ Five types, one folder each under `docs/ai/notes/`: `area`, `reference`, `pitfal
 | `notes-header`, `notes-id`, `notes-summary`, `notes-tags` | A field is missing, unreadable, or outside its list. The id disagrees with the file name. The summary is empty or over 120 characters. `tags` are not the type plus the area names |
 | `notes-link` | `related`, `replaced_by`, or a `code:` path does not resolve |
 | `notes-index` | The committed `docs/ai/INDEX.md` differs from the generated text |
-| `notes-code-moved` | A change touches a path named in `code:` and leaves that note untouched |
 | `notes-handoff-age` | A handoff's `checked` date is more than 14 days ago |
 
-A `current` note whose `checked` date is more than 90 days ago is a warning. An area folder with no `docs/ai/notes/area/<area>.md` hub is a warning. Warnings leave the command green.
+A change that touches a path named in `code:` and leaves that note untouched is a warning (`notes-code-moved`). A `current` note whose `checked` date is more than 90 days ago is a warning. An area folder with no `docs/ai/notes/area/<area>.md` hub is a warning. Warnings leave the command green.
 
 ## INDEX.md
 

@@ -22,13 +22,6 @@ const ADR_HEADINGS = ["Context", "Decision", "Alternatives", "Consequences", "Co
 export const ENTRYPOINTS = ["web", "api", "indexer", "media", "review", "admin", "pds-admin", "chat-admin"];
 /** Five headings (ADR 0044), each one a heading of the template before it, so an older PR body still passes. */
 export const PR_TEMPLATE_HEADINGS = ["Step", "What", "How to test", "Security review", "What I am unsure about"];
-/** Words from the superseded v2e direction or an icon package; only the two bullets below may use them. */
-const V2E_WORDS = /v2e|amber|chamfer|serif|\bUiIcon\b|iconoir-react/i;
-const V2E_SUPERSEDED =
-  '- The 0x40 "v2e" visual direction (vault note `v2e-visual-direction-locked`) is **superseded** by the design sheet; follow nothing from it.';
-const ICONOIR_LINE =
-  "- **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in `shared/ui/approved-extensions.json`, rendered by the `shared/ui` `Icon` component from the copied, pinned SVG data. No icon npm package (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.";
-
 const readText = (root: string, file: string): string => readFileSync(join(root, file), "utf8");
 
 /** The text from a `## heading` up to the next `## ` heading. */
@@ -40,7 +33,11 @@ function section(text: string, heading: string): string {
   return end < 0 ? rest : rest.slice(0, end);
 }
 
-/** CLAUDE.md: short, pointing at the plan, the book and the engineering rules, with the rules' precedence and Delivery. */
+/**
+ * CLAUDE.md: short, pointing at the plan, the book and the engineering rules, and still saying who may not merge.
+ * The rest of its wording is not tested (retired 2026-11-15, whole-project review decision 4): CLAUDE.md cannot
+ * auto-merge (`scripts/guards/docs-only-paths.ts`), so a change to it lands only through a reviewed pull request.
+ */
 export function claudeMdProblems(text: string): string[] {
   const found: string[] = [];
   const lines = text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
@@ -50,28 +47,10 @@ export function claudeMdProblems(text: string): string[] {
   }
   if (!text.split("\n").some((l) => l.trim() === TOP15_IMPORT))
     found.push(`CLAUDE.md lacks the import ${TOP15_IMPORT}`);
-  const flat = text.replace(/\s+/g, " ");
-  if (!/the plan wins/.test(flat) || !/architecture guideline wins/.test(flat)) {
-    found.push("CLAUDE.md does not state the precedence rule (plan wins; architecture guideline wins on structure)");
-  }
-  return [...found, ...deliveryProblems(text), ...uiProblems(text)];
-}
-
-/**
- * Delivery names D1, D2, D3, D4 and D8, says agents never push to `main` (decision 40; ADR 0009, superseded by ADR
- * 0017) and that author threads never merge their own PRs, naming ADR 0019 for who may.
- */
-function deliveryProblems(text: string): string[] {
-  const delivery = section(text, "Delivery");
-  const flat = delivery.replace(/\s+/g, " ");
-  const found = ["D1", "D2", "D3", "D4", "D8"]
-    .filter((d) => !new RegExp(`\\b${d}\\b`).test(delivery))
-    .map((d) => `Delivery does not mention ${d}`);
+  const flat = section(text, "Delivery").replace(/\s+/g, " ");
   if (!/author threads never merge/.test(flat))
     found.push("Delivery does not say author threads never merge their PRs");
   if (!/never push to `main`/.test(flat)) found.push("Delivery does not say agents never push to `main`");
-  if (!/ADR 0009/.test(flat)) found.push("Delivery does not name ADR 0009");
-  if (!/ADR 0019/.test(flat)) found.push("Delivery does not name ADR 0019");
   return found;
 }
 
@@ -89,18 +68,6 @@ export function claudeMdImportProblems(root: string, text: string): string[] {
 }
 
 /** No v2e instruction survives, v2e is named superseded, and Iconoir is named the way decision 33 says. */
-function uiProblems(text: string): string[] {
-  // Bullets and paragraphs, each on one line, so a sentence is compared whole.
-  const blocks = text.split(/\n(?=- |\n|#)/).map((b) => b.replace(/\s+/g, " ").trim());
-  const found = blocks
-    .filter((b) => V2E_WORDS.test(b) && b !== V2E_SUPERSEDED && b !== ICONOIR_LINE)
-    .map((b) => `CLAUDE.md mentions v2e or an icon package outside the two allowed lines: ${b.slice(0, 80)}`);
-  if (!blocks.includes(V2E_SUPERSEDED)) found.push("CLAUDE.md does not name v2e-visual-direction-locked as superseded");
-  if (!blocks.includes(ICONOIR_LINE))
-    found.push("CLAUDE.md lacks the Iconoir line (7.12.1, shared/ui Icon, no icon packages)");
-  return found;
-}
-
 /** The imported Top 15 page is short and its rules equal the Top 15 section of the full rules file. */
 export function top15Problems(root: string): string[] {
   const page = readText(root, TOP15_IMPORT.slice(1));

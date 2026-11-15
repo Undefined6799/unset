@@ -9,8 +9,9 @@ import type { Session, SessionDb, SessionLimits, SessionStore } from "@unset/inf
 /**
  * How many of `did`'s sessions can still sign a browser in (P2.08c). A row past its idle or absolute expiry is not
  * one, nor is a row whose DID has no stored token set: the store reads both as signed out (infrastructure/session/
- * store.ts, `lookup`'s `expired` and `has_token_set`). No sweep deletes them until the jobs process exists, so counting
- * them would keep the grant after the last real browser signs out (readiness review 2026-10-19, S2). The conditions
+ * store.ts, `lookup`'s `expired` and `has_token_set`). The hourly sweep (jobs/sweeps.ts, P2.03s) deletes expired rows
+ * only up to an hour late, so counting them would keep the grant after the last real browser signs out (readiness
+ * review 2026-10-19, S2). The conditions
  * repeat the store's, because that folder is trusted base; the integration test pins both boundaries.
  * `count(*)::int` is a number (node-pg 8.23, oid 23).
  */
