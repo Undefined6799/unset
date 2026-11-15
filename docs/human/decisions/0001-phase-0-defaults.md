@@ -556,3 +556,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0038](0038-profile-save-keeps-unknown-fields.md)):** a profile save checks the merged record in read mode, so a
   stored field the lexicon does not define is kept and never blocks a save; a defined field that is invalid is still
   refused. Supersedes ADR 0037 Decision 2's strict-validator clause.
+- **ADR 0041 proposed (Alex asked for S3 for the app and the PDS, 2026-11-15 20:43:46Z; own record:
+  [0041](0041-object-store.md)):** one SeaweedFS store in the dev and local stacks with two buckets, `unset-private`
+  for app media and `unset-pds` for the PDS's blobs, a key per process, and the app's client signing with `aws4fetch`
+  through net-guard. Settles P2-A8; production's store stays P5.01's. Proposed, awaiting Alex.

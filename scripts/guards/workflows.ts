@@ -1,5 +1,6 @@
 // The CI supply-chain and privilege rules (P0.07) over one workflow file.
 // Line-based on purpose: the rules are about what the YAML says, and a parser would be one more dependency.
+import { createHash } from "node:crypto";
 
 /** The only shape a secret- or OIDC-using job may have: bound to an environment and run only for pushes to main. */
 export const GATE_IF = "if: github.event_name == 'push' && github.ref == 'refs/heads/main'";
@@ -213,7 +214,7 @@ const AUTO_MERGE_RUN = "node scripts/guards/docs-auto-merge.ts";
 // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub expression, not a JS template.
 const CHECKOUT_REF = "ref: ${{ github.sha }}";
 
-const SCOPES_JUDGED_ELSEWHERE = new Set(["id-token", "packages", "contents", "pull-requests"]);
+const SCOPES_JUDGED_ELSEWHERE = new Set(["id-token", "packages", "contents", "pull-requests", "issues"]);
 
 function otherWriteProblems(line: string): string[] {
   const found: string[] = [];
@@ -281,6 +282,26 @@ function docsAutoMergeProblems(file: string, lines: string[]): string[] {
   return found;
 }
 
+/**
+ * The one job that may write issues (P1.38r): `notify` in waivers.yml, which tells the owner that the daily waiver
+ * look failed. It holds that one permission, uses no action, checks out nothing and runs one script that only calls
+ * `gh issue`. Rules read line by line kept missing ways to change what such a job runs (another command, a custom
+ * shell, workflow defaults, a quoted key), so the guard does not judge the file's shape: waivers.yml must be byte
+ * for byte the file that was reviewed, named here by its SHA-256. Any edit to that workflow is therefore also an
+ * edit to this guard. Every other file keeps the ban on write permissions.
+ */
+const WAIVERS_FILE = "waivers.yml";
+const WAIVERS_SHA256 = "3461b5a2943ed81220c40d8ac3de1b916fa53626e3a6c2e91e158ea39586e945";
+
+function waiverNotifyProblems(file: string, text: string, lines: string[]): string[] {
+  const writes = lines.filter((line) => /\bissues["']?\s*:\s*["']?write\b/.test(line));
+  if (file !== WAIVERS_FILE) return writes.map((line) => `write permission: ${line.trim()}`);
+  const digest = createHash("sha256").update(text).digest("hex");
+  return digest === WAIVERS_SHA256
+    ? []
+    : ["waivers.yml is not the reviewed file (update WAIVERS_SHA256 with the change)"];
+}
+
 /** Every rule violation in one workflow file (`file` is its name under .github/workflows/), as readable strings. */
 export function problems(text: string, file = ""): string[] {
   const lines = code(text);
@@ -296,6 +317,7 @@ export function problems(text: string, file = ""): string[] {
     if (ungated(body)) found.push(`job ${id}: secret or OIDC outside an environment-bound main-only job`);
   }
   found.push(...docsAutoMergeProblems(file, lines));
+  found.push(...waiverNotifyProblems(file, text, lines));
   found.push(...signingProblems(file, lines));
   return found;
 }
