@@ -289,18 +289,27 @@ describe("classifyGrantChanges", () => {
     expect(classify({ baseMatrix: {}, headMatrix: { schemas: { app: ["web"] } } })).toMatchObject([
       { kind: "trusted", reason: "matrix_schemas" },
     ]);
-    const reg = (registry: unknown, sql?: string) =>
+    const reg = (registry: unknown, sql?: string, baseMatrix?: unknown) =>
       classify({
         baseRegistry: { "app.account.did": { strategy: "delete-row" } },
         headRegistry: registry,
         ...(sql ? { sql } : {}),
+        ...(baseMatrix ? { baseMatrix } : {}),
       })
         .filter((f) => f.path === REGISTRY)
         .map((f) => [f.kind, f.reason]);
     const kept = { "app.account.did": { strategy: "delete-row" } };
-    expect(
-      reg({ ...kept, "app.account.bio": { strategy: "null" } }, "ALTER TABLE app.account ADD COLUMN bio text;"),
-    ).toEqual([["feature", "registry_row_created_column"]]);
+    const withBio = { ...kept, "app.account.bio": { strategy: "null" } };
+    const addBio = "ALTER TABLE app.account ADD COLUMN bio text;";
+    // A row follows the statement that creates its column. With column-level grants the ADD COLUMN is neutral, so
+    // the row is a feature path; with no matrix entry the ADD COLUMN is trusted, and so is its row, or the two
+    // could never share a pull request while did-columns.test.ts refuses either one alone (P1.15k, #1556).
+    const columnGrants = { tables: { "app.account": [{ role: "web", privileges: ["SELECT"], columns: ["id"] }] } };
+    expect(reg(withBio, addBio, columnGrants)).toEqual([["feature", "registry_row_created_column"]]);
+    expect(reg(withBio, addBio)).toEqual([["trusted", "registry_row_trusted_column"]]);
+    expect(reg({ ...kept, "app.n.did": { strategy: "null" } }, "CREATE TABLE app.n (did text);")).toEqual([
+      ["feature", "registry_row_created_column"],
+    ]);
     expect(reg({ "app.account.did": { strategy: "null" } })).toEqual([["trusted", "registry_row_changed"]]);
     expect(reg({})).toEqual([["trusted", "registry_row_changed"]]);
     expect(reg({ ...kept, "app.account.c": { strategy: "null" } })).toEqual([["trusted", "unclassified"]]);

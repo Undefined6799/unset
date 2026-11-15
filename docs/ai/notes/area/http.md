@@ -26,6 +26,8 @@ Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read J
 The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
 public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
+Home and the three legal pages send `Cache-Control: public, max-age=300` (P1.25v, `cachedPublicPage` in
+`routes/home.ts`): they read no cookie, so a browser may keep them five minutes. No other public-group page does.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
 `routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
@@ -44,8 +46,15 @@ identity network and DID resolver, and the one OAuth client over them, and wires
 itself (compose returns `server`, `boot` and the process's `log`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
-which writes the secrets to files; the runtime image copies each package the server imports, and
+which writes the secrets to files, and may pass `compose` a stand-in identity network (its third argument, P2.13s:
+PLC, DNS and handle domains only; `main.ts` passes none), as `tests/integration/http/signed-in.test.ts` does to walk
+a signed-in member through the composed server; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
+
+**Expiry sweeps (P2.03s).** `jobs/sweeps.ts` runs the session store's and the OAuth state store's `sweep` once when
+`boot()` finishes and then hourly, on an unref'd timer that the first close hook stops. web runs them because web is
+the role that may delete from `app.session` and `app.oauth_state`; the `app.single_use` sweep needs `retention` and
+waits for `interfaces/jobs`. A failure logs `error` with `job` and the error's class name, nothing else.
 
 **Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
 Referer's path when the Referer's host is the request's host-checked Host, never a `/login` page or `next`, else `/`); POST /login (rate limit `login`, CSRF gate)
@@ -115,7 +124,11 @@ only while that cache is at most 4 × `EMAIL_RECHECK_S` old, and ends nothing (P
 transient answer, including a 429 and a 401 while the token set is stored, shows the PDS-unavailable page and still
 ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
 successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS call, whichever comes first. While
-the PDS can't be reached, the cached result is kept, up to that cap. Once P1.36v
+the PDS can't be reached, the cached result is kept, up to that cap. After a recheck the PDS did not answer
+(unavailable or 429, not our own lock timeout), `email-refresh.ts` does not ask again for that member for
+`PDS_HOLD_MS` (30 s, this process's memory, at most 10,000 members) and answers `transient` at once (P2.11g), so a
+hanging PDS costs a member one wait per hold, not one per page view. The gate's rules are unchanged; the cost is
+that a recheck that would have succeeded inside the hold happens up to 30 s later. Once P1.36v
 lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth

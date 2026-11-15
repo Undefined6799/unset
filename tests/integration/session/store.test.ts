@@ -134,6 +134,7 @@ describe("session store", () => {
     expect(read.clearCookie).toBe(false);
     expect(read.session?.did).toBe(DID_A);
     expect(read.session?.emailConfirmed).toBeNull();
+    expect(read.session?.emailCheckedAt).toBeNull();
     expect(read.session?.idHash.equals(sha256(Buffer.from(cookieValue, "base64url")))).toBe(true);
   });
 
@@ -338,8 +339,16 @@ describe("session store", () => {
     const second = await insertSession(owner);
     const one = await store.read(request(first));
     await withClient(web, null, (db) => store.setEmailConfirmed(db, one.session?.idHash as Buffer, true));
-    expect((await store.read(request(first))).session?.emailConfirmed).toBe(true);
-    expect((await store.read(request(second))).session?.emailConfirmed).toBeNull();
+    const checked = (await store.read(request(first))).session;
+    expect(checked?.emailConfirmed).toBe(true);
+    // P2.03m: the read carries when the answer was written, the row's own email_checked_at.
+    const [{ at }] = (await sql<{ at: Date }>("SELECT email_checked_at AS at FROM app.session WHERE id_hash = $1", [
+      checked?.idHash,
+    ])) as [{ at: Date }];
+    expect(checked?.emailCheckedAt).toEqual(at);
+    const unchecked = (await store.read(request(second))).session;
+    expect(unchecked?.emailConfirmed).toBeNull();
+    expect(unchecked?.emailCheckedAt).toBeNull();
     await withClient(web, null, (db) => store.setEmailConfirmed(db, { did: owner }, false));
     expect((await store.read(request(first))).session?.emailConfirmed).toBe(false);
     expect((await store.read(request(second))).session?.emailConfirmed).toBe(false);

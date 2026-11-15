@@ -12,9 +12,22 @@
 
 name: mirror
 
+# P2.26k: a push starts a run, and so asks for the signing approval, only when it changes a file this workflow reads
+# (scripts/ci/image-workflows.test.ts, mirror_runs_for_every_file_it_reads). What copy-and-sign copies is decided by
+# deployment/mirror.list.json alone, and copying an unchanged list re-signs the same digests. The weekly scan is
+# unchanged. A `paths` filter runs the workflow when at least one changed file matches
+# (docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax, on.<push|pull_request>.<paths|paths-ignore>,
+# read 2026-11-15).
 on:
   push:
     branches: [main]
+    paths:
+      - deployment/mirror.list.json
+      - deployment/images/bases.lock.json
+      - .github/trivyignore.yaml
+      - .github/trivyignore.pds.yaml
+      - .github/workflows/mirror.yml
+      - scripts/ci/verify-images.ts
   schedule:
     - cron: "17 5 * * 1"
 

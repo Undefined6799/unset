@@ -4,7 +4,7 @@ import { parseDid } from "@unset/domains-identity";
 import type { PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
 import { expect, test } from "vitest";
-import { emailRefresh } from "./email-refresh.ts";
+import { emailRefresh, PDS_HOLD_MAX_MEMBERS, PDS_HOLD_MS } from "./email-refresh.ts";
 
 const did = parseDid(`did:plc:${"a".repeat(24)}`);
 if (did === null) throw new Error("test DID did not parse");
@@ -22,6 +22,7 @@ function refreshWith(info: PdsResult<SessionInfo>) {
     setEmailConfirmed: async (_idHash, value) => {
       writes.push(value);
     },
+    now: () => 0,
   });
   return { answer: () => refresh(SESSION, AbortSignal.timeout(1000), performance.now() + 1000), writes };
 }
@@ -64,7 +65,94 @@ test("email_refresh.passes_the_route_deadline_to_the_pds_read", async () => {
       return { kind: "transient", code: "pds_unavailable" };
     },
     setEmailConfirmed: async () => undefined,
+    now: () => 0,
   });
   await refresh(SESSION, AbortSignal.timeout(1000), 12_345);
   expect(seen).toEqual([12_345]);
+});
+
+// P2.11g: after the PDS fails to answer, the gate stops asking for that member for a short hold.
+function refreshAnswering(answers: PdsResult<SessionInfo>[]) {
+  let now = 0;
+  let asked = 0;
+  const refresh = emailRefresh({
+    sessionInfo: async () => {
+      asked += 1;
+      return answers.shift() ?? { kind: "transient", code: "pds_unavailable" };
+    },
+    setEmailConfirmed: async () => undefined,
+    now: () => now,
+  });
+  return {
+    view: (session: Session = SESSION) => refresh(session, AbortSignal.timeout(1000), 1000),
+    advance: (ms: number) => {
+      now += ms;
+    },
+    asked: () => asked,
+  };
+}
+
+test("email_refresh.transient_holds_the_next_asks", async () => {
+  for (const code of ["pds_unavailable", "pds_rate_limited"] as const) {
+    const gate = refreshAnswering([{ kind: "transient", code }]);
+    expect(await gate.view()).toBe("transient");
+    gate.advance(PDS_HOLD_MS - 1);
+    expect(await gate.view(), code).toBe("transient");
+    expect(gate.asked(), code).toBe(1);
+  }
+});
+
+test("email_refresh.hold_ends_and_the_pds_is_asked_again", async () => {
+  const gate = refreshAnswering([
+    { kind: "transient", code: "pds_unavailable" },
+    { kind: "ok", value: { handle: "alice.test", emailConfirmed: true } },
+  ]);
+  await gate.view();
+  gate.advance(PDS_HOLD_MS);
+  expect(await gate.view()).toBe("confirmed");
+  expect(gate.asked()).toBe(2);
+  // A good answer leaves no hold behind.
+  expect(await gate.view()).toBe("transient");
+  expect(gate.asked()).toBe(3);
+});
+
+test("email_refresh.hold_is_per_member", async () => {
+  const other = parseDid(`did:plc:${"b".repeat(24)}`);
+  if (other === null) throw new Error("test DID did not parse");
+  const gate = refreshAnswering([{ kind: "transient", code: "pds_unavailable" }, { kind: "auth_dead" }]);
+  await gate.view();
+  expect(await gate.view({ ...SESSION, did: other })).toBe("ended");
+  expect(gate.asked()).toBe(2);
+});
+
+test("email_refresh.lock_timeout_and_final_answers_hold_nothing", async () => {
+  for (const first of [
+    { kind: "transient", code: "lock_timeout" },
+    { kind: "auth_dead" },
+    { kind: "scope_missing" },
+    { kind: "ok", value: { handle: "alice.test", emailConfirmed: false } },
+  ] as const) {
+    const gate = refreshAnswering([first]);
+    await gate.view();
+    await gate.view();
+    expect(gate.asked(), first.kind).toBe(2);
+  }
+});
+
+test("email_refresh.full_hold_table_starts_over", async () => {
+  const gate = refreshAnswering([]);
+  const member = (n: number): Session => {
+    const letters = [...n.toString(26)].map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 26)));
+    const parsed = parseDid(`did:plc:${letters.join("").padStart(24, "a")}`);
+    if (parsed === null) throw new Error("test DID did not parse");
+    return { ...SESSION, did: parsed };
+  };
+  for (let n = 0; n <= PDS_HOLD_MAX_MEMBERS; n++) await gate.view(member(n));
+  const asked = gate.asked();
+  // The table was emptied to admit the last member, so the first member is asked again: never a stuck hold.
+  await gate.view(member(0));
+  expect(gate.asked()).toBe(asked + 1);
+  // The last member's hold stands.
+  await gate.view(member(PDS_HOLD_MAX_MEMBERS));
+  expect(gate.asked()).toBe(asked + 1);
 });
