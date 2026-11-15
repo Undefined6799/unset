@@ -98,6 +98,27 @@ describe("health", () => {
     expect(((await response.json()) as { status: string }).status).toBe("unready");
   });
 
+  test("health_concurrent_probes_share_one_check", async () => {
+    // Two probes arriving before the first answer used to start two checks, each holding a pooled client (P1.04y).
+    let calls = 0;
+    let answer: (ready: boolean) => void = () => undefined;
+    const { request } = kit({
+      readiness: [
+        () => {
+          calls += 1;
+          return new Promise<boolean>((resolve) => {
+            answer = resolve;
+          });
+        },
+      ],
+    });
+    const both = Promise.all([request("/health"), request("/health")]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    answer(true);
+    expect((await both).map((response) => response.status)).toEqual([200, 200]);
+    expect(calls).toBe(1);
+  });
+
   test("health_any_host", async () => {
     const { request } = kit();
     expect((await request("/health", { host: "localhost:8080" })).status).toBe(200);
