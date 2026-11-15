@@ -80,6 +80,7 @@ function setup(world: World = {}) {
   const logout = logoutRoutes({
     readSession: async () => (world.signedIn ? ({ did: DID, idHash: Buffer.alloc(32, 7) } as Session) : null),
     destroySession: async () => 1,
+    destroyAllSessions: async () => undefined,
     issuerOf: async () => `https://${PDS}`,
     revokeGrant: async () => undefined,
     deleteTokenSet: async () => undefined,

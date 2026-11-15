@@ -27,6 +27,8 @@ type World = {
   session?: Session | null;
   destroyFails?: boolean;
   remaining?: number;
+  /** P2.08j: ending every session fails at the database. */
+  destroyAllFails?: boolean;
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. `"stall"` never settles. */
   issuer?: string | null | Error | "stall";
   /** The last browser's revocation fails at the PDS (P2.08g). */
@@ -55,6 +57,11 @@ function setup(world: World = {}) {
       // Another browser still holds a session, so this path must not revoke the shared grant.
       return world.remaining ?? 1;
     },
+    destroyAllSessions: async (session) => {
+      calls.push("destroyAll");
+      if (world.destroyAllFails) throw new Error("db down");
+      destroyed.push(session);
+    },
     issuerOf: async (_did, signal?: AbortSignal) => {
       calls.push("issuerOf");
       issuerSignal = signal;
@@ -71,7 +78,7 @@ function setup(world: World = {}) {
     },
     revokeGrant: async () => {
       calls.push("revoke");
-      if (world.remaining !== 0) throw new Error("revoke is not this test");
+      if (world.remaining !== 0 && !calls.includes("everywhere")) throw new Error("revoke is not this test");
       if (world.revokeFails) throw new Error("RevokeDown");
     },
     deleteTokenSet: async () => {
@@ -272,14 +279,79 @@ describe("POST /logout", () => {
   });
 });
 
-// P2.08d: "Sign out everywhere" is removed (Alex, 2026-10-19 02:34:31Z). Its path is an unknown route, and nothing
-// is signed out by it.
-test("logout_everywhere_is_gone", async () => {
-  const { send, destroyed } = setup();
-  const response = await send("/logout/everywhere", { body: "confirm=yes" });
-  expect(response.status).toBe(404);
-  expect(response.headers.getSetCookie()).toEqual([]);
-  expect(destroyed).toEqual([]);
+// P2.08j (Alex, 2026-11-15 23:11:42Z; review 2026-11-15 security finding 5): "Sign out everywhere" is back, after
+// P2.08d removed it. It ends a session the member does not hold, by ending every session of their account.
+describe("POST /logout/everywhere", () => {
+  /** A setup whose revoke stub knows this is the everywhere path, so a revoke there is expected. */
+  const everywhere = (world: World = {}) => {
+    const made = setup(world);
+    made.calls.push("everywhere");
+    return made;
+  };
+
+  test("logout_everywhere_revokes_then_ends_every_session", async () => {
+    const { send, destroyed, calls, lines } = everywhere();
+    const response = await send("/logout/everywhere");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    // This browser is signed out too, and the page links the issuer read before the revoke deleted its record.
+    expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
+    // Revoke first: the definer deletes the token set the revocation call needs (migration 0014).
+    expect(calls).toEqual(["everywhere", "issuerOf", "revoke", "destroyAll"]);
+    // The session is the request's own: the caller ends their own account's sessions and nobody else's.
+    expect(destroyed).toEqual([SESSION]);
+    expect(lines.filter((line) => line.event === "auth.logout_everywhere")).toHaveLength(1);
+    expect(JSON.stringify(lines)).not.toContain(DID);
+  });
+
+  test("logout_everywhere_ignores_the_body", async () => {
+    const other = `did:plc:${"b".repeat(24)}`;
+    const { send, destroyed } = everywhere();
+    expect((await send("/logout/everywhere", { body: `did=${other}&session=abc` })).status).toBe(303);
+    expect(destroyed).toEqual([SESSION]);
+  });
+
+  test("logout_everywhere_failed_revoke_drops_the_grant_and_still_ends_sessions", async () => {
+    const { send, destroyed, calls, lines } = everywhere({ revokeFails: true });
+    const response = await send("/logout/everywhere");
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["everywhere", "issuerOf", "revoke", "deleteTokenSet", "destroyAll"]);
+    expect(destroyed).toEqual([SESSION]);
+    expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toHaveLength(1);
+  });
+
+  test("logout_everywhere_no_session_idempotent", async () => {
+    const { send, destroyed, calls } = everywhere({ session: null });
+    const response = await send("/logout/everywhere");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
+    expect(calls).toEqual(["everywhere"]);
+    expect(destroyed).toEqual([]);
+  });
+
+  test("logout_everywhere_csrf", async () => {
+    const { send, destroyed, calls } = everywhere();
+    expect((await send("/logout/everywhere", { site: "cross-site" })).status).toBe(403);
+    expect(calls).toEqual(["everywhere"]);
+    expect(destroyed).toEqual([]);
+  });
+
+  test("logout_everywhere_get_405", async () => {
+    const { send, calls } = everywhere();
+    expect((await send("/logout/everywhere", { method: "GET" })).status).toBe(405);
+    expect(calls).toEqual(["everywhere"]);
+  });
+
+  test("logout_everywhere_db_failure_keeps_the_cookie", async () => {
+    const { send, lines } = everywhere({ destroyAllFails: true });
+    const response = await send("/logout/everywhere");
+    expect(response.status).toBe(503);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await response.text()).toContain("Could not sign you out, try again.");
+    expect(lines.filter((line) => line.event === "auth.logout_everywhere")).toEqual([]);
+  });
 });
 
 test("signed_out_page", async () => {

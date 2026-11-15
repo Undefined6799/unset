@@ -2,8 +2,10 @@
 // another site can sign a member out. This browser's session ends, and the browser is marked signed out so the next
 // sign-in asks for the password again. Other browsers keep their sessions and the shared token set. The last browser
 // revokes the grant: a refresh credential with nobody behind it is not kept (review F13). "Sign out everywhere" was
-// removed (P2.08d; Alex, 2026-10-19 02:34:31Z). P2.08b: the signed-out page links the issuer recorded at sign-in,
-// carried in a short-lived cookie because the last browser's revoke deletes the record. No DID in any log line.
+// removed (P2.08d; Alex, 2026-10-19 02:34:31Z) and is back as POST /logout/everywhere (P2.08j; Alex, 2026-11-15
+// 23:11:42Z; review 2026-11-15 security finding 5): it revokes the grant and ends every session of the DID. P2.08b:
+// the signed-out page links the issuer recorded at sign-in, carried in a short-lived cookie because the last
+// browser's revoke deletes the record. No DID in any log line.
 import type { Did } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { AppError } from "@unset/shared-errors";
@@ -30,6 +32,8 @@ export type LogoutDeps = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<Session | null>;
   /** Destroys this session and returns how many of the DID's sessions remain, in one transaction. */
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
+  /** P2.08j: P2.04s `destroyAllForDid` (`user_signout_all`): every session of this session's DID, and its token set. */
+  destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<void>;
   /** The issuer OAuth recorded at sign-in (the stored token set's `iss`), or null. Never a DID-document field. */
   issuerOf: (did: Did, signal: AbortSignal) => Promise<string | null>;
   /**
@@ -146,6 +150,32 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         deps.log.info("auth.logout_this_browser");
         // Last browser: revoke outside the transaction. The count saw this delete. No unconfirmed notice (F13).
         if (remaining === 0) await endGrantIfLast(session.did, deadline);
+        return finish("/signed-out", issuer);
+      },
+    }),
+    defineRoute({
+      method: "POST",
+      path: "/logout/everywhere",
+      group: "app",
+      accepts: [FORM],
+      bodyLimit: 1024,
+      rateLimit: "default",
+      mutates: true,
+      session: "none",
+      // P2.08j. In order: the CSRF gate (the kit, before this runs), this request's own session, the revoke, then the
+      // delete for that session's DID. Nothing is read from the body, so no field can name another member.
+      handler: async ({ request, deadline }) => {
+        const session = await deps.readSession(request, deadline);
+        if (session === null) return finish("/signed-out", null);
+        const issuer = await recordedIssuer(session.did);
+        // Revoke while the token set is still there: app.end_sessions_for_did deletes it (migration 0014). Once the
+        // set is gone, by the revoke or by the drop after a failed one, no session of the DID reads as signed in.
+        await revokeOrDrop(session.did, deadline);
+        // A failed delete is a retryable 503 and the cookie stays, as on POST /logout.
+        await deps.destroyAllSessions(session, deadline).catch((cause: unknown) => {
+          throw new AppError("logout.failed", { cause });
+        });
+        deps.log.info("auth.logout_everywhere");
         return finish("/signed-out", issuer);
       },
     }),

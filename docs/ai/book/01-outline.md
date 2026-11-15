@@ -546,6 +546,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08f | Mark sign out everywhere unused in session | trusted | P2.08d | `phase-2.md` |
 | P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
 | P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
+| P2.08j | Bring back sign out everywhere | [SEC] | P2.08d, P2.13c | `phase-2.md` |
 | P2.08s | Ask about the PDS after signing out | — | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
@@ -865,6 +866,7 @@ flowchart TD
   P2_08f["P2.08f user_signout_all marked unused"]
   P2_08g["P2.08g Revoke failure unit test"]
   P2_08h["P2.08h Issuer read bounded, carrier narrowed"]
+  P2_08j["P2.08j Sign out everywhere is back"]
   P2_11["P2.11 Email-verify gate"]
   P2_11a["P2.11a Revoked grant ends sessions"]
   P2_11b["P2.11b RETIRED to P3.20c"]
@@ -1114,6 +1116,8 @@ flowchart TD
   P2_08e --> P2_08g
   P2_08b --> P2_08g
   P2_08b --> P2_08h
+  P2_08d --> P2_08j
+  P2_13c --> P2_08j
   P2_12 --> P2_12a
   P2_12 --> P2_12b
   P2_12a --> P2_12c
