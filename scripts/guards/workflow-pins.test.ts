@@ -276,7 +276,7 @@ describe("signing jobs (P1.27s)", () => {
     expect(problems(renamed, "publish-images.yml")).toEqual([
       "job release: id-token: write outside a signing job",
       "job release: packages: write outside a signing job",
-      "publish-images.yml has a job other than publish",
+      "publish-images.yml has a job other than publish and bump",
     ]);
     const flow = publish
       .replace(
@@ -294,6 +294,9 @@ describe("signing jobs (P1.27s)", () => {
       expect(problems(publish, file), file).toEqual([
         // The pushed-digest pull is accepted only in publish-images.yml.
         expect.stringMatching(/^line \d+: container started without a digest-pinned image$/),
+        // P2.26m: the bump job's two writes pass only in publish-images.yml.
+        "write permission: contents: write",
+        "write permission: pull-requests: write",
         "job publish: id-token: write outside a signing job",
         "job publish: packages: write outside a signing job",
       ]);
@@ -314,6 +317,92 @@ describe("signing jobs (P1.27s)", () => {
         .map(([id]) => `${file} ${id}`),
     );
     expect(holders.sort()).toEqual(["mirror.yml copy-and-sign", "publish-images.yml publish"]);
+  });
+
+  // P2.26m (Alex's typed line, in the PR): after publish, the bump job opens the lock-bump pull request. It is the one
+  // job outside docs-auto-merge.yml with contents: write and pull-requests: write, and only in this exact shape.
+  test("bump_job_shape_is_pinned", () => {
+    const bump = publish.slice(publish.indexOf("  bump:\n"));
+    const changed = (from: string, to: string) => {
+      expect(bump, from).toContain(from);
+      return problems(publish.replace(bump, bump.replace(from, to)), "publish-images.yml");
+    };
+    const CHANGED = "bump job is not the reviewed job (update BUMP_JOB_LINES with the change)";
+    const run = "        run: node scripts/ci/lock-bump-pr.ts\n";
+    const checkout = "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n";
+    const cases: [string, string][] = [
+      ["    needs: publish\n", ""],
+      [`    ${GATE_IF}\n`, "    if: always()\n"],
+      ["      pull-requests: write\n", ""],
+      ["      pull-requests: write\n", "      pull-requests: write\n      actions: write\n"],
+      ["          persist-credentials: false\n", ""],
+      ["          ref: ${{ github.sha }}\n", "          ref: main\n"],
+      [run, "        run: node scripts/ci/lock-bump-pr.ts && git push\n"],
+      [run, `${run}      - run: gh pr merge\n`],
+      [run, `${run}        shell: bash -c "gh pr merge; {0}"\n`],
+      [run, `${run}        working-directory: /tmp\n`],
+      [
+        "          PUBLISHED_LOCK: ${{ needs.publish.outputs.lock }}\n",
+        "          PUBLISHED_LOCK: ${{ github.event.head_commit.message }}\n",
+      ],
+      // What a rule read line by line would miss: a job environment (its secrets), a container, job defaults,
+      // another env or with key, another action, and the same keys quoted.
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    environment: signing\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    container: ghcr.io/evil/image\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    defaults:\n      run:\n        shell: sh\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    env:\n      NODE_OPTIONS: --require ./x.js\n"],
+      ["      - env:\n", "      - env:\n          NODE_OPTIONS: --require ./x.js\n"],
+      ["          package-manager-cache: false\n", "          package-manager-cache: false\n          token: x\n"],
+      [
+        "          persist-credentials: false\n",
+        "          persist-credentials: false\n          repository: evil/x\n",
+      ],
+      [
+        "      - env:\n",
+        "      - uses: actions/upload-artifact@0123456789012345678901234567890123456789\n      - env:\n",
+      ],
+      ["      - env:\n", '      - "uses": evil/action@0123456789012345678901234567890123456789\n      - env:\n'],
+      [checkout, checkout.replace("uses:", '"uses":')],
+      [checkout, checkout.replace("actions/checkout", "evil/checkout")],
+      [run, run.replace("run:", '"run":')],
+    ];
+    for (const [from, to] of cases) expect(changed(from, to), to).toContain(CHANGED);
+    expect(problems(`defaults:\n  run:\n    shell: sh\n${publish}`, "publish-images.yml")).toContain(
+      "publish-images.yml sets workflow defaults",
+    );
+    // A quoted write is still a write: refused on publish, and in any other workflow.
+    for (const quoted of [
+      '      "contents": write\n',
+      "      contents: 'write'\n",
+      '      "pull-requests": "write"\n',
+    ]) {
+      const moved = publish.replace("      packages: write\n", `      packages: write\n${quoted}`);
+      expect(problems(moved, "publish-images.yml"), quoted).toContain("a merge write outside the bump job");
+      expect(problems(moved, "ci.yml"), quoted).toContain(`write permission: ${quoted.trim()}`);
+    }
+    // It cannot sign: the signing scopes and the signing environment's secrets stay with publish.
+    expect(changed("      contents: write\n", "      contents: write\n      id-token: write\n")).toContain(
+      "job bump: id-token: write outside a signing job",
+    );
+    expect(changed("      contents: write\n", "      contents: write\n      packages: write\n")).toContain(
+      "job bump: packages: write outside a signing job",
+    );
+    // The same writes on the publish job, or on any third job, are refused.
+    const onPublish = publish.replace("      packages: write\n", "      packages: write\n      contents: write\n");
+    expect(problems(onPublish, "publish-images.yml")).toContain("a merge write outside the bump job");
+    const third = `${publish}  other:\n    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n`;
+    expect(problems(third, "publish-images.yml")).toEqual([
+      "a merge write outside the bump job",
+      "publish-images.yml has a job other than publish and bump",
+    ]);
+    // Without the bump job the file passes, and the writes pass nowhere else.
+    expect(problems(publish.replace(bump, ""), "publish-images.yml")).toEqual([]);
+    const renamed = publish.replace("  bump:\n", "  release:\n");
+    expect(problems(renamed, "publish-images.yml")).toEqual([
+      "write permission: contents: write",
+      "write permission: pull-requests: write",
+      "publish-images.yml has a job other than publish and bump",
+    ]);
   });
 
   test("publish_images_pull_request_trigger_fails", () => {

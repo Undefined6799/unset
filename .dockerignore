@@ -15,3 +15,7 @@ docs
 secrets
 **/*.pem
 **/*.key
+# P2.26m: the deploy lock and the dev stack file name published digests; no image is built from them, and a lock bump
+# must not count as an image input (publish-images.yml ignores a push that changes only these).
+deployment/images.lock.json
+deployment/compose.dev.yaml
