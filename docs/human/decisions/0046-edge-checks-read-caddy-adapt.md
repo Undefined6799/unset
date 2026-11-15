@@ -26,8 +26,10 @@ two replaces, built with Go from the same module versions):
 - The adapted config is 8 to 12 KB for each env. `{$NAME}` values are substituted, snippets and globs are expanded,
   and directive order inside `route` is kept.
 - `caddy adapt` does not open the certificate files a `tls <cert> <key>` line names.
-- For the same files, only two things change with the configured values beyond the values themselves: the order of
-  a server's site routes and of the names in a connection policy's SNI matcher. Caddy puts the longer host first.
+- In the five value sets tried across the three envs, the same files adapted to the same config apart from the
+  values themselves and two orders: a server's site routes and the names in a connection policy's SNI matcher,
+  where Caddy puts the longer host first. This is an observation of those runs, not a proof about every value. A
+  value that changes the output in any other way makes `reviewedDifference` fail, which is the safe side.
 
 ## Decision
 1. **The edge's checks judge `caddy adapt` output.** No check reads the Caddyfile format itself. One source of truth
@@ -60,7 +62,7 @@ two replaces, built with Go from the same module versions):
 | Lexer refusals: heredocs, escapes, quotes, non-ASCII | Gone. Caddy parses its own format; equality with the reviewed config pins the result. |
 | Directive allowlist per block (`DIRECTIVES`) | Equality with the reviewed config at deploy; allowlists of handler modules, matchers and keys in the rules. |
 | File and glob imports refused, snippets in byte order | Gone. Caddy expands them; the result is compared whole. |
-| Containment: symlinks, hard links, resolved paths | Gone as reader rules. Caddy reads through the real mounts in the real image. C18's mount-source rules stay. |
+| Containment: symlinks, hard links, resolved paths | Gone as reader rules. At deploy, Caddy reads through the real mounts in the real image (P1.39c). C18's mount-source rules stay. |
 | `{$NAME}` only in its position; upstream never a literal | Each configured value only at its ruled path (host matcher, access-log name, SNI, certificate subject, ACME email, the font `font-src`, the site's upstream dial). |
 | Value shapes; app values differ from the PDS's; dev app values exact | Unchanged, checked before the config is read. |
 | LOCAL_ONLY and DEV_ONLY tokens by folder | The local and dev leaf paths only in that env's certificate loader; no secret path elsewhere. |
@@ -79,6 +81,31 @@ two replaces, built with Go from the same module versions):
 | `(pds-fonts)` exact; once, before the upstream, on the PDS site only | The two font routes and the CSP append compared whole, once, before the upstream, on the PDS site only. |
 | No file server, response matcher or CSP change outside the fonts | Same, on handlers. `(strict-csp)` is imported nowhere today; a site that imports it adds its handler to the rules. |
 | Messages carry no configured value | Unchanged: fixed words and placeholder names. |
+
+### What is lost when the reader goes
+Four reader rules judge the source text, and the adapted config no longer carries what they read. Each is replaced,
+not kept, and the replacement is a different kind of check:
+- **Where a placeholder is written.** The reader fails a `{$NAME}` outside its one position and an upstream written
+  as a literal. After adapting, a placeholder and a literal with the same value are the same text, so the new rule
+  is about where each value ends up. A literal that equals the configured value passes, and behaves the same.
+- **Which snippet a directive came from.** The reader requires, for example, that a site's rate limiter was imported
+  from the zones snippet. The adapted config has no snippets. The new rules require the handlers themselves, compared
+  whole, so a copy of a snippet written in place passes when it adapts to the same handlers.
+- **Containment of the files read.** The reader refuses symlinks that leave `deployment/edge`, hard links and
+  unresolved paths, so that it reads what Caddy will read. With `caddy adapt` in the container, Caddy reads through
+  the real mounts, so that guarantee holds only where C18 runs it, at deploy (P1.39c). The CI image test uses its
+  own list of mounts, written to match each compose file; for prod that list is an assumption until a prod compose
+  file exists (P5). C18's own rules on mount sources (inside `deployment/edge`, read-only, exact files) stay.
+- **The directive allowlist.** The reader fails any directive it does not model, before anyone reviews it. Afterwards
+  a new directive is caught in two ways: the rules fail a module, matcher or key they do not name, and the deploy
+  fails unless the adapted config equals the reviewed one. A directive that adapts only to keys the rules already
+  allow reaches review as a diff of the saved JSON and is stopped there by a person, not by a machine.
+
+### Who reviews the saved JSON
+A change to `deployment/edge/adapted/` is a trusted-base change: Alex reads the diff before merge, and the
+coordinator reviews the head it names safe. Nothing enforces that review. `.github/CODEOWNERS` routes it and says
+itself that code-owner review is not enforced, so this is a process rule, the same as for every other trusted path.
+What a machine does enforce is that the saved JSON is what the image adapts (CI) and passes the rules (P1.39b).
 
 ## Alternatives
 - **Keep the reader.** Costs a trusted review of a parser at every Caddy change, and still needs the image test.
