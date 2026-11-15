@@ -79,7 +79,7 @@ function startWithTestRoutes(unsetEnv: string, extra: Record<string, string> = {
     [`--import=data:text/javascript,${encodeURIComponent(TEST_ROUTES_HOOK)}`, join(REPOSITORY, ENTRY)],
     { env: { ...env, UNSET_ENV: unsetEnv, ...extra }, encoding: "utf8", timeout: 20_000 },
   );
-  return { status: run.status, stderr: run.stderr };
+  return { status: run.status, stderr: run.stderr, stdout: run.stdout };
 }
 
 test("startup_outside_test_never_loads_test_routes", () => {
@@ -91,11 +91,16 @@ test("startup_outside_test_never_loads_test_routes", () => {
     // With the key off the start gets past the config and past compose's gated import (its first line), still
     // without the module, and exits 1 at one of two known places. Where depends on whether apps/web's server build
     // exists: without it (CI's state when npm test starts) the start stops at loadWebRender, so a load placed later
-    // in compose is caught only when another test has written the build first; with it, at the database.
+    // in compose is caught only when another test has written the build first; with it, at the database. The first
+    // is thrown inside compose and printed by Node; the second comes after the last-resort handlers are installed
+    // (fatal.ts, P1.04w), so it is one scrubbed log line on stdout and nothing raw on stderr.
     const off = startWithTestRoutes(unsetEnv, {});
     expect(off.stderr, unsetEnv).not.toContain("config.invalid");
     expect(off.stderr, unsetEnv).not.toContain("test-routes loaded");
-    expect(off.stderr, unsetEnv).toMatch(/AppError: db\.busy|@unset\/apps-web\/server did not load/);
+    expect(`${off.stdout}${off.stderr}`, unsetEnv).toMatch(
+      /"event":"error","code":"db\.busy"|@unset\/apps-web\/server did not load/,
+    );
+    expect(off.stderr, unsetEnv).not.toContain("AppError");
     expect(off.status, unsetEnv).toBe(1);
   }
   const control = startWithTestRoutes("test");

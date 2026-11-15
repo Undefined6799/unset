@@ -78,10 +78,15 @@ import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
 
+/** Under the kit's 1 s readiness bound (shared/http/health.ts), so the wait for a client is cancelled, not left behind. */
+const READINESS_MS = 900;
+
 export type Services = {
   server: ReturnType<typeof createServer>;
   /** Boot checks that need the database, run once before the server listens. */
   boot: () => Promise<void>;
+  /** The process's one logger, for the entry point's last-resort handlers (fatal.ts). */
+  log: Logger;
 };
 
 /** `web`'s two pools, the OAuth client over them, and what closes them; nothing here opens a connection. */
@@ -392,9 +397,16 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       routes,
       policies,
       log,
+      // `/health` answers 200 only while Postgres answers (P1.04w): a rollout must not swap in a replica that cannot
+      // reach the database. The kit bounds the check at 1 s, caches it for 2 s and reads a throw as not ready
+      // (shared/http/health.ts), so a probe holds at most one pooled connection, briefly.
+      readiness: [
+        () => withClient(oauth.pool, AbortSignal.timeout(READINESS_MS), (db) => db.query("SELECT 1")).then(() => true),
+      ],
       onClose: oauth.onClose,
       errorPage,
     }),
     boot: oauth.boot,
+    log,
   };
 }

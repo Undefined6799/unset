@@ -39,7 +39,7 @@ rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
 identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
-itself (compose returns only `server` and `boot`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+itself (compose returns `server`, `boot` and the process's `log`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
 which writes the secrets to files; the runtime image copies each package the server imports, and
@@ -166,7 +166,11 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   `/legal/privacy`, `/legal/domains`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
-- `health.ts`: `/health`, which reveals only status and commit.
+- `health.ts`: `/health`, which reveals only status and commit. `web` registers one readiness check, a `SELECT 1`
+  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer.
+- `interfaces/http/fatal.ts` (P1.04w): `main.ts` installs it after compose. An unhandled rejection is logged through
+  the scrubbing logger and the server drains as on SIGTERM; an uncaught exception is logged and exits 1. Neither
+  prints the raw error, so a boot that cannot reach the database is one `error` line with `code: db.busy`.
 - `errors.ts`: every error response by code and group. An interface may pass `errorPage` (P1.25k) for the page
   groups' body only: it gets the shown code, the group and, for `internal.error`, the kit's request id, never request
   data. On a throw, a non-string or a body over 256 KiB the kit uses its fixed page; the status and headers stay the kit's.
