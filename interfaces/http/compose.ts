@@ -55,6 +55,7 @@ import { createAccountStore } from "./account.ts";
 import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
+import { startSweeps } from "./jobs/sweeps.ts";
 import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
@@ -78,6 +79,11 @@ import { errorPageHook, type PageDeps, type PageSpec, pageResponse } from "./web
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
+/** What the OAuth client keeps per sign-in in flight, read off its own option type (infrastructure/pds exports none). */
+type SavedState = NonNullable<Awaited<ReturnType<Parameters<typeof createOAuthClient>[0]["stateStore"]["get"]>>>;
+
+/** The book's cadence for both expiry sweeps (phase-2.md P2.03 "run hourly"; oauthStores.ts "the hourly job"). */
+const SWEEP_EVERY_MS = 3_600_000;
 
 /** Under the kit's 1 s readiness bound (shared/http/health.ts), so the probe is ended, not left behind. */
 const READINESS_MS = 900;
@@ -122,11 +128,12 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
   const sessionStore = createOAuthSessionStore<SavedSession>({ pool, sealer, log });
   // P1.36y: a sign-in or last-browser sign-out holds the account's OAuth lock for its whole run (sign-in-lock.ts).
   const signIn = createSignInLock({ store: sessionStore, lock: createRequestLock(lockPool) });
+  const stateStore = createOAuthStateStore<SavedState>({ pool, sealer, log });
   const { client } = await createOAuthClient({
     origin: cfg.PUBLIC_ORIGIN,
     keys: cfg.OAUTH_CLIENT_KEYS,
     activeKid: cfg.OAUTH_ACTIVE_KID,
-    stateStore: createOAuthStateStore({ pool, sealer, log }),
+    stateStore,
     sessionStore: signIn.tokenSets,
     requestLock: signIn.requestLock,
     fetch: libraryFetch(guard),
@@ -146,6 +153,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     resolveDid,
     pool,
     sessionStore,
+    sweepStates: () => stateStore.sweep(),
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
     boot,
@@ -359,6 +367,13 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
     },
   });
+  // P2.03s: expired sessions and abandoned sign-in states are deleted from the first boot on, then hourly. The
+  // timer starts in `boot`, after the budget check, so composing alone still opens no connection.
+  let stopSweeps = (): void => undefined;
+  const sweeps = [
+    { job: "sweep.session", run: () => withClient(oauth.pool, null, (db) => sessions.sweep(db)) },
+    { job: "sweep.oauth_state", run: oauth.sweepStates },
+  ];
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [
@@ -403,10 +418,13 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       // (shared/http/health.ts). `ping` bounds the wait for a client and the query with the same signal (P1.04x), so a
       // probe holds its pooled connection for under a second.
       readiness: [() => ping(oauth.pool, AbortSignal.timeout(READINESS_MS)).then(() => true)],
-      onClose: oauth.onClose,
+      onClose: [async () => stopSweeps(), ...oauth.onClose],
       errorPage,
     }),
-    boot: oauth.boot,
+    boot: async () => {
+      await oauth.boot();
+      stopSweeps = startSweeps({ sweeps, everyMs: SWEEP_EVERY_MS, log });
+    },
     log,
   };
 }
