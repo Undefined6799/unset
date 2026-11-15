@@ -22,6 +22,7 @@ type Unavailable = { readonly ok: false; readonly code: "objects.unavailable" };
 type Done<T> = ({ readonly ok: true } & T) | Unavailable;
 
 export type ObjectStore = {
+  /** One request: through net-guard a body over its 1 MiB request cap fails as unavailable (larger media: Phase 4). */
   put(key: string, bytes: Uint8Array, contentType: string, tags?: Tags): Promise<Done<object>>;
   setTags(key: string, tags: Tags): Promise<Done<object>>;
   /** `bytes` is null when no object has that key. */
@@ -96,6 +97,10 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
     const res = await call("GET", `${bucketUrl}?${query}`);
     if (res?.status !== 200) return null;
     const xml = await res.text();
+    // A 200 can still carry a cut-off or invalid document (ListObjectsV2 API reference): a page counts only when it is
+    // one whole ListBucketResult that says whether it is truncated, so a cleanup never reads a broken page as empty.
+    const whole = /^\s*(<\?xml[^>]*\?>\s*)?<ListBucketResult[\s>][\s\S]*<\/ListBucketResult>\s*$/.test(xml);
+    if (!whole || !/<IsTruncated>(true|false)<\/IsTruncated>/.test(xml)) return null;
     const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => xmlText(m[1] ?? ""));
     const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
     const next = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml)?.[1];

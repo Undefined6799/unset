@@ -47,6 +47,16 @@ describe("object store adapter", () => {
     expect(await store(answering(200, xml)).list("drafts/")).toEqual(UNAVAILABLE);
   });
 
+  test("objects_malformed_list_is_unavailable", async () => {
+    for (const xml of [
+      "",
+      "<ListBucketResult><Contents>",
+      "<ListBucketResult><Key>drafts/a</Key></ListBucketResult>",
+    ]) {
+      expect(await store(answering(200, xml)).deletePrefix("drafts/"), xml).toEqual(UNAVAILABLE);
+    }
+  });
+
   test("objects_partial_delete_is_unavailable", async () => {
     const calls: string[] = [];
     const fetch: typeof globalThis.fetch = async (input) => {
