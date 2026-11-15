@@ -1,7 +1,7 @@
 // P1.11p: what the pool does before any server answers. Port 1 on loopback refuses every connection.
 import { AppError } from "@unset/shared-errors";
 import { describe, expect, test } from "vitest";
-import { acquire, createPool } from "./pool.ts";
+import { acquire, createPool, type Pool, ping } from "./pool.ts";
 
 const unreachable = () =>
   createPool({
@@ -39,5 +39,45 @@ describe("pool", () => {
     expect((failure as AppError).code).toBe("db.busy");
     expect((failure as AppError).cause).toBeInstanceOf(Error);
     await pool.end();
+  });
+});
+
+// P1.04x: the readiness probe. The signal bounds the wait for a client and the query itself.
+describe("ping", () => {
+  test("ping_resolves_when_postgres_answers", async () => {
+    const sent: string[] = [];
+    const client = {
+      query: (text: string) => {
+        sent.push(text);
+        return Promise.resolve({ rows: [] });
+      },
+      release: () => undefined,
+    };
+    const pool = { connect: () => Promise.resolve(client) } as unknown as Pool;
+    await expect(ping(pool, AbortSignal.timeout(1000))).resolves.toBeUndefined();
+    expect(sent).toEqual(["SELECT 1"]);
+  });
+
+  test("ping_ends_a_silent_connection_at_the_deadline", async () => {
+    // A connection that stops answering used to keep its client until the role's statement_timeout (Codex on #1531).
+    const order: string[] = [];
+    let rejectQuery: (error: Error) => void = () => undefined;
+    const client = {
+      query: () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectQuery = reject;
+        }),
+      end: () => {
+        order.push("end");
+        rejectQuery(new Error("Connection terminated"));
+        return Promise.resolve();
+      },
+      release: () => {
+        order.push("release");
+      },
+    };
+    const pool = { connect: () => Promise.resolve(client) } as unknown as Pool;
+    expect(await codeOf(ping(pool, AbortSignal.timeout(30)))).toBe("http.deadline");
+    expect(order).toEqual(["end", "release"]);
   });
 });
