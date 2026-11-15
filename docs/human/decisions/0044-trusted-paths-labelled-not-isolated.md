@@ -1,11 +1,9 @@
 # 0044 — A trusted-path change is labelled and reviewed; it is no longer isolated
 
-Status: Proposed (awaiting Alex). Alex approved building this on 2026-11-15 23:11:42Z ("yes 1 3 5", item 3 of the
-whole-project review's scope calls); that is not acceptance. This record, the guard change and the rule text are in
-one pull request (D8) and nothing in it takes effect before that pull request merges: until then rule SE-6 as it
-stood binds every thread. On Alex's line this status line is rewritten in the same pull request to "Accepted by
-Alex", with his words, their time and the head they named, as a status-only commit, and the pull request merges
-after that.
+Status: Accepted by Alex, 2026-11-15 23:36:23Z, against 8956c52. The coordinator's project-chat post asked for the
+line "accept ADR 0044 at 8956c52", on the head it had reviewed; Alex replied to that post with the line. This
+record, the guard change and the rule text are in one pull request (D8) and take effect when it merges. From here
+the record changes only to be marked superseded.
 
 It amends engineering rule SE-6 and rule DL-3 (ADR 0002 adopted both). ADR 0019 stands whole: who merges, when, and
 what stays with Alex. No earlier record is edited.
