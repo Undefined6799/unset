@@ -32,6 +32,8 @@ export type SingleUseStore = {
 };
 
 const TOKEN_BYTES = 32;
+/** Calls of app.sweep_single_use per sweep: at most 100 000 rows a run. */
+const SWEEP_ROUNDS = 20;
 /** Canonical unpadded base64url of 32 bytes. */
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UNIQUE_VIOLATION = "23505";
@@ -130,6 +132,10 @@ export function createSingleUseStore(options: {
   async function claim(db: Db, purpose: Purpose, id: ExternalId, expiresAt: Date) {
     const key = claimKey(purpose, id);
     // Inserted already consumed: the insert is the check, and ON CONFLICT makes every later claim a no-op.
+    // expires_at is clamped to the purpose's cap, and the sweep removes the row a day after that. So a caller must
+    // refuse an external token whose own lifetime is longer than the cap: one still valid at cap plus a day would
+    // be claimable again after the sweep. Every cap is at most an hour (single-use.test.ts pins it), and no caller
+    // exists yet; the first one (service auth, module assertions) checks `exp` against the cap before claiming.
     const { rows } = await db.query<{ clamped: boolean }>(
       "INSERT INTO app.single_use (id, purpose, expires_at, consumed_at) " +
         "VALUES ($1, $2, LEAST($3::timestamptz, now() + make_interval(secs => $4)), now()) " +
@@ -146,8 +152,16 @@ export function createSingleUseStore(options: {
    * app.sweep_single_use (migration 0023), which `web` and `retention` may call; web holds no DELETE of its own.
    */
   async function sweep(db: Db) {
-    const result = await db.query("SELECT app.sweep_single_use() AS swept");
-    return Number(result.rows[0]?.swept ?? 0);
+    // One call removes at most 5000 rows, so each statement stays short; a backlog is worked off over SWEEP_ROUNDS
+    // calls now and the rest at the next run.
+    let total = 0;
+    for (let round = 0; round < SWEEP_ROUNDS; round++) {
+      const result = await db.query("SELECT app.sweep_single_use() AS swept");
+      const swept = Number(result.rows[0]?.swept ?? 0);
+      total += swept;
+      if (swept === 0) break;
+    }
+    return total;
   }
 
   return { issue, consume, claim, sweep };

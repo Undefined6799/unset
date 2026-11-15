@@ -4,8 +4,9 @@
 -- retention until interfaces/jobs exists (P4.25), so consumed and expired tokens, some bound to a DID, were never
 -- removed. web calls this from its hourly sweeps (interfaces/http/jobs/sweeps.ts). It takes no argument and deletes
 -- only rows a day past expiry, so web gains no DELETE: it still cannot remove a live or just-used
--- token, and a replayed token finds its row or, a day after expiry, no row, and is refused either way. Returns the
--- number of rows removed.
+-- token, and a replayed token finds its row or, a day after expiry, no row, and is refused either way. One call
+-- removes at most 5000 rows, oldest first, so a backlog can never run into web's statement_timeout and fail every
+-- hour for good; the caller repeats while rows come back (singleUse/store.ts). Returns the number of rows removed.
 CREATE FUNCTION app.sweep_single_use() RETURNS int
   LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, app
@@ -13,7 +14,9 @@ AS $$
 DECLARE
   swept int;
 BEGIN
-  DELETE FROM app.single_use WHERE expires_at < now() - interval '1 day';
+  DELETE FROM app.single_use
+   WHERE id IN (SELECT id FROM app.single_use WHERE expires_at < now() - interval '1 day'
+                 ORDER BY expires_at LIMIT 5000);
   GET DIAGNOSTICS swept = ROW_COUNT;
   RETURN swept;
 END

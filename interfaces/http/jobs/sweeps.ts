@@ -1,7 +1,8 @@
 // web's expiry sweeps (P2.03s; whole-project review 2026-11-15, security item 2). The session store and the OAuth
 // state store each had a sweep with no caller, so an expired session whose cookie never came back, and every
 // abandoned sign-in, stayed for good. web runs both because web is the role that may delete from those tables
-// (migrations 0011 and 0013); the single-use sweep needs the retention role and stays with the jobs process.
+// (migrations 0011 and 0013). The single-use sweep (P1.16w) runs here too: web holds no DELETE on that table and
+// calls app.sweep_single_use (migration 0023), one fixed statement, until the jobs process exists (P4.25).
 // The sweeps are idempotent DELETEs (book phase-2.md P2.03, DA-4), so every replica runs them and none takes a lock.
 import type { Logger } from "@unset/shared-log";
 

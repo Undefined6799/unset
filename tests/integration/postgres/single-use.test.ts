@@ -9,6 +9,7 @@ import {
   type Db,
   type ExternalId,
   type Pool,
+  PURPOSES,
   type Purpose,
   withClient,
 } from "@unset/infrastructure-postgres";
@@ -273,6 +274,31 @@ describe("single-use store", () => {
       [[Buffer.alloc(32, 20), Buffer.alloc(32, 21)]],
     );
     expect(left).toEqual([{ fill: 21 }]);
+  });
+
+  test("purpose_caps_stay_far_inside_the_sweep_day", () => {
+    // claim() clamps expires_at to the cap and the sweep removes a row a day later. An external token must therefore
+    // never be accepted with a lifetime beyond its cap; a cap near a day would make that easy to get wrong.
+    for (const [purpose, cap] of Object.entries(PURPOSES)) expect(cap, purpose).toBeLessThanOrEqual(3600);
+  });
+
+  test("sweep_is_bounded_per_call", async () => {
+    // 5001 rows two days past expiry: one call of the function takes 5000, the store's loop takes the rest.
+    await sql(
+      web,
+      "INSERT INTO app.single_use (id, purpose, expires_at) " +
+        "SELECT sha256(convert_to('bulk ' || n, 'UTF8')), 'login.nonce', now() - interval '2 days' " +
+        "FROM generate_series(1, 5001) n",
+    );
+    const [row] = await sql<{ swept: number }>(web, "SELECT app.sweep_single_use() AS swept");
+    expect(row?.swept).toBe(5000);
+    const { store } = setup();
+    expect(await withClient(web, null, (db) => store.sweep(db))).toBeGreaterThanOrEqual(1);
+    const [left] = await sql<{ n: string }>(
+      web,
+      "SELECT count(*) AS n FROM app.single_use WHERE expires_at < now() - interval '1 day'",
+    );
+    expect(left?.n).toBe("0");
   });
 
   test("sweep_function_grants", async () => {
