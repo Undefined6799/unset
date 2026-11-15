@@ -16,6 +16,7 @@ import {
   createHandleVerifier,
   type Did,
   type EmailCache,
+  type IdentityNetwork,
   PRIVACY_VERSION,
   resolveHandle,
   TERMS_VERSION,
@@ -90,8 +91,14 @@ export type Services = {
   log: Logger;
 };
 
+/**
+ * What a test replaces: unmanaged dependencies only (rule TE-1). `main.ts` passes none, so production always builds
+ * the real ones. `network` stands in for PLC, DNS and handle domains, which no test may reach.
+ */
+export type StandIns = { readonly network?: IdentityNetwork };
+
 /** `web`'s two pools, the OAuth client over them, and what closes them; nothing here opens a connection. */
-async function composeOAuth(cfg: WebConfig, log: Logger) {
+async function composeOAuth(cfg: WebConfig, log: Logger, standIns: StandIns) {
   const connection = connectionOf(cfg);
   const pool = createPool({
     connection,
@@ -107,12 +114,14 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     commit: cfg.UNSET_COMMIT,
   });
   const plcUrl = new URL(cfg.PLC_URL);
-  const network = createIdentityNetwork({
-    guard,
-    plcUrl,
-    httpTimeoutMs: cfg.IDENTITY_HTTP_TIMEOUT_MS,
-    dnsTimeoutMs: cfg.IDENTITY_DNS_TIMEOUT_MS,
-  });
+  const network =
+    standIns.network ??
+    createIdentityNetwork({
+      guard,
+      plcUrl,
+      httpTimeoutMs: cfg.IDENTITY_HTTP_TIMEOUT_MS,
+      dnsTimeoutMs: cfg.IDENTITY_DNS_TIMEOUT_MS,
+    });
   const resolveDid = createDidResolver({
     network,
     plcUrl,
@@ -154,7 +163,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
 }
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
-export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services> {
+export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIns = {}): Promise<Services> {
   // P1.25c: the test-only pages load only when TEST_ROUTES is on, which the config allows only under test. First, so a
   // start that gets past the config has already passed this point (main.test.ts).
   const testRoutes = cfg.TEST_ROUTES ? (await import("./routes/test-routes.ts")).testRoutes : undefined;
@@ -169,7 +178,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
     pdsHost: cfg.PDS_HOSTNAME,
   };
-  const oauth = await composeOAuth(cfg, log);
+  const oauth = await composeOAuth(cfg, log, standIns);
   const page = (input: PageSpec): Response => pageResponse(deps, input);
   const nonces = createSingleUseStore({ log });
   // One object for the store and the sign-out count (P2.08c), so the two cannot read different idle limits.

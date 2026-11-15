@@ -44,7 +44,9 @@ identity network and DID resolver, and the one OAuth client over them, and wires
 itself (compose returns `server`, `boot` and the process's `log`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
-which writes the secrets to files; the runtime image copies each package the server imports, and
+which writes the secrets to files, and may pass `compose` a stand-in identity network (its third argument, P2.13s:
+PLC, DNS and handle domains only; `main.ts` passes none), as `tests/integration/http/signed-in.test.ts` does to walk
+a signed-in member through the composed server; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
 
 **Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
