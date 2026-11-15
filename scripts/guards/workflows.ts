@@ -236,7 +236,7 @@ function keepProblem(file: string, line: string, problem: string): boolean {
 }
 
 function isMergeWrite(line: string): boolean {
-  return /^\s*(?:contents|pull-requests):\s*write\s*$/.test(line);
+  return /(?:\bcontents|\bpull-requests)["']?\s*:\s*["']?write\b/.test(line);
 }
 
 /**
@@ -250,33 +250,50 @@ const BUMP_FILE = "publish-images.yml";
 const BUMP_JOB = "bump";
 const BUMP_RUN = "node scripts/ci/lock-bump-pr.ts";
 
+/**
+ * The bump job, line for line as it was reviewed, comments dropped. Rules read line by line kept missing ways to
+ * change what a job runs (see WAIVERS_SHA256 below), so the job is not judged by shape: it must be exactly these
+ * lines. That refuses an environment, a container, job defaults, another env or with key, another step and a quoted
+ * key alike. Any edit to the job, an action bump included, is therefore also an edit to this guard.
+ */
+const BUMP_JOB_LINES = [
+  "    needs: publish",
+  `    ${GATE_IF}`,
+  "    runs-on: ubuntu-24.04",
+  "    timeout-minutes: 5",
+  "    permissions:",
+  "      contents: write",
+  "      pull-requests: write",
+  "    steps:",
+  "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 ",
+  "        with:",
+  "          persist-credentials: false",
+  `          ${CHECKOUT_REF}`,
+  "      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 ",
+  "        with:",
+  "          node-version-file: .nvmrc",
+  "          package-manager-cache: false",
+  "      - env:",
+  "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
+  "          REPO: ${{ github.repository }}",
+  "          COMMIT: ${{ github.sha }}",
+  "          RUN_ATTEMPT: ${{ github.run_attempt }}",
+  "          PUBLISHED_LOCK: ${{ needs.publish.outputs.lock }}",
+  `        run: ${BUMP_RUN}`,
+];
+const BUMP_JOB_CHANGED = "bump job is not the reviewed job (update BUMP_JOB_LINES with the change)";
+
 function bumpJobProblems(lines: string[]): string[] {
   const writes = lines.filter(isMergeWrite);
   const body = jobs(lines).get(BUMP_JOB);
   if (body === undefined) return writes.map((line) => `write permission: ${line.trim()}`);
   const found: string[] = [];
   if (body.filter(isMergeWrite).length !== writes.length) found.push("a merge write outside the bump job");
-  const at = body.indexOf("    permissions:");
-  const end = body.findIndex((line, i) => i > at && line.trim() !== "" && indent(line) <= 4);
-  const scopes = at < 0 ? [] : body.slice(at + 1, end < 0 ? body.length : end).filter((line) => line.trim() !== "");
-  if (scopes.join("\n") !== "      contents: write\n      pull-requests: write")
-    found.push("bump job permissions are not exactly contents: write and pull-requests: write");
-  if (!body.includes("    needs: publish")) found.push("bump job does not need publish");
-  if (!body.some((line) => line.trim() === GATE_IF && indent(line) === 4))
-    found.push("bump job is not limited to a push to main");
-  const runs = runValues(body).map((value) => value.trim());
-  if (runs.length !== 1 || runs[0] !== BUMP_RUN) found.push("bump job runs something other than its script");
-  const uses = body.flatMap((line) => /\buses:\s*(actions\/[\w-]+)@/.exec(line)?.[1] ?? []);
-  if (uses.join() !== "actions/checkout,actions/setup-node") found.push("bump job uses another action");
-  const checkout = body.findIndex((line) => /uses:\s*actions\/checkout@/.test(line));
-  const next = body.findIndex((line, i) => i > checkout && /^ {6}- /.test(line));
-  const step = body.slice(checkout + 1, next < 0 ? body.length : next).map((line) => line.trim());
-  if (!step.includes("persist-credentials: false")) found.push("bump job checkout keeps credentials");
-  if (!step.includes(CHECKOUT_REF)) found.push("bump job checkout ref is not github.sha");
-  for (const line of body) {
-    if (/artifact|github\.event\.|github\.head_ref|refs\/pull\/|head\.sha/.test(line))
-      found.push(`bump job touches untrusted input: ${line.trim()}`);
-  }
+  const kept = body.filter((line) => line.trim() !== "");
+  if (kept.join("\n") !== BUMP_JOB_LINES.join("\n")) found.push(BUMP_JOB_CHANGED);
+  // Workflow-level defaults would set the shell the job's one command runs in.
+  if (lines.some((line) => /^["']?defaults["']?\s*:/.test(line)))
+    found.push("publish-images.yml sets workflow defaults");
   return found;
 }
 

@@ -142,7 +142,20 @@ jobs:
   # and pull-requests: write to push a `lock-bump/…` branch and open the pull request; it holds no id-token, no
   # packages scope and no environment, so it cannot sign or push an image, and the publish job gains nothing. It never
   # merges: the pull request is judged by lock.yml (P2.26j) and the required checks like any other, and main's ruleset
-  # still refuses a direct push. scripts/guards/workflows.ts pins this job's shape.
+  # still refuses a direct push. scripts/guards/workflows.ts pins this job line for line (BUMP_JOB_LINES): an edit
+  # here, an action bump included, edits the guard too.
+  #
+  # Operating it (GitHub docs read 2026-11-15; unverified until the first run on main):
+  # - The repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General,
+  #   Workflow permissions) must be on, or opening the pull request fails. It is off by default for a personal
+  #   repository (docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/
+  #   enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
+  # - The pull request's checks do not start by themselves. A pull request opened with GITHUB_TOKEN creates its
+  #   runs "in an approval-required state"; the owner starts them with "Approve workflows to run" in the pull
+  #   request's merge box (docs.github.com/en/actions/concepts/security/github_token). Should no banner show, closing
+  #   and reopening the pull request as a person starts them.
+  # - Each publish run opens its own pull request. Merge the newest and close older ones: a bump names every
+  #   first-party image, so the newest covers them, and lock.yml refuses an older one once a newer is merged.
   bump:
     needs: publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

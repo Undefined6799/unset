@@ -327,40 +327,59 @@ describe("signing jobs (P1.27s)", () => {
       expect(bump, from).toContain(from);
       return problems(publish.replace(bump, bump.replace(from, to)), "publish-images.yml");
     };
-    const cases: [string, string, string][] = [
-      ["    needs: publish\n", "", "bump job does not need publish"],
-      [`    ${GATE_IF}\n`, "    if: always()\n", "bump job is not limited to a push to main"],
-      [
-        "      pull-requests: write\n",
-        "",
-        "bump job permissions are not exactly contents: write and pull-requests: write",
-      ],
-      [
-        "      pull-requests: write\n",
-        "      pull-requests: write\n      actions: write\n",
-        "bump job permissions are not exactly contents: write and pull-requests: write",
-      ],
-      ["          persist-credentials: false\n", "", "bump job checkout keeps credentials"],
-      ["          ref: ${{ github.sha }}\n", "          ref: main\n", "bump job checkout ref is not github.sha"],
-      [
-        "        run: node scripts/ci/lock-bump-pr.ts\n",
-        "        run: node scripts/ci/lock-bump-pr.ts && git push\n",
-        "bump job runs something other than its script",
-      ],
-      [
-        "        run: node scripts/ci/lock-bump-pr.ts\n",
-        "        run: node scripts/ci/lock-bump-pr.ts\n      - run: gh pr merge\n",
-        "bump job runs something other than its script",
-      ],
+    const CHANGED = "bump job is not the reviewed job (update BUMP_JOB_LINES with the change)";
+    const run = "        run: node scripts/ci/lock-bump-pr.ts\n";
+    const checkout = "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n";
+    const cases: [string, string][] = [
+      ["    needs: publish\n", ""],
+      [`    ${GATE_IF}\n`, "    if: always()\n"],
+      ["      pull-requests: write\n", ""],
+      ["      pull-requests: write\n", "      pull-requests: write\n      actions: write\n"],
+      ["          persist-credentials: false\n", ""],
+      ["          ref: ${{ github.sha }}\n", "          ref: main\n"],
+      [run, "        run: node scripts/ci/lock-bump-pr.ts && git push\n"],
+      [run, `${run}      - run: gh pr merge\n`],
+      [run, `${run}        shell: bash -c "gh pr merge; {0}"\n`],
+      [run, `${run}        working-directory: /tmp\n`],
       [
         "          PUBLISHED_LOCK: ${{ needs.publish.outputs.lock }}\n",
         "          PUBLISHED_LOCK: ${{ github.event.head_commit.message }}\n",
-        "bump job touches untrusted input: PUBLISHED_LOCK: ${{ github.event.head_commit.message }}",
       ],
+      // What a rule read line by line would miss: a job environment (its secrets), a container, job defaults,
+      // another env or with key, another action, and the same keys quoted.
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    environment: signing\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    container: ghcr.io/evil/image\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    defaults:\n      run:\n        shell: sh\n"],
+      ["    runs-on: ubuntu-24.04\n", "    runs-on: ubuntu-24.04\n    env:\n      NODE_OPTIONS: --require ./x.js\n"],
+      ["      - env:\n", "      - env:\n          NODE_OPTIONS: --require ./x.js\n"],
+      ["          package-manager-cache: false\n", "          package-manager-cache: false\n          token: x\n"],
+      [
+        "          persist-credentials: false\n",
+        "          persist-credentials: false\n          repository: evil/x\n",
+      ],
+      [
+        "      - env:\n",
+        "      - uses: actions/upload-artifact@0123456789012345678901234567890123456789\n      - env:\n",
+      ],
+      ["      - env:\n", '      - "uses": evil/action@0123456789012345678901234567890123456789\n      - env:\n'],
+      [checkout, checkout.replace("uses:", '"uses":')],
+      [checkout, checkout.replace("actions/checkout", "evil/checkout")],
+      [run, run.replace("run:", '"run":')],
     ];
-    for (const [from, to, problem] of cases) expect(changed(from, to), problem).toContain(problem);
-    const upload = "      - uses: actions/upload-artifact@0123456789012345678901234567890123456789\n";
-    expect(changed("      - env:\n", `${upload}      - env:\n`)).toContain("bump job uses another action");
+    for (const [from, to] of cases) expect(changed(from, to), to).toContain(CHANGED);
+    expect(problems(`defaults:\n  run:\n    shell: sh\n${publish}`, "publish-images.yml")).toContain(
+      "publish-images.yml sets workflow defaults",
+    );
+    // A quoted write is still a write: refused on publish, and in any other workflow.
+    for (const quoted of [
+      '      "contents": write\n',
+      "      contents: 'write'\n",
+      '      "pull-requests": "write"\n',
+    ]) {
+      const moved = publish.replace("      packages: write\n", `      packages: write\n${quoted}`);
+      expect(problems(moved, "publish-images.yml"), quoted).toContain("a merge write outside the bump job");
+      expect(problems(moved, "ci.yml"), quoted).toContain(`write permission: ${quoted.trim()}`);
+    }
     // It cannot sign: the signing scopes and the signing environment's secrets stay with publish.
     expect(changed("      contents: write\n", "      contents: write\n      id-token: write\n")).toContain(
       "job bump: id-token: write outside a signing job",

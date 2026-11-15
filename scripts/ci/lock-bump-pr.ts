@@ -11,10 +11,15 @@
 // GitHub REST, version 2026-03-10 (docs.github.com/en/rest/git/trees, /git/commits, /git/refs, /pulls/pulls): a tree
 // made with `base_tree` and inline `content` entries, a commit with one parent, a ref `refs/heads/<branch>`, then
 // `POST /pulls`. All four need only the token's contents and pull-requests writes
-// (docs.github.com/en/rest/authentication/permissions-required-for-github-apps). A pull request opened with
-// GITHUB_TOKEN starts workflow runs that wait for approval on the pull request page
-// (docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows, pull_request). Read
-// 2026-11-15; unverified until the first run on main.
+// (docs.github.com/en/rest/authentication/permissions-required-for-github-apps). Opening the pull request also needs
+// the repository setting "Allow GitHub Actions to create and approve pull requests".
+//
+// The pull request's checks do not start by themselves. For a pull request a workflow creates with GITHUB_TOKEN,
+// `pull_request` events of type opened, synchronize or reopened "create workflow runs that require approval. A user
+// with write access to the repository can approve these runs from the pull request page"
+// (docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows, pull_request;
+// docs.github.com/en/actions/concepts/security/github_token: "Approve workflows to run" in the merge box). Other
+// GITHUB_TOKEN events create no runs at all. Read 2026-11-15; unverified until the first run on main.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { bumpedFiles, COMPOSE_PATH, LOCK_PATH } from "./lock-write.ts";
