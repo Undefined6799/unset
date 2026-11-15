@@ -147,9 +147,21 @@ export function createServer(options: ServerOptions) {
   });
 
   const errorGroup = (path: string) => options.errorGroup ?? groupForPath(path);
+  // Every error response the kit builds is made by `fail`, so that is where its code is kept for the request log: a
+  // 503 from `db.busy` and one from `http.deadline` must not look the same in production (P1.04v).
+  const failedWith = new WeakMap<Response, ErrorCode>();
   /** The error response for `code`; `reqId` is passed where the code can be `internal.error`. */
-  const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>, reqId?: string) =>
-    kitErrorResponse(code, group, headers, options.errorPage && hookedPage(options.errorPage, log, reqId), reqId);
+  const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>, reqId?: string) => {
+    const response = kitErrorResponse(
+      code,
+      group,
+      headers,
+      options.errorPage && hookedPage(options.errorPage, log, reqId),
+      reqId,
+    );
+    failedWith.set(response, code);
+    return response;
+  };
 
   /** Step 2: a missing host is 400, one not in HTTP_ALLOWED_HOSTS is 421. `/health` skips it (probes). */
   function hostProblem(request: Request, rawPath: string): ErrorCode | undefined {
@@ -305,6 +317,7 @@ export function createServer(options: ServerOptions) {
     const matched = checked instanceof Response ? undefined : checked;
     const group = matched ? matched.route.group : errorGroup(new URL(request.url).pathname);
     const answered = matched ? await run(matched, request, reqId, peer) : (checked as Response);
+    const failedCode = failedWith.get(answered);
     const response = secured(answered, group, matched?.route.path);
     if (health.state === "draining") {
       response.headers.set("connection", "close");
@@ -313,6 +326,7 @@ export function createServer(options: ServerOptions) {
       ...(matched ? { route: matched.route.path } : {}),
       ...(LOGGED_METHODS.has(request.method) ? { method: request.method as LogFields["method"] & string } : {}),
       status: response.status,
+      ...(failedCode === undefined ? {} : { code: failedCode }),
       ms: Math.round(now() - started),
       reqId,
     });
