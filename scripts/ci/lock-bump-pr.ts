@@ -1,0 +1,161 @@
+// Opens the lock-bump pull request after a publish run (P2.26m). publish-images.yml's `bump` job runs this file, and
+// nothing else, from the checkout of the commit that was just published. The job holds `contents: write` and
+// `pull-requests: write` and no signing right; the signing job holds neither of those two.
+//
+// Input: PUBLISHED_LOCK, the lock the publish job wrote and verified in the same run, as a job output. lock-write.ts
+// refuses anything that is not that run's shape and writes the two files; this file commits them on a new branch off
+// the published commit and opens the pull request. It never merges and never touches main. The pull request is
+// judged like any other bump: lock.yml (P2.26j) verifies every entry's signature and provenance and refuses a move
+// back, and pr-shape reads the title, commit and body written here.
+//
+// GitHub REST, version 2026-03-10 (docs.github.com/en/rest/git/trees, /git/commits, /git/refs, /pulls/pulls): a tree
+// made with `base_tree` and inline `content` entries, a commit with one parent, a ref `refs/heads/<branch>`, then
+// `POST /pulls`. All four need only the token's contents and pull-requests writes
+// (docs.github.com/en/rest/authentication/permissions-required-for-github-apps). A pull request opened with
+// GITHUB_TOKEN starts workflow runs that wait for approval on the pull request page
+// (docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows, pull_request). Read
+// 2026-11-15; unverified until the first run on main.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { bumpedFiles, COMPOSE_PATH, LOCK_PATH } from "./lock-write.ts";
+
+/** The step every bump pull request belongs to: P2.26w pinned the first published images by hand (#1300). */
+export const BUMP_STEP = "P2.26w";
+const API = "https://api.github.com";
+const API_VERSION = "2026-03-10";
+const COMMIT = /^[0-9a-f]{40}$/;
+const REPO = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
+const ATTEMPT = /^[1-9][0-9]{0,3}$/;
+
+export type BumpEnv = { REPO?: string; COMMIT?: string; RUN_ATTEMPT?: string; PUBLISHED_LOCK?: string };
+export type BumpClient = {
+  treeOf(commit: string): Promise<string>;
+  createTree(baseTree: string, files: readonly { path: string; content: string }[]): Promise<string>;
+  createCommit(message: string, tree: string, parent: string): Promise<string>;
+  createBranch(name: string, sha: string): Promise<void>;
+  openPull(pull: { title: string; head: string; body: string }): Promise<number>;
+};
+export type BumpDeps = {
+  env: BumpEnv;
+  github: BumpClient;
+  readText: (path: string) => string;
+  log: (line: string) => void;
+};
+
+const ANSWERS: Readonly<Record<string, (commit: string) => string>> = {
+  Step: (commit) =>
+    `${BUMP_STEP}, repeated by publish-images.yml for each publish run. This one pins the images built from ${commit}.`,
+  What: () =>
+    `\`${LOCK_PATH}\` and \`${COMPOSE_PATH}\` name the digests the publish run pushed, signed and verified. Written by \`scripts/ci/lock-write.ts\`; no other file changes.`,
+  Why: () => "The stack runs only locked digests, so a published image is used only once the lock names it.",
+  "How to test": () =>
+    "The `lock` check verifies every entry's signature and provenance and refuses a move back to an older commit.",
+  "Needs an ADR?": () => "No.",
+};
+
+/** The pull request body: every heading of the template, answered or n/a, so pr-shape reads it like any other. */
+export function bumpBody(template: string, commit: string): string {
+  const headings = [...template.replaceAll("\r", "").matchAll(/^## (.+?)\s*$/gm)].map((match) => match[1] as string);
+  const sections = headings.map((heading) => `## ${heading}\n${ANSWERS[heading]?.(commit) ?? "n/a"}\n`);
+  return [
+    `Opened by \`publish-images.yml\` after it published ${commit}.\n`,
+    ...sections,
+    "AI notes: none needed\n",
+  ].join("\n");
+}
+
+export const bumpTitle = (commit: string): string => `${BUMP_STEP} Pin the images published from ${commit.slice(0, 7)}`;
+
+/** Exit code of one run: 0 when a pull request was opened or nothing changed, 1 on any refusal or error. */
+export async function runBump({ env, github, readText, log }: BumpDeps): Promise<number> {
+  const { REPO: repo = "", COMMIT: commit = "", RUN_ATTEMPT: attempt = "", PUBLISHED_LOCK: published = "" } = env;
+  if (!REPO.test(repo) || !COMMIT.test(commit) || !ATTEMPT.test(attempt) || published === "") {
+    log("lock-bump-pr: REPO, COMMIT, RUN_ATTEMPT or PUBLISHED_LOCK is missing or malformed");
+    return 1;
+  }
+  try {
+    const lock = readText(LOCK_PATH);
+    const compose = readText(COMPOSE_PATH);
+    const next = bumpedFiles(published, lock, compose, commit);
+    if (next.lock === lock && next.compose === compose) {
+      log("lock-bump-pr: the lock already names these images; no pull request");
+      return 0;
+    }
+    const title = bumpTitle(commit);
+    const tree = await github.createTree(await github.treeOf(commit), [
+      { path: LOCK_PATH, content: next.lock },
+      { path: COMPOSE_PATH, content: next.compose },
+    ]);
+    const message = `${title}\n\nWritten by scripts/ci/lock-write.ts from the lock publish-images.yml\nverified for ${commit}.\n`;
+    const head = `lock-bump/${commit.slice(0, 12)}-${attempt}`;
+    await github.createBranch(head, await github.createCommit(message, tree, commit));
+    const number = await github.openPull({
+      title,
+      head,
+      body: bumpBody(readText(".github/pull_request_template.md"), commit),
+    });
+    log(`lock-bump-pr: opened #${number} from ${head}`);
+    return 0;
+  } catch (error) {
+    log(`lock-bump-pr: ${error instanceof Error ? error.message : "failed"}`);
+    return 1;
+  }
+}
+
+type Json = Record<string, unknown>;
+
+/** One POST or GET to api.github.com under this repository; the named string field of the JSON answer. */
+async function call(token: string, path: string, field: string, body?: Json): Promise<string | number> {
+  const response = await fetch(`${API}${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "unset-lock-bump",
+      "X-GitHub-Api-Version": API_VERSION,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`github ${response.status} ${path}`);
+  const answer = (await response.json()) as Json;
+  const value = field.split(".").reduce<unknown>((at, key) => (at as Json | undefined)?.[key], answer);
+  if (typeof value !== "string" && typeof value !== "number") throw new Error(`github answer lacks ${field}: ${path}`);
+  return value;
+}
+
+/** The GitHub client; `repo` is owner/name, already checked. */
+export function githubClient(token: string, repo: string): BumpClient {
+  const root = `/repos/${repo}`;
+  return {
+    treeOf: async (commit) => String(await call(token, `${root}/git/commits/${commit}`, "tree.sha")),
+    createTree: async (baseTree, files) => {
+      const tree = files.map(({ path, content }) => ({ path, mode: "100644", type: "blob", content }));
+      return String(await call(token, `${root}/git/trees`, "sha", { base_tree: baseTree, tree }));
+    },
+    createCommit: async (message, tree, parent) =>
+      String(await call(token, `${root}/git/commits`, "sha", { message, tree, parents: [parent] })),
+    createBranch: async (name, sha) => {
+      await call(token, `${root}/git/refs`, "ref", { ref: `refs/heads/${name}`, sha });
+    },
+    openPull: async ({ title, head, body }) =>
+      Number(await call(token, `${root}/pulls`, "number", { title, head, base: "main", body })),
+  };
+}
+
+if (import.meta.main) {
+  const token = process.env.GH_TOKEN ?? "";
+  const repo = process.env.REPO ?? "";
+  if (token === "" || !REPO.test(repo)) {
+    console.error("lock-bump-pr: GH_TOKEN or REPO is missing");
+    process.exit(1);
+  }
+  const root = join(import.meta.dirname, "..", "..");
+  process.exitCode = await runBump({
+    env: process.env,
+    github: githubClient(token, repo),
+    readText: (path) => readFileSync(join(root, path), "utf8"),
+    log: console.error,
+  });
+}

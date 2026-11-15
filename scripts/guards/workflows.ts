@@ -117,7 +117,7 @@ function lineProblems(line: string): string[] {
   if (/_IMAGE=/.test(line) && /\bGITHUB_ENV\b/.test(line)) found.push("image variable written at run time");
   if (/\bpull_request_target\b/.test(line) || /\bworkflow_run\b/.test(line)) found.push("banned trigger");
   // id-token and packages are judged per job by signingProblems. contents and pull-requests writes are
-  // judged by docsAutoMergeProblems, and only docs-auto-merge.yml may hold them (P0.07e).
+  // judged by docsAutoMergeProblems: only docs-auto-merge.yml (P0.07e) and publish-images.yml's bump job (P2.26m).
   found.push(...otherWriteProblems(line));
   return found;
 }
@@ -201,7 +201,9 @@ function signingProblems(file: string, lines: string[]): string[] {
   if (file !== "publish-images.yml") return found;
   if (lines.some((l) => /\bpull_request\b/.test(l))) found.push("publish-images.yml has a pull_request trigger");
   if (lines.some((l) => CACHE.test(l))) found.push("publish-images.yml uses a cache");
-  if ([...all.keys()].join() !== "publish") found.push("publish-images.yml has a job other than publish");
+  // P2.26m: `bump` may follow `publish`; bumpJobProblems holds its shape.
+  if (!["publish", `publish,${BUMP_JOB}`].includes([...all.keys()].join()))
+    found.push("publish-images.yml has a job other than publish and bump");
   return found;
 }
 
@@ -237,9 +239,51 @@ function isMergeWrite(line: string): boolean {
   return /^\s*(?:contents|pull-requests):\s*write\s*$/.test(line);
 }
 
-/** contents: write and pull-requests: write exist only on the auto-merge job, in the shape below. */
+/**
+ * The one other job that may hold contents: write and pull-requests: write (P2.26m): `bump` in publish-images.yml,
+ * which opens the lock-bump pull request after `publish` signed. It needs `publish`, runs only for a push to main,
+ * holds exactly those two scopes, checks out the pushed commit without keeping credentials, uses no other action than
+ * setup-node, reads nothing a pull request controls and runs one script. id-token, packages and caches are already
+ * refused there by signingProblems; a secret other than GITHUB_TOKEN by the environment rule.
+ */
+const BUMP_FILE = "publish-images.yml";
+const BUMP_JOB = "bump";
+const BUMP_RUN = "node scripts/ci/lock-bump-pr.ts";
+
+function bumpJobProblems(lines: string[]): string[] {
+  const writes = lines.filter(isMergeWrite);
+  const body = jobs(lines).get(BUMP_JOB);
+  if (body === undefined) return writes.map((line) => `write permission: ${line.trim()}`);
+  const found: string[] = [];
+  if (body.filter(isMergeWrite).length !== writes.length) found.push("a merge write outside the bump job");
+  const at = body.indexOf("    permissions:");
+  const end = body.findIndex((line, i) => i > at && line.trim() !== "" && indent(line) <= 4);
+  const scopes = at < 0 ? [] : body.slice(at + 1, end < 0 ? body.length : end).filter((line) => line.trim() !== "");
+  if (scopes.join("\n") !== "      contents: write\n      pull-requests: write")
+    found.push("bump job permissions are not exactly contents: write and pull-requests: write");
+  if (!body.includes("    needs: publish")) found.push("bump job does not need publish");
+  if (!body.some((line) => line.trim() === GATE_IF && indent(line) === 4))
+    found.push("bump job is not limited to a push to main");
+  const runs = runValues(body).map((value) => value.trim());
+  if (runs.length !== 1 || runs[0] !== BUMP_RUN) found.push("bump job runs something other than its script");
+  const uses = body.flatMap((line) => /\buses:\s*(actions\/[\w-]+)@/.exec(line)?.[1] ?? []);
+  if (uses.join() !== "actions/checkout,actions/setup-node") found.push("bump job uses another action");
+  const checkout = body.findIndex((line) => /uses:\s*actions\/checkout@/.test(line));
+  const next = body.findIndex((line, i) => i > checkout && /^ {6}- /.test(line));
+  const step = body.slice(checkout + 1, next < 0 ? body.length : next).map((line) => line.trim());
+  if (!step.includes("persist-credentials: false")) found.push("bump job checkout keeps credentials");
+  if (!step.includes(CHECKOUT_REF)) found.push("bump job checkout ref is not github.sha");
+  for (const line of body) {
+    if (/artifact|github\.event\.|github\.head_ref|refs\/pull\/|head\.sha/.test(line))
+      found.push(`bump job touches untrusted input: ${line.trim()}`);
+  }
+  return found;
+}
+
+/** contents: write and pull-requests: write exist only on the auto-merge job, in the shape below, and on `bump`. */
 function docsAutoMergeProblems(file: string, lines: string[]): string[] {
   const writes = lines.filter(isMergeWrite);
+  if (file === BUMP_FILE) return bumpJobProblems(lines);
   if (file !== AUTO_MERGE_FILE) return writes.map((line) => `write permission: ${line.trim()}`);
   const found: string[] = [];
   const contents = writes.filter((line) => line.trim() === "contents: write").length;
