@@ -30,10 +30,20 @@ describe(".github/trivyignore.yaml", () => {
     expect(trivyIgnoreProblems("vulns:\n  - id: X\n", TODAY)).toEqual(["unknown section vulns"]);
   });
 
+  test("trivyignore_shape_check_leaves_expiry_to_the_scan", () => {
+    const entry = (fields: string) => `vulnerabilities:\n  - id: CVE-2026-0001\n${fields}`;
+    const shape = (fields: string) => trivyIgnoreProblems(entry(fields), TODAY, MAX_DAYS, "shape");
+    expect(shape("    statement: reason\n    expired_at: 2026-10-05\n")).toEqual([]);
+    expect(shape("    expired_at: 2026-10-05\n")).toEqual(["vulnerabilities CVE-2026-0001: no statement (the reason)"]);
+    expect(shape("    statement: reason\n    expired_at: 2027-02-01\n")).toEqual([
+      `vulnerabilities CVE-2026-0001: expired_at 2027-02-01 is more than ${MAX_DAYS} days ahead`,
+    ]);
+  });
+
   test("trivyignore_file_valid", () => {
-    expect(trivyIgnoreProblems(readFileSync(join(ROOT, ".github", "trivyignore.yaml"), "utf8"), new Date())).toEqual(
-      [],
-    );
+    // "shape": a date that has passed is the scan's and the daily waivers job's to report, not this required check's.
+    const text = readFileSync(join(ROOT, ".github", "trivyignore.yaml"), "utf8");
+    expect(trivyIgnoreProblems(text, new Date(), MAX_DAYS, "shape")).toEqual([]);
   });
 });
 
@@ -112,7 +122,7 @@ describe(".github/trivyignore.pds.yaml", () => {
       `vulnerabilities CVE-2026-0001: expired_at 2026-11-16 is more than ${PDS_MAX_DAYS} days ahead`,
     ]);
     expect(PDS_MAX_DAYS).toBeLessThan(MAX_DAYS);
-    expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
+    expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS, "shape")).toEqual([]);
     const entries = pdsEntries();
     expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual([
       ...KEPT_ENTRIES,
