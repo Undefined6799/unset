@@ -472,3 +472,27 @@ test("logout.remaining_sessions_match_the_store", async () => {
     expect(judged).toEqual({ edge, counted: live ? 1 : 0, accepted: live });
   }
 });
+
+test("logout.replacing_sign_in_keeps_other_browsers", async () => {
+  // P2.03t (migration 0025, ADR 0049): deleting a token set now deletes the DID's sessions. A sign-in replaces the
+  // set: the library revokes and deletes the old one, then stores the new one (@atproto/oauth-client 0.8.10
+  // dist/oauth-client.js `callback`). sign-in-lock.ts drops that delete when a store follows, so the row is updated
+  // in place and the member's other browsers stay signed in. This fails if a delete ever reaches the table there.
+  const { createSignInLock } = await import(join(HTTP, "sign-in-lock.ts"));
+  const signIn = createSignInLock({ store: tokenSets, lock: createRequestLock(lockPool) });
+  const owner = newDid();
+  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  const other = await open(owner);
+  await signIn.during(async () => {
+    await signIn.tokenSets.del(owner);
+    await signIn.tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "B" } });
+  });
+  expect(await sessionsOf(owner)).toBe(1);
+  expect((await get(`/${owner}`, other.cookieValue)).status).toBe(200);
+  // A sign-in whose new set was never stored leaves a real delete, and that ends every browser, as it must.
+  await signIn.during(async () => {
+    await signIn.tokenSets.del(owner);
+  });
+  expect(await hasToken(owner)).toBe(false);
+  expect(await sessionsOf(owner)).toBe(0);
+});
