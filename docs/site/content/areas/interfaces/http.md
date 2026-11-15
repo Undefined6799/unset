@@ -11,7 +11,7 @@ Route table: [Endpoints](/endpoints/).
 
 Public pages, sign-in, the signed-in account page, and the adapters those routes call. `interfaces/http/compose.ts` is the only file here that builds adapters. It wires the `web` Postgres pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account store, then registers the route modules below. `main.ts` does not import `infrastructure/`.
 
-The kit adds `GET /health` in `shared/http/server.ts`. The body is status, service and commit (`shared/http/health.ts`). `compose.ts` registers one readiness check, a `SELECT 1` through the `web` pool, so `/health` answers 503 while Postgres does not answer. `main.ts` installs `fatal.ts` after compose: an unhandled rejection is logged by class name and the server drains; an uncaught exception is logged and the process exits 1.
+The kit adds `GET /health` in `shared/http/server.ts`. The body is status, service and commit (`shared/http/health.ts`). `compose.ts` registers one readiness check that runs through `ping` (`infrastructure/postgres/pool.ts`), which ends a connection that has not answered by 900 ms, so `/health` is 503 while Postgres does not answer. `main.ts` installs `fatal.ts` after compose: an unhandled rejection is logged by class name and the server drains; an uncaught exception is logged and the process exits 1.
 
 | Module | What it holds |
 | --- | --- |
