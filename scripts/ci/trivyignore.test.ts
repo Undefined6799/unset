@@ -30,10 +30,20 @@ describe(".github/trivyignore.yaml", () => {
     expect(trivyIgnoreProblems("vulns:\n  - id: X\n", TODAY)).toEqual(["unknown section vulns"]);
   });
 
+  test("trivyignore_shape_check_leaves_expiry_to_the_scan", () => {
+    const entry = (fields: string) => `vulnerabilities:\n  - id: CVE-2026-0001\n${fields}`;
+    const shape = (fields: string) => trivyIgnoreProblems(entry(fields), TODAY, MAX_DAYS, "shape");
+    expect(shape("    statement: reason\n    expired_at: 2026-10-05\n")).toEqual([]);
+    expect(shape("    expired_at: 2026-10-05\n")).toEqual(["vulnerabilities CVE-2026-0001: no statement (the reason)"]);
+    expect(shape("    statement: reason\n    expired_at: 2027-02-01\n")).toEqual([
+      `vulnerabilities CVE-2026-0001: expired_at 2027-02-01 is more than ${MAX_DAYS} days ahead`,
+    ]);
+  });
+
   test("trivyignore_file_valid", () => {
-    expect(trivyIgnoreProblems(readFileSync(join(ROOT, ".github", "trivyignore.yaml"), "utf8"), new Date())).toEqual(
-      [],
-    );
+    // "shape": a date that has passed is the scan's and the daily waivers job's to report, not this required check's.
+    const text = readFileSync(join(ROOT, ".github", "trivyignore.yaml"), "utf8");
+    expect(trivyIgnoreProblems(text, new Date(), MAX_DAYS, "shape")).toEqual([]);
   });
 });
 
@@ -43,7 +53,7 @@ const SHARED_FILE = join(ROOT, ".github", "trivyignore.yaml");
  * re-stated from the 0.4.5037 list for 0.4.5049's packages, four new; each scoped to one path and one PURL. P1.38l: the
  * 0.4.5037 (3a8feb34) entries ended with the re-pin, so these and KEPT_ENTRIES are the whole file. */
 /** P1.38l: the five 0.4.5037 nodemailer 6.10.1 entries that 0.4.5049 still needs, kept unchanged by Alex's line of
- * 2026-10-28T22:38:42Z. */
+ * 2026-10-28T22:38:42Z, and to 2026-11-27 by P1.38n (no upstream fix on 2026-11-14). */
 const KEPT_STATEMENT = [
   "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4:",
   "newest upstream release, local stack only, accepted by Alex 2026-10-14T20:34:16Z,",
@@ -60,7 +70,7 @@ const KEPT_ENTRIES = [
   paths: ["app/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/package.json"],
   purls: ["pkg:npm/nodemailer@6.10.1"],
   statement: KEPT_STATEMENT,
-  expired_at: "2026-11-13",
+  expired_at: "2026-11-27",
 }));
 const REPIN_STATEMENT = [
   "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf:",
@@ -112,7 +122,7 @@ describe(".github/trivyignore.pds.yaml", () => {
       `vulnerabilities CVE-2026-0001: expired_at 2026-11-16 is more than ${PDS_MAX_DAYS} days ahead`,
     ]);
     expect(PDS_MAX_DAYS).toBeLessThan(MAX_DAYS);
-    expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
+    expect(trivyIgnoreProblems(readFileSync(PDS_FILE, "utf8"), new Date(), PDS_MAX_DAYS, "shape")).toEqual([]);
     const entries = pdsEntries();
     expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual([
       ...KEPT_ENTRIES,
