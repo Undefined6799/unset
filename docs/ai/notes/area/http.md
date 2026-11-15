@@ -167,7 +167,8 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
 - `health.ts`: `/health`, which reveals only status and commit. `web` registers one readiness check, a `SELECT 1`
-  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer.
+  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer. `ping`
+  (infrastructure/postgres/pool.ts) ends a connection that has not answered by 900 ms (P1.04x).
 - `interfaces/http/fatal.ts` (P1.04w): `main.ts` installs it after compose. An unhandled rejection is logged through
   the scrubbing logger and the server drains as on SIGTERM; an uncaught exception is logged and exits 1. Neither
   prints the raw error, so a boot that cannot reach the database is one `error` line with `code: db.busy`.

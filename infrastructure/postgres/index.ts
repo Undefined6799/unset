@@ -34,6 +34,7 @@ export {
   type Pool,
   type PoolClient,
   type PoolOptions,
+  ping,
   withClient,
 } from "./pool.ts";
 export { checkExit, type KidCounts, kidCounts, rewrapAll } from "./rewrapAll.ts";

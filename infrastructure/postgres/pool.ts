@@ -156,6 +156,15 @@ export function readUntilAbort<T>(client: PoolClient, signal: AbortSignal | unde
 }
 
 /**
+ * Resolves when Postgres answers one `SELECT 1` before `signal` aborts (the readiness probe, P1.04x). The signal bounds
+ * both the wait for a client and the query, so a connection that has gone silent is ended at the deadline instead
+ * of holding its pool slot until the role's statement_timeout.
+ */
+export async function ping(pool: Pool, signal: AbortSignal): Promise<void> {
+  await withClient(pool, signal, (db) => readUntilAbort(db, signal, db.query("SELECT 1")));
+}
+
+/**
  * Boot check, after every pool of the process exists: the pools of all replicas alive during a rollout must fit the
  * role's `rolconnlimit`, so a three-replica `docker-rollout` never meets connection refusals mid-deploy. -1 is no limit.
  */
