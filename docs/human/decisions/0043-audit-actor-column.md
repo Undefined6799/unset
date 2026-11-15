@@ -1,7 +1,9 @@
 # 0043 — The audit side row names its actor in a DID column
 
-Status: Proposed (awaiting Alex). Alex approved writing this record and its migration on 2026-11-15 20:52:18Z
-("do what is recomended", on the decision "Audit actor column, added now with a new ADR"). That is not acceptance.
+Status: Accepted by Alex, 2026-11-15 23:25:58Z, against 90ac137 ("accept ADR 0043 at 90ac137", typed in reply to
+the coordinator's project-chat post, on the head it had verified). From here the record changes only to be marked
+superseded. Alex approved writing this record and its migration on 2026-11-15 20:52:18Z ("do what is recomended",
+on the decision "Audit actor column, added now with a new ADR").
 
 ## Context
 Each audit event is two rows (migrations 0008 to 0010; plan §5.7; admin design §7.1). `audit.chain` holds no
