@@ -371,9 +371,11 @@ export function classifyGrantChanges(input: GrantInput): GrantFinding[] {
     isTrustedFunction: globMatcher(input.trustedFunctions),
     baseMatrix: readMatrix(input.base.grantMatrix),
   };
+  const trustedObjects = new Set<string>();
   const statementFindings = added.flatMap(({ path, statements }) =>
     statements.map((stmt): GrantFinding => {
       const verdict = classifyStatement(stmt, { ...context, legalHoldFile: /legal[-_]hold/i.test(path) });
+      if (verdict.kind === "trusted") for (const object of objectsOf([stmt])) trustedObjects.add(object);
       return { path, line: stmt.line, ...verdict, statement: stmt.text };
     }),
   );
@@ -382,6 +384,6 @@ export function classifyGrantChanges(input: GrantInput): GrantFinding[] {
     ...unreadable,
     ...statementFindings,
     ...classifyMatrix(jsonFile(input, "grantMatrix", MATRIX_PATH), created),
-    ...classifyRegistry(jsonFile(input, "erasureRegistry", REGISTRY_PATH), created),
+    ...classifyRegistry(jsonFile(input, "erasureRegistry", REGISTRY_PATH), created, trustedObjects),
   ];
 }

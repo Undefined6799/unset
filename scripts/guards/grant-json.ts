@@ -1,6 +1,7 @@
 // P0.09e: rule 6 of the grant classifier (grant-parse.ts): grant-matrix.json and erasure-registry.json are parsed
-// on both sides of the PR, and each changed entry is `trusted` unless the PR creates its object. A file that does
-// not parse, or holds a key this reader does not know, is `trusted`, `unclassified` (fail closed).
+// on both sides of the PR, and each changed entry is `trusted` unless the PR creates its object (a registry row
+// takes the verdict of the statement that creates its column). A file that does not parse, or holds a key this
+// reader does not know, is `trusted`, `unclassified` (fail closed).
 
 import { colKey, key, lineAt, type QName } from "./grant-sql.ts";
 
@@ -95,14 +96,27 @@ export function classifyMatrix(file: JsonFile, created: ReadonlySet<string>): Fi
   return [...sections, ...tables];
 }
 
-export function classifyRegistry(file: JsonFile, created: ReadonlySet<string>): Finding[] {
+/**
+ * A row for a column this PR creates follows the statement that creates it: `trustedColumns` holds the columns a
+ * trusted statement adds (an ADD COLUMN on an existing table with no column-level grants), and their rows ride
+ * with that migration. The catalog test refuses a DID column without its row, so the two cannot be split.
+ */
+export function classifyRegistry(
+  file: JsonFile,
+  created: ReadonlySet<string>,
+  trustedColumns: ReadonlySet<string>,
+): Finding[] {
   if (file.base === file.head) return [];
   const [base, head] = [readRegistry(file.base), readRegistry(file.head)];
   if (base === null || head === null) return [jsonFinding(file, "erasure-registry.json", UNCLASSIFIED)];
   return changedKeys(base, head).map((row) => {
     if (Object.hasOwn(base, row)) return jsonFinding(file, row, { kind: "trusted", reason: "registry_row_changed" });
     const [schema = "", table = "", column = ""] = row.split(".");
-    const isNew = created.has(colKey({ schema, name: table }, column));
-    return jsonFinding(file, row, isNew ? { kind: "feature", reason: "registry_row_created_column" } : UNCLASSIFIED);
+    const columnKey = colKey({ schema, name: table }, column);
+    if (!created.has(columnKey)) return jsonFinding(file, row, UNCLASSIFIED);
+    const verdict: Verdict = trustedColumns.has(columnKey)
+      ? { kind: "trusted", reason: "registry_row_trusted_column" }
+      : { kind: "feature", reason: "registry_row_created_column" };
+    return jsonFinding(file, row, verdict);
   });
 }
