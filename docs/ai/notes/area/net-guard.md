@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[config]]", "[[node-dns-lookup-hides-nxdomain]]"]
 replaced_by: null
 tags: [area, net-guard]
-checked: 2026-10-28
+checked: 2026-11-15
 ---
 # net-guard
 
@@ -25,6 +25,8 @@ sends all such traffic through this folder.
   rebinding. P1.29t runs those checks inside the built web runtime image (`net_guard_resolve_pin_in_image`).
 - `src/dns.ts`: TXT lookups on c-ares, bounded by our own timer.
 - `src/policies.ts`: named egress policies; every request names one. There is no model-provider policy in v1.
+  `objectStore(origin)` (P2.18k) is the private object store by the one `OBJECT_STORE_URL` origin a composition root
+  passes in.
   `plc` is plc.directory alone. `localPlc` (P1.34y) is dead: we host no PLC (ADRs 0022, 0023), P1.34z was
   dropped, and #1041 removes it. Since the P1.10 cleanup the index no longer exports it, nor `RANGES` or
   `normaliseHost`; the package's own tests import them from their modules.

@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { atproto, localPlc, type Policy, plc } from "./policies.ts";
+import { atproto, localPlc, objectStore, type Policy, plc } from "./policies.ts";
 import { fakeResolver, type Handler, httpServer, httpsServer, loopbackDial, testCertificate } from "./remote.fake.ts";
 import { createNetGuardWith, type EgressEvent } from "./request.ts";
 import { NetGuardError } from "./resolve.ts";
@@ -199,6 +199,28 @@ describe("guardedRequest", () => {
     expect(await codeOf(bad.guard.request(objects, { url: "http://objects:9000/" }))).toBe("egress.host_not_allowed");
     expect(await codeOf(bad.guard.request(objects, { url: "http://other:8333/" }))).toBe("egress.host_not_allowed");
     expect(await codeOf(bad.guard.request(plc, { url: "http://plc.directory/" }))).toBe("egress.scheme");
+  });
+
+  test("object_store_policy_exact_origin", async () => {
+    // P2.18k: the object store by the one origin the composition root passes in (OBJECT_STORE_URL), nothing wider.
+    handler = (_req, res) => res.end("ok");
+    const policy = objectStore("http://objects:8333");
+    expect(policy).toEqual({ name: "object-store", kind: "internal", origins: ["http://objects:8333"] });
+    const ok = guardFor({ objects: ["172.20.0.9"] }, servers.http.port);
+    expect((await ok.guard.request(policy, { url: "http://objects:8333/unset-private/drafts/x" })).status).toBe(200);
+    const other = guardFor({ objects: ["172.20.0.9"], db: ["172.20.0.9"] }, servers.http.port);
+    for (const url of ["http://objects:8334/", "http://db:8333/", "https://objects:8333/", "http://172.20.0.9:8333/"]) {
+      expect(await codeOf(other.guard.request(policy, { url })), url).toBe("egress.host_not_allowed");
+    }
+    expect(() => objectStore("http://objects:8333/bucket")).toThrow(TypeError);
+    expect(() => objectStore("")).toThrow(TypeError);
+  });
+
+  test("object_store_policy_private_only", async () => {
+    const bad = guardFor({ objects: [PUBLIC] }, servers.http.port);
+    expect(await codeOf(bad.guard.request(objectStore("http://objects:8333"), { url: "http://objects:8333/" }))).toBe(
+      "egress.private_address",
+    );
   });
 
   test("local_plc_is_one_exact_private_origin", async () => {
