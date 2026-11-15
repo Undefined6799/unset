@@ -218,7 +218,7 @@ const visible = (html: string) => html.replace(/<[^>]*>/g, " ");
 describe("POST /welcome/age", () => {
   test("age.valid_adult", async () => {
     const { send, calls, lines, row } = setup();
-    const response = await send("/welcome/age", post("day=1&month=1&year=2000"));
+    const response = await send("/welcome/age", post("day=1&month=1&year=2000&confirmed=yes"));
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/welcome/terms");
     expect(row()).toMatchObject({ onboarding: "terms", ageConfirmedAt: "confirmed" });
@@ -233,12 +233,34 @@ describe("POST /welcome/age", () => {
   });
 
   test("age.exact_birthday", async () => {
-    const allowed = await setup().send("/welcome/age", post("day=17&month=10&year=2010"));
+    const allowed = await setup().send("/welcome/age", post("day=17&month=10&year=2010&confirmed=yes"));
     expect(allowed.headers.get("location")).toBe("/welcome/terms");
     const early = setup();
-    const refused = await early.send("/welcome/age", post("day=18&month=10&year=2010"));
+    // NOW is 12:00 UTC on the 17th, already the 18th at UTC+14, so a birthday on the 18th has arrived somewhere.
+    const zoned = await setup().send("/welcome/age", post("day=18&month=10&year=2010&confirmed=yes"));
+    expect(zoned.headers.get("location")).toBe("/welcome/terms");
+    const refused = await early.send("/welcome/age", post("day=19&month=10&year=2010&confirmed=yes"));
     expect(refused.headers.get("location")).toBe("/welcome/blocked");
     expect(early.calls.map((call) => call.op)).toEqual(["block"]);
+  });
+
+  test("age.first_post_shows_the_date_back_and_decides_nothing", async () => {
+    // P2.12e: an adult's date and a child's date get the same page; nothing is written until it comes back confirmed.
+    for (const [body, shown] of [
+      ["day=1&month=1&year=2000", "1 January 2000"],
+      ["day=17&month=10&year=2014", "17 October 2014"],
+    ] as const) {
+      const { send, calls, row } = setup();
+      const response = await send("/welcome/age", post(body));
+      expect(response.status, body).toBe(200);
+      const html = await response.text();
+      expect(visible(html), body).toContain(`You entered ${shown}.`);
+      expect(html, body).toContain('name="confirmed" value="yes"');
+      expect(html, body).toContain('href="/welcome/age"');
+      expect(response.headers.getSetCookie(), body).toEqual([]);
+      expect(row(), body).toBeNull();
+      expect(calls, body).toEqual([]);
+    }
   });
 
   test("age.invalid_dates", async () => {
@@ -260,7 +282,7 @@ describe("POST /welcome/age", () => {
 
   test("age.underage_blocks", async () => {
     const hosted = setup({ issuer: PDS });
-    const response = await hosted.send("/welcome/age", post("day=17&month=10&year=2014"));
+    const response = await hosted.send("/welcome/age", post("day=17&month=10&year=2014&confirmed=yes"));
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/welcome/blocked");
     expect(response.headers.getSetCookie()).toContain("__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0");
@@ -272,21 +294,21 @@ describe("POST /welcome/age", () => {
     const alert = hosted.lines.map((line) => JSON.parse(line) as { event?: string; kind?: string; count?: number });
     expect(alert.find((line) => line.event === "age_gate.hosted_block")).toMatchObject({ kind: "sec", count: 7 });
     expect(hosted.lines.join("\n")).not.toContain(DID);
-    const again = await hosted.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const again = await hosted.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(again.headers.get("location")).toBe("/welcome/blocked");
     expect(hosted.calls).toHaveLength(1);
 
     const foreign = setup({ issuer: "https://other.example" });
-    await foreign.send("/welcome/age", post("day=17&month=10&year=2014"));
+    await foreign.send("/welcome/age", post("day=17&month=10&year=2014&confirmed=yes"));
     expect(foreign.calls).toEqual([{ op: "block", hosted: false }]);
     expect(foreign.lines.join("\n")).not.toContain("age_gate.hosted_block");
 
     const failed = setup({ blockThrows: true });
-    expect((await failed.send("/welcome/age", post("day=1&month=1&year=2014"))).status).toBe(503);
+    expect((await failed.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"))).status).toBe(503);
     expect(failed.order).toEqual([]);
 
     const unread = setup({ issuerThrows: true });
-    const stillBlocked = await unread.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const stillBlocked = await unread.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(stillBlocked.status).toBe(303);
     expect(stillBlocked.headers.get("location")).toBe("/welcome/blocked");
     expect(unread.calls).toEqual([{ op: "block", hosted: false }]);
@@ -296,7 +318,7 @@ describe("POST /welcome/age", () => {
     expect(unread.lines.join("\n")).not.toContain(DID);
 
     const revoked = setup({ revokeThrows: true, issuer: "https://other.example" });
-    const after = await revoked.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const after = await revoked.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(after.headers.get("location")).toBe("/welcome/blocked");
     expect(revoked.order).toEqual(["block", "revoke", "end"]);
     expect(revoked.lines.join("\n")).toContain("oauth.revoke_failed");

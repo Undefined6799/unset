@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-10-23
+checked: 2026-11-15
 ---
 # web
 
@@ -26,6 +26,10 @@ P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`
 side list `SettingsShell`, `SettingsProfile` with the "Set up your profile" card, and `SettingsAccount`, with the
 copy in `settings/messages.ts`; `Me` gains the Avatar initial and an Edit profile link), and the islands runtime under
 `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
+
+`Age` takes an optional `confirm` date (P2.12e): with it the screen shows the entered date back, with the same
+three values as hidden fields and `confirmed=yes`, and a link back to the empty form. It renders the same for
+every date and names no threshold.
 
 **The shell (P1.25).** `renderPage` takes `islands: "on" | "off"` and an optional `shell`. "off" (the public pages
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the

@@ -6,7 +6,14 @@
 // set, calls the revocation endpoint, and deletes the set in a finally. app.end_sessions_for_did also deletes that
 // set, so revoke runs first. Read 2026-10-17 from the published 0.8.9 file.
 import { randomUUID } from "node:crypto";
-import { ageInYears, type Did, type OnboardingStep, onboardingStep, parseBirthDate } from "@unset/domains-identity";
+import {
+  ageInYears,
+  type Did,
+  latestCalendarDay,
+  type OnboardingStep,
+  onboardingStep,
+  parseBirthDate,
+} from "@unset/domains-identity";
 import type { Session, SessionRead } from "@unset/infrastructure-session";
 import { AppError, type ErrorCode, withErrorParam } from "@unset/shared-errors";
 import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
@@ -188,12 +195,18 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (found.kind === "out") return found.response;
       if (found.step !== "age") return elsewhere(found);
       const form = new URLSearchParams(await request.text());
-      const today = deps.now();
+      // The latest calendar day anywhere, so a birthday that has arrived where the person lives counts (P2.12e).
+      const today = latestCalendarDay(deps.now());
       const birth = parseBirthDate(
         { day: single(form, "day") ?? "", month: single(form, "month") ?? "", year: single(form, "year") ?? "" },
         today,
       );
       if (birth === null) return redirect(withErrorParam("/welcome/age", "welcome.date_invalid"));
+      // Every valid date is shown back once, whatever it is, and nothing is decided or stored until it returns
+      // confirmed: a mistyped year must not block an account, and asking only some dates would hint at the rule.
+      if (single(form, "confirmed") !== "yes") {
+        return show(request, "Is this date right?", deps.screens.welcomeAge({ confirm: birth }));
+      }
       if (ageInYears(birth, today) < deps.minAge) return block(found.session, deadline);
       const wrote = await deps.accounts.confirmAdult(found.session.did, deadline);
       if (!wrote) {
