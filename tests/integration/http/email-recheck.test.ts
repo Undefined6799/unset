@@ -131,6 +131,7 @@ function gate(afterS: number): AppGate {
           : Promise.resolve(answer),
       setEmailConfirmed: (idHash, value, deadline) =>
         withTransaction(pool, deadline, (tx) => store.setEmailConfirmed(tx, idHash, value)),
+      now: () => performance.now(),
     }),
     now: () => Date.now() + afterS * 1000,
     emailRecheckS: RECHECK_S,

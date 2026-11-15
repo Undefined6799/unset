@@ -290,7 +290,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did);
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
-  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed });
+  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed, now: () => performance.now() });
   const gate: AppGate = {
     readSession,
     loadAccount: (did, deadline) => accounts.get(did, deadline),

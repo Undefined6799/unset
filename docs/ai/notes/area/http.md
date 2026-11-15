@@ -120,7 +120,11 @@ only while that cache is at most 4 × `EMAIL_RECHECK_S` old, and ends nothing (P
 transient answer, including a 429 and a 401 while the token set is stored, shows the PDS-unavailable page and still
 ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
 successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS call, whichever comes first. While
-the PDS can't be reached, the cached result is kept, up to that cap. Once P1.36v
+the PDS can't be reached, the cached result is kept, up to that cap. After a recheck the PDS did not answer
+(unavailable or 429, not our own lock timeout), `email-refresh.ts` does not ask again for that member for
+`PDS_HOLD_MS` (30 s, this process's memory, at most 10,000 members) and answers `transient` at once (P2.11g), so a
+hanging PDS costs a member one wait per hold, not one per page view. The gate's rules are unchanged; the cost is
+that a recheck that would have succeeded inside the hold happens up to 30 s later. Once P1.36v
 lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
