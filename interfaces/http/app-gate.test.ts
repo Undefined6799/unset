@@ -169,6 +169,9 @@ test("session_gate.return_path_comes_from_the_route_template", async () => {
   expect(await returnPath("GET", "/did")).toBe("/did");
   expect(await returnPath("GET", "/me")).toBe("/did");
   expect(await returnPath("POST", "/profile")).toBe("/did");
+  // The kit answers HEAD from the GET route (shared/http/server.ts), so a HEAD returns where its GET would.
+  expect(await returnPath("HEAD", "/settings/account")).toBe("/settings/account");
+  expect(await returnPath("HEAD", "/me")).toBe("/did");
 });
 
 test("session_gate.route_without_a_return_path_denies", async () => {
@@ -176,6 +179,7 @@ test("session_gate.route_without_a_return_path_denies", async () => {
   await expect(returnPath("POST", "/unlisted")).rejects.toThrow("no return path");
   await expect(returnPath("GET", "/:did")).rejects.toThrow("no return path");
   await expect(returnPath("GET", "/files/*")).rejects.toThrow("no return path");
+  await expect(returnPath("HEAD", "/:did")).rejects.toThrow("no return path");
 });
 
 test("session_gate.admits_the_opened_session_under_its_did", async () => {

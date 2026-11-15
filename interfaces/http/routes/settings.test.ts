@@ -67,7 +67,7 @@ function setup(world: World = {}) {
       }),
       "10.0.0.1",
     );
-  return { get, opened, checked };
+  return { get, opened, checked, server };
 }
 
 /** The settings side list's links, each with whether it is marked as the current page. */
@@ -111,6 +111,19 @@ describe("GET /settings/profile", () => {
       elements(parse(html), "script").map((script) => script.attrs?.find((a) => a.name === "type")?.value),
     ).toEqual(["application/json", "module"]);
   });
+});
+
+test("head_on_a_gated_page_answers_as_its_get", async () => {
+  // The kit serves HEAD from the GET route, so the gate must find a return path for it too.
+  const head = (signedIn: boolean) => {
+    const headers = { host: "unset.test", "x-forwarded-for": "192.0.2.1", cookie: "__Host-sid=x" };
+    const request = new Request(`${ORIGIN}/settings/account`, { method: "HEAD", headers });
+    return setup({ signedIn }).server.request(request, "10.0.0.1");
+  };
+  expect((await head(true)).status).toBe(200);
+  const refused = await head(false);
+  expect(refused.status).toBe(303);
+  expect(refused.headers.get("location")).toBe("/login?next=%2Fsettings%2Faccount");
 });
 
 describe("GET /settings/account", () => {

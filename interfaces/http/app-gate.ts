@@ -138,14 +138,16 @@ const RETURN_TO: Readonly<Record<string, string>> = { "/me": "/did", "/profile":
 
 /**
  * The app gate as the server's session gate (ADR 0045): the kit runs it before every `session: "required"` handler.
- * The return path comes from the route's template, never the request: a GET page without parameters returns to
- * itself, anything else needs an entry above. A route with neither throws, which the kit answers as a denial.
+ * The return path comes from the route's template, never the request: a GET page without parameters (or its HEAD)
+ * returns to itself, anything else needs an entry above. A route with neither throws, which the kit answers as a
+ * denial.
  */
 export function appSessionGate(
   open: (request: Request, deadline: AbortSignal, next: string, deadlineAt: number) => Promise<Response | OpenedApp>,
 ): SessionGate {
   return async ({ request, route, deadline, deadlineAt }) => {
-    const page = request.method === "GET" && !/[:*]/.test(route);
+    // The kit answers HEAD from the GET route (shared/http/server.ts), so a HEAD returns where its GET would.
+    const page = (request.method === "GET" || request.method === "HEAD") && !/[:*]/.test(route);
     const next = RETURN_TO[route] ?? (page ? route : null);
     if (next === null) throw new Error(`${route}: no return path after sign-in`);
     const opened = await open(request, deadline, next, deadlineAt);
