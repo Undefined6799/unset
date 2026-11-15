@@ -70,6 +70,9 @@ merged copy of the guard, so no rebase is needed.
   the API. Adding a label re-runs `pr-shape` and changes no commit, so a review of that head still stands.
 - It then merges as above: on the review of its head, or on Alex's line too if it loosens something. A line he
   already typed for that head counts.
+- A Renovate pull request that is already open has no `security-review` label until Renovate next rewrites it.
+  If it changes a trusted path, `pr-shape` is red on it until then. Alex merges those himself (ADR 0019); he, or a
+  thread at his ask, adds the label by hand, or waits for Renovate's next update of that pull request.
 - A body written against the sixteen headings still passes: the five kept headings are among them.
 - Work already split in two under the old rule stays split. Nothing has to be recombined.
 - A pull request that changes no trusted path is not affected.
@@ -80,12 +83,12 @@ merged copy of the guard, so no rebase is needed.
 - **Alex's typed line on every trusted-path pull request**, not only on loosenings. This is the stricter rule and
   it is his to choose instead. For it: these are the files where a mistake costs most, and a mixed diff is
   harder to read than an isolated one, so a second pair of eyes is worth more than before. Against it: of the
-  last 50 merges on `main`, 16 changed a trusted path, so he would type a line for about one agent pull request in
-  four, and on 2026-11-15 he asked for the opposite ("merge autonomously" after review, his line for loosenings
+  last 50 merges on `main`, 17 changed a trusted path, so he would type a line for about one agent pull request in
+  three, and on 2026-11-15 he asked for the opposite ("merge autonomously" after review, his line for loosenings
   and ADRs). Not chosen as the default for that reason. Choosing it later is a tightening and needs no new ADR.
 - **Label, but keep the SQL classifier** so that the label is asked only for grants on existing objects and not
   for a migration that creates new tables. Not chosen: it keeps about 770 lines of hand-written SQL parsing to
-  save a label, and one of the last 50 merges on `main` touched a migration.
+  save a label, and none of the last 50 merges on `main` touched a migration.
 - **Exempt Renovate in the guard.** Rejected: anyone with write access can push to a `renovate/` branch, and a
   narrower exemption by path cannot tell a digest bump from an edited workflow without reading file contents.
 - **A machine-checked approval** (a required review, or a comment read by CI). Not possible today: agent pull
@@ -95,9 +98,9 @@ merged copy of the guard, so no rebase is needed.
 - This is a loosening. A security change can now sit in the same diff as product lines, and a check can change in
   the same pull request as the code it judges. What answers that: the size limit, the label, the printed list of
   trusted paths, a reviewer who reads the whole diff of the exact head, and Alex's line on anything that loosens.
-- The label is asked more often than isolation was. Of the last 50 merges on `main`, 16 changed a trusted path:
-  9 a security path, 8 a check path, one of them both; 3 were Renovate's. Every migration is among them from now
-  on, including one that only creates new tables.
+- The label will be common. Of the 50 first-parent merges on `main` ending at 5336865, 17 changed a trusted path:
+  8 a security path, 9 a check path, none both, none a migration; one was Renovate's. Every migration is on the
+  list from now on, including one that only creates new tables.
 - The lockfile closure check is gone with no replacement. It only ever applied when `package-lock.json` rode with
   a trusted package's dependency change; in any other pull request the lockfile was already unchecked by it.
   `package-lock.json` is not on the trusted list and this record does not add it. What still judges a lockfile

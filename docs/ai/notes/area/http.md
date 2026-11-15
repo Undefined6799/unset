@@ -87,7 +87,7 @@ set, repeating the store's `lookup` conditions, because no sweep runs before the
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
 `logout.remaining_sessions_match_the_store` pins the count to `store.read` at the same `now()` on every limit edge.
 `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+it is trusted base, and when P2.08e was built a store method could not share its PR (the rule before ADR 0044). GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
 deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. The read has
 its own deadline, `ISSUER_READ_MS`, well below `PG_CONNECT_TIMEOUT_MS`. The session store's `get` ends a checked-out

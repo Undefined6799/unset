@@ -49,7 +49,7 @@ The optional licensed-font solution is limited to fixed same-origin static deliv
 Test-only ephemeral PDS/PLC/mail fixtures may operate without public registrations, real mail or changes to the
 operated local/dev topology. They do not replace P2.24's manual dev SMTP checks or P5.12's production recheck.
 P2.24's subdivisions allocate boundary/image/CI checks before implementation, with checks, product and edge work
-separated under SE-6. These checks are planned, not implemented by this docs record; current admission checks
+separated under SE-6 as it then stood (ADR 0044 no longer requires the separation). These checks are planned, not implemented by this docs record; current admission checks
 remain in force. [ADR 0027](decisions/0027-pds-frontend-distribution.md) defines the exact contract, font gate and
 same-backend-version rollback. ADR 0019 still governs merges and Alex's reserved gates.
 

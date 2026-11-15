@@ -16,8 +16,9 @@ checked: 2026-10-19
 
 **What goes wrong.** Each `interfaces/*/routes.manifest.test.ts` loads its server's config from a fixed test
 environment. When a shared fragment (for example the server kit's `httpKitConfig` in `shared/http`) gains a key with
-no default, all six tests fail to boot the server. If the fragment is trusted base, those test files are product paths
-and cannot ride in the same PR, so the PR cannot go green on its own (P1.05, `TRUSTED_PROXY_MODE`).
+no default, all six tests fail to boot the server. Before ADR 0044, when the fragment was trusted base those test files were
+product paths and could not ride in the same PR, so the PR could not go green on its own (P1.05,
+`TRUSTED_PROXY_MODE`). Since ADR 0044 they may share one PR that carries the `security-review` label.
 
 **Why it is safe to split.** `loadConfig` ignores environment keys it does not declare, except `UNSET_*` keys, which
 it only warns about (`shared/config/load.ts`). Adding the key to the test envs first changes nothing on main.
