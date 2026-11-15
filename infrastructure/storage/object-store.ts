@@ -38,13 +38,32 @@ const REGION = "us-east-1";
 /** S3's ceiling for one list page and one multi-object delete. */
 const BATCH = 1000;
 /** Our key alphabet (book P2.18 key convention: `drafts/<did>/i/<uuid>/<variant>`): no encoding is ever needed. */
-const KEY = /^[A-Za-z0-9._:-]+(\/[A-Za-z0-9._:-]+)*\/?$/;
+const KEY = /^[A-Za-z0-9._:-]+(\/[A-Za-z0-9._:-]+)*$/;
 
+const validKey = (key: string): boolean =>
+  KEY.test(key) && !key.split("/").some((segment) => segment === "." || segment === "..");
+
+/** An object's key: no trailing slash. */
 function checkKey(key: string): void {
-  if (!KEY.test(key) || key.split("/").some((segment) => segment === "." || segment === "..")) {
-    throw new TypeError("object key outside the allowed alphabet");
+  if (!validKey(key)) throw new TypeError("object key outside the allowed alphabet");
+}
+
+/**
+ * A prefix ends in `/`, so `drafts/did:web:example.com/` can never also match `drafts/did:web:example.com.au/…`.
+ */
+function checkPrefix(prefix: string): void {
+  if (!prefix.endsWith("/") || !validKey(prefix.slice(0, -1))) {
+    throw new TypeError("object prefix outside the allowed alphabet or without its trailing slash");
   }
 }
+
+const xmlEscape = (text: string): string =>
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
 const sha256 = (body: Uint8Array | string): string => createHash("sha256").update(body).digest("hex");
 const xmlText = (text: string): string =>
@@ -57,7 +76,7 @@ const xmlText = (text: string): string =>
 const tagQuery = (tags: Tags): string => new URLSearchParams(Object.entries(tags)).toString();
 const tagXml = (tags: Tags): string =>
   `<Tagging><TagSet>${Object.entries(tags)
-    .map(([k, v]) => `<Tag><Key>${k}</Key><Value>${v}</Value></Tag>`)
+    .map(([k, v]) => `<Tag><Key>${xmlEscape(k)}</Key><Value>${xmlEscape(v)}</Value></Tag>`)
     .join("")}</TagSet></Tagging>`;
 
 export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
@@ -119,12 +138,14 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
   }
 
   async function list(prefix: string): Promise<Done<{ keys: string[] }>> {
-    checkKey(prefix);
+    checkPrefix(prefix);
     const keys: string[] = [];
     let token: string | null = null;
     do {
       const page = await listPage(prefix, token);
       if (page === null) return UNAVAILABLE;
+      // A key the store lists must be one we could have written, or it never goes into a delete.
+      if (!page.keys.every(validKey)) return UNAVAILABLE;
       keys.push(...page.keys);
       token = page.next;
     } while (token !== null);
@@ -141,8 +162,11 @@ export function createObjectStore(settings: ObjectStoreSettings): ObjectStore {
       "content-type": "application/xml",
     });
     if (res?.status !== 200) return false;
+    // Like a listing page, the answer counts only as one whole DeleteResult with no per-key Error in it.
     const answer = await text(res);
-    return answer !== null && !answer.includes("<Error>");
+    if (answer === null) return false;
+    const whole = /^\s*(<\?xml[^>]*\?>\s*)?<DeleteResult[\s>][\s\S]*<\/DeleteResult>\s*$/.test(answer);
+    return whole && !answer.includes("<Error>");
   }
 
   return {

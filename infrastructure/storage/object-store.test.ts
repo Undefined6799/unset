@@ -75,6 +75,45 @@ describe("object store adapter", () => {
     expect(await store(deleteBroken).deletePrefix("drafts/")).toEqual(UNAVAILABLE);
   });
 
+  test("objects_prefix_needs_trailing_slash", async () => {
+    const never = store(async () => {
+      throw new Error("must not be called");
+    });
+    // drafts/did:web:example.com would also match drafts/did:web:example.com.au/…
+    await expect(never.deletePrefix("drafts/did:web:example.com")).rejects.toThrow(TypeError);
+    await expect(never.list("drafts/did:web:example.com")).rejects.toThrow(TypeError);
+    await expect(never.get("drafts/did:web:example.com/")).rejects.toThrow(TypeError);
+  });
+
+  test("objects_delete_needs_whole_result", async () => {
+    const listed = "<ListBucketResult><IsTruncated>false</IsTruncated><Key>drafts/a</Key></ListBucketResult>";
+    for (const answer of ["", "<DeleteResult>", "<Other></Other>"]) {
+      const fetch: typeof globalThis.fetch = async (input) =>
+        new Response((input as Request).method === "GET" ? listed : answer);
+      expect(await store(fetch).deletePrefix("drafts/"), answer).toEqual(UNAVAILABLE);
+    }
+    const ok: typeof globalThis.fetch = async (input) =>
+      new Response(
+        (input as Request).method === "GET" ? listed : '<?xml version="1.0"?>\n<DeleteResult></DeleteResult>',
+      );
+    expect(await store(ok).deletePrefix("drafts/")).toEqual({ ok: true, deleted: 1 });
+  });
+
+  test("objects_listed_key_outside_alphabet_is_unavailable", async () => {
+    const listed = "<ListBucketResult><IsTruncated>false</IsTruncated><Key>drafts/a&lt;b</Key></ListBucketResult>";
+    expect(await store(answering(200, listed)).deletePrefix("drafts/")).toEqual(UNAVAILABLE);
+  });
+
+  test("objects_tag_values_are_escaped", async () => {
+    let body = "";
+    const fetch: typeof globalThis.fetch = async (input) => {
+      body = await (input as Request).text();
+      return new Response("");
+    };
+    await store(fetch).setTags(`drafts/${DID}/x`, { note: "a<b&c" });
+    expect(body).toContain("<Value>a&lt;b&amp;c</Value>");
+  });
+
   test("objects_partial_delete_is_unavailable", async () => {
     const calls: string[] = [];
     const fetch: typeof globalThis.fetch = async (input) => {
