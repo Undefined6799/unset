@@ -1,7 +1,10 @@
 # 0045 — The request kit enforces the session gate on routes that require one
 
-Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-15 23:18:33Z (decision card "Choose how routes
-enforce sign-in before Phase 3", option "Kit enforces it").
+Status: Accepted by Alex, 2026-11-15 23:26:34Z, against 7f29dc1. The coordinator's project-chat post asked for the
+line "accept ADR 0045 at 7f29dc1", on the head it had verified; Alex replied to that post with "ccept ADR 0045 at
+7f29dc1" (a paste dropped the first letter). He had chosen the direction on 2026-11-15 23:18:33Z (decision card
+"Choose how routes enforce sign-in before Phase 3", option "Kit enforces it"). From here the record changes only to
+be marked superseded.
 
 ## Context
 Every route states whether it needs a signed-in session (`session` on `defineRoute`, architecture ruling
