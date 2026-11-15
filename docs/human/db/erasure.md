@@ -15,7 +15,8 @@ the list: a column holds a DID when its type is one of the `types` domains, and
    - `set_null`: erasure sets the column to null; the column must be nullable.
    - `retain`: kept, with `class` (the retention class) and `reason` (why the law or the product needs it).
    - `audit_redact`: the audit side tables (P1.15a); erasure calls `audit.erase_subject(did)`. It needs `class: "mod"`
-     and a `reason`.
+     and a `reason`. `audit.event_body` has two such columns, `subject` (the target) and `actor` (the person who
+     caused the event, ADR 0043); a side row goes when either one is erased.
    - `retain_legal_hold`: defined by P4.07; erasure skips held rows only.
 3. P3.07 erases by the registry; nothing else needs a list.
 

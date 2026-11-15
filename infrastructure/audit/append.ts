@@ -18,6 +18,10 @@ import { AuditError } from "./error.ts";
 export type AuditEvent = {
   readonly action: AuditAction;
   readonly outcome: AuditOutcome;
+  /**
+   * The person who caused the event. audit.append refuses a member's or an operator's action without one and
+   * stores it in event_body.actor, where erasure finds it; only system work leaves it out (0016, ADR 0043).
+   */
   readonly actorDid?: Did;
   /** A WebAuthn credential id (base64url). */
   readonly actorKey?: string;

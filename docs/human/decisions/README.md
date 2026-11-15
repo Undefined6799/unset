@@ -47,3 +47,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0038](0038-profile-save-keeps-unknown-fields.md) | A profile save keeps stored fields the lexicon does not define (P2.20f) | Accepted 2026-10-29 |
 | [0041](0041-object-store.md) | One S3-compatible object store (SeaweedFS in our stacks) for app media and PDS blobs (P2.18s, P2.18p) | Accepted 2026-11-15 |
 | [0042](0042-app-limits-behind-the-edge.md) | Behind the edge, the app's rate limits are site-wide ceilings; the edge is the only per-client limiter (P1.06s) | Accepted 2026-11-15 |
+| [0043](0043-audit-actor-column.md) | The audit side row names its actor in a DID column, so erasure finds a person's rows as actor as well as subject (P1.15k) | Proposed (awaiting Alex) |
