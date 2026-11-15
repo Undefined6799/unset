@@ -260,7 +260,10 @@ jobs:
   scan-image:
     name: scan ${{ matrix.name }}
     needs: discover
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # A skipped job skips its whole dependency chain, not only its direct dependants: `changes` is skipped on every
+    # push to main, and without a status function here that would skip this matrix although discover ran. So the
+    # condition names discover's own result (workflow-syntax, jobs.<job_id>.needs, as above).
+    if: ${{ !cancelled() && needs.discover.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

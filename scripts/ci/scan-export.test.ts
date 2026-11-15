@@ -366,10 +366,13 @@ describe("scan-export gates the secret scan", () => {
       expect(wf.jobs[id]?.if, id).toBe(heavy);
       expect(wf.jobs[id]?.needs, id).toBe("changes");
     }
-    // scan-image has no status function, so it runs only when discover succeeded.
+    // A skipped `changes` (every push to main) is an ancestor of scan-image, and a skip travels down the whole
+    // chain; the status function keeps the matrix running, and it still runs only when discover succeeded.
     expect(wf.jobs["scan-image"]?.needs).toBe("discover");
     expect(wf.jobs["scan-image"]?.if).toBe(
-      "github.event_name != 'pull_request' || github.event.pull_request.draft == false",
+      gh(
+        "!cancelled() && needs.discover.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)",
+      ),
     );
   });
 });
