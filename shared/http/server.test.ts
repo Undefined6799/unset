@@ -242,6 +242,40 @@ describe("request checks", () => {
     expect(JSON.stringify(records())).not.toContain("alice");
   });
 
+  test("request_log_names_the_error_code", async () => {
+    // P1.04v: one line per request says which failure it was; a success carries no code.
+    const { request, records } = kit({
+      routes: [
+        page({ method: "GET", path: "/ok" }),
+        page({
+          method: "GET",
+          path: "/busy",
+          handler: () => {
+            throw new AppError("db.busy");
+          },
+        }),
+        page({
+          method: "GET",
+          path: "/boom",
+          handler: () => {
+            throw new TypeError("xyz");
+          },
+        }),
+      ],
+    });
+    await request("/ok");
+    await request("/busy");
+    await request("/boom");
+    await request("/nowhere");
+    const lines = records().filter((r) => r.event === "http.request");
+    expect(lines.map((r) => [r.status, r.code])).toEqual([
+      [200, undefined],
+      [503, "db.busy"],
+      [500, "internal.error"],
+      [404, "http.not_found"],
+    ]);
+  });
+
   test("params_are_decoded", async () => {
     let seen = "";
     const { request } = kit({
