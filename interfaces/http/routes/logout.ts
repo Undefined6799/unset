@@ -2,8 +2,10 @@
 // another site can sign a member out. This browser's session ends, and the browser is marked signed out so the next
 // sign-in asks for the password again. Other browsers keep their sessions and the shared token set. The last browser
 // revokes the grant: a refresh credential with nobody behind it is not kept (review F13). "Sign out everywhere" was
-// removed (P2.08d; Alex, 2026-10-19 02:34:31Z). P2.08b: the signed-out page links the issuer recorded at sign-in,
-// carried in a short-lived cookie because the last browser's revoke deletes the record. No DID in any log line.
+// removed (P2.08d; Alex, 2026-10-19 02:34:31Z) and is back as POST /logout/everywhere (P2.08j; Alex, 2026-11-15
+// 23:11:42Z; review 2026-11-15 security finding 5): it revokes the grant and ends every session of the DID. P2.08b:
+// the signed-out page links the issuer recorded at sign-in, carried in a short-lived cookie because the last
+// browser's revoke deletes the record. No DID in any log line.
 import type { Did } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { AppError } from "@unset/shared-errors";
@@ -30,6 +32,13 @@ export type LogoutDeps = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<Session | null>;
   /** Destroys this session and returns how many of the DID's sessions remain, in one transaction. */
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
+  /** P2.08j: P2.04s `destroyAllForDid` (`user_signout_all`): every session of this session's DID, and its token set. */
+  destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<void>;
+  /**
+   * P2.08j: runs `fn` holding the account's sign-in lock (sign-in-lock.ts `exclusive`), which a sign-in holds from
+   * storing its token set until its session row exists. Rejects without calling `fn` when the lock cannot be had.
+   */
+  underAccountLock: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
   /** The issuer OAuth recorded at sign-in (the stored token set's `iss`), or null. Never a DID-document field. */
   issuerOf: (did: Did, signal: AbortSignal) => Promise<string | null>;
   /**
@@ -59,6 +68,15 @@ const FORM = "application/x-www-form-urlencoded";
  * `AbortSignal.timeout`: https://nodejs.org/docs/latest-v26.x/api/globals.html#abortsignaltimeoutdelay (Node 26.12.0).
  */
 export const ISSUER_READ_MS = 250;
+/**
+ * How often sign-out everywhere tries to end the sessions, and the pause between tries (P2.08j). Once the revoke has
+ * deleted the token set, only this request still knows whose sessions to end: a repeat of the POST reads no session,
+ * because the store reads a DID without a token set as signed out. Rows left behind would be valid again at the
+ * member's next sign-in, so one failed statement must not be the end of it.
+ */
+export const END_ALL_ATTEMPTS = 3;
+const END_ALL_PAUSE_MS = 100;
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 function className(cause: unknown): string {
   return cause instanceof Error && cause.name !== "" ? cause.name : "Error";
@@ -99,6 +117,43 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
     } catch (cause: unknown) {
       deps.log.warn("oauth.revoke_failed", { kind: className(cause) });
       await revokeOrDrop(did, deadline);
+    }
+  }
+
+  /** Ends every session of the DID, trying again after a failure. The last failure is logged and is a retryable 503. */
+  async function endEverySession(session: Session, deadline: AbortSignal): Promise<void> {
+    let last: unknown;
+    for (let attempt = 1; attempt <= END_ALL_ATTEMPTS && !deadline.aborted; attempt++) {
+      if (attempt > 1) await pause(END_ALL_PAUSE_MS);
+      try {
+        return await deps.destroyAllSessions(session, deadline);
+      } catch (cause: unknown) {
+        last = cause;
+      }
+    }
+    // The grant is gone and session rows may remain: an operator must be able to see that it happened. No DID.
+    deps.log.warn("auth.logout_everywhere_incomplete", { kind: className(last) });
+    throw new AppError("logout.failed", { cause: last });
+  }
+
+  /**
+   * Sign out everywhere (P2.08j): revoke while the token set is still there (app.end_sessions_for_did deletes it,
+   * migration 0014), then end every session. Both run under the account's sign-in lock, so a sign-in cannot store a
+   * new grant between them and lose it unrevoked. If the lock cannot be had, both still run, as in `endGrantIfLast`.
+   */
+  async function endEverything(session: Session, deadline: AbortSignal): Promise<void> {
+    let entered = false;
+    const work = async (): Promise<void> => {
+      entered = true;
+      await revokeOrDrop(session.did, deadline);
+      await endEverySession(session, deadline);
+    };
+    try {
+      await deps.underAccountLock(session.did, work);
+    } catch (cause: unknown) {
+      if (entered) throw cause instanceof AppError ? cause : new AppError("logout.failed", { cause });
+      deps.log.warn("oauth.revoke_failed", { kind: className(cause) });
+      await work();
     }
   }
 
@@ -146,6 +201,26 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         deps.log.info("auth.logout_this_browser");
         // Last browser: revoke outside the transaction. The count saw this delete. No unconfirmed notice (F13).
         if (remaining === 0) await endGrantIfLast(session.did, deadline);
+        return finish("/signed-out", issuer);
+      },
+    }),
+    defineRoute({
+      method: "POST",
+      path: "/logout/everywhere",
+      group: "app",
+      accepts: [FORM],
+      bodyLimit: 1024,
+      rateLimit: "default",
+      mutates: true,
+      session: "none",
+      // P2.08j. In order: the CSRF gate (the kit, before this runs), this request's own session, the revoke, then the
+      // delete for that session's DID. Nothing is read from the body, so no field can name another member.
+      handler: async ({ request, deadline }) => {
+        const session = await deps.readSession(request, deadline);
+        if (session === null) return finish("/signed-out", null);
+        const issuer = await recordedIssuer(session.did);
+        await endEverything(session, deadline);
+        deps.log.info("auth.logout_everywhere");
         return finish("/signed-out", issuer);
       },
     }),

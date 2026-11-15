@@ -130,6 +130,17 @@ describe("GET /settings/account", () => {
     expect(checked).toEqual([DID]);
   });
 
+  test("settings_account_offers_sign_out_everywhere", async () => {
+    // P2.08j: a second form, with no script and no field, that says it signs this browser out too.
+    const html = await (await setup().get("/settings/account")).text();
+    const main = elements(parse(html), "main")[0];
+    const forms = elements(main, "form", { method: "post", action: "/logout/everywhere" });
+    expect(forms).toHaveLength(1);
+    expect(elements(forms[0], "input")).toEqual([]);
+    expect(html).toContain("Signs out every browser, this one too. You will sign in again.");
+    expect(html).toContain(">Sign out everywhere</button>");
+  });
+
   test("settings_account_without_a_recorded_issuer_has_no_account_link", async () => {
     const html = await (await setup({ issuer: null }).get("/settings/account")).text();
     expect(html).not.toContain("pds.unset.test/account");

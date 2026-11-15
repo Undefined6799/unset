@@ -82,8 +82,17 @@ welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 **Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
 that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
-throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /logout/everywhere is an unknown route;
-`destroyAllForDid` stays for the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
+throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19) and is back (P2.08j; Alex, 2026-11-15; review
+security finding 5): a second form on Settings, Account posts to POST /logout/everywhere, which revokes the grant
+(dropping the stored set if that fails) and then calls `destroyAllForDid` with `user_signout_all`, so every browser,
+this one included, is signed out and lands on /signed-out. There is no "other browsers only" variant: the definer also
+deletes the token set, and `session.end_sessions_single_sql` (infrastructure/session, trusted base) allows no second
+DELETE of a DID's sessions. The revoke and the delete run under the account's sign-in lock. After the revoke the
+token set is gone, so a repeat of the POST reads no session: the request itself tries the delete three times, and if
+all fail it logs `auth.logout_everywhere_incomplete`, because rows left behind become valid again at the member's next
+sign-in (an open gap shared with auth_dead and the age gate; the fix is in trusted base). No confirmation box, no
+audit row (plan §6), and `auth.logout_everywhere` carries no field.
+`destroyAllForDid` also serves the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
