@@ -16,7 +16,7 @@ import { SignedOut, type SignedOutProps } from "./src/screens/SignedOut.tsx";
 import { SettingsAccount, type SettingsAccountProps } from "./src/screens/settings/SettingsAccount.tsx";
 import { SettingsProfile, type SettingsProfileProps } from "./src/screens/settings/SettingsProfile.tsx";
 import { VerifyEmail, type VerifyEmailProps } from "./src/screens/VerifyEmail.tsx";
-import { Age } from "./src/screens/welcome/Age.tsx";
+import { Age, type AgeProps } from "./src/screens/welcome/Age.tsx";
 import { ChatLater } from "./src/screens/welcome/ChatLater.tsx";
 import { Terms, type TermsProps } from "./src/screens/welcome/Terms.tsx";
 import { UnderAge, type UnderAgeProps } from "./src/screens/welcome/UnderAge.tsx";
@@ -52,7 +52,7 @@ export const screens = {
   signedOut: (props: SignedOutProps): ReactNode => <SignedOut {...props} />,
   me: (props: MeProps): ReactNode => <Me {...props} />,
   verifyEmail: (props: VerifyEmailProps): ReactNode => <VerifyEmail {...props} />,
-  welcomeAge: (): ReactNode => <Age />,
+  welcomeAge: (props: AgeProps = {}): ReactNode => <Age {...props} />,
   welcomeTerms: (props: TermsProps): ReactNode => <Terms {...props} />,
   welcomeChat: (): ReactNode => <ChatLater />,
   welcomeBlocked: (props: UnderAgeProps): ReactNode => <UnderAge {...props} />,

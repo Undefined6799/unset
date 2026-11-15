@@ -10,7 +10,7 @@ importance: normal
 related: ["[[tests]]", "[[deployment]]", "[[postgres-tests-need-docker]]"]
 replaced_by: null
 tags: [area, postgres]
-checked: 2026-10-28
+checked: 2026-11-15
 ---
 # postgres
 
@@ -26,7 +26,8 @@ checked: 2026-10-28
 - `erasure-registry.json` and `didColumns.ts`: every DID-bearing column, found from the catalog.
 - `pool.ts`: the only place a pooled client is taken. `Pool` is the driver's `pg.Pool`; a pooled session runs with
   its role's own timeouts from `roles.json` (migration 0003), and the pool sends only `application_name`, so no
-  caller holds a copy of them (P1.11a). `tx.ts`: the only place a transaction opens.
+  caller holds a copy of them (P1.11a). `readUntilAbort` ends a client whose query outlives its signal, and `ping`
+  is the readiness probe built on it (P1.04x). `tx.ts`: the only place a transaction opens.
 - `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
   lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
 - `migrations/0015_app_account.sql`: `app.account` (P2.12). The birth date is not a column; an adult confirmation

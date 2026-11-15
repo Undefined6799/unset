@@ -42,6 +42,7 @@ import {
   createRequestLock,
   createSingleUseStore,
   PURPOSES,
+  ping,
   withClient,
   withTransaction,
 } from "@unset/infrastructure-postgres";
@@ -54,7 +55,7 @@ import { createAccountStore } from "./account.ts";
 import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
-import { policies } from "./limits.ts";
+import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
@@ -78,7 +79,7 @@ import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
 
-/** Under the kit's 1 s readiness bound (shared/http/health.ts), so the wait for a client is cancelled, not left behind. */
+/** Under the kit's 1 s readiness bound (shared/http/health.ts), so the probe is ended, not left behind. */
 const READINESS_MS = 900;
 
 export type Services = {
@@ -395,14 +396,13 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     server: createServer({
       config: cfg,
       routes,
-      policies,
+      policies: policiesFor(cfg.TRUSTED_PROXY_MODE),
       log,
       // `/health` answers 200 only while Postgres answers (P1.04w): a rollout must not swap in a replica that cannot
       // reach the database. The kit bounds the check at 1 s, caches it for 2 s and reads a throw as not ready
-      // (shared/http/health.ts), so a probe holds at most one pooled connection, briefly.
-      readiness: [
-        () => withClient(oauth.pool, AbortSignal.timeout(READINESS_MS), (db) => db.query("SELECT 1")).then(() => true),
-      ],
+      // (shared/http/health.ts). `ping` bounds the wait for a client and the query with the same signal (P1.04x), so a
+      // probe holds its pooled connection for under a second.
+      readiness: [() => ping(oauth.pool, AbortSignal.timeout(READINESS_MS)).then(() => true)],
       onClose: oauth.onClose,
       errorPage,
     }),

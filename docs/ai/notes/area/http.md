@@ -35,7 +35,9 @@ the module first, before the web build loads, so `main.test.ts` proves a key-off
 import, build or not (P1.25z). A load placed later in compose is caught only when apps/web's server build exists:
 without it the key-off start stops at `loadWebRender`, and the test accepts either stop point. The
 book's `/__test/` paths fail the kit's path template, which refuses a leading underscore. `limits.ts` holds its
-rate-limit policies; a feature step adds its policy in the same PR as its route.
+rate-limit policies; a feature step adds its policy in the same PR as its route. compose passes
+`policiesFor(TRUSTED_PROXY_MODE)`: in `socket` mode (behind the edge, which hides the client address) the table has no
+per-address entry, only site-wide ceilings and per-DID entries; the edge is the per-client limiter (ADR 0042).
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
 identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
@@ -167,7 +169,8 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
 - `health.ts`: `/health`, which reveals only status and commit. `web` registers one readiness check, a `SELECT 1`
-  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer.
+  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer. `ping`
+  (infrastructure/postgres/pool.ts) ends a connection that has not answered by 900 ms (P1.04x).
 - `interfaces/http/fatal.ts` (P1.04w): `main.ts` installs it after compose. An unhandled rejection is logged through
   the scrubbing logger and the server drains as on SIGTERM; an uncaught exception is logged and exits 1. Neither
   prints the raw error, so a boot that cannot reach the database is one `error` line with `code: db.busy`.
