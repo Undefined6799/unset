@@ -2,7 +2,8 @@
 -- eraseDid, as far as the app holds data today (P3.07k, cut down; plan section 6 "eraseDid(did)", section 2 rule 11).
 -- One function removes every row that names a DID, following infrastructure/postgres/erasure-registry.json: one
 -- hand-written statement per registry row, so a reviewer reads exactly what is deleted, and the coverage test
--- (tests/integration/postgres/erase-did.test.ts) fails when a DID column has no statement here.
+-- (tests/integration/postgres/erase-did.test.ts) fails when a DID column has no statement here. At run time the
+-- function itself refuses to erase while the catalog holds a DID column outside its list (step 2).
 --
 -- Not here yet, each with the step that brings what it needs: the tombstone and its key (P3.07, with the indexer that
 -- reads it), the object-store and untrack outbox (P3.07; web stores nothing per DID yet, and ADR 0041 Decision 7 gates
@@ -38,10 +39,28 @@ BEGIN
     RAISE EXCEPTION 'erase_bad_input' USING ERRCODE = '22023';
   END IF;
 
-  -- 2. One erasure of a DID at a time.
+  -- 2. Fail closed on a DID column this function does not know: a table added later without its statement below
+  --    stops every erasure until a migration replaces this function, so nothing is ever reported erased while a
+  --    row still names the person. The catalog is the list, as in infrastructure/postgres/didColumns.ts.
+  IF EXISTS (
+    SELECT 1
+      FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_type t ON t.oid = a.atttypid
+     WHERE t.typname IN ('did', '_did', 'at_uri', '_at_uri') AND t.typnamespace = 'types'::regnamespace
+       AND c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped
+       AND (n.nspname::text || '.' || c.relname::text || '.' || a.attname::text) NOT IN (
+         'app.single_use.bind_did', 'app.session.did', 'app.oauth_session.did', 'app.account.did',
+         'audit.event_body.subject', 'audit.event_body.actor')
+  ) THEN
+    RAISE EXCEPTION 'erase_uncovered_did_column' USING ERRCODE = '55000';
+  END IF;
+
+  -- 3. One erasure of a DID at a time.
   PERFORM pg_advisory_xact_lock(hashtext('erase:' || p_did::text));
 
-  -- 3. One statement per registry row, children before parents. Any error rolls the whole call back.
+  -- 4. One statement per registry row, children before parents. Any error rolls the whole call back.
   DELETE FROM app.single_use WHERE bind_did = p_did;
   GET DIAGNOSTICS v_single_use = ROW_COUNT;
   DELETE FROM app.session WHERE did = p_did;
@@ -51,11 +70,11 @@ BEGIN
   DELETE FROM app.account WHERE did = p_did;
   GET DIAGNOSTICS v_account = ROW_COUNT;
 
-  -- 4. audit.event_body.subject and .actor (strategy audit_redact): the security lane's rows about the person. The
+  -- 5. audit.event_body.subject and .actor (strategy audit_redact): the security lane's rows about the person. The
   --    moderation lane keeps its rows until their class ends (admin design 8).
   v_audit := audit.erase_subject(p_did);
 
-  -- 5. The record that it happened, with no actor and no target.
+  -- 6. The record that it happened, with no actor and no target.
   PERFORM audit.append('account.erased', 'succeeded', NULL, NULL, NULL, p_why, NULL, NULL, NULL, NULL);
 
   RETURN jsonb_build_object(

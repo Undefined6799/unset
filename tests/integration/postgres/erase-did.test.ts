@@ -124,6 +124,21 @@ describe("core.erase_did", () => {
     ).rejects.toMatchObject({ code: "22023" });
   });
 
+  test("an_unknown_did_column_stops_erasure", async () => {
+    // A table added without its statement in erase_did: the function refuses instead of reporting a partial erasure.
+    const attempt = withClient(migrator, null, async (c) => {
+      await c.query("BEGIN");
+      try {
+        await c.query("CREATE TABLE app.erase_probe (who types.did)");
+        await c.query("SELECT core.erase_did($1, 'user_request')", [X]);
+      } finally {
+        await c.query("ROLLBACK");
+      }
+    });
+    await expect(attempt).rejects.toMatchObject({ code: "55000" });
+    for (const count of Object.values(await naming(X))) expect(count).toBeGreaterThan(0);
+  });
+
   test("erases_every_row_naming_the_person", async () => {
     const before = await naming(Y);
     const result = await erase(X, "user_request");
