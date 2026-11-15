@@ -1,7 +1,9 @@
 # 0041 — One S3-compatible object store for app media and PDS blobs
 
-Status: Proposed, awaiting Alex. Alex asked for the plan on 2026-10-30 and for the build on 2026-11-15 ("also
-implement s3 storage for both, the pds and the users."). Acceptance is his typed line naming this record's commit.
+Status: Accepted by Alex, 2026-11-15 22:06:23Z, against 843bfc4 ("accept ADR 0041 at 843bfc4", typed in the
+storage thread, on the head the coordinator had verified). From here the record changes only to be marked superseded.
+Alex asked for the plan on 2026-10-30 and for the build on 2026-11-15 ("also implement s3 storage for both, the pds
+and the users.").
 Once accepted it settles book question P2-A8 (the store's server) and replaces the plan's "the dev PDS keeps blobs on
 disk" (book P1.29i) for the stacks that run the store. Production's store and provider stay P5.01's decision (Q3);
 this record does not choose one.
