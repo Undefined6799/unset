@@ -180,7 +180,7 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   The fixed page shows the request id on `internal.error` (UUID shape only). The exported `errorResponse` takes no
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
-**Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+**Watch out.** `shared/http` is trusted base (CODEOWNERS); a PR that changes it carries the `security-review` label (ADR 0044).
 
 **In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a

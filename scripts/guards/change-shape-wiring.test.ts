@@ -117,7 +117,7 @@ describe("wiring", () => {
     const labelled = job({ PR_LABELS: '["kind/fix","security-review"]' });
     expect(labelled.status).toBe(0);
     expect(labelled.out).toContain(
-      `::notice::[SE-6] trusted paths in this PR, which merge only on Alex's line for this head: ${paths}\n`,
+      `::notice::[SE-6] trusted paths in this PR, for the security review of this head: ${paths}\n`,
     );
     // With the line on neither side, nothing says which paths are checks: fail closed.
     put(".github/CODEOWNERS", withoutChecks);

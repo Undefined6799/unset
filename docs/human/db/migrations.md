@@ -80,7 +80,8 @@ Each process connects as its own role, listed with its class, connection limit a
 - A table-level matrix entry says `{ "privileges": [...], "wholeTable": true }`: the role is meant to hold those
   privileges on every column, including columns added later. A personal-data table may not carry the flag.
 - Every migration, `grant-matrix.json`, `erasure-registry.json` and `roles.json` is trusted base: the PR carries the
-  `security-review` label and merges on Alex's line (rule SE-6, ADR 0044). It may ride with the step that needs it.
+  `security-review` label and gets a security review of its exact head (rule SE-6, ADR 0044). It may ride with the
+  step that needs it.
 - The test reads the catalog and prints each difference as one line, `+` for a privilege the database holds and the
   matrix does not, `-` for the reverse: `+ api SELECT app.drafts`.
 

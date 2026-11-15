@@ -36,17 +36,17 @@ const LISTED_AT_MOST = 20;
 
 /**
  * SE-6 (ADR 0044): a change to a trusted path is named, not isolated. Without the label the job fails. With it the job
- * lists the trusted paths as a notice, so the reviewer and Alex see what his line covers. Renovate cannot label by
- * path and Alex merges every Renovate pull request himself (ADR 0019), so its pull requests get the notice only.
+ * lists the trusted paths as a notice, so the reviewer sees what the review must cover. No author is exempt: Renovate
+ * labels its own pull requests (`.github/renovate.json`), so a commit pushed to one of its branches gets no free pass.
  */
 function trustedPathLines(input: ShapeInput): { error?: string; notice?: string } {
   const trusted = trustedPathsChanged(input.changedPaths, input.trustedBase);
   if (trusted.length === 0) return {};
   const more = trusted.length > LISTED_AT_MOST ? `, and ${trusted.length - LISTED_AT_MOST} more` : "";
   const paths = `${trusted.slice(0, LISTED_AT_MOST).join(", ")}${more}`;
-  if (!input.labels.includes(SECURITY_REVIEW) && !isRenovate(input.author))
+  if (!input.labels.includes(SECURITY_REVIEW))
     return { error: `[SE-6] a PR that changes a trusted path carries the ${SECURITY_REVIEW} label: ${paths}` };
-  return { notice: `[SE-6] trusted paths in this PR, which merge only on Alex's line for this head: ${paths}` };
+  return { notice: `[SE-6] trusted paths in this PR, for the security review of this head: ${paths}` };
 }
 
 function kindLabelWarning(labels: readonly string[]): string[] {

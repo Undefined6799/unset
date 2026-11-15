@@ -333,7 +333,7 @@ describe("the pr-shape job", () => {
     const labelled = runChangeShape(input({ changedPaths, labels: ["kind/build", "security-review"] }));
     expect(labelled.errors).toEqual([]);
     expect(labelled.notices).toEqual([
-      `[SE-6] trusted paths in this PR, which merge only on Alex's line for this head: ${named}`,
+      `[SE-6] trusted paths in this PR, for the security review of this head: ${named}`,
     ]);
     // No trusted path: no label needed, and nothing to announce.
     expect(runChangeShape(input({ labels: ["kind/build", "security-review"] })).notices).toEqual([]);
@@ -342,14 +342,16 @@ describe("the pr-shape job", () => {
     expect(runChangeShape(input({ changedPaths: many })).errors[0]).toMatch(/f19\.ts, and 3 more$/);
   });
 
-  test("renovate_needs_no_label", () => {
-    // Renovate cannot label by path, and Alex merges each of its pull requests himself (ADR 0019).
+  test("renovate_needs_label_too", () => {
+    // No author is exempt: anyone with write access can push to a renovate/ branch. Renovate labels its own PRs.
     const changedPaths = [".github/workflows/ci.yml"];
-    const out = runChangeShape(input({ author: { login: "renovate[bot]", type: "Bot" }, changedPaths, body: "" }));
-    expect(out.errors).toEqual([]);
-    expect(out.notices).toHaveLength(1);
-    const spoof = runChangeShape(input({ author: { login: "renovate[bot]", type: "User" }, changedPaths }));
-    expect(spoof.errors).toHaveLength(1);
+    const bot = { login: "renovate[bot]", type: "Bot" };
+    expect(runChangeShape(input({ author: bot, changedPaths, body: "" })).errors).toHaveLength(1);
+    const labels = ["deps", "kind/build", "security-review"];
+    expect(runChangeShape(input({ author: bot, changedPaths, body: "", labels })).errors).toEqual([]);
+    const config = JSON.parse(read(".github/renovate.json"));
+    for (const own of [config.labels, config.vulnerabilityAlerts.labels] as string[][])
+      expect(own).toContain("security-review");
   });
 
   // P0.09i (architecture ruling 2026-10-05 11:55Z): Renovate writes its own body, so only DL-3 is waived, and only for

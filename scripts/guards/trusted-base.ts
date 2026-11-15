@@ -1,7 +1,7 @@
 // The trusted base (P0.09c; rule SE-6 as amended by ADR 0044, plan §9): the written list of paths whose changes are
 // security changes. `.github/CODEOWNERS`'s last section is that one list. A pull request that changes a listed path
-// carries the `security-review` label, so the change is named before anyone reads the diff; Alex's own line on the
-// reviewed head is the merge condition (ADR 0044), which no machine reads.
+// carries the `security-review` label, so the change is named before anyone reads the diff. Who may merge it is in
+// ADR 0044 and ADR 0019: the recorded review of the exact head, and Alex's own line when it loosens anything.
 // The reader fails closed: a section it cannot read is an error, never "no trusted base".
 
 export type TrustedBase = { patterns: string[]; parsedPaths: string[]; trustedFunctions: string[]; checks: string[] };

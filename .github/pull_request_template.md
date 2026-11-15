@@ -11,7 +11,7 @@
 
 ## Security review
 <!-- Threats and ASVS rows for a [SEC] step. For a trusted path (CODEOWNERS' last section): the security-review label,
-     which trusted paths change and why (rule SE-6, ADR 0044). Otherwise n/a. -->
+     which trusted paths change and why, and whether anything is loosened (rule SE-6, ADR 0044). Otherwise n/a. -->
 
 ## What I am unsure about
 <!-- Also: sources read, and whether this needs an ADR. -->

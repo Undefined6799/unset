@@ -69,10 +69,10 @@ The workflow runs on a pull request that is not a draft. `runChangeShape` report
 | Size | Warning over 400 source lines. Error over 800 without `large-pr` and a `Large PR:` reason |
 | Template headings | Error when one is missing. Renovate is the exception above |
 | `kind/*` | Warning unless there is exactly one |
-| A trusted-base or check path without the `security-review` label | Error, tagged `[SE-6]`. With the label, a notice lists those paths. Renovate needs no label |
+| A trusted-base or check path without the `security-review` label | Error, tagged `[SE-6]`. With the label, a notice lists those paths. Renovate labels its own pull requests |
 | A `-- why: speed` index | Error, tagged `[PF-1]`, when Performance evidence lacks p50, p95 and p99 before and after |
 
-The trusted-base list is the last section of `.github/CODEOWNERS` (its path lines, `# parsed:` and `# checks:`), read by `scripts/guards/trusted-base.ts`. A pull request that changes a listed path merges only on Alex's line for the reviewed head ([ADR 0044](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0044-trusted-paths-labelled-not-isolated.md)).
+The trusted-base list is the last section of `.github/CODEOWNERS` (its path lines, `# parsed:` and `# checks:`), read by `scripts/guards/trusted-base.ts`. A pull request that changes a listed path merges on a recorded security review of its exact head, and a loosening also needs Alex's own line ([ADR 0044](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0044-trusted-paths-labelled-not-isolated.md)).
 
 ## Docs-only allowlist
 

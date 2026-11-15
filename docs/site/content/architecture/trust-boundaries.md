@@ -31,7 +31,7 @@ Ways out of the stack, from `deployment/networks.dev.json`: `web_egress` (web on
 
 ## Trusted base
 
-A pull request that changes a trusted-base path, or a `# checks:` path, carries the `security-review` label and merges only on Alex's line for the reviewed head (SE-6, ADR 0044). It may change other paths too. `pr-shape` fails without the label (`trusted_path_needs_label`) and lists the trusted paths with it.
+A pull request that changes a trusted-base path, or a `# checks:` path, carries the `security-review` label and merges on a recorded security review of its exact head; a loosening also needs Alex's own line (SE-6, ADR 0044, ADR 0019). It may change other paths too. `pr-shape` fails without the label (`trusted_path_needs_label`) and lists the trusted paths with it.
 
 Paths the section names that are in the tree:
 

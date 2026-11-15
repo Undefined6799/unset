@@ -56,6 +56,7 @@ checked: 2026-11-15
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
 - SQL is parameterised only and carries a tenant or DID predicate.
 - No network I/O inside a transaction (DA-4).
-- Most of this folder is trusted base (CODEOWNERS); check before mixing it with other files in a PR.
+- Most of this folder is trusted base (CODEOWNERS), every migration included; a PR that changes it carries the
+  `security-review` label (ADR 0044).
 
 **Links.** [[tests]], [[deployment]].
