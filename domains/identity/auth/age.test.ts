@@ -1,6 +1,6 @@
 // P2.12 (auth/age.ts): the birth date is judged and then dropped. Nothing here stores it.
 import { describe, expect, test } from "vitest";
-import { ageInYears, parseBirthDate } from "./age.ts";
+import { ageInYears, latestCalendarDay, parseBirthDate } from "./age.ts";
 
 const TODAY = new Date(Date.UTC(2026, 9, 17, 15, 0, 0));
 
@@ -41,4 +41,17 @@ describe("birth date", () => {
     expect(ageInYears(birth, new Date(Date.UTC(2026, 1, 28)))).toBe(25);
     expect(ageInYears(birth, new Date(Date.UTC(2026, 2, 1)))).toBe(26);
   });
+});
+
+test("age.latest_calendar_day_is_utc_plus_14", () => {
+  // 10:00 UTC on the 17th is already the 18th at UTC+14, so a 16th birthday on the 18th has arrived somewhere.
+  const now = new Date(Date.UTC(2026, 9, 17, 10, 0, 0));
+  const day = latestCalendarDay(now);
+  expect([day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate()]).toEqual([2026, 10, 18]);
+  const birth = parseBirthDate({ day: "18", month: "10", year: "2010" }, day);
+  expect(birth === null ? 0 : ageInYears(birth, day)).toBe(16);
+  // On UTC's own calendar the same birthday is still a day away.
+  expect(ageInYears({ year: 2010, month: 10, day: 18 }, now)).toBe(15);
+  // 09:59 UTC is still the 17th everywhere.
+  expect(latestCalendarDay(new Date(Date.UTC(2026, 9, 17, 9, 59, 0))).getUTCDate()).toBe(17);
 });
