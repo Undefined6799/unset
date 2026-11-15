@@ -2781,6 +2781,8 @@ Outputs:
          `changedPaths` comes from `git diff --name-only <base>...HEAD` (in CI the `check` job passes `BASE_SHA` through
          `env:`; locally the merge-base with `origin/main`; in pre-commit the staged paths). No base available in CI
          → error (fail closed).
+         **Amended 2026-11-15 (whole-project review, decision 4):** this rule is a warning, and a missing base in CI is
+         a warning too. As an error it was met by bumping `checked`, which proves no re-read.
       5. `[notes-handoff-age]` a `handoff` whose `checked` is more than 14 days before `today`.
     **warn (`::warning`, never fails):** a `current` note with `checked` older than 90 days; an area folder that exists
     in the code (the template's area list mapped to folders) with no `notes/area/<name>.md` hub note.
@@ -2814,7 +2816,7 @@ Done when (tests): (`scripts/guards/notes.test.ts`; one planted-fault fixture pe
   - notes_dead_related, notes_dead_replaced_by, notes_dead_code_path → `[notes-link]`, one each.
   - notes_index_stale_fails: a committed `INDEX.md` missing one note → `[notes-index]`.
   - notes_code_moved_fails: `changedPaths` holding a note's `code:` file and not the note → `[notes-code-moved]`; with
-    the note too → ok; CI mode with no base → error.
+    the note too → ok; CI mode with no base → error. (Amended 2026-11-15: `notes_code_moved_warns`; warnings.)
   - notes_handoff_15_days → `[notes-handoff-age]`; 14 days → ok.
   - notes_warn_checked_91_days and notes_warn_area_without_hub → a warning, test passes.
   - notes_good_vault: the fixture vault → no error; the real `docs/ai/` → no error; the scan counted ≥ 1 fixture note.
