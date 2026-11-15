@@ -15,9 +15,18 @@
 
 name: publish-images
 
+# P2.26k: a push that changes only docs/ or tests/ starts no run, so it asks for no approval. No image build reads
+# either folder: the root .dockerignore leaves both out of the root build context, and every other context is a folder
+# under deployment/ (scripts/ci/image-workflows.test.ts, publish_skips_only_what_no_image_reads). `paths-ignore` skips
+# a push only when every changed file matches, and the run starts anyway when the diff cannot be made (more than 1,000
+# commits, or a timeout): docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
+# on.<push|pull_request>.<paths|paths-ignore>, read 2026-11-15.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "tests/**"
 
 permissions: {}
 

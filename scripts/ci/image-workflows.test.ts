@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
+import { listDockerfiles } from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const FILES = ["images.yml", "mirror.yml", "publish-images.yml", "sigstore-root.yml"] as const;
@@ -167,6 +168,52 @@ describe("image workflows", () => {
         expect(step.run ?? "", `${id} ${step.name}`).not.toContain("skipped");
       }
     }
+  });
+
+  /** Every repository file a workflow names outside its comments. */
+  const filesRead = (file: string): string[] => {
+    const lines = text(file)
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"));
+    const named = lines.join("\n").match(/(?<![\w./-])(?:\.github|deployment|scripts|docs|tests)\/[\w./-]*\w/g) ?? [];
+    return [...new Set(named)].sort();
+  };
+
+  // P2.26k: a push that changes only docs/ or tests/ publishes nothing. That is safe only while no image build and
+  // no step of the job reads either folder.
+  test("publish_skips_only_what_no_image_reads", () => {
+    const ignored = ["docs", "tests"];
+    expect(workflow("publish-images.yml").on).toEqual({
+      push: { branches: ["main"], "paths-ignore": ignored.map((folder) => `${folder}/**`) },
+    });
+    // The root build context (`.`, for a <name>.Dockerfile) leaves both folders out.
+    const dockerignore = readFileSync(join(ROOT, ".dockerignore"), "utf8").split("\n");
+    for (const folder of ignored) expect(dockerignore, folder).toContain(folder);
+    expect(dockerignore.filter((line) => line.startsWith("!"))).toEqual([]);
+    // Every other context is the Dockerfile's own folder, and every Dockerfile is under deployment/.
+    const images = listDockerfiles(ROOT);
+    expect(images.length).toBeGreaterThan(0);
+    for (const { dockerfile } of images) expect(dockerfile).toMatch(/^deployment\//);
+    // The job itself reads no file there either.
+    const read = filesRead("publish-images.yml");
+    expect(read).toContain("scripts/ci/list-dockerfiles.ts");
+    for (const path of read) expect(path).not.toMatch(/^(?:docs|tests)\//);
+    for (const { ignorefile } of images) expect(ignorefile).not.toMatch(/^(?:docs|tests)\//);
+  });
+
+  // P2.26k: a push starts the mirror only when it changes a file the workflow reads; the weekly scan stays.
+  test("mirror_runs_for_every_file_it_reads", () => {
+    const on = workflow("mirror.yml").on as { push: { branches: string[]; paths: string[] }; schedule: unknown[] };
+    expect(on.push.branches).toEqual(["main"]);
+    expect(on.schedule).toEqual([{ cron: "17 5 * * 1" }]);
+    expect(Object.keys(on).sort()).toEqual(["push", "schedule"]);
+    const read = filesRead("mirror.yml").filter((path) => path !== ".github/workflows/mirror.yml");
+    expect(read).toContain("deployment/mirror.list.json");
+    expect(read).toContain("scripts/ci/verify-images.ts");
+    for (const path of read) expect(existsSync(join(ROOT, path)), path).toBe(true);
+    expect([...on.push.paths].sort()).toEqual([...read, ".github/workflows/mirror.yml"].sort());
+    // Exact files only: no pattern that could match less than it seems to, and no exclusion.
+    for (const path of on.push.paths) expect(path).toMatch(/^[\w./-]+$/);
   });
 
   test("image_checks_present", () => {
