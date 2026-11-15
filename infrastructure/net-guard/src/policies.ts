@@ -38,3 +38,9 @@ export function internalPolicy(name: string, origins: readonly string[]): Policy
  * composition root selects it, which P1.34z allows only under UNSET_ENV=local.
  */
 export const localPlc: Policy = internalPolicy("plc", ["http://plc:2582"]);
+
+/**
+ * The private object store (P2.18k; plan §5.8 drafts store): one exact internal origin, the `OBJECT_STORE_URL` the
+ * calling process's composition root passes in, so its answers must be private and no other host or port is reachable.
+ */
+export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin]);
