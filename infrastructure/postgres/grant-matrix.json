@@ -164,6 +164,10 @@
     "app.end_sessions_for_did": {
       "web": ["EXECUTE"]
     },
+    "app.sweep_single_use": {
+      "retention": ["EXECUTE"],
+      "web": ["EXECUTE"]
+    },
     "app.oauth_state": {
       "web": {
         "columns": {

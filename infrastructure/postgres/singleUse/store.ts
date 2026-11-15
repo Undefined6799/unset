@@ -141,10 +141,13 @@ export function createSingleUseStore(options: {
     return row !== undefined;
   }
 
-  /** Deletes rows a day past expiry; a replay after that finds no row and is still refused. Run as `retention`. */
+  /**
+   * Deletes rows a day past expiry; a replay after that finds no row and is still refused. The statement lives in
+   * app.sweep_single_use (migration 0023), which `web` and `retention` may call; web holds no DELETE of its own.
+   */
   async function sweep(db: Db) {
-    const result = await db.query("DELETE FROM app.single_use WHERE expires_at < now() - interval '1 day'");
-    return result.rowCount ?? 0;
+    const result = await db.query("SELECT app.sweep_single_use() AS swept");
+    return Number(result.rows[0]?.swept ?? 0);
   }
 
   return { issue, consume, claim, sweep };
