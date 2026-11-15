@@ -163,7 +163,7 @@ function setup(world: World = {}) {
         log,
       }),
       ...settingsRoutes({
-        open: (request, deadline, next) => openApp(gate, request, deadline, next),
+        open: (request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -172,7 +172,7 @@ function setup(world: World = {}) {
         log,
       }),
       ...meRoutes({
-        open: (request, deadline, next) => openApp(gate, request, deadline, next),
+        open: (request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
         page,
         screens: web.screens,

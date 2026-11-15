@@ -25,7 +25,8 @@ export type AppGate = {
   loadAccount: (did: Did, deadline: AbortSignal) => Promise<OnboardingAccount | null>;
   versions: OnboardingVersions;
   emailCache: (session: Session, deadline: AbortSignal) => Promise<EmailCache>;
-  refreshEmail: (session: Session, deadline: AbortSignal) => Promise<EmailRefresh>;
+  /** `deadlineAt` is the route handler's own (shared/http routes.ts): the PDS read retries only while it fits. */
+  refreshEmail: (session: Session, deadline: AbortSignal, deadlineAt: number) => Promise<EmailRefresh>;
   now: () => number;
   emailRecheckS: number;
   /**
@@ -81,6 +82,7 @@ export async function openApp(
   request: Request,
   deadline: AbortSignal,
   next: string,
+  deadlineAt: number,
 ): Promise<Response | OpenedApp> {
   const { session, clearCookie } = await gate.readSession(request, deadline);
   if (session === null)
@@ -102,7 +104,7 @@ export async function openApp(
     case "pass":
       return opened();
     case "refresh": {
-      const answer = await gate.refreshEmail(session, deadline);
+      const answer = await gate.refreshEmail(session, deadline, deadlineAt);
       // The cap is the age when the answer arrives. The PDS call can take its 10s timeout (pds-call.ts
       // PDS_CALL_TIMEOUT_MS), so the time from before the await would still open the page after the bound.
       const after = verifiedAfterRefresh(answer, cache, gate.now(), gate.emailRecheckS);

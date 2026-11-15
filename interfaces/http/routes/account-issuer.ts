@@ -11,7 +11,7 @@ import { issuerOrigin } from "./sign-in-state.ts";
 /** What the account page (me.ts) and the settings pages (settings.ts) are given. */
 export type AccountDeps = {
   /** Session, then onboarding, then a confirmed email (P2.12). A Response is the redirect. */
-  open: (request: Request, deadline: AbortSignal, next: string) => Promise<Response | OpenedApp>;
+  open: (request: Request, deadline: AbortSignal, next: string, deadlineAt: number) => Promise<Response | OpenedApp>;
   verifyHandle: (did: Did, signal: AbortSignal) => Promise<HandleVerdict>;
   page: (page: PageSpec) => Response;
   screens: WebRender["screens"];

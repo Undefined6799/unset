@@ -17,8 +17,8 @@ export function meRoutes(deps: AccountDeps): Route[] {
         group: "app",
         rateLimit: "default",
         session: "handler",
-        handler: async ({ request, deadline }) => {
-          const opened = await deps.open(request, deadline, "/did");
+        handler: async ({ request, deadline, deadlineAt }) => {
+          const opened = await deps.open(request, deadline, "/did", deadlineAt);
           if (opened instanceof Response) return opened;
           // The session store keeps only DIDs this server wrote after the callback parsed them.
           return new Response(null, {
@@ -34,12 +34,12 @@ export function meRoutes(deps: AccountDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "handler",
-      handler: async ({ request, params, deadline }) => {
+      handler: async ({ request, params, deadline, deadlineAt }) => {
         // shared/http decodes path parameters once; identity's parser accepts only supported DID syntax.
         const did = parseDid(params.did ?? "");
         if (did === null) throw new AppError("http.not_found");
         const accountPath = `/${did}`;
-        const opened = await deps.open(request, deadline, accountPath);
+        const opened = await deps.open(request, deadline, accountPath, deadlineAt);
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
         const { verdict, props } = await accountOf(opened, deadline);

@@ -125,9 +125,9 @@ function gate(afterS: number): AppGate {
       return { confirmed: row?.email_confirmed ?? null, checkedAt: row?.email_checked_at ?? null };
     },
     refreshEmail: emailRefresh({
-      sessionInfo: (owner, deadline) =>
+      sessionInfo: (owner, deadline, deadlineAt) =>
         answer === undefined
-          ? pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, owner)
+          ? pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, owner)
           : Promise.resolve(answer),
       setEmailConfirmed: (idHash, value, deadline) =>
         withTransaction(pool, deadline, (tx) => store.setEmailConfirmed(tx, idHash, value)),
@@ -151,6 +151,7 @@ const visit = (cookie: string, afterS: number) =>
     new Request("https://unset.test/me", { headers: { "x-test-sid": cookie } }),
     AbortSignal.timeout(5000),
     "/me",
+    performance.now() + 5000,
   );
 
 /** Two browsers of one account, each with a confirmed email checked just now, over one stored grant. */

@@ -7,13 +7,13 @@ import type { AppGate } from "./app-gate.ts";
 
 export type EmailRefreshDeps = {
   /** P2.07 pdsSessionInfo. On a dead grant it has already ended the DID's sessions (pds-call.ts `authDead`). */
-  sessionInfo: (did: Did, deadline: AbortSignal) => Promise<PdsResult<SessionInfo>>;
+  sessionInfo: (did: Did, deadline: AbortSignal, deadlineAt: number) => Promise<PdsResult<SessionInfo>>;
   setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
 };
 
 export function emailRefresh(deps: EmailRefreshDeps): AppGate["refreshEmail"] {
-  return async (session, deadline) => {
-    const info = await deps.sessionInfo(session.did, deadline);
+  return async (session, deadline, deadlineAt) => {
+    const info = await deps.sessionInfo(session.did, deadline, deadlineAt);
     switch (info.kind) {
       case "transient":
         return "transient";
