@@ -1260,6 +1260,16 @@ flowchart TD
   P1_38f["P1.38f Blob methods denied on the public PDS name"]
   P1_38g["P1.38g Dev directory bind dropped from C18"]
   P1_36c --> P1_38g
+  P1_39a["P1.39a Reviewed caddy adapt output for each env"]
+  P1_39b["P1.39b Edge rules on the adapted config"]
+  P1_39a --> P1_39b
+  P1_39c["P1.39c C18 runs caddy adapt in the edge image"]
+  P1_39b --> P1_39c
+  P1_39d["P1.39d Edge tests on the adapted config"]
+  P1_39b --> P1_39d
+  P1_39e["P1.39e Caddyfile reader deleted"]
+  P1_39c --> P1_39e
+  P1_39d --> P1_39e
   P1_38d["P1.38d [to fill: values refused under dev"]
   P1_36k["P1.36k Dev-only runtime keys refused outside local"]
   P1_36l["P1.36l Zero commit refused under dev"]
@@ -1471,6 +1481,11 @@ Arachnid application, and the Phase 1 exit.
 | P1.38f | Deny the blob methods on the public PDS name | [SEC] trusted | — | `phase-1.md` |
 | P1.36c | Wire the dev edge's app site and mounts (slice 2, after P1.38e) | [SEC] | P1.36b, P1.38e | `phase-1.md` |
 | P1.38g | Drop the dev directory bind from C18 | [SEC] | P1.36c | `phase-1.md` |
+| P1.39a | Save the reviewed `caddy adapt` output for each env | [SEC] trusted | — | `phase-1.md` |
+| P1.39b | Judge the adapted config with the edge rules | [SEC] trusted | P1.39a | `phase-1.md` |
+| P1.39c | Run `caddy adapt` in the edge image from C18 | [SEC] | P1.39b | `phase-1.md` |
+| P1.39d | Move the edge tests to the adapted config | [SEC] trusted | P1.39b | `phase-1.md` |
+| P1.39e | Delete the Caddyfile reader | [SEC] trusted [ALEX] (typed line) | P1.39c, P1.39d | `phase-1.md` |
 | P1.36i | Pin the dev edge aliases and public paths (slice 2, after P1.37v) | [SEC] | P1.36b, P1.37v | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.36b, P1.36c, P1.36i, P1.36j, P1.37v, P1.38e, P1.38f, P1.38d, P1.38g, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u | `phase-1.md` |
