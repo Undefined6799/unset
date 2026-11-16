@@ -14,7 +14,7 @@ From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reac
 | `apps/` | `web` |
 | `interfaces/` | `http` |
 | `domains/` | `identity` |
-| `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session` |
+| `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session`, `storage` |
 | `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
 | `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, the two compose files |
 
@@ -46,6 +46,6 @@ Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/mai
 | deployment-preflight | `deployment/preflight/` | itself, `deployment/edge/caddyfile.ts`, `shared/host-pin/index.ts`, the `yaml` package, Node | `edge-not-preflight` is one way: the edge never imports the preflight |
 | tooling | `scripts/`, `tests/`, `*.test.ts`, root config, an app's `vite.config.ts` | anything | `no-product-imports-tooling-set`: product code never imports this set |
 
-An app's `vite.config.ts` may also import Node built-ins and `scripts/ui/css-scope.ts` (`app-build-config-imports`). Nothing imports that file. A `*.island.tsx` may import `shared/ui/`, `shared/islands/` and `react/jsx-runtime` (`island-import-boundary`). `vendor-sdk-one-adapter` allows each SDK in `SDK_ADAPTERS` on one adapter path. The paths on this tree are `infrastructure/postgres/` (`pg`), `infrastructure/net-guard/` (`undici`), `infrastructure/pds/` (`@atproto/oauth-client-node`, `@atproto/api`), `infrastructure/seal/` (`age-encryption`) and `shared/lexicons/` (`@atproto/lex*`). The same list names the path `infrastructure/storage/` for `@aws-sdk/client-s3` and the path `apps/chat/matrix/` for `matrix-js-sdk`. `ADMIN_SERVICES` names `interfaces/pds-admin/` and `interfaces/chat-admin/`. `RENDER_ENTRIES.admin` names `apps/admin/render.tsx`. `ZERO_DEP_ALLOWLIST` and the `shared-admin-envelope` row name `shared/admin-envelope/`. Those strings are paths in `scripts/lint/.dependency-cruiser.cjs`.
+An app's `vite.config.ts` may also import Node built-ins and `scripts/ui/css-scope.ts` (`app-build-config-imports`). Nothing imports that file. A `*.island.tsx` may import `shared/ui/`, `shared/islands/` and `react/jsx-runtime` (`island-import-boundary`). `vendor-sdk-one-adapter` allows each SDK in `SDK_ADAPTERS` on one adapter path. The paths on this tree are `infrastructure/postgres/` (`pg`), `infrastructure/net-guard/` (`undici`), `infrastructure/pds/` (`@atproto/oauth-client-node`, `@atproto/api`), `infrastructure/seal/` (`age-encryption`), `infrastructure/storage/` (`@aws-sdk/client-s3`) and `shared/lexicons/` (`@atproto/lex*`). The same list names the path `apps/chat/matrix/` for `matrix-js-sdk`. `ADMIN_SERVICES` names `interfaces/pds-admin/` and `interfaces/chat-admin/`. `RENDER_ENTRIES.admin` names `apps/admin/render.tsx`. `ZERO_DEP_ALLOWLIST` and the `shared-admin-envelope` row name `shared/admin-envelope/`. Those strings are paths in `scripts/lint/.dependency-cruiser.cjs`.
 
 Adapters are built in the process's `compose.ts` (`interfaces/http/compose.ts` is the one that wires Postgres, net-guard, the PDS client, the sealer and the session store). `main.ts` imports `compose.ts` and does not import `infrastructure/`.

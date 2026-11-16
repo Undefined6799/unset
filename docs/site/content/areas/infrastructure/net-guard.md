@@ -25,8 +25,11 @@ Policies `policies.ts` exports:
 | `plc` | `kind: "fixed"`, host `plc.directory` |
 | `atproto` | `kind: "public"` |
 | `internalPolicy` | Builds a `kind: "internal"` policy from exact http(s) origins |
+| `objectStore(origin)` | `internalPolicy("object-store", [origin])`, one exact internal origin passed in by the caller |
 
 `localPlc` is a dead export, [ADR 0023](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0023-local-pds-publishes-to-shared-plc.md), decided (0001 log), acceptance pending.
+
+`checkRequest` in `request.ts` allows PUT only on a `kind: "internal"` policy and GET and POST on any; any other method throws `TypeError`.
 
 `request.ts` refuses status 301, 302, 303, 307 and 308 with `egress.redirect`. `resolveVetted` classifies every answer (`classifyAddress`) and `pinnedLookup` returns only the addresses it was given. `infrastructure/postgres/config.ts` calls `classifyAddress` for `PG_SSLMODE=disable`.
 

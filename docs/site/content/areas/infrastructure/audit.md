@@ -58,4 +58,4 @@ Grants recorded in `infrastructure/postgres/grant-matrix.json`:
 
 `grant-matrix.json` has no `audit.event_body` entry. `0010_audit_append_grant.sql` grants `EXECUTE` on `audit.append` to `web`, `indexer` and `admin`. Schema `USAGE` on `audit` is on the [postgres](../postgres/) page.
 
-`infrastructure/postgres/erasure-registry.json` has `audit.event_body.subject` with strategy `audit_redact`.
+`infrastructure/postgres/erasure-registry.json` has `audit.event_body.subject` and `audit.event_body.actor`, both with strategy `audit_redact`. `0016_audit_actor.sql` adds the `actor` column and replaces `audit.append` to fill it (ADR 0043).

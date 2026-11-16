@@ -125,13 +125,13 @@
   why: "Sends the signed-in member to their own account path (interfaces/http/routes/me.ts)."
   input: "No request body."
   output: "303 to / followed by the session DID, or the gate's redirect."
-  errors: "The handler returns the gate's redirect. It names no error code of its own."
+  errors: "The kit's session gate answers with its redirect before the handler runs (ADR 0045). It names no error code of its own."
   auth: "gate: openApp"
 "GET /me":
   why: "Legacy path to the signed-in member's account (interfaces/http/routes/me.ts)."
   input: "No request body."
   output: "303 to / followed by the session DID, or the gate's redirect."
-  errors: "The handler returns the gate's redirect. It names no error code of its own."
+  errors: "The kit's session gate answers with its redirect before the handler runs (ADR 0045). It names no error code of its own."
   auth: "gate: openApp"
 "GET /:did":
   why: "The signed-in member's own account page (interfaces/http/routes/me.ts)."
@@ -149,7 +149,7 @@
   why: "Saves the signed-in member's own profile to their PDS (interfaces/http/routes/profile.ts)."
   input: "Form fields displayName, headline, location, website and links; a field left out keeps its stored value."
   output: "303 to the member's profile page, or to /settings/profile when next names it."
-  errors: "profile.invalid, profile.too_long, profile.url_invalid and profile.name_required for bad fields. profile.conflict when the record changed since it was read. profile.pds_unavailable when the PDS does not answer."
+  errors: "profile.invalid, profile.too_long, profile.url_invalid and profile.name_required for bad fields. profile.conflict when the record changed since it was read. profile.pds_unavailable when the PDS does not answer. The kit's session gate answers a signed-out post with its redirect, and a member past their own limit with 429, before the handler runs (ADR 0045)."
   auth: "gate: openApp"
 "GET /welcome/age":
   why: "Asks for a birth date. The date is not stored (interfaces/http/routes/welcome.ts)."
@@ -203,11 +203,11 @@
   why: "The Profile page inside the settings side list (interfaces/http/routes/settings.ts)."
   input: "No request body."
   output: "HTML profile page, or the gate's redirect."
-  errors: "The handler returns the gate's redirect. It names no error code of its own."
+  errors: "The kit's session gate answers with its redirect before the handler runs (ADR 0045). It names no error code of its own."
   auth: "gate: openApp"
 "GET /settings/account":
   why: "The Account page: handle, DID and account host, inside the settings side list (interfaces/http/routes/settings.ts)."
   input: "No request body."
   output: "HTML account page, or the gate's redirect."
-  errors: "The handler returns the gate's redirect. A handle that cannot be checked shows as unavailable on the page."
+  errors: "The kit's session gate answers with its redirect before the handler runs (ADR 0045). A handle that cannot be checked shows as unavailable on the page."
   auth: "gate: openApp"

@@ -19,5 +19,10 @@
     "strategy": "audit_redact",
     "class": "mod",
     "reason": "the target of a moderation or security event; the side row is redacted, the hash chain stays (P1.15a)"
+  },
+  "audit.event_body.actor": {
+    "strategy": "audit_redact",
+    "class": "mod",
+    "reason": "the person who caused a moderation or security event; redacted with the same side row as its subject (P1.15k, ADR 0043)"
   }
 }

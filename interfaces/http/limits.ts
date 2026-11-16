@@ -9,6 +9,12 @@ export const policies = definePolicies({
     { capacity: 60, refillPerSec: 300 / 60, scope: "ip" },
     { capacity: 3000, refillPerSec: 3000 / 60, scope: "global" },
   ],
+  // A profile save writes to the member's PDS: the page limits, and 30 a minute for one member whatever their address.
+  profile: [
+    { capacity: 60, refillPerSec: 300 / 60, scope: "ip" },
+    { capacity: 3000, refillPerSec: 3000 / 60, scope: "global" },
+    { capacity: 30, refillPerSec: 30 / 60, scope: "did" },
+  ],
   login: [{ capacity: 10, refillPerSec: 10 / 60, scope: "ip" }],
   search: [
     { capacity: 60, refillPerSec: 60 / 60, scope: "ip" },
