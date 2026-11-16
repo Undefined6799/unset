@@ -135,6 +135,6 @@ Migrations and the objects they add:
 
 `sealed-columns.json`: `app.oauth_session.sealed` row key `did`; `app.oauth_state.sealed` row key `key`.
 
-`erasure-registry.json`: `app.single_use.bind_did`, `app.session.did`, `app.oauth_session.did` and `app.account.did` (`delete_row`); `audit.event_body.subject` (`audit_redact`).
+`erasure-registry.json`: `app.single_use.bind_did`, `app.session.did`, `app.oauth_session.did` and `app.account.did` (`delete_row`); `audit.event_body.subject` and `audit.event_body.actor` (`audit_redact`).
 
 `singleUse/store.ts` `PURPOSES`: `login.nonce` 600, `module.assertion` 120, `service_auth.jti` 120, `invite.claim` 600, `email.interstitial` 600, `chat.openid` 3600. The numbers are seconds.
