@@ -133,16 +133,18 @@ describe("the one bounded wait (D4)", () => {
     { Service: "pds", State: "running", Health: "" },
     { Service: "edge", State: "running", Health: "" },
     { Service: "web", State: "running", Health: "" },
+    { Service: "objects", State: "running", Health: "healthy" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
 
   test("wait_passes_only_when_every_service_is_up", () => {
-    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web"]);
+    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects"]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");
     expect(servicesVerdict(swap("migrate", { State: "exited", ExitCode: 1 }))).toBe("failed: migrate exited");
     expect(servicesVerdict(swap("pds", { State: "exited", ExitCode: 0 }))).toBe("failed: pds exited");
+    expect(servicesVerdict(swap("objects", { State: "running", Health: "starting" }))).toBe("starting");
     expect(servicesVerdict(swap("postgres", { State: "running", Health: "unhealthy" }))).toBe(
       "failed: postgres unhealthy",
     );

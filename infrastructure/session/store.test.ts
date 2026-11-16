@@ -47,6 +47,44 @@ describe("session store without a database", () => {
     await expect(busy.read({ key: {}, cookieValue: value, deadline: null })).rejects.toMatchObject({ code: "db.busy" });
   });
 
+  test("session.create_writes_only_an_origin_the_column_accepts", async () => {
+    // What create binds as issuer_origin: the caller's checked origin, or null for a shape migration 0019's check
+    // refuses, so that check can never fail a sign-in (ADR 0048).
+    const store = storeWith(() => Promise.reject(new Error("never reached")));
+    const did = parseDid("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") as Did;
+    const written = async (options?: { issuerOrigin?: string | null }) => {
+      let values: unknown[] = [];
+      const db = {
+        query: (text: string, bound: unknown[] = []) => {
+          expect(text).toContain("issuer_origin");
+          values = bound;
+          return Promise.resolve({ rows: [{ expires_at: new Date(0) }] as never[], rowCount: 1 });
+        },
+      };
+      await store.create(db, did, options);
+      return values[3];
+    };
+    expect(await written({ issuerOrigin: "https://pds.example.com" })).toBe("https://pds.example.com");
+    expect(await written({ issuerOrigin: `https://${"a".repeat(253)}` })).toBe(`https://${"a".repeat(253)}`);
+    expect(await written()).toBeNull();
+    expect(await written({ issuerOrigin: null })).toBeNull();
+    for (const issuerOrigin of [
+      "http://pds.example.com",
+      "https://pds.example.com:8443",
+      "https://pds.example.com/",
+      "https://PDS.example.com",
+      "https://under_score.example.com",
+      "https://user@pds.example.com",
+      "https://-pds.example.com",
+      `https://${"a".repeat(254)}`,
+      "https://pds.example.com\n",
+      "https://pds.example.com\nhttps://evil.example",
+      "",
+    ]) {
+      expect(await written({ issuerOrigin })).toBeNull();
+    }
+  });
+
   test("session.destroyAllForDid_requires_tx", () => {
     // The caller's transaction is a required argument, so ending the sessions commits with the caller's own change
     // (P2.12's block, P3.06's account state) or not at all. The check is the typecheck; nothing is called here.

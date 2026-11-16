@@ -194,7 +194,6 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("deployment/preflight/a.ts", "./checks/b.ts"),
     edge("deployment/preflight/a.ts", "yaml"),
     edge("deployment/preflight/a.ts", "node:child_process"),
-    edge("deployment/preflight/checks/a.ts", "../../edge/caddyfile.ts"),
     // P1.39c: the adapted config's comparison and rules, these two files only.
     edge("deployment/preflight/checks/a.ts", "../../edge/adapted.ts"),
     edge("deployment/preflight/checks/a.ts", "../../edge/adapted-rules.ts"),
@@ -595,16 +594,15 @@ describe("allowlist matrix", () => {
 
   test("deployment_preflight_is_a_leaf", async () => {
     // P1.30q: the preflight reaches only itself, Node built-ins and the yaml parser; it runs verify-images as a child
-    // process, never by import, and nothing outside it imports it. Two files outside itself are allowed: the edge
-    // reader deployment/edge/caddyfile.ts (P1.30u, Alex's "Allow import" 2026-10-12T02:16:16Z), and shared/host-pin's
-    // index only (P1.33i, DC-2; Alex's typed line 2026-10-14). Never a test, a sibling, or a file whose name only
-    // starts the same.
+    // process, never by import, and nothing outside it imports it. Outside itself it may import the edge's
+    // adapted.ts and adapted-rules.ts (P1.39c) and shared/host-pin's index only (P1.33i, DC-2; Alex's typed line
+    // 2026-10-14). Never a test, a sibling, or a file whose name only starts the same. The Caddyfile reader the row
+    // named until P1.39e is gone, and a file of its name is refused like any other edge file.
     await expectPass(edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts"));
     await expectFail(
       "not-in-allowed",
-      edge("deployment/preflight/a.ts", "../edge/caddyfile.test.ts"),
-      edge("deployment/preflight/a.ts", "../edge/caddyfile.image.test.ts"),
-      edge("deployment/preflight/a.ts", "../edge/caddyfile.ts.bak.ts"),
+      edge("deployment/preflight/a.ts", "../edge/caddyfile.ts"),
+      edge("deployment/preflight/a.ts", "../edge/adapted.ts.bak.ts"),
       // P1.39c: adapted.ts and adapted-rules.ts only, never their tests, another edge file or a name that starts so.
       edge("deployment/preflight/a.ts", "../edge/adapted.test.ts"),
       edge("deployment/preflight/a.ts", "../edge/adapted.image.test.ts"),
@@ -613,10 +611,10 @@ describe("allowlist matrix", () => {
       edge("deployment/preflight/a.ts", "../edge/docker-call.ts"),
       edge("deployment/images/a.ts", "../edge/adapted-rules.ts"),
       edge("deployment/preflight/a.ts", "../edge/edge.test.ts"),
-      edge("deployment/preflight/a.ts", "../edge/sites/caddyfile.ts"),
-      edge("deployment/preflight/a.ts", "../../x/deployment/edge/caddyfile.ts"),
-      // Only the preflight gains the edge reader: no other deployment/ file may import it (P1.30r).
-      edge("deployment/images/a.ts", "../edge/caddyfile.ts"),
+      edge("deployment/preflight/a.ts", "../edge/sites/adapted.ts"),
+      edge("deployment/preflight/a.ts", "../../x/deployment/edge/adapted.ts"),
+      // Only the preflight gains the edge's two files: no other deployment/ file may import them (P1.30r).
+      edge("deployment/images/a.ts", "../edge/adapted.ts"),
       edge("deployment/preflight/a.ts", "../../scripts/ci/verify-images.ts"),
       // P1.33i red fixtures: any other shared module, and a non-index file of shared/host-pin/.
       edge("deployment/preflight/a.ts", "../../shared/config/index.ts"),
@@ -634,7 +632,7 @@ describe("allowlist matrix", () => {
       edge("interfaces/http/a.ts", "../../deployment/preflight/b.ts"),
     );
     // The row is one way: the edge still never imports the preflight (P1.30r).
-    await expectFail("edge-not-preflight", edge("deployment/edge/caddyfile.ts", "../preflight/checks/edge.ts"));
+    await expectFail("edge-not-preflight", edge("deployment/edge/adapted.ts", "../preflight/checks/edge.ts"));
   });
 
   test("lexicon_scripts_row_is_narrow", async () => {

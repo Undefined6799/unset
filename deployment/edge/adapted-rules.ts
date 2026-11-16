@@ -6,12 +6,10 @@
 // configured value sits outside its position. Every module, matcher and key it does not name fails.
 //
 // It is pure: it takes parsed JSON, reads no file and runs no process. A message names a placeholder, never its value
-// (P1.28l). Each rule restates one of the reader's (caddyfile.ts edgeSiteProblems; preflight checks/edge.ts
-// certificateProblems); ADR 0046's table maps them. Nothing but its test reads this file until P1.39c.
+// (P1.28l). Each rule restates one of the hand-written Caddyfile reader's, which P1.39e deleted (edgeSiteProblems,
+// and the preflight's certificateProblems); ADR 0046's table maps them.
 //
-// A non-test edge file imports no other (dependency-cruiser), so the value shapes and the dev stack's ruled addresses
-// are written here as caddyfile.ts holds them; adapted-rules.test.ts holds the two equal until P1.39e deletes the
-// reader and these become the only copy.
+// The value shapes and the dev stack's ruled addresses are written here, their only copy since P1.39e.
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Obj = { [key: string]: Json };
 
@@ -246,8 +244,8 @@ const named = (handlers: Obj[], name: string): Obj[] => handlers.filter((handler
 
 /**
  * Why the adapted config breaks an edge rule; empty when it breaks none. `env` holds the values the config was adapted
- * with. The rules, each from the reader it replaces (deployment/edge/caddyfile.ts edgeSiteProblems and
- * deployment/preflight/checks/edge.ts certificateProblems; ADR 0046 maps them one by one):
+ * with. The rules, each from the deleted reader's rule it replaces (edgeSiteProblems and the preflight's
+ * certificateProblems; ADR 0046 maps them one by one):
  *
  * - only the modules, matchers and keys in the tables above; the admin API off and no config persisted;
  * - one loopback server, exactly the health site; one public server, on :443 or under dev on the edge's newt_edge
@@ -287,8 +285,11 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   return [...found, ...strayProblems(top, server, mode, env)];
 }
 
-/** Each value the env's sites need is present and fits its shape; the app's differ from the PDS's (P1.34a, P1.36b). */
-function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
+/**
+ * Each value the env's sites need is present and fits its shape; the app's differ from the PDS's (P1.34a, P1.36b).
+ * Exported so the preflight judges the values before it hands them to a container (P1.39e).
+ */
+export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
   const needed: EnvName[] = hostsOf(mode).flatMap((host) => [host, UPSTREAM[host]]);
   if (mode === "shipped") needed.push("ACME_EMAIL");
   const found = needed.filter((name) => !ENV_NAMES[name].test(env[name] ?? "")).map((name) => `{$${name}} is not set`);

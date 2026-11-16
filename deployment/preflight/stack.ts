@@ -23,8 +23,11 @@
 // 60 s in all to answer (P1.37u; book edit 2026-10-19-staging-tailnet-rulings): only no answer, or a refused
 // connection, waits; the first answer of any kind is judged at once.
 //
-// Under --env local (P1.34d item 15), `up` then runs served-leaf.ts, also as a process, to prove the edge serves the
-// leaf copy the preflight judged; if that check does not pass, the wrapper runs `down` and fails.
+// After Compose, `up` runs objects-buckets.ts as a process with the same compose files and interpolation file, which
+// creates the object store's buckets through the store's own shell (P2.18s; ADR 0050); if it does not pass, the
+// wrapper runs `down` and fails. Under --env local (P1.34d item 15), `up` then runs served-leaf.ts, also as a process,
+// to prove the edge serves the leaf copy the preflight judged; if that check does not pass, the wrapper runs `down` and
+// fails.
 import { spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
@@ -37,6 +40,7 @@ export const CHILD_ENV_NAMES = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PA
 
 const PRECHECK = resolve(import.meta.dirname, "../../scripts/dev-precheck.ts");
 const SERVED_LEAF = resolve(import.meta.dirname, "served-leaf.ts");
+const OBJECTS_BUCKETS = resolve(import.meta.dirname, "objects-buckets.ts");
 
 /**
  * A program to run; `name` is the fixed label reasons use, so no reason prints a path (P1.34s, nit 4). `undo` runs when
@@ -157,6 +161,13 @@ export function plan(
   const { action, env, source, files, envFile } = parse(argv);
   const compose = ["compose", ...files.flatMap((f) => ["-f", f]), "--env-file", envFile];
   const down: Command = { name: "docker", file: "docker", args: [...compose, "down"] };
+  // P2.18s (ADR 0050 Decision 2): the store's buckets, made through its own shell once Compose has started it.
+  const bucketSetup: Command = {
+    name: "the bucket setup",
+    file: process.execPath,
+    args: [OBJECTS_BUCKETS, "--", ...files.flatMap((f) => ["--compose", f]), "--interpolation-env", envFile],
+    undo: down,
+  };
   const leafCheck: Command = {
     name: "the leaf check",
     file: process.execPath,
@@ -188,6 +199,7 @@ export function plan(
             file: "docker",
             args: [...compose, "up", "-d", env === "local" || source ? "--build" : "--no-build"],
           },
+          bucketSetup,
           ...(env === "local" ? [leafCheck] : []),
         ]
       : [down];

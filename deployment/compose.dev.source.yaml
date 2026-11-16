@@ -156,7 +156,7 @@ services:
       - /tmp:uid=65532,gid=65532,mode=1777
     # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
     # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
-    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
+    # site's name and upstream are the ruled values (deployment/edge/adapted-rules.ts DEV_APP).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
@@ -243,6 +243,31 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
+  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
+  # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
+  # sits only on its own internal network and publishes nothing; until a process gets a key (P2.18, P2.18p), no service
+  # shares that network. Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
+  # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
+  # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
+  objects:
+    build:
+      context: ..
+      dockerfile: deployment/images/objects.Dockerfile
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - objectsdata:/data
+    secrets: [objects_s3]
+    networks: [objects]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    restart: unless-stopped
+
   # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
   # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
@@ -250,7 +275,7 @@ services:
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
   # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
   newt:
-    image: ghcr.io/undefined6799/mirror/newt@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319
+    image: ghcr.io/undefined6799/mirror/newt@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -301,12 +326,16 @@ networks:
         - subnet: 10.250.37.0/29
   # Newt's own way out: its tunnel to Pangolin.
   newt_egress:
+  # The object store's only network (ADR 0041): internal, so the store has no way out, and nothing else joins it yet.
+  objects:
+    internal: true
 
 volumes:
   pgdata:
   pdsdata:
   edgedata:
   edgeconfig:
+  objectsdata:
 
 secrets:
   pg_superuser_password:
@@ -333,3 +362,7 @@ secrets:
     file: ../../unset-dev-secrets/dev_tls_cert
   dev_tls_key:
     file: ../../unset-dev-secrets/dev_tls_key
+  # The object store's identities (ADR 0041 Decision 3, ADR 0050 Decision 1): SeaweedFS's s3.json, with no Admin
+  # identity; read by objects (uid 1000) only.
+  objects_s3:
+    file: ../../unset-dev-secrets/objects_s3

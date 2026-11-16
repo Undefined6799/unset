@@ -21,7 +21,7 @@ Our Postgres holds the app's own rows. The account's repo stays on its PDS. Sche
 
 | In Postgres, role `web` | On the account's PDS |
 | --- | --- |
-| `app.session`: hash of the cookie id, DID, timestamps, a cache of `emailConfirmed` (migration 0011). The raw cookie is not stored. | Sign-in and the OAuth grant. `emailConfirmed` is read from the PDS when the cache is stale. |
+| `app.session`: hash of the cookie id, DID, timestamps, a cache of `emailConfirmed` (migration 0011), and nullable `issuer_origin` (migration 0019, https-origin check, no grant in that file). The raw cookie is not stored. | Sign-in and the OAuth grant. `emailConfirmed` is read from the PDS when the cache is stale. |
 | `app.oauth_state`, `app.oauth_session`: sealed authorization state and token set (migration 0013). A dump of the column does not open the seal (`infrastructure/seal`). | The account repo and its records. This page does not read a profile record. |
 | `app.account`: onboarding state, terms and privacy versions, `age_confirmed_at` (migration 0015). The birth date is not a column. | |
 

@@ -236,9 +236,9 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     complete: (query) => completeAuthorization(oauth.client, query, log, pdsIssuer),
     consumeNonce: (nonce, deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
-    createSession: (did, replacingCookie, deadline) =>
+    createSession: (did, replacingCookie, issuerOrigin, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) =>
-        sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
+        sessions.create(tx, did, replacingCookie === null ? { issuerOrigin } : { replacingCookie, issuerOrigin }),
       ),
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     signInScope: oauth.signInScope,

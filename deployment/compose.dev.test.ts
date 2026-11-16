@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
+import { DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/adapted-rules.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
@@ -885,6 +885,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     web_oauth_client_keys: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
+    objects_s3: 1000,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1038,7 +1039,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 11 mounted secrets" },
+      { pass: true, reason: "3 files, 12 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
@@ -1084,7 +1085,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     // The cross reds (P1.37v): the address the edge's dev sites bind and its one trusted proxy, both in
     // deployment/edge (P1.36b, P1.36j), are exactly the addresses this file gives the edge and Newt on newt_edge; the
     // trusted listener is the dev sites' https listener; every zone keys on the client address behind Newt.
-    expect([DEV_EDGE_ADDRESS, DEV_PROXY_ADDRESS]).toEqual([EDGE_ADDRESS, NEWT_ADDRESS]);
+    expect(DEV_PROXY_ADDRESS).toBe(NEWT_ADDRESS);
     expect(DEV_LISTENER).toBe(`${EDGE_ADDRESS}:443`);
     const caddyfile = read("edge/Caddyfile");
     expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);
@@ -1121,7 +1122,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
   test("newt_runs_as_shipped_with_no_listener_and_no_host_access", () => {
     const newt = service(dev(), "newt");
     expect(newt.image).toBe(`ghcr.io/undefined6799/mirror/newt@${readLock().newt?.digest}`);
-    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.19\.0@sha256:[0-9a-f]{64}$/);
+    expect(readDeployLock().newt?.upstreamSource).toMatch(/^docker\.io\/fosrl\/newt:1\.20\.0@sha256:[0-9a-f]{64}$/);
     expect(newt.build).toBeNull();
     expect(newt.hardening).toMatchObject({
       readOnly: true,
@@ -1133,7 +1134,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     expect([newt.ports, newt.mounts, newt.secrets]).toEqual([[], [], []]);
     expect(newt.envFiles).toEqual(["../../unset-dev-env/newt.env"]);
     // Every setting a literal: no SSH, no client access, no Docker socket, no metrics or pprof listener, and its saved
-    // credentials on its tmpfs (newt 1.19.0 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
+    // credentials on its tmpfs (newt 1.20.0 newtconfig/newtconfig.go:452-503, websocket/config.go:26-51).
     expect(Object.fromEntries(newt.environment)).toEqual({
       CONFIG_FILE: { literal: "/tmp/newt.json" },
       DISABLE_SSH: { literal: "true" },

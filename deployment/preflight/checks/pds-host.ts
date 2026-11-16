@@ -1,6 +1,6 @@
 // C18's tie between the edge's PDS_HOST and the PDS's own PDS_HOSTNAME, in every env (P1.35g under local; P1.35l for
 // dev and prod, architecture 02:01Z). C21 reads only the retirement report (host.ts:18-40), so nothing else ties them.
-import { ENV_NAMES } from "../../edge/caddyfile.ts";
+import { ENV_NAMES } from "../../edge/adapted-rules.ts";
 import { fail, type Inputs, missing, type Outcome } from "./types.ts";
 
 /**

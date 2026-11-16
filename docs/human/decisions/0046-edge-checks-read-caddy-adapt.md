@@ -1,8 +1,10 @@
 # 0046 — The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile
 
-Status: Proposed, 2026-11-15. Not accepted. Decisions 1 and 2 add checks and remove none, and land with this record
-(P1.39a). Decision 5 removes a trusted reader and is a loosening: it waits for Alex's typed line on a named commit,
-after the coordinator's review.
+Status: Accepted by Alex, 2026-11-16 02:15:57Z, against f6e6789 (his line "loosen C18 reader call and accept ADR 0046
+Undefined6799/unset#1627 at f6e6789", typed in the project chat after the coordinator's review of that commit).
+Decisions 1 to 4 landed with P1.39a to P1.39c. Decision 5, the loosening, landed in two parts under P1.39e: C18
+stopped calling the reader in #1627, and the reader, its tests and its dependency-cruiser entry were deleted in the
+pull request that records this status.
 
 ## Context
 `deployment/edge/caddyfile.ts` (1,210 lines, with 1,628 lines of tests in four files) is our own reader of the
@@ -85,7 +87,7 @@ two replaces, built with Go from the same module versions):
 | Messages carry no configured value | Unchanged: fixed words and placeholder names. |
 
 ### What is lost when the reader goes
-Four reader rules judge the source text, and the adapted config no longer carries what they read. Each is replaced,
+Five reader rules judge the source text, and the adapted config no longer carries what they read. Each is replaced,
 not kept, and the replacement is a different kind of check:
 - **Where a placeholder is written.** The reader fails a `{$NAME}` outside its one position and an upstream written
   as a literal. After adapting, a placeholder and a literal with the same value are the same text, so the new rule
@@ -102,6 +104,13 @@ not kept, and the replacement is a different kind of check:
   a new directive is caught in two ways: the rules fail a module, matcher or key they do not name, and the deploy
   fails unless the adapted config equals the reviewed one. A directive that adapts only to keys the rules already
   allow reaches review as a diff of the saved JSON and is stopped there by a person, not by a machine.
+- **Which names a placeholder may read.** The reader fails a `{$NAME}` for any name but the five. Caddy replaces
+  `{$NAME}` from its process environment before it lexes, and an unset name with no default becomes nothing (v2.11.7
+  `caddyconfig/caddyfile/parse.go:63-64`, `replaceEnvVars` `:67-108`). C18 and the image test hand `caddy adapt` the
+  five names only, so a placeholder for a sixth adapts to the same config whatever the running edge would put there.
+  The new rule is on the other side (P1.39e): C18 fails when the edge service's environment, from `environment` or an
+  env file, holds any name beside the five. The running edge then reads exactly what adapt read, and a placeholder
+  for another name is empty in both.
 
 ### Who reviews the saved JSON
 A change to `deployment/edge/adapted/` is a trusted-base change: Alex reads the diff before merge, and the
