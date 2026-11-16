@@ -141,15 +141,22 @@ function whiteout(tree: Map<string, Entry>, path: string, entry: Entry, ui: stri
     for (const key of tree.keys()) if (key.startsWith(`${target}/`)) tree.delete(key);
   } else remove(tree, target);
 }
+/** Why a candidate entry outside the UI directory is not an untouched ancestor of it, or null when it is one. */
+function outsideChange(tree: Map<string, Entry>, path: string, entry: Entry, ui: string): string | null {
+  if (!ui.startsWith(`${path}/`)) return "not an ancestor of the UI directory";
+  if (entry.header.type !== "directory") return `a ${entry.header.type}, not a directory`;
+  if (!tree.has(path)) return "absent from the base";
+  // metadata() is JSON, so a control character in an owner name reaches the log escaped.
+  const [was, now] = [metadata(tree.get(path) as Entry), metadata(entry)];
+  return was === now ? null : `metadata differs from the base: base ${was}, layer ${now}`;
+}
 function install(tree: Map<string, Entry>, path: string, entry: Entry, ui: string | null): void {
-  if (ui !== null && !inside(ui, path))
-    requireThat(
-      ui.startsWith(`${path}/`) &&
-        entry.header.type === "directory" &&
-        tree.has(path) &&
-        metadata(tree.get(path) as Entry) === metadata(entry),
-      "outside UI filesystem change",
-    );
+  if (ui !== null && !inside(ui, path)) {
+    // The reason names the path and the first rule it broke, so a red run says what the layer held. A path here
+    // passed pathName (no control character, no backslash), so it cannot start a workflow command in the log.
+    const broke = outsideChange(tree, path, entry, ui);
+    requireThat(broke === null, `outside UI filesystem change: ${path} (${broke})`);
+  }
   if (["link", "symlink"].includes(entry.header.type)) {
     const target = linkTarget(path, entry.header.linkname, entry.header.type === "link");
     requireThat(ui === null || !inside(ui, path) || inside(ui, target), "link escapes UI directory");

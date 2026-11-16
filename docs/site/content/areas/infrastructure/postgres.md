@@ -17,11 +17,11 @@ Migrations, the role roster, grants, pools, transactions, and the stores whose S
 | `infrastructure/postgres/roles.json` | The roster below. |
 | `infrastructure/postgres/roles.ts` | `syncRolePasswords`. Skips a row whose `passwordFrom` is null. `ALTER ROLE` gets the string `scramVerifier` returns. |
 | `infrastructure/postgres/grant-matrix.json` | Grants the integration test diffs. |
-| `infrastructure/postgres/pool.ts` | `createPool`, `acquire`, `withClient`, `checkConnectionBudget`. The file comment and [ADR 0014](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0014-node-postgres.md) say `pool.connect` and `pool.query` live only here. `migrate.ts` and `roles.ts` open a `pg.Client` and call `client.connect()`. |
+| `infrastructure/postgres/pool.ts` | `createPool`, `acquire`, `withClient`, `readUntilAbort`, `ping`, `checkConnectionBudget`. `readUntilAbort` ends a client whose query outlives its signal, rejecting with `http.deadline`. `ping` is one `SELECT 1`; the signal bounds the wait for a client and the query. The file comment and [ADR 0014](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0014-node-postgres.md) say `pool.connect` and `pool.query` live only here. `migrate.ts` and `roles.ts` open a `pg.Client` and call `client.connect()`. |
 | `infrastructure/postgres/tx.ts` | `inTransaction`, `withTransaction`. The file comment says `BEGIN`, `COMMIT` and `ROLLBACK` in TypeScript live only here. `docs/human/architecture.md` row DM-2 names Semgrep `transactions-only-in-tx`. |
 | `infrastructure/postgres/config.ts` | `postgresFields`, `poolFields`, `lockPoolFields`, `connectionOf`. |
 | `infrastructure/postgres/lock.ts` | `withAdvisoryLock`, `createRequestLock`. `LockNamespace.oauth` is `1`. The wait calls `pg_advisory_xact_lock`. |
-| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`. SQL on `app.oauth_state` and `app.oauth_session`. Values go through the sealer. |
+| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`. SQL on `app.oauth_state` and `app.oauth_session`. Values go through the sealer. `createOAuthStateStore`'s `sweep` is run by `interfaces/http/jobs/sweeps.ts` (`sweep.oauth_state`). |
 | `infrastructure/postgres/singleUse/store.ts` | `createSingleUseStore`. SQL on `app.single_use`. `PURPOSES` is the closed list. |
 | `infrastructure/postgres/didColumns.ts` | `didColumns`. One catalog query for columns typed `types.did` or `types.at_uri`, including arrays. |
 | `infrastructure/postgres/sealedColumns.ts` | `sealedColumns`, `sealedContext`. Rows from `sealed-columns.json`. |
@@ -131,6 +131,7 @@ Migrations and the objects they add:
 | `0013_app_oauth.sql` | `app.oauth_state`, `app.oauth_session`. |
 | `0014_app_end_sessions.sql` | `app.end_sessions_for_did` (`SECURITY DEFINER`). |
 | `0015_app_account.sql` | `app.account`. |
+| `0016_audit_actor.sql` | `audit.event_body.actor`; `audit.append` replaced to fill it and to refuse a person's action with no actor. |
 
 `sealed-columns.json`: `app.oauth_session.sealed` row key `did`; `app.oauth_state.sealed` row key `key`.
 

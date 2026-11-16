@@ -108,6 +108,7 @@ beforeAll(async () => {
     { createSignInLock },
     { logoutRoutes },
     { meRoutes },
+    { appSessionGate },
     { policies },
     { config },
     { webTestEnv },
@@ -118,6 +119,7 @@ beforeAll(async () => {
     import(join(HTTP, "sign-in-lock.ts")),
     import(join(HTTP, "routes/logout.ts")),
     import(join(HTTP, "routes/me.ts")),
+    import(join(HTTP, "app-gate.ts")),
     import(join(HTTP, "limits.ts")),
     import(join(HTTP, "config.ts")),
     import(join(HTTP, "test-env.ts")),
@@ -126,6 +128,16 @@ beforeAll(async () => {
   ]);
   remainingSessions = counted;
   const page = testPage(log);
+  // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
+  const open = async (request: Request, deadline: AbortSignal, next: string) => {
+    const { session, clearCookie } = await store.read({ key: request, cookieValue: cookieOf(request), deadline });
+    if (session === null) {
+      const headers = new Headers({ location: `/login?${new URLSearchParams({ next })}`, "cache-control": "no-store" });
+      if (clearCookie) headers.append("set-cookie", sessionClearCookie());
+      return new Response(null, { status: 303, headers });
+    }
+    return { session, privacyNotice: false };
+  };
   server = createServer({
     // The schema arrives through a path import, so its field types do not survive; the value is the web config.
     config: loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN })) as Parameters<
@@ -154,23 +166,7 @@ beforeAll(async () => {
         log,
       }),
       ...meRoutes({
-        // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
-        open: async (request: Request, deadline: AbortSignal, next: string) => {
-          const { session, clearCookie } = await store.read({
-            key: request,
-            cookieValue: cookieOf(request),
-            deadline,
-          });
-          if (session === null) {
-            const headers = new Headers({
-              location: `/login?${new URLSearchParams({ next })}`,
-              "cache-control": "no-store",
-            });
-            if (clearCookie) headers.append("set-cookie", sessionClearCookie());
-            return new Response(null, { status: 303, headers });
-          }
-          return { session, privacyNotice: false };
-        },
+        open,
         verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -181,6 +177,7 @@ beforeAll(async () => {
     ],
     policies,
     log,
+    gate: appSessionGate(open),
   });
 });
 

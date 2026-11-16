@@ -70,6 +70,6 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 `infrastructure/postgres/roles.ts` syncs passwords only when `passwordFrom` is not null.
 
-Only [http](./http/) opens a pool. Roles for the processes without a folder yet are in `roles.json` ahead of their code. Per-role grants for `web` are on its page.
+Only [http](./http/) opens a pool. `roles.json` also lists roles for processes that have no folder on this tree. Per-role grants for `web` are on its page.
 
 `review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2).

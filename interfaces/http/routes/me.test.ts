@@ -10,6 +10,7 @@ import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
+import { appSessionGate } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
@@ -67,7 +68,13 @@ function setup(world: World = {}) {
     pdsIssuer: "https://pds.unset.test",
     log,
   };
-  const server = createServer({ config: CONFIG, routes: meRoutes(deps), policies, log });
+  const server = createServer({
+    config: CONFIG,
+    routes: meRoutes(deps),
+    policies,
+    log,
+    gate: appSessionGate(deps.open),
+  });
   const get = (path = ACCOUNT_PATH) =>
     server.request(
       new Request(`${ORIGIN}${path}`, {
