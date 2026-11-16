@@ -5,14 +5,19 @@
 //
 //   node deployment/preflight/objects-buckets.ts -- --compose <file> [--compose <file>...] --interpolation-env <file>
 //
-// It waits for the store's health endpoint (the image's own HEALTHCHECK URL, objects.Dockerfile), lists the buckets,
-// creates each missing one with `s3.bucket.create -name <name>`, and lists again to prove both exist. It never passes
+// It waits for the store's health endpoint (the image's own HEALTHCHECK URL, objects.Dockerfile), then for a first
+// list of the buckets to succeed, creates each missing one with `s3.bucket.create -name <name>`, and lists again to prove both exist. It never passes
 // -withLock, which turns versioning and object lock on (weed shell `help s3.bucket.create`, SeaweedFS 4.53). What weed
 // prints is never echoed: it prints bucket names and sizes only, and this prints fixed lines (SE-7).
 //
 // weed shell reads commands from stdin and, on 4.53 (checked 2026-11-16): `s3.bucket.list` prints one line per bucket,
 // two spaces then the name then a tab; `s3.bucket.create` on an existing bucket exits 1 ("already exists"), so a bucket
 // is created only when the list lacks it; an unknown command exits 1.
+//
+// The health URL answers before the master has a leader: on a restart with existing raft state the shell's first list
+// fails while the masters elect ("raft.Server: Not current leader", staging 2026-11-16). So a failed first list is
+// retried, with the pause doubling from 1 s up to 8 s, until it succeeds or the deadline passes. Once a list has
+// succeeded there is a leader, and every later failure is final.
 import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 
@@ -22,6 +27,7 @@ export const BUCKETS = ["unset-private", "unset-pds"] as const;
 export const DEADLINE_MS = 90_000;
 const CALL_MS = 30_000;
 const PAUSE_MS = 1_000;
+const MAX_PAUSE_MS = 8_000;
 const HEALTH = ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"];
 
 /** One finished `docker` call; `status` is null when it never ran, ran out of time or was killed. */
@@ -56,8 +62,12 @@ export function ensureBuckets(compose: string[], docker: Docker): string | null 
     if (health.status === 0) break;
     docker.sleep(Math.min(PAUSE_MS, Math.max(0, deadline - docker.now())));
   }
-  const before = shell("s3.bucket.list");
-  if (before?.status !== 0) return "the object store's shell could not list the buckets";
+  let before = shell("s3.bucket.list");
+  for (let pause = PAUSE_MS; before !== null && before.status !== 0; pause = Math.min(pause * 2, MAX_PAUSE_MS)) {
+    docker.sleep(Math.min(pause, Math.max(0, deadline - docker.now())));
+    before = shell("s3.bucket.list");
+  }
+  if (before === null) return "the object store's shell could not list the buckets in time";
   for (const name of BUCKETS.filter((bucket) => !listedBuckets(before.stdout).includes(bucket))) {
     if (shell(`s3.bucket.create -name ${name}`)?.status !== 0) return `the object store did not create ${name}`;
   }

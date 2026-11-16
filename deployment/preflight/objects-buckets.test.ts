@@ -66,7 +66,14 @@ describe("objects bucket setup (P2.18s)", () => {
       "the object store did not become healthy in time",
     );
     const listFails = store({ answer: (line) => (line.startsWith("s3.bucket.list") ? 1 : 0) });
-    expect(ensureBuckets(COMPOSE, listFails.docker)).toBe("the object store's shell could not list the buckets");
+    expect(ensureBuckets(COMPOSE, listFails.docker)).toBe(
+      "the object store's shell could not list the buckets in time",
+    );
+    // After a first list has succeeded there is a leader, so a failed second list is final.
+    let lists = 0;
+    const secondFails = store({ answer: (line) => (line.startsWith("s3.bucket.list") && lists++ > 0 ? 1 : 0) });
+    expect(ensureBuckets(COMPOSE, secondFails.docker)).toBe("the object store's shell could not list the buckets");
+    expect(secondFails.lines.filter((line) => line.startsWith("s3.bucket.list"))).toHaveLength(2);
     const createFails = store({ answer: (line) => (line.startsWith("s3.bucket.create") ? 1 : 0) });
     expect(ensureBuckets(COMPOSE, createFails.docker)).toBe("the object store did not create unset-private");
     // A create that reports success but leaves no bucket is caught by the second list.
@@ -79,8 +86,28 @@ describe("objects bucket setup (P2.18s)", () => {
     expect(ensureBuckets(COMPOSE, lying)).toBe("the object store lacks unset-private, unset-pds after setup");
     // A killed call (status null) is a failure, not a pass.
     expect(ensureBuckets(COMPOSE, store({ answer: () => null }).docker)).toBe(
-      "the object store's shell could not list the buckets",
+      "the object store's shell could not list the buckets in time",
     );
+  });
+
+  test("the_first_list_waits_for_a_leader", () => {
+    // Healthy before a leader exists (a restart with raft state, staging 2026-11-16): the first lists fail, then one
+    // succeeds, and the pauses between them double up to 8 s.
+    let failures = 6;
+    const s = store({ answer: (line) => (line.startsWith("s3.bucket.list") && failures-- > 0 ? 1 : 0) });
+    const pauses: number[] = [];
+    const sleep = s.docker.sleep;
+    const docker: Docker = { ...s.docker, sleep: (ms) => (pauses.push(ms), sleep(ms)) };
+    expect(ensureBuckets(COMPOSE, docker)).toBeNull();
+    expect(pauses).toEqual([1_000, 2_000, 4_000, 8_000, 8_000, 8_000]);
+    expect(s.lines.filter((line) => line.startsWith("s3.bucket.create"))).toHaveLength(2);
+  });
+
+  test("a_store_with_no_leader_fails_by_the_deadline", () => {
+    const s = store({ answer: (line) => (line.startsWith("s3.bucket.list") ? 1 : 0) });
+    expect(ensureBuckets(COMPOSE, s.docker)).toBe("the object store's shell could not list the buckets in time");
+    expect(s.docker.now()).toBeLessThanOrEqual(DEADLINE_MS + 10);
+    expect(s.lines.some((line) => line.startsWith("s3.bucket.create"))).toBe(false);
   });
 
   test("the_wait_ends_by_the_deadline", () => {
@@ -107,11 +134,15 @@ describe("objects bucket setup (P2.18s)", () => {
 
 describe("objects bucket setup as a process (P2.18s)", () => {
   test("what_docker_prints_is_never_echoed", () => {
-    // A docker on PATH that answers the health probe, then fails the shell with text on stderr: the setup's own stderr
-    // holds only its fixed line (SE-7).
+    // A docker on PATH that answers the health probe and the list, printing text on both streams, then fails the
+    // create with text on stderr: the setup's own stderr holds only its fixed line (SE-7).
     const bin = mkdtempSync(join(tmpdir(), "objects-docker-"));
     const fake = join(bin, "docker");
-    writeFileSync(fake, '#!/bin/sh\ncase "$*" in *wget*) exit 0 ;; esac\necho "LEAKED-STORE-OUTPUT" >&2\nexit 1\n');
+    writeFileSync(
+      fake,
+      '#!/bin/sh\ncase "$*" in *wget*) exit 0 ;; esac\nread -r line\necho "LEAKED-STORE-OUTPUT"\necho "LEAKED-STORE-OUTPUT" >&2\n' +
+        'case "$line" in s3.bucket.list) exit 0 ;; esac\nexit 1\n',
+    );
     chmodSync(fake, 0o755);
     const ran = spawnSync(
       process.execPath,
@@ -119,7 +150,7 @@ describe("objects bucket setup as a process (P2.18s)", () => {
       { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin` }, timeout: 30_000 },
     );
     expect(ran.status).toBe(1);
-    expect(ran.stderr).toBe("objects: the object store's shell could not list the buckets\n");
+    expect(ran.stderr).toBe("objects: the object store did not create unset-private\n");
     expect(ran.stdout).toBe("");
   });
 });
