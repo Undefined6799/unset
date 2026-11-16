@@ -5,30 +5,26 @@
 
 # Upstream base until P1.27s mirrors it (book edits 2026-10-06-p127-upstream-base-by-digest, 2026-10-07-p128-edge-bases-and-ratelimit-adr); removed by P1.27s.
 # hadolint ignore=DL3026
-FROM docker.io/library/caddy:2.11.7-builder-alpine@sha256:d718a1d1431403c4a46698f33ad1c0f9dd5dd7fe2bae654d1027d275b6fb5fd7 AS build
+FROM docker.io/library/caddy:2.11.9-builder-alpine@sha256:646fee578e680989ca5c7fd1ce6f1de574d19fd71ef2221810cc0510a9f40c86 AS build
 # Module downloads go through the default proxy (proxy.golang.org) and are checked against the checksum database
 # (sum.golang.org); none of GONOSUMDB, GONOSUMCHECK, GOINSECURE, GOPRIVATE or an insecure flag is set. With
 # -mod=readonly the final `go build` fails if go.mod would change after xcaddy's `go get` and `go mod tidy` (Go 1.27:
 # cmd/go/internal/modload/init.go setDefaultBuildMod; `go get` omits the -mod flag, modget/get.go:270).
 ENV GOFLAGS=-mod=readonly
-# Builder index d718a1d1 (tag 2.11.7-builder-alpine, Docker Hub last_updated 2026-10-20T08:52:39Z)
-# sets GOLANG_VERSION=1.27.3. Rebuilding with it drops the fixed stdlib HIGH finding
-# CVE-2026-111943 (crypto/x509, fixed in 1.27.3). The index is under 7 days old; the base-digest
-# bump procedure allows that when the PR names the CVE. Caddy v2.11.7 go.mod still requires
-# golang.org/x/net v0.59.0, so --replace pins v0.60.0 (proxy.golang.org, 2026-10-08T17:22:58Z),
-# the fixed module for CVE-2026-78669. xcaddy v0.4.7 writes it as `go mod edit -replace`
-# (github.com/caddyserver/xcaddy blob/v0.4.7/environment.go) and does not add an import.
-# go-jose/v4 is pinned the same way to v4.1.6 (proxy.golang.org, 2026-10-14T22:46:21Z), the fixed module for
-# CVE-2026-116587 (Trivy 0.75.0 on 2026-10-28: v4.1.5 in Caddy v2.11.7's build, HIGH).
-RUN xcaddy build v2.11.7 \
+# Builder index 646fee57 (tag 2.11.9-builder-alpine; amd64 image created 2026-11-10T18:35:33Z) sets
+# GOLANG_VERSION=1.27.4 and XCADDY_VERSION=v0.4.7. Caddy v2.11.9 go.mod requires golang.org/x/net v0.60.0 and
+# github.com/go-jose/go-jose/v4 v4.1.6 (proxy.golang.org caddy/v2@v2.11.9 go.mod), so the go-jose replace is gone;
+# --replace pins x/net to v0.62.0 (proxy.golang.org, 2026-10-27T19:00:16Z), the fixed module for CVE-2026-78661.
+# xcaddy v0.4.7 writes it as `go mod edit -replace` (github.com/caddyserver/xcaddy blob/v0.4.7/environment.go) and
+# does not add an import.
+RUN xcaddy build v2.11.9 \
       --with github.com/mholt/caddy-ratelimit@v0.1.1-0.20260612195517-5625512f24f6 \
-      --replace golang.org/x/net=golang.org/x/net@v0.60.0 \
-      --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 \
+      --replace golang.org/x/net=golang.org/x/net@v0.62.0 \
       --output /out/caddy
 
 # Upstream base until P1.27s mirrors it (book edits 2026-10-06-p127-upstream-base-by-digest, 2026-10-07-p128-edge-bases-and-ratelimit-adr); removed by P1.27s.
 # hadolint ignore=DL3026
-FROM docker.io/library/caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f AS runtime
+FROM docker.io/library/caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset" \
       org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0 AND OFL-1.1"
 COPY --from=build /out/caddy /usr/bin/caddy

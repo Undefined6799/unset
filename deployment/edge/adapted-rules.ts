@@ -556,6 +556,7 @@ function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): 
   }
   for (const proxy of proxies) found.push(...proxyProblems(name, proxy, env[UPSTREAM[host]] as string));
   found.push(...snippetProblems(name, site, routes, host, mode), ...headerProblems(name, all, host, env));
+  found.push(...strayRouteProblems(name, site, routes));
   return [...found, ...fontProblems(name, routes, host, env)];
 }
 
@@ -671,8 +672,9 @@ function zoneSetProblems(name: string, zones: Obj, own: string, other: string): 
   if (!(own in zones)) found.push(`${name}: there is no ${own} zone`);
   else if ("match" in obj(zones[own])) found.push(`${name}: the ${own} zone has a matcher`);
   if (other in zones) found.push(`${name}: the route applies another site's zones`);
-  for (const [zone, settings] of Object.entries(zones)) {
-    if (obj(settings).key !== CLIENT_KEY) found.push(`${name}: the ${zone} zone is not keyed on {client_ip}`);
+  // A fixed label: the zone's name is input, and a message repeats nothing it was given.
+  if (Object.values(zones).some((settings) => obj(settings).key !== CLIENT_KEY)) {
+    found.push(`${name}: a zone is not keyed on {client_ip}`);
   }
   return found;
 }
@@ -748,6 +750,27 @@ function snippetProblems(name: string, site: Obj[], routes: Obj[], host: Host, m
   const own = pds ? ROUTE_CLASS : [];
   const exact = classes.length === own.length && own.every((part, at) => same(site[at], part));
   return exact ? found : [...found, `${name}: the route class is not the ruled one`];
+}
+
+/**
+ * Nothing answers a request but the ruled snippets and the upstream. Before the site's route only the route class and
+ * `headers` handlers may sit, so no `static_response` there can answer for the site. Inside it, a route that counts
+ * or proxies has no matcher and holds only the rate limiter, the fonts' CSP append and the upstream; every other
+ * route is one a snippet adapts to, whole.
+ */
+function strayRouteProblems(name: string, site: Obj[], routes: Obj[]): string[] {
+  const found: string[] = [];
+  const kinds = (handlers: Obj[]): string[] => handlers.map((each) => String(each.handler));
+  if (!kinds(site.slice(0, -1)).every((kind) => ["map", "log_append", "headers"].includes(kind))) {
+    found.push(`${name}: a handler outside the ruled snippets`);
+  }
+  const ruled: Json[] = [...XRPC_GUARD, BLOB_DENY, SIGNIN_FILES, FONT_404];
+  const fine = routes.every((route) => {
+    const own = kinds(arr(route.handle).map(obj));
+    if (!own.includes("rate_limit") && !own.includes("reverse_proxy")) return holds(ruled, route) || isFontFile(route);
+    return !("match" in route) && own.every((kind) => ["rate_limit", "headers", "reverse_proxy"].includes(kind));
+  });
+  return fine ? found : [...found, `${name}: a route outside the ruled snippets`];
 }
 
 /**
