@@ -29,11 +29,13 @@ const BUILD = [
 /**
  * Modules that build an image only through a process runner handed to them (P1.39c; ADR 0046 decision 4): the
  * preflight's C18 builds the edge under local and dev --source through `Inputs.run`. A unit test may reach one, since
- * it hands it a double and nothing is built. The exemption holds only while the module imports no child_process of its
- * own, so it cannot start a process itself; the preflight's real runner is private to its CLI entry.
+ * it hands it a double and nothing is built. The exemption holds only while the module cannot start a process itself
+ * (startsNoProcess): neither it nor anything it imports, at any depth, names child_process in any form. The
+ * preflight's real runner is private to its CLI entry.
  */
 const INJECTED_BUILDS: readonly string[] = ["deployment/preflight/checks/edge-adapt.ts"];
-const OWN_PROCESS = /["'](?:node:)?child_process["']/;
+/** The module's name anywhere in a file's text: a static, dynamic or template-literal import, a require, a comment. */
+const OWN_PROCESS = /child_process/;
 const SKIP = /\b(?:runIf|skipIf|todo)\b|\.skip\b/;
 /** Each module dependency-cruiser reaches from `root`, with its imports resolved by the repository's own resolver
  * settings (scripts/lint/.dependency-cruiser.cjs): extensionless and `.js` imports, folder indexes and `@unset/*`
@@ -82,11 +84,31 @@ function buildProblem(root: string, walk: Walk, test: string): string | null {
   return null;
 }
 
+/**
+ * Whether `file` and every module it reaches cannot start a process: none names child_process, as an import
+ * dependency-cruiser sees or anywhere in its text, and every import of ours on the way resolves, so nothing is left
+ * unread. A third-party package is not followed, as elsewhere in this walk; the listed module imports none.
+ */
+function startsNoProcess(root: string, walk: Walk, file: string): boolean {
+  const seen = new Set<string>();
+  const pending = [file];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (seen.has(next)) continue;
+    seen.add(next);
+    const dependencies = walk.graph.get(next) ?? [];
+    if (OWN_PROCESS.test(readFileSync(join(root, next), "utf8"))) return false;
+    if (dependencies.some((dependency) => OWN_PROCESS.test(dependency.module))) return false;
+    if (dependencies.some((dependency) => dependency.couldNotResolve && ours(dependency))) return false;
+    pending.push(...dependencies.filter(followed).map((dependency) => dependency.resolved));
+  }
+  return true;
+}
+
 /** Why `file`, reached from `test`, breaks the rule on its own: it builds an image, or one of its imports does not
  * resolve. */
 function moduleProblem(root: string, walk: Walk, test: string, file: string): string | null {
   const text = readFileSync(join(root, file), "utf8");
-  const injected = walk.injected.includes(file) && !OWN_PROCESS.test(text);
+  const injected = walk.injected.includes(file) && startsNoProcess(root, walk, file);
   if (!injected && BUILD.some((pattern) => pattern.test(text))) {
     const by = file === test ? "builds an image" : `imports ${file}, which builds an image`;
     return `${test} ${by}, so it must be named *.image.test.ts`;
@@ -189,24 +211,43 @@ describe("image tests", () => {
     ]);
   });
 
-  test("injected_build_is_exempt_only_when_listed_and_spawning_nothing", async () => {
-    // P1.39c: a module that builds through a runner it is handed, and one that also imports child_process.
+  test("injected_build_is_exempt_only_when_nothing_it_reaches_can_spawn", async () => {
+    // P1.39c: a module that builds through a runner it is handed is exempt only when listed, and only while neither
+    // it nor anything it imports, at any depth, names child_process: statically, dynamically, by a template literal,
+    // or through an import that does not resolve.
     const handed = `export const make = (run) => run("docker", ${JSON.stringify([BUILD_WORD, "-q", "."])});\n`;
-    const root = tree({
-      "e/handed.ts": handed,
-      "e/handed.test.ts": using("./handed.ts"),
-      "e/unlisted.ts": handed,
-      "e/unlisted.test.ts": using("./unlisted.ts"),
-      "e/spawns.ts": `import { execFile } from "node:child_process";\n${handed}`,
-      "e/spawns.test.ts": using("./spawns.ts"),
-    });
-    expect((await imageBuildProblems(root, ["e/handed.ts", "e/spawns.ts"])).problems).toEqual([
-      named("e/spawns.test.ts", "imports e/spawns.ts, which builds an image"),
-      named("e/unlisted.test.ts", "imports e/unlisted.ts, which builds an image"),
-    ]);
-    // The list is one file, and the listed file exists and starts no process itself.
+    const name = ["child", "process"].join("_");
+    const viaHelper = (helper: string) => `import "./${helper}";\n${handed}`;
+    const cases: Record<string, Record<string, string>> = {
+      handed: { "handed.ts": handed },
+      unlisted: { "unlisted.ts": handed },
+      static: { "static.ts": `import { execFile } from "node:${name}";\n${handed}` },
+      dynamic: { "dynamic.ts": `const start = () => import("node:${name}");\n${handed}` },
+      template: { "template.ts": `const start = () => import(\`node:${name}\`);\n${handed}` },
+      required: { "required.ts": `const start = () => require("${name}");\n${handed}` },
+      deep: {
+        "deep.ts": viaHelper("deep-a.ts"),
+        "deep-a.ts": 'import "./deep-b.ts";\n',
+        "deep-b.ts": `export const start = () => import("node:${name}");\n`,
+      },
+      missing: { "missing.ts": viaHelper("gone.ts") },
+      clean: { "clean.ts": viaHelper("clean-a.ts"), "clean-a.ts": "export const one = 1;\n" },
+    };
+    const files: Record<string, string> = {};
+    for (const [each, sources] of Object.entries(cases)) {
+      for (const [file, text] of Object.entries(sources)) files[`e/${file}`] = text;
+      files[`e/${each}.test.ts`] = using(`./${each}.ts`);
+    }
+    const listed = Object.keys(cases)
+      .filter((each) => each !== "unlisted")
+      .map((each) => `e/${each}.ts`);
+    const { problems } = await imageBuildProblems(tree(files), listed);
+    const refused = ["deep", "dynamic", "missing", "required", "static", "template", "unlisted"];
+    expect(problems.filter((problem) => problem.includes("builds an image"))).toEqual(
+      refused.map((each) => named(`e/${each}.test.ts`, `imports e/${each}.ts, which builds an image`)),
+    );
+    // The list is one file.
     expect(INJECTED_BUILDS).toEqual(["deployment/preflight/checks/edge-adapt.ts"]);
-    for (const file of INJECTED_BUILDS) expect(readFileSync(join(ROOT, file), "utf8")).not.toMatch(OWN_PROCESS);
   });
 
   test("unresolved_import_fails", async () => {

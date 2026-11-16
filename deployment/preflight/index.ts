@@ -86,7 +86,8 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
     // A check's own deadline comes from its definition alone, before the default or a test's.
     const timeoutMs = check.timeoutMs ?? deps.timeoutMs ?? NETWORK_TIMEOUT_MS;
     const outcome = await runCheck(check, loaded, timeoutMs, new Map(earlier));
-    earlier.set(check.id, outcome);
+    // Frozen: the copies each later check gets share these objects, and none may turn an earlier failure into a pass.
+    earlier.set(check.id, Object.freeze({ ...outcome }));
     failed ||= !outcome.pass;
     lines.push(`${verdict(outcome)} ${check.id}${named(outcome, services)} ${printable(outcome.reason)}`);
   }

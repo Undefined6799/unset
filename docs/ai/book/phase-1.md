@@ -16397,7 +16397,8 @@ for the two new imports in its own trusted PR if the guard requires); ADR 0046 d
 to be null and the P1.39b rules to pass, beside the reader until P1.39e. The image is the lock's edge reference by
 digest, only after C2 to C5 passed, or under `--env local` and `--env dev --source` an image the preflight builds
 from `deployment/edge/Dockerfile` after C26 passed. The container gets no network, a read-only root, no added
-capability, the image's user, the edge service's read-only `/etc/caddy` binds, and its values by variable name.
+capability, the edge's uid 65532:65532 (the image's USER), the edge service's read-only `/etc/caddy` binds, and its
+values by variable name.
 Reds: no Docker fails; a non-zero exit, a timeout and non-JSON output fail; an image other than the lock's is never
 run; a failed C5 means no run; a reason never carries a value or Caddy's stderr.
 

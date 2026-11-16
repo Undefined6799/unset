@@ -5801,6 +5801,36 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     expect(result.lines).toContain("FAIL C18 timed out");
   });
 
+  test("a_later_check_cannot_change_an_earlier_outcome", async () => {
+    // The outcomes handed to a check are frozen: one that tries to turn an earlier failure into a pass throws, which
+    // is its own failure, and the next check still sees the failure.
+    const seen: (boolean | undefined)[] = [];
+    const checks: Check[] = [
+      { id: "C2", run: () => fail("not verified") },
+      {
+        id: "X1",
+        run: (_inputs, _signal, earlier) => {
+          const first = earlier?.get("C2") as Outcome;
+          first.pass = true;
+          return pass();
+        },
+      },
+      {
+        id: "X2",
+        run: (_inputs, _signal, earlier) => {
+          seen.push(earlier?.get("C2")?.pass);
+          (earlier as Map<string, Outcome>).set("C2", pass());
+          return pass();
+        },
+      },
+      { id: "X3", run: (_inputs, _signal, earlier) => (seen.push(earlier?.get("C2")?.pass), pass()) },
+    ];
+    const result = await check({}, "prod", { checks });
+    expect(result.lines).toEqual(["FAIL C2 not verified", "FAIL X1 check error", "PASS X2 ok", "PASS X3 ok"]);
+    // X2 replaced the entry in its own copy of the map only.
+    expect(seen).toEqual([false, false]);
+  });
+
   test("c18_built_edge_is_built_then_run_with_the_same_hardening", async () => {
     // dev --source with the edge built from its Dockerfile: no pull, the build's id is what runs, flags unchanged.
     const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
