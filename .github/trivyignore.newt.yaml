@@ -1,0 +1,21 @@
+# Accepted findings in the upstream Newt image only (P1.37m).
+# Format: Trivy v0.76.1 docs/guide/configuration/filtering.md (.trivyignore.yaml).
+# `paths` and `purls` scope the id to the one binary and module version; `expired_at`
+# is yyyy-mm-dd, at most 30 days ahead (NEWT_MAX_DAYS). Passed with --ignorefile only
+# when the source is docker.io/fosrl/newt, in mirror.yml and images.yml.
+# Trivy v0.76.1 reported this one finding for 1.20.0 (2170e673) on 2026-11-16: x/net
+# v0.60.0 linked into newt, fixed in v0.62.0, which only fosrl/newt main carries
+# (1.20.0 is the newest tag). The advisory is in golang.org/x/net/html (quadratic text
+# coalescing in the HTML parser). The newt binary links x/net bpf, dns/dnsmessage,
+# http/httpguts, http/httpproxy, http2, http2/hpack, icmp, idna, internal/socket,
+# internal/timeseries, ipv4, ipv6 and trace, but not html (package paths read from the
+# linux/amd64 binary's pclntab), so the vulnerable code is not in the image.
+# Removed when the pin moves to a release built with the fix.
+vulnerabilities:
+  - id: CVE-2026-78661
+    paths:
+      - "usr/local/bin/newt"
+    purls:
+      - "pkg:golang/golang.org/x/net@v0.60.0"
+    statement: "sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e: Newt 1.20.0, newest upstream release, no fixed build yet; the finding is in golang.org/x/net/html, which the newt binary does not link; removed on the re-pin to a release with x/net v0.62.0 or later"
+    expired_at: 2026-12-15

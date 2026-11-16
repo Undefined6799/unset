@@ -30,7 +30,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | `caddy` | `docker.io/library/caddy` | `2.11.9-alpine` | runtime |
 | `postgres` | `docker.io/library/postgres` | `18-trixie` | runtime |
 | `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5051` | runtime |
-| `newt` | `docker.io/fosrl/newt` | `1.19.0` | runtime |
+| `newt` | `docker.io/fosrl/newt` | `1.20.0` | runtime |
 | `seaweedfs` | `docker.io/chrislusf/seaweedfs` | `4.53` | runtime |
 
 `deployment/mirror.list.json` lists the same seven sources. Each `mirror` is `ghcr.io/undefined6799/mirror/<name>` (`seaweedfs` is `ghcr.io/undefined6799/mirror/seaweedfs`).
@@ -43,7 +43,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | --- | --- | --- |
 | `postgres`, `migrate`, `edge`, `web` | `first-party` | `ghcr.io/undefined6799/unset/<name>@sha256:…` |
 | `pds` | `first-party` | `ghcr.io/undefined6799/unset/pds`, built by publish-images from `deployment/pds/Dockerfile` on the Bluesky `0.4.5051` image (P2.24y) |
-| `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.19.0` |
+| `newt` | `upstream` | `ghcr.io/undefined6799/mirror/newt`, `upstreamSource` `docker.io/fosrl/newt:1.20.0` |
 
 The digest strings live in the lock. This page does not copy them.
 
