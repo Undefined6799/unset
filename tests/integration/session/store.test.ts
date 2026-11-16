@@ -112,7 +112,13 @@ describe("session store", () => {
     const { cookieValue, expiresAt } = await withClient(web, null, (db) => store.create(db, DID_A));
     expect(cookieValue).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const raw = Buffer.from(cookieValue, "base64url");
-    const rows = await sql<Record<string, unknown>>("SELECT * FROM app.session WHERE did = $1", [DID_A]);
+    // Every column web may read, by name: web holds column grants only, so `SELECT *` is refused as soon as the
+    // table has a column web was not granted (issuer_origin, between migrations 0019 and 0020).
+    const rows = await sql<Record<string, unknown>>(
+      "SELECT id_hash, did, created_at, last_seen_at, absolute_expires_at, email_confirmed, email_checked_at " +
+        "FROM app.session WHERE did = $1",
+      [DID_A],
+    );
     const row = rows.find((r) => (r.id_hash as Buffer).equals(sha256(raw)));
     expect(row).toBeDefined();
     for (const value of Object.values(row ?? {})) {
