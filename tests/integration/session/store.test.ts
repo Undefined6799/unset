@@ -344,7 +344,7 @@ describe("session store", () => {
     // P2.04s: the library deletes a token set when its grant is dead, and that ends every browser session on it.
     // P2.03t (migration 0024, ADR 0049): the rows go with the set, in the same statement, so a later sign-in that
     // stores a new set cannot make an old cookie valid again.
-    const { store, request } = setup();
+    const { store, logged, request } = setup();
     const owner = newDid();
     await giveTokenSet(owner);
     const values = [await insertSession(owner), await insertSession(owner)];
@@ -355,17 +355,21 @@ describe("session store", () => {
     for (const value of values) {
       expect(await store.read(request(value))).toEqual({ session: null, clearCookie: true });
     }
+    // An ended session is an ordinary unknown cookie: nothing is logged about it.
+    expect(logged).toEqual([]);
   });
 
   test("session.needs_a_token_set", async () => {
     // The order the constraint requires: the token set first, then the session row. 23503 is foreign_key_violation
     // (https://www.postgresql.org/docs/18/errcodes-appendix.html). The store's create fails the same way, so a
     // sign-in whose set is gone by the time its session is written fails closed.
-    const { store } = setup();
+    const { store, logged } = setup();
     const owner = newDid();
     await expect(insertSession(owner)).rejects.toMatchObject({ code: "23503" });
     await expect(withTransaction(web, null, (db) => store.create(db, owner))).rejects.toMatchObject({ code: "23503" });
     expect(await sql("SELECT 1 FROM app.session WHERE did = $1", [owner])).toEqual([]);
+    // The store throws the database's error and logs nothing: no DID reaches a log line from here.
+    expect(logged).toEqual([]);
   });
 
   test("session.token_refresh_keeps_sessions", async () => {

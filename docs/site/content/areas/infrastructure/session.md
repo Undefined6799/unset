@@ -17,7 +17,7 @@ A session ends at whichever limit comes first. `create` sets `absolute_expires_a
 
 `SessionDb` is a `query` method. `WithSessionDb` is how `read` takes a connection. The composition root passes them. This package does not import `infrastructure/postgres` or `pg`. The [`infrastructure` row](../) does not let it.
 
-`END_SESSIONS_REASONS` is the same ten strings as the `IN` list in `infrastructure/postgres/migrations/0014_app_end_sessions.sql`. `destroyAllForDid` calls `app.end_sessions_for_did($1, $2)`. That function deletes `app.session` for the DID. Since migration `0025_app_session_token_set_fk.sql`, `app.session.did` also references `app.oauth_session(did)` with `ON DELETE CASCADE`: deleting a member's token set deletes their sessions, and a session cannot be inserted before its token set (ADR 0049). When `p_why` is not `deactivated` it also deletes `app.oauth_session` for the DID.
+`END_SESSIONS_REASONS` is the same ten strings as the `IN` list in `infrastructure/postgres/migrations/0014_app_end_sessions.sql`. `destroyAllForDid` calls `app.end_sessions_for_did($1, $2)`. That function deletes `app.session` for the DID. Since migration `0024_app_session_token_set_fk.sql`, `app.session.did` also references `app.oauth_session(did)` with `ON DELETE CASCADE`: deleting a member's token set deletes their sessions, and a session cannot be inserted before its token set (ADR 0049). When `p_why` is not `deactivated` it also deletes `app.oauth_session` for the DID.
 
 `interfaces/http/compose.ts` calls `createSessionStore`. Cookie attributes are `interfaces/http`, not this package.
 
