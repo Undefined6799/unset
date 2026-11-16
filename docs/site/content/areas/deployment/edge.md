@@ -44,7 +44,7 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 | `snippets/upstream.caddy` | image `COPY` | Upstream timeout and the forwarding headers the file deletes. |
 | `snippets/xrpc-guard.caddy` | image `COPY` | PDS admin surface. The dev PDS site also shuts blob routes. |
 
-`(pds-fonts)` as written in `snippets/pds-fonts.caddy`. `sites/pds.caddy` imports it after `xrpc-guard`. `dev/pds.caddy` imports it after `blob-deny`. Both imports are inside `route`, before `import upstream`. Inside `route`, Caddy v2.11.7 runs the directives in the order written.
+`(pds-fonts)` as written in `snippets/pds-fonts.caddy`. `sites/pds.caddy` imports it after `xrpc-guard`. `dev/pds.caddy` imports it after `blob-deny`. Both imports are inside `route`, before `import upstream`. Inside `route`, Caddy v2.11.9 runs the directives in the order written.
 
 | Line | Effect |
 | --- | --- |
@@ -57,7 +57,7 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 
 The licence files copied to `/etc/caddy/static/licenses/` sit outside `/_unset/`, so this snippet does not serve them. The PDS sites import `security-headers` at site level, which sets `X-Content-Type-Options nosniff`. In Caddy's default order that `header` runs before `route`.
 
-Read against Caddy v2.11.7: `caddyconfig/httpcaddyfile/directives.go` (`route` is the ordered group; `header` precedes it in the default order), `modules/caddyhttp/fileserver/staticfiles.go` (GET and HEAD only; `notFound` returns 404 when `pass_thru` is unset; an existing Content-Type is kept), `modules/caddyhttp/headers/caddyfile.go` (`>` sets the replace deferred) and `modules/caddyhttp/headers/headers.go` (`responseWriterWrapper` applies it at `WriteHeader`). `modules/caddyhttp/matchers.go` `matchHeaders` treats a trailing `*` as a prefix. A replace of `^(.+)$` needs one character, so a response with no Content-Security-Policy is left as the upstream wrote it.
+Read against Caddy v2.11.9: `caddyconfig/httpcaddyfile/directives.go` (`route` is the ordered group; `header` precedes it in the default order), `modules/caddyhttp/fileserver/staticfiles.go` (GET and HEAD only; `notFound` returns 404 when `pass_thru` is unset; an existing Content-Type is kept), `modules/caddyhttp/headers/caddyfile.go` (`>` sets the replace deferred) and `modules/caddyhttp/headers/headers.go` (`responseWriterWrapper` applies it at `WriteHeader`). `modules/caddyhttp/matchers.go` `matchHeaders` treats a trailing `*` as a prefix. A replace of `^(.+)$` needs one character, so a response with no Content-Security-Policy is left as the upstream wrote it.
 
 `deployment/edge/image-cleanup.ts` exports `removeEveryTag` for the image tests. It imports nothing.
 
