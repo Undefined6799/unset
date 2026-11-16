@@ -170,7 +170,6 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C15",
   "C16",
   "C17",
-  "C18",
   "C19",
   "C20",
   "C21",
@@ -179,6 +178,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C24",
   "C25",
   "C26",
+  "C18", // after C26, whose outcome it needs to build the edge (P1.39c)
   "C27",
   "C28",
   "C29",
@@ -538,7 +538,7 @@ describe("preflight", () => {
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C17", "C18", "C25"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C17", "C25", "C18"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -592,11 +592,11 @@ describe("preflight", () => {
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
     // C18 reads the lock's edge ref (P1.30w), C25 does for the edge's cap_add (P1.30x), and C17 to know the edge beside
     // the PDS (P1.35o), so all three fail closed without the lock, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C18", "C25"]);
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C25", "C18"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C17", "C18", "C25"]);
+    expect(failed(unlisted)).toEqual(["C2", "C17", "C25", "C18"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -3126,8 +3126,8 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     });
     expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
-      EDGE_NOT_RUN,
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      EDGE_NOT_RUN,
     ]);
     const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
     symlinkSync(join(folder.root, "deployment/images"), join(folder.root, "deployment/linked"));
@@ -3138,8 +3138,8 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     });
     expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
-      EDGE_NOT_RUN,
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      EDGE_NOT_RUN,
     ]);
   });
 
@@ -4235,6 +4235,26 @@ networks:
       };
       expect(await onLocal(linked), entry).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
     }
+    // P1.39c (Codex on #1609): the CA key hard-linked into the edge's build context. C18 builds the edge only when the
+    // whole of C26 passes, so the alias is never sent to the daemon: no build, no run.
+    const alias = (root: string) => {
+      mkdirSync(join(root, "deployment/edge/fonts"), { recursive: true });
+      linkSync(join(folder(root), "root.key"), join(root, "deployment/edge/fonts/alias.txt"));
+    };
+    const { run, calls } = fakeRun();
+    const { lines } = await local((text) => text, { setUp: alias, deps: { run } });
+    expect(c26(lines)).toMatch(/^FAIL C26 dev CA file has extra hard links: /);
+    expect(lines).toContain("FAIL C18 the edge image was not built: C26 does not pass");
+    const edgeCalls = calls.filter(([file, verb]) => file === "docker" && (verb === "build" || verb === "run"));
+    expect(edgeCalls).toEqual([]);
+    // Run with no C26 outcome before it, or after a C26 that failed, C18 builds nothing: it fails closed.
+    const failing: Check = { id: "C26", run: () => fail("x") };
+    for (const checks of [[c18], [failing, c18]]) {
+      const lone = fakeRun();
+      const alone = await local((text) => text, { deps: { run: lone.run, checks } });
+      expect(alone.lines).toContain("FAIL C18 the edge image was not built: C26 does not pass");
+      expect(lone.calls.filter(([f, verb]) => f === "docker" && (verb === "build" || verb === "run"))).toEqual([]);
+    }
     // N1: a link inside the folder, here to a folder outside it, is never followed.
     const pointing = (root: string) => {
       mkdirSync(join(dirname(root), "outside"));
@@ -4486,6 +4506,7 @@ networks:
       });
       expect(lines.filter((line) => /C26/.test(line))).toEqual([
         `FAIL C26 dev CA file has extra hard links: ${printable(path)}`,
+        "FAIL C18 the edge image was not built: C26 does not pass",
       ]);
       expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
     }

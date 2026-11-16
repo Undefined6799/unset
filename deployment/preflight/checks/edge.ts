@@ -530,12 +530,15 @@ function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
 const IMAGE_CHECKS = ["C2", "C3", "C4", "C5"];
 
 /**
- * The image `caddy adapt` may run in (P1.39c), or why none: the edge's own build under local and dev --source, which
- * the compose rules above held to EDGE_DOCKERFILE and C26's rule; otherwise the lock's edge reference, and only when
- * C2 to C5 each passed in this run, as a verified image and not a local stack's unsigned one.
+ * The image `caddy adapt` may run in (P1.39c), or why none. Under local and dev --source it is the edge's own build,
+ * which the compose rules above held to EDGE_DOCKERFILE, and it is built only when the whole of C26 passed in this
+ * run (C26 comes before C18 in the list): its context rule and its dev CA and dev trust folder rules, so no second
+ * name for a CA file is ever sent to the daemon (Codex on #1609). Otherwise it is the lock's edge reference, and only
+ * when C2 to C5 each passed in this run, as a verified image and not a local stack's unsigned one.
  */
 function adaptImage(inputs: Inputs, edge: Service, earlier: Earlier): EdgeImage | Outcome {
   if (edge.build !== null && (inputs.env === "local" || inputs.source)) {
+    if (earlier.get("C26")?.pass !== true) return fail("the edge image was not built: C26 does not pass");
     return { dockerfile: edge.build.dockerfile, context: edge.build.context };
   }
   const verified = IMAGE_CHECKS.every((id) => earlier.get(id)?.pass === true && earlier.get(id)?.unsigned !== true);
