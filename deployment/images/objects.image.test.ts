@@ -4,9 +4,11 @@
 // buckets through the store's own shell, with versioning left off (ADR 0050). It builds an image, so it lives in an
 // *.image.test.ts file (P1.28r): CI runs it after the unit tests, and a local run without Docker fails rather than
 // skips.
+import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AwsClient } from "aws4fetch";
 import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
 import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
@@ -26,6 +28,22 @@ function identities(body: string): string {
   writeFileSync(file, body);
   chmodSync(file, 0o644);
   return file;
+}
+
+/** The bucket setup's own calls, `compose … exec -T objects <command>`, run in `container` instead. */
+function inContainer(container: string, inputs: string[] = []): Docker {
+  return {
+    run: (args, input, timeoutMs) => {
+      const command = args.slice(args.indexOf("objects") + 1);
+      inputs.push(input);
+      const ran = docker(["exec", "-i", container, ...command], { timeoutMs, input });
+      return { status: ran.code, stdout: ran.out };
+    },
+    now: () => performance.now(),
+    sleep: (ms) => {
+      docker(["exec", container, "sleep", `${Math.ceil(ms / 1000)}`], { timeoutMs: CALL_MS });
+    },
+  };
 }
 
 /** The anonymous S3 answer to GET `path` from inside the container, once the server answers at all (busybox wget). */
@@ -86,21 +104,9 @@ describe("objects image", () => {
           const container = started.out.trim();
           withCleanup(
             () => {
-              // The setup's own calls, `compose … exec -T objects <command>`, run in this container instead.
               const inputs: string[] = [];
-              const inContainer: Docker = {
-                run: (args, input, timeoutMs) => {
-                  const command = args.slice(args.indexOf("objects") + 1);
-                  inputs.push(input);
-                  const ran = docker(["exec", "-i", container, ...command], { timeoutMs, input });
-                  return { status: ran.code, stdout: ran.out };
-                },
-                now: () => performance.now(),
-                sleep: (ms) => {
-                  docker(["exec", container, "sleep", `${Math.ceil(ms / 1000)}`], { timeoutMs: CALL_MS });
-                },
-              };
-              expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer)).toBeNull();
+              const store = inContainer(container, inputs);
+              expect(ensureBuckets(["compose", "-f", "x.yaml"], store)).toBeNull();
               const shell = (line: string) =>
                 docker(["exec", "-i", container, "weed", "shell"], { timeoutMs: CALL_MS, input: `${line}\n` }).out;
               expect(listedBuckets(shell("s3.bucket.list")).sort()).toEqual([...BUCKETS].sort());
@@ -117,7 +123,7 @@ describe("objects image", () => {
               }
               // A second `up` finds both buckets and creates nothing.
               inputs.length = 0;
-              expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer)).toBeNull();
+              expect(ensureBuckets(["compose", "-f", "x.yaml"], store)).toBeNull();
               expect(inputs.filter((line) => line.startsWith("s3.bucket.create"))).toEqual([]);
             },
             () => docker(["rm", "-f", container], { timeoutMs: CALL_MS }),
@@ -125,6 +131,67 @@ describe("objects image", () => {
         },
         () => removeTestImage(image, { timeoutMs: CALL_MS }),
       );
+    },
+    TEST_MS,
+  );
+
+  test(
+    "objects_each_bucket_takes_writes",
+    async () => {
+      // Staging, 2026-11-16: with the default 32 GB volume size and -volume.max=0, a disk with 51 GB free holds one
+      // volume, the filer's own collection took it, and every PDS upload failed "No writable volumes". Each bucket is
+      // its own collection and needs volumes of its own (weed/topology/volume_growth.go grows 7 per collection at
+      // 4.53). So the store runs on a 40 GB /data, like staging's, and each caller writes with its own scoped key.
+      const image = buildTestImage(join(IMAGES, "objects.Dockerfile"), IMAGES, { timeoutMs: BUILD_CALL_MS });
+      const key = () => ({
+        accessKey: randomBytes(8).toString("hex"),
+        secretKey: randomBytes(24).toString("base64url"),
+      });
+      const callers = { "unset-pds": key(), "unset-private": key() };
+      const file = identities(
+        JSON.stringify({
+          identities: Object.entries(callers).map(([bucket, credentials]) => ({
+            name: bucket,
+            credentials: [credentials],
+            actions: [`Read:${bucket}`, `Write:${bucket}`, `List:${bucket}`],
+          })),
+        }),
+      );
+      try {
+        const started = docker(
+          ["run", "-d", "--read-only", "-p", "127.0.0.1::8333", "--tmpfs", "/tmp"].concat([
+            "--tmpfs",
+            "/data:uid=1000,gid=1000,size=40g",
+            "-v",
+            `${file}:${SECRET}:ro`,
+            image,
+          ]),
+          { timeoutMs: CALL_MS },
+        );
+        expect(started.code, started.err).toBe(0);
+        const container = started.out.trim();
+        try {
+          expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer(container))).toBeNull();
+          const port = docker(["port", container, "8333/tcp"], { timeoutMs: CALL_MS }).out.split(":").at(-1)?.trim();
+          for (const [bucket, { accessKey, secretKey }] of Object.entries(callers)) {
+            const client = new AwsClient({
+              accessKeyId: accessKey,
+              secretAccessKey: secretKey,
+              service: "s3",
+              region: "us-east-1",
+            });
+            const url = `http://127.0.0.1:${port}/${bucket}/probe/one`;
+            const put = await fetch(await client.sign(url, { method: "PUT", body: `bytes for ${bucket}` })); // guard-allow: egress the loopback store this test started
+            expect(put.status, `${bucket}: ${await put.text()}`).toBe(200);
+            const got = await fetch(await client.sign(url, { method: "GET" })); // guard-allow: egress the loopback store this test started
+            expect(await got.text(), bucket).toBe(`bytes for ${bucket}`);
+          }
+        } finally {
+          docker(["rm", "-f", container], { timeoutMs: CALL_MS });
+        }
+      } finally {
+        removeTestImage(image, { timeoutMs: CALL_MS });
+      }
     },
     TEST_MS,
   );
