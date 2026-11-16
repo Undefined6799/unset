@@ -178,6 +178,7 @@ const BLOB_DENY: Json = {
   ],
   handle: [{ handler: "static_response", status_code: 404 }],
 };
+const SIGNIN_ALLOW: Json = { handler: "headers", response: { set: { Allow: ["GET, HEAD"] } } };
 const SIGNIN_FILES: Json = {
   match: [
     {
@@ -188,11 +189,28 @@ const SIGNIN_FILES: Json = {
       },
     },
   ],
-  handle: [
-    { handler: "headers", response: { set: { Allow: ["GET, HEAD"] } } },
-    { handler: "static_response", status_code: 405 },
-  ],
+  handle: [SIGNIN_ALLOW, { handler: "static_response", status_code: 405 }],
 };
+/** (route-class) as adapted: the class of route an access log line names in place of its URI, first on the PDS site. */
+const ROUTE_CLASS: Json[] = [
+  {
+    handler: "map",
+    source: "{http.request.orig_uri}",
+    destinations: ["{route_class}"],
+    mappings: [
+      {
+        input_regexp: "^/xrpc/(_health|[A-Za-z][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)+)(?:\\?[^#]*)?$",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Caddy's capture placeholder, as adapted.
+        outputs: ["xrpc:${1}"],
+      },
+      { input_regexp: "^/oauth/", outputs: ["oauth"] },
+      { input_regexp: "^/\\.well-known/", outputs: ["well-known"] },
+      { input_regexp: "^/health(?:\\?[^#]*)?$", outputs: ["health"] },
+    ],
+    defaults: ["other"],
+  },
+  { handler: "log_append", key: "route_class", value: "{route_class}" },
+];
 /**
  * (pds-fonts) as adapted (P2.24e): woff2 files by one plain name from the image's /etc/caddy/static, anything else
  * under /_unset/ a 404, and one deferred CSP append on HTML responses naming the exact origin and path. The file
@@ -243,6 +261,9 @@ const named = (handlers: Obj[], name: string): Obj[] => handlers.filter((handler
  * - under dev the security headers, noindex, the admin guard and blob routes shut on the PDS, the sign-in files
  *   read-only on the app;
  * - the fonts once on the PDS site before its upstream; no other file server, response matcher or CSP change;
+ * - the logs whole: errors and one filtered access log per site, no credentials, the PDS's route class and no other
+ *   map or log_append; each site's zones, upstream handler and response-header handlers whole, the headers all before
+ *   the route; the security headers on every site and the admin guard on the PDS in every env;
  * - each configured value only in its position, and no secret path outside the certificate files.
  */
 export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): string[] {
@@ -256,7 +277,9 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   if (loopback.length !== 1) found.push("not exactly one health site on loopback");
   const [server, ...others] = open;
   if (server === undefined || others.length > 0) return [...found, "not exactly one public server"];
-  found.push(...serverProblems(server, mode, env), ...tlsProblems(top, server, mode, env));
+  const hosts = hostsOf(mode).map((host) => env[host] as string);
+  found.push(...serverProblems(server, mode, env), ...logProblems(top, server, hosts));
+  found.push(...tlsProblems(top, server, mode, env));
   for (const host of hostsOf(mode)) {
     const route = siteRoute(server, env[host] as string);
     found.push(...(route === null ? [`{$${host}}: no site`] : siteProblems(route, host, mode, env)));
@@ -320,7 +343,8 @@ function matcherProblems(matcher: Json): string[] {
 
 function handlerShapeProblems(handler: Obj): string[] {
   const name = typeof handler.handler === "string" ? handler.handler : "";
-  const keys = HANDLER_KEYS[name];
+  // Own keys only: a handler named `constructor` or `__proto__` is no module of ours, and must fail, not throw.
+  const keys = Object.hasOwn(HANDLER_KEYS, name) ? HANDLER_KEYS[name] : undefined;
   if (keys === undefined) return ["a handler the rules do not read"];
   const found = unknownKeys(handler, ["handler", ...keys], `a ${name} handler`);
   if (name === "subroute") found.push(...routeShapeProblems(arr(handler.routes)));
@@ -364,8 +388,84 @@ function serverProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] 
     (route) => route.terminal === true && hosts.some((host) => same(route.match, [{ host: [host] }])),
   );
   if (!exact || routes.length !== hosts.length) found.push("the public server holds a site other than the env's own");
-  const logged = Object.keys(obj(obj(server.logs).logger_names)).sort();
-  if (!same(logged, [...hosts].sort())) found.push("the access log does not name exactly the env's sites");
+  return found;
+}
+
+const deleted = (fields: readonly string[]): Json =>
+  Object.fromEntries(fields.map((each) => [each, { filter: "delete" }]));
+const filtered = (fields: readonly string[]): Json => ({
+  fields: deleted(fields),
+  format: "filter",
+  wrap: { format: "json" },
+});
+/** What an access log line never carries (SE-7; snippets/log.caddy): the client's address, headers, URI and user. */
+const ACCESS_DROPPED = [
+  "request>client_ip",
+  "request>headers",
+  "request>proto",
+  "request>remote_ip",
+  "request>remote_port",
+  "request>tls",
+  "request>uri",
+  "resp_headers",
+  "user_id",
+];
+/** What the error log never carries (SE-7; the Caddyfile's global log). */
+const ERROR_DROPPED = [
+  "client_ip",
+  "data>remote_ip",
+  "remote",
+  "remote_addr",
+  "remote_ip",
+  "request>client_ip",
+  "request>headers",
+  "request>remote_ip",
+  "request>remote_port",
+  "request>tls",
+  "request>uri",
+  "resp_headers",
+];
+/** The whole `logging` block for `count` sites: errors to stderr, and one filtered access log per site to stdout. */
+function loggingFor(count: number): Json {
+  const names = Array.from({ length: count }, (_, at) => `log${at}`);
+  const access = names.map((name) => `http.log.access.${name}`);
+  const logs: Obj = {
+    default: {
+      writer: { output: "stderr" },
+      encoder: filtered(ERROR_DROPPED),
+      level: "ERROR",
+      exclude: ["http.log.access", ...access, "http.stdlib"],
+    },
+  };
+  names.forEach((name, at) => {
+    logs[name] = { writer: { output: "stdout" }, encoder: filtered(ACCESS_DROPPED), include: [access[at] as string] };
+  });
+  return { logs };
+}
+
+/**
+ * The logs (SE-7; P1.28): the `logging` block is the ruled one whole, so no logger, field or level is added or
+ * dropped, and the public server's `logs` only names each site's own filtered access logger: no other key, so
+ * credentials are never logged, and no site writes to the default logger.
+ */
+function logProblems(top: Obj, server: Obj, hosts: readonly string[]): string[] {
+  const found: string[] = [];
+  if (!same(top.logging, loggingFor(hosts.length))) found.push("the logs are not the ruled ones");
+  const logs = obj(server.logs);
+  const names = obj(logs.logger_names);
+  if (!same(Object.keys(logs), ["logger_names"])) found.push("the public server changes what it logs");
+  if (!same(Object.keys(names).sort(), [...hosts].sort())) {
+    found.push("the access log does not name exactly the env's sites");
+  }
+  const loggers = Object.values(names).map(canonical).sort();
+  if (
+    !same(
+      loggers,
+      hosts.map((_, at) => canonical([`log${at}`])),
+    )
+  ) {
+    found.push("a site's access log is not its own filtered logger");
+  }
   return found;
 }
 
@@ -446,13 +546,17 @@ function siteProblems(route: Obj, host: Host, mode: EdgeMode, env: AdaptedEnv): 
   const routes = arr(inner.routes).map(obj);
   const all = handlersIn(site);
   const found = [...zoneProblems(name, routes, all, host, mode)];
+  // The route answers the request, so a handler after it never runs on an upstream's response: the site's headers
+  // must all come before it.
+  if (site.at(-1) !== inner) found.push(`${name}: a handler follows the route`);
   const proxies = named(all, "reverse_proxy");
   if (proxies.length === 0) found.push(`${name}: public site without an upstream`);
   if (named(routesIn(routes), "reverse_proxy").length !== proxies.length) {
     found.push(`${name}: a reverse_proxy is outside the route`);
   }
   for (const proxy of proxies) found.push(...proxyProblems(name, proxy, env[UPSTREAM[host]] as string));
-  if (mode === "dev") found.push(...devShapeProblems(name, site, routes, host));
+  found.push(...snippetProblems(name, site, routes, host, mode), ...headerProblems(name, all, host, env));
+  found.push(...strayRouteProblems(name, site, routes));
   return [...found, ...fontProblems(name, routes, host, env)];
 }
 
@@ -472,8 +576,95 @@ function zoneProblems(name: string, routes: Obj[], all: Obj[], host: Host, mode:
   if (limits.length !== 1) found.push(`${name}: ${limits.length} rate_limit blocks`);
   const own = host === "APP_HOST" && mode === "dev" ? "app_global" : "global";
   const other = own === "global" ? "app_global" : "global";
+  const ruled = own === "global" ? PDS_ZONES : APP_ZONES;
+  if (!limits.every((each) => same(each, limiter(ruled)))) found.push(`${name}: the zones are not the ruled ones`);
   return [...found, ...limits.flatMap((each) => zoneSetProblems(name, obj(each.rate_limits), own, other))];
 }
+
+type Zone = readonly [name: string, events: number, seconds: number, match?: Json];
+const paths = (...path: string[]): Json => [{ path }];
+const API = "/@atproto/oauth-provider/~api";
+/**
+ * The PDS's zones (snippets/ratelimit.caddy; limits.json holds the numbers, which edge.test.ts compares): events in a
+ * window of seconds, for the requests a matcher names, or for every request when it names none.
+ */
+const PDS_ZONES: readonly Zone[] = [
+  ["blob_read", 600, 300, paths("/xrpc/com.atproto.sync.getBlob")],
+  ["blob_upload", 60, 300, paths("/xrpc/com.atproto.repo.uploadBlob")],
+  ["firehose", 6, 60, paths("/xrpc/com.atproto.sync.subscribeRepos")],
+  ["firehose_hour", 60, 3600, paths("/xrpc/com.atproto.sync.subscribeRepos")],
+  ["global", 3000, 300],
+  [
+    "identity",
+    300,
+    300,
+    paths(
+      "/xrpc/com.atproto.identity.*",
+      "/xrpc/com.atproto.server.describeServer",
+      "/.well-known/atproto-did",
+      "/xrpc/_health",
+    ),
+  ],
+  ["oauth_signin", 30, 300, [{ method: ["POST"], path: [`${API}/sign-in`] }]],
+  ["oauth_token", 120, 300, paths("/oauth/token", "/xrpc/com.atproto.server.refreshSession")],
+  [
+    "reset",
+    5,
+    3600,
+    paths(
+      "/xrpc/com.atproto.server.requestPasswordReset",
+      "/xrpc/com.atproto.server.resetPassword",
+      "/xrpc/com.atproto.server.requestEmailConfirmation",
+      "/xrpc/com.atproto.server.requestEmailUpdate",
+      `${API}/reset-password-request`,
+      `${API}/reset-password-confirm`,
+      `${API}/update-email-request`,
+      `${API}/verify-email-request`,
+    ),
+  ],
+  ["session", 30, 300, paths("/xrpc/com.atproto.server.createSession")],
+  ["session_day", 300, 86_400, paths("/xrpc/com.atproto.server.createSession")],
+  ["signup", 10, 3600, paths("/xrpc/com.atproto.server.createAccount", `${API}/sign-up`)],
+  [
+    "sync",
+    1500,
+    300,
+    [
+      {
+        not: [{ path: ["/xrpc/com.atproto.sync.getBlob"] }, { path: ["/xrpc/com.atproto.sync.subscribeRepos"] }],
+        path: ["/xrpc/com.atproto.sync.*"],
+      },
+    ],
+  ],
+];
+/** The dev app site's own zones (dev/app.caddy, P1.36b). */
+const APP_ZONES: readonly Zone[] = [
+  ["app_burst", 20, 10],
+  ["app_global", 1200, 300],
+  [
+    "app_signin",
+    5,
+    300,
+    [{ method: ["POST"], path: ["/login", "/verify-email/reconsent"] }, { path: ["/oauth/callback"] }],
+  ],
+];
+/** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64. */
+const limiter = (zones: readonly Zone[]): Json => ({
+  handler: "rate_limit",
+  disable_metrics: true,
+  rate_limits: Object.fromEntries(
+    zones.map(([name, events, seconds, match]) => [
+      name,
+      {
+        ipv6_prefix: 64,
+        key: CLIENT_KEY,
+        max_events: events,
+        window: seconds * 1_000_000_000,
+        ...(match === undefined ? {} : { match }),
+      },
+    ]),
+  ),
+});
 
 /** One rate_limit's zones: the site's own global zone, unmatched; no other site's; every zone keyed on the client. */
 function zoneSetProblems(name: string, zones: Obj, own: string, other: string): string[] {
@@ -481,8 +672,9 @@ function zoneSetProblems(name: string, zones: Obj, own: string, other: string): 
   if (!(own in zones)) found.push(`${name}: there is no ${own} zone`);
   else if ("match" in obj(zones[own])) found.push(`${name}: the ${own} zone has a matcher`);
   if (other in zones) found.push(`${name}: the route applies another site's zones`);
-  for (const [zone, settings] of Object.entries(zones)) {
-    if (obj(settings).key !== CLIENT_KEY) found.push(`${name}: the ${zone} zone is not keyed on {client_ip}`);
+  // A fixed label: the zone's name is input, and a message repeats nothing it was given.
+  if (Object.values(zones).some((settings) => obj(settings).key !== CLIENT_KEY)) {
+    found.push(`${name}: a zone is not keyed on {client_ip}`);
   }
   return found;
 }
@@ -515,6 +707,19 @@ function proxyProblems(name: string, proxy: Obj, upstream: string): string[] {
   ) {
     found.push(`${name}: a reverse_proxy passes X-Forwarded-Host`);
   }
+  // Then the handler whole, so it sets no other request header and keeps the ruled transport and timeouts.
+  const ruled: Json = {
+    handler: "reverse_proxy",
+    headers: {
+      request: {
+        delete: ADDRESS_HEADERS,
+        set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
+      },
+    },
+    transport: { protocol: "http", dial_timeout: 5_000_000_000, response_header_timeout: 130_000_000_000 },
+    upstreams: [{ dial: upstream }],
+  };
+  if (!same(proxy, ruled)) found.push(`${name}: a reverse_proxy is not the ruled one`);
   return found;
 }
 
@@ -525,21 +730,63 @@ const upstreamAt = (routes: Obj[]): number => {
 };
 const holds = (list: Json[], part: Json): boolean => list.some((each) => same(each, part));
 
-/** The dev shape (P1.36b, P1.38f; ADR 0032): each snippet's handlers on the site, each deny route before the upstream. */
-function devShapeProblems(name: string, site: Obj[], routes: Obj[], host: Host): string[] {
+/**
+ * Each snippet's handlers on the site, each deny route before the upstream. Every site in every env: the security
+ * headers. The PDS in every env: the admin guard and the route class its access log carries, once and nowhere else.
+ * Under dev (P1.36b, P1.38f; ADR 0032) also noindex, blob routes shut on the PDS and the sign-in files read-only on
+ * the app.
+ */
+function snippetProblems(name: string, site: Obj[], routes: Obj[], host: Host, mode: EdgeMode): string[] {
   const before = routes.slice(0, upstreamAt(routes));
-  const required: [boolean, string][] = [
-    [SECURITY_HEADERS.every((part) => holds(site, part)), "security-headers"],
-    [holds(site, NOINDEX), "noindex"],
-  ];
-  if (host === "PDS_HOST") {
-    required.push(
-      [XRPC_GUARD.every((part) => holds(before, part)), "xrpc-guard"],
-      [holds(before, BLOB_DENY), "blob-deny"],
-    );
+  const pds = host === "PDS_HOST";
+  const required: [boolean, string][] = [[SECURITY_HEADERS.every((part) => holds(site, part)), "security-headers"]];
+  if (pds) required.push([XRPC_GUARD.every((part) => holds(before, part)), "xrpc-guard"]);
+  if (mode === "dev") {
+    required.push([holds(site, NOINDEX), "noindex"]);
+    required.push(pds ? [holds(before, BLOB_DENY), "blob-deny"] : [holds(before, SIGNIN_FILES), "signin-files"]);
   }
-  if (host === "APP_HOST") required.push([holds(before, SIGNIN_FILES), "signin-files"]);
-  return required.filter(([present]) => !present).map(([, snippet]) => `${name}: does not import ${snippet}`);
+  const found = required.filter(([present]) => !present).map(([, snippet]) => `${name}: does not import ${snippet}`);
+  const classes = handlersIn(site).filter((each) => each.handler === "map" || each.handler === "log_append");
+  const own = pds ? ROUTE_CLASS : [];
+  const exact = classes.length === own.length && own.every((part, at) => same(site[at], part));
+  return exact ? found : [...found, `${name}: the route class is not the ruled one`];
+}
+
+/**
+ * Nothing answers a request but the ruled snippets and the upstream. Before the site's route only the route class and
+ * `headers` handlers may sit, so no `static_response` there can answer for the site. Inside it, a route that counts
+ * or proxies has no matcher and holds only the rate limiter, the fonts' CSP append and the upstream; every other
+ * route is one a snippet adapts to, whole.
+ */
+function strayRouteProblems(name: string, site: Obj[], routes: Obj[]): string[] {
+  const found: string[] = [];
+  const kinds = (handlers: Obj[]): string[] => handlers.map((each) => String(each.handler));
+  if (!kinds(site.slice(0, -1)).every((kind) => ["map", "log_append", "headers"].includes(kind))) {
+    found.push(`${name}: a handler outside the ruled snippets`);
+  }
+  const ruled: Json[] = [...XRPC_GUARD, BLOB_DENY, SIGNIN_FILES, FONT_404];
+  const fine = routes.every((route) => {
+    const own = kinds(arr(route.handle).map(obj));
+    if (!own.includes("rate_limit") && !own.includes("reverse_proxy")) return holds(ruled, route) || isFontFile(route);
+    return !("match" in route) && own.every((kind) => ["rate_limit", "headers", "reverse_proxy"].includes(kind));
+  });
+  return fine ? found : [...found, `${name}: a route outside the ruled snippets`];
+}
+
+/**
+ * Every `headers` handler of a site is one the snippets adapt to, whole, so none after them can delete or weaken
+ * what they set, or add a header of its own such as a CORS origin.
+ */
+function headerProblems(name: string, all: Obj[], host: Host, env: AdaptedEnv): string[] {
+  const ruled: Json[] = [...SECURITY_HEADERS, NOINDEX];
+  if (host === "PDS_HOST") ruled.push(FONT_TYPE, cspAppend(env.PDS_HOST as string));
+  else ruled.push(SIGNIN_ALLOW);
+  const headers = named(all, "headers");
+  // Each at most once: a second copy of the CSP append, say, would add its source twice.
+  const once = ruled.every((part) => headers.filter((handler) => same(handler, part)).length <= 1);
+  return headers.every((handler) => holds(ruled, handler)) && once
+    ? []
+    : [`${name}: changes a response header outside the ruled snippets`];
 }
 
 const isFontFile = (route: Obj): boolean => {
@@ -608,13 +855,32 @@ function strayProblems(top: Obj, server: Obj, mode: EdgeMode, env: AdaptedEnv): 
   return [...found, ...valueProblems(top, append, mode, env)];
 }
 
+/**
+ * A copy of the config without the positions a configured value is ruled to sit in, each by its own path and never by
+ * key name alone: the tls app, each server's access-log names, SNI policies and site matchers, each upstream's dial,
+ * and the fonts' CSP append. A `host` matcher inside a zone or an inner route is no such position, and stays.
+ */
+function positionsBlanked(top: Obj, append: Json): Json {
+  const handler = (each: Json): Json => {
+    const value = obj(each);
+    if (same(value, append)) return null;
+    if (value.handler === "reverse_proxy") return { ...value, upstreams: null };
+    return "routes" in value ? { ...value, routes: arr(value.routes).map(route) } : value;
+  };
+  const route = (each: Json): Json => ({ ...obj(each), handle: arr(obj(each).handle).map(handler) });
+  const servers = Object.entries(obj(obj(obj(top.apps).http).servers)).map(([name, value]) => {
+    const server = obj(value);
+    const routes = arr(server.routes).map((each) => ({ ...obj(route(each)), match: null }));
+    const logs = { ...obj(server.logs), logger_names: null };
+    return [name, { ...server, routes, logs, tls_connection_policies: null }];
+  });
+  return { ...top, apps: { ...obj(top.apps), tls: null, http: { servers: Object.fromEntries(servers) } } };
+}
+
 /** With every ruled position blanked, a configured value or a secret path still in the config. */
 function valueProblems(top: Obj, append: Json, mode: EdgeMode, env: AdaptedEnv): string[] {
   const found: string[] = [];
-  const blanked = JSON.stringify(top, (key, value: Json) => {
-    if (key === "tls" || key === "upstreams" || key === "logger_names" || key === "sni" || key === "host") return null;
-    return same(value, append) ? null : value;
-  });
+  const blanked = JSON.stringify(positionsBlanked(top, append));
   for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
     const value = env[name];
     if (value !== undefined && blanked.includes(value)) found.push(`{$${name}} is outside its position`);

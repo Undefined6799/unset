@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-11-15
+checked: 2026-11-16
 ---
 # http
 
@@ -155,7 +155,9 @@ unchanged. pdsCall retries an idempotent read once, and only while the backoff a
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
-birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
+birth date is not stored or logged. The routes take identity's `AccountRepository`; compose builds the Postgres one
+and passes `age-gate-audit.ts` as its audit writer (P2.12g). SQL for a product record goes behind a domain contract
+in the adapter's folder, not in this interface. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
 **Settings (P2.13c).** `routes/settings.ts`: GET `/settings` answers 303 to `/settings/profile`, keeping only the
 query, without opening the gate. `/settings/profile` (the "Set up your profile" card until P2.21) and
 `/settings/account` (handle, DID, the sign-in server link, the sign-out form) open the app gate, then render inside

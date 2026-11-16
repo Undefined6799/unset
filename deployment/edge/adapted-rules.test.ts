@@ -424,13 +424,13 @@ const SITES: Red[] = [
     "a zone keyed on a header",
     "local",
     (c) => void Object.assign(o(zones(c, P).global), { key: "{http.request.header.X-Forwarded-For}" }),
-    "{$PDS_HOST}: the global zone is not keyed on {client_ip}",
+    "{$PDS_HOST}: a zone is not keyed on {client_ip}",
   ],
   [
     "a zone keyed on nothing",
     "dev",
     (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { key: "static" }),
-    "{$APP_HOST}: the app_signin zone is not keyed on {client_ip}",
+    "{$APP_HOST}: a zone is not keyed on {client_ip}",
   ],
 ];
 
@@ -670,7 +670,259 @@ const STRAY: Red[] = [
   ],
 ];
 
+const logging = (config: Json): Obj => o(o(o(config).logging).logs);
+const routeClass = (config: Json): Obj[] => site(config, P).slice(0, 2).map(o);
+// What the review of #1586 found passing: logs, the PDS guard outside dev, zone numbers, later header changes, other
+// upstream headers, another map, and handler names that are object members.
+const REVIEW: Red[] = [
+  ["no logging block", "shipped", (c) => void delete o(c).logging, "the logs are not the ruled ones"],
+  [
+    "errors logged at debug",
+    "local",
+    (c) => void Object.assign(o(logging(c).default), { level: "DEBUG" }),
+    "the logs are not the ruled ones",
+  ],
+  [
+    "an access log that keeps the URI",
+    "shipped",
+    (c) => void delete o(o(o(logging(c).log0).encoder).fields)["request>uri"],
+    "the logs are not the ruled ones",
+  ],
+  [
+    "an unfiltered access log",
+    "dev",
+    (c) => void Object.assign(o(logging(c).log1), { encoder: { format: "json" } }),
+    "the logs are not the ruled ones",
+  ],
+  [
+    "a logger more",
+    "shipped",
+    (c) => void Object.assign(logging(c), { extra: { writer: { output: "stdout" } } }),
+    "the logs are not the ruled ones",
+  ],
+  [
+    "credentials logged",
+    "shipped",
+    (c) => void Object.assign(o(publicServer(c).logs), { should_log_credentials: true }),
+    "the public server changes what it logs",
+  ],
+  [
+    "a site logged by the default logger",
+    "shipped",
+    (c) => void Object.assign(o(o(publicServer(c).logs).logger_names), { [P]: ["default"] }),
+    "a site's access log is not its own filtered logger",
+  ],
+  [
+    "two sites in one access log",
+    "local",
+    (c) => void Object.assign(o(o(publicServer(c).logs).logger_names), { [P]: ["log0"], [APP_LOCAL]: ["log0"] }),
+    "a site's access log is not its own filtered logger",
+  ],
+  [
+    "the client address appended to the log",
+    "shipped",
+    (c) => void Object.assign(routeClass(c)[1] as Obj, { value: "{http.request.remote.host}" }),
+    "{$PDS_HOST}: the route class is not the ruled one",
+  ],
+  [
+    "a second log_append",
+    "local",
+    (c) => void site(c, P).push({ handler: "log_append", key: "auth", value: "{http.request.header.Authorization}" }),
+    "{$PDS_HOST}: the route class is not the ruled one",
+  ],
+  [
+    "another map",
+    "dev",
+    (c) => void Object.assign(routeClass(c)[0] as Obj, { source: "{http.request.header.Authorization}" }),
+    "{$PDS_HOST}: the route class is not the ruled one",
+  ],
+  [
+    "a map on the app site",
+    "local",
+    (c) => void site(c, APP_LOCAL).unshift(copy(routeClass(c)[0] as Json)),
+    "{$APP_HOST}: the route class is not the ruled one",
+  ],
+  [
+    "the admin guard gone under prod",
+    "shipped",
+    (c) => void inner(c, P).splice(routeNamed(c, P, "xrpc_admin"), 1),
+    "{$PDS_HOST}: does not import xrpc-guard",
+  ],
+  [
+    "the basic-auth guard gone under local",
+    "local",
+    (c) => void inner(c, P).splice(routeNamed(c, P, "xrpc_basic"), 1),
+    "{$PDS_HOST}: does not import xrpc-guard",
+  ],
+  [
+    "no security headers under prod",
+    "shipped",
+    (c) => void site(c, P).splice(2, 1),
+    "{$PDS_HOST}: does not import security-headers",
+  ],
+  [
+    "no security headers on the local app",
+    "local",
+    (c) => void site(c, APP_LOCAL).splice(0, 2),
+    "{$APP_HOST}: does not import security-headers",
+  ],
+  [
+    "a zone that never limits",
+    "shipped",
+    (c) => void Object.assign(o(zones(c, P).session), { max_events: 1_000_000 }),
+    "{$PDS_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a longer window",
+    "dev",
+    (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { window: 1 }),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  ["a zone removed", "local", (c) => void delete zones(c, P).signup, "{$PDS_HOST}: the zones are not the ruled ones"],
+  [
+    "a narrower zone matcher",
+    "local",
+    (c) => void Object.assign(o(zones(c, APP_LOCAL).session), { match: [{ path: ["/nothing"] }] }),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "metrics on",
+    "shipped",
+    (c) => void delete handlerIn(inner(c, P), "rate_limit").disable_metrics,
+    "{$PDS_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "HSTS deleted later",
+    "shipped",
+    (c) =>
+      void a(o(inner(c, P).at(-1)).handle).unshift({
+        handler: "headers",
+        response: { deferred: true, delete: ["Strict-Transport-Security"] },
+      }),
+    "{$PDS_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "noindex deleted later",
+    "dev",
+    (c) => void site(c, APP_DEV).push({ handler: "headers", response: { delete: ["X-Robots-Tag"] } }),
+    "{$APP_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "a wildcard CORS origin",
+    "local",
+    (c) =>
+      void site(c, APP_LOCAL).push({
+        handler: "headers",
+        response: { set: { "Access-Control-Allow-Origin": ["*"] } },
+      }),
+    "{$APP_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "the font CSP append on the app site",
+    "local",
+    (c) => void site(c, APP_LOCAL).push(copy(a(o(inner(c, P).at(-1)).handle)[0] as Json)),
+    "{$APP_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "an upstream sent a credential",
+    "shipped",
+    (c) => void Object.assign(o(request(c, P).set), { Authorization: ["Basic eDp5"] }),
+    "{$PDS_HOST}: a reverse_proxy is not the ruled one",
+  ],
+  [
+    "an upstream over another transport",
+    "local",
+    (c) => void Object.assign(o(proxy(c, APP_LOCAL).transport), { protocol: "fastcgi" }),
+    "{$APP_HOST}: a reverse_proxy is not the ruled one",
+  ],
+  [
+    "an upstream with no response timeout",
+    "dev",
+    (c) => void delete o(proxy(c, P).transport).response_header_timeout,
+    "{$PDS_HOST}: a reverse_proxy is not the ruled one",
+  ],
+  [
+    "the app host in a PDS zone matcher",
+    "local",
+    (c) => void Object.assign(o(a(o(zones(c, P).session).match)[0]), { host: [APP_LOCAL] }),
+    "{$APP_HOST} is outside its position",
+  ],
+  [
+    "the upstream named in an inner route's matcher",
+    "shipped",
+    (c) => void inner(c, P).splice(1, 0, { match: [{ host: [PDS.PDS_UPSTREAM] }], handle: [respond(404)] }),
+    "{$PDS_UPSTREAM} is outside its position",
+  ],
+  [
+    "the font CSP append twice",
+    "shipped",
+    (c) => void a(o(inner(c, P).at(-1)).handle).unshift(copy(a(o(inner(c, P).at(-1)).handle)[0] as Json)),
+    "{$PDS_HOST}: changes a response header outside the ruled snippets",
+  ],
+  [
+    "the site's headers after its route",
+    "dev",
+    (c) => void site(c, APP_DEV).push(...site(c, APP_DEV).splice(0, 3)),
+    "{$APP_HOST}: a handler follows the route",
+  ],
+  [
+    "a static response before the site's route",
+    "shipped",
+    (c) => void site(c, P).splice(2, 0, respond(503)),
+    "{$PDS_HOST}: a handler outside the ruled snippets",
+  ],
+  [
+    "a static-only route inside the route",
+    "local",
+    (c) => void inner(c, APP_LOCAL).unshift({ handle: [respond(200)] }),
+    "{$APP_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "a matched static route before the upstream",
+    "dev",
+    (c) => void inner(c, P).splice(1, 0, { match: [{ path: ["/xrpc/*"] }], handle: [respond(404)] }),
+    "{$PDS_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "an upstream behind a matcher",
+    "local",
+    (c) => void Object.assign(o(inner(c, P).at(-1)), { match: [{ path: ["/xrpc/*"] }] }),
+    "{$PDS_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "a zone named by the input",
+    "local",
+    (c) => void Object.assign(zones(c, P), { "pds.example.org": { key: "static", window: 1, max_events: 1 } }),
+    "{$PDS_HOST}: a zone is not keyed on {client_ip}",
+  ],
+  [
+    "a handler named constructor",
+    "shipped",
+    (c) => void site(c, P).push({ handler: "constructor" }),
+    "a handler the rules do not read",
+  ],
+  [
+    "a handler named __proto__",
+    "shipped",
+    (c) => void site(c, P).push({ handler: "__proto__" }),
+    "a handler the rules do not read",
+  ],
+  [
+    "a handler named toString",
+    "local",
+    (c) => void a(o(inner(c, P)[0]).handle).push({ handler: "toString" }),
+    "a handler the rules do not read",
+  ],
+  [
+    "an http app key",
+    "shipped",
+    (c) => void Object.assign(o(o(o(c).apps).http), { grace_period: 1 }),
+    "the http app holds a key the rules do not read",
+  ],
+];
+
 const REDS: readonly Red[] = [
+  ...REVIEW,
   ...SHAPE,
   ...SERVERS,
   ...CERTIFICATES,

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, identity]
-checked: 2026-11-15
+checked: 2026-11-16
 ---
 # identity
 
@@ -35,6 +35,9 @@ network itself.
   (P2.12e) moves `now` to UTC+14; the age route passes that day to both functions, so a birthday that has arrived
   anywhere counts. The route shows every valid date back once (`confirmed=yes` on the second POST) before it decides
   or writes anything, for every date alike, so the confirm step hints at no threshold.
+- `account.ts`: the `AccountRepository` contract (P2.12g): the account record's read and its four onboarding
+  writes. [[postgres]] implements it on `app.account`; an interface gets one from its composition root. A new
+  process that needs the account record takes this contract; it never imports `interfaces/http`.
 - `legal/versions.ts`: `TERMS_VERSION` and `PRIVACY_VERSION`, the date strings P2.12 compares (P2.15).
 
 **How data flows.** Interface → identity → `IdentityNetwork` → [[pds]] adapter → [[net-guard]] → network. Every

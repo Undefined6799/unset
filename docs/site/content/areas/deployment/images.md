@@ -26,8 +26,8 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 | Key | `ref` | `tag` | `stage` |
 | --- | --- | --- | --- |
 | `node` | `docker.io/library/node` | `26-trixie-slim` | runtime |
-| `caddy-builder` | `docker.io/library/caddy` | `2.11.7-builder-alpine` | build |
-| `caddy` | `docker.io/library/caddy` | `2.11.7-alpine` | runtime |
+| `caddy-builder` | `docker.io/library/caddy` | `2.11.9-builder-alpine` | build |
+| `caddy` | `docker.io/library/caddy` | `2.11.9-alpine` | runtime |
 | `postgres` | `docker.io/library/postgres` | `18-trixie` | runtime |
 | `pds` | `ghcr.io/bluesky-social/pds` | `0.4.5049` | runtime |
 | `newt` | `docker.io/fosrl/newt` | `1.19.0` | runtime |

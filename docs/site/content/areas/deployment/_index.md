@@ -49,7 +49,7 @@ The only product row whose `from` is under `deployment/` is `deployment-prefligh
 
 | From | May reach |
 | --- | --- |
-| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/caddyfile.ts`, `shared/host-pin/index.ts`, the npm package `yaml`, and Node built-ins. |
+| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, the npm package `yaml`, and Node built-ins. |
 
 `yaml` is 2.9.1, a root `devDependency`. `deployment/preflight/compose-parse.ts` imports `parseAllDocuments` from it.
 

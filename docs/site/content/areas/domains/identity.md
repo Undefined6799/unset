@@ -115,7 +115,7 @@ Values the gates read, stored by the caller:
 
 | Shape | Fields | Stored by |
 | --- | --- | --- |
-| `OnboardingAccount` | `onboarding`, `termsVersion`, `privacyVersion` | `interfaces/http/account.ts` reads `onboarding`, `terms_version`, `privacy_version` from `app.account` |
+| `OnboardingAccount` | `onboarding`, `termsVersion`, `privacyVersion` | `infrastructure/postgres/accountRepository.ts` (the `AccountRepository` contract in `account.ts`) reads `onboarding`, `terms_version`, `privacy_version` from `app.account` |
 | `EmailCache` | `confirmed`, `checkedAt` | `interfaces/http/compose.ts` reads `email_confirmed`, `email_checked_at` from `app.session` |
 
 `app.account` is created in `infrastructure/postgres/migrations/0015_app_account.sql`. It has `age_confirmed_at` and no birth-date column. `TERMS_VERSION` and `PRIVACY_VERSION` are the constants in `legal/versions.ts`. `interfaces/http/routes/legal.test.ts` (`legal.versions_exported`) checks them against the `version` in `apps/web/legal/terms.en.md` and `apps/web/legal/privacy.en.md`.

@@ -42,6 +42,10 @@ COPY --from=deps /app/infrastructure/session /app/infrastructure/session
 COPY --from=deps /app/interfaces/http /app/interfaces/http
 COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
 COPY --from=build /app/apps/web/dist /app/apps/web/dist
+# Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
+# base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
+# no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*
 # The server needs node only, so every package manager the base may ship leaves the runtime: the bundled npm (whose
 # own dependencies Trivy flags) and any yarn, corepack or pnpm, then the OS's own apt, debconf, dpkg and libapt, each
 # through its own removal verb and dpkg last, then dpkg's maintainer scripts. dpkg's database stays, without a script,
