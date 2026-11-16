@@ -158,9 +158,9 @@
   errors: "The handler names no error code of its own."
   auth: "reads session"
 "POST /welcome/age":
-  why: "Records an adult confirmation, or blocks an under-age answer (interfaces/http/routes/welcome.ts)."
-  input: "Form fields day, month and year."
-  output: "303 to /welcome/terms, or to /welcome/blocked when under the minimum age."
+  why: "Shows a valid date back until confirmed is yes, then records an adult confirmation or blocks an under-age answer (interfaces/http/routes/welcome.ts)."
+  input: "Form fields day, month and year, and optional confirmed."
+  output: "200 HTML confirm page titled Is this date right? when confirmed is not yes; nothing is decided or stored. With confirmed=yes, 303 to /welcome/terms, or to /welcome/blocked when under the minimum age."
   errors: "welcome.date_invalid when the date does not parse. service.unavailable when the block cannot be written."
   auth: "reads session"
 "GET /welcome/terms":
