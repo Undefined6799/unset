@@ -11,6 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN } from "./cosign.ts";
+import { edgeImageAnswer } from "./edge-image-double.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { type VirtualEntry, virtualCheckout } from "./virtual-checkout.ts";
 
@@ -100,12 +101,15 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   const { aboveCheckout, look, real } = virtualCheckout({ checkout: CHECKOUT, files, deployUid: DEPLOY_UID, dev: DEV });
 
   /** The pinned cosign, verify-images passing, an OCI index for every ref, and a synchronised clock. */
-  const run: Run = async (file) => {
+  const run: Run = async (file, args, _signal, env) => {
     if (file === "sha256sum") return { code: 0, stdout: `${COSIGN.sha256.x64}  ${COSIGN.path}\n`, stderr: "" };
     if (file === "timedatectl") return { code: 0, stdout: "yes\n", stderr: "" };
     if (file === "chronyc")
       return { code: 0, stdout: "System time     : 0.000006523 seconds fast of NTP time\n", stderr: "" };
     if (file === "docker") {
+      // C18's pull and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+      const edge = edgeImageAnswer(args, env);
+      if (edge !== null) return edge;
       return { code: 0, stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }), stderr: "" };
     }
     return { code: 0, stdout: "", stderr: "" };

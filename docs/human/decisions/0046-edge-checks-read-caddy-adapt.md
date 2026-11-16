@@ -48,7 +48,9 @@ two replaces, built with Go from the same module versions):
    rules to pass. It runs only an image the preflight already holds to account: the lock's edge reference, by
    digest, after the lock, digest and signature checks (C2 to C5) passed; or, under `--env local` and `--env dev
    --source`, an image built from `deployment/edge/Dockerfile` that C26 passed, built by the preflight before the
-   check. The container has no network, a read-only root, no added capability, the image's non-root user, and only
+   check. The container has no network, a read-only root, every capability dropped but `NET_BIND_SERVICE` (the
+   image's binary carries that file capability and the kernel will not start it without; with no network there is
+   nothing to bind; the running edge has the same pair), no new privileges, the image's non-root user, and only
    the compose edge service's own read-only binds under `/etc/caddy`. Values reach it by variable name, never on the
    command line. No Docker, a failed or timed-out run, or output that is not JSON fails C18; nothing is skipped.
    C18's rules about the compose file itself (which image, which mounts, which secrets, which hosts) do not change.

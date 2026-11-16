@@ -5,12 +5,12 @@
     "stage": "runtime"
   },
   {
-    "source": "docker.io/library/caddy:2.11.7-builder-alpine@sha256:d718a1d1431403c4a46698f33ad1c0f9dd5dd7fe2bae654d1027d275b6fb5fd7",
+    "source": "docker.io/library/caddy:2.11.9-builder-alpine@sha256:646fee578e680989ca5c7fd1ce6f1de574d19fd71ef2221810cc0510a9f40c86",
     "mirror": "ghcr.io/undefined6799/mirror/caddy",
     "stage": "build"
   },
   {
-    "source": "docker.io/library/caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
+    "source": "docker.io/library/caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0",
     "mirror": "ghcr.io/undefined6799/mirror/caddy",
     "stage": "runtime"
   },
@@ -20,7 +20,7 @@
     "stage": "runtime"
   },
   {
-    "source": "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf",
+    "source": "ghcr.io/bluesky-social/pds:0.4.5051@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6",
     "mirror": "ghcr.io/undefined6799/mirror/pds",
     "stage": "runtime"
   },

@@ -14,7 +14,7 @@
   "separateMajorMinor": true,
   "automerge": false,
   "dependencyDashboard": true,
-  "labels": ["deps", "kind/build"],
+  "labels": ["deps", "kind/build", "security-review"],
   "branchPrefix": "renovate/",
   "semanticCommits": "disabled",
   "commitMessagePrefix": "P0.08",
@@ -24,7 +24,7 @@
     "schedule": ["before 6am on monday"]
   },
   "vulnerabilityAlerts": {
-    "labels": ["security", "kind/build"],
+    "labels": ["security", "kind/build", "security-review"],
     "minimumReleaseAge": "7 days",
     "rangeStrategy": "pin"
   },
@@ -45,13 +45,6 @@
       "minimumReleaseAge": "7 days",
       "matchPackageNames": ["@atproto/**"],
       "groupName": "atproto packages"
-    },
-    {
-      "description": "atproto packages in shared/lexicons (trusted base, SE-6) get their own PR, since no PR may mix trusted and product paths; later rules win, so this overrides the group above",
-      "minimumReleaseAge": "7 days",
-      "matchPackageNames": ["@atproto/**"],
-      "matchFileNames": ["shared/lexicons/package.json"],
-      "groupName": "atproto lexicon packages"
     },
     {
       "description": "Matrix SDK packages: one PR each, labelled for the chat module",

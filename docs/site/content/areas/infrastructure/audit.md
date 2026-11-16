@@ -3,7 +3,7 @@ title: audit
 weight: 1
 ---
 
-The TypeScript side of the append-only audit store. Package `@unset/infrastructure-audit`. The SQL is in `infrastructure/postgres/migrations/0008_audit.sql` through `0010_audit_append_grant.sql`.
+The TypeScript side of the append-only audit store. Package `@unset/infrastructure-audit`. The SQL is in `infrastructure/postgres/migrations/0008_audit.sql`, `0009_audit_tables.sql`, `0010_audit_append_grant.sql`, `0016_audit_actor.sql` and `0017_audit_retention.sql`.
 
 ## Owns
 
@@ -18,7 +18,7 @@ Closed lists, the one write function, the row hash and the chain walk.
 | `infrastructure/audit/verify.ts` | `verifyChain`. `links` reads `audit.chain`. `full` also reads `audit.event_body`. |
 | `infrastructure/audit/error.ts` | `AuditError`. Codes `audit.bad_input` and `audit.bad_timestamp`. |
 
-`appendAudit` is called from `interfaces/http/account.ts`. This package opens no pool.
+`appendAudit` is called from `interfaces/http/age-gate-audit.ts`, on the transaction the account repository (`infrastructure/postgres/accountRepository.ts`) hands it. This package opens no pool.
 
 ## May import
 
@@ -46,8 +46,13 @@ Objects created for this store:
 | --- | --- |
 | `audit.lp`, `audit.row_hash`, `audit.append`, `audit.refuse_change` | `0008_audit.sql` |
 | `audit.retention_classes`, `audit.actions`, `audit.reasons`, `audit.chain`, `audit.event_body` | `0009_audit_tables.sql` |
+| `audit.segment`, `audit.redaction_log` | `0017_audit_retention.sql` |
 
-`0008_audit.sql` runs `SET ROLE audit_owner` before the functions. `0009_audit_tables.sql` creates the tables as `audit_owner`.
+`0008_audit.sql` runs `SET ROLE audit_owner` before the functions. `0009_audit_tables.sql` and `0017_audit_retention.sql` create their tables as `audit_owner`. Nothing writes `audit.segment` or `audit.redaction_log`.
+
+`audit.segment` is one segment per lane and calendar month (UTC), numbered YYYYMM. `prev_hash` is the hash before `first_seq` and `head_hash` the `row_hash` of `last_seq`. No personal data.
+
+`audit.redaction_log` is why a body row is missing: the lane, the seq, the part (`redact`, `erase` or `drop`) and the login role. It keeps the month only, never the instant. No personal data.
 
 Grants recorded in `infrastructure/postgres/grant-matrix.json`:
 
@@ -55,6 +60,8 @@ Grants recorded in `infrastructure/postgres/grant-matrix.json`:
 | --- | --- |
 | `audit.append` | `EXECUTE` for `web`, `indexer`, `admin` |
 | `audit.chain` | `SELECT` for `auditor`, `wholeTable: true` |
+| `audit.segment` | `SELECT` for `auditor`, `wholeTable: true` |
+| `audit.redaction_log` | `SELECT` for `auditor`, `wholeTable: true` |
 
 `grant-matrix.json` has no `audit.event_body` entry. `0010_audit_append_grant.sql` grants `EXECUTE` on `audit.append` to `web`, `indexer` and `admin`. Schema `USAGE` on `audit` is on the [postgres](../postgres/) page.
 

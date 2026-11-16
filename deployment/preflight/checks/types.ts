@@ -15,11 +15,15 @@ export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
 export type Verifier = (lockPath: string, signal: AbortSignal) => Promise<VerifyResult>;
 /** The media type of a reference's top-level manifest, read from the registry. */
 export type ManifestKind = (ref: string, signal: AbortSignal) => Promise<string>;
-/** A process run with fixed arguments and no shell. `missing` is true when the command is not installed. */
+/**
+ * A process run with fixed arguments and no shell. `missing` is true when the command is not installed. `env` adds
+ * variables to the child's environment, so a value can reach it by name and never sit in its arguments (C18, P1.39c).
+ */
 export type Run = (
   file: string,
   args: string[],
   signal: AbortSignal,
+  env?: Readonly<Record<string, string>>,
 ) => Promise<{ code: number; stdout: string; stderr: string; missing?: boolean }>;
 
 export type Inputs = WalkInputs & {
@@ -85,10 +89,20 @@ export type NamedKey = (typeof NAMED_KEYS)[number];
  * closed list (P1.37k), so they survive a withheld reason.
  */
 export type Outcome = { pass: boolean; reason: string; unsigned?: true; key?: NamedKey; service?: string };
+/**
+ * The outcome of every check that ran before this one in the same run, by id (P1.39c). The runner always passes it; a
+ * check called without one must read it as nothing having passed.
+ */
+export type Earlier = ReadonlyMap<string, Outcome>;
+/**
+ * `timeoutMs` is a check's own deadline in place of the runner's 30 s (P1.39c): only the check's definition sets it,
+ * never an argument, an input file or the environment.
+ */
 export type Check = {
   id: string;
   network?: true;
-  run: (inputs: Inputs, signal: AbortSignal) => Outcome | Promise<Outcome>;
+  timeoutMs?: number;
+  run: (inputs: Inputs, signal: AbortSignal, earlier?: Earlier) => Outcome | Promise<Outcome>;
 };
 
 export const pass = (reason = "ok"): Outcome => ({ pass: true, reason });

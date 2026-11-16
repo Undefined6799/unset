@@ -6,24 +6,7 @@ import { checkCommitMessage, checkPrTitle } from "./commit-msg.ts";
 import { checkPerfEvidence } from "./perf-evidence.ts";
 import { measurePrSize } from "./pr-size.ts";
 import { checkPrTemplate } from "./pr-template.ts";
-import {
-  checkPathsMixed,
-  checkTrustedBaseIsolation,
-  type DocFacts,
-  digestSwapOnly,
-  EDGE_DOCKERFILE,
-  edgeFromReplacements,
-  readTrustedBase,
-  unionTrustedBase,
-} from "./trusted-base.ts";
-
-/** Every path a regular file, as git reports most; `symlinks` and `licenceOnly` say what else git found. */
-const docsFor = (paths: readonly string[], symlinks: string[] = [], licenceOnly: string[] = []): DocFacts => ({
-  regular: new Set(paths.filter((p) => !symlinks.includes(p))),
-  licenceOnly: new Set(licenceOnly),
-  dependencyChanges: new Set(),
-  lockfiles: null,
-});
+import { readTrustedBase, trustedPathsChanged, unionTrustedBase } from "./trusted-base.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
@@ -143,7 +126,7 @@ describe("PR template and performance evidence", () => {
       .join("\n");
 
   test("template_headings_required", () => {
-    expect(checkPrTemplate(bodyWith("Why"), TEMPLATE)).toEqual(["Why"]);
+    expect(checkPrTemplate(bodyWith("What"), TEMPLATE)).toEqual(["What"]);
     expect(checkPrTemplate(bodyWith(""), TEMPLATE)).toEqual([]);
     // CRLF bodies, as GitHub's web editor sends them.
     expect(checkPrTemplate(bodyWith("").replaceAll("\n", "\r\n"), TEMPLATE)).toEqual([]);
@@ -178,18 +161,6 @@ describe("trusted base (SE-6)", () => {
   ].join("\n");
   const base = readTrustedBase(CODEOWNERS);
   if (!base.ok) throw new Error(base.error);
-  const { patterns, parsedPaths, checks } = base.section;
-  const MIGRATION = "infrastructure/postgres/migrations/0042_x.sql";
-  const finding = (kind: "trusted" | "feature" | "neutral") => ({
-    path: MIGRATION,
-    line: 1,
-    kind,
-    reason: kind,
-    statement: "…",
-  });
-  const isolate = (paths: string[], findings = [] as ReturnType<typeof finding>[]) =>
-    checkTrustedBaseIsolation(paths, patterns, { parsedPaths, findings, docs: docsFor(paths) });
-
   test("trusted_base_list_from_codeowners", () => {
     expect(base.section).toEqual({
       patterns: ["/shared/http/", "/infrastructure/postgres/roles.json"],
@@ -258,290 +229,43 @@ describe("trusted base (SE-6)", () => {
     expect(configs.filter((path) => !real.section.checks.includes(path))).toEqual([]);
   });
 
-  // SE-6 ruling 2026-10-05 (refined 01:15Z): CI runs the PR's own checks, so a PR that changes a check path changes no
-  // product path. Tests, fixtures, docs and repo config may ride with it.
-  test("check_pr_alone_ok", () => {
-    expect(
-      checkPathsMixed(
-        ["scripts/guards/x.ts", ".github/labels.json"],
-        checks,
-        docsFor(["scripts/guards/x.ts", ".github/labels.json"]),
-      ),
-    ).toEqual([]);
-    // A product PR with no check path is the trusted-base check's business, not this one's.
-    expect(
-      checkPathsMixed(
-        ["shared/http/csrf/gate.ts", "apps/web/a.ts"],
-        checks,
-        docsFor(["shared/http/csrf/gate.ts", "apps/web/a.ts"]),
-      ),
-    ).toEqual([]);
-  });
-
-  test("check_plus_product_fails", () => {
-    expect(
-      checkPathsMixed(
-        [".github/labels.json", "shared/http/csrf/gate.ts", "apps/web/a.ts"],
-        checks,
-        docsFor([".github/labels.json", "shared/http/csrf/gate.ts", "apps/web/a.ts"]),
-      ),
-    ).toEqual(["shared/http/csrf/gate.ts", "apps/web/a.ts"]);
-  });
-
-  test("check_plus_docs_and_tests_ok", () => {
-    const ride = ["scripts/guards/x.test.ts", "docs/ai/book/phase-0.md", "docs/human/x.md", "tests/e2e/x.test.ts"];
-    expect(
-      checkPathsMixed(
-        ["scripts/guards/x.ts", "renovate.json", ...ride],
-        checks,
-        docsFor(["scripts/guards/x.ts", "renovate.json", ...ride]),
-      ),
-    ).toEqual([]);
-  });
-
-  test("checks_line_union_of_base_and_head", () => {
-    // The head drops /.semgrep/ from "# checks:"; the base still lists it, so .semgrep/ plus domains/ still fails.
-    const side = (list: string[]) => ({ patterns: [], parsedPaths: [], trustedFunctions: [], checks: list });
-    const merged = unionTrustedBase(side(["/.github/", "/.semgrep/"]), side(["/.github/"]));
-    expect(merged.checks).toEqual(["/.github/", "/.semgrep/"]);
-    expect(
-      checkPathsMixed(
-        [".semgrep/rules/x.yml", "domains/content/x.ts"],
-        merged.checks,
-        docsFor([".semgrep/rules/x.yml", "domains/content/x.ts"]),
-      ),
-    ).toEqual(["domains/content/x.ts"]);
-  });
-
-  test("fixture_is_check_path", () => {
-    expect(
-      checkPathsMixed(
-        ["infrastructure/postgres/migrations/0042_x.sql", "scripts/guards/fixtures/a.sql"],
-        checks,
-        docsFor(["infrastructure/postgres/migrations/0042_x.sql", "scripts/guards/fixtures/a.sql"]),
-      ),
-    ).toEqual(["infrastructure/postgres/migrations/0042_x.sql"]);
-  });
-
-  test("doc_exemptions_in_both_checks", () => {
-    // Architecture rulings 2026-10-05 01:31Z and 01:40Z: a package's LICENSE, any *.md and a package.json diff that
-    // changes only `license` are documentation in both checks, so P0.13 (scripts/licence plus the LICENSE files) is one
-    // PR, while a check PR still cannot carry a dependency change.
-    expect(isolate(["shared/http/LICENSE", "shared/config/LICENSE", "shared/log/LICENSE.txt"])).toEqual({
-      ok: true,
-      touched: false,
-    });
-    expect(isolate(["shared/http/LICENSE", "shared/http/index.ts"])).toEqual({ ok: true, touched: true });
-    expect(isolate(["shared/http/LICENSE.md", "shared/http/index.ts", "domains/content/x.ts"])).toEqual({
-      ok: false,
-      outside: ["domains/content/x.ts"],
-    });
-    // Only the exact basename at a package root: anything else in a trusted folder is still trusted base.
-    for (const name of [
-      "shared/http/license.ts",
-      "shared/http/LICENSE.ts",
-      "shared/http/LICENSES",
-      "shared/http/csp/LICENSE",
-    ]) {
-      expect(isolate([name, "shared/config/LICENSE", "domains/content/x.ts"]), name).toEqual({
-        ok: false,
-        outside: ["domains/content/x.ts"],
-      });
-    }
-    const SCRIPTS = ["/scripts/licence/"]; // a check folder on the real "# checks:" line
-    const licencePr = [
-      "scripts/licence/check.ts",
-      "shared/http/LICENSE",
-      "shared/config/LICENSE",
-      "shared/x/README.md",
+  test("trusted_paths_named", () => {
+    // ADR 0044: a path pattern, a "# parsed:" path or a "# checks:" path, whatever the file is. Nothing rides free.
+    const changed = [
+      "shared/http/csrf/gate.ts",
+      "shared/http/csrf/gate.test.ts",
+      "shared/http/README.md",
+      "shared/httpx/a.ts",
+      "infrastructure/postgres/roles.json",
+      "infrastructure/postgres/roles.test.ts",
+      "infrastructure/postgres/migrations/0042_x.sql",
+      "infrastructure/postgres/grant-matrix.json",
+      "scripts/guards/fixtures/a.sql",
+      ".github/workflows/ci.yml",
+      "domains/content/x.ts",
+      "docs/human/decisions/0044-x.md",
+      "tests/integration/http/gate.test.ts",
     ];
-    expect(checkPathsMixed(licencePr, SCRIPTS, docsFor(licencePr))).toEqual([]);
-    const manifest = ["scripts/licence/check.ts", "shared/config/package.json"];
-    expect(checkPathsMixed(manifest, SCRIPTS, docsFor(manifest, [], ["shared/config/package.json"]))).toEqual([]);
-    expect(checkPathsMixed(manifest, SCRIPTS, docsFor(manifest))).toEqual(["shared/config/package.json"]);
-    // A licence-only manifest in a trusted folder does not touch the trusted base either.
-    const http = ["shared/http/package.json", "domains/content/x.ts"];
-    expect(
-      checkTrustedBaseIsolation(http, patterns, {
-        parsedPaths,
-        findings: [],
-        docs: docsFor(http, [], [http[0] as string]),
-      }),
-    ).toEqual({ ok: true, touched: false });
-  });
-
-  test("symlink_license_not_exempt", () => {
-    // A symlink is judged by its location, whatever its name (git mode 120000, not 100644).
-    for (const link of ["shared/http/LICENSE", "shared/http/README.md"]) {
-      const paths = [link, "domains/content/x.ts"];
-      expect(
-        checkTrustedBaseIsolation(paths, patterns, { parsedPaths, findings: [], docs: docsFor(paths, [link]) }),
-        link,
-      ).toEqual({
-        ok: false,
-        outside: ["domains/content/x.ts"],
-      });
-    }
-    const SCRIPTS = ["/scripts/licence/"];
-    const paths = ["scripts/licence/check.ts", "shared/config/LICENSE"];
-    expect(checkPathsMixed(paths, SCRIPTS, docsFor(paths, ["shared/config/LICENSE"]))).toEqual([
-      "shared/config/LICENSE",
+    expect(trustedPathsChanged(changed, base.section)).toEqual([
+      "shared/http/csrf/gate.ts",
+      "shared/http/csrf/gate.test.ts",
+      "shared/http/README.md",
+      "infrastructure/postgres/roles.json",
+      "infrastructure/postgres/migrations/0042_x.sql",
+      "infrastructure/postgres/grant-matrix.json",
+      "scripts/guards/fixtures/a.sql",
+      ".github/workflows/ci.yml",
     ]);
+    expect(trustedPathsChanged(["domains/content/x.ts"], base.section)).toEqual([]);
   });
 
-  test("trusted_base_isolated", () => {
-    expect(isolate(["shared/http/csrf/gate.ts", "shared/http/csrf/gate.test.ts"])).toEqual({ ok: true, touched: true });
-    expect(isolate(["shared/http/csrf/gate.ts", "interfaces/http/routes/profile.ts"])).toEqual({
-      ok: false,
-      outside: ["interfaces/http/routes/profile.ts"],
-    });
-    expect(isolate([MIGRATION, "domains/content/x.ts"], [finding("trusted")])).toEqual({
-      ok: false,
-      outside: ["domains/content/x.ts"],
-    });
-    expect(isolate([MIGRATION, "domains/content/x.ts"], [finding("feature"), finding("neutral")])).toEqual({
-      ok: true,
-      touched: false,
-    });
-    expect(isolate(["domains/content/x.ts"])).toEqual({ ok: true, touched: false });
-    expect(isolate(["shared/http/README.md", "shared/http/csp/build.ts"])).toEqual({ ok: true, touched: true });
-    // A grants-only PR with its integration test and human docs.
-    expect(
-      isolate(
-        [
-          MIGRATION,
-          "infrastructure/postgres/roles.json",
-          "tests/integration/postgres/grants.test.ts",
-          "docs/human/x.md",
-        ],
-        [finding("trusted")],
-      ),
-    ).toEqual({ ok: true, touched: true });
-    // Trusted and feature statements in one migration: the grants go in their own file and PR.
-    expect(isolate([MIGRATION], [finding("trusted"), finding("feature")])).toEqual({
-      ok: false,
-      outside: [`${MIGRATION} (mixed_grant_change)`],
-    });
-    // A test elsewhere is not a test of the trusted base.
-    expect(isolate(["shared/http/csrf/gate.ts", "tests/integration/profile.test.ts"])).toEqual({
-      ok: false,
-      outside: ["tests/integration/profile.test.ts"],
-    });
-  });
-
-  // P0.09t (#639): a trusted file pattern carries only its own tests, the same basename with `.test.ts` beside it or
-  // under the mirrored tests/ path. Its parent folder's name no longer lets every tests/**/<folder>/** file ride. A
-  // trusted folder pattern keeps its folder rule.
-  test("trusted_file_pattern_carries_only_its_own_tests", () => {
-    const filePatterns = ["/interfaces/http/session-cookie.ts", "/infrastructure/postgres/roles.json", "/shared/http/"];
-    const isolateFiles = (paths: string[]) =>
-      checkTrustedBaseIsolation(paths, filePatterns, { parsedPaths: [], findings: [], docs: docsFor(paths) });
-    const COOKIE = "interfaces/http/session-cookie.ts";
-    // Red: an unrelated test under a folder named like the file's parent.
-    expect(isolateFiles([COOKIE, "tests/integration/http/unrelated.test.ts"])).toEqual({
-      ok: false,
-      outside: ["tests/integration/http/unrelated.test.ts"],
-    });
-    expect(isolateFiles(["infrastructure/postgres/roles.json", "tests/integration/postgres/schemas.test.ts"])).toEqual({
-      ok: false,
-      outside: ["tests/integration/postgres/schemas.test.ts"],
-    });
-    // The same basename in a folder that is not the mirrored path, or a different suffix, does not ride either.
-    for (const stray of [
-      "tests/integration/media/session-cookie.test.ts",
-      "tests/integration/session-cookie.test.ts",
-      "tests/session-cookie.test.ts",
-      "tests/integration/other/http/session-cookie.test.ts",
-      "tests/integration/http/session-cookie.spec.ts",
-      "tests/integration/http/session-cookie.ts",
-      "interfaces/http/other/session-cookie.test.ts",
-    ]) {
-      expect(isolateFiles([COOKIE, stray])).toEqual({ ok: false, outside: [stray] });
-    }
-    // Green: the file's own test beside it, or under the mirrored tests/ path.
-    for (const own of [
-      "interfaces/http/session-cookie.test.ts",
-      "tests/integration/http/session-cookie.test.ts",
-      "tests/integration/interfaces/http/session-cookie.test.ts",
-      "tests/e2e/http/session-cookie.test.ts",
-    ]) {
-      expect(isolateFiles([COOKIE, own])).toEqual({ ok: true, touched: true });
-    }
-    // Red: a trusted file that is not .ts carries no test, beside it or mirrored (main refused the beside one).
-    for (const stray of ["infrastructure/postgres/roles.test.ts", "tests/integration/postgres/roles.test.ts"]) {
-      expect(isolateFiles(["infrastructure/postgres/roles.json", stray])).toEqual({ ok: false, outside: [stray] });
-    }
-    // Green: a folder pattern's tests/**/<folder>/** file still rides.
-    expect(isolateFiles(["shared/http/csp/build.ts", "tests/integration/http/unrelated.test.ts"])).toEqual({
-      ok: true,
-      touched: true,
-    });
-  });
-
-  // P1.28a. The bump procedure puts the lock and the mirror list in the same PR as the FROM line. They ride only
-  // for a digest substitution on deployment/edge/Dockerfile, and the check that recognizes that may share the PR.
-  test("edge_digest_bump_carries_only_its_pins", () => {
-    const oldDigest = "a".repeat(64);
-    const newDigest = "b".repeat(64);
-    const image = "docker.io/library/caddy:2.11.7-builder-alpine";
-    const before = `FROM ${image}@sha256:${oldDigest} AS build\n`;
-    const after = `FROM ${image}@sha256:${newDigest} AS build\nRUN echo kept\n`;
-    const replacements = edgeFromReplacements(before, after);
-    expect(replacements).toEqual(new Map([[oldDigest, newDigest]]));
-    expect(
-      edgeFromReplacements(before, `FROM docker.io/library/caddy:2.11.8@sha256:${newDigest} AS build\n`),
-    ).toBeNull();
-    expect(digestSwapOnly(`"digest": "sha256:${oldDigest}"\n`, `note\n`, replacements ?? new Map())).toBe(false);
-    const lock = (digest: string) => `{"digest":"sha256:${digest}"}\n`;
-    const texts = new Map([
-      ["deployment/images/bases.lock.json", { base: lock(oldDigest), head: lock(newDigest) }],
-      ["deployment/mirror.list.json", { base: lock(oldDigest), head: lock(newDigest) }],
-    ]);
-    const paths = [EDGE_DOCKERFILE, "deployment/images/bases.lock.json", "deployment/mirror.list.json"];
-    const docs: DocFacts = { ...docsFor(paths), edgeBaseBump: { replacements: replacements ?? new Map(), texts } };
-    const edgePatterns = [...patterns, "/deployment/edge/"];
-    expect(checkTrustedBaseIsolation(paths, edgePatterns, { parsedPaths, findings: [], docs })).toEqual({
-      ok: true,
-      touched: true,
-    });
-    const dirty = new Map(texts);
-    dirty.set("deployment/images/bases.lock.json", { base: lock(oldDigest), head: `${lock(newDigest)}extra\n` });
-    const dirtyDocs: DocFacts = {
-      ...docs,
-      edgeBaseBump: { replacements: docs.edgeBaseBump?.replacements ?? new Map(), texts: dirty },
-    };
-    expect(checkTrustedBaseIsolation(paths, edgePatterns, { parsedPaths, findings: [], docs: dirtyDocs })).toEqual({
-      ok: false,
-      outside: ["deployment/images/bases.lock.json"],
-    });
-    expect(
-      checkTrustedBaseIsolation([...paths, "apps/web/a.ts"], edgePatterns, {
-        parsedPaths,
-        findings: [],
-        docs: docsFor([...paths, "apps/web/a.ts"]),
-      }),
-    ).toEqual({
-      ok: false,
-      outside: ["deployment/images/bases.lock.json", "deployment/mirror.list.json", "apps/web/a.ts"],
-    });
-    const checks = ["/scripts/guards/"];
-    const withGuard = ["scripts/guards/trusted-base.ts", "docs/ai/book/phase-1.md", ...paths];
-    const bump = docs.edgeBaseBump ?? null;
-    if (bump === null) throw new Error("edge digest bump was not recognized");
-    const guardDocs: DocFacts = { ...docsFor(withGuard), edgeBaseBump: bump };
-    expect(checkTrustedBaseIsolation(withGuard, edgePatterns, { parsedPaths, findings: [], docs: guardDocs })).toEqual({
-      ok: true,
-      touched: true,
-    });
-    expect(checkPathsMixed(withGuard, checks, guardDocs)).toEqual([]);
-    expect(
-      checkTrustedBaseIsolation([...withGuard, "scripts/ci/list-dockerfiles.ts"], edgePatterns, {
-        parsedPaths,
-        findings: [],
-        docs: guardDocs,
-      }),
-    ).toEqual({ ok: false, outside: ["scripts/ci/list-dockerfiles.ts"] });
-    expect(checkPathsMixed(["scripts/ci/list-dockerfiles.ts", ...paths], ["/scripts/ci/"], docs)).toEqual(paths);
+  test("list_is_union_of_base_and_head", () => {
+    // A PR cannot leave the list by editing it: a path the head's CODEOWNERS drops is still trusted for that PR.
+    const head = readTrustedBase(CODEOWNERS.replace("/shared/http/ @Undefined6799\n", "").replace(" /.github/", ""));
+    if (!head.ok) throw new Error(head.error);
+    const changed = ["shared/http/csrf/gate.ts", ".github/CODEOWNERS"];
+    expect(trustedPathsChanged(changed, head.section)).toEqual([]);
+    expect(trustedPathsChanged(changed, unionTrustedBase(base.section, head.section))).toEqual(changed);
   });
 });
 
@@ -553,13 +277,11 @@ describe("the pr-shape job", () => {
     labels: ["kind/build"],
     author: { login: "Undefined6799", type: "User" },
     commits: [{ sha: "abc1234", message: "P0.09c Check the shape of every change\n" }],
-    numstat: "10\t0\tscripts/guards/x.ts",
+    numstat: "10\t0\tdomains/content/x.ts",
     template: TEMPLATE,
-    changedPaths: ["scripts/guards/x.ts"],
+    changedPaths: ["domains/content/x.ts"],
     trustedBase: base_,
-    grantFindings: [],
     migrationDiff: "",
-    docs: docsFor(over.changedPaths ?? ["scripts/guards/x.ts"]),
     ...over,
   });
   const section = readTrustedBase(read(".github/CODEOWNERS"));
@@ -583,30 +305,53 @@ describe("the pr-shape job", () => {
         numstat: "900\t0\tapps/web/a.ts",
         body: "## Step\nx\n",
         changedPaths: ["shared/http/csrf/gate.ts", "apps/web/a.ts"],
-        grantFindings: [
-          {
-            path: "infrastructure/postgres/migrations/0042_x.sql",
-            line: 3,
-            kind: "trusted",
-            reason: "unclassified",
-            statement: "DO $$ BEGIN END $$",
-          },
-        ],
         migrationDiff: "+CREATE INDEX i ON app.t (a); -- why: speed\n",
       }),
     );
     expect(out.errors).toContain(
       "[D3] PR size: 900 changed source lines: over 800 changed source lines without the large-pr label and a `Large PR:` reason",
     );
-    expect(out.errors.some((e) => e.startsWith("[DL-3] PR body is missing headings: What, Why,"))).toBe(true);
-    expect(out.errors).toContain("[SE-6] outside the trusted base in a trusted-base PR: apps/web/a.ts");
     expect(out.errors).toContain(
-      "[SE-6] infrastructure/postgres/migrations/0042_x.sql:3 unclassified: DO $$ BEGIN END $$",
+      "[DL-3] PR body is missing headings: What, How to test, Security review, What I am unsure about",
+    );
+    expect(out.errors).toContain(
+      "[SE-6] a PR that changes a trusted path carries the security-review label: shared/http/csrf/gate.ts",
     );
     expect(out.errors).toContain(
       "[PF-1] a `-- why: speed` index needs p50, p95 and p99 before and after in Performance evidence",
     );
     expect(out.warnings).toEqual(["[D2] expected exactly one kind/* label, found none"]);
+  });
+
+  test("trusted_path_needs_label", () => {
+    // ADR 0044: a trusted path beside a product path passes with the label, and the job then names what was trusted.
+    const changedPaths = ["shared/http/csrf/gate.ts", "apps/web/a.ts", ".github/workflows/ci.yml"];
+    const named = "shared/http/csrf/gate.ts, .github/workflows/ci.yml";
+    expect(runChangeShape(input({ changedPaths })).errors).toEqual([
+      `[SE-6] a PR that changes a trusted path carries the security-review label: ${named}`,
+    ]);
+    const labelled = runChangeShape(input({ changedPaths, labels: ["kind/build", "security-review"] }));
+    expect(labelled.errors).toEqual([]);
+    expect(labelled.notices).toEqual([
+      `[SE-6] trusted paths in this PR, for the security review of this head: ${named}`,
+    ]);
+    // No trusted path: no label needed, and nothing to announce.
+    expect(runChangeShape(input({ labels: ["kind/build", "security-review"] })).notices).toEqual([]);
+    // A long list is cut, with the count of what was left out.
+    const many = Array.from({ length: 23 }, (_, i) => `shared/http/f${i}.ts`);
+    expect(runChangeShape(input({ changedPaths: many })).errors[0]).toMatch(/f19\.ts, and 3 more$/);
+  });
+
+  test("renovate_needs_label_too", () => {
+    // No author is exempt: anyone with write access can push to a renovate/ branch. Renovate labels its own PRs.
+    const changedPaths = [".github/workflows/ci.yml"];
+    const bot = { login: "renovate[bot]", type: "Bot" };
+    expect(runChangeShape(input({ author: bot, changedPaths, body: "" })).errors).toHaveLength(1);
+    const labels = ["deps", "kind/build", "security-review"];
+    expect(runChangeShape(input({ author: bot, changedPaths, body: "", labels })).errors).toEqual([]);
+    const config = JSON.parse(read(".github/renovate.json"));
+    for (const own of [config.labels, config.vulnerabilityAlerts.labels] as string[][])
+      expect(own).toContain("security-review");
   });
 
   // P0.09i (architecture ruling 2026-10-05 11:55Z): Renovate writes its own body, so only DL-3 is waived, and only for

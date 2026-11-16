@@ -21,7 +21,8 @@ Migrations, the role roster, grants, pools, transactions, and the stores whose S
 | `infrastructure/postgres/tx.ts` | `inTransaction`, `withTransaction`. The file comment says `BEGIN`, `COMMIT` and `ROLLBACK` in TypeScript live only here. `docs/human/architecture.md` row DM-2 names Semgrep `transactions-only-in-tx`. |
 | `infrastructure/postgres/config.ts` | `postgresFields`, `poolFields`, `lockPoolFields`, `connectionOf`. |
 | `infrastructure/postgres/lock.ts` | `withAdvisoryLock`, `createRequestLock`. `LockNamespace.oauth` is `1`. The wait calls `pg_advisory_xact_lock`. |
-| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`. SQL on `app.oauth_state` and `app.oauth_session`. Values go through the sealer. `createOAuthStateStore`'s `sweep` is run by `interfaces/http/jobs/sweeps.ts` (`sweep.oauth_state`). |
+| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`, `oauthSessionExists`. SQL on `app.oauth_state` and `app.oauth_session`. The stores seal values. `oauthSessionExists` is `SELECT 1` on `app.oauth_session` and does not unseal. `createOAuthStateStore`'s `sweep` is run by `interfaces/http/jobs/sweeps.ts` (`sweep.oauth_state`). `interfaces/http/compose.ts` passes `oauthSessionExists` to `createPdsCall` as `tokenSetRemains`. |
+| `infrastructure/postgres/accountRepository.ts` | `createAccountRepository`, `AccountRepositoryOptions`, `BlockTransaction`. SQL on `app.account`. Implements `AccountRepository` from `domains/identity/account.ts`. The audit writer (`recordUnderageBlock`) comes from the caller and gets only `BlockTransaction`, a `query`-only view of the block's transaction. |
 | `infrastructure/postgres/singleUse/store.ts` | `createSingleUseStore`. SQL on `app.single_use`. `PURPOSES` is the closed list. |
 | `infrastructure/postgres/didColumns.ts` | `didColumns`. One catalog query for columns typed `types.did` or `types.at_uri`, including arrays. |
 | `infrastructure/postgres/sealedColumns.ts` | `sealedColumns`, `sealedContext`. Rows from `sealed-columns.json`. |
@@ -35,12 +36,13 @@ Migrations, the role roster, grants, pools, transactions, and the stores whose S
 
 ## May import
 
-The [`infrastructure` row](../). This package imports `net-guard` and `seal`.
+The [`infrastructure` row](../). This package imports `net-guard` and `seal`. `accountRepository.ts` imports types from `@unset/domains-identity`.
 
 Declared in `infrastructure/postgres/package.json`:
 
 | Dependency | Version |
 | --- | --- |
+| `@unset/domains-identity` | workspace |
 | `@unset/infrastructure-net-guard` | workspace |
 | `@unset/infrastructure-seal` | workspace |
 | `@unset/shared-config` | workspace |
@@ -111,6 +113,8 @@ Table and routine grants in `grant-matrix.json` (column lists are in that file):
 | `app.account` | `web` |
 | `audit.append` | `web`, `indexer`, `admin` (`EXECUTE`) |
 | `audit.chain` | `auditor` (`SELECT`, `wholeTable`) |
+| `audit.segment` | `auditor` (`SELECT`, `wholeTable`) |
+| `audit.redaction_log` | `auditor` (`SELECT`, `wholeTable`) |
 
 Migrations and the objects they add:
 
@@ -132,9 +136,11 @@ Migrations and the objects they add:
 | `0014_app_end_sessions.sql` | `app.end_sessions_for_did` (`SECURITY DEFINER`). |
 | `0015_app_account.sql` | `app.account`. |
 | `0016_audit_actor.sql` | `audit.event_body.actor`; `audit.append` replaced to fill it and to refuse a person's action with no actor. |
+| `0017_audit_retention.sql` | `audit.segment`, `audit.redaction_log`. |
+| `0019_app_session_issuer.sql` | `app.session.issuer_origin`, nullable, no default, https-origin check. No grant in this file. |
 
 `sealed-columns.json`: `app.oauth_session.sealed` row key `did`; `app.oauth_state.sealed` row key `key`.
 
-`erasure-registry.json`: `app.single_use.bind_did`, `app.session.did`, `app.oauth_session.did` and `app.account.did` (`delete_row`); `audit.event_body.subject` (`audit_redact`).
+`erasure-registry.json`: `app.single_use.bind_did`, `app.session.did`, `app.oauth_session.did` and `app.account.did` (`delete_row`); `audit.event_body.subject` and `audit.event_body.actor` (`audit_redact`).
 
 `singleUse/store.ts` `PURPOSES`: `login.nonce` 600, `module.assertion` 120, `service_auth.jti` 120, `invite.claim` 600, `email.interstitial` 600, `chat.openid` 3600. The numbers are seconds.

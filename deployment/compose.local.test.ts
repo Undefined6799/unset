@@ -19,6 +19,7 @@ import {
   type Service,
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
+import { edgeImageAnswer } from "./preflight/edge-image-double.ts";
 import { type Deps, preflight } from "./preflight/index.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 import {
@@ -1032,15 +1033,16 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
   ];
   const realLocalDeps = (): Deps => ({
     root: CHECKOUT,
-    run: async (file) =>
+    run: async (file, args, _signal, env) =>
       file === "timedatectl"
         ? { code: 0, stdout: "yes\n", stderr: "" }
         : file === "docker"
-          ? {
+          ? // C18's build and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+            (edgeImageAnswer(args, env) ?? {
               code: 0,
               stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }),
               stderr: "",
-            }
+            })
           : { code: 0, stdout: "", stderr: "" },
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),

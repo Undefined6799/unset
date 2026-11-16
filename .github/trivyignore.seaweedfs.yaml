@@ -2,7 +2,8 @@
 # Format: Trivy v0.76.1 docs/guide/configuration/filtering.md (.trivyignore.yaml).
 # `paths` and `purls` scope the id to the one binary and module version; `expired_at`
 # is yyyy-mm-dd, at most 30 days ahead (SEAWEEDFS_MAX_DAYS). Passed with --ignorefile
-# only when the source is docker.io/chrislusf/seaweedfs, in mirror.yml and images.yml.
+# only when the source is docker.io/chrislusf/seaweedfs, in mirror.yml and images.yml,
+# and for the objects image built on it (scripts/ci/list-dockerfiles.ts IGNOREFILES).
 # Trivy v0.76.1 reported this one finding for 4.53 (ccad23e1) on 2026-11-15: x/net
 # v0.61.0 linked into weed, fixed in v0.62.0, which no SeaweedFS release ships yet
 # (4.53 is the newest tag). Removed when the pin moves to a release built with the fix.
