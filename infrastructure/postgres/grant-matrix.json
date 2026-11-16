@@ -89,9 +89,14 @@
         "admin": ["USAGE"],
         "auditor": ["USAGE"],
         "indexer": ["USAGE"],
+        "migrator": ["USAGE"],
         "retention": ["USAGE"],
         "web": ["USAGE"]
       }
+    },
+    "core": {
+      "owner": "migrator",
+      "grants": {}
     },
     "idx": {
       "owner": "migrator",
@@ -117,7 +122,11 @@
     "audit.append": {
       "admin": ["EXECUTE"],
       "indexer": ["EXECUTE"],
+      "migrator": ["EXECUTE"],
       "web": ["EXECUTE"]
+    },
+    "audit.erase_subject": {
+      "migrator": ["EXECUTE"]
     },
     "audit.chain": {
       "auditor": { "privileges": ["SELECT"], "wholeTable": true }
