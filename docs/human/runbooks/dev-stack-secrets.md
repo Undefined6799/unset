@@ -404,6 +404,17 @@ unsigned`. Builds fill the disk over time (the reason rule 23 forbade them); whe
 builder cache with `docker builder prune -f`, which touches no volume. Commit and push what you tried afterwards;
 main still changes only by PR.
 
+The preflight runs the edge image before anything starts (C18; P1.39c, ADR 0046). It pulls the lock's edge image, or
+builds the edge from the checkout under `dev:source:up` and `local:up`, runs `caddy adapt` in it with no network and a
+read-only root, and requires the result to be the reviewed config in `deployment/edge/adapted/`. Two things follow:
+
+- The preflight needs Docker, and the registry the first time it meets a new edge image. C18 gives up after ten
+  minutes.
+- The lock's edge image must hold the checkout's edge config. After a change under `deployment/edge/` merges, `dev:up`
+  fails C18 with `the edge config Caddy adapts is not the reviewed one` until the newly published edge image is in
+  `deployment/images.lock.json` (the lock bump PR) and the checkout holds that bump. Wait for the bump and pull main,
+  or use `dev:source:up`, which builds the edge from the checkout. There is no flag to skip the check.
+
 The local stack (P1.34d) is `deployment/compose.local.yaml`, with the same wrapper under `--env local`:
 
 ```sh
