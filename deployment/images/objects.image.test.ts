@@ -28,10 +28,10 @@ function identities(body: string): string {
   return file;
 }
 
-/** The anonymous S3 answer from inside the container, once the server answers at all (busybox wget). */
-function anonymousAnswer(container: string): string {
+/** The anonymous S3 answer to GET `path` from inside the container, once the server answers at all (busybox wget). */
+function anonymousAnswer(container: string, path = "/"): string {
   for (let attempt = 0; attempt < 30; attempt++) {
-    const ran = docker(["exec", container, "wget", "-S", "-O", "/dev/null", "http://127.0.0.1:8333/"], {
+    const ran = docker(["exec", container, "wget", "-S", "-O", "/dev/null", `http://127.0.0.1:8333${path}`], {
       timeoutMs: CALL_MS,
     });
     if (!ran.err.includes("Connection refused")) return ran.out + ran.err;
@@ -111,6 +111,10 @@ describe("objects image", () => {
               expect(inputs.filter((line) => line.startsWith("s3.bucket.create"))).toEqual(
                 BUCKETS.map((bucket) => `s3.bucket.create -name ${bucket}\n`),
               );
+              // With both buckets there, an anonymous caller still lists nothing and reads nothing.
+              for (const path of ["/", ...BUCKETS.map((bucket) => `/${bucket}/`), `/${BUCKETS[0]}/any-object`]) {
+                expect(anonymousAnswer(container, path), path).toContain("403");
+              }
               // A second `up` finds both buckets and creates nothing.
               inputs.length = 0;
               expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer)).toBeNull();
