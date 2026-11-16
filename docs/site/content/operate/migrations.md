@@ -7,7 +7,7 @@ Schema changes applied by the one-shot Compose `migrate` service. File rules and
 
 ## Where the files are
 
-`infrastructure/postgres/migrations/` holds `0001_init.sql` through `0016_audit_actor.sql`.
+`infrastructure/postgres/migrations/` holds `0001_init.sql` through `0018_audit_retention_functions.sql`.
 
 | Piece | Path |
 | --- | --- |
