@@ -31,6 +31,10 @@ copy in `settings/messages.ts`; `Me` gains the Avatar initial and an Edit profil
 three values as hidden fields and `confirmed=yes`, and a link back to the empty form. It renders the same for
 every date and names no threshold.
 
+P2.12i: `Age` (both states), `Terms` and `ChatLater` end in `welcome/SignOut`, a standalone Button posting to
+`/logout` under a line, so a member held at a step can sign out; the default shell's Header still offers only Sign
+in. `UnderAge` has no session left and shows none.
+
 **The shell (P1.25).** `renderPage` takes `islands: "on" | "off"` and an optional `shell`. "off" (the public pages
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,

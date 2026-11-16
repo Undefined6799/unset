@@ -25,4 +25,5 @@ export const WELCOME = {
   appealUnpublished: "The review address is not published on this page yet.",
   privacyNoticeTitle: "Privacy notice",
   privacyNotice: "The privacy notice has changed.",
+  signOut: "Sign out",
 } as const;

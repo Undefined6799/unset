@@ -3,6 +3,7 @@
 // corrected and the question still tells nobody which answers pass.
 import { Button, Input, Link, safeHref } from "@unset/shared-ui";
 import { WELCOME } from "./messages.ts";
+import { SignOut } from "./SignOut.tsx";
 
 export type AgeProps = {
   /** The date the person entered, to confirm. Absent on the first view. It lives only in this page's form. */
@@ -22,6 +23,7 @@ export function Age({ confirm }: AgeProps) {
           <Input label={WELCOME.year} name="year" type="text" inputMode="numeric" autoComplete="off" />
           <Button type="submit">{WELCOME.continue}</Button>
         </form>
+        <SignOut />
       </>
     );
   }
@@ -45,6 +47,7 @@ export function Age({ confirm }: AgeProps) {
           </Link>
         </p>
       )}
+      <SignOut />
     </>
   );
 }
