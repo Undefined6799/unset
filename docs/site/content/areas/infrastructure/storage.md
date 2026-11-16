@@ -31,7 +31,7 @@ Each signed call sets `x-amz-content-sha256` to the SHA-256 hex of the body, or 
 
 The [`infrastructure` row](../). This package reaches neither `net-guard` nor `seal` nor another infrastructure package.
 
-Declared in `infrastructure/storage/package.json`: `aws4fetch` 1.0.20. `object-store.ts` imports `AwsClient` from it and `createHash` from `node:crypto`. The root `package.json` devDependency `aws4fetch` is 1.0.20.
+Declared in `infrastructure/storage/package.json`: `aws4fetch` 1.0.20. `object-store.ts` imports `AwsClient` from it and `createHash` from `node:crypto`. The root `package.json` does not list it: the image's dev-dependency check would flag it, and the integration test resolves the workspace's hoisted copy.
 
 `vendor-sdk-one-adapter` names `@aws-sdk/client-s3` for `infrastructure/storage/`. This package does not depend on `@aws-sdk/client-s3`.
 
