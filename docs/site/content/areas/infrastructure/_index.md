@@ -58,7 +58,7 @@ No `main.ts` under `infrastructure/`. Each package publishes `index.ts` (`packag
 
 | Package | Public module | Process |
 | --- | --- | --- |
-| audit | `infrastructure/audit/index.ts` | None. `interfaces/http/compose.ts` does not construct it. `interfaces/http/account.ts` calls `appendAudit`. |
+| audit | `infrastructure/audit/index.ts` | None. `interfaces/http/compose.ts` does not construct it. `interfaces/http/age-gate-audit.ts` calls `appendAudit`. |
 | net-guard | `infrastructure/net-guard/index.ts` | None. `interfaces/http/compose.ts` calls `createNetGuard`. |
 | pds | `infrastructure/pds/index.ts` | None. `interfaces/http/compose.ts` calls `createIdentityNetwork`, `createOAuthClient` and `createPdsCall`. |
 | postgres | `infrastructure/postgres/index.ts` | `unset-migrate` and `unset-rewrap`. See [postgres](postgres/). |

@@ -37,6 +37,7 @@ Rules that refuse an edge the row would otherwise allow:
 | --- | --- |
 | `domain-pure` | No import from `infrastructure/`, `interfaces/` or `apps/`. |
 | `domain-cross-via-index` | Another domain is reached only through its `index.ts`. |
+| `domain-via-exports` | From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names. |
 | `domain-no-io-builtins` | No `node:fs`, `node:net`, `node:http`, `node:https`, `node:http2`, `node:dgram`, `node:dns`, `node:tls`, `node:child_process` or `node:worker_threads`. The prefix `node:` is optional in the rule. A test file under `domains/` is included. |
 | `infra-shared-via-index` | From outside, `shared/<name>/` is reached through its `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |

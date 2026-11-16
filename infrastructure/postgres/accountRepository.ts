@@ -1,38 +1,29 @@
-// app.account (P2.12; the row P2.06's book specified, written from onboarding because the callback does not create it).
-// The birth date never reaches a parameter: an adult row stores now() in age_confirmed_at, and a block stores only
-// the state. appendAudit runs in the same transaction as the block, so a failed audit rolls the block back.
-import type { Did, Onboarding } from "@unset/domains-identity";
-import { type AuditDb, appendAudit } from "@unset/infrastructure-audit";
-import type { Pool, PoolClient } from "@unset/infrastructure-postgres";
-import { withClient, withTransaction } from "@unset/infrastructure-postgres";
+// app.account behind the AccountRepository contract domains/identity defines (P2.12; moved here from interfaces/http
+// by P2.12g so admin, the API, jobs and erasure can be handed the same store). The birth date never reaches a
+// parameter: an adult row stores now() in age_confirmed_at, and a block stores only the state.
+import type {
+  AccountRepository,
+  Did,
+  Onboarding,
+  OnboardingAccount,
+  UnderageBlockRecord,
+} from "@unset/domains-identity";
+import type { Pool, PoolClient } from "./pool.ts";
+import { withClient } from "./pool.ts";
+import { withTransaction } from "./tx.ts";
 
-export type AccountRow = {
-  readonly onboarding: Onboarding;
-  readonly termsVersion: string | null;
-  readonly privacyVersion: string | null;
-};
-
-export type AccountStore = {
-  get(did: Did, deadline: AbortSignal): Promise<AccountRow | null>;
-  /** Sets onboarding to terms and age_confirmed_at to now(), only from the age step. */
-  confirmAdult(did: Did, deadline: AbortSignal): Promise<boolean>;
-  /** Records the accepted versions. From terms the step becomes chat; a finished account stays done. */
-  acceptTerms(did: Did, terms: string, privacy: string, deadline: AbortSignal): Promise<"chat" | "done" | null>;
-  finishChat(did: Did, deadline: AbortSignal): Promise<boolean>;
+export type AccountRepositoryOptions = {
   /**
-   * Blocks the account and writes age_gate.blocked. Null means this call did not change the row
-   * (it was already past the age step), so no second audit row is written. A throw rolls both back.
+   * Writes the audit row for an under-age block on the block's own transaction, so a failed audit rolls the block
+   * back. The composition root passes it: this folder may not import infrastructure/audit (architecture matrix row
+   * `infrastructure`).
    */
-  blockUnderage(
-    did: Did,
-    hosted: boolean,
-    deadline: AbortSignal,
-  ): Promise<{ readonly lane: string; readonly seq: number } | null>;
+  readonly recordUnderageBlock: (tx: PoolClient, did: Did, hosted: boolean) => Promise<UnderageBlockRecord>;
 };
 
 const STEPS = ["age", "terms", "chat", "done", "blocked_underage"] as const;
 
-function accountOf(raw: Record<string, unknown>): AccountRow {
+function accountOf(raw: Record<string, unknown>): OnboardingAccount {
   const onboarding = raw.onboarding;
   if (typeof onboarding !== "string" || !(STEPS as readonly string[]).includes(onboarding)) {
     throw new Error("onboarding state");
@@ -47,12 +38,7 @@ function accountOf(raw: Record<string, unknown>): AccountRow {
 
 const READ = "SELECT onboarding, terms_version, privacy_version FROM app.account WHERE did = $1";
 
-/** PoolClient satisfies AuditDb; the wrapper keeps the call typed without a cast of the client. */
-function asAuditDb(tx: PoolClient): AuditDb {
-  return { query: (text, values) => tx.query(text, values) };
-}
-
-export function createAccountStore(pool: Pool): AccountStore {
+export function createAccountRepository(pool: Pool, options: AccountRepositoryOptions): AccountRepository {
   const read = <T>(deadline: AbortSignal, fn: (db: PoolClient) => Promise<T>) => withClient(pool, deadline, fn);
   const write = <T>(deadline: AbortSignal, fn: (tx: PoolClient) => Promise<T>) => withTransaction(pool, deadline, fn);
 
@@ -108,14 +94,7 @@ export function createAccountStore(pool: Pool): AccountStore {
           [did],
         );
         if (rows.length !== 1) return null;
-        const appended = await appendAudit(asAuditDb(tx), {
-          action: "age_gate.blocked",
-          outcome: "succeeded",
-          actorDid: did,
-          target: did,
-          ...(hosted ? { reason: "age_gate_hosted" as const } : {}),
-        });
-        return { lane: appended.lane, seq: appended.seq };
+        return options.recordUnderageBlock(tx, did, hosted);
       });
     },
   };

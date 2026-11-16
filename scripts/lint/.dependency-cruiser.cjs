@@ -31,6 +31,30 @@ const IO_BUILTINS = "fs|net|http|https|http2|dgram|dns|tls|child_process|worker_
 const escapeRegex = (path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const anyOf = (paths) => `^(${paths.map(escapeRegex).join("|")})`;
 const oneOfFiles = (paths) => `${anyOf(paths)}$`;
+
+/**
+ * The files through which a domain is reached from outside domains/: its index.ts and each file its package.json
+ * `exports` names (P0.09s, rule DC-2). Read here and never hard-coded, so a new subpath is a visible package.json
+ * change in a domain PR. dependency-cruiser does not judge `exports` itself (18.7.0 resolves with
+ * `exportsFields: []`, src/main/resolve-options/normalize.mjs:35), and a relative `../../domains/<x>/<file>.ts`
+ * bypasses the map anyway. A conditional (non-string) export target names no file and so allows none.
+ */
+function domainEntryFiles() {
+  const { existsSync, readdirSync, readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const root = join(__dirname, "../../domains");
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, "package.json")))
+    .flatMap((entry) => {
+      const targets = Object.values(
+        JSON.parse(readFileSync(join(root, entry.name, "package.json"), "utf8")).exports ?? {},
+      );
+      return ["./index.ts", ...targets]
+        .filter((target) => typeof target === "string" && /^\.\/[\w./-]+$/.test(target) && !target.includes(".."))
+        .map((target) => `domains/${entry.name}/${target.slice(2)}`);
+    });
+}
+const DOMAIN_ENTRY_FILES = domainEntryFiles();
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 /**
@@ -237,6 +261,12 @@ module.exports = {
       { path: "^domains/", pathNot: ["^domains/$1/", "^domains/[^/]+/index\\.ts$"] },
     ),
     forbidden(
+      "domain-via-exports",
+      "From apps/, interfaces/, infrastructure/ or shared/, a domain is reached only through its index.ts or a file its package.json exports names, tests included (P0.09s, rule DC-2).",
+      { path: "^(apps|interfaces|infrastructure|shared)/" },
+      { path: "^domains/", pathNot: oneOfFiles(DOMAIN_ENTRY_FILES) },
+    ),
+    forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
       { pathNot: `^${WORKSPACE_WITH_INDEX}` },
@@ -429,5 +459,6 @@ Object.defineProperties(module.exports, {
   E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
+  DOMAIN_ENTRY_FILES: { value: DOMAIN_ENTRY_FILES },
   LEXICON_SCRIPT_BUILTINS: { value: LEXICON_SCRIPT_BUILTINS },
 });
