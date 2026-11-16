@@ -35,12 +35,14 @@ import {
 import {
   checkConnectionBudget,
   connectionOf,
+  createAccountRepository,
   createLockPool,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createRequestLock,
   createSingleUseStore,
+  oauthSessionExists,
   PURPOSES,
   ping,
   withClient,
@@ -51,7 +53,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
-import { createAccountStore } from "./account.ts";
+import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { type AppGate, appSessionGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
@@ -234,9 +236,9 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     complete: (query) => completeAuthorization(oauth.client, query, log, pdsIssuer),
     consumeNonce: (nonce, deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
-    createSession: (did, replacingCookie, deadline) =>
+    createSession: (did, replacingCookie, issuerOrigin, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) =>
-        sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
+        sessions.create(tx, did, replacingCookie === null ? { issuerOrigin } : { replacingCookie, issuerOrigin }),
       ),
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     signInScope: oauth.signInScope,
@@ -271,14 +273,10 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     client: oauth.client,
     endSessions: (did) =>
       withTransaction(oauth.pool, null, (tx) => sessions.destroyAllForDid(tx, did, "auth_dead")).then(() => undefined),
-    tokenSetRemains: (did) =>
-      withClient(oauth.pool, null, async (db) => {
-        const found = await db.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did]);
-        return found.rowCount === 1;
-      }),
+    tokenSetRemains: (did) => oauthSessionExists(oauth.pool, did),
     log,
   });
-  const accounts = createAccountStore(oauth.pool);
+  const accounts = createAccountRepository(oauth.pool, { recordUnderageBlock });
   const versions = { terms: TERMS_VERSION, privacy: PRIVACY_VERSION };
   // `deadlineAt` is the route handler's own, on the kit's monotonic clock: pdsCall retries a read only while the
   // wait and one more call fit before it (README rule 8a; P2.07a).

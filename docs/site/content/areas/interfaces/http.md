@@ -9,7 +9,7 @@ Route table: [Endpoints](/endpoints/).
 
 ## Owns
 
-Public pages, sign-in, the signed-in account page, and the adapters those routes call. `interfaces/http/compose.ts` is the only file here that builds adapters. It wires the `web` Postgres pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account store, then registers the route modules below. `boot()` starts the expiry sweeps in `interfaces/http/jobs/sweeps.ts` after the connection-budget check. `main.ts` does not import `infrastructure/`.
+Public pages, sign-in, the signed-in account page, and the adapters those routes call. `interfaces/http/compose.ts` is the only file here that builds adapters. It wires the `web` Postgres pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account repository, then registers the route modules below. `boot()` starts the expiry sweeps in `interfaces/http/jobs/sweeps.ts` after the connection-budget check. `main.ts` does not import `infrastructure/`.
 
 The kit adds `GET /health` in `shared/http/server.ts`. The body is status, service and commit (`shared/http/health.ts`). `compose.ts` registers one readiness check that runs through `ping` (`infrastructure/postgres/pool.ts`), which ends a connection that has not answered by 900 ms, so `/health` is 503 while Postgres does not answer. `main.ts` installs `fatal.ts` after compose: an unhandled rejection is logged by class name and the server drains; an uncaught exception is logged and the process exits 1.
 
@@ -24,13 +24,14 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/login.ts` | Sign-in form and the start of authorization. Browser binding: `interfaces/http/routes/sign-in-state.ts`. |
 | `interfaces/http/routes/oauth-callback.ts` | Authorization callback. |
 | `interfaces/http/routes/logout.ts` | Sign-out for this browser. Session count: `interfaces/http/logout-sessions.ts`. |
-| `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: `interfaces/http/account.ts`. |
+| `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: the `AccountRepository` contract (`domains/identity/account.ts`), implemented by `infrastructure/postgres/accountRepository.ts`. |
 | `interfaces/http/routes/revoke.ts` | `withRevokeTimeout`, the 10 s grant-revocation limit shared by `logout.ts` and `welcome.ts`. |
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |
 | `interfaces/http/routes/profile.ts` | `POST /profile`, the owner's profile save. Body limit `PROFILE_BODY_LIMIT_BYTES` is 96 KiB. The DID comes from the session. `domains/profile` reads the fields. `infrastructure/pds/profile-record.ts` writes the record. |
-| `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). |
+| `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). The origin comes from the session row (`Session.issuerOrigin`, written by the OAuth callback, [ADR 0048](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0048-session-issuer-origin.md)); a session without one reads the stored token set instead. |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
+| `interfaces/http/age-gate-audit.ts` | `recordUnderageBlock`. `compose.ts` passes it to `createAccountRepository`. It calls `appendAudit` on the block's transaction. |
 | `interfaces/http/sign-in-lock.ts` | Holds the account's OAuth lock during a sign-in and a last-browser sign-out, so one can't revoke the token set the other just stored. |
 | `interfaces/http/app-gate.ts` | Page gate `openApp`: session, then onboarding, then a confirmed email. |
 | `interfaces/http/redirect.ts` | `redirect`: the 303, `no-store` answer the forms and the page gate send, with any cookies. |
@@ -45,7 +46,7 @@ Routes in this process set `session` to `"handler"` or `"none"`. None set `"requ
 
 The other routes set `"none"`, which omits both manifest fields. `GET /welcome/blocked`, `POST /logout`, `GET /signed-out`, `GET /login` and `POST /login` still read the session in the handler. `GET /login` and `POST /login` send a signed-in visitor to `/did` (`interfaces/http/routes/login.ts`). `GET /settings` returns 303 to `/settings/profile` and does not read a session.
 
-The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS. The maximum is 900 in `interfaces/http/config.ts`. While the PDS can't be reached, that cached confirmation is served for at most 4 × `EMAIL_RECHECK_S`. After that, the gated page shows the PDS-unavailable page and the session stays.
+The confirmed-email cache is rechecked at the next gated page view, at most `EMAIL_RECHECK_S` (max 900s), and only on our own PDS. It is not a wall-clock timer. `emailGate` (`domains/identity/auth/gates.ts`) compares the cache age when `openApp` runs. A stale cache calls `emailRefresh` (`interfaces/http/email-refresh.ts`), which asks the PDS unless that member is on hold. After a recheck answers `transient` other than our own `lock_timeout`, `emailRefresh` holds that member for `PDS_HOLD_MS` (30_000 ms, monotonic `performance.now()` in `interfaces/http/compose.ts`, this process's memory only; the table is capped at `PDS_HOLD_MAX_MEMBERS` (10,000) and emptied when full) and answers `transient` without calling the PDS. A restart or another replica asks again, and the 4 × `EMAIL_RECHECK_S` cap and the PDS-unavailable page are unchanged. The maximum is 900 in `interfaces/http/config.ts`. While the PDS can't be reached, that cached confirmation is served for at most 4 × `EMAIL_RECHECK_S`. After that, the gated page shows the PDS-unavailable page and the session stays.
 
 `compose.ts` keeps `meRoutes` last so the one-segment DID route does not shadow the explicit paths.
 
@@ -185,6 +186,6 @@ Grants for `web` in `infrastructure/postgres/grant-matrix.json`:
 | `app.oauth_session` | `SELECT`, `INSERT` on `did`; `SELECT`, `INSERT`, `UPDATE` on `sealed`, `client_kid`, `updated_at`; `DELETE` |
 | `app.account` | `SELECT`, `INSERT` on `did`, `first_seen_at`; `SELECT`, `INSERT`, `UPDATE` on `onboarding`, `terms_version`, `terms_accepted_at`, `privacy_version`, `age_confirmed_at`; `SELECT` on `storage_quota_bytes` |
 
-SQL in this folder names `app.account`, `app.session` and `app.oauth_session`. The stores composed here run the other statements: `infrastructure/session/store.ts` (`app.session`, `app.end_sessions_for_did`), `infrastructure/postgres/oauthStores.ts` (`app.oauth_state`, `app.oauth_session`), `infrastructure/postgres/singleUse/store.ts` (`app.single_use`), `infrastructure/audit/append.ts` (`audit.append`, called from `account.ts` on an underage block).
+SQL in this folder names `app.session` and `app.oauth_session` (`interfaces/http/logout-sessions.ts`). The stores composed here run the other statements: `infrastructure/session/store.ts` (`app.session`, `app.end_sessions_for_did`), `infrastructure/postgres/oauthStores.ts` (`app.oauth_state`, `app.oauth_session`), `infrastructure/postgres/accountRepository.ts` (`app.account`), `infrastructure/postgres/singleUse/store.ts` (`app.single_use`), `infrastructure/audit/append.ts` (`audit.append`, called from `interfaces/http/age-gate-audit.ts` on an underage block).
 
 Schema `idx` has `USAGE` and no table grant in `grant-matrix.json`. No `CREATE TABLE` in schema `idx` is in `infrastructure/postgres/migrations/`.

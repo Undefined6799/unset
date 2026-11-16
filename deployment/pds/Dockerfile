@@ -1,12 +1,12 @@
 # P2.24c / ADR 0027: build only the paired upstream frontend.
 # P1.27s keeps the existing pinned upstream builder pending mirror rollout.
-# P1.38h: atproto 0.5.49 (5d6febdd package.json devEngines) requires Node ^26.12.1; P1.38j pairs this builder.
+# P1.38h: atproto 0.5.49 (5d6febdd) and 0.5.51 (fb16c8e0) package.json devEngines require Node ^26.12.1; P1.38j pairs this builder.
 # hadolint ignore=DL3026
 FROM docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS ui-build
 COPY source.lock.json /source.lock.json
 # P2.24x: the unset.sh theme, appended to upstream's stylesheet before the source is hashed.
 COPY ui/unset-theme.css /unset-theme.css
-ADD --checksum=sha256:d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be https://codeload.github.com/bluesky-social/atproto/tar.gz/5d6febdd96671891bd82f07fece7eb089c6fe931 /tmp/atproto.tar.gz
+ADD --checksum=sha256:8ec64f48214236a37ffe739b17fe80bfd060c2cf438ff028484cb24ebcc4dc08 https://codeload.github.com/bluesky-social/atproto/tar.gz/fb16c8e0247fb5159fd23ce0e5301249532d1b4e /tmp/atproto.tar.gz
 # BuildKit tmpfs keeps source/dependencies out of layers; only /dist survives.
 # See https://docs.docker.com/reference/dockerfile/#run---mounttypetmpfs.
 # Exact pnpm and frozen upstream lock; dependency lifecycle scripts never run. pnpm 11.11.0 has no dependencies, so
@@ -18,8 +18,8 @@ ENV PNPM_INTEGRITY=sha512-RGP2X9gO2A1pvB1L8WPulPYFxzgPwxi7Wy6+FfjNEtScUaTVnpUbQB
 RUN --mount=type=tmpfs,target=/build,size=4294967296 \
     test "$(node --version)" = "v26.12.1" \
     && tar -xzf /tmp/atproto.tar.gz -C /build \
-    && cd /build/atproto-5d6febdd96671891bd82f07fece7eb089c6fe931 \
-    && node -e 'const fs=require("node:fs"),c=require("node:crypto"),a=require("node:assert/strict"),l=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));a.equal(l.source.revision,"5d6febdd96671891bd82f07fece7eb089c6fe931");a.equal(c.createHash("sha256").update(fs.readFileSync("pnpm-lock.yaml")).digest("hex"),l.source.lockSha256);a.equal(process.versions.node,l.builder.node);a.equal(require("./package.json").packageManager,"pnpm@"+l.builder.pnpm);for(const [p,n,v] of [["packages/pds","@atproto/pds","0.5.49"],["packages/oauth/oauth-provider","@atproto/oauth-provider","0.24.3"],["packages/oauth/oauth-provider-ui","@atproto/oauth-provider-ui","0.10.7"]]){const j=require("./"+p+"/package.json");a.equal(j.name,n);a.equal(j.version,v);}' /source.lock.json \
+    && cd /build/atproto-fb16c8e0247fb5159fd23ce0e5301249532d1b4e \
+    && node -e 'const fs=require("node:fs"),c=require("node:crypto"),a=require("node:assert/strict"),l=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));a.equal(l.source.revision,"fb16c8e0247fb5159fd23ce0e5301249532d1b4e");a.equal(c.createHash("sha256").update(fs.readFileSync("pnpm-lock.yaml")).digest("hex"),l.source.lockSha256);a.equal(process.versions.node,l.builder.node);a.equal(require("./package.json").packageManager,"pnpm@"+l.builder.pnpm);for(const [p,n,v] of [["packages/pds","@atproto/pds","0.5.51"],["packages/oauth/oauth-provider","@atproto/oauth-provider","0.25.1"],["packages/oauth/oauth-provider-ui","@atproto/oauth-provider-ui","0.11.0"]]){const j=require("./"+p+"/package.json");a.equal(j.name,n);a.equal(j.version,v);}' /source.lock.json \
     && cat /unset-theme.css >> packages/oauth/oauth-provider-ui/src/style.css \
     && find . -type f -exec sha256sum {} + > /build/source.sha256 \
     && (cd /build && npm pack --cache /build/npm-cache pnpm@11.11.0) \
@@ -43,6 +43,6 @@ FROM scratch AS ui-artifact
 COPY --from=ui-build /dist/ /dist/
 
 # ADR 0027: inherit the complete official runtime Config unchanged.
-FROM ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf
-RUN rm -rf /app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist
-COPY --from=ui-artifact /dist/ /app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist/
+FROM ghcr.io/bluesky-social/pds:0.4.5051@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6
+RUN rm -rf /app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.11.0/node_modules/@atproto/oauth-provider-ui/dist
+COPY --from=ui-artifact /dist/ /app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.11.0/node_modules/@atproto/oauth-provider-ui/dist/

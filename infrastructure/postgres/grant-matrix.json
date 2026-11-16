@@ -122,6 +122,12 @@
     "audit.chain": {
       "auditor": { "privileges": ["SELECT"], "wholeTable": true }
     },
+    "audit.redaction_log": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
+    "audit.segment": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
     "app.single_use": {
       "retention": {
         "columns": {
@@ -149,7 +155,8 @@
           "last_seen_at": ["SELECT", "INSERT", "UPDATE"],
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
-          "email_checked_at": ["SELECT", "UPDATE"]
+          "email_checked_at": ["SELECT", "UPDATE"],
+          "issuer_origin": ["SELECT", "INSERT"]
         },
         "rowPrivileges": ["DELETE"]
       }

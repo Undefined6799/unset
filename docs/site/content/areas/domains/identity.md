@@ -14,6 +14,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/index.ts` | Package root. Re-exports the rows below. |
 | `domains/identity/syntax.ts` | `parseDid`, `parseHandle`, `isHandleSyntax`, and the branded `Did` and `Handle` types. |
 | `domains/identity/contract.ts` | `IdentityNetwork` and its outcome types. |
+| `domains/identity/account.ts` | `AccountRepository` (`get`, `confirmAdult`, `acceptTerms`, `finishChat`, `blockUnderage`) and `UnderageBlockRecord`. |
 | `domains/identity/did-doc.ts` | `parseDidDoc`. Not a package export. `resolve-did.ts` is the caller. |
 | `domains/identity/resolve-did.ts` | `createDidResolver`, `IdentityError`. |
 | `domains/identity/resolve-handle.ts` | `resolveHandle`. |
@@ -97,6 +98,7 @@ Re-exports from `index.ts`:
 
 | From | Names |
 | --- | --- |
+| `account.ts` | `AccountRepository`, `UnderageBlockRecord` |
 | `auth/age.ts` | `ageInYears`, `parseBirthDate`, `latestCalendarDay`, `BirthDate` |
 | `auth/gates.ts` | `emailGate`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`, and the types `EmailCache`, `EmailGate`, `EmailRefresh`, `Onboarding`, `OnboardingAccount`, `OnboardingDecision`, `OnboardingStep`, `OnboardingVersions` |
 | `contract.ts` | `FetchRequest`, `FetchTarget`, `HttpOutcome`, `IdentityNetwork`, `TxtOutcome` |
@@ -115,7 +117,7 @@ Values the gates read, stored by the caller:
 
 | Shape | Fields | Stored by |
 | --- | --- | --- |
-| `OnboardingAccount` | `onboarding`, `termsVersion`, `privacyVersion` | `interfaces/http/account.ts` reads `onboarding`, `terms_version`, `privacy_version` from `app.account` |
+| `OnboardingAccount` | `onboarding`, `termsVersion`, `privacyVersion` | `infrastructure/postgres/accountRepository.ts` (the `AccountRepository` contract in `account.ts`) reads `onboarding`, `terms_version`, `privacy_version` from `app.account` |
 | `EmailCache` | `confirmed`, `checkedAt` | `openApp` (`interfaces/http/app-gate.ts`) sets `confirmed` to `session.emailConfirmed` and `checkedAt` to `session.emailCheckedAt`, or null when the session has no check time. `read` (`infrastructure/session/store.ts`) selects `email_confirmed` and `email_checked_at` from `app.session` |
 
 `app.account` is created in `infrastructure/postgres/migrations/0015_app_account.sql`. It has `age_confirmed_at` and no birth-date column. `TERMS_VERSION` and `PRIVACY_VERSION` are the constants in `legal/versions.ts`. `interfaces/http/routes/legal.test.ts` (`legal.versions_exported`) checks them against the `version` in `apps/web/legal/terms.en.md` and `apps/web/legal/privacy.en.md`.
