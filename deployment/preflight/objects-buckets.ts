@@ -84,13 +84,16 @@ export function composeArgs(argv: string[]): string[] {
 
 const PAUSE = new Int32Array(new SharedArrayBuffer(4));
 
-/** Real docker, with no shell; a call past its deadline is killed with SIGKILL. Its stderr is passed on unread. */
+/**
+ * Real docker, with no shell; a call past its deadline is killed with SIGKILL. Its stderr is captured and dropped,
+ * never echoed.
+ */
 export const processDocker: Docker = {
   run: (args, input, timeoutMs) => {
     const result = spawnSync("docker", args, {
       input,
       encoding: "utf8",
-      stdio: ["pipe", "pipe", "inherit"],
+      stdio: ["pipe", "pipe", "pipe"],
       shell: false,
       timeout: timeoutMs,
       killSignal: "SIGKILL",

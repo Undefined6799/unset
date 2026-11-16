@@ -1,5 +1,9 @@
 // P2.18s (ADR 0050 Decision 2): the bucket setup's own decisions, with Docker as the one double (TE-1). The real store
 // is objects.image.test.ts's (objects_buckets_created_by_stack).
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   BUCKETS,
@@ -11,6 +15,7 @@ import {
   listedBuckets,
 } from "./objects-buckets.ts";
 
+const SCRIPT = join(import.meta.dirname, "objects-buckets.ts");
 const COMPOSE = ["compose", "-f", "/c/compose.dev.yaml", "--env-file", "/e/dev-public.env"];
 const listing = (names: readonly string[]) => names.map((name) => `  ${name}\tsize:0\tlogical:0\tchunk:0\n`).join("");
 
@@ -97,5 +102,24 @@ describe("objects bucket setup (P2.18s)", () => {
     expect(() => composeArgs(["--compose", "/c/a.yaml"])).toThrow("usage");
     expect(() => composeArgs(["--interpolation-env", "/e/x.env"])).toThrow("usage");
     expect(() => composeArgs(["--compose", "/c/a.yaml", "--interpolation-env", "/e/x.env", "--other"])).toThrow();
+  });
+});
+
+describe("objects bucket setup as a process (P2.18s)", () => {
+  test("what_docker_prints_is_never_echoed", () => {
+    // A docker on PATH that answers the health probe, then fails the shell with text on stderr: the setup's own stderr
+    // holds only its fixed line (SE-7).
+    const bin = mkdtempSync(join(tmpdir(), "objects-docker-"));
+    const fake = join(bin, "docker");
+    writeFileSync(fake, '#!/bin/sh\ncase "$*" in *wget*) exit 0 ;; esac\necho "LEAKED-STORE-OUTPUT" >&2\nexit 1\n');
+    chmodSync(fake, 0o755);
+    const ran = spawnSync(
+      process.execPath,
+      [SCRIPT, "--", "--compose", "/c/compose.dev.yaml", "--interpolation-env", "/e/dev-public.env"],
+      { encoding: "utf8", env: { PATH: `${bin}:/usr/bin:/bin` }, timeout: 30_000 },
+    );
+    expect(ran.status).toBe(1);
+    expect(ran.stderr).toBe("objects: the object store's shell could not list the buckets\n");
+    expect(ran.stdout).toBe("");
   });
 });
