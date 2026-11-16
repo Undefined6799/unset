@@ -195,6 +195,9 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("deployment/preflight/a.ts", "yaml"),
     edge("deployment/preflight/a.ts", "node:child_process"),
     edge("deployment/preflight/checks/a.ts", "../../edge/caddyfile.ts"),
+    // P1.39c: the adapted config's comparison and rules, these two files only.
+    edge("deployment/preflight/checks/a.ts", "../../edge/adapted.ts"),
+    edge("deployment/preflight/checks/a.ts", "../../edge/adapted-rules.ts"),
     // P1.33i: the index only. The row-alone cruise fails until the row allows this file.
     edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts"),
   ],
@@ -602,6 +605,13 @@ describe("allowlist matrix", () => {
       edge("deployment/preflight/a.ts", "../edge/caddyfile.test.ts"),
       edge("deployment/preflight/a.ts", "../edge/caddyfile.image.test.ts"),
       edge("deployment/preflight/a.ts", "../edge/caddyfile.ts.bak.ts"),
+      // P1.39c: adapted.ts and adapted-rules.ts only, never their tests, another edge file or a name that starts so.
+      edge("deployment/preflight/a.ts", "../edge/adapted.test.ts"),
+      edge("deployment/preflight/a.ts", "../edge/adapted.image.test.ts"),
+      edge("deployment/preflight/a.ts", "../edge/adapted-rules.test.ts"),
+      edge("deployment/preflight/a.ts", "../edge/adapted-rules.ts.bak.ts"),
+      edge("deployment/preflight/a.ts", "../edge/docker-call.ts"),
+      edge("deployment/images/a.ts", "../edge/adapted-rules.ts"),
       edge("deployment/preflight/a.ts", "../edge/edge.test.ts"),
       edge("deployment/preflight/a.ts", "../edge/sites/caddyfile.ts"),
       edge("deployment/preflight/a.ts", "../../x/deployment/edge/caddyfile.ts"),

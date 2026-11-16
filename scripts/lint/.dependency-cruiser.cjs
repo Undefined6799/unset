@@ -191,6 +191,9 @@ const MATRIX = [
   // "Allow import", 2026-10-12T02:16:16Z), and shared/host-pin/index.ts only (P1.33i, DC-2; Alex's typed line
   // "yes P1.33i scripts/lint depcruise deployment-preflight row shared/host-pin", 2026-10-14). dependency-cruiser
   // 18.5.0 matches `to.path` as a regular expression against the resolved path (doc/rules-reference.md, `path`).
+  // P1.39c (ADR 0046 decision 4): two more edge files, exactly, so C18 judges what `caddy adapt` prints with the
+  // edge's own comparison (adapted.ts) and rules (adapted-rules.ts) and no second copy; caddyfile.ts leaves this row
+  // when P1.39e deletes the reader.
   // The edge may still never import the preflight (edge-not-preflight).
   {
     name: "deployment-preflight",
@@ -198,6 +201,8 @@ const MATRIX = [
     to: [
       { path: "^deployment/preflight/" },
       { path: "^deployment/edge/caddyfile\\.ts$" },
+      { path: "^deployment/edge/adapted\\.ts$" },
+      { path: "^deployment/edge/adapted-rules\\.ts$" },
       { path: "^shared/host-pin/index\\.ts$" },
       { path: npmPackage("yaml") },
       CORE,
