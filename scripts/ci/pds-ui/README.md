@@ -67,8 +67,9 @@ and the immutable image's package JSON must agree on the `@atproto/pds`, `@atpro
 `@atproto/oauth-provider-ui` versions that `PAIRS` in `contract.ts` lists for the lock's base tag, and `uiDirectory`
 must name that pair's `oauth-provider-ui` version. `builder.ref` and `builder.node` must equal the pair's exact
 builder. A new upstream tag needs a reviewed `PAIRS` row first (trusted base), then the re-pin. Today `PAIRS` holds
-only 0.4.5049 (0.5.49, 0.24.3, 0.10.7; builder `node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because
-atproto at 0.5.49 requires Node ^26.12.1); 0.4.5037 was dropped after the P1.38h re-pin (P1.38m).
+0.4.5049 (0.5.49, 0.24.3, 0.10.7) and 0.4.5051 (0.5.51, 0.25.1, 0.11.0), both with builder
+`node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because atproto at 0.5.49 and 0.5.51 requires Node
+^26.12.1; 0.4.5037 was dropped after the P1.38h re-pin (P1.38m), and 0.4.5049 goes once the 0.4.5051 re-pin merges.
 
 The Dockerfile has exactly three stages: `FROM <builder.ref> AS ui-build`, `FROM scratch AS ui-artifact`, and
 `FROM <base.ref>`. Its one ADD is exactly:

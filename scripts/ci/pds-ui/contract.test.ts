@@ -67,7 +67,7 @@ describe("derived PDS recipe contract", () => {
       expect(() => parseLock(JSON.stringify({ ...locked, ...delta }))).toThrow();
   });
   test("pds_lock_accepts_only_the_reviewed_pair_with_its_ui_directory", () => {
-    expect(Object.keys(PAIRS)).toEqual(["0.4.5049"]);
+    expect(Object.keys(PAIRS)).toEqual(["0.4.5049", "0.4.5051"]);
     expect(parseLock(JSON.stringify(locked))).toEqual(locked);
     expect(() => parseLock(JSON.stringify(dropped))).toThrow();
     expect(() => parseLock(JSON.stringify({ ...locked, uiDirectory: dropped.uiDirectory }))).toThrow();
