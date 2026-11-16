@@ -1,6 +1,6 @@
 # 0049 — A browser session ends with its token set, enforced by the database
 
-Status: Proposed (awaiting Alex). Step P2.03t.
+Status: Accepted by Alex, 2026-11-16 00:03:50Z, against 51508e1 ("ccept ADR 0049 at 51508e1", read as accept). Step P2.03t.
 
 ## Context
 A browser session is a row in `app.session`. It is only good while the member's OAuth token set exists in
