@@ -31,11 +31,13 @@ export const HEALTH_WAIT_MS = 180_000;
 const POLL_MS = 3_000;
 const PROBE_MS = 15_000;
 /** The services `up` starts; pds-token-reader is a tools profile and never starts. */
-export const SERVICES = ["postgres", "migrate", "pds", "edge", "web"] as const;
+export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects"] as const;
 const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const PARENT = dirname(ROOT);
+/** The object store's identities (runbook "The object store's identities"): none yet, and never an Admin one. */
+export const OBJECTS_IDENTITIES = '{"identities":[]}';
 const FOLDERS = ["unset-dev-env", "unset-dev-secrets", "unset-dev-ca", "unset-dev-trust"] as const;
 const ENV_FILE = join(PARENT, "unset-dev-env/dev-public.env");
 const COMPOSE = join(ROOT, "deployment/compose.local.yaml");
@@ -156,6 +158,7 @@ function folders(): void {
   secret(65532, "pg_indexer_password", v.indexer);
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
+  secret(1000, "objects_s3", OBJECTS_IDENTITIES);
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });
   writeFileSync(at("unset-dev-ca/leaf.key"), v.leafKey);
   const ca = (name: string): string => at(`unset-dev-ca/${name}`);

@@ -45,11 +45,11 @@ The preflight is product. The edge is trusted base. [architecture.md](https://gi
 
 Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and `edge-not-preflight`). dependency-cruiser 18.7.0 is pinned in `package.json`. The config states that an edge no row lists fails as `not-in-allowed`. The checked-rule table is [architecture.md](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
 
-The only product row whose `from` is under `deployment/` is `deployment-preflight`. A `*.test.ts` is the tooling row, which allows every target. `deployment/edge/caddyfile.ts`, `deployment/edge/image-cleanup.ts` and `deployment/images/vendor.ts` have no import.
+The only product row whose `from` is under `deployment/` is `deployment-preflight`. A `*.test.ts` is the tooling row, which allows every target. `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `deployment/edge/image-cleanup.ts` and `deployment/images/vendor.ts` have no import.
 
 | From | May reach |
 | --- | --- |
-| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, the npm package `yaml`, and Node built-ins. |
+| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, the npm package `yaml`, and Node built-ins. |
 
 `yaml` is 2.9.1, a root `devDependency`. `deployment/preflight/compose-parse.ts` imports `parseAllDocuments` from it.
 
