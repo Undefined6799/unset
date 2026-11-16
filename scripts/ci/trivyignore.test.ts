@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import { MAX_DAYS, PDS_MAX_DAYS, SEAWEEDFS_MAX_DAYS, trivyIgnoreProblems } from "./trivyignore.ts";
+import { MAX_DAYS, NEWT_MAX_DAYS, PDS_MAX_DAYS, SEAWEEDFS_MAX_DAYS, trivyIgnoreProblems } from "./trivyignore.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const TODAY = new Date("2026-10-06T00:00:00Z");
@@ -242,6 +242,43 @@ describe(".github/trivyignore.seaweedfs.yaml", () => {
       const other = readFileSync(file, "utf8");
       expect(other, file).not.toContain("CVE-2026-78661");
       expect(other, file).not.toContain("seaweedfs");
+    }
+  });
+});
+
+const NEWT_FILE = join(ROOT, ".github", "trivyignore.newt.yaml");
+/** P1.37m: Trivy v0.76.1's one finding in Newt 1.20.0 (2170e673), the newest release; x/net/html is not linked. */
+const NEWT_ENTRIES = [
+  {
+    id: "CVE-2026-78661",
+    paths: ["usr/local/bin/newt"],
+    purls: ["pkg:golang/golang.org/x/net@v0.60.0"],
+    statement: [
+      "sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e:",
+      "Newt 1.20.0, newest upstream release, no fixed build yet; the finding is in golang.org/x/net/html,",
+      "which the newt binary does not link; removed on the re-pin to a release with x/net v0.62.0 or later",
+    ].join(" "),
+    expired_at: "2026-12-15",
+  },
+];
+
+describe(".github/trivyignore.newt.yaml", () => {
+  test("newt_ignorefile_is_the_one_reviewed_entry", () => {
+    expect(NEWT_MAX_DAYS).toBe(30);
+    const text = readFileSync(NEWT_FILE, "utf8");
+    expect(trivyIgnoreProblems(text, new Date(), NEWT_MAX_DAYS, "shape")).toEqual([]);
+    const doc = parse(text) as { vulnerabilities?: IgnoreEntry[] };
+    expect(Object.keys(doc)).toEqual(["vulnerabilities"]);
+    const entries = (doc.vulnerabilities ?? []).map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }));
+    expect(entries).toEqual(NEWT_ENTRIES);
+  });
+
+  test("newt_waiver_names_no_other_image", () => {
+    // Its entry is scoped to the newt binary alone; the shared and PDS files name neither Newt nor its id.
+    for (const file of [SHARED_FILE, PDS_FILE]) {
+      const other = readFileSync(file, "utf8");
+      expect(other, file).not.toContain("CVE-2026-78661");
+      expect(other, file).not.toContain("usr/local/bin/newt");
     }
   });
 });

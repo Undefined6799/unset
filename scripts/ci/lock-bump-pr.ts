@@ -4,9 +4,21 @@
 //
 // Input: PUBLISHED_LOCK, the lock the publish job wrote and verified in the same run, as a job output. lock-write.ts
 // refuses anything that is not that run's shape and writes the two files; this file commits them on a new branch off
-// the published commit and opens the pull request. It never pushes to main and never merges directly. The pull
-// request is judged like any other bump: lock.yml (P2.26j) verifies every entry's signature and provenance and
-// refuses a move back, and pr-shape reads the title, commit and body written here.
+// main's head and opens the pull request. It never pushes to main and never merges directly. The pull request is
+// judged like any other bump: lock.yml (P2.26j) verifies every entry's signature and provenance and refuses a move
+// back, and pr-shape reads the title, commit and body written here.
+//
+// Off main, not off the published commit (P2.26o). Two publish runs close together each opened a bump from their own
+// commit; once the first merged, the second conflicted on the same lines and got no checks (#1618, #1622). So the two
+// files are read at main's head and the commit's parent is that head. When main's lock already names the published
+// commit or a later one, nothing is opened: "later" is ancestry, read from "Compare two commits" with the locked
+// commit as base and the published one as head, whose `status` must be exactly `ahead`. `identical` and `behind`
+// open nothing; any other answer fails the run. docs.github.com/en/rest/commits/commits (Compare two commits; its
+// example answers `"status": "behind"`; the page describes BASE...HEAD as branch names, and full commit ids answered
+// `ahead` and `behind` for e71d055...a4f8dbf and its reverse on this repository), /rest/git/refs (Get a reference:
+// "formatted as `heads/<branch name>`", the id at `object.sha`), /rest/repos/contents (Get repository content: `ref`,
+// "1 MB or smaller: All features of this endpoint are supported", `"encoding": "base64"`). All three need Contents
+// read only. Read 2026-11-16.
 //
 // Auto-merge (P2.26n, ADR 0047). When main's rules require the `lock` check, this file then turns on GitHub's squash
 // auto-merge for the pull request, pinned to the commit it just made; GitHub merges once every required check has
@@ -46,6 +58,12 @@ const ATTEMPT = /^[1-9][0-9]{0,3}$/;
 
 export type BumpEnv = { REPO?: string; COMMIT?: string; RUN_ATTEMPT?: string; PUBLISHED_LOCK?: string };
 export type BumpClient = {
+  /** The commit main points at now. */
+  mainHead(): Promise<string>;
+  /** The text of one file at a commit. */
+  fileAt(commit: string, path: string): Promise<string>;
+  /** Where `head` stands relative to `base`: GitHub's `ahead`, `behind`, `identical` or `diverged`. */
+  order(base: string, head: string): Promise<string>;
   treeOf(commit: string): Promise<string>;
   createTree(baseTree: string, files: readonly { path: string; content: string }[]): Promise<string>;
   createCommit(message: string, tree: string, parent: string): Promise<string>;
@@ -87,6 +105,24 @@ export function bumpBody(template: string, commit: string): string {
 
 export const bumpTitle = (commit: string): string => `${BUMP_STEP} Pin the images published from ${commit.slice(0, 7)}`;
 
+/** The commits the lock's first-party entries name. */
+function lockedCommits(lockText: string): string[] {
+  const entries = Object.values(JSON.parse(lockText) as Record<string, { origin?: string; gitCommit?: string }>);
+  const commits = entries.flatMap((entry) => (entry.origin === "first-party" ? [entry.gitCommit ?? ""] : []));
+  if (commits.some((commit) => !COMMIT.test(commit))) throw new Error("a locked first-party entry names no commit");
+  return [...new Set(commits)];
+}
+
+/** True when `commit` comes after every commit main's lock names; false when the lock is already as new. */
+async function isNewer(github: BumpClient, lockText: string, commit: string): Promise<boolean> {
+  for (const locked of lockedCommits(lockText)) {
+    const order = await github.order(locked, commit);
+    if (order === "identical" || order === "behind") return false;
+    if (order !== "ahead") throw new Error(`${commit} is not on one line with the locked ${locked}`);
+  }
+  return true;
+}
+
 /** Exit code of one run: 0 when a pull request was opened or nothing changed, 1 on any refusal or error. */
 export async function runBump({ env, github, readText, log }: BumpDeps): Promise<number> {
   const { REPO: repo = "", COMMIT: commit = "", RUN_ATTEMPT: attempt = "", PUBLISHED_LOCK: published = "" } = env;
@@ -95,21 +131,26 @@ export async function runBump({ env, github, readText, log }: BumpDeps): Promise
     return 1;
   }
   try {
-    const lock = readText(LOCK_PATH);
-    const compose = readText(COMPOSE_PATH);
+    const main = await github.mainHead();
+    const lock = await github.fileAt(main, LOCK_PATH);
+    const compose = await github.fileAt(main, COMPOSE_PATH);
     const next = bumpedFiles(published, lock, compose, commit);
     if (next.lock === lock && next.compose === compose) {
       log("lock-bump-pr: the lock already names these images; no pull request");
       return 0;
     }
+    if (!(await isNewer(github, lock, commit))) {
+      log(`lock-bump-pr: main's lock already names ${commit.slice(0, 7)} or a later commit; no pull request`);
+      return 0;
+    }
     const title = bumpTitle(commit);
-    const tree = await github.createTree(await github.treeOf(commit), [
+    const tree = await github.createTree(await github.treeOf(main), [
       { path: LOCK_PATH, content: next.lock },
       { path: COMPOSE_PATH, content: next.compose },
     ]);
     const message = `${title}\n\nWritten by scripts/ci/lock-write.ts from the lock publish-images.yml\nverified for ${commit}.\n`;
     const head = `lock-bump/${commit.slice(0, 12)}-${attempt}`;
-    const made = await github.createCommit(message, tree, commit);
+    const made = await github.createCommit(message, tree, main);
     await github.createBranch(head, made);
     const pull = await github.openPull({
       title,
@@ -183,6 +224,20 @@ const ENABLE =
 export function githubClient(token: string, repo: string): BumpClient {
   const root = `/repos/${repo}`;
   return {
+    mainHead: async () => {
+      const sha = String(await call(token, `${root}/git/ref/heads/main`, "object.sha"));
+      if (!COMMIT.test(sha)) throw new Error("main's head is not a commit id");
+      return sha;
+    },
+    fileAt: async (commit, path) => {
+      const at = `${root}/contents/${path}?ref=${commit}`;
+      const answer = (await request(token, at)) as Json;
+      if (answer?.encoding !== "base64" || typeof answer.content !== "string") {
+        throw new Error(`github answer is not a base64 file: ${at}`);
+      }
+      return Buffer.from(answer.content, "base64").toString("utf8");
+    },
+    order: async (base, head) => String(await call(token, `${root}/compare/${base}...${head}?per_page=1`, "status")),
     treeOf: async (commit) => String(await call(token, `${root}/git/commits/${commit}`, "tree.sha")),
     createTree: async (baseTree, files) => {
       const tree = files.map(({ path, content }) => ({ path, mode: "100644", type: "blob", content }));

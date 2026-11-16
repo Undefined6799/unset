@@ -48,8 +48,8 @@
   },
   "newt": {
     "ref": "docker.io/fosrl/newt",
-    "tag": "1.19.0",
-    "digest": "sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319",
+    "tag": "1.20.0",
+    "digest": "sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false
