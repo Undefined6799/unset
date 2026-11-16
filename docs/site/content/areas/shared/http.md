@@ -17,7 +17,7 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 | `contentTypeCheck`, `bodyLimit` | `POST` |
 | `rateLimitIp` | Unless `rateLimit` is `exempt` |
 | `csrf` | `POST` |
-| `session`, `rateLimitDid` | `session: "required"` |
+| `session`, `rateLimitDid` | `session: "required"`. The server's `gate` runs after `csrf` |
 
 `headerSets` (`shared/http/csp/headers.ts`) is applied to the final response (`secured` in `server.ts`). A handler's own Content-Security-Policy is replaced.
 
@@ -39,6 +39,8 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 
 `defineRoute` accepts methods `GET`, `HEAD` and `POST`, and groups `app`, `public`, `profile`, `static`, `media`, `admin`, `api`. `rateLimit` is required. `exempt` is allowed only for group `static`. `session` is `"required"`, `"handler"` or `"none"`, with no default. `"required"` sets `requiresSession`. `"handler"` sets `handlerSession` and leaves `requiresSession` unset, so `middlewareOf` does not add `session` or `rateLimitDid`, and a per-DID policy still requires `session: "required"` (`checkRoutes` and `middlewareOf` in `server.ts`). A route's deadline is its `deadlineMs` or `REQUEST_DEADLINE_MS`. A set `deadlineMs` is an integer from 1000 to 120000.
 
+`createServer`'s `gate` is a `SessionGate` ([ADR 0045](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0045-kit-enforces-the-session-gate.md)). A route with `requiresSession` and no gate throws before the server listens. `admit` calls the gate after the CSRF check and inside the route's deadline. A `Response` is sent and the handler does not run. An admission has to name a non-empty `did`; otherwise the answer is `internal.error` and the per-DID bucket is not taken. An admitted request is then limited per DID when the policy has a `did` entry. The handler of a request that passes receives that admission's `session` on the context. The handler `defineRoute` stores for `"required"` throws if the context has no `session`. A gate that throws is an error response: `internal.error`, or the thrown `AppError` code. `"handler"` and `"none"` do not call the gate.
+
 `defineRoute` refuses `{ mutates: true }` on a non-POST unless the path is in `GET_MUTATION_EXCEPTIONS`. The only entry is `GET /oauth/callback`. The CSRF gate still runs only for `POST` (`csrfDenied`).
 
 `createCsrfGate` (`shared/http/csrf/gate.ts`) allows GET and HEAD. For anything else it decides in this order, and a throw denies:
@@ -57,7 +59,7 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 
 `safeReturnPath` returns a `SafePath` or `null`. `DENIED_TARGETS` is `/login`, `/logout` and `/oauth`.
 
-The kit's `index.ts` does not export the gate, the CSP builder, the proxy resolver or `/health`. Interfaces reach those through `createServer`.
+The kit's `index.ts` does not export the CSRF gate, the CSP builder, the proxy resolver or `/health`. Interfaces reach those through `createServer`. It does export `SessionGate`.
 
 ## May import
 
