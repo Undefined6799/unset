@@ -52,3 +52,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0045](0045-kit-enforces-the-session-gate.md) | The request kit enforces the session gate on routes that require one (P1.04g) | Accepted 2026-11-15 |
 | [0046](0046-edge-checks-read-caddy-adapt.md) | The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile (P1.39a to P1.39e) | Proposed |
 | [0047](0047-lock-bump-auto-merge.md) | A lock bump the publish run opened merges itself once the `lock` check is required and green (P2.26n) | Accepted 2026-11-16 |
+| [0050](0050-object-store-admin-through-its-shell.md) | The object store's buckets and clean-up run through its own shell; no S3 admin key; supersedes two clauses of 0041 (P2.18s) | Proposed |

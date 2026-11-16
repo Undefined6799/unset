@@ -566,3 +566,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0047 accepted (Alex, 2026-11-16 00:03:50Z, against 1b12ea7; own record:
   [0047](0047-lock-bump-auto-merge.md)):** a lock bump the publish run opened merges itself while main's ruleset
   requires the `lock` check. Before removing that check, disable auto-merge on any open bump pull request.
+- **ADR 0050 proposed (Alex chose "Store's own shell, no admin key" on the object-store card, 2026-11-16; own record:
+  [0050](0050-object-store-admin-through-its-shell.md)):** the object store's buckets, vacuum and takedown run through
+  `weed shell` inside the `objects` container, and no S3 identity has `Admin`. Supersedes two clauses of ADR 0041
+  Decisions 3 and 7 once accepted. Proposed, awaiting Alex.
