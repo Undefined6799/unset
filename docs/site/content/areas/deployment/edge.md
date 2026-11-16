@@ -65,9 +65,11 @@ Read against Caddy v2.11.7: `caddyconfig/httpcaddyfile/directives.go` (`route` i
 
 The reviewed files are `deployment/edge/adapted/prod.generated.json`, `deployment/edge/adapted/dev.generated.json` and `deployment/edge/adapted/local.generated.json`. `deployment/edge/adapted.test.ts` requires that directory to hold exactly those three names, requires each reviewed file to equal itself and to equal the same JSON with the sentinels replaced by real values, and requires every other change it tries to return that message. `deployment/edge/adapted.image.test.ts` builds `deployment/edge/Dockerfile` and runs `caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile` in that image once per env, with `--read-only`, `--network none`, the sentinel environment and that env's read-only binds. Prod binds `sites/pds.caddy` at `sites/enabled/pds.caddy`. Dev binds `dev/app.caddy` and `dev/pds.caddy` under `sites/enabled/` and `dev/tls.caddy` over `snippets/tls.caddy`. Local binds `sites/pds.caddy` and `local/app.caddy` under `sites/enabled/` and `local/tls.caddy` over `snippets/tls.caddy`. The test fails unless the image's JSON equals the reviewed file.
 
+`deployment/edge/adapted-rules.ts` (P1.39b; [ADR 0046](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0046-edge-checks-read-caddy-adapt.md) decision 3) judges that JSON. It imports nothing. `adaptedProblems` returns why the JSON breaks a rule. Its header says every module, matcher and key it does not name fails, that it reads no file and runs no process, and that nothing but `deployment/edge/adapted-rules.test.ts` reads it until P1.39c.
+
 ## May import
 
-No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts`, `image-cleanup.ts` and `adapted.ts` have no import. An import from this folder would fail as `not-in-allowed`.
+No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts`, `image-cleanup.ts`, `adapted.ts` and `adapted-rules.ts` have no import. An import from this folder would fail as `not-in-allowed`.
 
 `edge-not-preflight` (`scripts/lint/.dependency-cruiser.cjs`): no file under `deployment/edge/`, tests included, imports `deployment/preflight/`.
 
