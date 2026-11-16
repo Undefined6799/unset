@@ -73,7 +73,7 @@ No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts`, `image-clea
 
 `edge-not-preflight` (`scripts/lint/.dependency-cruiser.cjs`): no file under `deployment/edge/`, tests included, imports `deployment/preflight/`.
 
-The preflight row may reach `deployment/edge/caddyfile.ts` and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
+The preflight row may reach `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts` and `deployment/edge/adapted-rules.ts`, and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
 
 ## Entry points
 
