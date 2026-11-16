@@ -5357,6 +5357,16 @@ networks:
     expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/pds.caddy/x.caddy:"))).toBe(
       "FAIL C18 check error",
     );
+    // P1.39e: the reader's own tests held these two until it was deleted (a_linked_mount_fails,
+    // two_mounts_at_one_target_fail). A site's source is one regular file, never a link, even a link to the right
+    // file; and no site file is mounted under two names.
+    const linked = await local((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/link.caddy:"), {
+      links: { "deployment/edge/sites/link.caddy": "pds.caddy" },
+    });
+    expect(linked.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 pds.caddy: the mount is not one regular file",
+    );
+    expect(await c18((text) => text.replace(pds, `${pds}${pds}`))).toMatch(/^FAIL C18 /);
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(await c18((text) => text.replace(tls, ""))).toBe("FAIL C18 the TLS snippet is not mounted");
     expect(

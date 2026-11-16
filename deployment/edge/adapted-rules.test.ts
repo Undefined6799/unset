@@ -13,11 +13,9 @@ import {
   DEV_PROXY_ADDRESS,
   DEV_TLS,
   type EdgeMode,
-  ENV_NAMES,
   type EnvName,
   type Json,
 } from "./adapted-rules.ts";
-import * as reader from "./caddyfile.ts";
 
 const EDGE = import.meta.dirname;
 type Obj = Record<string, Json>;
@@ -939,16 +937,6 @@ const changed = ([, mode, change]: Red): string[] => {
 };
 
 describe("edge rules on the adapted config (P1.39b)", () => {
-  test("rules_constants_are_the_readers", () => {
-    expect(Object.fromEntries(Object.entries(ENV_NAMES).map(([name, shape]) => [name, shape.source]))).toEqual(
-      Object.fromEntries(Object.entries(reader.ENV_NAMES).map(([name, shape]) => [name, shape.source])),
-    );
-    expect(DEV_APP).toEqual(reader.DEV_APP);
-    expect(DEV_TLS).toEqual(reader.DEV_TLS);
-    expect(DEV_LISTENER).toBe(reader.DEV_LISTENER);
-    expect(DEV_PROXY_ADDRESS).toBe(reader.DEV_PROXY_ADDRESS);
-  });
-
   test("rules_pass_each_reviewed_config", () => {
     for (const mode of ["shipped", "local", "dev"] as const) {
       expect(adaptedProblems(adapted(mode), mode, ENVS[mode]), mode).toEqual([]);
