@@ -2,7 +2,8 @@
 
 From P2.18p the PDS keeps its blobs in the object store's `unset-pds` bucket (ADR 0041 Decision 5), not on its data
 volume. This runbook moves an existing stack's blobs there once, before the first `up` of a commit that has P2.18p. A
-fresh stack with no blobs needs only step 2.
+fresh stack with no blobs needs only step 2 (the key and identity) and step 5 (moving the key pair into `pds.env` and
+starting the P2.18p commit); it skips the backup, the copy, the check and the clean-up.
 
 Run it on the host, from the checkout, with the stack on a commit before P2.18p that already runs the `objects`
 service (main at 1514182 or later). Throughout:
