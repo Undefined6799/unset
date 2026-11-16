@@ -5,6 +5,7 @@ import { archive, compareImages, verifyArtifact } from "./verify.ts";
 
 const PAIR = PAIRS["0.4.5049"] as Pair;
 const ui = uiDirectoryOf(PAIR);
+const parent = ui.slice(0, ui.lastIndexOf("/"));
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
 const config = { Env: ["NODE_ENV=production"], Cmd: ["node", "index.ts"] };
@@ -48,6 +49,17 @@ describe("immutable PDS frontend boundary", () => {
     ["unsupported PAX", [{ name: `${ui}/file`, pax: { "SCHILY.xattr.bad": "yes" } }]],
   ] as [string, Item[]][])("rejects %s", async (_name, change) => {
     await expect(check(change)).rejects.toThrow();
+  });
+  test.each([
+    ["provider bytes", [{ ...file, body: "changed" }], "app/provider.js (not an ancestor of the UI directory)"],
+    [
+      "ancestor metadata",
+      [{ name: "app", type: "directory", mode: 0o777 }],
+      'app (metadata differs from the base: base ["directory",493,',
+    ],
+    ["new ancestor", [{ name: parent, type: "directory" }], `${parent} (absent from the base)`],
+  ] as [string, Item[], string][])("names the path and the rule for %s", async (_name, change, reason) => {
+    await expect(check(change)).rejects.toThrow(`outside UI filesystem change: ${reason}`);
   });
   test("rejects complete runtime Config drift", async () => {
     await expect(check([], { ...config, Env: [...config.Env, "EXTRA=yes"] })).rejects.toThrow(/Config/);
