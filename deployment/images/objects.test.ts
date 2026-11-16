@@ -30,7 +30,7 @@ describe("objects image", () => {
       "-s3.port.lance=0",
       // No embedded IAM API; identities only from the mounted secret, which fails closed.
       "-s3.iam=false",
-      "-s3.config=/run/secrets/objects_s3.json",
+      "-s3.config=/run/secrets/objects_s3",
       "-volume.max=0",
       "-filer.encryptVolumeData",
       "-master.garbageThreshold=0.01",

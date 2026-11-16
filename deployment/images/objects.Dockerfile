@@ -29,10 +29,13 @@ USER 1000:1000
 # -filer.encryptVolumeData encrypts every chunk with its own key held in the filer, so no object's bytes are plaintext
 # in a volume file; it is not an erase mechanism (ADR 0041 Decision 6). -master.garbageThreshold=0.01 is the vacuum
 # backstop only; erasure runs the forced vacuum (Decision 7). -volume.max=0 sizes volumes to the disk.
+# -s3.config names the file Compose mounts for the secret objects_s3, at /run/secrets/<name> with no extension: the
+# preflight's parser takes only [a-z0-9_] secret names, and weed reads the file as JSON whatever its name (checked on
+# 4.53, 2026-11-16: an extensionless file with no identities loads and denies every request).
 # These flags are pinned by objects.test.ts.
 ENTRYPOINT ["/usr/bin/weed"]
 CMD ["server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1", "-s3", "-s3.ip.bind=0.0.0.0", \
-  "-s3.port.iceberg=0", "-s3.port.lance=0", "-s3.iam=false", "-s3.config=/run/secrets/objects_s3.json", \
+  "-s3.port.iceberg=0", "-s3.port.lance=0", "-s3.iam=false", "-s3.config=/run/secrets/objects_s3", \
   "-volume.max=0", "-filer.encryptVolumeData", "-master.garbageThreshold=0.01"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=20s --retries=3 \
   CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]

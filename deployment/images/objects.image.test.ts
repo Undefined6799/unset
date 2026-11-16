@@ -13,13 +13,13 @@ const IMAGES = import.meta.dirname;
 const BUILD_CALL_MS = killBefore(300_000);
 const CALL_MS = 60_000;
 const TEST_MS = 300_000 + 8 * CALL_MS;
-const SECRET = "/run/secrets/objects_s3.json";
+const SECRET = "/run/secrets/objects_s3";
 const RUN = ["run", "--read-only", "--network", "none", "--tmpfs", "/tmp", "--tmpfs", "/data:uid=1000,gid=1000"];
 
 /** A one-file folder holding `body` as the identities file, readable by the image's user. */
 function identities(body: string): string {
   const dir = mkdtempSync(join(tmpdir(), "objects-ids-"));
-  const file = join(dir, "objects_s3.json");
+  const file = join(dir, "objects_s3");
   writeFileSync(file, body);
   chmodSync(file, 0o644);
   return file;
