@@ -36,8 +36,21 @@ const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const PARENT = dirname(ROOT);
-/** The object store's identities (runbook "The object store's identities"): none yet, and never an Admin one. */
-export const OBJECTS_IDENTITIES = '{"identities":[]}';
+/**
+ * The object store's identities (runbook "The object store's identities"): the PDS's alone, with the three actions
+ * docs/human/runbooks/pds-blobstore-move.md writes and tests/integration/storage/pds-key.test.ts proves (P2.18p), and
+ * never an Admin one.
+ */
+export const objectsIdentities = (keyId: string, secret: string): string =>
+  JSON.stringify({
+    identities: [
+      {
+        name: "pds",
+        credentials: [{ accessKey: keyId, secretKey: secret }],
+        actions: ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"],
+      },
+    ],
+  });
 const FOLDERS = ["unset-dev-env", "unset-dev-secrets", "unset-dev-ca", "unset-dev-trust"] as const;
 const ENV_FILE = join(PARENT, "unset-dev-env/dev-public.env");
 const COMPOSE = join(ROOT, "deployment/compose.local.yaml");
@@ -99,6 +112,8 @@ export function generate() {
     jwtSecret: randomBytes(32).toString("hex"),
     adminPassword: randomBytes(32).toString("hex"),
     rotationKey: secp256k1PrivateHex(randomBytes(32)),
+    pdsStoreKeyId: randomBytes(16).toString("hex"),
+    pdsStoreSecret: randomBytes(30).toString("base64url"),
     recoveryDidKey: p256DidKey(ec().publicKey),
     rootKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
     leafKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
@@ -141,6 +156,8 @@ function folders(): void {
       `PDS_ADMIN_PASSWORD=${v.adminPassword}`,
       `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX=${v.rotationKey}`,
       `PDS_RECOVERY_DID_KEY=${v.recoveryDidKey}`,
+      `PDS_BLOBSTORE_S3_ACCESS_KEY_ID=${v.pdsStoreKeyId}`,
+      `PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY=${v.pdsStoreSecret}`,
       "",
     ].join("\n"),
   );
@@ -158,7 +175,7 @@ function folders(): void {
   secret(65532, "pg_indexer_password", v.indexer);
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
-  secret(1000, "objects_s3", OBJECTS_IDENTITIES);
+  secret(1000, "objects_s3", objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret));
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });
   writeFileSync(at("unset-dev-ca/leaf.key"), v.leafKey);
   const ca = (name: string): string => at(`unset-dev-ca/${name}`);
