@@ -6,8 +6,10 @@
 # (the edge's rule: the last apk command removes apk-tools). busybox wget stays for the healthcheck.
 # Checked by building it on 4.53 (2026-11-16): no setuid or setgid file is left, and `weed server` answers
 # 127.0.0.1:8333/healthz with 200.
-# The S3 identities (an admin key for the one-shot setup, a scoped key per caller) are a secret file mounted at run
-# time, never baked here.
+# The S3 identities (one scoped key per caller) are a secret file mounted at run time, never baked here. -s3.config
+# fails closed on 4.53 (weed/s3api/auth_credentials.go:386-427): a missing or unparsable file stops the server
+# (glog.Fatalf), and a file that yields no identity turns authentication on with nobody allowed. Pinned by
+# objects.image.test.ts.
 
 FROM ghcr.io/undefined6799/mirror/seaweedfs@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
@@ -22,10 +24,12 @@ USER 1000:1000
 # 127.0.0.1, -s3.ip.bind opens S3 alone, and the Iceberg and Lance listeners and the embedded IAM API are off. The
 # S3 IAM-cache gRPC port that S3 binds beside it refuses every non-local caller with no signing key
 # (weed/security/grpc_peer.go CheckLocalGrpcPeer at 4.53). Checked with netstat on 4.53 (2026-11-16): 8333 and
-# 18333 on 0.0.0.0, every other port on 127.0.0.1; anonymous bucket create, list and put all 403.
-# -filer.encryptVolumeData encrypts every chunk with its own key held in the filer, so deleting the object's filer
-# entry leaves the volume bytes unreadable (ADR 0041 Decision 3). -master.garbageThreshold=0.01 lets a vacuum reclaim
-# any volume with deleted bytes. -volume.max=0 sizes volumes to the disk.
+# 18333 on 0.0.0.0, every other port on 127.0.0.1; anonymous bucket create, list and put all 403. Neither port is
+# ever published: the store sits only on its internal objects networks, and the compose tests hold that.
+# -filer.encryptVolumeData encrypts every chunk with its own key held in the filer, so no object's bytes are plaintext
+# in a volume file; it is not an erase mechanism (ADR 0041 Decision 6). -master.garbageThreshold=0.01 is the vacuum
+# backstop only; erasure runs the forced vacuum (Decision 7). -volume.max=0 sizes volumes to the disk.
+# These flags are pinned by objects.test.ts.
 ENTRYPOINT ["/usr/bin/weed"]
 CMD ["server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1", "-s3", "-s3.ip.bind=0.0.0.0", \
   "-s3.port.iceberg=0", "-s3.port.lance=0", "-s3.iam=false", "-s3.config=/run/secrets/objects_s3.json", \
