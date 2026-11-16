@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-11-15
+checked: 2026-11-16
 ---
 # http
 
@@ -98,7 +98,7 @@ set, repeating the store's `lookup` conditions, because no sweep runs before the
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
 `logout.remaining_sessions_match_the_store` pins the count to `store.read` at the same `now()` on every limit edge.
 `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+it is trusted base, and when P2.08e was built a store method could not share its PR (the rule before ADR 0044). GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
 deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. The read has
 its own deadline, `ISSUER_READ_MS`, well below `PG_CONNECT_TIMEOUT_MS`. The session store's `get` ends a checked-out
@@ -155,7 +155,9 @@ unchanged. pdsCall retries an idempotent read once, and only while the backoff a
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
-birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
+birth date is not stored or logged. The routes take identity's `AccountRepository`; compose builds the Postgres one
+and passes `age-gate-audit.ts` as its audit writer (P2.12g). SQL for a product record goes behind a domain contract
+in the adapter's folder, not in this interface. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
 **Settings (P2.13c).** `routes/settings.ts`: GET `/settings` answers 303 to `/settings/profile`, keeping only the
 query, without opening the gate. `/settings/profile` (the "Set up your profile" card until P2.21) and
 `/settings/account` (handle, DID, the sign-in server link, the sign-out form) open the app gate, then render inside
@@ -204,7 +206,7 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   The fixed page shows the request id on `internal.error` (UUID shape only). The exported `errorResponse` takes no
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
-**Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+**Watch out.** `shared/http` is trusted base (CODEOWNERS); a PR that changes it carries the `security-review` label (ADR 0044).
 
 **In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
