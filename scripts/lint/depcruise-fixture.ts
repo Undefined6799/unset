@@ -22,6 +22,7 @@ type Config = {
   RENDER_BUILD_IMPORT: { from: string; module: string };
   E2E_SERVER_BUILD: { from: string; module: string };
   LEXICON_SCRIPT_BUILTINS: string[];
+  DOMAIN_ENTRY_FILES: string[];
 };
 export const config: Config = createRequire(import.meta.url)(CONFIG_PATH);
 

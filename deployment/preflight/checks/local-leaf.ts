@@ -9,7 +9,7 @@
 // checkIssued and verify(publicKey) test the issuer's name and signature.
 import { X509Certificate } from "node:crypto";
 import { dirname, join } from "node:path";
-import { ENV_NAMES } from "../../edge/caddyfile.ts";
+import { ENV_NAMES } from "../../edge/adapted-rules.ts";
 import { certificateExtensions, DerError, der, type Extension } from "./der.ts";
 import { fail, type Inputs, missing, type Outcome } from "./types.ts";
 

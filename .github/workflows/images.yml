@@ -3,8 +3,8 @@
 # the push-and-sign job needs `packages: write` and the `signing` environment, which wait on Alex (see the P1.27q PR).
 #
 # No step is skipped: a missing or renamed Dockerfile fails the job (image_jobs_never_skip in
-# scripts/ci/image-workflows.test.ts). Any later cost saving is change detection inside the job, never a `paths:`
-# filter, because a required check that never starts blocks the PR.
+# scripts/ci/image-workflows.test.ts). The one cost saving is the `changes` job (P0.07j): a docs-only pull request
+# skips the build and scan jobs whole. Never a `paths:` filter, because a check that never starts blocks the PR.
 #
 # The `edge` job (P1.28q) does the same for the edge image, deployment/edge/Dockerfile (Caddy plus one plugin, P1.28):
 # hadolint, build, Trivy and the image's own health check. Its Trivy scan reads no ignore file: an edge finding is
@@ -40,8 +40,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # P0.07j (whole-project review 2026-11-15, decision 5). A pull request whose every changed path is on the docs-only
+  # allowlist (scripts/guards/docs-only-paths.ts, the list docs auto-merge already trusts) builds and scans no image:
+  # images, edge, discover (and so scan-image) and pds-ui are skipped. The verdict comes from the same script as the
+  # docs-only check; it exits non-zero on any other path, an empty diff or a git error, and only exit 0 writes true.
+  # The heavy jobs compare the output with 'true', so a failed, skipped (push to main) or cancelled changes job runs
+  # them: `!cancelled()` keeps a job running when a needed job failed or was skipped (workflow-syntax,
+  # jobs.<job_id>.needs: "all jobs that need it are skipped unless the jobs use a conditional expression that causes
+  # the job to continue"; expressions, status check functions). No `paths:` filter, as before.
+  changes:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.verdict.outputs.docs_only }}
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: verdict
+        run: |
+          if node scripts/guards/docs-only.ts; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   images:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -141,7 +177,8 @@ jobs:
           exit 1
 
   edge:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -192,7 +229,8 @@ jobs:
   # workflow commands, "Setting an output parameter"). Job outputs are a map the next job reads through
   # needs (docs.github.com workflow-syntax, jobs.<job_id>.outputs). contents: read, no secrets.
   discover:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -222,7 +260,10 @@ jobs:
   scan-image:
     name: scan ${{ matrix.name }}
     needs: discover
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # A skipped job skips its whole dependency chain, not only its direct dependants: `changes` is skipped on every
+    # push to main, and without a status function here that would skip this matrix although discover ran. So the
+    # condition names discover's own result (workflow-syntax, jobs.<job_id>.needs, as above).
+    if: ${{ !cancelled() && needs.discover.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -357,7 +398,8 @@ jobs:
 
   # The paired PDS is admitted only as a derived build, never as a vendor/Compose exception.
   pds-ui:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -377,8 +419,10 @@ jobs:
   # jobs.<job_id>.needs; expressions, always()). needs.<job_id>.result is success, failure, cancelled or
   # skipped (contexts reference). Anything but success is red, so a skipped export cannot read as green
   # (P1.33u). Drafts stay skipped, same as the other jobs. Making `scan` a required check stays P1.27r.
+  # P0.07j: the one skip that is green is the docs-only one, and only when the changes job said true and all three
+  # jobs were skipped; any other mix is red.
   scan:
-    needs: [discover, scan-image, pds-ui]
+    needs: [changes, discover, scan-image, pds-ui]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -390,7 +434,12 @@ jobs:
           DISCOVER: ${{ needs.discover.result }}
           SCAN_RESULT: ${{ needs.scan-image.result }}
           PDS_RESULT: ${{ needs.pds-ui.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
         run: |
+          if [ "$DOCS_ONLY" = true ] && [ "$DISCOVER" = skipped ] && [ "$SCAN_RESULT" = skipped ] && [ "$PDS_RESULT" = skipped ]; then
+            echo "docs-only change: no image built or scanned"
+            exit 0
+          fi
           if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$PDS_RESULT" != success ]; then
             echo "discover=$DISCOVER scan-image=$SCAN_RESULT pds-ui=$PDS_RESULT"
             exit 1
@@ -521,6 +570,14 @@ jobs:
             case "$source" in
               ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)
                 ignorefile=.github/trivyignore.pds.yaml
+                ;;
+              # P2.18s (Alex's "yes waiver", 2026-11-15T23:08:12Z): only docker.io/chrislusf/seaweedfs reads its own file.
+              docker.io/chrislusf/seaweedfs:*|docker.io/chrislusf/seaweedfs@*)
+                ignorefile=.github/trivyignore.seaweedfs.yaml
+                ;;
+              # P1.37m: only docker.io/fosrl/newt reads its own file (CVE-2026-78661, x/net/html not linked).
+              docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)
+                ignorefile=.github/trivyignore.newt.yaml
                 ;;
             esac
             status=0

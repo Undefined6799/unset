@@ -1,9 +1,9 @@
-// C13 to C16, C19, C20, C22 and C23 (P1.30s; plan section 5.2, 5.3): further settings that would leak data, redirect
+// C13 to C16, C19, C20, C22, C23 (P1.30s) and C33 (P2.18p; plan section 5.2, 5.3): further settings that would leak data, redirect
 // trust or silently drop mail. Names and parsing follow @atproto/pds 0.5.37 packages/pds/src/config/env.ts and
 // packages/common/src/env.ts: envStr treats an empty value as unset, envList splits on commas, envInt parses an
 // integer. A reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
-import { fromAddressProblem, localMail, smtpProblem, withPds } from "./pds.ts";
+import { fromAddressProblem, localMail, PDS_STORE_KEYS, smtpProblem, withPds } from "./pds.ts";
 import { type Check, fail, type Inputs, pass, serviceNamed } from "./types.ts";
 
 const present = (env: SecretMap, name: string): boolean => env.has(name);
@@ -21,10 +21,10 @@ export const c13: Check = {
 /**
  * A setting that turns a PDS protection off or enables dev mode (P1.34k). The one exemption is the confirmation-link
  * switch, and only at the exact value `true` (C16 requires that pair). The key's presence is the denial: @atproto/pds
- * (packages/pds/src/config/env.ts at tag @atproto/pds@0.5.49, 5d6febdd, read 2026-10-26) parses these with envBool,
+ * (packages/pds/src/config/env.ts at tag @atproto/pds@0.5.51, fb16c8e0, read 2026-11-16) parses these with envBool,
  * which treats `true` and `1` as true and `false` and `0` as false (packages/common/src/env.ts). A value PDS currently
  * ignores must not be allowed through, because the compose rule already refuses the key itself. The shipped image is
- * pds 0.4.5049, which runs @atproto/pds 0.5.49; its DISABLE and DEV_MODE keys are the same four as 0.5.37's.
+ * pds 0.4.5051, which runs @atproto/pds 0.5.51; env.ts is unchanged from 0.5.49 (same four DISABLE and DEV_MODE keys).
  */
 export function switchesProtectionOff(name: string, value: string): boolean {
   if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
@@ -124,9 +124,9 @@ function videoMasterMax({ serviceEnv }: Inputs): bigint | null | "invalid" {
 }
 
 /**
- * The PDS's upload bounds under local and dev (P1.36p; architecture 2026-10-19 04:53Z). @atproto/pds 0.5.37 writes a
- * temporary blob under PDS_BLOBSTORE_DISK_LOCATION's `tempt`, on the data volume, unless PDS_BLOBSTORE_DISK_TMP_LOCATION
- * moves it (dist/disk-blobstore.js:15-16, dist/config/config.js:71-76), so that key stays absent. The upload limit is
+ * The PDS's upload bounds under local and dev (P1.36p; architecture 2026-10-19 04:53Z). Blobs, temporary ones
+ * included, now go to the object store (C33), and PDS_BLOBSTORE_DISK_TMP_LOCATION stays absent so no disk store
+ * comes back beside it. The upload limit is
  * exact, and the PDS's only tmpfs is /tmp at exactly one size. A reason names keys only, never a value.
  */
 const PINNED_UPLOAD_LIMIT = "5242880";
@@ -181,4 +181,46 @@ export const c23: Check = {
     }
     return checked ? pass() : fail("no service sets FINGERPRINT_CHECK to the real fingerprint service");
   },
+};
+
+/**
+ * The one PDS blobstore shape under local and dev (P2.18p, ADR 0041 Decision 5): the object store's unset-pds bucket
+ * at its internal S3 origin, path style, a fixed region, and an explicit key pair. @atproto/pds 0.5.51 picks S3 when
+ * the bucket is set and passes these keys straight to its AWS SDK client, with no fetch guard of its own
+ * (packages/pds/src/config/config.ts and src/context.ts at atproto fb16c8e0). With an explicit endpoint, region and
+ * key pair the SDK reads no credential or region from elsewhere, and no AWS_ name may reach the process to change
+ * that. A disk key beside them would make the PDS refuse to start, so it is refused here first.
+ */
+const STORE: Readonly<Record<string, string>> = {
+  PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+  PDS_BLOBSTORE_S3_REGION: "us-east-1",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+};
+const DISK_KEYS = ["PDS_BLOBSTORE_DISK_LOCATION", "PDS_BLOBSTORE_DISK_TMP_LOCATION"];
+const AWS_NAME = /^aws_/i;
+const PRINTABLE_AWS = /^AWS_[A-Z0-9_]+$/;
+
+/** Why the PDS's blobstore settings are not the store's one shape, by key names only, or null. */
+export function pdsStoreProblem(env: SecretMap): string | null {
+  const disk = DISK_KEYS.find((name) => present(env, name));
+  if (disk !== undefined) return `${disk} is set beside the object store`;
+  for (const [name, pinned] of Object.entries(STORE)) {
+    if (value(env, name) !== pinned) return `${name} is not the pinned value`;
+  }
+  const unset = PDS_STORE_KEYS.find((name) => (value(env, name) ?? "") === "");
+  if (unset !== undefined) return `${unset} is not set`;
+  const aws = env.names().find((name) => AWS_NAME.test(name));
+  if (aws !== undefined) return `${PRINTABLE_AWS.test(aws) ? aws : "an AWS_ name"} is set for the PDS`;
+  return null;
+}
+
+/** C33: under local and dev the PDS keeps its blobs in the object store and nowhere else; prod waits for P5.01. */
+export const c33: Check = {
+  id: "C33",
+  run: withPds((env, { env: stage }) => {
+    if (stage === "prod") return pass("skipped: P5.01 pins the production store");
+    const problem = pdsStoreProblem(env);
+    return problem === null ? pass() : fail(problem);
+  }),
 };

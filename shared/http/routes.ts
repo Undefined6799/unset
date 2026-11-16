@@ -24,7 +24,11 @@ export type RouteContext = Readonly<{
 
 export type Handler = (ctx: RouteContext) => Response | Promise<Response>;
 
-export type RouteSpec = {
+/** What a `session: "required"` handler sees: the context, plus the session the server's gate admitted (ADR 0045). */
+export type SessionRouteContext<S> = RouteContext & { readonly session: S };
+export type SessionHandler<S> = (ctx: SessionRouteContext<S>) => Response | Promise<Response>;
+
+type RouteOptions = {
   method: RouteMethod;
   path: string;
   group: RouteGroup;
@@ -33,16 +37,22 @@ export type RouteSpec = {
   /** A policy in the serving interface's own table (P1.06p), or `"exempt"`, allowed only for group `static`. */
   rateLimit: string;
   mutates?: boolean;
-  /**
-   * Whether the route needs a signed-in session, stated on every route with no default (architecture, 2026-10-05):
-   * `"required"` has the kit read it and refuse the request without one, and a policy with a per-DID entry needs it
-   * (P1.06). `"handler"` means the handler reads the session itself and sends a signed-out visitor to /login; the kit
-   * only records it, so the manifest shows the route's real need (#1279, rule SE-4). `"none"` needs no session.
-   */
-  session: "required" | "handler" | "none";
   deadlineMs?: number;
-  handler: Handler;
 };
+
+/**
+ * A route's options. Whether it needs a signed-in session is stated on every route with no default (architecture,
+ * 2026-10-05), and decides what its handler is given (ADR 0045):
+ * - `"required"`: the kit runs the server's gate before the handler. A refused request gets the gate's answer and the
+ *   handler never runs; an admitted one is limited per DID when its policy has such an entry (P1.06), and the handler
+ *   receives the session. `S` is the session type the interface's gate admits.
+ * - `"handler"`: the handler reads the session itself and sends a signed-out visitor to /login; the kit only records
+ *   it, so the manifest shows the route's real need (#1279, rule SE-4). For a route that must also answer a visitor
+ *   the gate would refuse.
+ * - `"none"`: needs no session.
+ */
+export type RouteSpec<S = unknown> = RouteOptions &
+  ({ session: "handler" | "none"; handler: Handler } | { session: "required"; handler: SessionHandler<S> });
 
 export type Route = Readonly<{
   method: RouteMethod;
@@ -84,7 +94,7 @@ function checkPath(path: string): void {
 }
 
 /** Startup checks of the identity options: method, path template, group, session need and rate-limit policy. */
-function checkIdentity(spec: RouteSpec): void {
+function checkIdentity(spec: RouteOptions & { session: string }): void {
   if (!METHODS.includes(spec.method)) throw new Error(`route method is not GET, HEAD or POST: ${spec.method}`);
   if (spec.session !== "required" && spec.session !== "handler" && spec.session !== "none") {
     throw new Error(`${spec.path}: session must be "required", "handler" or "none"`);
@@ -100,7 +110,7 @@ function checkIdentity(spec: RouteSpec): void {
 }
 
 /** Startup checks of the limits: a deadline in range (never "no deadline") and a positive body limit. */
-function checkLimits({ path, deadlineMs, bodyLimit }: RouteSpec): void {
+function checkLimits({ path, deadlineMs, bodyLimit }: RouteOptions): void {
   const inRange = (ms: number) => Number.isInteger(ms) && ms >= MIN_DEADLINE_MS && ms <= MAX_DEADLINE_MS;
   if (deadlineMs !== undefined && !inRange(deadlineMs)) {
     throw new Error(`${path}: deadlineMs must be an integer from ${MIN_DEADLINE_MS} to ${MAX_DEADLINE_MS}`);
@@ -110,7 +120,18 @@ function checkLimits({ path, deadlineMs, bodyLimit }: RouteSpec): void {
   }
 }
 
-export function defineRoute(spec: RouteSpec): Route {
+/**
+ * The stored handler of a `session: "required"` route. It runs only on a context that carries a session, which the
+ * kit adds after its gate admitted the request; called any other way it throws, so it cannot run signed out.
+ */
+function behindGate<S>(path: string, handler: SessionHandler<S>): Handler {
+  return (ctx) => {
+    if (!Object.hasOwn(ctx, "session")) throw new Error(`${path}: a session route ran without the gate's session`);
+    return handler(ctx as SessionRouteContext<S>);
+  };
+}
+
+export function defineRoute<S = unknown>(spec: RouteSpec<S>): Route {
   checkIdentity(spec);
   checkLimits(spec);
   const post = spec.method === "POST";
@@ -134,7 +155,7 @@ export function defineRoute(spec: RouteSpec): Route {
     requiresSession: spec.session === "required" ? true : undefined,
     handlerSession: spec.session === "handler" ? true : undefined,
     deadlineMs: spec.deadlineMs,
-    handler: spec.handler,
+    handler: spec.session === "required" ? behindGate(spec.path, spec.handler) : spec.handler,
   });
 }
 

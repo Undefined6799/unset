@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-29
+checked: 2026-11-16
 ---
 # http
 
@@ -26,6 +26,8 @@ Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read J
 The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
 public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
+Home and the three legal pages send `Cache-Control: public, max-age=300` (P1.25v, `cachedPublicPage` in
+`routes/home.ts`): they read no cookie, so a browser may keep them five minutes. No other public-group page does.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
 `routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
@@ -35,15 +37,25 @@ the module first, before the web build loads, so `main.test.ts` proves a key-off
 import, build or not (P1.25z). A load placed later in compose is caught only when apps/web's server build exists:
 without it the key-off start stops at `loadWebRender`, and the test accepts either stop point. The
 book's `/__test/` paths fail the kit's path template, which refuses a leading underscore. `limits.ts` holds its
-rate-limit policies; a feature step adds its policy in the same PR as its route.
+rate-limit policies; a feature step adds its policy in the same PR as its route. compose passes
+`policiesFor(TRUSTED_PROXY_MODE)`: in `socket` mode (behind the edge, which hides the client address) the table has no
+per-address entry, only site-wide ceilings and per-DID entries; the edge is the per-client limiter (ADR 0042).
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
 identity network and DID resolver, and the one OAuth client over them, and wires it into the sign-in routes
-itself (compose returns only `server` and `boot`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+itself (compose returns `server`, `boot` and the process's `log`); building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
 the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
 `client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
-which writes the secrets to files; the runtime image copies each package the server imports, and
+which writes the secrets to files, and may pass `compose` a stand-in identity network (its third argument, P2.13s:
+PLC, DNS and handle domains only; `main.ts` passes none), as `tests/integration/http/signed-in.test.ts` does to walk
+a signed-in member through the composed server; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
+
+**Expiry sweeps (P2.03s, P1.16w).** `jobs/sweeps.ts` runs the session store's, the OAuth state store's and the
+single-use store's `sweep` once when `boot()` finishes and then hourly, on an unref'd timer that the first close hook
+stops. web runs them because web is the role that may delete from `app.session` and `app.oauth_state`; for
+`app.single_use` web holds no DELETE and calls `app.sweep_single_use()` (migration 0023), one fixed statement that
+removes only rows a day past expiry. A failure logs `error` with `job` and the error's class name, nothing else.
 
 **Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
 Referer's path when the Referer's host is the request's host-checked Host, never a `/login` page or `next`, else `/`); POST /login (rate limit `login`, CSRF gate)
@@ -71,14 +83,23 @@ welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 **Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
 that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
-throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /logout/everywhere is an unknown route;
-`destroyAllForDid` stays for the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
+throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19) and is back (P2.08j; Alex, 2026-11-15; review
+security finding 5): a second form on Settings, Account posts to POST /logout/everywhere, which revokes the grant
+(dropping the stored set if that fails) and then calls `destroyAllForDid` with `user_signout_all`, so every browser,
+this one included, is signed out and lands on /signed-out. There is no "other browsers only" variant: the definer also
+deletes the token set, and `session.end_sessions_single_sql` (infrastructure/session, trusted base) allows no second
+DELETE of a DID's sessions. The revoke and the delete run under the account's sign-in lock. After the revoke the
+token set is gone, so a repeat of the POST reads no session: the request itself tries the delete three times, and if
+all fail it logs `auth.logout_everywhere_incomplete`, because rows left behind become valid again at the member's next
+sign-in (an open gap shared with auth_dead and the age gate; the fix is in trusted base). No confirmation box, no
+audit row (plan §6), and `auth.logout_everywhere` carries no field.
+`destroyAllForDid` also serves the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
 `logout.remaining_sessions_match_the_store` pins the count to `store.read` at the same `now()` on every limit edge.
 `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+it is trusted base, and when P2.08e was built a store method could not share its PR (the rule before ADR 0044). GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
 deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. The read has
 its own deadline, `ISSUER_READ_MS`, well below `PG_CONNECT_TIMEOUT_MS`. The session store's `get` ends a checked-out
@@ -102,7 +123,9 @@ revoking.
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
-onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
+onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. The gate takes the cached answer
+and its check time from the session read (`emailConfirmed`, `emailCheckedAt`; P2.03m, P2.12f) and runs no query of
+its own; a session with no check time is asked at the PDS. `/verify-email` checks onboarding
 and then is the email page itself.
 
 **A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through
@@ -113,7 +136,11 @@ only while that cache is at most 4 × `EMAIL_RECHECK_S` old, and ends nothing (P
 transient answer, including a 429 and a 401 while the token set is stored, shows the PDS-unavailable page and still
 ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
 successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS call, whichever comes first. While
-the PDS can't be reached, the cached result is kept, up to that cap. Once P1.36v
+the PDS can't be reached, the cached result is kept, up to that cap. After a recheck the PDS did not answer
+(unavailable or 429, not our own lock timeout), `email-refresh.ts` does not ask again for that member for
+`PDS_HOLD_MS` (30 s, this process's memory, at most 10,000 members) and answers `transient` at once (P2.11g), so a
+hanging PDS costs a member one wait per hold, not one per page view. The gate's rules are unchanged; the cost is
+that a recheck that would have succeeded inside the hold happens up to 30 s later. Once P1.36v
 lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
@@ -122,9 +149,16 @@ repository pins the PDS side; it rests on @atproto/pds 0.5.49 (dist/context.js:2
 @atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
 `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
+Every PDS call made for a request carries that route handler's own `deadlineAt` (the kit's monotonic clock,
+`shared/http/routes.ts`) in its `PdsContext`: `open`, `refreshEmail`, `sessionInfo` and `saveProfile` pass it through
+unchanged. pdsCall retries an idempotent read once, and only while the backoff and one more call fit before it
+(README rule 8a). compose.ts never invents a budget of its own (P2.07a).
+
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
-birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
+birth date is not stored or logged. The routes take identity's `AccountRepository`; compose builds the Postgres one
+and passes `age-gate-audit.ts` as its audit writer (P2.12g). SQL for a product record goes behind a domain contract
+in the adapter's folder, not in this interface. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
 **Settings (P2.13c).** `routes/settings.ts`: GET `/settings` answers 303 to `/settings/profile`, keeping only the
 query, without opening the gate. `/settings/profile` (the "Set up your profile" card until P2.21) and
 `/settings/account` (handle, DID, the sign-in server link, the sign-out form) open the app gate, then render inside
@@ -161,14 +195,19 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   `/legal/privacy`, `/legal/domains`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
-- `health.ts`: `/health`, which reveals only status and commit.
+- `health.ts`: `/health`, which reveals only status and commit. `web` registers one readiness check, a `SELECT 1`
+  through its pool (compose.ts, P1.04w), so `/health` is 503 while Postgres does not answer. `ping`
+  (infrastructure/postgres/pool.ts) ends a connection that has not answered by 900 ms (P1.04x).
+- `interfaces/http/fatal.ts` (P1.04w): `main.ts` installs it after compose. An unhandled rejection is logged through
+  the scrubbing logger and the server drains as on SIGTERM; an uncaught exception is logged and exits 1. Neither
+  prints the raw error, so a boot that cannot reach the database is one `error` line with `code: db.busy`.
 - `errors.ts`: every error response by code and group. An interface may pass `errorPage` (P1.25k) for the page
   groups' body only: it gets the shown code, the group and, for `internal.error`, the kit's request id, never request
   data. On a throw, a non-string or a body over 256 KiB the kit uses its fixed page; the status and headers stay the kit's.
   The fixed page shows the request id on `internal.error` (UUID shape only). The exported `errorResponse` takes no
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
-**Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+**Watch out.** `shared/http` is trusted base (CODEOWNERS); a PR that changes it carries the `security-review` label (ADR 0044).
 
 **In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
@@ -181,9 +220,18 @@ marker; CSRF-gated, in the route manifest.
 
 **Session in the manifest (#1279, P1.04s/u).** The web routes gate in their handlers (`openApp`, or
 `readSession` then a 303 to `/login?next=`), never in the kit, so they declare `session: "handler"`: the manifest
-shows `handlerSession: true` and the kit enforces nothing. `"required"` would have the kit read a session, and no
-reader is wired, so it answers 500. `routes.session.test.ts` calls every route signed out and fails when the routes
-that send to sign-in and the declared ones differ. A route that only peeks (GET /login, POST /logout, GET and POST
-/signed-out, /welcome/blocked, /settings's redirect) stays `"none"`. A new path parameter needs a sample value in that test.
+shows `handlerSession: true` and the kit enforces nothing. `"required"` (ADR 0045, P1.04g) has the kit run the
+server's `gate` before the handler: a refused request gets the gate's answer, an admitted one is limited per DID and
+its handler receives the session. A server with such a route and no gate refuses to start. P2.13t: the web
+server's gate is `appSessionGate` (`app-gate.ts`), the app gate with a return path taken from the route template
+(a GET page without parameters returns to itself; `/me` and POST `/profile` return to `/did`; any other route throws,
+which the kit denies). `/did`, `/me`, `/settings/profile`, `/settings/account` and POST `/profile` are `"required"`;
+POST `/profile` uses the `profile` policy, 30 saves a minute per member. `/:did`, `/welcome*` and `/verify-email*`
+stay `"handler"`: `/:did` must 404 a path that is no DID before any sign-in redirect, and the others must answer a
+visitor the app gate would refuse. A test that builds a server from these routes passes `gate: appSessionGate(open)`.
+`routes.session.test.ts` calls every route signed out and fails when the routes
+that send to sign-in and the ones declaring either need differ. A route that reads the session but works signed out (GET and POST
+/login, POST /logout, GET /signed-out, GET /welcome/blocked) stays `"none"`, as do routes that never read it (POST
+/signed-out, GET /settings's redirect). A new path parameter needs a sample value in that test.
 
 **Links.** [[web]], [[config]], [[errors]].

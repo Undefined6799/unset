@@ -79,8 +79,9 @@ Each process connects as its own role, listed with its class, connection limit a
   grants is unreachable, and a table whose grants and matrix row disagree fails `tests/integration/postgres/grants.test.ts`.
 - A table-level matrix entry says `{ "privileges": [...], "wholeTable": true }`: the role is meant to hold those
   privileges on every column, including columns added later. A personal-data table may not carry the flag.
-- A new role, a role attribute, a membership, a default privilege, or a grant on an object that already exists is
-  trusted base: its own step and PR, ahead of the step that needs it (rule SE-6).
+- Every migration, `grant-matrix.json`, `erasure-registry.json` and `roles.json` is trusted base: the PR carries the
+  `security-review` label and gets a security review of its exact head (rule SE-6, ADR 0044). It may ride with the
+  step that needs it.
 - The test reads the catalog and prints each difference as one line, `+` for a privilege the database holds and the
   matrix does not, `-` for the reverse: `+ api SELECT app.drafts`.
 

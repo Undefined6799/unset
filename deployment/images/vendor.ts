@@ -6,3 +6,10 @@
  * image tests and the compose tests both read this one list.
  */
 export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds", "docker.io/fosrl/newt"]);
+
+/**
+ * Vendor images a Dockerfile may build on, each by its exact name, as a runtime base only: SeaweedFS, the object store
+ * (accepted ADR 0041; P2.18s). Our objects image adds no package, drops the upstream entrypoint and runs `weed` as a
+ * non-root user, so only the binary and its Alpine base ship. Never a run-only image (VENDOR_IMAGES), never a builder.
+ */
+export const VENDOR_BASES: ReadonlySet<string> = new Set(["docker.io/chrislusf/seaweedfs"]);

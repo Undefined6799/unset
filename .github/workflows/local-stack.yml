@@ -2,6 +2,8 @@
 # architecture's 02:15Z ruling in it). Drafts run nothing; marking the PR ready runs it. It is not a required check
 # (D5). A push trigger is its own later step with its own typed line (D1).
 #
+# A docs-only pull request starts no stack (the changes job, P0.07k).
+#
 # - green: the stack through `npm run local:up` (preflight, precheck, compose up, leaf check), then the client_id GET
 #   from inside the PDS must return web's metadata.
 # - red: the same stack without P1.34d's trust mount, so the PDS trusts no dev root; the job passes only when that GET
@@ -28,11 +30,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # P0.07k (whole-project review 2026-11-15, decision 5), the same rule as images.yml's changes job: a pull request
+  # whose every changed path is on the docs-only allowlist (scripts/guards/docs-only-paths.ts) starts no stack. Only
+  # exit 0 of the docs-only script writes true; any other path, an empty diff or a git error writes false. The stack
+  # job compares the output with 'true' under `!cancelled()`, so a failed or skipped changes job still runs both
+  # cases (workflow-syntax, jobs.<job_id>.needs and jobs.<job_id>.if; expressions, status check functions).
+  changes:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.verdict.outputs.docs_only }}
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: verdict
+        run: |
+          if node scripts/guards/docs-only.ts; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # One job per case, named after it (green, red), as before the matrix. Only the start and stop commands and the
   # probe's expectation differ; CASE reaches run: through env, never as an expression.
   stack:
     name: ${{ matrix.case }}
-    if: github.event.pull_request.draft == false
+    needs: changes
+    if: ${{ !cancelled() && github.event.pull_request.draft == false && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

@@ -167,18 +167,19 @@ describe("index", () => {
 });
 
 describe("code moved", () => {
-  test("notes_code_moved_fails", () => {
+  test("notes_code_moved_warns", () => {
     const root = vault();
     const code = "domains/identity/README.md";
-    const errors = errorsOf(root, [code]);
-    // The area hub names the folder and the pitfall names the file: both must be touched.
-    expect(errors.map((f) => [f.rule, f.file])).toEqual([
+    const check = (changed: string[]) => checkNotes(root, { today: TODAY, changedPaths: changed });
+    // The area hub names the folder and the pitfall names the file: both are reported, and neither fails the guard.
+    expect(check([code]).warnings.map((f) => [f.rule, f.file])).toEqual([
       ["notes-code-moved", AREA],
       ["notes-code-moved", PITFALL],
     ]);
-    expect(errorsOf(root, [code, AREA, PITFALL])).toEqual([]);
-    expect(errorsOf(root, ["domains/identityx/a.ts"])).toEqual([]);
-    // CI mode with no usable base fails closed.
+    expect(check([code]).errors).toEqual([]);
+    expect(check([code, AREA, PITFALL]).warnings).toEqual([]);
+    expect(check(["domains/identityx/a.ts"]).warnings).toEqual([]);
+    // CI mode with no usable base says so; the live test below reports it as a warning.
     for (const base of [undefined, "0".repeat(40), "main", "f".repeat(40)]) {
       const env = base === undefined ? { CI: "true" } : { CI: "true", BASE_SHA: base };
       expect(changedPaths(ROOT, env).problem?.rule).toBe("notes-code-moved");
@@ -239,10 +240,9 @@ describe("vault", () => {
     // The real vault, against the real clock and this change's files.
     const changed = changedPaths(ROOT, process.env);
     const real = checkNotes(ROOT, { today: new Date(), changedPaths: changed.paths });
-    const warnings = [...real.warnings, ...(changed.problem && !process.env.CI ? [changed.problem] : [])];
+    const warnings = [...real.warnings, ...(changed.problem ? [changed.problem] : [])];
     for (const line of report(warnings).split("\n").filter(Boolean)) process.stderr.write(`::warning::${line}\n`);
-    const errors = [...real.errors, ...(changed.problem && process.env.CI ? [changed.problem] : [])];
-    expect(errors, report(errors)).toEqual([]);
+    expect(real.errors, report(real.errors)).toEqual([]);
   });
 
   test("vault_skeleton", () => {

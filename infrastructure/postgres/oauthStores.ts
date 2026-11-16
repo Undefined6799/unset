@@ -6,7 +6,7 @@
 import { SealError, type Sealer } from "@unset/infrastructure-seal";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
-import { type Pool, type PoolClient, withClient } from "./pool.ts";
+import { type Pool, readUntilAbort, withClient } from "./pool.ts";
 import { sealedContext } from "./sealedColumns.ts";
 
 /**
@@ -125,40 +125,12 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
 }
 
 /**
- * The query, or `http.deadline` once `signal` aborts. Abort ends the client first (pg 8.23.1 `Client#end` drops a
- * socket that still has a query), and the rejection is delivered only after that, so the pool slot is free.
+ * Whether a token set is stored for `did`. It reads no sealed value, so it takes no sealer: after a PDS call fails,
+ * pds-call asks this to tell a grant that is gone from one that was replaced meanwhile (P2.07).
  */
-function readUntilAbort<T>(client: PoolClient, signal: AbortSignal | undefined, query: Promise<T>): Promise<T> {
-  if (signal === undefined) return query;
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let aborted = false;
-    const finish = (error: unknown) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      reject(error);
-    };
-    const onAbort = () => {
-      aborted = true;
-      query.catch(() => undefined);
-      void Promise.resolve(client.end()).then(
-        () => finish(new AppError("http.deadline")),
-        () => finish(new AppError("http.deadline")),
-      );
-    };
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-    query.then(
-      (value) => {
-        if (settled || aborted) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        if (!aborted) finish(error);
-      },
-    );
+export function oauthSessionExists(pool: Pool, did: string): Promise<boolean> {
+  return withClient(pool, null, async (db) => {
+    const found = await db.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did]);
+    return found.rowCount === 1;
   });
 }

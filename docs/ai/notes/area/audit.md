@@ -4,18 +4,18 @@ type: area
 status: current
 areas: ["[[audit]]"]
 summary: "Hub for infrastructure/audit: the TS side of the append-only audit store (appendAudit, rowHash, verifyChain)."
-code: [infrastructure/audit/index.ts, infrastructure/audit/rowHash.ts, infrastructure/audit/verify.ts]
+code: [infrastructure/audit/index.ts, infrastructure/audit/rowHash.ts, infrastructure/audit/verify.ts, infrastructure/audit/segments.ts]
 sources: []
 importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, audit]
-checked: 2026-10-07
+checked: 2026-11-15
 ---
 # audit
 
 **What it owns.** The TS side of the audit store whose SQL lives in `infrastructure/postgres/migrations/0008` to
-`0010` (see [[postgres]]):
+`0010` and `0016` (see [[postgres]]):
 - the closed lists (`actions.ts`), mirroring the `audit.actions` and `audit.reasons` seeds;
 - `appendAudit`, the only TS way in, which re-checks every field before calling `audit.append`;
 - `rowHash` (`rowHash.ts`) and `verifyChain` (`verify.ts`).
@@ -42,5 +42,22 @@ make a test pass. Chain tests against real Postgres are in `tests/integration/au
   production verifier role exists yet. The weekly verifier (the owner's `full` run, built in P3.22) will log in as a
   `NOINHERIT` member (`WITH INHERIT FALSE, SET TRUE`) and `SET ROLE audit_owner` first, as the chain tests' role does
   today; without it every audit read is denied (`verifier_without_set_role_is_denied`).
+
+- **A person's event needs an actor (ADR 0043, migration 0016).** `audit.append` stores `p_actor_did` in
+  `event_body.actor` and raises `audit_bad_input` for a `user_triggered` or `operator` action with no actor. Only
+  `system` actions may leave it null. `appendAudit` does not repeat the check, so a writer that omits `actorDid`
+  fails at the database. Rows older than 0016 have a null column and the actor only in the body.
+- **Retention and erasure (P1.15a, P1.15f).** Migrations 0017 and 0018 add the only ways a row leaves: `audit.redact`
+  (one body row whose class ran out), `audit.erase_subject` (a person's `sec` body rows, as subject or actor; `mod`
+  is never touched) and `seal_segment`, `mark_anchored`, `drop_segment` for whole months. `refuse_change` lets a
+  DELETE through only as `audit_owner` with `audit.maintenance` set. That stops every service role, not the owner:
+  migrator or a superuser, acting as `audit_owner`, can set it and delete (they could already drop the triggers);
+  the off-box anchor (P3.22) is what detects that. `audit.segment` and `audit.redaction_log` are append-only too
+  (segment allows only setting `anchored_at` and `dropped_at` once). No role is granted any function yet (P3.07g,
+  P3.22). `drop_segment` never drops a lane's last rows, because `audit.append` continues from the newest row, and
+  never takes the append lock; `seal_segment` takes it with a 2 s `lock_timeout`. `max_class_expiry` is fixed at
+  seal, so P4.07 (legal holds) must make `drop_segment` check holds. `redaction_log` keeps the month only.
+  `segments.ts` gives the verifier `chainStart` (start after the newest dropped segment) and `verifySegments`.
+  `tests/integration/audit/retention.test.ts` writes past-dated rows as the superuser, chained with `audit.row_hash`.
 
 **Links.** [[postgres]].

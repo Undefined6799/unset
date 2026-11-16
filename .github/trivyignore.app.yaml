@@ -12,4 +12,4 @@ vulnerabilities:
     purls:
       - "pkg:npm/zod@3.25.76"
     statement: "zod 3.25.76 has no fixed 3.x release and every @atproto package we use (oauth-client 0.9.0, api 0.29.5) requires zod ^3.23.8; zod 4 drops ZodError.errors, which @atproto/oauth-client reads, so an override breaks sign-in errors. Denial of service only, by a large array: the OAuth library fetches only our own PDS through net-guard's 1 MiB cap and parses DID documents our identity domain rebuilt (same finding as GHSA-mrhx-c7xc-m3w5 in .github/npm-audit-ignore.yaml). Removed when @atproto moves to zod >= 4.6.6, or at expiry."
-    expired_at: 2026-11-22
+    expired_at: 2026-12-13

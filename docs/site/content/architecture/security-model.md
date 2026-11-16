@@ -52,15 +52,22 @@ A denied POST is logged as `csrf.denied` with the route template and a fixed rea
 
 ## Rate limits
 
-Two layers, both in memory.
+Two layers, both in memory. In `socket` mode the edge's per-client zones are the per-client layer ([ADR 0042](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0042-app-limits-behind-the-edge.md)).
 
-The process layer is a token bucket per policy (`shared/http/limits/rateLimit.ts`). Keys are an HMAC of the IP rate key or the DID under a salt that is not written. Each interface has its own table. `interfaces/http/limits.ts` defines `default`, `login`, `search`, `report`, `follow`, `like` and `upload`. Routes in the tree name `default`, `login` or `exempt` (`exempt` is the assets route and `GET /health`). `scripts/guards/route-policy.ts` fails a route whose policy is missing from that interface's table. A per-DID entry requires `session: "required"` (`shared/http/server.ts`, `checkRoutes`).
+The process layer is a token bucket per policy (`shared/http/limits/rateLimit.ts`). Keys are an HMAC of the IP rate key or the DID under a salt that is not written. Each interface has its own table. `interfaces/http/limits.ts` defines `default`, `login`, `search`, `report`, `follow`, `like` and `upload`. `interfaces/http/compose.ts` passes `policiesFor(cfg.TRUSTED_PROXY_MODE)`:
 
-The edge layer is `deployment/edge/snippets/ratelimit.caddy`: caddy-ratelimit, sliding window, keyed by client address, no `distributed` block and no `storage` ([ADR 0018](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0018-edge-rate-limit-plugin.md)). The app site imports `app-ratelimit`; the PDS site imports `pds-ratelimit`.
+| `TRUSTED_PROXY_MODE` | Table |
+| --- | --- |
+| `header` | The full `policies` table |
+| `socket` | Every `scope: "ip"` entry is dropped. `default` keeps its `global` entry. `login` gains the site-wide sign-in ceiling. Per-DID entries stay |
+
+`deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml` set `socket` on web. Routes in the tree name `default`, `login` or `exempt` (`exempt` is the assets route and `GET /health`). `scripts/guards/route-policy.ts` fails a route whose policy is missing from that interface's table. A per-DID entry requires `session: "required"` (`shared/http/server.ts`, `checkRoutes`).
+
+The edge layer is `deployment/edge/snippets/ratelimit.caddy`: caddy-ratelimit, sliding window, keyed by client address, no `distributed` block and no `storage` ([ADR 0018](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0018-edge-rate-limit-plugin.md)). Dev and dev-source mount `deployment/edge/dev/app.caddy`, which imports `app-ratelimit`. Local mounts `deployment/edge/local/app.caddy`, which imports `pds-ratelimit`, as the PDS sites do.
 
 ## PDS fonts
 
-The app's Content-Security-Policy is the kit ([http](../../areas/shared/http/)). On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` serves `.woff2` files from `/_unset/fonts/` and answers every other `/_unset/` path with 404, inside the route and before the upstream. When the response Content-Type starts with `text/html`, it appends `font-src https://{$PDS_HOST}/_unset/fonts/` to a Content-Security-Policy the response already carries. `deployment/edge/caddyfile.ts` (`fontSnippetProblems`, `fontProblems`, `isFontSrc`) rejects a wider snippet, a `file_server` outside it, a response `match` outside it, and a `{$PDS_HOST}` placeholder except in that one `font-src`. The lines are on [edge](../../areas/deployment/edge/). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) is the PDS frontend record.
+The app's Content-Security-Policy is the kit ([http](../../areas/shared/http/)). On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` serves `.woff2` files from `/_unset/fonts/` and answers every other `/_unset/` path with 404, inside the route and before the upstream. When the response Content-Type starts with `text/html`, it appends `font-src https://{$PDS_HOST}/_unset/fonts/` to a Content-Security-Policy the response already carries. `deployment/edge/adapted-rules.ts` (`fontProblems`, `strayProblems`), on the config `caddy adapt` prints, rejects a wider font route, a file server outside it, a response matcher outside it, and any other change to a Content-Security-Policy. The lines are on [edge](../../areas/deployment/edge/). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) is the PDS frontend record.
 
 ## Logging allowlist
 

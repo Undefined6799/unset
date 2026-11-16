@@ -49,7 +49,7 @@ The optional licensed-font solution is limited to fixed same-origin static deliv
 Test-only ephemeral PDS/PLC/mail fixtures may operate without public registrations, real mail or changes to the
 operated local/dev topology. They do not replace P2.24's manual dev SMTP checks or P5.12's production recheck.
 P2.24's subdivisions allocate boundary/image/CI checks before implementation, with checks, product and edge work
-separated under SE-6. These checks are planned, not implemented by this docs record; current admission checks
+separated under SE-6 as it then stood (ADR 0044 no longer requires the separation). These checks are planned, not implemented by this docs record; current admission checks
 remain in force. [ADR 0027](decisions/0027-pds-frontend-distribution.md) defines the exact contract, font gate and
 same-backend-version rollback. ADR 0019 still governs merges and Alex's reserved gates.
 
@@ -72,6 +72,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, plan §5.1, P1.25o | An island (`*.island.tsx`) imports only `shared/ui`, the island runtime `shared/islands` (through its index, DC-2), type-only modules and the npm modules named in the rule (today React's JSX runtime) | checked: `island-import-boundary`, `island_import_boundary`, `island_imports_jsx_runtime_passes` |
 | ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
+| DC-2, P0.09s | From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names | checked: `domain-via-exports` |
 | DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
 | ADG §1 | No two tracked paths differ only in letter case | checked: `scripts/guards/case-collision.ts`, `case_pair_file_fails`, `case_pair_dir_fails` |
@@ -100,7 +101,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | checked: `transactions_only_in_tx` (Semgrep rule transactions-only-in-tx, proven on fixtures by the CI semgrep job) |
 | DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
 | SE-4 | Every route names a rate-limit policy in its own interface's `limits.ts`, or is "exempt" on a static route | checked: `scripts/guards/route-policy.ts`, `every_route_has_policy` |
-| SE-6 | A PR that touches the trusted base touches nothing else, and a PR that changes a check changes no product path | checked: `trusted_base_isolated`, `trusted_base_list_from_codeowners`, `check_plus_product_fails`, `lockfile_rides_with_trusted_dependency_change` |
+| SE-6 | A PR that changes a trusted-base path, a check path among them, carries the `security-review` label (ADR 0044); the review of the exact head, and Alex's line for a loosening, are review-only | checked: `trusted_path_needs_label`, `renovate_needs_label_too`, `trusted_paths_named`, `trusted_base_list_from_codeowners`, `list_is_union_of_base_and_head` |
 
 The docs test (P0.09, `architecture_rule_table_matches_depcruise`) reads this table. It fails if a named check
 does not exist, a `forbidden` rule or `MATRIX` has no row, a planned step has already merged, or a review-only row

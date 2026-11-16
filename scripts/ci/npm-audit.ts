@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
+import type { WaiverCheck } from "./trivyignore.ts";
 
 export const MAX_DAYS = 30;
 const FAILING = new Set(["high", "critical"]);
@@ -31,7 +32,7 @@ function dateOf(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function entryProblem(entry: Entry, index: number, today: Date): string | null {
+function entryProblem(entry: Entry, index: number, today: Date, check: WaiverCheck): string | null {
   if (typeof entry.id !== "string" || !/^GHSA(-[0-9a-z]{4}){3}$/.test(entry.id))
     return `entry ${index + 1}: no GHSA id`;
   if (typeof entry.package !== "string" || entry.package === "") return `${entry.id}: no package`;
@@ -43,7 +44,7 @@ function entryProblem(entry: Entry, index: number, today: Date): string | null {
   if (expires === null) return `${entry.id}: no expired_at`;
   const day = expires.toISOString().slice(0, 10);
   const startOfToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  if (expires.getTime() <= startOfToday) return `${entry.id}: expired on ${day}`;
+  if (expires.getTime() <= startOfToday) return check === "all" ? `${entry.id}: expired on ${day}` : null;
   if (expires.getTime() > startOfToday + MAX_DAYS * DAY_MS)
     return `${entry.id}: expired_at ${day} is more than ${MAX_DAYS} days ahead`;
   return null;
@@ -65,12 +66,18 @@ function unaccepted(
 }
 
 /** Every reason the audit fails on `today`; an empty list means it passes. */
-export function auditProblems(report: AuditReport, ignoreYaml: string, installed: Installed, today: Date): string[] {
+export function auditProblems(
+  report: AuditReport,
+  ignoreYaml: string,
+  installed: Installed,
+  today: Date,
+  check: WaiverCheck = "all",
+): string[] {
   if (report.auditReportVersion !== 2) return ["npm audit --json: not auditReportVersion 2"];
   const listed: unknown = (parse(ignoreYaml) ?? {}).advisories ?? [];
   if (!Array.isArray(listed)) return ["advisories: not a list"];
   const entries = listed as Entry[];
-  const problems = entries.flatMap((entry, i) => entryProblem(entry ?? {}, i, today) ?? []);
+  const problems = entries.flatMap((entry, i) => entryProblem(entry ?? {}, i, today, check) ?? []);
   if (problems.length > 0) return problems;
   const used = new Set<string>();
   for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {

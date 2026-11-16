@@ -27,7 +27,7 @@ export function guardedFetch(guard: NetGuard, policy: Policy, defaults: FetchDef
     const headers: Record<string, string> = Object.fromEntries(req.headers);
     const options: GuardedRequest = {
       url: req.url,
-      method: req.method as "GET" | "POST", // checked by the guard
+      method: req.method as "GET" | "POST" | "PUT", // checked by the guard
       headers,
       signal: req.signal,
       ...(req.body ? { body: req.body } : {}),

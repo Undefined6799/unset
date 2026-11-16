@@ -93,9 +93,10 @@ const OUTBOUND_ADDRESSES = ["PDS_REDIS_SCRATCH_ADDRESS", "PDS_HANDLE_BACKUP_NAME
 /**
  * Keys that turn on a provider just by being set, naming no host (Codex on #803; verify at 94ab296, B1-B4, and at
  * d24dd55, B2):
- * - a bucket is S3 (dist/config/config.js:51-67), refused outright: with every S3 key judged, the locked S3 client
- *   still asks instance metadata for a region, AWS_DEFAULTS_MODE or the AWS config file can make it do so, and some
- *   bucket names ignore path style or the endpoint. The PDS keeps blobs on disk instead (config.js:48-50);
+ * - a bucket is S3 (dist/config/config.js:51-67). Only the local object store's one shape passes (P2.18p, ADR 0041
+ *   Decision 5; checkStore below): with no region the S3 client asks instance metadata for one, with no key pair it
+ *   walks the AWS credential chain, AWS_DEFAULTS_MODE or the AWS config file can do the same, and some bucket names
+ *   ignore path style or the endpoint, so each of those is pinned and no AWS_ variable may be set;
  * - a KMS key id is AWS KMS, which takes no endpoint at all (dist/config/secrets.js:26-30);
  * - an hCaptcha site key calls api.hcaptcha.com (config.js:265-271; oauth-provider 0.23.1 lib/hcaptcha.js:105-111);
  * - a lexicon authority DID is resolved, and a did:web fetched from its host (config.js:279-281).
@@ -106,6 +107,8 @@ const PROVIDER_SELECTORS = [
   "PDS_HCAPTCHA_SITE_KEY",
   "PDS_LEXICON_AUTHORITY_DID",
 ];
+/** S3 settings read and pinned with the bucket and endpoint (checkStore); neither is secret. */
+const STORE_SETTINGS = ["PDS_BLOBSTORE_S3_REGION", "PDS_BLOBSTORE_S3_FORCE_PATH_STYLE"];
 /** The rest of env.js, never read here, by why none sends the PDS to a host it names. */
 const NOT_OUTBOUND = [
   // Links and images the browser loads (config.js:222-252, describeServer).
@@ -155,11 +158,10 @@ const NOT_OUTBOUND = [
   "PDS_RATE_LIMIT_BYPASS_KEY",
   "PDS_HCAPTCHA_SECRET_KEY",
   "PDS_HCAPTCHA_TOKEN_SALT",
-  // S3 options, used only with a bucket, which is refused.
-  "PDS_BLOBSTORE_S3_FORCE_PATH_STYLE",
+  // S3 options, used only with the one bucket checkStore accepts: the key pair is judged by name only (never read),
+  // and the timeouts name no host.
   "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
   "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
-  "PDS_BLOBSTORE_S3_REGION",
   "PDS_BLOBSTORE_S3_REQUEST_TIMEOUT_MS",
   "PDS_BLOBSTORE_S3_UPLOAD_TIMEOUT_MS",
   // Limits, timeouts, flags and names. The two that loosen SSRF on request-driven fetches name no destination;
@@ -200,6 +202,7 @@ export const CLASSIFIED_KEYS: ReadonlySet<string> = new Set([
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
+  ...STORE_SETTINGS,
   ...NOT_OUTBOUND,
 ]);
 /**
@@ -266,9 +269,21 @@ const PDS_KEYS = [
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
+  ...STORE_SETTINGS,
   ...PROXY_KEYS,
   "NODE_OPTIONS",
 ];
+/**
+ * The local object store, the only S3 store the PDS may use here (deployment/compose.local.yaml; preflight C33 pins
+ * the same shape). The bucket is DNS-safe and path style is on, so the SDK addresses the endpoint, never a bucket host.
+ */
+const STORE: Readonly<Record<string, string>> = {
+  PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+  PDS_BLOBSTORE_S3_REGION: "us-east-1",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+};
+const STORE_KEY_PAIR = ["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"];
 /** One PEM certificate and nothing else. */
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
 const KNOWN_READER_REASONS = new Set<string>(Object.values(READER_REASONS));
@@ -375,8 +390,9 @@ function checkLocalStack(stack: LocalStack, docker: Docker): { host: string; ca:
     refuse("a handle domain is not local");
   }
   if (MAIL.some((name) => (pdsEnv.get(name) ?? "") !== "")) refuse("the PDS has a mail server set");
+  const pdsNames = containerEnvNames(docker, pds);
   checkProcess(pdsEnv);
-  checkProviders(pdsEnv);
+  checkProviders(pdsEnv, pdsNames);
   checkOutbound(docker, pdsEnv, isLocal);
   checkPdsVolume(docker, pds);
   return { host: pdsHost, ca };
@@ -391,15 +407,28 @@ function checkProcess(env: Map<string, string>): void {
   if (options !== "" && !HEAP_SIZE_ONLY.test(options)) refuse("NODE_OPTIONS is not only a heap size");
 }
 
-/** No provider that names no host of its own: no S3 bucket, KMS, hCaptcha or lexicon authority. */
-function checkProviders(env: Map<string, string>): void {
+/** No provider that names no host of its own: no KMS, hCaptcha or lexicon authority, and S3 only as the store. */
+function checkProviders(env: Map<string, string>, names: ReadonlyMap<string, { empty: boolean }>): void {
   const set = (name: string): boolean => (env.get(name) ?? "") !== "";
-  if (set("PDS_BLOBSTORE_S3_BUCKET")) refuse("PDS_BLOBSTORE_S3_BUCKET is set, so the PDS stores blobs in S3");
+  if ([...names.keys()].some((name) => /^aws_/i.test(name))) refuse("an AWS_ variable is set for the PDS");
+  if (set("PDS_BLOBSTORE_S3_BUCKET")) checkStore(env, names);
   if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
   if (set("PDS_HCAPTCHA_SITE_KEY")) refuse("PDS_HCAPTCHA_SITE_KEY is set, so the PDS calls hCaptcha");
   if (set("PDS_LEXICON_AUTHORITY_DID")) {
     refuse("PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID");
   }
+}
+
+/**
+ * S3 only as the local object store: its bucket, endpoint, region and path style exactly, and both key halves set and
+ * not empty. An empty value reads as unset (@atproto/common envStr, src/env.ts:8-12 at atproto fb16c8e0), and with
+ * both unset @atproto/pds config.ts:78-88 passes no credentials, so the AWS SDK walks its default credential chain.
+ */
+function checkStore(env: Map<string, string>, names: ReadonlyMap<string, { empty: boolean }>): void {
+  if (Object.entries(STORE).some(([name, pinned]) => env.get(name) !== pinned)) {
+    refuse("the PDS's S3 settings are not the local object store's");
+  }
+  if (!STORE_KEY_PAIR.every((name) => names.get(name)?.empty === false)) refuse("the PDS's S3 key pair is not set");
 }
 
 /**
@@ -508,6 +537,26 @@ function containerEnv(docker: Docker, id: string, keys: readonly string[]): Map<
  * pkg.go.dev/text/template "Functions"). Measured on Docker 29.8.2: a value holding "=" prints whole, an empty value
  * prints, an unset key prints nothing.
  */
+/**
+ * The names in a container's environment, each with whether its value is empty, and never a value: the format prints
+ * the part before each `=` as a JSON string, then `true` when the entry is exactly that name and `=` (Docker CLI
+ * `split` and `json`; Go text/template variables, `printf` and `eq`). Measured with `docker inspect` on Docker 29.9.2:
+ * `A=` prints `"A" true`, `B=x` and `C==` print false. A name set twice is refused, as containerEnv does.
+ */
+function containerEnvNames(docker: Docker, id: string): ReadonlyMap<string, { empty: boolean }> {
+  const printed = ok(docker(["inspect", "--format", NAMES_FORMAT, id]), "inspect");
+  const names = new Map<string, { empty: boolean }>();
+  for (const line of printed.split("\n").filter((line) => line !== "")) {
+    const space = line.lastIndexOf(" ");
+    const name = JSON.parse(line.slice(0, space)) as string;
+    if (names.has(name)) refuse("a container variable is set twice");
+    names.set(name, { empty: line.slice(space + 1) === "true" });
+  }
+  return names;
+}
+export const NAMES_FORMAT =
+  '{{range .Config.Env}}{{$n := index (split . "=") 0}}{{json $n}} {{eq . (printf "%s=" $n)}}{{println}}{{end}}';
+
 export const envFormat = (keys: readonly string[]): string =>
   `{{range .Config.Env}}{{if eq (index (split . "=") 0) ${keys.map((key) => JSON.stringify(key)).join(" ")}}}` +
   "{{json .}}{{println}}{{end}}{{end}}";

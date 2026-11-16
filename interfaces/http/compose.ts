@@ -15,7 +15,7 @@ import {
   createDidResolver,
   createHandleVerifier,
   type Did,
-  type EmailCache,
+  type IdentityNetwork,
   PRIVACY_VERSION,
   resolveHandle,
   TERMS_VERSION,
@@ -35,26 +35,30 @@ import {
 import {
   checkConnectionBudget,
   connectionOf,
+  createAccountRepository,
   createLockPool,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createRequestLock,
   createSingleUseStore,
+  oauthSessionExists,
   PURPOSES,
+  ping,
   withClient,
   withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
-import { createSessionStore, type Session } from "@unset/infrastructure-session";
+import { createSessionStore } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
-import { createAccountStore } from "./account.ts";
-import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
+import { recordUnderageBlock } from "./age-gate-audit.ts";
+import { type AppGate, appSessionGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
-import { policies } from "./limits.ts";
+import { startSweeps } from "./jobs/sweeps.ts";
+import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
@@ -77,15 +81,31 @@ import { errorPageHook, type PageDeps, type PageSpec, pageResponse } from "./web
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
+/** What the OAuth client keeps per sign-in in flight, read off its own option type (infrastructure/pds exports none). */
+type SavedState = NonNullable<Awaited<ReturnType<Parameters<typeof createOAuthClient>[0]["stateStore"]["get"]>>>;
+
+/** The book's cadence for both expiry sweeps (phase-2.md P2.03 "run hourly"; oauthStores.ts "the hourly job"). */
+const SWEEP_EVERY_MS = 3_600_000;
+
+/** Under the kit's 1 s readiness bound (shared/http/health.ts), so the probe is ended, not left behind. */
+const READINESS_MS = 900;
 
 export type Services = {
   server: ReturnType<typeof createServer>;
   /** Boot checks that need the database, run once before the server listens. */
   boot: () => Promise<void>;
+  /** The process's one logger, for the entry point's last-resort handlers (fatal.ts). */
+  log: Logger;
 };
 
+/**
+ * What a test replaces: unmanaged dependencies only (rule TE-1). `main.ts` passes none, so production always builds
+ * the real ones. `network` stands in for PLC, DNS and handle domains, which no test may reach.
+ */
+export type StandIns = { readonly network?: IdentityNetwork };
+
 /** `web`'s two pools, the OAuth client over them, and what closes them; nothing here opens a connection. */
-async function composeOAuth(cfg: WebConfig, log: Logger) {
+async function composeOAuth(cfg: WebConfig, log: Logger, standIns: StandIns) {
   const connection = connectionOf(cfg);
   const pool = createPool({
     connection,
@@ -101,12 +121,14 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     commit: cfg.UNSET_COMMIT,
   });
   const plcUrl = new URL(cfg.PLC_URL);
-  const network = createIdentityNetwork({
-    guard,
-    plcUrl,
-    httpTimeoutMs: cfg.IDENTITY_HTTP_TIMEOUT_MS,
-    dnsTimeoutMs: cfg.IDENTITY_DNS_TIMEOUT_MS,
-  });
+  const network =
+    standIns.network ??
+    createIdentityNetwork({
+      guard,
+      plcUrl,
+      httpTimeoutMs: cfg.IDENTITY_HTTP_TIMEOUT_MS,
+      dnsTimeoutMs: cfg.IDENTITY_DNS_TIMEOUT_MS,
+    });
   const resolveDid = createDidResolver({
     network,
     plcUrl,
@@ -116,11 +138,12 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
   const sessionStore = createOAuthSessionStore<SavedSession>({ pool, sealer, log });
   // P1.36y: a sign-in or last-browser sign-out holds the account's OAuth lock for its whole run (sign-in-lock.ts).
   const signIn = createSignInLock({ store: sessionStore, lock: createRequestLock(lockPool) });
+  const stateStore = createOAuthStateStore<SavedState>({ pool, sealer, log });
   const { client } = await createOAuthClient({
     origin: cfg.PUBLIC_ORIGIN,
     keys: cfg.OAUTH_CLIENT_KEYS,
     activeKid: cfg.OAUTH_ACTIVE_KID,
-    stateStore: createOAuthStateStore({ pool, sealer, log }),
+    stateStore,
     sessionStore: signIn.tokenSets,
     requestLock: signIn.requestLock,
     fetch: libraryFetch(guard),
@@ -140,6 +163,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     resolveDid,
     pool,
     sessionStore,
+    sweepStates: () => stateStore.sweep(),
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
     boot,
@@ -148,7 +172,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
 }
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
-export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services> {
+export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIns = {}): Promise<Services> {
   // P1.25c: the test-only pages load only when TEST_ROUTES is on, which the config allows only under test. First, so a
   // start that gets past the config has already passed this point (main.test.ts).
   const testRoutes = cfg.TEST_ROUTES ? (await import("./routes/test-routes.ts")).testRoutes : undefined;
@@ -163,7 +187,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
     pdsHost: cfg.PDS_HOSTNAME,
   };
-  const oauth = await composeOAuth(cfg, log);
+  const oauth = await composeOAuth(cfg, log, standIns);
   const page = (input: PageSpec): Response => pageResponse(deps, input);
   const nonces = createSingleUseStore({ log });
   // One object for the store and the sign-out count (P2.08c), so the two cannot read different idle limits.
@@ -212,9 +236,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     complete: (query) => completeAuthorization(oauth.client, query, log, pdsIssuer),
     consumeNonce: (nonce, deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
-    createSession: (did, replacingCookie, deadline) =>
+    createSession: (did, replacingCookie, issuerOrigin, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) =>
-        sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
+        sessions.create(tx, did, replacingCookie === null ? { issuerOrigin } : { replacingCookie, issuerOrigin }),
       ),
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     signInScope: oauth.signInScope,
@@ -249,37 +273,22 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     client: oauth.client,
     endSessions: (did) =>
       withTransaction(oauth.pool, null, (tx) => sessions.destroyAllForDid(tx, did, "auth_dead")).then(() => undefined),
-    tokenSetRemains: (did) =>
-      withClient(oauth.pool, null, async (db) => {
-        const found = await db.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did]);
-        return found.rowCount === 1;
-      }),
+    tokenSetRemains: (did) => oauthSessionExists(oauth.pool, did),
     log,
   });
-  const accounts = createAccountStore(oauth.pool);
+  const accounts = createAccountRepository(oauth.pool, { recordUnderageBlock });
   const versions = { terms: TERMS_VERSION, privacy: PRIVACY_VERSION };
-  const emailCache = async (session: Session, deadline: AbortSignal): Promise<EmailCache> => {
-    const { rows } = await withClient(oauth.pool, deadline, (db) =>
-      db.query<{ email_confirmed: boolean | null; email_checked_at: Date | null }>(
-        "SELECT email_confirmed, email_checked_at FROM app.session WHERE id_hash = $1 AND did = $2",
-        [session.idHash, session.did],
-      ),
-    );
-    const row = rows[0];
-    return row === undefined
-      ? { confirmed: null, checkedAt: null }
-      : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
-  };
-  const sessionInfo = (did: Did, deadline: AbortSignal) =>
-    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did);
+  // `deadlineAt` is the route handler's own, on the kit's monotonic clock: pdsCall retries a read only while the
+  // wait and one more call fit before it (README rule 8a; P2.07a).
+  const sessionInfo = (did: Did, deadline: AbortSignal, deadlineAt: number) =>
+    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did);
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
-  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed });
+  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed, now: () => performance.now() });
   const gate: AppGate = {
     readSession,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions,
-    emailCache,
     refreshEmail,
     now: () => Date.now(),
     emailRecheckS: cfg.EMAIL_RECHECK_S,
@@ -327,7 +336,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   });
   const accountDeps = {
-    open: (request: Request, deadline: AbortSignal, next: string) => openApp(gate, request, deadline, next),
+    open: (request: Request, deadline: AbortSignal, next: string, deadlineAt: number) =>
+      openApp(gate, request, deadline, next, deadlineAt),
     verifyHandle: (did: Did, signal: AbortSignal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
@@ -338,9 +348,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   const settings = settingsRoutes(accountDeps);
   const me = meRoutes(accountDeps);
   const profile = profileRoutes({
-    open: accountDeps.open,
-    saveProfile: async (did, fields, deadline) => {
-      const ctx = { memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 };
+    saveProfile: async (did, fields, deadline, deadlineAt) => {
+      const ctx = { memo: new Map(), deadline, deadlineAt };
       const now = new Date().toISOString();
       const result = await saveProfileRecord(pds.pdsCall, ctx, did, (existing) =>
         toProfileRecord(fields, existing, now),
@@ -350,6 +359,15 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
     },
   });
+  // P2.03s, P1.16w: expired sessions, abandoned sign-in states and one-time tokens a day past expiry are deleted
+  // from the first boot on, then hourly. The
+  // timer starts in `boot`, after the budget check, so composing alone still opens no connection.
+  let stopSweeps = (): void => undefined;
+  const sweeps = [
+    { job: "sweep.session", run: () => withClient(oauth.pool, null, (db) => sessions.sweep(db)) },
+    { job: "sweep.oauth_state", run: oauth.sweepStates },
+    { job: "sweep.single_use", run: () => withClient(oauth.pool, null, (db) => nonces.sweep(db)) },
+  ];
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [
@@ -387,11 +405,22 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     server: createServer({
       config: cfg,
       routes,
-      policies,
+      policies: policiesFor(cfg.TRUSTED_PROXY_MODE),
+      // ADR 0045: the kit runs the app gate before every `session: "required"` handler.
+      gate: appSessionGate(accountDeps.open),
       log,
-      onClose: oauth.onClose,
+      // `/health` answers 200 only while Postgres answers (P1.04w): a rollout must not swap in a replica that cannot
+      // reach the database. The kit bounds the check at 1 s, caches it for 2 s and reads a throw as not ready
+      // (shared/http/health.ts). `ping` bounds the wait for a client and the query with the same signal (P1.04x), so a
+      // probe holds its pooled connection for under a second.
+      readiness: [() => ping(oauth.pool, AbortSignal.timeout(READINESS_MS)).then(() => true)],
+      onClose: [async () => stopSweeps(), ...oauth.onClose],
       errorPage,
     }),
-    boot: oauth.boot,
+    boot: async () => {
+      await oauth.boot();
+      stopSweeps = startSweeps({ sweeps, everyMs: SWEEP_EVERY_MS, log });
+    },
+    log,
   };
 }

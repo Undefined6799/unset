@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { EmailCache } from "@unset/domains-identity";
-import { type Did, type Onboarding, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
+import {
+  type AccountRepository,
+  type Did,
+  type Onboarding,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
@@ -13,12 +19,11 @@ import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
-import type { AccountStore } from "../account.ts";
-import { type AppGate, openApp } from "../app-gate.ts";
+import { type AppGate, appSessionGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { elements } from "../web/fixtures/html.ts";
+import { elements, textContent } from "../web/fixtures/html.ts";
 import { testPage } from "../web/fixtures/page.ts";
 import { meRoutes } from "./me.ts";
 import { settingsRoutes } from "./settings.ts";
@@ -74,7 +79,7 @@ function setup(world: World = {}) {
     env: "test",
     write: (line) => lines.push(line),
   });
-  const accounts: AccountStore = {
+  const accounts: AccountRepository = {
     get: async () =>
       row === null
         ? null
@@ -116,11 +121,17 @@ function setup(world: World = {}) {
     session: world.session === undefined ? sessionOf(null) : world.session,
     clearCookie: world.clearCookie ?? false,
   });
+  // The gate reads the email cache off the session (P2.12f); `world.email` is that cache, confirmed by default.
+  const email = world.email ?? { confirmed: true, checkedAt: NOW };
   const gate: AppGate = {
-    readSession,
+    readSession: async () => {
+      const read = await readSession();
+      if (read.session === null) return read;
+      const session = { ...read.session, emailConfirmed: email.confirmed, emailCheckedAt: email.checkedAt };
+      return { ...read, session };
+    },
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
-    emailCache: async () => world.email ?? { confirmed: true, checkedAt: NOW },
     refreshEmail: async () => "confirmed",
     now: () => NOW.getTime(),
     emailRecheckS: 900,
@@ -163,7 +174,7 @@ function setup(world: World = {}) {
         log,
       }),
       ...settingsRoutes({
-        open: (request, deadline, next) => openApp(gate, request, deadline, next),
+        open: (request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -172,7 +183,7 @@ function setup(world: World = {}) {
         log,
       }),
       ...meRoutes({
-        open: (request, deadline, next) => openApp(gate, request, deadline, next),
+        open: (request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -183,6 +194,7 @@ function setup(world: World = {}) {
     ],
     policies,
     log,
+    gate: appSessionGate((request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt)),
   });
   const send = (path: string, init: { method?: string; body?: string; theme?: string; csrf?: boolean } = {}) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
@@ -218,14 +230,14 @@ const visible = (html: string) => html.replace(/<[^>]*>/g, " ");
 describe("POST /welcome/age", () => {
   test("age.valid_adult", async () => {
     const { send, calls, lines, row } = setup();
-    const response = await send("/welcome/age", post("day=1&month=1&year=2000"));
+    const response = await send("/welcome/age", post("day=1&month=1&year=2000&confirmed=yes"));
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/welcome/terms");
     expect(row()).toMatchObject({ onboarding: "terms", ageConfirmedAt: "confirmed" });
     const dumped = JSON.stringify({ calls, row: row(), lines });
     expect(dumped).not.toContain("2000-01-01");
     expect(dumped).not.toContain("year=2000");
-    const account = readFileSync(join(REPO, "interfaces/http/account.ts"), "utf8");
+    const account = readFileSync(join(REPO, "infrastructure/postgres/accountRepository.ts"), "utf8");
     const migration = readFileSync(join(REPO, "infrastructure/postgres/migrations/0015_app_account.sql"), "utf8");
     expect(account).toContain("confirmAdult(did, deadline)");
     expect(account).not.toMatch(/\b(birth_date|date_of_birth|born_on|dob)\b/);
@@ -233,12 +245,34 @@ describe("POST /welcome/age", () => {
   });
 
   test("age.exact_birthday", async () => {
-    const allowed = await setup().send("/welcome/age", post("day=17&month=10&year=2010"));
+    const allowed = await setup().send("/welcome/age", post("day=17&month=10&year=2010&confirmed=yes"));
     expect(allowed.headers.get("location")).toBe("/welcome/terms");
     const early = setup();
-    const refused = await early.send("/welcome/age", post("day=18&month=10&year=2010"));
+    // NOW is 12:00 UTC on the 17th, already the 18th at UTC+14, so a birthday on the 18th has arrived somewhere.
+    const zoned = await setup().send("/welcome/age", post("day=18&month=10&year=2010&confirmed=yes"));
+    expect(zoned.headers.get("location")).toBe("/welcome/terms");
+    const refused = await early.send("/welcome/age", post("day=19&month=10&year=2010&confirmed=yes"));
     expect(refused.headers.get("location")).toBe("/welcome/blocked");
     expect(early.calls.map((call) => call.op)).toEqual(["block"]);
+  });
+
+  test("age.first_post_shows_the_date_back_and_decides_nothing", async () => {
+    // P2.12e: an adult's date and a child's date get the same page; nothing is written until it comes back confirmed.
+    for (const [body, shown] of [
+      ["day=1&month=1&year=2000", "1 January 2000"],
+      ["day=17&month=10&year=2014", "17 October 2014"],
+    ] as const) {
+      const { send, calls, row } = setup();
+      const response = await send("/welcome/age", post(body));
+      expect(response.status, body).toBe(200);
+      const html = await response.text();
+      expect(visible(html), body).toContain(`You entered ${shown}.`);
+      expect(html, body).toContain('name="confirmed" value="yes"');
+      expect(html, body).toContain('href="/welcome/age"');
+      expect(response.headers.getSetCookie(), body).toEqual([]);
+      expect(row(), body).toBeNull();
+      expect(calls, body).toEqual([]);
+    }
   });
 
   test("age.invalid_dates", async () => {
@@ -260,7 +294,7 @@ describe("POST /welcome/age", () => {
 
   test("age.underage_blocks", async () => {
     const hosted = setup({ issuer: PDS });
-    const response = await hosted.send("/welcome/age", post("day=17&month=10&year=2014"));
+    const response = await hosted.send("/welcome/age", post("day=17&month=10&year=2014&confirmed=yes"));
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/welcome/blocked");
     expect(response.headers.getSetCookie()).toContain("__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0");
@@ -272,21 +306,21 @@ describe("POST /welcome/age", () => {
     const alert = hosted.lines.map((line) => JSON.parse(line) as { event?: string; kind?: string; count?: number });
     expect(alert.find((line) => line.event === "age_gate.hosted_block")).toMatchObject({ kind: "sec", count: 7 });
     expect(hosted.lines.join("\n")).not.toContain(DID);
-    const again = await hosted.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const again = await hosted.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(again.headers.get("location")).toBe("/welcome/blocked");
     expect(hosted.calls).toHaveLength(1);
 
     const foreign = setup({ issuer: "https://other.example" });
-    await foreign.send("/welcome/age", post("day=17&month=10&year=2014"));
+    await foreign.send("/welcome/age", post("day=17&month=10&year=2014&confirmed=yes"));
     expect(foreign.calls).toEqual([{ op: "block", hosted: false }]);
     expect(foreign.lines.join("\n")).not.toContain("age_gate.hosted_block");
 
     const failed = setup({ blockThrows: true });
-    expect((await failed.send("/welcome/age", post("day=1&month=1&year=2014"))).status).toBe(503);
+    expect((await failed.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"))).status).toBe(503);
     expect(failed.order).toEqual([]);
 
     const unread = setup({ issuerThrows: true });
-    const stillBlocked = await unread.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const stillBlocked = await unread.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(stillBlocked.status).toBe(303);
     expect(stillBlocked.headers.get("location")).toBe("/welcome/blocked");
     expect(unread.calls).toEqual([{ op: "block", hosted: false }]);
@@ -296,12 +330,12 @@ describe("POST /welcome/age", () => {
     expect(unread.lines.join("\n")).not.toContain(DID);
 
     const revoked = setup({ revokeThrows: true, issuer: "https://other.example" });
-    const after = await revoked.send("/welcome/age", post("day=1&month=1&year=2014"));
+    const after = await revoked.send("/welcome/age", post("day=1&month=1&year=2014&confirmed=yes"));
     expect(after.headers.get("location")).toBe("/welcome/blocked");
     expect(revoked.order).toEqual(["block", "revoke", "end"]);
     expect(revoked.lines.join("\n")).toContain("oauth.revoke_failed");
 
-    const sources = ["interfaces/http/routes/welcome.ts", "interfaces/http/account.ts"]
+    const sources = ["interfaces/http/routes/welcome.ts", "infrastructure/postgres/accountRepository.ts"]
       .map((path) => readFileSync(join(REPO, path), "utf8"))
       .join("\n");
     expect(sources).not.toContain("deactivateAccount");
@@ -483,6 +517,35 @@ test("completed_onboarding_returns_to_the_profile_resolver", async () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/did");
   }
+});
+
+describe("signing out from onboarding", () => {
+  test("welcome.every_held_step_offers_sign_out", async () => {
+    // P2.12i: a member held at a step must be able to leave it. Each page with a session posts to the one sign-out
+    // route; the blocked page has no session left, so it offers none (welcome_screens_structure).
+    const terms: Row = { onboarding: "terms", termsVersion: null, privacyVersion: null, ageConfirmedAt: "confirmed" };
+    const chat: Row = {
+      onboarding: "chat",
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+      ageConfirmedAt: "confirmed",
+    };
+    const pages = [
+      { name: "age", row: null, path: "/welcome/age", init: undefined },
+      { name: "age confirm", row: null, path: "/welcome/age", init: post("day=1&month=1&year=2000") },
+      { name: "terms", row: terms, path: "/welcome/terms", init: undefined },
+      { name: "chat", row: chat, path: "/welcome/chat", init: undefined },
+    ];
+    for (const page of pages) {
+      const response = await setup({ row: page.row }).send(page.path, page.init);
+      expect(response.status, page.name).toBe(200);
+      const main = elements(parse(await response.text()), "main")[0];
+      const forms = elements(main, "form", { action: "/logout", method: "post" });
+      expect(forms, page.name).toHaveLength(1);
+      const submit = elements(forms[0], "button", { type: "submit" });
+      expect(submit.map(textContent), page.name).toEqual(["Sign out"]);
+    }
+  });
 });
 
 describe("welcome screens", () => {

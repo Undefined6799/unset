@@ -69,6 +69,10 @@ const EVENTS = [
   "pds.unexpected",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
+  // P2.08j, signing out of every browser: a count with no DID, and the case where the grant was ended but the
+  // sessions could not be (`kind` is the error class): rows remain that a later sign-in would make valid again.
+  "auth.logout_everywhere",
+  "auth.logout_everywhere_incomplete",
   // A revocation that failed: on the last browser's sign-out (P2.08a, routes/logout.ts, also when dropping the stored
   // set fails) and at the under-16 block (P2.12, routes/welcome.ts). `kind` is the class name. No DID.
   "oauth.revoke_failed",

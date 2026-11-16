@@ -164,6 +164,7 @@ flowchart TD
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P208c --> P208e[P2.08e count pinned to store]; P208d --> P208e; P208d --> P208f[P2.08f signout_all marked unused]
   P208e --> P208g[P2.08g revoke failure unit test]; P208b --> P208g; P208b --> P208h[P2.08h issuer read bounded]
+  P208d --> P208j[P2.08j everywhere is back]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
@@ -180,7 +181,8 @@ flowchart TD
   P125 --> P215[P2.15 legal 2]
   P216b[P2.16b PDQ hasher] --> P216[P2.16 fingerprint stage, fake check]; P112 --> P216; P115 --> P216
   P216 --> P217[P2.17 image pipeline]; P216b --> P217
-  P112 --> P218[P2.18 draft store]; P217 --> P218; P118 --> P218
+  P218k[P2.18k store egress policy] --> P218s[P2.18s object store and adapter]; P218s --> P218p[P2.18p PDS blobstore]
+  P112 --> P218[P2.18 draft store]; P217 --> P218; P118 --> P218; P218s --> P218
   P218 --> P219[P2.19 draft media URLs]; P108 --> P219
   P124 --> P220[P2.20 ProfileView]
   P218 --> P221[P2.21 editor]; P219 --> P221; P220 --> P221; P123 --> P221
@@ -892,6 +894,26 @@ Size: ~10 source lines
 As built: merged at 2026-10-12T22:24:03Z as `88b79b6` (#637, head 2cea1a3) (merge data read by REST, 22:35Z). It is
   the repo's first `CREATE INDEX CONCURRENTLY` migration. The coordinator's post-merge verify parked F1 (a failed
   concurrent build leaves an INVALID index that a rerun skips), F2 and N2 in the refocus order, section 4.
+
+### P2.03t — End sessions with their token set in the database
+Tags: [SEC]            Depends on: P2.03, P2.04s
+Trusted base (a migration, the session store's comment and tests) with its docs, in one PR under ADR 0044's
+security-review label. ADR 0049, accepted 2026-11-16. Found by Codex on #1566 (P2.08j), 2026-11-15, and wider than that PR.
+**What:** migration 0024 deletes the sessions whose DID has no token set, then adds a foreign key from
+`app.session.did` to `app.oauth_session(did)` with ON DELETE CASCADE. Deleting a token set then deletes that DID's
+sessions in the same statement, and a session cannot be inserted before its token set. No grant, role or store method
+changes; the store's `has_token_set` check stays as a second line.
+Threats:
+- A token set is deleted and the step that ends the sessions fails (sign out everywhere, a dead grant, the under-16
+  block). The rows wait, and the member's next sign-in makes them valid again, a copied cookie included. Answered: the
+  rows go with the set (red: `session.no_token_set_ends`).
+- The constraint signs members out when it should not. Answered: a refresh is an in-place update and a replacing
+  sign-in never reaches the table with its delete (reds: `session.token_refresh_keeps_sessions`,
+  `logout.replacing_sign_in_keeps_other_browsers`).
+- A session is written for a DID with no token set. Answered: refused with 23503 (red: `session.needs_a_token_set`).
+- The migration locks sign-in. Accepted: one scan of a small indexed table under SHARE ROW EXCLUSIVE.
+ASVS 5.0: V7.4.1 and V7.4.2 gain the constraint's tests; the PR names the rows.
+Done when the reds are shown in CI (no Postgres here to run them), ADR 0049 is accepted, and check is green.
 
 ### P2.04 — OAuth client
 Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x (merged, #579), P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
@@ -2027,6 +2049,41 @@ fail closed, to sign-out without a link.
 ASVS 5.0: the PR names its rows, at least the session-termination row and the URL-validation or output-encoding row
 that apply.
 Done when every red is shown and check is green.
+
+### P2.08j — Bring back sign out everywhere
+Tags: [SEC]            Depends on: P2.08d, P2.13c
+Product only, the sign-out lane. Whole-project review 2026-11-15, security finding 5; Alex, 2026-11-15 23:11:42Z,
+"yes 1 3 5" to the coordinator's scope call 1, and at 23:22:23Z "Sign out everywhere, this one too" on the thread's
+card. It reverses P2.08d. P2.08d's reason (the PDS handles sessions and auth) still holds for PDS sessions and other
+apps; what it left open is our own session rows, which only we can end at once.
+**What:** a second form on Settings, Account posts to `POST /logout/everywhere` (CSRF gate, form media type, 1 KB).
+The handler reads this request's session, reads the recorded issuer, revokes the grant (dropping the stored set if the
+revoke fails, as the last browser's sign-out does), then calls `destroyAllForDid(tx, did, "user_signout_all")` and
+answers as `POST /logout` does: cookies cleared, 303 to `/signed-out`. Nothing is read from the body. No confirmation
+box (the old `confirm` field stays removed): a mistaken press costs one sign-in.
+Not in this step: "other browsers only". The definer deletes the token set this browser would still need, and
+`session.end_sessions_single_sql` (trusted base) forbids a second DELETE of a DID's sessions; either change is a
+trusted-base step with Alex's line. A session or device list is not built. The comments in
+`infrastructure/session/store.ts` that call `user_signout_all` unused (P2.08f) are corrected by the next trusted step
+that touches that file.
+Threats:
+- A session the member does not hold (a shared computer, a copied cookie or browser profile) outlives their sign-out
+  for up to 30 days. Answered: every session of the DID ends at once, a copy of this browser's cookie included.
+- Another site, or a link, signs a member out everywhere. Answered: POST only, behind the CSRF gate (red: 403).
+- A caller ends another member's sessions. Answered: the DID comes from the caller's own session (reds: a `did` field
+  in the body is ignored; the integration test leaves a stranger's session and grant alive).
+- A failed revoke leaves a usable grant. Answered: the stored set is deleted, then the sessions (red).
+- The delete fails after the revoke removed the token set (Codex on #1566). A repeat of the POST then reads no
+  session, so it cannot end the rows left behind, and the member's next sign-in would make them valid again. Narrowed,
+  not closed: the request tries the delete three times and logs `auth.logout_everywhere_incomplete` if all fail (reds).
+  Closing it needs sign-in to end a DID's older rows, or rows bound to their token set; that is a trusted-base step,
+  and auth_dead and the age gate share the gap.
+- A sign-in lands between the revoke and the delete and loses a grant nobody revoked. Answered: both run under the
+  account's sign-in lock, and still run if the lock cannot be had (red).
+- A holder of a copied cookie signs the member out. Accepted: the member signs in again, and the copy dies with it.
+- An identity record of the action. Answered: no audit row, and a log line with no field (plan §6).
+ASVS 5.0: V7.4.3 stays partial with the in-app control named; the PR updates the row.
+Done when the reds are shown, the manifest, budget fixture and endpoint page carry the route, and check is green.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
@@ -3587,11 +3644,56 @@ Done when (tests): `object_store_policy_exact_origin` (the configured origin →
   `egress.blocked`); `object_store_policy_private_only` (a public answer → `egress.blocked`).
 Reuse: none. Not in this step: the storage client and drafts (P2.18). Diagram: none.
 
+### P2.18s — Object store service and `infrastructure/storage` adapter (ADR 0041)
+Tags: [SEC]            Depends on: P2.18k            Plan: §5.8 drafts store; ADR 0041 (proposed)
+Where: `infrastructure/storage/{index.ts, object-store.ts, README.md}` + tests, `tests/support/objects.ts`,
+  `deployment/compose.{dev,dev.source,local}.yaml` service `objects` and its one-shot setup, `deployment/networks.dev.json`,
+  the image lock and mirror list, the dev-stack secret files' names
+Size: ~200 source lines, ~250 test lines
+
+Book edit 2026-11-15: split out of P2.18 so the store lands before the image pipeline (Alex, 2026-11-15 20:43:46Z,
+"also implement s3 storage for both, the pds and the users."). P2.18 keeps the tables, quota, sweeper and draft media.
+
+Goal: the store runs in the dev and local stacks, and the app has the book's thin client for it.
+Outputs: P2.18's `objectStore` contract (`put`, `get`, `setTags`, `deletePrefix`, `list`; 10 s timeouts; typed
+  `objects.unavailable`), built here on `aws4fetch` signing and net-guard's `object-store` policy; the `objects`
+  service (SeaweedFS by digest), its buckets `unset-private` and `unset-pds`, and one key per process (ADR 0041
+  Decision 3). The adapter is not wired into any composition root yet (P2.18 does that).
+Threats: E a key used outside its prefix (`objects_key_scoped_to_prefix`, against the real store); I a key or DID in a
+  log (`objects_errors_carry_no_key`); E any request leaving through another origin (P2.18k's policy).
+Done when (tests): `objects_round_trip`, `objects_tags`, `objects_delete_prefix`, `objects_list_pages`,
+  `objects_key_scoped_to_prefix`, `objects_unavailable_is_typed`, `objects_errors_carry_no_key`, against SeaweedFS
+  started by `tests/support/objects.ts` (the TE-2 pattern P1.11g set for Postgres). The compose half also pins: the
+  store runs with `-filer.encryptVolumeData` (`objects_no_plaintext_at_rest`: a marker is in no volume file after a
+  put) and erasure removes the ciphertext (`objects_erase_removes_bytes`: the object's encrypted chunk bytes, read
+  from its volume file before the delete, are in no volume file after delete plus forced vacuum, and the test fails
+  with the vacuum skipped); neither bucket
+  reports versioning on (`objects_no_versioning`); the image's upstream signature is verified against a pinned
+  identity, or it is built from tagged source; the admin secret is mounted only into the setup; a rotation, forced
+  vacuum and metadata-log purge runbook in Decision 7's order (delete, purge the log, wait for the chunk deletes,
+  vacuum), with the manual takedown of one `unset-private` object; and the filer-store tombstone question settled or carried as the P5.01 gate
+  (ADR 0041 Decisions 3, 6, 7).
+
+### P2.18p — PDS blobstore in the object store (ADR 0041)
+Tags: [SEC]            Depends on: P2.18s            Plan: ADR 0041 Decision 5
+Where: `deployment/compose.{dev,dev.source,local}.yaml` (the PDS's `PDS_BLOBSTORE_S3_*`), `deployment/preflight`
+  (a check on those keys), `tests/support/pds-email-token.ts` (P1.29i's reader accepts exactly this shape), a runbook
+  step that copies existing blobs
+Size: ~80 source lines, ~150 test lines
+
+Goal: the PDS stores blobs in `unset-pds` through the store's internal origin, with its own key, and nothing else.
+Threats: E a PDS S3 setting that leaves the stack (endpoint, region or key missing, or another host) → preflight and
+  the reader refuse it (`pds_s3_only_internal_store`); D blobs lost in the switch → the copy runbook and a count check.
+Done when (tests): `pds_s3_only_internal_store`, `pds_s3_and_disk_refused`, the local stack's upload-then-`getBlob`
+  through the store, and P1.29i's existing refusals still red for every other S3 shape. The runbook also holds the
+  interim hard-delete for a DID or a CID: remove its objects under `blocks/`, `tmp/` and `quarantine/` with the PDS key,
+  then the forced vacuum (ADR 0041 Decision 7), until P5.08a automates takedown.
+
 ### P2.18 — Draft store
-Tags: [SEC]            Depends on: P2.18k, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
-Where: `domains/identity/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}`,
-  `infrastructure/storage/{object-store.ts, README.md}`, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
-  lines, `deployment/compose.dev.yaml` service `objects` (S3-compatible) and its bucket and credentials
+Tags: [SEC]            Depends on: P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
+Where: `domains/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}` (the profile
+  module's folder since ADR 0037; book edit 2026-11-15), wiring P2.18s's `infrastructure/storage` adapter, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
+  lines (the `objects` service, its buckets and keys come from P2.18s)
 Size: ~330 source lines, ~400 test lines
 
 Goal: Keep every profile edit, section and draft image in the app (Postgres plus the private object store, per-DID

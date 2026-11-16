@@ -89,9 +89,14 @@
         "admin": ["USAGE"],
         "auditor": ["USAGE"],
         "indexer": ["USAGE"],
+        "migrator": ["USAGE"],
         "retention": ["USAGE"],
         "web": ["USAGE"]
       }
+    },
+    "core": {
+      "owner": "migrator",
+      "grants": {}
     },
     "idx": {
       "owner": "migrator",
@@ -117,9 +122,19 @@
     "audit.append": {
       "admin": ["EXECUTE"],
       "indexer": ["EXECUTE"],
+      "migrator": ["EXECUTE"],
       "web": ["EXECUTE"]
     },
+    "audit.erase_subject": {
+      "migrator": ["EXECUTE"]
+    },
     "audit.chain": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
+    "audit.redaction_log": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
+    "audit.segment": {
       "auditor": { "privileges": ["SELECT"], "wholeTable": true }
     },
     "app.single_use": {
@@ -149,12 +164,17 @@
           "last_seen_at": ["SELECT", "INSERT", "UPDATE"],
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
-          "email_checked_at": ["SELECT", "UPDATE"]
+          "email_checked_at": ["SELECT", "UPDATE"],
+          "issuer_origin": ["SELECT", "INSERT"]
         },
         "rowPrivileges": ["DELETE"]
       }
     },
     "app.end_sessions_for_did": {
+      "web": ["EXECUTE"]
+    },
+    "app.sweep_single_use": {
+      "retention": ["EXECUTE"],
       "web": ["EXECUTE"]
     },
     "app.oauth_state": {

@@ -1,6 +1,7 @@
 // The session work behind signing out (P2.08a; book phase-2.md "POST /logout" step 4; plan §5.3 "Logout"). P2.08d
-// removed "sign out everywhere" and its destroy-all here. The count (live sessions only since P2.08c) runs in the same
-// transaction as the delete, so a failed count rolls the delete back. It lives here, not on infrastructure/session:
+// removed "sign out everywhere" and its destroy-all here; P2.08j brings both back. The count (live sessions only
+// since P2.08c) runs in the same transaction as the delete, so a failed count rolls the delete back. It lives here,
+// not on infrastructure/session:
 // that folder is trusted base (SE-6, CODEOWNERS) and cannot share a pull request with these routes.
 import type { Did } from "@unset/domains-identity";
 import { type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
@@ -9,8 +10,9 @@ import type { Session, SessionDb, SessionLimits, SessionStore } from "@unset/inf
 /**
  * How many of `did`'s sessions can still sign a browser in (P2.08c). A row past its idle or absolute expiry is not
  * one, nor is a row whose DID has no stored token set: the store reads both as signed out (infrastructure/session/
- * store.ts, `lookup`'s `expired` and `has_token_set`). No sweep deletes them until the jobs process exists, so counting
- * them would keep the grant after the last real browser signs out (readiness review 2026-10-19, S2). The conditions
+ * store.ts, `lookup`'s `expired` and `has_token_set`). The hourly sweep (jobs/sweeps.ts, P2.03s) deletes expired rows
+ * only up to an hour late, so counting them would keep the grant after the last real browser signs out (readiness
+ * review 2026-10-19, S2). The conditions
  * repeat the store's, because that folder is trusted base; the integration test pins both boundaries.
  * `count(*)::int` is a number (node-pg 8.23, oid 23).
  */
@@ -40,6 +42,8 @@ export function browserLogout(options: {
   readonly lockDid: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
+  destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<void>;
+  underAccountLock: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
   whenLastBrowser: (did: Did, deadline: AbortSignal, fn: () => Promise<void>) => Promise<void>;
@@ -51,6 +55,13 @@ export function browserLogout(options: {
         await sessions.destroy(tx, session.idHash);
         return remainingSessions(tx, session.did, limits.idleS);
       }),
+    // P2.08j: the definer (migration 0014) ends every session of the DID and deletes its token set, in one transaction.
+    destroyAllSessions: (session, deadline) =>
+      withTransaction(pool, deadline, (tx) => sessions.destroyAllForDid(tx, session.did, "user_signout_all")).then(
+        () => undefined,
+      ),
+    // P2.08j: sign-out everywhere revokes and deletes under the lock a sign-in holds, so none lands between the two.
+    underAccountLock: lockDid,
     revokeGrant: revoke,
     // Counted again under the lock: a sign-in that finished since the delete above has its session row by now.
     whenLastBrowser: (did, deadline, fn) =>
