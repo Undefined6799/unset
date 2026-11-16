@@ -15,6 +15,10 @@
 FROM ghcr.io/undefined6799/mirror/postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND PostgreSQL"
+# Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
+# base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
+# no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*
 RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     /etc/ssl/certs/ce275665.0 \
   && apt-get purge --allow-remove-essential -y apt \
