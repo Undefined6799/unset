@@ -182,6 +182,9 @@ export function createSessionStore(options: {
    * The session row, with whether its DID still has a stored OAuth token set (P2.04s): the library deletes the set when
    * the grant is dead (refresh refused, revoked, sign out everywhere), and that ends every browser session on it. The
    * library's own delete hook cannot do this, as it also fires on every sign-in (P2.04 step 7).
+   * P2.03t (migration 0024, ADR 0049): the database now deletes those rows with the set (a foreign key with ON DELETE
+   * CASCADE), so no row here can lack one. The check stays: it costs one index probe and holds if the constraint is
+   * ever dropped.
    */
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(

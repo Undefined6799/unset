@@ -33,12 +33,13 @@ const lines = (query: string) => postgres.sql("unset", query).split("\n").filter
 /** One row in every app table that names `did`, written behind the grants: only the DID matters here. */
 function seedApp(did: string, fill: string): void {
   const id = `decode(repeat('${fill}', 32), 'hex')`;
+  // The token set before the session: a session needs one (session_did_token_set, migration 0024).
   postgres.sql(
     "unset",
     `INSERT INTO app.account (did, first_seen_at) VALUES ('${did}', now());
+     INSERT INTO app.oauth_session (did, sealed, client_kid, updated_at) VALUES ('${did}', 's1.k1.made-up', 'kid', now());
      INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at)
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');
-     INSERT INTO app.oauth_session (did, sealed, client_kid, updated_at) VALUES ('${did}', 's1.k1.made-up', 'kid', now());
      INSERT INTO app.single_use (id, purpose, bind_did, expires_at)
        VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');`,
   );
