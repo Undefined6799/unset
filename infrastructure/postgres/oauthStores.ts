@@ -123,3 +123,14 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
     del,
   };
 }
+
+/**
+ * Whether a token set is stored for `did`. It reads no sealed value, so it takes no sealer: after a PDS call fails,
+ * pds-call asks this to tell a grant that is gone from one that was replaced meanwhile (P2.07).
+ */
+export function oauthSessionExists(pool: Pool, did: string): Promise<boolean> {
+  return withClient(pool, null, async (db) => {
+    const found = await db.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did]);
+    return found.rowCount === 1;
+  });
+}

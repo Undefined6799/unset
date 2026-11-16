@@ -6,6 +6,7 @@ import {
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
+  oauthSessionExists,
   type Pool,
   withClient,
 } from "@unset/infrastructure-postgres";
@@ -154,5 +155,16 @@ describe("oauth stores", () => {
     await session.del(DID_B);
     expect(await state.get("state-del")).toBeUndefined();
     expect(await session.get(DID_B)).toBeUndefined();
+  });
+
+  test("session_exists_follows_the_row", async () => {
+    const { session } = setup();
+    const did = "did:plc:cccccccccccccccccccccccc";
+    expect(await oauthSessionExists(web, did)).toBe(false);
+    await session.set(did, { authMethod: { method: "private_key_jwt", kid: "A" }, tokenSet: { a: "x" } });
+    expect(await oauthSessionExists(web, did)).toBe(true);
+    expect(await oauthSessionExists(web, DID_A.replace(/a$/, "z"))).toBe(false);
+    await session.del(did);
+    expect(await oauthSessionExists(web, did)).toBe(false);
   });
 });
