@@ -255,7 +255,7 @@ services:
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
   # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
-  # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
+  # listener (newt 1.20.0 newtconfig/newtconfig.go:452-503).
   newt:
     image: ghcr.io/undefined6799/mirror/newt@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e
     user: "65532:65532"
