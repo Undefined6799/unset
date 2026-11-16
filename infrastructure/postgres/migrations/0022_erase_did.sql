@@ -65,10 +65,11 @@ BEGIN
   -- 4. One statement per registry row, children before parents. Any error rolls the whole call back.
   DELETE FROM app.single_use WHERE bind_did = p_did;
   GET DIAGNOSTICS v_single_use = ROW_COUNT;
-  DELETE FROM app.session WHERE did = p_did;
-  GET DIAGNOSTICS v_session = ROW_COUNT;
-  DELETE FROM app.oauth_session WHERE did = p_did;
-  GET DIAGNOSTICS v_oauth_session = ROW_COUNT;
+  --    app.session.did and app.oauth_session.did go through the one function that ends a DID's sessions (0014;
+  --    infrastructure/session's session.end_sessions_single_sql keeps it the only such delete). 'deleted' is its
+  --    reason that also removes the token set. It reports sessions only, so the token set is counted first.
+  SELECT count(*) INTO v_oauth_session FROM app.oauth_session WHERE did = p_did;
+  v_session := app.end_sessions_for_did(p_did, 'deleted');
   DELETE FROM app.account WHERE did = p_did;
   GET DIAGNOSTICS v_account = ROW_COUNT;
 
