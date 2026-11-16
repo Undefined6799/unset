@@ -167,7 +167,7 @@ describe("stack wrapper (P1.27w)", () => {
       ["up", "--env", "dev", "--compose", files[0] as string, "--compose", files[1] as string, ...ENV_FILE],
       {},
     );
-    expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker"]);
+    expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker", process.execPath]);
     // Amendment 3 of 2026-10-12-preflight-compose-inputs: after "--", so Node never reads an argument as its own flag.
     expect(commands[0]?.args.slice(1)).toEqual([
       "--",
@@ -295,9 +295,9 @@ describe("stack wrapper (P1.27w)", () => {
   test("local_up_checks_the_served_leaf_after_compose", () => {
     // P1.34d item 15: under local, the served-leaf check runs last, as a process like the preflight.
     const { commands } = plan(LOCAL_UP, {});
-    expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker", process.execPath]);
+    expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker", process.execPath, process.execPath]);
     expect(commands[0]?.args.slice(1, 4)).toEqual(["--", "--env", "local"]);
-    expect(commands[2]?.args).toEqual([
+    expect(commands[3]?.args).toEqual([
       expect.stringMatching(/deployment\/preflight\/served-leaf\.ts$/),
       "--",
       "--env",
@@ -315,13 +315,13 @@ describe("stack wrapper (P1.27w)", () => {
     expect(argv.some((part) => part.includes("createAccount"))).toBe(false);
     expect(argv.some((part) => part.includes(".seeded.json"))).toBe(false);
     expect(argv.some((part) => part.includes("pds-token-reader"))).toBe(false);
-    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker", "the leaf check"]);
+    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker", "the bucket setup", "the leaf check"]);
   });
 
   test("probe_runs_under_local_only", () => {
     // P1.29t: no client_id probe, sign-in, or token reader under dev (Amendment 4 of 2026-10-13-local-plc, point 1).
     const { commands } = plan(UP, {});
-    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker"]);
+    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker", "the bucket setup"]);
     const argv = commands.flatMap((c) => [c.file, ...c.args]).join(" ");
     expect(argv).not.toMatch(/oauth-client-metadata|createAccount|pds-token-reader|dev-seed/);
   });
@@ -344,6 +344,7 @@ describe("stack wrapper (P1.27w)", () => {
     expect(failed.ran.map((command) => command.at(-1))).toEqual([
       expect.stringMatching(/\.env$/),
       "--build",
+      expect.stringMatching(/\.env$/),
       "local",
       "down",
     ]);
@@ -352,6 +353,38 @@ describe("stack wrapper (P1.27w)", () => {
     expect(killed.code).toBe(2);
     expect(killed.ran.at(-1)).toEqual(["docker", "down"]);
     expect(leafCheck({ status: 0, signal: null }).ran.map((command) => command.at(-1))).not.toContain("down");
+  });
+
+  test("up_creates_the_buckets_after_compose_with_the_same_inputs", () => {
+    // P2.18s (ADR 0050 Decision 2): after `up -d`, under dev and local alike, the bucket setup runs as a process with
+    // the compose files and interpolation file Compose got, after a "--", and a failure takes the stack down.
+    for (const argv of [UP, LOCAL_UP]) {
+      const { commands } = plan(argv, {});
+      const setup = commands[2];
+      const files = argv === UP ? [resolve("deployment/compose.dev.yaml")] : [resolve("deployment/compose.local.yaml")];
+      expect(setup?.name).toBe("the bucket setup");
+      expect(setup?.args).toEqual([
+        expect.stringMatching(/deployment\/preflight\/objects-buckets\.ts$/),
+        "--",
+        ...files.flatMap((file) => ["--compose", file]),
+        "--interpolation-env",
+        resolve("deployment/env/dev.env"),
+      ]);
+      expect(setup?.undo?.args.at(-1)).toBe("down");
+    }
+  });
+
+  test("a_failing_bucket_setup_takes_the_stack_down", () => {
+    const ran: string[] = [];
+    const setupRunner: Runner = {
+      ...runner(() => 0),
+      spawn: (file, args) => {
+        ran.push(args.at(-1) ?? file);
+        return /objects-buckets\.ts$/.test(args[0] ?? "") ? { status: 1, signal: null } : { status: 0, signal: null };
+      },
+    };
+    expect(main(UP, {}, setupRunner, () => undefined, SOCKET)).toBe(1);
+    expect(ran.slice(-2)).toEqual([resolve("deployment/env/dev.env"), "down"]);
   });
 
   test("down_never_removes_volumes", () => {
@@ -392,7 +425,7 @@ describe("stack wrapper (P1.27w)", () => {
     // The message names the variables, never their values.
     expect(() => plan(UP, { COMPOSE_FILE: "/secret/path.yaml" })).not.toThrow(/secret/);
     // An unset entry (undefined) is not a set variable.
-    expect(plan(UP, { COMPOSE_FILE: undefined }).commands).toHaveLength(2);
+    expect(plan(UP, { COMPOSE_FILE: undefined }).commands).toHaveLength(3);
   });
 
   test("node_never_loads_the_interpolation_env_file", () => {
@@ -584,7 +617,7 @@ describe("stack wrapper (P1.27w)", () => {
     // P1.37u red 1: a daemon still starting gets no answer for 15 s, then a local daemon answers; the stack starts.
     const late = lateDaemon(15_000);
     expect(run(plan(UP, {}), late.runner)).toBe(0);
-    expect(late.ran).toEqual([process.execPath, "docker"]);
+    expect(late.ran).toEqual([process.execPath, "docker", process.execPath]);
     expect(late.asked.length).toBeGreaterThan(1);
     expect(late.clock()).toBeLessThan(DOCKER_WAIT_MS);
     // A socket that refuses the connection while the daemon starts waits the same way.

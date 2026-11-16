@@ -37,6 +37,11 @@ export type Session = {
    * so the gate needs no second query for it (P2.03m). A session built without it reads as never checked.
    */
   readonly emailCheckedAt?: Date | null;
+  /**
+   * The origin of the sign-in server OAuth recorded when this session was created (ADR 0048, P2.03o); null for a
+   * session created before the column or with no storable origin. `read` always sets it.
+   */
+  readonly issuerOrigin?: string | null;
 };
 /** One request as read sees it: `key` (the Request) scopes the memo; `cookieValue` is null when none was sent. */
 export type SessionRequest = {
@@ -65,18 +70,30 @@ export const END_SESSIONS_REASONS = [
 export type EndSessionsReason = (typeof END_SESSIONS_REASONS)[number];
 
 export type SessionStore = {
-  create(db: Db, did: Did, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
+  create(db: Db, did: Did, options?: CreateOptions): Promise<CreatedSession>;
   read(request: SessionRequest): Promise<SessionRead>;
   destroy(db: Db, idHash: Buffer): Promise<void>;
   destroyAllForDid(tx: Db, did: Did, why: EndSessionsReason): Promise<number>;
   setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
+/**
+ * `replacingCookie` names the browser's previous session, which dies first. `issuerOrigin` is the sign-in server's
+ * origin, already checked by the caller (interfaces/http `issuerOrigin`); it is written once and never updated.
+ */
+export type CreateOptions = { readonly replacingCookie?: string; readonly issuerOrigin?: string | null };
 export type CreatedSession = { readonly cookieValue: string; readonly expiresAt: Date };
 
 const ID_BYTES = 32;
 /** Canonical unpadded base64url of 32 bytes. */
 const COOKIE_VALUE = /^[A-Za-z0-9_-]{43}$/;
+/**
+ * The shape migration 0019's check on app.session.issuer_origin accepts. An origin outside it is stored as null, so
+ * the column check never fails a sign-in; the account pages then read the token set, as they do for an older session.
+ */
+const STORABLE_ORIGIN = /^https:\/\/[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
+const storableOrigin = (origin: string | null | undefined): string | null =>
+  origin != null && STORABLE_ORIGIN.test(origin) ? origin : null;
 const NONE: SessionRead = { session: null, clearCookie: false };
 const CLEAR: SessionRead = { session: null, clearCookie: true };
 
@@ -95,6 +112,7 @@ type SessionRow = {
   created_at: Date;
   email_confirmed: boolean | null;
   email_checked_at: Date | null;
+  issuer_origin: string | null;
   expired: boolean;
   touch_due: boolean;
   has_token_set: boolean;
@@ -109,15 +127,16 @@ export function createSessionStore(options: {
   const memo = new WeakMap<object, Promise<SessionRead>>();
 
   /** Rotation first (this browser's previous session dies, whoever it belonged to), then a fresh id. */
-  async function create(db: Db, did: Did, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
+  async function create(db: Db, did: Did, { replacingCookie, issuerOrigin }: CreateOptions = {}) {
     const previous = replacingCookie === undefined ? null : idHashOf(replacingCookie);
     if (previous !== null) await destroy(db, previous);
     // A repeated id (2^-256) violates the primary key, and the caller's transaction fails closed (P2.03 step 1c).
     const id = randomBytes(ID_BYTES);
     const { rows } = await db.query<{ expires_at: Date }>(
-      "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) " +
-        "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3)) RETURNING absolute_expires_at AS expires_at",
-      [sha256(id), did, limits.absoluteS],
+      "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at, issuer_origin) " +
+        "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3), $4) " +
+        "RETURNING absolute_expires_at AS expires_at",
+      [sha256(id), did, limits.absoluteS, storableOrigin(issuerOrigin)],
     );
     return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
   }
@@ -154,6 +173,7 @@ export function createSessionStore(options: {
       createdAt: row.created_at,
       emailConfirmed: row.email_confirmed,
       emailCheckedAt: row.email_checked_at,
+      issuerOrigin: row.issuer_origin,
     };
     return { session, clearCookie: false };
   }
@@ -165,7 +185,7 @@ export function createSessionStore(options: {
    */
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(
-      "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, " +
+      "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, s.issuer_origin, " +
         "now() > s.absolute_expires_at OR now() > s.last_seen_at + make_interval(secs => $2) AS expired, " +
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
         "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +

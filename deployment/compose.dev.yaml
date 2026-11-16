@@ -24,7 +24,7 @@ name: unset-dev
 
 services:
   postgres:
-    image: ghcr.io/undefined6799/unset/postgres@sha256:f0810f91197d282eb63d52b4ba05598fca19f13421bfe2d3155678ea53884891
+    image: ghcr.io/undefined6799/unset/postgres@sha256:8008afdaa8e5ce12e8bc51e6553b67942f1d8711472f87033fe1e77361685bc1
     user: "999:999"
     read_only: true
     cap_drop: [ALL]
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/undefined6799/unset/migrate@sha256:89237144d08eebe4c8b4a31f2b7847eceba851a4645dca1c33e6f624703bec0a
+    image: ghcr.io/undefined6799/unset/migrate@sha256:6cea69b2b6f3bc2cd1b937dc602cc3a86229256462df3759b73f6e49bcdeb57c
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -92,7 +92,7 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/undefined6799/unset/pds@sha256:c0f26b546f613428127f7768e04fbc0cd76e823d175695d2fc36b8acc82c3bbd
+    image: ghcr.io/undefined6799/unset/pds@sha256:bb7514b95006a74e0cc4a4f0563bf72fe47f79bde948850ef20f62c232d6dc80
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
@@ -132,7 +132,7 @@ services:
   # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
   # 0700 (P1.27o).
   edge:
-    image: ghcr.io/undefined6799/unset/edge@sha256:bfcbb99c39340108bf8175b745ce66654ef90e9781b52034f237799c95d6c2bb
+    image: ghcr.io/undefined6799/unset/edge@sha256:2ae439bd7584be81ad9a0b91a7131408f15100c0d1d819481b8a0ccdd0a69b00
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -142,7 +142,7 @@ services:
       - /tmp:uid=65532,gid=65532,mode=1777
     # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
     # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
-    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
+    # site's name and upstream are the ruled values (deployment/edge/adapted-rules.ts DEV_APP).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
@@ -172,7 +172,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/undefined6799/unset/web@sha256:a3ded8242d56e88e208980ab7c79b31d21b7875402035959b1f055da13525dfc
+    image: ghcr.io/undefined6799/unset/web@sha256:2632e814d3c7fb0bd962881b4cf9e73b0be1ead7b74aadfee2d7f8281262f8db
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -227,14 +227,37 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
+  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
+  # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
+  # sits only on its own internal network and publishes nothing; until a process gets a key (P2.18, P2.18p), no service
+  # shares that network. Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
+  # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
+  # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
+  objects:
+    image: ghcr.io/undefined6799/unset/objects@sha256:7aeb369798be2303676c56614c6de8f5c7128979e95c32a37296d95f5afa6d7c
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - objectsdata:/data
+    secrets: [objects_s3]
+    networks: [objects]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    restart: unless-stopped
+
   # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
   # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
   # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
-  # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
+  # listener (newt 1.20.0 newtconfig/newtconfig.go:452-503).
   newt:
-    image: ghcr.io/undefined6799/mirror/newt@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319
+    image: ghcr.io/undefined6799/mirror/newt@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -285,12 +308,16 @@ networks:
         - subnet: 10.250.37.0/29
   # Newt's own way out: its tunnel to Pangolin.
   newt_egress:
+  # The object store's only network (ADR 0041): internal, so the store has no way out, and nothing else joins it yet.
+  objects:
+    internal: true
 
 volumes:
   pgdata:
   pdsdata:
   edgedata:
   edgeconfig:
+  objectsdata:
 
 secrets:
   pg_superuser_password:
@@ -317,3 +344,7 @@ secrets:
     file: ../../unset-dev-secrets/dev_tls_cert
   dev_tls_key:
     file: ../../unset-dev-secrets/dev_tls_key
+  # The object store's identities (ADR 0041 Decision 3, ADR 0050 Decision 1): SeaweedFS's s3.json, with no Admin
+  # identity; read by objects (uid 1000) only.
+  objects_s3:
+    file: ../../unset-dev-secrets/objects_s3

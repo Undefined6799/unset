@@ -47,7 +47,7 @@ function setup(world: World = {}) {
   const calls: string[] = [];
   /** P1.36y: where in `calls` the sign-in scope opened and ended. */
   const scope: { opened?: number; ended?: number } = {};
-  const created: { did: Did; replacing: string | null }[] = [];
+  const created: { did: Did; replacing: string | null; issuerOrigin: string | null }[] = [];
   const asked: { input: string; appState: Record<string, unknown>; prompt?: string }[] = [];
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
@@ -76,10 +76,10 @@ function setup(world: World = {}) {
       if (world.consumed === "throws") throw new Error("db down");
       return world.consumed ?? "ok";
     },
-    createSession: async (did, replacing) => {
+    createSession: async (did, replacing, issuerOrigin) => {
       calls.push("create");
       if (world.createFails) throw new Error("db down");
-      created.push({ did, replacing });
+      created.push({ did, replacing, issuerOrigin });
       return { cookieValue: SID, expiresAt: new Date(Date.now() + 1000) };
     },
     sessionMaxAgeS: 2_592_000,
@@ -134,7 +134,7 @@ describe("GET /oauth/callback", () => {
     expect(location(response)).toBe("/did");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(calls).toEqual(["complete st", `consume ${NONCE}`, "create"]);
-    expect(created).toEqual([{ did: DID, replacing: null }]);
+    expect(created).toEqual([{ did: DID, replacing: null, issuerOrigin: "https://pds.unset.test" }]);
     expect(cookies(response)).toEqual([
       CLEAR_NONCE,
       "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
@@ -281,7 +281,17 @@ describe("GET /oauth/callback", () => {
   test("callback_rotates_old_session", async () => {
     const { send, created } = setup();
     await send(`__Host-sid=${"o".repeat(43)}; ${NONCE_COOKIE}`);
-    expect(created).toEqual([{ did: DID, replacing: "o".repeat(43) }]);
+    expect(created).toEqual([{ did: DID, replacing: "o".repeat(43), issuerOrigin: "https://pds.unset.test" }]);
+  });
+
+  test("callback_keeps_no_issuer_that_is_not_a_bare_https_origin", async () => {
+    // ADR 0048: the session row gets the issuer's origin only in the form issuerOrigin returns; anything else is null
+    // and the sign-in still completes.
+    for (const issuer of ["https://198.51.100.1", "https://pds.example:8443", "http://pds.example", "not a url"]) {
+      const { send, created } = setup({ completed: { issuer } });
+      expect(location(await send(NONCE_COOKIE)), issuer).toBe("/did");
+      expect(created, issuer).toEqual([{ did: DID, replacing: null, issuerOrigin: null }]);
+    }
   });
 
   test("callback_db_failure", async () => {
