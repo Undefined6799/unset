@@ -70,9 +70,9 @@
 "POST /login":
   why: "Chooses the account and starts authorization. It does not create a session (interfaces/http/routes/login.ts)."
   input: "Form fields handle, intent and next."
-  output: "303 to /login/continue with nonce and target cookies, or 303 back to /login."
+  output: "303 to /did when a session is present, else 303 to /login/continue with nonce and target cookies, or 303 back to /login."
   errors: "login.handle_invalid, login.handle_not_found, login.identity_unavailable, login.failed, or login followed by the authorize reason."
-  auth: "none"
+  auth: "reads session"
 "GET /login/continue":
   why: "Sends the browser to the authorization URL stored by POST /login (interfaces/http/routes/login.ts)."
   input: "No request body. The target is taken from the continuation cookie."
