@@ -24,7 +24,7 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 | `http://127.0.0.1:8081` | `bind 127.0.0.1`, `respond /health 200`, `respond 404` |
 | imports | `snippets/*.caddy`, then `sites/enabled/*.caddy` |
 
-`deployment/edge/caddyfile.ts` is the reader the edge tests and preflight C18 share. It imports nothing. Its header says it fails on syntax our files do not use, and that dev and local modes exist so C18 reads the files those stacks mount. `edgeSiteProblems` checks `(pds-fonts)` with `fontSnippetProblems` and `fontProblems`. The snippet must equal `PDS_FONTS`. The `{$PDS_HOST}` site's one plain `route` must import it once, before `reverse_proxy`. A site on another host that imports it fails. Outside that snippet, `file_server`, a `match` block inside `header`, and a Content-Security-Policy field other than the one `(strict-csp)` sets are rejected. `{$PDS_HOST}` is accepted inside a directive only as `FONT_SRC` on that replace (`isFontSrc`, `PLACEHOLDER_POSITIONS`). The route and snippet allowlists include `file_server`. A `match` block inside `header` is the `header_match` level, and the only name it allows is `header`.
+No file in the repository reads the Caddyfile format (P1.39e; ADR 0046 decision 5). The hand-written reader `deployment/edge/caddyfile.ts` was deleted; the edge tests and preflight C18 judge what `caddy adapt` prints. `adaptedProblems` in `adapted-rules.ts` checks the PDS fonts with `fontProblems`: the `{$PDS_HOST}` site's route serves font files once, from `FONT_ROOT` (`/etc/caddy/static`), before its upstream, and appends the one `font-src` (`cspAppend`) to an HTML response's Content-Security-Policy. A site on another host that serves them fails. Outside that, a file server, a response matcher and a changed Content-Security-Policy are rejected (`strayProblems`, `touchesCsp`).
 
 | Path | Mounted by | What the file header says it is |
 | --- | --- | --- |
@@ -69,11 +69,11 @@ The reviewed files are `deployment/edge/adapted/prod.generated.json`, `deploymen
 
 ## May import
 
-No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts`, `image-cleanup.ts`, `adapted.ts` and `adapted-rules.ts` have no import. An import from this folder would fail as `not-in-allowed`.
+No `MATRIX` row has `from` under `deployment/edge/`. `image-cleanup.ts`, `adapted.ts` and `adapted-rules.ts` have no import. An import from this folder would fail as `not-in-allowed`.
 
 `edge-not-preflight` (`scripts/lint/.dependency-cruiser.cjs`): no file under `deployment/edge/`, tests included, imports `deployment/preflight/`.
 
-The preflight row may reach `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts` and `deployment/edge/adapted-rules.ts`, and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
+The preflight row may reach `deployment/edge/adapted.ts` and `deployment/edge/adapted-rules.ts`, and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
 
 ## Entry points
 

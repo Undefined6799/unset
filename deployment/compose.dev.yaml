@@ -142,7 +142,7 @@ services:
       - /tmp:uid=65532,gid=65532,mode=1777
     # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
     # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
-    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
+    # site's name and upstream are the ruled values (deployment/edge/adapted-rules.ts DEV_APP).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro

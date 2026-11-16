@@ -185,22 +185,19 @@ const MATRIX = [
   { name: "shared-host-pin", from: { path: "^(shared/host-pin/)" }, to: [{ path: "^$1" }, CORE] },
   // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
   // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
-  // child process, never by import, so no edge to scripts/. Outside itself it may import two files: the edge reader
-  // deployment/edge/caddyfile.ts, so C18 reads the Caddyfile with the parser the edge tests use and no second one
-  // (P1.30r, for P1.30u; architecture record 2026-10-07-p130s-networks-and-caddyfile-reader item 2; Alex's
-  // "Allow import", 2026-10-12T02:16:16Z), and shared/host-pin/index.ts only (P1.33i, DC-2; Alex's typed line
+  // child process, never by import, so no edge to scripts/. Outside itself it may import three files, exactly:
+  // deployment/edge/adapted.ts and adapted-rules.ts, so C18 judges what `caddy adapt` prints with the edge's own
+  // comparison and rules and no second copy (P1.39c, ADR 0046 decision 4; Alex's line "loosen preflight imports for
+  // adapted rules at 9ea2394", 2026-11-15), and shared/host-pin/index.ts only (P1.33i, DC-2; Alex's typed line
   // "yes P1.33i scripts/lint depcruise deployment-preflight row shared/host-pin", 2026-10-14). dependency-cruiser
   // 18.5.0 matches `to.path` as a regular expression against the resolved path (doc/rules-reference.md, `path`).
-  // P1.39c (ADR 0046 decision 4): two more edge files, exactly, so C18 judges what `caddy adapt` prints with the
-  // edge's own comparison (adapted.ts) and rules (adapted-rules.ts) and no second copy; caddyfile.ts leaves this row
-  // when P1.39e deletes the reader.
+  // The Caddyfile reader this row once named (P1.30r) was deleted in P1.39e, and its entry with it.
   // The edge may still never import the preflight (edge-not-preflight).
   {
     name: "deployment-preflight",
     from: { path: "^deployment/preflight/" },
     to: [
       { path: "^deployment/preflight/" },
-      { path: "^deployment/edge/caddyfile\\.ts$" },
       { path: "^deployment/edge/adapted\\.ts$" },
       { path: "^deployment/edge/adapted-rules\\.ts$" },
       { path: "^shared/host-pin/index\\.ts$" },

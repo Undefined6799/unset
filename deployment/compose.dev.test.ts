@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
+import { DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/adapted-rules.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
@@ -1084,7 +1084,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     // The cross reds (P1.37v): the address the edge's dev sites bind and its one trusted proxy, both in
     // deployment/edge (P1.36b, P1.36j), are exactly the addresses this file gives the edge and Newt on newt_edge; the
     // trusted listener is the dev sites' https listener; every zone keys on the client address behind Newt.
-    expect([DEV_EDGE_ADDRESS, DEV_PROXY_ADDRESS]).toEqual([EDGE_ADDRESS, NEWT_ADDRESS]);
+    expect(DEV_PROXY_ADDRESS).toBe(NEWT_ADDRESS);
     expect(DEV_LISTENER).toBe(`${EDGE_ADDRESS}:443`);
     const caddyfile = read("edge/Caddyfile");
     expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);
