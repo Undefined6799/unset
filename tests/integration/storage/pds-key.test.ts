@@ -34,7 +34,7 @@ const pds = (method: string, path: string, init?: RequestInit) => as(keys.pds as
 
 beforeAll(async () => {
   ({ store, keys } = await startObjects([{ name: "pds", actions: PDS_ACTIONS }]));
-  for (const bucket of ["unset-pds", "unset-private"])
+  for (const bucket of ["unset-pds", "unset-private", "unset-pds-2"])
     expect((await as(store.admin, "PUT", `/${bucket}`)).status).toBe(200);
   // The first write into a fresh store allocates its volumes, which takes seconds; pay that here, not in a test.
   expect((await as(store.admin, "PUT", "/unset-private/drafts/x/warm-up", { body: "x" })).status).toBe(200);
@@ -71,8 +71,18 @@ describe("the PDS's key (P2.18p)", () => {
     expect((await pds("GET", "/unset-private?list-type=2")).status).toBe(403);
     expect((await pds("DELETE", "/unset-private/drafts/x/warm-up")).status).toBe(403);
     expect((await as(store.admin, "GET", "/unset-private/drafts/x/warm-up")).status).toBe(200);
+    // A sibling whose name starts with its bucket's: the actions name one bucket, not a prefix.
+    expect((await as(store.admin, "PUT", "/unset-pds-2/blocks/x", { body: "x" })).status).toBe(200);
+    expect((await pds("GET", "/unset-pds-2/blocks/x")).status).toBe(403);
+    expect((await pds("PUT", "/unset-pds-2/blocks/y", { body: "x" })).status).toBe(403);
+    expect((await pds("GET", "/unset-pds-2?list-type=2")).status).toBe(403);
+    // Listing every bucket answers with its own bucket alone (measured on SeaweedFS 4.53: 200, filtered by the
+    // identity's actions), so no other bucket's name reaches it.
+    const all = await pds("GET", "/");
+    expect(all.status).toBe(200);
+    expect([...(await all.text()).matchAll(/<Name>([^<]*)<\/Name>/g)].map((m) => m[1])).toEqual(["unset-pds"]);
     // No bucket of its own, and no removing its bucket.
-    expect((await pds("PUT", "/unset-pds-2")).status).toBe(403);
+    expect((await pds("PUT", "/unset-pds-3")).status).toBe(403);
     expect((await pds("DELETE", "/unset-pds")).status).toBe(403);
     // Nothing without a signature, in its own bucket either.
     expect((await pds("PUT", `/unset-pds/blocks/${DID}/${CID}`, { body: "blob" })).status).toBe(200);

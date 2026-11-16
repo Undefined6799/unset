@@ -53,14 +53,14 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
 
   // P2.18p: the store, by its name and the lock's objects image, on objects_pds alone, which holds exactly the two.
   const STORE_LOCK = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, objects: { ref: "o" } });
-  const withStore = (yaml: string) =>
+  const withStore = (yaml: string, env: Inputs["env"] = "dev", lock = STORE_LOCK) =>
     pdsNeighbours({
-      env: "prod",
+      env,
       source: false,
       root: "/repo",
       lockPath: "/repo/lock",
       compose: compose(yaml),
-      readText: (path: string) => (path === "/repo/lock" ? STORE_LOCK : null),
+      readText: (path: string) => (path === "/repo/lock" ? lock : null),
     } as Inputs);
   const storeStack = (store: string, extra = "", pds = "[edge, objects_pds]") =>
     `services:\n  edge:\n    image: e\n    networks: [edge]\n  pds:\n    image: p\n    networks: ${pds}\n${store}${extra}` +
@@ -94,6 +94,23 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
     expect(withStore(storeStack(STORE, "  web:\n    image: w\n    networks: [objects_pds]\n", "[edge]"))).toEqual([
       "objects_pds holds a service other than the pds and the store",
     ]);
+  });
+
+  test("pds_store_exemption_needs_the_locked_store_outside_prod", () => {
+    const refused = ["objects shares a network with the pds"];
+    // The lock's objects repository at another digest or tag is another image.
+    const digest = (d: string) => `ghcr.io/x/objects@sha256:${d.repeat(64)}`;
+    const pinned = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, objects: { ref: digest("a") } });
+    const at = (ref: string) => storeStack(`  objects:\n    image: ${ref}\n    networks: [objects, objects_pds]\n`);
+    expect(withStore(at(digest("a")), "dev", pinned)).toEqual([]);
+    expect(withStore(at(digest("b")), "dev", pinned)).toEqual(refused);
+    expect(withStore(at("ghcr.io/x/objects:latest"), "dev", pinned)).toEqual(refused);
+    // A lock with no objects entry admits no store.
+    expect(withStore(storeStack(STORE), "dev", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(
+      refused,
+    );
+    // Prod has no exemption: C33 pins no S3 setting there until P5.01.
+    expect(withStore(storeStack(STORE), "prod")).toEqual(refused);
   });
 });
 

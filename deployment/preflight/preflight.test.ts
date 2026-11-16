@@ -3524,6 +3524,15 @@ describe("preflight C33 the PDS's blobs in the object store (P2.18p)", () => {
     // Under prod the store is not pinned yet (P5.01), so the fixture's disk-less prod PDS passes as skipped.
     expect((await check()).lines).toContain("PASS C33 skipped: P5.01 pins the production store");
   });
+
+  test("prod_pds_env_holds_no_store_key_pair", async () => {
+    // P5.01 picks prod's store, so until then the key pair in prod's pds.env is a stray secret (C30).
+    const { lines } = await check({ store: true });
+    expect(failed(lines)).toEqual(["C30"]);
+    expect(lines).toContain(
+      "FAIL C30 PDS_BLOBSTORE_S3_ACCESS_KEY_ID is in the pds env file, which under prod holds only its set",
+    );
+  });
 });
 
 describe("preflight C22 pinned upload bounds (P1.36p)", () => {
@@ -5265,8 +5274,9 @@ networks:
     expect(code).toBe(0);
   });
 
-  test("local_c30_four_names", async () => {
-    // P1.36q red 5: one env per host, so a six-name pds.env under --env local fails, beside C11's and C19's refusals.
+  test("local_c30_refuses_the_mail_urls", async () => {
+    // P1.36q red 5: one env per host, so under --env local a pds.env with the mail URLs beside its set (the four secrets
+    // and, from P2.18p, the store's key pair) fails, beside C11's and C19's refusals.
     const mail = {
       PDS_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
       PDS_MODERATION_EMAIL_SMTP_URL: "smtps://m.test",
@@ -5274,6 +5284,52 @@ networks:
     const { lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...mail } });
     expect(failed(lines)).toEqual(["C11", "C19", "C30"]);
     expect(lines).toContain("FAIL C30 PDS_EMAIL_SMTP_URL is in the pds env file, which under local holds only its set");
+  });
+
+  test("local_pds_store_is_pinned", async () => {
+    // P2.18p: under local, C30 wants the store's key pair in pds.env and C33 pins the rest, as under dev.
+    const bare = await local((text) => text, { store: false });
+    expect(failed(bare.lines)).toEqual(["C30", "C33"]);
+    expect(bare.lines).toContain("FAIL C30 PDS_BLOBSTORE_S3_ACCESS_KEY_ID is missing from the pds env file");
+    expect(bare.lines).toContain("FAIL C33 PDS_BLOBSTORE_S3_BUCKET is not the pinned value");
+    const empty = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: "" } });
+    expect(failed(empty.lines)).toEqual(["C33"]);
+    expect(empty.lines).toContain("FAIL C33 PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY is not set");
+    const elsewhere = await local((text) => text, {
+      pdsEnv: { ...LOCAL_ENV, PDS_BLOBSTORE_S3_ENDPOINT: "http://web:3000" },
+    });
+    expect(failed(elsewhere.lines)).toEqual(["C33"]);
+  });
+
+  test("local_store_beside_the_pds_is_built_from_its_dockerfile", async () => {
+    // P2.18p: under local the store is known by its build of deployment/images/objects.Dockerfile, the only way it
+    // may share objects_pds with the PDS; an image under its name, or another Dockerfile, is refused.
+    const OBJECTS = "deployment/images/objects.Dockerfile";
+    const withStore = (store: string) => (text: string) =>
+      text
+        .replace(
+          "    env_file: ../../unset-dev-env/pds.env\n",
+          "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, objects_pds]\n",
+        )
+        .replace("networks:\n  back: {}\n", `networks:\n  back: {}\n  objects_pds:\n    internal: true\n`)
+        .replace("secrets:\n  db_password:", `${store}secrets:\n  db_password:`);
+    const built = (dockerfile: string) =>
+      `  objects:\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n    networks: [objects_pds]\n`;
+    const files = { [OBJECTS]: "FROM scratch\n", "deployment/images/other.Dockerfile": "FROM scratch\n" };
+    const c17 = async (store: string) =>
+      (
+        await local(withStore(store), {
+          files: { ...LOCAL_FILES, ...files },
+          networks: { ...TABLE, objects_pds: { internal: true, members: ["pds", "objects"] } },
+        })
+      ).lines.find((l) => / C17 /.test(l));
+    expect(await c17(built(OBJECTS))).toBe("PASS C17 ok");
+    expect(await c17(built("deployment/images/other.Dockerfile"))).toBe(
+      "FAIL C17 objects shares a network with the pds",
+    );
+    expect(await c17("  objects:\n    image: o\n    networks: [objects_pds]\n")).toBe(
+      "FAIL C17 objects shares a network with the pds",
+    );
   });
 
   test("local_any_smtp_key_refused", async () => {

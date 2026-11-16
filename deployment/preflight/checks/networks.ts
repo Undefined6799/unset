@@ -77,9 +77,10 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * fails; the edge is the service running the edge image as C25 knows it (runsBuilt).
  * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
  *
- * One exemption, as narrow as it can be (P2.18p, ADR 0041 Decision 5): the service named objects that runs the lock's
- * objects image (or, under local, builds deployment/images/objects.Dockerfile) may share objects_pds, and that network
- * alone, with the PDS, so the PDS reaches the store's S3 port. objects_pds holds exactly those two; the edge, a third
+ * One exemption, as narrow as it can be (P2.18p, ADR 0041 Decision 5): under local and dev only, the service named
+ * objects that runs the lock's objects image (or, under local, builds deployment/images/objects.Dockerfile) may share
+ * objects_pds, and that network alone, with the PDS, so the PDS reaches the store's S3 port. Prod has no exemption,
+ * as C33 pins no S3 setting there until P5.01 picks the production store. objects_pds holds exactly those two; the edge, a third
  * member, or the store on any other PDS network fails. The PDS still trusts the store as a proxy, because @atproto/pds
  * 0.5.51 hard-codes the private ranges in `trust proxy` and listens on every interface (packages/pds/src/index.ts at
  * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
@@ -99,7 +100,9 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   if (pds === undefined) return [];
   const isEdge = (s: Service) => runsBuilt(s, inputs, lock.edge?.ref, EDGE_DOCKERFILE) === "yes";
   const isStore = (s: Service) =>
-    s.name === "objects" && runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
+    inputs.env !== "prod" &&
+    s.name === "objects" &&
+    runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
   const allowed = (s: Service, network: string) =>
     !pds.networks.includes(network) || (network === STORE_NETWORK ? isStore(s) : isEdge(s));
   const problems = services

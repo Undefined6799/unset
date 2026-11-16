@@ -24,46 +24,56 @@ The PDS's disk store (`@atproto/pds` 0.5.51 `src/disk-blobstore.ts` at atproto f
 
 ## 1. Back up first
 
-Back up the database as for any staging pull. Then back up the blobs to a file only you can read:
+Back up the database as for any staging pull. Then back up the blobs into a folder of their own, beside the checkout
+and outside the secrets and env folders, that only uid 1000 can enter:
 
 ```sh
-umask 077
+sudo install -d -m 0700 -o 1000 -g 1000 ../pds-backup
 IMG=$(docker inspect --format '{{.Config.Image}}' "$($DC ps -q objects)")
-docker run --rm --network none --entrypoint tar -v unset-dev_pdsdata:/src:ro -v "$PWD/..":/out "$IMG" \
-  -czf /out/pds-blocks-backup.tgz -C /src blocks
+docker run --rm --network none --user 1000:1000 --entrypoint sh -v unset-dev_pdsdata:/src:ro \
+  -v "$PWD/../pds-backup":/out "$IMG" -c 'umask 077 && tar -czf /out/pds-blocks.tgz -C /src blocks'
 ```
 
-The objects image is used only because it is already on the host, and it has `tar`. It runs as uid 1000, the PDS's
-own uid, so it can read the blobs; the folder above the checkout must be writable by uid 1000 (it is on the staging
-VM, where the deploy user is 1000). The backup holds members' blobs:
-delete it in step 6, and replay any erasure made while it exists.
+The objects image is used only because it is already on the host and has `tar`. It runs as uid 1000, the PDS's own
+uid, so it can read the blobs. The container mounts only the data volume, read-only, and the backup folder, and sets
+its own `umask 077`, so the tarball is mode 0600 inside a 0700 folder (the host's umask does not reach the container).
+The backup holds members' blobs: see step 6 for how long it is kept, and replay any erasure on it while it exists.
 
 ## 2. Make the PDS's key and identity
 
 The key pair is made on the host and written straight into the files that need it. It is never typed, printed or
-committed. The identity goes into `objects_s3` now; the PDS's half waits in a pending file until step 5, because the
-commit before P2.18p refuses those two names in `pds.env` (C30). With `umask 077`, from the checkout:
+committed. The identity is added to `objects_s3` now, beside any identity already there; the PDS's half waits in a
+pending file until step 5, because the commit before P2.18p refuses those two names in `pds.env` (C30). From the
+checkout:
 
 ```sh
-node -e '
+S=../unset-dev-secrets
+sudo cp -p $S/objects_s3 $S/objects_s3.before-pds
+sudo cat $S/objects_s3 | node -e '
 const fs = require("node:fs"), { randomBytes } = require("node:crypto");
+const file = JSON.parse(fs.readFileSync(0, "utf8"));
+if (!Array.isArray(file.identities)) throw new Error("objects_s3 has no identities list");
+if (file.identities.some((i) => i.name === "pds")) throw new Error("objects_s3 already has a pds identity");
 const id = randomBytes(16).toString("hex"), secret = randomBytes(30).toString("base64url");
 const actions = ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"];
-const identities = { identities: [{ name: "pds", credentials: [{ accessKey: id, secretKey: secret }], actions }] };
-fs.writeFileSync("../unset-dev-secrets/objects_s3.new", JSON.stringify(identities), { mode: 0o600 });
-fs.writeFileSync("../unset-dev-env/pds-s3.pending",
+file.identities.push({ name: "pds", credentials: [{ accessKey: id, secretKey: secret }], actions });
+fs.writeFileSync(process.argv[1], JSON.stringify(file), { mode: 0o600 });
+fs.writeFileSync(process.argv[2],
   `PDS_BLOBSTORE_S3_ACCESS_KEY_ID=${id}\nPDS_BLOBSTORE_S3_SECRET_ACCESS_KEY=${secret}\n`, { mode: 0o600 });
-'
-sudo chown 1000:1000 ../unset-dev-secrets/objects_s3.new
-sudo chmod 0400 ../unset-dev-secrets/objects_s3.new
-sudo mv ../unset-dev-secrets/objects_s3.new ../unset-dev-secrets/objects_s3
+' $S/objects_s3.new ../unset-dev-env/pds-s3.pending
+sudo chown 1000:1000 $S/objects_s3.new
+sudo chmod 0400 $S/objects_s3.new
+sudo mv $S/objects_s3.new $S/objects_s3
 npm run dev:down && npm run dev:up
 ```
 
-The store reads the file only at start, and Compose mounts the file itself, so a replaced file is seen only by a new
-container: hence `dev:down` and `dev:up`, not a restart. The three actions are exactly the ones
+The script keeps every identity already in the file and stops, writing nothing, if the file has no identities list or
+already has a `pds` identity. `objects_s3.before-pds` is the old file, with its owner and mode; delete it once the
+switch has been tested. The store reads the file only at start, and Compose mounts the file itself, so a replaced file
+is seen only by a new container: hence `dev:down` and `dev:up`, not a restart. The three actions are exactly the ones
 `tests/integration/storage/pds-key.test.ts` proves: everything the PDS does in `unset-pds`, and denial in
-`unset-private`, for a new bucket, and without a signature. The file has no `Admin` identity (ADR 0050).
+`unset-private`, in a sibling bucket, for a new bucket, and without a signature. The file has no `Admin` identity
+(ADR 0050).
 
 ## 3. Copy, with the PDS stopped
 
@@ -125,18 +135,26 @@ npm run dev:down && npm run dev:up
 The preflight now requires the store's settings (C33) and both key names in `pds.env` (C30). The PDS starts on the
 store. Then:
 
-- open a post or a profile with an image from before the move, and upload a new image, then open it.
+- the owner opens a post or a profile with an image from before the move, uploads a new image, then opens it.
 
-## 6. Clean up, after Alex has tested
+## 6. Clean up, after the owner has tested
 
-Remove the old blobs from the data volume, then the backup:
+Keep one copy of every blob at all times. So first back up the store's volume, with the store stopped, and check that
+the backup reads back; only then remove the old blobs from the PDS's data volume:
 
 ```sh
-$DC stop pds
+$DC stop pds objects
+docker run --rm --network none --user 1000:1000 --entrypoint sh -v unset-dev_objectsdata:/src:ro \
+  -v "$PWD/../pds-backup":/out "$IMG" -c 'umask 077 && tar -czf /out/objects-data.tgz -C /src . && tar -tzf /out/objects-data.tgz >/dev/null && echo readable'
+$DC start objects
 docker run --rm --network none --entrypoint rm -v unset-dev_pdsdata:/src --user 1000:1000 "$IMG" -rf /src/blocks
 $DC start pds
-rm ../pds-blocks-backup.tgz
 ```
+
+Go on to remove the old blobs only if it printed `readable`. Keep `pds-blocks.tgz` until the store's own backups
+exist (P5.04), or delete it once `objects-data.tgz` has been copied where the database backups go; then delete
+`objects_s3.before-pds`. Both tarballs hold members' blobs, so each is under the erasure rule below for as long as it
+exists.
 
 ## Rolling back
 
@@ -153,3 +171,8 @@ The PDS's own account deletion on S3 removes only `blocks/<did>/<cid>` for the C
 logs a failure instead of stopping (`packages/pds/src/actor-store/actor-store.ts` `destroy` at atproto fb16c8e0). It
 never removes `tmp/<did>/` or `quarantine/<did>/`. So every erasure of a PDS account also runs
 `docs/human/runbooks/object-store.md`'s physical removal for all three prefixes, then the forced vacuum.
+
+Until step 6 has run, the old copy is still on the PDS's data volume: an erasure made after the switch also removes
+`blocks/<did>/` and `blocks/quarantine/<did>/` there, in the same kind of container with the volume mounted
+read-write. And while `pds-blocks.tgz` or `objects-data.tgz` exists, each erasure is replayed on it (unpack, remove the
+member's folders, pack again in the backup folder), or the tarball is deleted.

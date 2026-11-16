@@ -180,7 +180,7 @@ async function attempt(world: World) {
       const id = args.at(-1) as string;
       if (id !== PDS_ID || args.length !== 4 || args[1] !== "--format") throw new Error(`unexpected command ${line}`);
       const pairs = world.pdsEnvLines ?? Object.entries(world.pdsEnv);
-      return ok(`${pairs.map(([key]) => `${JSON.stringify(key)}\n`).join("")}\n`);
+      return ok(`${pairs.map(([key, value]) => `${JSON.stringify(key)} ${value === ""}\n`).join("")}\n`);
     }
     if (args[0] === "inspect" && line.includes(".Config.Env")) {
       const id = args.at(-1) as string;
@@ -521,6 +521,17 @@ describe("tests/support/pds-email-token.ts", () => {
             ...w,
             services: { ...w.services, objects: [OBJECTS_ID] },
             pdsEnv: storeEnv(w, { [name]: undefined }),
+          }),
+        ],
+      ),
+      // An empty half reads as unset in the PDS, which then takes credentials from the AWS SDK's default chain.
+      ...["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"].map(
+        (name): [string, (w: World) => World] => [
+          "the PDS's S3 key pair is not set",
+          (w) => ({
+            ...w,
+            services: { ...w.services, objects: [OBJECTS_ID] },
+            pdsEnv: storeEnv(w, { [name]: "" }),
           }),
         ],
       ),

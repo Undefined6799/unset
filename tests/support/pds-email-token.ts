@@ -408,9 +408,9 @@ function checkProcess(env: Map<string, string>): void {
 }
 
 /** No provider that names no host of its own: no KMS, hCaptcha or lexicon authority, and S3 only as the store. */
-function checkProviders(env: Map<string, string>, names: ReadonlySet<string>): void {
+function checkProviders(env: Map<string, string>, names: ReadonlyMap<string, { empty: boolean }>): void {
   const set = (name: string): boolean => (env.get(name) ?? "") !== "";
-  if ([...names].some((name) => /^aws_/i.test(name))) refuse("an AWS_ variable is set for the PDS");
+  if ([...names.keys()].some((name) => /^aws_/i.test(name))) refuse("an AWS_ variable is set for the PDS");
   if (set("PDS_BLOBSTORE_S3_BUCKET")) checkStore(env, names);
   if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
   if (set("PDS_HCAPTCHA_SITE_KEY")) refuse("PDS_HCAPTCHA_SITE_KEY is set, so the PDS calls hCaptcha");
@@ -419,12 +419,16 @@ function checkProviders(env: Map<string, string>, names: ReadonlySet<string>): v
   }
 }
 
-/** S3 only as the local object store: its bucket, endpoint, region and path style exactly, and both key names set. */
-function checkStore(env: Map<string, string>, names: ReadonlySet<string>): void {
+/**
+ * S3 only as the local object store: its bucket, endpoint, region and path style exactly, and both key halves set and
+ * not empty. An empty value reads as unset (@atproto/common envStr, src/env.ts:8-12 at atproto fb16c8e0), and with
+ * both unset @atproto/pds config.ts:78-88 passes no credentials, so the AWS SDK walks its default credential chain.
+ */
+function checkStore(env: Map<string, string>, names: ReadonlyMap<string, { empty: boolean }>): void {
   if (Object.entries(STORE).some(([name, pinned]) => env.get(name) !== pinned)) {
     refuse("the PDS's S3 settings are not the local object store's");
   }
-  if (!STORE_KEY_PAIR.every((name) => names.has(name))) refuse("the PDS's S3 key pair is not set");
+  if (!STORE_KEY_PAIR.every((name) => names.get(name)?.empty === false)) refuse("the PDS's S3 key pair is not set");
 }
 
 /**
@@ -534,19 +538,24 @@ function containerEnv(docker: Docker, id: string, keys: readonly string[]): Map<
  * prints, an unset key prints nothing.
  */
 /**
- * The names in a container's environment and never a value: the format prints only the part before each `=`, as a
- * JSON string on its own line. A name set twice is refused, as containerEnv does.
+ * The names in a container's environment, each with whether its value is empty, and never a value: the format prints
+ * the part before each `=` as a JSON string, then `true` when the entry is exactly that name and `=` (Docker CLI
+ * `split` and `json`; Go text/template variables, `printf` and `eq`). Measured with `docker inspect` on Docker 29.9.2:
+ * `A=` prints `"A" true`, `B=x` and `C==` print false. A name set twice is refused, as containerEnv does.
  */
-function containerEnvNames(docker: Docker, id: string): ReadonlySet<string> {
+function containerEnvNames(docker: Docker, id: string): ReadonlyMap<string, { empty: boolean }> {
   const printed = ok(docker(["inspect", "--format", NAMES_FORMAT, id]), "inspect");
-  const names = printed
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line) => JSON.parse(line) as string);
-  if (new Set(names).size !== names.length) refuse("a container variable is set twice");
-  return new Set(names);
+  const names = new Map<string, { empty: boolean }>();
+  for (const line of printed.split("\n").filter((line) => line !== "")) {
+    const space = line.lastIndexOf(" ");
+    const name = JSON.parse(line.slice(0, space)) as string;
+    if (names.has(name)) refuse("a container variable is set twice");
+    names.set(name, { empty: line.slice(space + 1) === "true" });
+  }
+  return names;
 }
-export const NAMES_FORMAT = '{{range .Config.Env}}{{json (index (split . "=") 0)}}{{println}}{{end}}';
+export const NAMES_FORMAT =
+  '{{range .Config.Env}}{{$n := index (split . "=") 0}}{{json $n}} {{eq . (printf "%s=" $n)}}{{println}}{{end}}';
 
 export const envFormat = (keys: readonly string[]): string =>
   `{{range .Config.Env}}{{if eq (index (split . "=") 0) ${keys.map((key) => JSON.stringify(key)).join(" ")}}}` +
