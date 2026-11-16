@@ -21,10 +21,10 @@ export const c13: Check = {
 /**
  * A setting that turns a PDS protection off or enables dev mode (P1.34k). The one exemption is the confirmation-link
  * switch, and only at the exact value `true` (C16 requires that pair). The key's presence is the denial: @atproto/pds
- * (packages/pds/src/config/env.ts at tag @atproto/pds@0.5.49, 5d6febdd, read 2026-10-26) parses these with envBool,
+ * (packages/pds/src/config/env.ts at tag @atproto/pds@0.5.51, fb16c8e0, read 2026-11-16) parses these with envBool,
  * which treats `true` and `1` as true and `false` and `0` as false (packages/common/src/env.ts). A value PDS currently
  * ignores must not be allowed through, because the compose rule already refuses the key itself. The shipped image is
- * pds 0.4.5049, which runs @atproto/pds 0.5.49; its DISABLE and DEV_MODE keys are the same four as 0.5.37's.
+ * pds 0.4.5051, which runs @atproto/pds 0.5.51; env.ts is unchanged from 0.5.49 (same four DISABLE and DEV_MODE keys).
  */
 export function switchesProtectionOff(name: string, value: string): boolean {
   if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
