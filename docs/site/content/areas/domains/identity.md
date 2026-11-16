@@ -14,6 +14,7 @@ Product rules for identity. The folder does not open a socket. Callers pass an `
 | `domains/identity/index.ts` | Package root. Re-exports the rows below. |
 | `domains/identity/syntax.ts` | `parseDid`, `parseHandle`, `isHandleSyntax`, and the branded `Did` and `Handle` types. |
 | `domains/identity/contract.ts` | `IdentityNetwork` and its outcome types. |
+| `domains/identity/account.ts` | `AccountRepository` (`get`, `confirmAdult`, `acceptTerms`, `finishChat`, `blockUnderage`) and `UnderageBlockRecord`. |
 | `domains/identity/did-doc.ts` | `parseDidDoc`. Not a package export. `resolve-did.ts` is the caller. |
 | `domains/identity/resolve-did.ts` | `createDidResolver`, `IdentityError`. |
 | `domains/identity/resolve-handle.ts` | `resolveHandle`. |
@@ -97,6 +98,7 @@ Re-exports from `index.ts`:
 
 | From | Names |
 | --- | --- |
+| `account.ts` | `AccountRepository`, `UnderageBlockRecord` |
 | `auth/age.ts` | `ageInYears`, `parseBirthDate`, `latestCalendarDay`, `BirthDate` |
 | `auth/gates.ts` | `emailGate`, `cachedRecheckCapS`, `verifiedAfterRefresh`, `onboardingStep`, `requireOnboarded`, and the types `EmailCache`, `EmailGate`, `EmailRefresh`, `Onboarding`, `OnboardingAccount`, `OnboardingDecision`, `OnboardingStep`, `OnboardingVersions` |
 | `contract.ts` | `FetchRequest`, `FetchTarget`, `HttpOutcome`, `IdentityNetwork`, `TxtOutcome` |
