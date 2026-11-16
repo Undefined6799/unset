@@ -12,13 +12,25 @@ import type { Pool, PoolClient } from "./pool.ts";
 import { withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 
+/**
+ * The block's open transaction, as the audit writer sees it: one `query`, nothing else. It cannot commit, roll back,
+ * release the client or reach the pool. `infrastructure/audit`'s `AuditDb` has this shape.
+ */
+export type BlockTransaction = {
+  query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+};
+
 export type AccountRepositoryOptions = {
   /**
-   * Writes the audit row for an under-age block on the block's own transaction, so a failed audit rolls the block
-   * back. The composition root passes it: this folder may not import infrastructure/audit (architecture matrix row
-   * `infrastructure`).
+   * Writes the audit row for an under-age block. The composition root passes it: this folder may not import
+   * infrastructure/audit (architecture matrix row `infrastructure`).
+   *
+   * It must write through `tx` and nowhere else. `tx` is the transaction that holds the block, so a throw here rolls
+   * the block back and a row written through `tx` is rolled back with it. A writer that used a client of its own
+   * would leave an audit row for a block that never happened, or a block with no audit row. No type can enforce
+   * that; `age.audit_failure_rolls_block_back` (tests/integration/http/onboarding.test.ts) pins the rollback.
    */
-  readonly recordUnderageBlock: (tx: PoolClient, did: Did, hosted: boolean) => Promise<UnderageBlockRecord>;
+  readonly recordUnderageBlock: (tx: BlockTransaction, did: Did, hosted: boolean) => Promise<UnderageBlockRecord>;
 };
 
 const STEPS = ["age", "terms", "chat", "done", "blocked_underage"] as const;
@@ -94,7 +106,8 @@ export function createAccountRepository(pool: Pool, options: AccountRepositoryOp
           [did],
         );
         if (rows.length !== 1) return null;
-        return options.recordUnderageBlock(tx, did, hosted);
+        const audit: BlockTransaction = { query: (text, values) => tx.query(text, values) };
+        return options.recordUnderageBlock(audit, did, hosted);
       });
     },
   };
