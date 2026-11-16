@@ -319,7 +319,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V14.2.1 | Sensitive data is only sent to the server in the HTTP message body or header fields, and … | open |  | — |
 | V14.2.2 | The application prevents sensitive data from being cached in server components, such as … | open |  | — |
 | V14.2.3 | Defined sensitive data is not sent to untrusted parties (e.g., user trackers) to prevent … | open |  | — |
-| V14.2.4 | Controls around sensitive data related to encryption, integrity verification, retention … | partial | `test:tests/integration/postgres/grants.test.ts#personal_data_by_column_list`, `doc:docs/human/db/erasure.md` | P5.09 |
+| V14.2.4 | Controls around sensitive data related to encryption, integrity verification, retention … | partial | `test:tests/integration/postgres/grants.test.ts#personal_data_by_column_list`, `test:tests/integration/audit/retention.test.ts#erase_sec_by_did`, `test:tests/integration/audit/retention.test.ts#redact_refuses_unexpired`, `doc:docs/human/db/erasure.md` | P5.09 |
 | V14.3.1 | Authenticated data is cleared from client storage, such as the browser DOM, after the … | open |  | — |
 | V14.3.2 | The application sets sufficient anti-caching HTTP response header fields (i.e. … | open |  | — |
 | V14.3.3 | Data stored in browser storage (such as localStorage, sessionStorage, IndexedDB, or … | partial | `test:interfaces/http/prefs/theme.test.ts#parse_theme_allowlist_only`, `step:P2.03` | P2.03 |
