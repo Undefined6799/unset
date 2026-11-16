@@ -8,18 +8,9 @@ import { join } from "node:path";
  * node:26.12.1-trixie-slim index (registry-1.docker.io, read 2026-10-28). P1.38m: 0.4.5037 was dropped once the
  * 0.4.5049 re-pin (P1.38h) merged, as Alex's line of 2026-10-26T20:20:14Z allowed it only until then. 0.4.5051 ships
  * @atproto/pds 0.5.51 (atproto fb16c8e0, tag @atproto/pds@0.5.51), whose devEngines are unchanged, so it keeps the
- * same builder; 0.4.5049 is dropped once the 0.4.5051 re-pin merges.
+ * same builder. P1.38o: 0.4.5049 was dropped once the 0.4.5051 re-pin (#1611) merged.
  */
 export const PAIRS: Readonly<Record<string, Pair>> = {
-  "0.4.5049": {
-    pds: "0.5.49",
-    oauthProvider: "0.24.3",
-    oauthProviderUi: "0.10.7",
-    builder: {
-      ref: "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec",
-      node: "26.12.1",
-    },
-  },
   "0.4.5051": {
     pds: "0.5.51",
     oauthProvider: "0.25.1",
