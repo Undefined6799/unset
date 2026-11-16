@@ -4,8 +4,8 @@ import { describe, expect, test } from "vitest";
 import { captureLogger } from "./capture-logger.ts";
 import type { HttpKitConfig } from "./config.ts";
 import { type ErrorPage, errorResponse, kitErrorResponse } from "./errors.ts";
-import { defineRoute, type RouteSpec } from "./routes.ts";
-import { createServer, type ServerOptions } from "./server.ts";
+import { defineRoute, type Handler, type RouteSpec } from "./routes.ts";
+import { createServer, type ServerOptions, type SessionGate } from "./server.ts";
 
 const COMMIT = "c".repeat(40);
 const CONFIG: HttpKitConfig = {
@@ -34,8 +34,13 @@ const POLICIES = {
 } as const;
 
 const ok = () => new Response("ok");
-const page = (spec: Partial<RouteSpec> & Pick<RouteSpec, "method" | "path">) =>
-  defineRoute({ group: "app", rateLimit: "page", session: "none", handler: ok, ...spec });
+/** A route with this file's defaults. Its handler never takes the session; the gate tests call defineRoute. */
+type PageSpec = Partial<Omit<RouteSpec, "session" | "handler">> &
+  Pick<RouteSpec, "method" | "path"> & { session?: RouteSpec["session"]; handler?: Handler };
+const page = (spec: PageSpec) =>
+  defineRoute({ group: "app", rateLimit: "page", session: "none", handler: ok, ...spec } as RouteSpec);
+/** A gate that admits everyone as one member (ADR 0045). */
+const admitAlice: SessionGate = async () => ({ did: "did:plc:alice", session: { did: "did:plc:alice" } });
 
 function kit(options: Partial<ServerOptions> = {}) {
   const lines: string[] = [];
@@ -57,6 +62,136 @@ function kit(options: Partial<ServerOptions> = {}) {
   };
   return { server, request, lines, records };
 }
+
+describe("session gate (ADR 0045)", () => {
+  type Member = { did: string; name: string };
+  const alice: Member = { did: "did:plc:alice", name: "alice" };
+  const toSignIn = () => new Response(null, { status: 303, headers: { location: "/login?next=%2Fhome" } });
+  /** Signed in when the request carries `x-test-member`; otherwise the sign-in redirect. */
+  const gate: SessionGate = async ({ request }) =>
+    request.headers.has("x-test-member") ? { did: alice.did, session: alice } : toSignIn();
+  const member = { headers: { "x-test-member": "alice" } };
+
+  test("gate_admits_and_the_handler_gets_the_session", async () => {
+    const home = defineRoute<Member>({
+      method: "GET",
+      path: "/home",
+      group: "app",
+      rateLimit: "page",
+      session: "required",
+      handler: ({ session }) => new Response(`hello ${session.name}`),
+    });
+    const { request } = kit({ routes: [home], gate });
+    const response = await request("/home", member);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("hello alice");
+  });
+
+  test("gate_refusal_is_the_answer_and_the_handler_never_runs", async () => {
+    let ran = false;
+    const handler = () => {
+      ran = true;
+      return ok();
+    };
+    const home = page({ method: "GET", path: "/home", session: "required", handler });
+    const { request } = kit({ routes: [home], gate });
+    const response = await request("/home");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Fhome");
+    // The refusal still leaves through the kit, so it carries the group's security headers.
+    expect(response.headers.get("content-security-policy")).toContain("default-src");
+    expect(ran).toBe(false);
+  });
+
+  test("gate_is_told_the_route_its_parameters_and_the_deadline", async () => {
+    const seen: unknown[] = [];
+    const item = page({ method: "GET", path: "/items/:id", session: "required", deadlineMs: 2000 });
+    const { request } = kit({
+      routes: [item],
+      gate: async ({ route, params, deadline, deadlineAt, request: asked }) => {
+        seen.push(route, params, deadline.aborted, deadlineAt - performance.now() > 1000, new URL(asked.url).pathname);
+        return { did: alice.did, session: alice };
+      },
+    });
+    expect((await request("/items/a%20b")).status).toBe(200);
+    expect(seen).toEqual(["/items/:id", { id: "a b" }, false, true, "/items/a%20b"]);
+  });
+
+  test("gate_runs_only_for_required_routes", async () => {
+    let asked = 0;
+    const routes = [
+      page({ method: "GET", path: "/open", session: "none" }),
+      page({ method: "GET", path: "/own", session: "handler" }),
+    ];
+    const counting: SessionGate = async () => {
+      asked += 1;
+      return toSignIn();
+    };
+    const { request } = kit({ routes, gate: counting });
+    expect((await request("/open")).status).toBe(200);
+    expect((await request("/own")).status).toBe(200);
+    expect(asked).toBe(0);
+  });
+
+  test("cross_site_post_is_denied_before_the_gate", async () => {
+    let asked = 0;
+    const save = page({ method: "POST", path: "/save", session: "required" });
+    const counting: SessionGate = async () => {
+      asked += 1;
+      return { did: alice.did, session: alice };
+    };
+    const { request } = kit({ routes: [save], gate: counting });
+    const headers = { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": "cross-site" };
+    expect((await request("/save", { method: "POST", body: "a=1", headers })).status).toBe(403);
+    expect(asked).toBe(0);
+  });
+
+  test("gate_that_throws_denies", async () => {
+    let ran = false;
+    const handler = () => {
+      ran = true;
+      return ok();
+    };
+    const home = page({ method: "GET", path: "/home", session: "required", handler });
+    const broken = kit({
+      routes: [home],
+      gate: async () => {
+        throw new Error("store down");
+      },
+    });
+    expect((await broken.request("/home")).status).toBe(500);
+    const busy = kit({
+      routes: [home],
+      gate: async () => {
+        throw new AppError("service.unavailable");
+      },
+    });
+    expect((await busy.request("/home")).status).toBe(503);
+    expect(ran).toBe(false);
+  });
+
+  test("admission_without_a_did_denies", async () => {
+    const home = page({ method: "GET", path: "/home", session: "required" });
+    const { request, records } = kit({ routes: [home], gate: async () => ({ did: "", session: alice }) });
+    expect((await request("/home")).status).toBe(500);
+    expect(records().map((r) => r.event)).toContain("ratelimit.no_session");
+  });
+
+  test("session_handler_called_without_the_gate_throws", () => {
+    // The stored handler of a session route cannot be run signed out, even by code that holds the route.
+    const home = defineRoute<Member>({
+      method: "GET",
+      path: "/home",
+      group: "app",
+      rateLimit: "page",
+      session: "required",
+      handler: ({ session }) => new Response(session.name),
+    });
+    const bare = { request: new Request("http://internal/home"), clientIp: null, params: {}, reqId: "r" };
+    const ctx = { ...bare, deadline: AbortSignal.timeout(1000), deadlineAt: performance.now() + 1000 };
+    expect(() => home.handler(ctx)).toThrow(/without the gate's session/);
+  });
+});
 
 describe("health", () => {
   test("health_ok_with_commit", async () => {
@@ -350,9 +485,9 @@ describe("deadline", () => {
     // (here a 300 ms session read) is already gone when the handler starts, not budgeted again from its own start.
     let left = Number.NaN;
     let late = Number.NaN;
-    const session = async () => {
+    const gate: SessionGate = async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
-      return { did: "did:plc:alice" };
+      return { did: "did:plc:alice", session: null };
     };
     const slow = page({
       method: "GET",
@@ -369,7 +504,7 @@ describe("deadline", () => {
         });
       },
     });
-    const { request } = kit({ routes: [slow], session });
+    const { request } = kit({ routes: [slow], gate });
     expect((await request("/slow")).status).toBe(503);
     expect(left).toBeGreaterThan(600);
     expect(left).toBeLessThan(705);
@@ -475,7 +610,7 @@ describe("startup checks", () => {
     const table = (session: "required" | "handler" | "none") =>
       JSON.parse(
         JSON.stringify(
-          kit({ routes: [page({ method: "GET", path: "/x", session })] })
+          kit({ routes: [page({ method: "GET", path: "/x", session })], gate: admitAlice })
             .server.routeTable()
             .find((r) => r.path === "/x"),
         ),
@@ -511,7 +646,7 @@ describe("startup checks", () => {
       mutates: true,
       session: "required",
     });
-    const { server } = kit({ routes: [route] });
+    const { server } = kit({ routes: [route], gate: admitAlice });
     expect(server.routeTable().find((r) => r.path === "/upload")).toEqual({
       method: "POST",
       path: "/upload",
@@ -708,8 +843,7 @@ describe("limits", () => {
 
   test("did_limit_at_route_level", async () => {
     const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "required" });
-    const session = async () => ({ did: "did:plc:alice" });
-    const { request } = kit({ routes: [follow], policies: LIMITED, session });
+    const { request } = kit({ routes: [follow], policies: LIMITED, gate: admitAlice });
     const statuses: number[] = [];
     for (let i = 1; i <= 121; i += 1) {
       const peer = { peer: "10.0.0.2", headers: { ...form, "x-forwarded-for": `9.9.${i >> 8}.${i & 255}` } };
@@ -730,22 +864,37 @@ describe("limits", () => {
     expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
   });
 
-  test("session_route_without_session_denies", async () => {
-    let called = false;
-    const follow = page({
-      method: "POST",
-      path: "/follow",
-      rateLimit: "follow",
-      session: "required",
-      handler: () => {
-        called = true;
-        return new Response();
-      },
-    });
-    const { request, records } = kit({ routes: [follow], policies: LIMITED });
-    expect((await request("/follow", { method: "POST", headers: form, body: "a=1" })).status).toBe(500);
-    expect(called).toBe(false);
-    expect(records().map((r) => r.event)).toContain("ratelimit.no_session");
+  test("session_route_without_a_gate_refuses_to_start", () => {
+    // Fail closed at startup (ADR 0045): with no gate the route could only refuse, so the server never listens.
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "required" });
+    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/needs the server's gate/);
+  });
+
+  test("did_limit_counts_the_gates_did", async () => {
+    // Two members behind one address: each has its own bucket, keyed by the DID the gate admitted.
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "required" });
+    const gate: SessionGate = async ({ request }) => {
+      const did = request.headers.get("x-test-member") ?? "";
+      return { did, session: null };
+    };
+    const { request } = kit({ routes: [follow], policies: LIMITED, gate });
+    const as = (member: string) =>
+      request("/follow", { method: "POST", body: "a=1", headers: { ...form, "x-test-member": member } });
+    for (let i = 0; i < 120; i += 1) expect((await as("did:plc:alice")).status).toBe(200);
+    expect((await as("did:plc:alice")).status).toBe(429);
+    expect((await as("did:plc:bob")).status).toBe(200);
+  });
+
+  test("refused_request_spends_no_did_token", async () => {
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "required" });
+    let signedIn = false;
+    const gate: SessionGate = async () =>
+      signedIn ? { did: "did:plc:alice", session: null } : new Response(null, { status: 303 });
+    const { request } = kit({ routes: [follow], policies: LIMITED, gate });
+    const post = () => request("/follow", { method: "POST", body: "a=1", headers: form });
+    for (let i = 0; i < 200; i += 1) expect((await post()).status).toBe(303);
+    signedIn = true;
+    expect((await post()).status).toBe(200);
   });
 
   test("salt_never_logged", async () => {

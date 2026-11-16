@@ -50,6 +50,17 @@ function load(extra: Record<string, string>) {
 }
 
 describe("legal pages", () => {
+  test("public_pages.cached_for_five_minutes_and_never_vary", async () => {
+    // P1.25v: home and the legal pages read no cookie, so a browser may keep them for five minutes.
+    for (const path of ["/", ...PAGES]) {
+      const response = await get(path);
+      expect(response.headers.get("cache-control"), path).toBe("public, max-age=300");
+      expect(response.headers.get("vary"), path).toBeNull();
+    }
+    // Other public-group pages are not covered: sign-in reads the session.
+    expect((await get("/login")).headers.get("cache-control")).not.toBe("public, max-age=300");
+  });
+
   test("legal.zero_js", async () => {
     const home = await get("/");
     const health = await get("/health");

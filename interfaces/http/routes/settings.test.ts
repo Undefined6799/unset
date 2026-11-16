@@ -10,6 +10,7 @@ import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
+import { appSessionGate } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
@@ -52,7 +53,13 @@ function setup(world: World = {}) {
     pdsIssuer: "https://pds.unset.test",
     log,
   };
-  const server = createServer({ config: CONFIG, routes: settingsRoutes(deps), policies, log });
+  const server = createServer({
+    config: CONFIG,
+    routes: settingsRoutes(deps),
+    policies,
+    log,
+    gate: appSessionGate(deps.open),
+  });
   const get = (path: string) =>
     server.request(
       new Request(`${ORIGIN}${path}`, {
@@ -60,7 +67,7 @@ function setup(world: World = {}) {
       }),
       "10.0.0.1",
     );
-  return { get, opened, checked };
+  return { get, opened, checked, server };
 }
 
 /** The settings side list's links, each with whether it is marked as the current page. */
@@ -106,6 +113,19 @@ describe("GET /settings/profile", () => {
   });
 });
 
+test("head_on_a_gated_page_answers_as_its_get", async () => {
+  // The kit serves HEAD from the GET route, so the gate must find a return path for it too.
+  const head = (signedIn: boolean) => {
+    const headers = { host: "unset.test", "x-forwarded-for": "192.0.2.1", cookie: "__Host-sid=x" };
+    const request = new Request(`${ORIGIN}/settings/account`, { method: "HEAD", headers });
+    return setup({ signedIn }).server.request(request, "10.0.0.1");
+  };
+  expect((await head(true)).status).toBe(200);
+  const refused = await head(false);
+  expect(refused.status).toBe(303);
+  expect(refused.headers.get("location")).toBe("/login?next=%2Fsettings%2Faccount");
+});
+
 describe("GET /settings/account", () => {
   test("settings_account_shows_the_account_and_sign_out", async () => {
     const { get, checked } = setup();
@@ -128,6 +148,17 @@ describe("GET /settings/account", () => {
     expect(elements(main, "form", { method: "post", action: "/logout" })).toHaveLength(1);
     expect(html).not.toContain("getBlob");
     expect(checked).toEqual([DID]);
+  });
+
+  test("settings_account_offers_sign_out_everywhere", async () => {
+    // P2.08j: a second form, with no script and no field, that says it signs this browser out too.
+    const html = await (await setup().get("/settings/account")).text();
+    const main = elements(parse(html), "main")[0];
+    const forms = elements(main, "form", { method: "post", action: "/logout/everywhere" });
+    expect(forms).toHaveLength(1);
+    expect(elements(forms[0], "input")).toEqual([]);
+    expect(html).toContain("Signs out every browser, this one too. You will sign in again.");
+    expect(html).toContain(">Sign out everywhere</button>");
   });
 
   test("settings_account_without_a_recorded_issuer_has_no_account_link", async () => {

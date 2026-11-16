@@ -10,6 +10,7 @@ import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, test } from "vitest";
+import { appSessionGate, type OpenedApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
@@ -22,20 +23,20 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-function setup(world: { signedIn?: boolean; save?: ProfileSave } = {}) {
+function setup(world: { signedIn?: boolean; save?: ProfileSave; session?: Session } = {}) {
   const saved: { did: Did; fields: ProfileEdit }[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
+  const open = async (_request: Request, _deadline: AbortSignal, next: string): Promise<Response | OpenedApp> =>
+    world.signedIn === false
+      ? new Response(null, { status: 303, headers: { location: `/login?${new URLSearchParams({ next })}` } })
+      : { session: world.session ?? SESSION, privacyNotice: false };
   const routes = profileRoutes({
-    open: async (_request, _deadline, next) =>
-      world.signedIn === false
-        ? new Response(null, { status: 303, headers: { location: `/login?${new URLSearchParams({ next })}` } })
-        : { session: SESSION, privacyNotice: false },
     saveProfile: async (did, fields) => {
       saved.push({ did, fields });
       return world.save ?? { kind: "saved" };
     },
   });
-  const server = createServer({ config: CONFIG, routes, policies, log });
+  const server = createServer({ config: CONFIG, routes, policies, log, gate: appSessionGate(open) });
   const post = (body: string, init: { csrf?: boolean } = {}) => {
     const headers = new Headers({
       host: "unset.test",
@@ -102,6 +103,30 @@ describe("POST /profile", () => {
       new URLSearchParams({ displayName: "Alice", next: "https://evil.example/" }).toString(),
     );
     expect(response.headers.get("location")).toBe(`/${DID}`);
+  });
+
+  test("profile_save_is_limited_per_member", async () => {
+    // ADR 0045: the kit counts the gate's DID against the `profile` policy's per-DID entry (limits.ts: 30 at once).
+    const world: { session?: Session } = {};
+    const { post, saved } = setup(world);
+    for (let n = 0; n < 30; n += 1) expect((await post(FORM)).status, `save ${n + 1}`).toBe(303);
+    const refused = await post(FORM);
+    expect(refused.status).toBe(429);
+    expect(saved).toHaveLength(30);
+    // Another member's bucket is their own.
+    const other = `did:plc:${"b".repeat(24)}` as Did;
+    world.session = { ...SESSION, did: other };
+    expect((await post(FORM)).status).toBe(303);
+    expect(saved.at(-1)?.did).toBe(other);
+  });
+
+  test("a signed-out post spends none of a member's saves", async () => {
+    const world: { signedIn?: boolean } = { signedIn: false };
+    const { post, saved } = setup(world);
+    for (let n = 0; n < 40; n += 1) expect((await post(FORM)).status).toBe(303);
+    world.signedIn = true;
+    expect((await post(FORM)).headers.get("location")).toBe(`/${DID}`);
+    expect(saved).toHaveLength(1);
   });
 
   test("a cross-site post is refused before anything is read", async () => {

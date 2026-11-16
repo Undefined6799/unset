@@ -66,11 +66,11 @@ No `main.ts`. The commands and the workflows are on [compose](compose/), [prefli
 
 | Workflow | File | Jobs |
 | --- | --- | --- |
-| `images` | `.github/workflows/images.yml` | `images`, `edge`, `discover`, `scan-image`, `pds-ui`, `scan`, `pins` |
+| `images` | `.github/workflows/images.yml` | `changes`, `images`, `edge`, `discover`, `scan-image`, `pds-ui`, `scan`, `pins` |
 | `publish-images` | `.github/workflows/publish-images.yml` | `publish` |
 | `mirror` | `.github/workflows/mirror.yml` | `scan`, `copy-and-sign` |
 | `sigstore-root` | `.github/workflows/sigstore-root.yml` | `fetch` (`workflow_dispatch` only) |
-| `local-stack` | `.github/workflows/local-stack.yml` | `green`, `red` |
+| `local-stack` | `.github/workflows/local-stack.yml` | `changes`, `green`, `red` |
 
 `pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. With `deployment/pds/Dockerfile` and `source.lock.json` present, that script builds the recipe and writes `pds-ui-proof.json` under `RUNNER_TEMP` only after `verifyInputs` returns. Both files absent, it prints `pds-ui: no candidate recipe or source lock` and returns. The script is under `scripts/`.
 

@@ -7,7 +7,7 @@ import { cachedRecheckCapS, type Did, parseDid } from "@unset/domains-identity";
 import { createPdsCall, type PdsResult, type SessionInfo } from "@unset/infrastructure-pds";
 import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
-import { createSessionStore, type Session } from "@unset/infrastructure-session";
+import { createSessionStore } from "@unset/infrastructure-session";
 import { defineConfig, loadConfig } from "@unset/shared-config";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeEach, expect, inject, test } from "vitest";
@@ -117,13 +117,6 @@ function gate(afterS: number): AppGate {
       store.read({ key: request, cookieValue: request.headers.get("x-test-sid"), deadline }),
     loadAccount: async () => ({ onboarding: "done", termsVersion: "t", privacyVersion: "p" }),
     versions: { terms: "t", privacy: "p" },
-    emailCache: async (session: Session) => {
-      const [row] = await sql<{ email_confirmed: boolean | null; email_checked_at: Date | null }>(
-        "SELECT email_confirmed, email_checked_at FROM app.session WHERE id_hash = $1 AND did = $2",
-        [session.idHash, session.did],
-      );
-      return { confirmed: row?.email_confirmed ?? null, checkedAt: row?.email_checked_at ?? null };
-    },
     refreshEmail: emailRefresh({
       sessionInfo: (owner, deadline, deadlineAt) =>
         answer === undefined

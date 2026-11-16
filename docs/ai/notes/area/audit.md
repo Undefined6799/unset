@@ -10,12 +10,12 @@ importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, audit]
-checked: 2026-10-07
+checked: 2026-11-15
 ---
 # audit
 
 **What it owns.** The TS side of the audit store whose SQL lives in `infrastructure/postgres/migrations/0008` to
-`0010` (see [[postgres]]):
+`0010` and `0016` (see [[postgres]]):
 - the closed lists (`actions.ts`), mirroring the `audit.actions` and `audit.reasons` seeds;
 - `appendAudit`, the only TS way in, which re-checks every field before calling `audit.append`;
 - `rowHash` (`rowHash.ts`) and `verifyChain` (`verify.ts`).
@@ -42,5 +42,10 @@ make a test pass. Chain tests against real Postgres are in `tests/integration/au
   production verifier role exists yet. The weekly verifier (the owner's `full` run, built in P3.22) will log in as a
   `NOINHERIT` member (`WITH INHERIT FALSE, SET TRUE`) and `SET ROLE audit_owner` first, as the chain tests' role does
   today; without it every audit read is denied (`verifier_without_set_role_is_denied`).
+
+- **A person's event needs an actor (ADR 0043, migration 0016).** `audit.append` stores `p_actor_did` in
+  `event_body.actor` and raises `audit_bad_input` for a `user_triggered` or `operator` action with no actor. Only
+  `system` actions may leave it null. `appendAudit` does not repeat the check, so a writer that omits `actorDid`
+  fails at the database. Rows older than 0016 have a null column and the actor only in the body.
 
 **Links.** [[postgres]].

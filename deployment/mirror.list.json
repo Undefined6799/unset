@@ -28,5 +28,10 @@
     "source": "docker.io/fosrl/newt:1.19.0@sha256:0189c8287058b800cca825590e4c39946b3815344ca48678dd0b96616d639319",
     "mirror": "ghcr.io/undefined6799/mirror/newt",
     "stage": "runtime"
+  },
+  {
+    "source": "docker.io/chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0",
+    "mirror": "ghcr.io/undefined6799/mirror/seaweedfs",
+    "stage": "runtime"
   }
 ]

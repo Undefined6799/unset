@@ -108,6 +108,7 @@ beforeAll(async () => {
     { createSignInLock },
     { logoutRoutes },
     { meRoutes },
+    { appSessionGate },
     { policies },
     { config },
     { webTestEnv },
@@ -118,6 +119,7 @@ beforeAll(async () => {
     import(join(HTTP, "sign-in-lock.ts")),
     import(join(HTTP, "routes/logout.ts")),
     import(join(HTTP, "routes/me.ts")),
+    import(join(HTTP, "app-gate.ts")),
     import(join(HTTP, "limits.ts")),
     import(join(HTTP, "config.ts")),
     import(join(HTTP, "test-env.ts")),
@@ -126,6 +128,16 @@ beforeAll(async () => {
   ]);
   remainingSessions = counted;
   const page = testPage(log);
+  // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
+  const open = async (request: Request, deadline: AbortSignal, next: string) => {
+    const { session, clearCookie } = await store.read({ key: request, cookieValue: cookieOf(request), deadline });
+    if (session === null) {
+      const headers = new Headers({ location: `/login?${new URLSearchParams({ next })}`, "cache-control": "no-store" });
+      if (clearCookie) headers.append("set-cookie", sessionClearCookie());
+      return new Response(null, { status: 303, headers });
+    }
+    return { session, privacyNotice: false };
+  };
   server = createServer({
     // The schema arrives through a path import, so its field types do not survive; the value is the web config.
     config: loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN })) as Parameters<
@@ -154,23 +166,7 @@ beforeAll(async () => {
         log,
       }),
       ...meRoutes({
-        // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
-        open: async (request: Request, deadline: AbortSignal, next: string) => {
-          const { session, clearCookie } = await store.read({
-            key: request,
-            cookieValue: cookieOf(request),
-            deadline,
-          });
-          if (session === null) {
-            const headers = new Headers({
-              location: `/login?${new URLSearchParams({ next })}`,
-              "cache-control": "no-store",
-            });
-            if (clearCookie) headers.append("set-cookie", sessionClearCookie());
-            return new Response(null, { status: 303, headers });
-          }
-          return { session, privacyNotice: false };
-        },
+        open,
         verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -181,6 +177,7 @@ beforeAll(async () => {
     ],
     policies,
     log,
+    gate: appSessionGate(open),
   });
 });
 
@@ -254,6 +251,60 @@ test("logout.this_browser keeps the other session and the grant", async () => {
     expect(signedOut.headers.get("location")).toBe("/login?next=%2Fdid");
   }
   expect(JSON.stringify(lines)).not.toContain(owner);
+});
+
+test("logout.everywhere_ends_every_session_of_the_caller_only", async () => {
+  // P2.08j, as the web role against the real store and the definer (migration 0014).
+  mode = "drop";
+  revoked = [];
+  lines.length = 0;
+  const owner = newDid();
+  const stranger = newDid();
+  for (const each of [owner, stranger]) {
+    await tokenSets.set(each, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  }
+  const here = await open(owner);
+  const elsewhere = await open(owner);
+  const theirs = await open(stranger);
+  const chainBefore = await chainRows();
+  const response = await post("/logout/everywhere", here.cookieValue, `did=${stranger}`);
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe("/signed-out");
+  expect(response.headers.getSetCookie()).toContain(sessionClearCookie());
+  // The grant was revoked while its token set was still stored, and then the set and every session went.
+  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
+  expect(await sessionsOf(owner)).toBe(0);
+  expect(await hasToken(owner)).toBe(false);
+  for (const cookie of [here.cookieValue, elsewhere.cookieValue]) {
+    const gone = await get(`/${owner}`, cookie);
+    expect(gone.status).toBe(303);
+    expect(gone.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: `/${owner}` })}`);
+  }
+  // Another member's session and grant are untouched, whatever the body named.
+  expect(await sessionsOf(stranger)).toBe(1);
+  expect(await hasToken(stranger)).toBe(true);
+  expect((await get(`/${stranger}`, theirs.cookieValue)).status).toBe(200);
+  // No audit row and no identity in the log: plan §6 "no user sign-in records".
+  expect(await chainRows()).toBe(chainBefore);
+  expect(lines.map((line) => line.event).filter((event) => event !== "http.request")).toEqual([
+    "auth.logout_everywhere",
+  ]);
+  expect(JSON.stringify(lines)).not.toContain(owner);
+});
+
+test("logout.everywhere_failed_revoke_still_ends_every_session", async () => {
+  mode = "keep";
+  revoked = [];
+  const owner = newDid();
+  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  const here = await open(owner);
+  await open(owner);
+  const response = await post("/logout/everywhere", here.cookieValue, "");
+  expect(response.headers.get("location")).toBe("/signed-out");
+  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
+  expect(await sessionsOf(owner)).toBe(0);
+  expect(await hasToken(owner)).toBe(false);
+  mode = "drop";
 });
 
 test("logout.no_sign_in_records", async () => {

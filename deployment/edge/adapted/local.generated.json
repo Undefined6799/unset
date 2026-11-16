@@ -1,0 +1,888 @@
+{
+  "admin": {
+    "disabled": true,
+    "config": {
+      "persist": false
+    }
+  },
+  "logging": {
+    "logs": {
+      "default": {
+        "writer": {
+          "output": "stderr"
+        },
+        "encoder": {
+          "fields": {
+            "client_ip": {
+              "filter": "delete"
+            },
+            "data>remote_ip": {
+              "filter": "delete"
+            },
+            "remote": {
+              "filter": "delete"
+            },
+            "remote_addr": {
+              "filter": "delete"
+            },
+            "remote_ip": {
+              "filter": "delete"
+            },
+            "request>client_ip": {
+              "filter": "delete"
+            },
+            "request>headers": {
+              "filter": "delete"
+            },
+            "request>remote_ip": {
+              "filter": "delete"
+            },
+            "request>remote_port": {
+              "filter": "delete"
+            },
+            "request>tls": {
+              "filter": "delete"
+            },
+            "request>uri": {
+              "filter": "delete"
+            },
+            "resp_headers": {
+              "filter": "delete"
+            }
+          },
+          "format": "filter",
+          "wrap": {
+            "format": "json"
+          }
+        },
+        "level": "ERROR",
+        "exclude": ["http.log.access", "http.log.access.log0", "http.log.access.log1", "http.stdlib"]
+      },
+      "log0": {
+        "writer": {
+          "output": "stdout"
+        },
+        "encoder": {
+          "fields": {
+            "request>client_ip": {
+              "filter": "delete"
+            },
+            "request>headers": {
+              "filter": "delete"
+            },
+            "request>proto": {
+              "filter": "delete"
+            },
+            "request>remote_ip": {
+              "filter": "delete"
+            },
+            "request>remote_port": {
+              "filter": "delete"
+            },
+            "request>tls": {
+              "filter": "delete"
+            },
+            "request>uri": {
+              "filter": "delete"
+            },
+            "resp_headers": {
+              "filter": "delete"
+            },
+            "user_id": {
+              "filter": "delete"
+            }
+          },
+          "format": "filter",
+          "wrap": {
+            "format": "json"
+          }
+        },
+        "include": ["http.log.access.log0"]
+      },
+      "log1": {
+        "writer": {
+          "output": "stdout"
+        },
+        "encoder": {
+          "fields": {
+            "request>client_ip": {
+              "filter": "delete"
+            },
+            "request>headers": {
+              "filter": "delete"
+            },
+            "request>proto": {
+              "filter": "delete"
+            },
+            "request>remote_ip": {
+              "filter": "delete"
+            },
+            "request>remote_port": {
+              "filter": "delete"
+            },
+            "request>tls": {
+              "filter": "delete"
+            },
+            "request>uri": {
+              "filter": "delete"
+            },
+            "resp_headers": {
+              "filter": "delete"
+            },
+            "user_id": {
+              "filter": "delete"
+            }
+          },
+          "format": "filter",
+          "wrap": {
+            "format": "json"
+          }
+        },
+        "include": ["http.log.access.log1"]
+      }
+    }
+  },
+  "apps": {
+    "http": {
+      "servers": {
+        "srv0": {
+          "listen": ["127.0.0.1:8081"],
+          "read_timeout": 30000000000,
+          "write_timeout": 135000000000,
+          "idle_timeout": 120000000000,
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["127.0.0.1"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "handle": [
+                        {
+                          "handler": "static_response",
+                          "status_code": 200
+                        }
+                      ],
+                      "match": [
+                        {
+                          "path": ["/health"]
+                        }
+                      ]
+                    },
+                    {
+                      "handle": [
+                        {
+                          "handler": "static_response",
+                          "status_code": 404
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "automatic_https": {
+            "skip": ["127.0.0.1"]
+          }
+        },
+        "srv1": {
+          "listen": [":443"],
+          "read_timeout": 30000000000,
+          "write_timeout": 135000000000,
+          "idle_timeout": 120000000000,
+          "routes": [
+            {
+              "match": [
+                {
+                  "host": ["app-host.invalid"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "handle": [
+                        {
+                          "handler": "headers",
+                          "response": {
+                            "deferred": true,
+                            "delete": ["Server", "Via"],
+                            "set": {
+                              "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
+                              "X-Content-Type-Options": ["nosniff"]
+                            }
+                          }
+                        },
+                        {
+                          "handler": "headers",
+                          "response": {
+                            "require": {
+                              "headers": {
+                                "Referrer-Policy": null
+                              }
+                            },
+                            "set": {
+                              "Referrer-Policy": ["no-referrer"]
+                            }
+                          }
+                        },
+                        {
+                          "handler": "subroute",
+                          "routes": [
+                            {
+                              "handle": [
+                                {
+                                  "disable_metrics": true,
+                                  "handler": "rate_limit",
+                                  "rate_limits": {
+                                    "blob_read": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.getBlob"]
+                                        }
+                                      ],
+                                      "max_events": 600,
+                                      "window": 300000000000
+                                    },
+                                    "blob_upload": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.repo.uploadBlob"]
+                                        }
+                                      ],
+                                      "max_events": 60,
+                                      "window": 300000000000
+                                    },
+                                    "firehose": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                        }
+                                      ],
+                                      "max_events": 6,
+                                      "window": 60000000000
+                                    },
+                                    "firehose_hour": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                        }
+                                      ],
+                                      "max_events": 60,
+                                      "window": 3600000000000
+                                    },
+                                    "global": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "max_events": 3000,
+                                      "window": 300000000000
+                                    },
+                                    "identity": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.identity.*",
+                                            "/xrpc/com.atproto.server.describeServer",
+                                            "/.well-known/atproto-did",
+                                            "/xrpc/_health"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 300,
+                                      "window": 300000000000
+                                    },
+                                    "oauth_signin": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "method": ["POST"],
+                                          "path": ["/@atproto/oauth-provider/~api/sign-in"]
+                                        }
+                                      ],
+                                      "max_events": 30,
+                                      "window": 300000000000
+                                    },
+                                    "oauth_token": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"]
+                                        }
+                                      ],
+                                      "max_events": 120,
+                                      "window": 300000000000
+                                    },
+                                    "reset": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.server.requestPasswordReset",
+                                            "/xrpc/com.atproto.server.resetPassword",
+                                            "/xrpc/com.atproto.server.requestEmailConfirmation",
+                                            "/xrpc/com.atproto.server.requestEmailUpdate",
+                                            "/@atproto/oauth-provider/~api/reset-password-request",
+                                            "/@atproto/oauth-provider/~api/reset-password-confirm",
+                                            "/@atproto/oauth-provider/~api/update-email-request",
+                                            "/@atproto/oauth-provider/~api/verify-email-request"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 5,
+                                      "window": 3600000000000
+                                    },
+                                    "session": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.server.createSession"]
+                                        }
+                                      ],
+                                      "max_events": 30,
+                                      "window": 300000000000
+                                    },
+                                    "session_day": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.server.createSession"]
+                                        }
+                                      ],
+                                      "max_events": 300,
+                                      "window": 86400000000000
+                                    },
+                                    "signup": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.server.createAccount",
+                                            "/@atproto/oauth-provider/~api/sign-up"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 10,
+                                      "window": 3600000000000
+                                    },
+                                    "sync": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "not": [
+                                            {
+                                              "path": ["/xrpc/com.atproto.sync.getBlob"]
+                                            },
+                                            {
+                                              "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                            }
+                                          ],
+                                          "path": ["/xrpc/com.atproto.sync.*"]
+                                        }
+                                      ],
+                                      "max_events": 1500,
+                                      "window": 300000000000
+                                    }
+                                  }
+                                },
+                                {
+                                  "handler": "reverse_proxy",
+                                  "headers": {
+                                    "request": {
+                                      "delete": ["X-Forwarded-For", "X-Real-IP", "Forwarded"],
+                                      "set": {
+                                        "X-Forwarded-Host": ["{http.request.host}"],
+                                        "X-Forwarded-Proto": ["https"]
+                                      }
+                                    }
+                                  },
+                                  "transport": {
+                                    "dial_timeout": 5000000000,
+                                    "protocol": "http",
+                                    "response_header_timeout": 130000000000
+                                  },
+                                  "upstreams": [
+                                    {
+                                      "dial": "app-upstream.invalid:2"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": ["pds-host.invalid"]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "handle": [
+                        {
+                          "defaults": ["other"],
+                          "destinations": ["{route_class}"],
+                          "handler": "map",
+                          "mappings": [
+                            {
+                              "input_regexp": "^/xrpc/(_health|[A-Za-z][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)+)(?:\\?[^#]*)?$",
+                              "outputs": ["xrpc:${1}"]
+                            },
+                            {
+                              "input_regexp": "^/oauth/",
+                              "outputs": ["oauth"]
+                            },
+                            {
+                              "input_regexp": "^/\\.well-known/",
+                              "outputs": ["well-known"]
+                            },
+                            {
+                              "input_regexp": "^/health(?:\\?[^#]*)?$",
+                              "outputs": ["health"]
+                            }
+                          ],
+                          "source": "{http.request.orig_uri}"
+                        },
+                        {
+                          "handler": "log_append",
+                          "key": "route_class",
+                          "value": "{route_class}"
+                        },
+                        {
+                          "handler": "headers",
+                          "response": {
+                            "deferred": true,
+                            "delete": ["Server", "Via"],
+                            "set": {
+                              "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
+                              "X-Content-Type-Options": ["nosniff"]
+                            }
+                          }
+                        },
+                        {
+                          "handler": "headers",
+                          "response": {
+                            "require": {
+                              "headers": {
+                                "Referrer-Policy": null
+                              }
+                            },
+                            "set": {
+                              "Referrer-Policy": ["no-referrer"]
+                            }
+                          }
+                        },
+                        {
+                          "handler": "subroute",
+                          "routes": [
+                            {
+                              "handle": [
+                                {
+                                  "disable_metrics": true,
+                                  "handler": "rate_limit",
+                                  "rate_limits": {
+                                    "blob_read": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.getBlob"]
+                                        }
+                                      ],
+                                      "max_events": 600,
+                                      "window": 300000000000
+                                    },
+                                    "blob_upload": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.repo.uploadBlob"]
+                                        }
+                                      ],
+                                      "max_events": 60,
+                                      "window": 300000000000
+                                    },
+                                    "firehose": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                        }
+                                      ],
+                                      "max_events": 6,
+                                      "window": 60000000000
+                                    },
+                                    "firehose_hour": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                        }
+                                      ],
+                                      "max_events": 60,
+                                      "window": 3600000000000
+                                    },
+                                    "global": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "max_events": 3000,
+                                      "window": 300000000000
+                                    },
+                                    "identity": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.identity.*",
+                                            "/xrpc/com.atproto.server.describeServer",
+                                            "/.well-known/atproto-did",
+                                            "/xrpc/_health"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 300,
+                                      "window": 300000000000
+                                    },
+                                    "oauth_signin": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "method": ["POST"],
+                                          "path": ["/@atproto/oauth-provider/~api/sign-in"]
+                                        }
+                                      ],
+                                      "max_events": 30,
+                                      "window": 300000000000
+                                    },
+                                    "oauth_token": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"]
+                                        }
+                                      ],
+                                      "max_events": 120,
+                                      "window": 300000000000
+                                    },
+                                    "reset": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.server.requestPasswordReset",
+                                            "/xrpc/com.atproto.server.resetPassword",
+                                            "/xrpc/com.atproto.server.requestEmailConfirmation",
+                                            "/xrpc/com.atproto.server.requestEmailUpdate",
+                                            "/@atproto/oauth-provider/~api/reset-password-request",
+                                            "/@atproto/oauth-provider/~api/reset-password-confirm",
+                                            "/@atproto/oauth-provider/~api/update-email-request",
+                                            "/@atproto/oauth-provider/~api/verify-email-request"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 5,
+                                      "window": 3600000000000
+                                    },
+                                    "session": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.server.createSession"]
+                                        }
+                                      ],
+                                      "max_events": 30,
+                                      "window": 300000000000
+                                    },
+                                    "session_day": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": ["/xrpc/com.atproto.server.createSession"]
+                                        }
+                                      ],
+                                      "max_events": 300,
+                                      "window": 86400000000000
+                                    },
+                                    "signup": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "path": [
+                                            "/xrpc/com.atproto.server.createAccount",
+                                            "/@atproto/oauth-provider/~api/sign-up"
+                                          ]
+                                        }
+                                      ],
+                                      "max_events": 10,
+                                      "window": 3600000000000
+                                    },
+                                    "sync": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "not": [
+                                            {
+                                              "path": ["/xrpc/com.atproto.sync.getBlob"]
+                                            },
+                                            {
+                                              "path": ["/xrpc/com.atproto.sync.subscribeRepos"]
+                                            }
+                                          ],
+                                          "path": ["/xrpc/com.atproto.sync.*"]
+                                        }
+                                      ],
+                                      "max_events": 1500,
+                                      "window": 300000000000
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "close": true,
+                                  "handler": "static_response",
+                                  "status_code": 400
+                                }
+                              ],
+                              "match": [
+                                {
+                                  "not": [
+                                    {
+                                      "vars_regexp": {
+                                        "{http.request.orig_uri}": {
+                                          "pattern": "^/xrpc/(?:_health|[A-Za-z][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)+)(?:\\?[^#]*)?$"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "path_regexp": {
+                                    "name": "xrpc_malformed",
+                                    "pattern": "(?i)xrpc"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "handler": "static_response",
+                                  "status_code": 404
+                                }
+                              ],
+                              "match": [
+                                {
+                                  "vars_regexp": {
+                                    "{http.request.orig_uri}": {
+                                      "name": "xrpc_admin",
+                                      "pattern": "(?i)^/xrpc/(?:com\\.atproto\\.admin\\.|com\\.atproto\\.temp\\.|tools\\.ozone\\.|com\\.atproto\\.server\\.createinvitecodes?(?:\\?|$))"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "handler": "static_response",
+                                  "status_code": 401
+                                }
+                              ],
+                              "match": [
+                                {
+                                  "header_regexp": {
+                                    "Authorization": {
+                                      "name": "xrpc_basic",
+                                      "pattern": "(?i)^\\s*basic\\b"
+                                    }
+                                  },
+                                  "path_regexp": {
+                                    "name": "xrpc_basic",
+                                    "pattern": "(?i)xrpc"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "handler": "headers",
+                                  "response": {
+                                    "set": {
+                                      "Content-Type": ["font/woff2"]
+                                    }
+                                  }
+                                },
+                                {
+                                  "handler": "file_server",
+                                  "hide": [
+                                    "/etc/caddy/sites/enabled/pds.caddy",
+                                    "/etc/caddy/snippets/log.caddy",
+                                    "/etc/caddy/snippets/pds-fonts.caddy",
+                                    "/etc/caddy/snippets/ratelimit.caddy",
+                                    "/etc/caddy/snippets/route-class.caddy",
+                                    "/etc/caddy/snippets/security-headers.caddy",
+                                    "/etc/caddy/snippets/tls.caddy",
+                                    "/etc/caddy/snippets/upstream.caddy",
+                                    "/etc/caddy/snippets/xrpc-guard.caddy"
+                                  ],
+                                  "root": "/etc/caddy/static"
+                                }
+                              ],
+                              "match": [
+                                {
+                                  "path_regexp": {
+                                    "name": "pds_font",
+                                    "pattern": "^/_unset/fonts/[A-Za-z0-9-]+\\.woff2$"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "handler": "static_response",
+                                  "status_code": 404
+                                }
+                              ],
+                              "match": [
+                                {
+                                  "path": ["/_unset/*"]
+                                }
+                              ]
+                            },
+                            {
+                              "handle": [
+                                {
+                                  "handler": "headers",
+                                  "response": {
+                                    "deferred": true,
+                                    "replace": {
+                                      "Content-Security-Policy": [
+                                        {
+                                          "replace": "$1; font-src https://pds-host.invalid/_unset/fonts/",
+                                          "search_regexp": "^(.+)$"
+                                        }
+                                      ]
+                                    },
+                                    "require": {
+                                      "headers": {
+                                        "Content-Type": ["text/html*"]
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "handler": "reverse_proxy",
+                                  "headers": {
+                                    "request": {
+                                      "delete": ["X-Forwarded-For", "X-Real-IP", "Forwarded"],
+                                      "set": {
+                                        "X-Forwarded-Host": ["{http.request.host}"],
+                                        "X-Forwarded-Proto": ["https"]
+                                      }
+                                    }
+                                  },
+                                  "transport": {
+                                    "dial_timeout": 5000000000,
+                                    "protocol": "http",
+                                    "response_header_timeout": 130000000000
+                                  },
+                                  "upstreams": [
+                                    {
+                                      "dial": "pds-upstream.invalid:1"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "tls_connection_policies": [
+            {
+              "match": {
+                "sni": ["app-host.invalid", "pds-host.invalid"]
+              },
+              "certificate_selection": {
+                "any_tag": ["cert0"]
+              }
+            },
+            {}
+          ],
+          "logs": {
+            "logger_names": {
+              "app-host.invalid": ["log0"],
+              "pds-host.invalid": ["log1"]
+            }
+          }
+        }
+      }
+    },
+    "tls": {
+      "certificates": {
+        "load_files": [
+          {
+            "certificate": "/run/secrets/local_tls_cert",
+            "key": "/run/secrets/local_tls_key",
+            "tags": ["cert0"]
+          }
+        ]
+      }
+    }
+  }
+}

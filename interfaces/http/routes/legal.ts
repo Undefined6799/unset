@@ -2,7 +2,7 @@
 // same slot as `/`: the public CSP allows the shell's stylesheets, and the static CSP does not (shared/http/csp/
 // policies.ts). Zero JS, no cookie, and kept out of search results. `?lang=` is ignored; English only until i18n.
 import { defineRoute, type Route } from "@unset/shared-http";
-import type { PublicPageDeps } from "./home.ts";
+import { cachedPublicPage, type PublicPageDeps } from "./home.ts";
 
 const DOCUMENTS = [
   { document: "terms", path: "/legal/terms", title: "Terms of service" },
@@ -23,13 +23,15 @@ export const legalRoutes = (deps: LegalDeps): Route[] =>
       rateLimit: "default",
       session: "none",
       handler: ({ request }) =>
-        deps.page({
-          group: "public",
-          request,
-          title,
-          body: deps.screens.legal({ document, values: deps.values }),
-          islands: "off",
-          shell: { noindex: true },
-        }),
+        cachedPublicPage(
+          deps.page({
+            group: "public",
+            request,
+            title,
+            body: deps.screens.legal({ document, values: deps.values }),
+            islands: "off",
+            shell: { noindex: true },
+          }),
+        ),
     }),
   );
