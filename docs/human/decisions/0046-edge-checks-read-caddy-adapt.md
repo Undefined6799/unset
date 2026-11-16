@@ -85,7 +85,7 @@ two replaces, built with Go from the same module versions):
 | Messages carry no configured value | Unchanged: fixed words and placeholder names. |
 
 ### What is lost when the reader goes
-Four reader rules judge the source text, and the adapted config no longer carries what they read. Each is replaced,
+Five reader rules judge the source text, and the adapted config no longer carries what they read. Each is replaced,
 not kept, and the replacement is a different kind of check:
 - **Where a placeholder is written.** The reader fails a `{$NAME}` outside its one position and an upstream written
   as a literal. After adapting, a placeholder and a literal with the same value are the same text, so the new rule
@@ -102,6 +102,13 @@ not kept, and the replacement is a different kind of check:
   a new directive is caught in two ways: the rules fail a module, matcher or key they do not name, and the deploy
   fails unless the adapted config equals the reviewed one. A directive that adapts only to keys the rules already
   allow reaches review as a diff of the saved JSON and is stopped there by a person, not by a machine.
+- **Which names a placeholder may read.** The reader fails a `{$NAME}` for any name but the five. Caddy replaces
+  `{$NAME}` from its process environment before it lexes, and an unset name with no default becomes nothing (v2.11.7
+  `caddyconfig/caddyfile/parse.go:63-64`, `replaceEnvVars` `:67-108`). C18 and the image test hand `caddy adapt` the
+  five names only, so a placeholder for a sixth adapts to the same config whatever the running edge would put there.
+  The new rule is on the other side (P1.39e): C18 fails when the edge service's environment, from `environment` or an
+  env file, holds any name beside the five. The running edge then reads exactly what adapt read, and a placeholder
+  for another name is empty in both.
 
 ### Who reviews the saved JSON
 A change to `deployment/edge/adapted/` is a trusted-base change: Alex reads the diff before merge, and the
