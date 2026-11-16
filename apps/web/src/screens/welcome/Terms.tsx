@@ -2,6 +2,7 @@
 // invite-country rule is on; the same sentence is in the terms.
 import { Button, Checkbox, Link, safeHref } from "@unset/shared-ui";
 import { WELCOME } from "./messages.ts";
+import { SignOut } from "./SignOut.tsx";
 
 export type TermsProps = {
   readonly countryRule: boolean;
@@ -39,6 +40,7 @@ export function Terms({ countryRule, next, termsVersion, privacyVersion }: Terms
         {countryRule ? <Checkbox label={WELCOME.country} name="country" value="yes" /> : null}
         <Button type="submit">{WELCOME.continue}</Button>
       </form>
+      <SignOut />
     </>
   );
 }

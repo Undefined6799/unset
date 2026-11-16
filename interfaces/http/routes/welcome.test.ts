@@ -23,7 +23,7 @@ import { type AppGate, appSessionGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { elements } from "../web/fixtures/html.ts";
+import { elements, textContent } from "../web/fixtures/html.ts";
 import { testPage } from "../web/fixtures/page.ts";
 import { meRoutes } from "./me.ts";
 import { settingsRoutes } from "./settings.ts";
@@ -517,6 +517,35 @@ test("completed_onboarding_returns_to_the_profile_resolver", async () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/did");
   }
+});
+
+describe("signing out from onboarding", () => {
+  test("welcome.every_held_step_offers_sign_out", async () => {
+    // P2.12i: a member held at a step must be able to leave it. Each page with a session posts to the one sign-out
+    // route; the blocked page has no session left, so it offers none (welcome_screens_structure).
+    const terms: Row = { onboarding: "terms", termsVersion: null, privacyVersion: null, ageConfirmedAt: "confirmed" };
+    const chat: Row = {
+      onboarding: "chat",
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+      ageConfirmedAt: "confirmed",
+    };
+    const pages = [
+      { name: "age", row: null, path: "/welcome/age", init: undefined },
+      { name: "age confirm", row: null, path: "/welcome/age", init: post("day=1&month=1&year=2000") },
+      { name: "terms", row: terms, path: "/welcome/terms", init: undefined },
+      { name: "chat", row: chat, path: "/welcome/chat", init: undefined },
+    ];
+    for (const page of pages) {
+      const response = await setup({ row: page.row }).send(page.path, page.init);
+      expect(response.status, page.name).toBe(200);
+      const main = elements(parse(await response.text()), "main")[0];
+      const forms = elements(main, "form", { action: "/logout", method: "post" });
+      expect(forms, page.name).toHaveLength(1);
+      const submit = elements(forms[0], "button", { type: "submit" });
+      expect(submit.map(textContent), page.name).toEqual(["Sign out"]);
+    }
+  });
 });
 
 describe("welcome screens", () => {
