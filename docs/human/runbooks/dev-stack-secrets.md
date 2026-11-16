@@ -68,6 +68,7 @@ keeps every other host account out:
 | `pg_web_password` (also) | `65532:65532` | web | the same file: web logs in as `web` with it (P2.04w) |
 | `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
+| `objects_s3` | `1000:1000` | objects | the object store's identities, with no Admin identity (P2.18s) |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -98,6 +99,18 @@ The legal pages' three values are not secrets and live in `deployment/compose.de
 `contact@staging.unset.sh` and `support@staging.unset.sh`, Alex's staging values (P1.36c). The preflight's C32 fails
 `--env dev` if any value starts with `[to fill:` again (P1.38d), naming the service and keys. A change to them is a
 PR.
+
+## The object store's identities (P2.18s; ADR 0041 Decision 3, ADR 0050)
+
+`objects_s3` is SeaweedFS's identities file (`weed server -s3.config`), read only by the `objects` service, which runs
+as `1000`. Until a process gets its own key (the draft store in P2.18, the PDS in P2.18p), it holds no identity at all,
+so the store denies every request:
+
+`printf '{"identities":[]}' > objects_s3`, then `chown 1000:1000` and `chmod 0400` as above.
+
+Never add an identity with the `Admin` action: buckets are created by the stack wrapper through the store's own shell
+(`deployment/preflight/objects-buckets.ts`), and removal goes through that shell too (ADR 0050 Decision 1). A file
+that is missing or empty stops the store at start; one with no identities starts it and refuses every request.
 
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
@@ -399,7 +412,7 @@ npm run dev:source:up
 npm run dev:source:down
 ```
 
-It builds the five first-party images on the VM, so the preflight's last line says `SOURCE built from the checkout,
+It builds the six first-party images (the object store joined at P2.18s, ADR 0041) on the VM, so the preflight's last line says `SOURCE built from the checkout,
 unsigned`. Builds fill the disk over time (the reason rule 23 forbade them); when `df -h /` runs low, prune the
 builder cache with `docker builder prune -f`, which touches no volume. Commit and push what you tried afterwards;
 main still changes only by PR.

@@ -62,7 +62,7 @@ The `deployment-preflight` row. dependency-cruiser 18.7.0 is pinned in `package.
 
 | From | May reach |
 | --- | --- |
-| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, npm package `yaml` (2.9.1), Node built-ins. |
+| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, npm package `yaml` (2.9.1), Node built-ins. |
 
 `stack.ts` imports `hostWalk`, `localDockerHost` and `UsageError` from `@unset/shared-host-pin`. `checks/build.ts` and `checks/secrets.ts` import `resolveChecked` and the walk reasons from the same package index.
 

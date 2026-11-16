@@ -1,4 +1,4 @@
-// P1.37y (ADR 0036): compose.dev.source.yaml is compose.dev.yaml with its five first-party services built from the
+// P1.37y (ADR 0036): compose.dev.source.yaml is compose.dev.yaml with its first-party services (six since P2.18s, ADR 0041) built from the
 // checkout, as compose.local.yaml builds them, and nothing else changed. Derived here from the two files, so the dev
 // file stays the one place a dev service is written.
 import { readFileSync } from "node:fs";
@@ -10,8 +10,9 @@ const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const parse = (file: string): Compose => parseCompose(read(file), file);
 const SOURCE = "compose.dev.source.yaml";
-/** The services staging builds (ADR 0036 Decision 1); Newt is run from the mirror as under dev. */
-const BUILT = ["postgres", "migrate", "pds", "edge", "web"];
+/** The first-party services staging builds (ADR 0036 Decision 1), objects among them since P2.18s; Newt is run from
+ * the mirror as under dev. */
+const BUILT = ["postgres", "migrate", "pds", "edge", "web", "objects"];
 /** A file's YAML without its comment lines: the header differs by design, the services may not. */
 const code = (text: string): string =>
   text

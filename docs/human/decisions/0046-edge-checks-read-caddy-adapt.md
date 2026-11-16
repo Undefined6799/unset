@@ -1,8 +1,10 @@
 # 0046 — The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile
 
-Status: Proposed, 2026-11-15. Not accepted. Decisions 1 and 2 add checks and remove none, and land with this record
-(P1.39a). Decision 5 removes a trusted reader and is a loosening: it waits for Alex's typed line on a named commit,
-after the coordinator's review.
+Status: Accepted by Alex, 2026-11-16 02:15:57Z, against f6e6789 (his line "loosen C18 reader call and accept ADR 0046
+Undefined6799/unset#1627 at f6e6789", typed in the project chat after the coordinator's review of that commit).
+Decisions 1 to 4 landed with P1.39a to P1.39c. Decision 5, the loosening, landed in two parts under P1.39e: C18
+stopped calling the reader in #1627, and the reader, its tests and its dependency-cruiser entry were deleted in the
+pull request that records this status.
 
 ## Context
 `deployment/edge/caddyfile.ts` (1,210 lines, with 1,628 lines of tests in four files) is our own reader of the
