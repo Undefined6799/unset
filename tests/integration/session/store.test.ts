@@ -113,10 +113,10 @@ describe("session store", () => {
     expect(cookieValue).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const raw = Buffer.from(cookieValue, "base64url");
     // Every column web may read, by name: web holds column grants only, so `SELECT *` is refused as soon as the
-    // table has a column web was not granted (issuer_origin, between migrations 0019 and 0020).
+    // table has a column web was not granted.
     const rows = await sql<Record<string, unknown>>(
-      "SELECT id_hash, did, created_at, last_seen_at, absolute_expires_at, email_confirmed, email_checked_at " +
-        "FROM app.session WHERE did = $1",
+      "SELECT id_hash, did, created_at, last_seen_at, absolute_expires_at, email_confirmed, email_checked_at, " +
+        "issuer_origin FROM app.session WHERE did = $1",
       [DID_A],
     );
     const row = rows.find((r) => (r.id_hash as Buffer).equals(sha256(raw)));
@@ -142,6 +142,56 @@ describe("session store", () => {
     expect(read.session?.emailConfirmed).toBeNull();
     expect(read.session?.emailCheckedAt).toBeNull();
     expect(read.session?.idHash.equals(sha256(Buffer.from(cookieValue, "base64url")))).toBe(true);
+  });
+
+  test("session.issuer_origin_roundtrip", async () => {
+    const { store, request } = setup();
+    const create = (issuerOrigin?: string | null) =>
+      withClient(web, null, (db) => store.create(db, DID_A, issuerOrigin === undefined ? {} : { issuerOrigin }));
+    const readBack = async (created: { cookieValue: string }) =>
+      (await store.read(request(created.cookieValue))).session?.issuerOrigin;
+    // Written once at creation as web (INSERT on the column, migration 0020) and returned by the read (SELECT).
+    expect(await readBack(await create("https://pds.example.com"))).toBe("https://pds.example.com");
+    expect(await readBack(await create("https://xn--bcher-kva.example"))).toBe("https://xn--bcher-kva.example");
+    // No origin, and a session row from before the column, read as null.
+    expect(await readBack(await create())).toBeNull();
+    expect(await readBack(await create(null))).toBeNull();
+    expect((await store.read(request(await insertSession(DID_A)))).session?.issuerOrigin).toBeNull();
+  });
+
+  test("session.issuer_origin_outside_the_column_check_is_stored_as_null", async () => {
+    const { store, request } = setup();
+    // Each of these would fail migration 0019's check; the session is still created, without the origin.
+    const refused = [
+      "http://pds.example.com",
+      "https://pds.example.com:8443",
+      "https://pds.example.com/",
+      "https://PDS.example.com",
+      "https://under_score.example.com",
+      "https://user@pds.example.com",
+      `https://${"a".repeat(254)}`,
+      "https://pds.example.com\n",
+      "",
+    ];
+    for (const issuerOrigin of refused) {
+      const { cookieValue } = await withClient(web, null, (db) => store.create(db, DID_A, { issuerOrigin }));
+      const read = await store.read(request(cookieValue));
+      expect(read.session?.did).toBe(DID_A);
+      expect(read.session?.issuerOrigin).toBeNull();
+    }
+  });
+
+  test("session.issuer_origin_is_never_updated_by_web", async () => {
+    const { store } = setup();
+    const { cookieValue } = await withClient(web, null, (db) =>
+      store.create(db, DID_A, { issuerOrigin: "https://pds.example.com" }),
+    );
+    const idHash = sha256(Buffer.from(cookieValue, "base64url"));
+    await expect(
+      withClient(web, null, (db) =>
+        db.query("UPDATE app.session SET issuer_origin = 'https://evil.example' WHERE id_hash = $1", [idHash]),
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
   });
 
   test("session.rotation", async () => {
