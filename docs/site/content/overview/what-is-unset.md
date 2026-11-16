@@ -46,7 +46,7 @@ Routes are `interfaces/http/routes.manifest.json`.
 | `GET /legal/terms`, `/legal/privacy`, `/legal/domains` | English document plus the placeholder banner. `interfaces/http/routes/legal.ts` |
 | `GET /login`, `POST /login`, `GET /login/continue` | Sign-in form, then the handoff. `interfaces/http/routes/login.ts` |
 | `GET /oauth/callback` | Return from the authorization server. `interfaces/http/routes/oauth-callback.ts` |
-| `POST /logout`, `GET /signed-out` | Sign-out routes. `interfaces/http/routes/logout.ts` |
+| `POST /logout`, `POST /logout/everywhere`, `GET /signed-out` | Sign-out routes. `interfaces/http/routes/logout.ts` |
 | `GET /verify-email`, `POST /verify-email/reconsent` | Confirmed-email page. `interfaces/http/routes/verify-email.ts` takes `sessionInfo` and has no mail sender in its dependencies. |
 | `GET /welcome`, `GET` and `POST /welcome/age`, `/welcome/terms`, `/welcome/chat`, `GET /welcome/blocked` | Onboarding. `interfaces/http/routes/welcome.ts`. Screens are `apps/web/src/screens/welcome/`. `ChatLater.tsx` shows the heading "Chat comes later". |
 | `GET /did`, `GET /me` | `303` to `/<DID>` of the session. `interfaces/http/routes/me.ts` |
@@ -54,7 +54,7 @@ Routes are `interfaces/http/routes.manifest.json`.
 | `POST /profile` | Saves the session's own profile fields, read by `domains/profile`. The DID comes from the session, never the request. `interfaces/http/routes/profile.ts` |
 | `GET /settings` | 303 to `/settings/profile`, keeping the query. `interfaces/http/routes/settings.ts` |
 | `GET /settings/profile` | Heading `Profile` inside the settings side list, and a card titled `Set up your profile`. The card body says the editor is not ready and the profile stays private. `apps/web/src/screens/settings/SettingsProfile.tsx` |
-| `GET /settings/account` | Heading `Account` inside the settings side list: handle, DID, a PDS link when the recorded issuer can be read, and sign out. An unchecked handle shows as unavailable. `apps/web/src/screens/settings/SettingsAccount.tsx` |
+| `GET /settings/account` | Heading `Account` inside the settings side list: handle, DID, a PDS link when the recorded issuer can be read, sign out, and sign out everywhere. An unchecked handle shows as unavailable. `apps/web/src/screens/settings/SettingsAccount.tsx` |
 | `POST /prefs/theme` | Theme form. `interfaces/http/routes/prefs.ts` |
 | `GET /health`, `GET /assets/:file`, `GET /oauth-client-metadata.json`, `GET /oauth/jwks.json`, `GET /.well-known/security.txt` | Listed in the manifest. `security.txt` is built in `interfaces/http/security-txt.ts`. |
 
