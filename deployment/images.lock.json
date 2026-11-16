@@ -30,9 +30,9 @@
     "verify": "cosign-keyless"
   },
   "objects": {
-    "ref": "ghcr.io/undefined6799/unset/objects@sha256:f4c9d04156c0245f9ce8161069eb93edb4f9051d4c18240f6fd3385fe1f99881",
+    "ref": "ghcr.io/undefined6799/unset/objects@sha256:7aeb369798be2303676c56614c6de8f5c7128979e95c32a37296d95f5afa6d7c",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "0e5b0324a13fa2f9e6a4a9c4295d5c116078dffd",
     "verify": "cosign-keyless"
   },
   "newt": {

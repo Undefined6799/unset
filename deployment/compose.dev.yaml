@@ -234,7 +234,7 @@ services:
   # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
   # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
   objects:
-    image: ghcr.io/undefined6799/unset/objects@sha256:f4c9d04156c0245f9ce8161069eb93edb4f9051d4c18240f6fd3385fe1f99881
+    image: ghcr.io/undefined6799/unset/objects@sha256:7aeb369798be2303676c56614c6de8f5c7128979e95c32a37296d95f5afa6d7c
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
