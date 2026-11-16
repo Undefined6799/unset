@@ -736,9 +736,10 @@ describe("preflight", () => {
     ] as const) {
       expect(await expectOnly("C8", { pdsEnv: { [name]: value } })).toBe(`FAIL C8 ${name} is set in pds`);
     }
-    // In any service, not only the PDS.
-    const edgeEnv = COMPOSE.replace("      ACME_EMAIL: edge@example.test", "$&\n      PDS_RATE_LIMIT_BYPASS_KEY: x");
-    await expectOnly("C8", { compose: edgeEnv });
+    // In any service, not only the PDS (web here: C18 refuses any name on the edge beside its own, P1.39e).
+    const webEnv = COMPOSE.replace("      FINGERPRINT_CHECK: arachnid", "$&\n      PDS_RATE_LIMIT_BYPASS_KEY: x");
+    expect(webEnv).not.toBe(COMPOSE);
+    await expectOnly("C8", { compose: webEnv });
   });
 
   // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
@@ -3401,13 +3402,12 @@ describe("preflight C32 (P1.38d)", () => {
       expect(await expectOnly("C32", withWeb(env, PLACEHOLDERS), env), env).toBe(
         "FAIL C32 service=web still a placeholder to fill: SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
       );
-      // In any service.
-      const edge = (env === "dev" ? DEV : COMPOSE).replace(
-        "      ACME_EMAIL: edge@example.test",
-        '$&\n      CONTACT: "[to fill: CONTACT]"',
-      );
-      expect(await expectOnly("C32", { compose: edge, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
-        "FAIL C32 service=edge still a placeholder to fill: a name",
+      // In any service (the PDS here: C18 refuses any name on the edge beside its own, P1.39e).
+      const base = env === "dev" ? DEV : COMPOSE;
+      const pds = base.replace(/^ {6}PDS_HOSTNAME: .*$/m, '$&\n      CONTACT: "[to fill: CONTACT]"');
+      expect(pds).not.toBe(base);
+      expect(await expectOnly("C32", { compose: pds, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
+        "FAIL C32 service=pds still a placeholder to fill: a name",
       );
     }
   });
@@ -5727,6 +5727,54 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
         expect(result.lines.join("\n")).not.toContain(sentinel);
         expect(edgeCalls(calls), `${name}=${value}`).toEqual([]);
       }
+    }
+  });
+
+  test("c18_dev_values_are_judged_before_any_run", async () => {
+    // The same under dev, where the app's two values are also the ruled ones exactly.
+    const dev = { pdsEnv: DEV_ENV };
+    const edits: [string, string][] = [
+      ["      APP_UPSTREAM: web:8080\n", "      APP_UPSTREAM: web:8081\n"],
+      ["      APP_UPSTREAM: web:8080\n", ""],
+      ["      APP_HOST: staging.unset.sh\n", '      APP_HOST: "staging.unset.sh c18 sentinel!"\n'],
+    ];
+    for (const [from, to] of edits) {
+      expect(DEV).toContain(from);
+      const { run, calls } = edgeRun(() => null);
+      const result = await check({ ...dev, compose: DEV.replace(from, to) }, "dev", { run });
+      expect(result.lines.find((l) => / C18 /.test(l)) ?? "", to).toMatch(/^FAIL C18 /);
+      expect(result.lines.join("\n")).not.toContain("c18 sentinel!");
+      expect(edgeCalls(calls), to).toEqual([]);
+    }
+  });
+
+  test("c18_edge_environment_holds_only_its_placeholders", async () => {
+    // Caddy replaces `{$NAME}` from its process environment before it lexes, and an unset name with no default
+    // becomes nothing (v2.11.7 caddyconfig/caddyfile/parse.go:63-64, replaceEnvVars :67-108). `caddy adapt` is given
+    // the five names only, so a name beside them on the edge service would be read by the running edge and by no
+    // check: a placeholder for it adapts to the reviewed config and expands at run time. The reader refused such a
+    // placeholder; since P1.39e C18 refuses the name, from `environment` or an env file, before any run.
+    const reason = "FAIL C18 the edge's environment sets a name other than its five placeholders";
+    const line = "      PDS_UPSTREAM: pds:3000\n";
+    const extra = `${line}      EXTRA_UPSTREAM: evil:9\n`;
+    const cases: [Parameters<typeof check>[0], "prod" | "dev"][] = [
+      [{ compose: COMPOSE.replace(line, extra) }, "prod"],
+      [{ compose: DEV.replace(line, extra), pdsEnv: DEV_ENV }, "dev"],
+      [
+        {
+          compose: COMPOSE.replace(
+            "    environment:\n      PDS_HOST:",
+            "    env_file: ../../unset-dev-env/pds.env\n$&",
+          ),
+        },
+        "prod",
+      ],
+    ];
+    for (const [stackOf, env] of cases) {
+      const { run, calls } = edgeRun(() => null);
+      const result = await check(stackOf, env, { run });
+      expect(result.lines.find((l) => / C18 /.test(l))).toBe(reason);
+      expect(edgeCalls(calls)).toEqual([]);
     }
   });
 

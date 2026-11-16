@@ -11,7 +11,7 @@
 // 1 and 2). Every config rule still applies to what it serves; only where the image's identity comes from changes.
 import { lstatSync, readdirSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
-import { DEV_APP } from "../../edge/adapted-rules.ts";
+import { DEV_APP, ENV_NAMES } from "../../edge/adapted-rules.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
@@ -504,6 +504,16 @@ function composeRules(inputs: Inputs): Outcome {
 }
 
 /**
+ * The edge's environment, from `environment` and env files alike, holds no name beside the five its config reads
+ * (P1.39e). Caddy replaces `{$NAME}` from its process environment before it lexes, and an unset name with no default
+ * becomes nothing (v2.11.7 caddyconfig/caddyfile/parse.go:63-64, replaceEnvVars :67-108). `caddy adapt` below is
+ * handed the five names only, so a placeholder for any other name adapts to the same config whatever the running
+ * edge would put there. With no other name on the service, the running edge reads what adapt read. The reader
+ * refused the placeholder; this refuses the name. Fixed words: the name comes from a file.
+ */
+const FOREIGN_NAME = "the edge's environment sets a name other than its five placeholders";
+
+/**
  * C18: the compose rules first, then Caddy's own reading of the edge's files in the edge image
  * (edge-adapt.ts). It pulls or builds that image, so it is a network check with its own deadline.
  */
@@ -517,6 +527,7 @@ export const c18: Check = {
     const edge = inputs.compose.services.find((service) => service.name === "edge");
     const env = inputs.serviceEnv.get("edge");
     if (edge === undefined || env === undefined) return missing("the edge service");
+    if (env.names().some((name) => !Object.hasOwn(ENV_NAMES, name))) return fail(FOREIGN_NAME);
     const image = adaptImage(inputs, edge, earlier ?? new Map());
     if ("pass" in image) return image;
     const binds = caddyBinds(edge);
