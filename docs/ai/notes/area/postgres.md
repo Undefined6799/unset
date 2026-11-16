@@ -29,7 +29,8 @@ checked: 2026-11-16
   caller holds a copy of them (P1.11a). `readUntilAbort` ends a client whose query outlives its signal, and `ping`
   is the readiness probe built on it (P1.04x). `tx.ts`: the only place a transaction opens.
 - `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
-  lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
+  lock lets exactly one caller through; only a SHA-256 of the token is stored, and `app.sweep_single_use()`
+  (P1.16w, migration 0023; EXECUTE for `web` and `retention`) removes rows a day past expiry; web runs it hourly.
 - `migrations/0021_erase_audit_grants.sql`, `0022_erase_did.sql` (P3.07g, P3.07k, brought forward 2026-11-15):
   `core.erase_did(did, why)` deletes every row naming a DID, one hand-written statement per erasure-registry row, calls
   `audit.erase_subject` and appends `account.erased` with no DID. No role is granted it; an owner runs it as migrator

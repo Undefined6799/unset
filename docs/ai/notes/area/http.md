@@ -51,10 +51,11 @@ PLC, DNS and handle domains only; `main.ts` passes none), as `tests/integration/
 a signed-in member through the composed server; the runtime image copies each package the server imports, and
 `web_image_boots_to_config_check` fails when one is missing.
 
-**Expiry sweeps (P2.03s).** `jobs/sweeps.ts` runs the session store's and the OAuth state store's `sweep` once when
-`boot()` finishes and then hourly, on an unref'd timer that the first close hook stops. web runs them because web is
-the role that may delete from `app.session` and `app.oauth_state`; the `app.single_use` sweep needs `retention` and
-waits for `interfaces/jobs`. A failure logs `error` with `job` and the error's class name, nothing else.
+**Expiry sweeps (P2.03s, P1.16w).** `jobs/sweeps.ts` runs the session store's, the OAuth state store's and the
+single-use store's `sweep` once when `boot()` finishes and then hourly, on an unref'd timer that the first close hook
+stops. web runs them because web is the role that may delete from `app.session` and `app.oauth_state`; for
+`app.single_use` web holds no DELETE and calls `app.sweep_single_use()` (migration 0023), one fixed statement that
+removes only rows a day past expiry. A failure logs `error` with `job` and the error's class name, nothing else.
 
 **Signing in (P2.05).** `routes/login.ts`: GET /login renders the sign-in box (P2.05m: no shell; its Close goes to the
 Referer's path when the Referer's host is the request's host-checked Host, never a `/login` page or `next`, else `/`); POST /login (rate limit `login`, CSRF gate)
