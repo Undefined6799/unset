@@ -18,7 +18,14 @@
 // deployment/edge/adapted.image.test.ts runs against the built image in CI.
 import { join } from "node:path";
 import { ADAPT_COMMAND, ADAPT_RUN_FLAGS, type Json, reviewedDifference } from "../../edge/adapted.ts";
-import { type AdaptedEnv, adaptedProblems, type EdgeMode, ENV_NAMES, type EnvName } from "../../edge/adapted-rules.ts";
+import {
+  type AdaptedEnv,
+  adaptedProblems,
+  type EdgeMode,
+  ENV_NAMES,
+  type EnvName,
+  envProblems,
+} from "../../edge/adapted-rules.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -107,9 +114,13 @@ export async function adaptedEdge(
   if (reviewedText === null) return missing(`deployment/edge/adapted/${REVIEWED[mode]}.generated.json`);
   const reviewed = parsed(reviewedText);
   if (reviewed === null) return fail("the reviewed adapted config is not JSON");
+  // The values are judged before any container sees them: a missing or misshapen one, an app value equal to the
+  // PDS's, or a dev app value other than the ruled one fails here, in placeholder names (P1.39e).
+  const values = valuesOf(env);
+  const misfit = envProblems(mode, values);
+  if (misfit.length > 0) return fail(misfit.join("; "));
   const runnable = await imageToRun(inputs, image, signal);
   if (typeof runnable !== "string") return runnable;
-  const values = valuesOf(env);
   const names = Object.keys(values).flatMap((name) => ["-e", name]);
   const ran = await inputs.run(
     "docker",
