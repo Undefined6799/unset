@@ -424,13 +424,13 @@ const SITES: Red[] = [
     "a zone keyed on a header",
     "local",
     (c) => void Object.assign(o(zones(c, P).global), { key: "{http.request.header.X-Forwarded-For}" }),
-    "{$PDS_HOST}: the global zone is not keyed on {client_ip}",
+    "{$PDS_HOST}: a zone is not keyed on {client_ip}",
   ],
   [
     "a zone keyed on nothing",
     "dev",
     (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { key: "static" }),
-    "{$APP_HOST}: the app_signin zone is not keyed on {client_ip}",
+    "{$APP_HOST}: a zone is not keyed on {client_ip}",
   ],
 ];
 
@@ -864,6 +864,36 @@ const REVIEW: Red[] = [
     "dev",
     (c) => void site(c, APP_DEV).push(...site(c, APP_DEV).splice(0, 3)),
     "{$APP_HOST}: a handler follows the route",
+  ],
+  [
+    "a static response before the site's route",
+    "shipped",
+    (c) => void site(c, P).splice(2, 0, respond(503)),
+    "{$PDS_HOST}: a handler outside the ruled snippets",
+  ],
+  [
+    "a static-only route inside the route",
+    "local",
+    (c) => void inner(c, APP_LOCAL).unshift({ handle: [respond(200)] }),
+    "{$APP_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "a matched static route before the upstream",
+    "dev",
+    (c) => void inner(c, P).splice(1, 0, { match: [{ path: ["/xrpc/*"] }], handle: [respond(404)] }),
+    "{$PDS_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "an upstream behind a matcher",
+    "local",
+    (c) => void Object.assign(o(inner(c, P).at(-1)), { match: [{ path: ["/xrpc/*"] }] }),
+    "{$PDS_HOST}: a route outside the ruled snippets",
+  ],
+  [
+    "a zone named by the input",
+    "local",
+    (c) => void Object.assign(zones(c, P), { "pds.example.org": { key: "static", window: 1, max_events: 1 } }),
+    "{$PDS_HOST}: a zone is not keyed on {client_ip}",
   ],
   [
     "a handler named constructor",
