@@ -98,7 +98,7 @@ set, repeating the store's `lookup` conditions, because no sweep runs before the
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
 `logout.remaining_sessions_match_the_store` pins the count to `store.read` at the same `now()` on every limit edge.
 `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+it is trusted base, and when P2.08e was built a store method could not share its PR (the rule before ADR 0044). GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
 deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. The read has
 its own deadline, `ISSUER_READ_MS`, well below `PG_CONNECT_TIMEOUT_MS`. The session store's `get` ends a checked-out
@@ -204,7 +204,7 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
   The fixed page shows the request id on `internal.error` (UUID shape only). The exported `errorResponse` takes no
   page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
-**Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
+**Watch out.** `shared/http` is trusted base (CODEOWNERS); a PR that changes it carries the `security-review` label (ADR 0044).
 
 **In-place sign-in (P2.05p).** `pageResponse` passes `signIn {pdsHost, next}` to the default shell when compose
 sets `pdsHost`; `next` is `safeReturnPath(url.pathname)`, never the query, and none on `/`. POST /login sends a
