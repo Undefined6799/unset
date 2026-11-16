@@ -18,7 +18,7 @@ Closed lists, the one write function, the row hash and the chain walk.
 | `infrastructure/audit/verify.ts` | `verifyChain`. `links` reads `audit.chain`. `full` also reads `audit.event_body`. |
 | `infrastructure/audit/error.ts` | `AuditError`. Codes `audit.bad_input` and `audit.bad_timestamp`. |
 
-`appendAudit` is called from `interfaces/http/account.ts`. This package opens no pool.
+`appendAudit` is called from `interfaces/http/age-gate-audit.ts`, on the transaction the account repository (`infrastructure/postgres/accountRepository.ts`) hands it. This package opens no pool.
 
 ## May import
 

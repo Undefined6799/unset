@@ -1,9 +1,9 @@
 // P2.12: the account row against Postgres as web. The birth date never reaches a parameter, so the row cannot hold it.
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
-import { createPool, withClient } from "@unset/infrastructure-postgres";
+import { createAccountRepository, createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, expect, inject, test } from "vitest";
-import { createAccountStore } from "../../../interfaces/http/account.ts";
+import { recordUnderageBlock } from "../../../interfaces/http/age-gate-audit.ts";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
@@ -23,7 +23,7 @@ const did = (text: string): Did => {
 const ADULT = did(`did:plc:${"a".repeat(24)}`);
 const CHILD = did(`did:plc:${"b".repeat(24)}`);
 const MOVED = did(`did:plc:${"c".repeat(24)}`);
-const store = createAccountStore(pool);
+const store = createAccountRepository(pool, { recordUnderageBlock });
 
 const columns = () =>
   withClient(pool, null, async (db) => {
