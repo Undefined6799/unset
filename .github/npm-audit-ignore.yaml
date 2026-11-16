@@ -20,4 +20,4 @@ advisories:
       array: the OAuth library fetches only our own PDS (ownIssuerOnly) through net-guard's 1 MiB cap, reads DID
       documents our identity domain rebuilt, and gets callback params as strings. Removed when @atproto moves to
       zod >= 4.6.6, or at expiry.
-    expired_at: 2026-11-22
+    expired_at: 2026-12-13

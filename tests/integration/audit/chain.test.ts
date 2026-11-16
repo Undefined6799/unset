@@ -105,7 +105,9 @@ describe("audit chain", () => {
   test("chain_links", async () => {
     const results: { lane: string; seq: number }[] = [];
     for (let i = 0; i < 50; i++) {
-      results.push(await append("web", { action: "report.submitted", outcome: "succeeded", target: TARGET }));
+      results.push(
+        await append("web", { action: "report.submitted", outcome: "succeeded", actorDid: ACTOR, target: TARGET }),
+      );
       results.push(
         await append("admin", {
           action: "mod.takedown",

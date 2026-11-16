@@ -3,14 +3,16 @@ import { PAIRS, type Pair, uiDirectoryOf } from "./contract.ts";
 import { artifacts, type Item, image, tar } from "./fixtures/native.ts";
 import { archive, compareImages, verifyArtifact } from "./verify.ts";
 
-const PAIR = PAIRS["0.4.5049"] as Pair;
+const PAIR = PAIRS["0.4.5051"] as Pair;
 const ui = uiDirectoryOf(PAIR);
+const parent = ui.slice(0, ui.lastIndexOf("/"));
 const file = { name: "app/provider.js", body: "original" };
 const link = { name: "app/provider-link", type: "symlink" as const, linkname: "provider.js" };
 const config = { Env: ["NODE_ENV=production"], Cmd: ["node", "index.ts"] };
 async function pair(change: Item[], runtime = config, prefix = true) {
   const baseLayer = await tar([
     { name: "app", type: "directory", mode: 0o755 },
+    { name: "etc", type: "directory", mode: 0o755 },
     file,
     link,
     { name: `${ui}/old.js`, body: "old" },
@@ -29,7 +31,7 @@ describe("immutable PDS frontend boundary", () => {
       { name: `${ui.slice(0, ui.lastIndexOf("/"))}/.wh.dist` },
       { name: `${ui}/new.js`, body: "new" },
     ]);
-    expect(result.outsideEntries).toBe(3);
+    expect(result.outsideEntries).toBe(4);
     expect(result.ui.get("new.js")?.data?.toString()).toBe("new");
   });
   test.each([
@@ -48,6 +50,26 @@ describe("immutable PDS frontend boundary", () => {
     ["unsupported PAX", [{ name: `${ui}/file`, pax: { "SCHILY.xattr.bad": "yes" } }]],
   ] as [string, Item[]][])("rejects %s", async (_name, change) => {
     await expect(check(change)).rejects.toThrow();
+  });
+  test.each([
+    ["provider bytes", [{ ...file, body: "changed" }], "app/provider.js (a file, not a directory)"],
+    [
+      "ancestor metadata",
+      [{ name: "app", type: "directory", mode: 0o777 }],
+      'app (metadata differs from the base: base ["directory",493,',
+    ],
+    ["new directory", [{ name: "opt", type: "directory" }], "opt (absent from the base)"],
+    ["other directory metadata", [{ name: "etc", type: "directory", mode: 0o777 }], "etc (metadata differs from"],
+    ["new ancestor", [{ name: parent, type: "directory" }], `${parent} (absent from the base)`],
+  ] as [string, Item[], string][])("names the path and the rule for %s", async (_name, change, reason) => {
+    await expect(check(change)).rejects.toThrow(`outside UI filesystem change: ${reason}`);
+  });
+  test("accepts a directory record the base already holds unchanged", async () => {
+    const result = await check([
+      { name: "etc", type: "directory", mode: 0o755 },
+      { name: `${ui}/new.js`, body: "new" },
+    ]);
+    expect(result.outsideEntries).toBe(4);
   });
   test("rejects complete runtime Config drift", async () => {
     await expect(check([], { ...config, Env: [...config.Env, "EXTRA=yes"] })).rejects.toThrow(/Config/);

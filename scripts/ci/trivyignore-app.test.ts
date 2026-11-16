@@ -11,7 +11,7 @@ const APP_FILE = join(import.meta.dirname, "..", "..", APP_IGNOREFILE);
 // most 30 days. Any other entry, or a wider scope, is a new loosening and fails here.
 describe(".github/trivyignore.app.yaml", () => {
   test("app_trivyignore_valid_within_30_days", () => {
-    expect(trivyIgnoreProblems(readFileSync(APP_FILE, "utf8"), new Date(), PDS_MAX_DAYS)).toEqual([]);
+    expect(trivyIgnoreProblems(readFileSync(APP_FILE, "utf8"), new Date(), PDS_MAX_DAYS, "shape")).toEqual([]);
   });
 
   test("app_trivyignore_accepts_only_zod_3_25_76", () => {

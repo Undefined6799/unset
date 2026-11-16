@@ -1,5 +1,6 @@
 // POST /profile (Alex 2026-10-23: the owner edits their profile in place and saves it to their PDS). The kit has
-// already checked the method, the media type, the body limit and the CSRF gate before this handler reads anything.
+// already checked the method, the media type, the body limit and the CSRF gate, run the server's gate and counted the
+// save against the member's own limit (ADR 0045) before this handler reads anything.
 // The profile written is always the session's own (the DID comes from the session, never the request). The fields
 // are read once by domains/profile (DM-1); the record is built over the stored one and written with a
 // compare-and-swap (infrastructure/pds/profile-record.ts). It works as a plain form; the editing island posts the
@@ -23,8 +24,7 @@ export type ProfileSave =
   | { readonly kind: "redirect"; readonly location: string };
 
 export type ProfileDeps = {
-  open: (request: Request, deadline: AbortSignal, next: string) => Promise<Response | OpenedApp>;
-  saveProfile: (did: Did, fields: ProfileEdit, deadline: AbortSignal) => Promise<ProfileSave>;
+  saveProfile: (did: Did, fields: ProfileEdit, deadline: AbortSignal, deadlineAt: number) => Promise<ProfileSave>;
 };
 
 /**
@@ -48,25 +48,23 @@ const seeOther = (location: string) =>
   new Response(null, { status: 303, headers: { location, "cache-control": "no-store" } });
 
 export const profileRoutes = (deps: ProfileDeps): Route[] => [
-  defineRoute({
+  defineRoute<OpenedApp>({
     method: "POST",
     path: "/profile",
     group: "app",
     accepts: [FORM],
     bodyLimit: PROFILE_BODY_LIMIT_BYTES,
-    rateLimit: "default",
+    rateLimit: "profile",
     mutates: true,
-    session: "handler",
-    handler: async ({ request, deadline }) => {
-      const opened = await deps.open(request, deadline, "/did");
-      if (opened instanceof Response) return opened;
+    session: "required",
+    handler: async ({ request, deadline, deadlineAt, session: opened }) => {
       const form = new URLSearchParams(await request.text());
       const input = formFields(form);
       if (input === null) throw new AppError("profile.invalid");
       const parsed = parseProfileFields(input);
       if (!parsed.ok) throw new AppError(parsed.code);
       const did = opened.session.did;
-      const saved = await deps.saveProfile(did, parsed.fields, deadline);
+      const saved = await deps.saveProfile(did, parsed.fields, deadline, deadlineAt);
       if (saved.kind === "saved") return seeOther(form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE : `/${did}`);
       if (saved.kind === "redirect") return seeOther(saved.location);
       if (saved.kind === "conflict") throw new AppError("profile.conflict");

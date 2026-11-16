@@ -34,7 +34,8 @@ export type EgressEvent = {
 
 export type GuardedRequest = {
   url: string;
-  method?: "GET" | "POST";
+  /** PUT only on an `internal` policy (the object store's objects and tags, P2.18k); GET and POST on any. */
+  method?: "GET" | "POST" | "PUT";
   /** Sent with keys lowercased. A `host` header is refused; `user-agent` and `accept-encoding` are always ours. */
   headers?: Record<string, string>;
   /** At most 1 MiB; a stream is read into memory first. */
@@ -69,9 +70,10 @@ type Seen = { status: number | null; bytes: number };
 type Target = { host: string; allow: "public" | "private"; loopbackOnly: boolean };
 
 /** Method and limits: a bad value is the caller's programming error, not an egress failure. */
-function checkRequest(req: GuardedRequest): Limits {
+function checkRequest(policy: Policy, req: GuardedRequest): Limits {
   const method: string = req.method ?? "GET";
-  if (method !== "GET" && method !== "POST") throw new TypeError(`net-guard does not send ${method}`);
+  const allowed = policy.kind === "internal" ? ["GET", "POST", "PUT"] : ["GET", "POST"];
+  if (!allowed.includes(method)) throw new TypeError(`net-guard does not send ${method} on ${policy.kind} policies`);
   const timeoutMs = req.timeoutMs ?? 10_000;
   const maxBytes = req.maxBytes ?? 1024 * 1024;
   if (!(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= MAX_TIMEOUT_MS)) {
@@ -317,7 +319,7 @@ async function guarded(
   hooks: NetGuardHooks,
   seen: Seen,
 ): Promise<GuardedResponse> {
-  const limits = checkRequest(req);
+  const limits = checkRequest(policy, req);
   const headers = requestHeaders(req.headers, settings.commit);
   const deadline = AbortSignal.timeout(limits.timeoutMs);
   const signal = req.signal ? AbortSignal.any([deadline, req.signal]) : deadline;

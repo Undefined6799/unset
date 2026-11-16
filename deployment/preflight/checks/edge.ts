@@ -1,44 +1,32 @@
-// C18, the edge's rate-limit zones (P1.30u; architecture amendment 7, points 1 to 3, and its 23:50Z note, in
-// 2026-10-07-p130s-networks-and-caddyfile-reader): which sites/enabled directory the compose edge service mounts, the
-// node:fs reads the shared edge reader takes, and the reader's verdict. The reader and the site rules are
-// deployment/edge/caddyfile.ts (P1.28e, P1.28f, P1.28l), imported here and nowhere duplicated; C18 reads the Caddyfile
-// and snippets from the repository, which the edge image carries byte for byte (caddyfile.image.test.ts).
+// C18, the edge (P1.30u; ADR 0046): first the rules about the compose file itself, which image the edge service
+// runs, which sites, files and secrets it mounts and from where, and which hosts it serves; then Caddy's own reading
+// of those files. edge-adapt.ts runs `caddy adapt` in the edge image on the same mounts and values and holds the
+// output to the reviewed adapted config (deployment/edge/adapted.ts) and the rules on it
+// (deployment/edge/adapted-rules.ts). C18 reads the Caddyfile format nowhere itself: since P1.39e it no longer
+// calls the reader (ADR 0046 decision 5).
 //
 // Under --env local (P1.27l) the edge is built from deployment/edge/Dockerfile rather than run from the lock, and it
 // mounts two files from deployment/edge/local/ beside its sites: the dev leaf's TLS snippet and the app site
 // (architecture records 2026-10-12-refocus-local-signin-rulings, Amendment 2, and 2026-10-13-p127l-local-gaps, items
 // 1 and 2). Every config rule still applies to what it serves; only where the image's identity comes from changes.
-import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { lstatSync, readdirSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
-import {
-  type Caddyfile,
-  CaddyfileError,
-  DEV_APP,
-  type Directive,
-  type EdgeMode,
-  ENV_NAMES,
-  type EnvName,
-  edgeSiteProblems,
-  readCaddyfile,
-  readEdgeConfig,
-  type Site,
-  type SiteMount,
-} from "../../edge/caddyfile.ts";
+import { DEV_APP, ENV_NAMES } from "../../edge/adapted-rules.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
+import { ADAPT_TIMEOUT_MS, adaptedEdge, type CaddyBind, type EdgeImage } from "./edge-adapt.ts";
 import { appHostProblem, localLeafProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
 import { pdsHostProblem } from "./pds-host.ts";
-import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
+import { type Check, type Earlier, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
 const CADDY_ROOT = "/etc/caddy";
 
 /**
- * The file-system reads readEdgeConfig takes (its EdgeFiles), each one direct node:fs call with no filtering and no
- * path logic; containment is the reader's (amendment 7 note, condition 2).
+ * The file-system reads C18's mount rules take, each one direct node:fs call with no filtering and no path logic.
  */
 export const EDGE_FILES = {
   list: (dir: string): string[] => readdirSync(dir),
@@ -58,7 +46,6 @@ export const EDGE_FILES = {
       throw error;
     }
   },
-  read: (path: string): string => readFileSync(path, "utf8"),
 };
 
 const mountTarget = (mount: Mount): string => posix.normalize(mount.target).replace(/(.)\/+$/, "$1");
@@ -91,7 +78,7 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
  * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three: dev/app.caddy and
  * dev/pds.caddy, each one read-only file bind at /etc/caddy/sites/enabled/<its name>, and dev/tls.caddy at
  * /etc/caddy/snippets/tls.caddy (P1.38e). No directory is mounted at the enabled sites, and the edge binds nothing
- * else; the reader's dev mode then requires each site from dev/ by its own name.
+ * else; siteMountsProblem then requires each site from dev/ by its own name.
  */
 export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | Outcome {
   const edge = compose.services.find((service) => service.name === "edge");
@@ -118,7 +105,8 @@ export function devSiteMounts(compose: Compose, edgeDir: string): SiteMount[] | 
   if (problem !== null) return problem;
   const absent = sites.find((site) => !sourceExists(site.source));
   if (absent !== undefined) return missing(absent.source);
-  return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
+  if (sites.length === 0) return missing(`the edge's site mounts in ${SITES_TARGET}`);
+  return siteMountsProblem(sites, edgeDir, "dev") ?? sites;
 }
 
 /**
@@ -140,10 +128,10 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
 }
 
 /**
- * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
- * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
- * value (P1.28l); a reader error is a failure, never a crash. The runner withholds a reason that still holds any
- * configured value and prints a fixed marker instead (P1.30m, P1.30v).
+ * C18's rules about the compose file under dev and prod: the edge runs the lock's image (or a judged build), mounts
+ * its sites as the env's shape allows, and has an environment. Under prod the enabled sites folder is sites/ itself
+ * or inside it, so a dev/ or local/ folder is refused (P1.36c). What the files mean is Caddy's to say: c18 then
+ * holds `caddy adapt`'s output to the reviewed config and its rules (edge-adapt.ts; P1.39e, ADR 0046 decision 5).
  */
 export function edgeZones(
   compose: Compose,
@@ -162,9 +150,17 @@ export function edgeZones(
   if (mode === "dev") {
     const problem = devEdgeProblem(compose);
     if (problem !== null) return problem;
+  } else if (!Array.isArray(sites) && !insideSites(sites.dir, edgeDir)) {
+    return fail("the enabled sites directory is not inside sites/");
   }
   if (env === undefined) return missing("the edge service's environment");
-  return readZones(edgeDir, Array.isArray(sites) ? sites : sites.dir, env, mode);
+  return pass();
+}
+
+/** Whether the realpathed `dir` is deployment/edge/sites/ or lies inside it. */
+function insideSites(dir: string, edgeDir: string): boolean {
+  const root = EDGE_FILES.realpath(edgeDir);
+  return root !== null && (dir === join(root, "sites") || dir.startsWith(`${join(root, "sites")}/`));
 }
 
 /** The dev leaf's certificate and key (P1.36c; ADR 0032), the only secrets a dev edge reads, both required. */
@@ -216,126 +212,10 @@ function edgeImage(compose: Compose, edgeRef: string | undefined): Outcome | nul
   return edge.image === edgeRef ? null : fail("the edge service does not run the lock's edge image");
 }
 
-function readZones(
-  edgeDir: string,
-  sitesDir: string | readonly SiteMount[],
-  env: SecretMap,
-  mode: EdgeMode = "shipped",
-): Outcome {
-  const values: Partial<Record<EnvName, string>> = {};
-  for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
-    const value = env.use(name, (v) => v);
-    if (value !== undefined) values[name] = value;
-  }
-  let problems: string[];
-  try {
-    const config = readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES, mode);
-    problems = [...edgeSiteProblems(config, mode), ...certificateProblems(config, edgeDir, values, mode)];
-  } catch (error) {
-    if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
-    throw error;
-  }
-  return problems.length === 0 ? pass() : fail(problems.join("; "));
-}
-
-/**
- * The image's own health site, deployment/edge/Caddyfile:48-53 on main 79b3582, as the reader reads it: the one site
- * that goes without `import tls` (architecture's Amendment 5 to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md).
- * Plain HTTP on loopback, so Caddy chooses no certificate for it (caddyserver/website
- * src/docs/markdown/automatic-https.md, "Activation", read 2026-10-13).
- */
-const HEALTH_SITE = JSON.stringify([
-  ["http://127.0.0.1:8081"],
-  [null],
-  [
-    ["bind", ["127.0.0.1"], [null], null, null],
-    ["respond", ["/health", "200"], [null, null], null, null],
-    ["respond", ["404"], [null], null, null],
-  ],
-]);
-const healthShaped = (site: Site): boolean =>
-  JSON.stringify([site.addresses, site.placeholders, shape(site.directives)]) === HEALTH_SITE;
-
-/**
- * The health site, when it is exempt: exactly one site in the served config has its shape, and the image's Caddyfile,
- * read alone without its two file imports, holds exactly that one site and nothing else. So the same block in a sites
- * or local file, beside the Caddyfile's or in its place, is never exempt.
- */
-function exemptHealthSite(config: Caddyfile, edgeDir: string, env: Partial<Record<EnvName, string>>): Site | null {
-  const shaped = config.sites.filter(healthShaped);
-  if (shaped.length !== 1) return null;
-  const own = EDGE_FILES.read(join(edgeDir, "Caddyfile"))
-    .split("\n")
-    .filter((line) => !FILE_IMPORT_LINES.includes(line))
-    .join("\n");
-  const sites = readCaddyfile(own, env).sites;
-  return sites.length === 1 && healthShaped(sites[0] as Site) ? (shaped[0] as Site) : null;
-}
-/** The Caddyfile's two file imports (deployment/edge/caddyfile.ts FILE_IMPORTS), each a whole line. */
-const FILE_IMPORT_LINES = ["import snippets/*.caddy", "import sites/enabled/*.caddy"];
-
-const flatten = (directives: Directive[]): Directive[] =>
-  directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
-
-/**
- * Why some site could get a certificate other than the env's own (tls) snippet gives it (P1.33t; architecture's
- * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but the image's health site
- * imports tls, and no tls directive in it comes from anywhere else; the (tls) served reads the same as the one the
- * env's own file defines (snippets/tls.caddy, local/tls.caddy under local, dev/tls.caddy under dev from P1.38e); a
- * (tls) from any other file fails. This closes Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
- * (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global allowlist.
- */
-function certificateProblems(
-  config: Caddyfile,
-  edgeDir: string,
-  env: Partial<Record<EnvName, string>>,
-  mode: EdgeMode,
-): string[] {
-  const found: string[] = [];
-  const health = exemptHealthSite(config, edgeDir, env);
-  for (const site of config.sites) {
-    if (site === health) continue;
-    // Named as written, `{$NAME}` for a placeholder, never its value (P1.28l).
-    const name = site.addresses
-      .map((address, at) => (site.placeholders[at] ? `{$${site.placeholders[at]}}` : address))
-      .join(" ");
-    if (!site.directives.some((directive) => directive.name === "tls" && directive.via === "tls")) {
-      found.push(`${name}: does not import tls`);
-    }
-    const tls = flatten(site.directives).filter((directive) => directive.name === "tls");
-    if (tls.some((directive) => directive.via !== "tls")) found.push(`${name}: has its own tls directive`);
-  }
-  const own = mode === "local" ? "local/tls.caddy" : mode === "dev" ? "dev/tls.caddy" : "snippets/tls.caddy";
-  if (!sameDirectives(config.snippet("tls"), ownTls(join(edgeDir, own), env))) {
-    found.push(`the (tls) snippet served is not ${own}`);
-  }
-  return found;
-}
-
-/** The (tls) snippet the env's own file defines, or null when the file is missing or defines none. */
-function ownTls(path: string, env: Partial<Record<EnvName, string>>): Directive[] | null {
-  if (EDGE_FILES.realpath(path) === null) return null;
-  try {
-    return readCaddyfile(EDGE_FILES.read(path), env).snippet("tls");
-  } catch (error) {
-    if (error instanceof CaddyfileError) return null;
-    throw error;
-  }
-}
-
-/** Whether two directive lists read the same, wherever in their files they were written. */
-function sameDirectives(served: Directive[], own: Directive[] | null): boolean {
-  return own !== null && JSON.stringify(shape(served)) === JSON.stringify(shape(own));
-}
-
-/** A directive list as data, without the line numbers that say where it was written. */
-const shape = (directives: Directive[]): unknown =>
-  directives.map(({ name, args, placeholders, block, via }) => [name, args, placeholders, block && shape(block), via]);
-
 /**
  * The files a local edge mounts from deployment/edge/local/ outside the sites, by target: each at most once,
  * read-only, by that name. The app site, local/app.caddy at sites/enabled/app.caddy, is one of the site mounts, which
- * the reader judges with the enabled sites (localSiteMounts, P1.33y).
+ * siteMountsProblem judges with the enabled sites (localSiteMounts, P1.33y).
  */
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
@@ -364,6 +244,8 @@ function localEdgeZones(inputs: Inputs): Outcome {
   if (!Array.isArray(sites)) return sites;
   const absent = sites.find((site) => !sourceExists(site.source));
   if (absent !== undefined) return missing(absent.source);
+  const foreign = siteMountsProblem(sites, inputs.edgeDir, "local");
+  if (foreign !== null) return foreign;
   const files = localFileMounts(edge, inputs.edgeDir);
   if (files !== null) return files;
   const env = inputs.serviceEnv.get("edge");
@@ -376,7 +258,7 @@ function localEdgeZones(inputs: Inputs): Outcome {
   if (pds !== null) return pds;
   const leaf = localLeafProblem(inputs, appHost ?? "", pdsHost ?? "");
   if (leaf !== null) return leaf;
-  return readZones(inputs.edgeDir, sites, env, "local");
+  return pass();
 }
 
 /** A target that names one file directly in the enabled sites directory. */
@@ -384,8 +266,8 @@ const siteFileTarget = (target: string): boolean => posix.dirname(target) === SI
 
 /**
  * The enabled sites a local edge mounts, one read-only bind per file at /etc/caddy/sites/enabled/<name>, never the
- * directory (P1.33y; book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2). The reader's
- * mountedSites then requires exactly every sites/*.caddy and local/app.caddy, each from where it belongs. Any other
+ * directory (P1.33y; book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2).
+ * siteMountsProblem then requires exactly every sites/*.caddy and local/app.caddy, each from where it belongs. Any other
  * mount at, under or above /etc/caddy than these and LOCAL_MOUNTS fails.
  */
 function localSiteMounts(edge: Service): SiteMount[] | Outcome {
@@ -404,7 +286,7 @@ function localSiteMounts(edge: Service): SiteMount[] | Outcome {
   return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
 }
 
-/** Whether `path` names anything at all, a dangling link included; the reader then judges what it is (verify-876 N5). */
+/** Whether `path` names anything at all, a dangling link included; siteMountsProblem then judges what it is (verify-876 N5). */
 function sourceExists(path: string): boolean {
   try {
     EDGE_FILES.kind(path);
@@ -413,6 +295,55 @@ function sourceExists(path: string): boolean {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
+}
+
+/** One read-only file mount at /etc/caddy/sites/enabled/`name`: the host file it binds and its name there (P1.34q). */
+type SiteMount = { source: string; name: string };
+
+/** The dev edge's two sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3). */
+const DEV_SITES = ["app.caddy", "pds.caddy"];
+/** The app site a local edge mounts from deployment/edge/local/ beside the shipped sites (P1.34a). */
+const LOCAL_APP_SITE = "app.caddy";
+
+/**
+ * The folder under deployment/edge/ each site a local or dev edge mounts comes from, by the site's name, or why it
+ * cannot be said: under dev exactly DEV_SITES from dev/; under local every sites/*.caddy from sites/ and the app site
+ * from local/ (P1.34q; local-gaps Amendment 3 S2).
+ */
+function expectedSites(root: string, mode: "local" | "dev"): Map<string, string> | Outcome {
+  if (mode === "dev") return new Map(DEV_SITES.map((name) => [name, "dev"]));
+  const expected = new Map<string, string>();
+  for (const name of EDGE_FILES.list(join(root, "sites")).filter((n) => n.endsWith(".caddy"))) {
+    expected.set(name, "sites");
+  }
+  if (expected.has(LOCAL_APP_SITE)) return fail(`${LOCAL_APP_SITE}: an enabled site has the mounted app site's name`);
+  return expected.set(LOCAL_APP_SITE, "local");
+}
+
+/**
+ * Why a local or dev edge's site mounts are not exactly the repository's own files, or null: each mount is one
+ * regular file, never a link or a folder, that resolves to the file of its name in the folder expectedSites gives;
+ * no name is mounted twice, and none is left out. The reader's mountedSites held this until P1.39e; it is a rule
+ * about the compose file, so it stays C18's when the reader goes (ADR 0046, "C18's mount-source rules stay").
+ */
+function siteMountsProblem(sites: readonly SiteMount[], edgeDir: string, mode: "local" | "dev"): Outcome | null {
+  const root = EDGE_FILES.realpath(edgeDir);
+  if (root === null) return missing(edgeDir);
+  const expected = expectedSites(root, mode);
+  if (!(expected instanceof Map)) return expected;
+  const seen = new Set<string>();
+  for (const { source, name } of sites) {
+    if (EDGE_FILES.kind(source).type !== "file") return fail(`${name}: the mount is not one regular file`);
+    const folder = expected.get(name);
+    if (folder === undefined) return fail(`${name}: not a site the ${mode} stack mounts`);
+    if (EDGE_FILES.realpath(source) !== join(root, folder, name)) {
+      return fail(`${name}: not mounted from ${folder}/${name}`);
+    }
+    if (seen.has(name)) return fail(`${name}: mounted more than once`);
+    seen.add(name);
+  }
+  const absent = [...expected.keys()].sort().find((name) => !seen.has(name));
+  return absent === undefined ? null : fail(`${absent}: not mounted`);
 }
 
 /** One enabled site's mount: a read-only bind of its file, named `name` in the enabled sites directory. */
@@ -443,8 +374,7 @@ function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
     const problem = editFileMount(mount, allowed, local, "local");
     if (problem !== null) return problem;
   }
-  // Each is required, not only allowed: without the TLS snippet's mount Caddy serves snippets/tls.caddy, while C18
-  // read local/tls.caddy in its place (P1.33t).
+  // Each is required, not only allowed: without the TLS snippet's mount Caddy serves snippets/tls.caddy (P1.33t).
   const absent = Object.keys(LOCAL_MOUNTS).find((target) => !seen.has(target));
   return absent === undefined ? null : fail(`${LOCAL_MOUNTS[absent]?.what} is not mounted`);
 }
@@ -521,19 +451,88 @@ function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
   return null;
 }
 
+/** The checks that say the lock's images are the signed, verified ones: C18 runs the lock's edge only after them. */
+const IMAGE_CHECKS = ["C2", "C3", "C4", "C5"];
+
+/**
+ * The image `caddy adapt` may run in (P1.39c), or why none. Under local and dev --source it is the edge's own build,
+ * which the compose rules above held to EDGE_DOCKERFILE, and it is built only when the whole of C26 passed in this
+ * run (C26 comes before C18 in the list): its context rule and its dev CA and dev trust folder rules, so no second
+ * name for a CA file is ever sent to the daemon (Codex on #1609). Otherwise it is the lock's edge reference, and only
+ * when C2 to C5 each passed in this run, as a verified image and not a local stack's unsigned one.
+ */
+function adaptImage(inputs: Inputs, edge: Service, earlier: Earlier): EdgeImage | Outcome {
+  if (edge.build !== null && (inputs.env === "local" || inputs.source)) {
+    if (earlier.get("C26")?.pass !== true) return fail("the edge image was not built: C26 does not pass");
+    return { dockerfile: edge.build.dockerfile, context: edge.build.context };
+  }
+  const verified = IMAGE_CHECKS.every((id) => earlier.get(id)?.pass === true && earlier.get(id)?.unsigned !== true);
+  if (!verified) return fail("the edge image was not run: C2 to C5 did not all pass");
+  const ref = readLock(inputs)?.edge?.ref;
+  return typeof ref === "string" && ref === edge.image
+    ? { ref }
+    : fail("the edge image was not run: it is not the lock's");
+}
+
+/** The edge's binds at or under /etc/caddy, each one the compose rules above required to be a read-only bind. */
+function caddyBinds(edge: Service): CaddyBind[] | Outcome {
+  const binds: CaddyBind[] = [];
+  for (const mount of edge.mounts) {
+    const target = mountTarget(mount);
+    if (target !== CADDY_ROOT && !target.startsWith(`${CADDY_ROOT}/`)) continue;
+    if (mount.type !== "bind" || mount.source === null || !mount.readOnly) {
+      return fail("an edge mount cannot be given to caddy adapt");
+    }
+    binds.push({ source: mount.source, target });
+  }
+  return binds;
+}
+
+/** C18's rules about the compose file, for the env. */
+function composeRules(inputs: Inputs): Outcome {
+  switch (inputs.env) {
+    case "local":
+      return localEdgeZones(inputs);
+    case "dev":
+    case "prod":
+      return deployedEdgeZones(inputs);
+    default: {
+      const unknown: never = inputs.env;
+      return fail(`no C18 rule for the env ${String(unknown)}`);
+    }
+  }
+}
+
+/**
+ * The edge's environment, from `environment` and env files alike, holds no name beside the five its config reads
+ * (P1.39e). Caddy replaces `{$NAME}` from its process environment before it lexes, and an unset name with no default
+ * becomes nothing (v2.11.7 caddyconfig/caddyfile/parse.go:63-64, replaceEnvVars :67-108). `caddy adapt` below is
+ * handed the five names only, so a placeholder for any other name adapts to the same config whatever the running
+ * edge would put there. With no other name on the service, the running edge reads what adapt read. The reader
+ * refused the placeholder; this refuses the name. Fixed words: the name comes from a file.
+ */
+const FOREIGN_NAME = "the edge's environment sets a name other than its five placeholders";
+
+/**
+ * C18: the compose rules first, then Caddy's own reading of the edge's files in the edge image
+ * (edge-adapt.ts). It pulls or builds that image, so it is a network check with its own deadline.
+ */
 export const c18: Check = {
   id: "C18",
-  run: (inputs) => {
-    switch (inputs.env) {
-      case "local":
-        return localEdgeZones(inputs);
-      case "dev":
-      case "prod":
-        return deployedEdgeZones(inputs);
-      default: {
-        const unknown: never = inputs.env;
-        return fail(`no C18 rule for the env ${String(unknown)}`);
-      }
-    }
+  network: true,
+  timeoutMs: ADAPT_TIMEOUT_MS,
+  run: async (inputs, signal, earlier) => {
+    const rules = composeRules(inputs);
+    if (!rules.pass) return rules;
+    const edge = inputs.compose.services.find((service) => service.name === "edge");
+    const env = inputs.serviceEnv.get("edge");
+    if (edge === undefined || env === undefined) return missing("the edge service");
+    if (env.names().some((name) => !Object.hasOwn(ENV_NAMES, name))) return fail(FOREIGN_NAME);
+    const image = adaptImage(inputs, edge, earlier ?? new Map());
+    if ("pass" in image) return image;
+    const binds = caddyBinds(edge);
+    if (!Array.isArray(binds)) return binds;
+    const mode = inputs.env === "local" ? "local" : inputs.env === "dev" ? "dev" : "shipped";
+    return adaptedEdge(inputs, image, binds, env, mode, signal);
   },
 };

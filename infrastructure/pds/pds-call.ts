@@ -23,7 +23,11 @@ export type PdsResult<T> =
 export type PdsContext = {
   readonly memo: Map<string, unknown>;
   readonly deadline: AbortSignal;
-  /** Epoch milliseconds when `deadline` fires, so a retry can tell whether it still fits (README rule 8a). */
+  /**
+   * When `deadline` fires, on `performance.now()`'s clock: the route handler's own `deadlineAt` (shared/http
+   * routes.ts), passed through unchanged, so a retry can tell whether it still fits (README rule 8a). Monotonic:
+   * never a wall-clock time.
+   */
   readonly deadlineAt: number;
   clearSession?: () => void;
 };
@@ -61,7 +65,7 @@ function backoffMs(): number {
 }
 
 function fits(deadlineAt: number, timeoutMs: number, waitMs: number): boolean {
-  return deadlineAt - Date.now() > waitMs + timeoutMs;
+  return deadlineAt - performance.now() > waitMs + timeoutMs;
 }
 
 /** Rejects when `signal` aborts. The work may keep running; the caller has already stopped waiting. */

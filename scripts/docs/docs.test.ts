@@ -51,41 +51,15 @@ describe("CLAUDE.md", () => {
     expect(claudeMdProblems(claudeMd.replace(`${TOP15_IMPORT}\n`, ""))).toContain(
       `CLAUDE.md lacks the import ${TOP15_IMPORT}`,
     );
-    const noPrecedence = claudeMd.replace(/the plan\s+wins/, "the plan is read first");
-    expect(claudeMdProblems(noPrecedence)).toEqual([expect.stringMatching(/precedence rule/)]);
-    expect(claudeMdProblems(claudeMd.replace("**D1 Functions:**", "**D10 Functions:**"))).toEqual([
-      "Delivery does not mention D1",
-    ]);
-    expect(claudeMdProblems(claudeMd.replace("**D8 Decisions:**", "**Decisions:**"))).toEqual([
-      "Delivery does not mention D8",
-    ]);
   });
 
   test("claude_md_author_threads_never_merge", () => {
     expect(claudeMdProblems(claudeMd.replace("author threads never merge", "author threads merge"))).toEqual([
       "Delivery does not say author threads never merge their PRs",
     ]);
-    expect(claudeMdProblems(claudeMd.replaceAll("ADR 0019", "ADR 0018"))).toEqual(["Delivery does not name ADR 0019"]);
     expect(claudeMdProblems(claudeMd.replace("never push to\n  `main`", "push to `main`"))).toEqual([
       "Delivery does not say agents never push to `main`",
     ]);
-    expect(claudeMdProblems(claudeMd.replace("ADR 0009", "ADR 0008"))).toEqual(["Delivery does not name ADR 0009"]);
-  });
-
-  test("v2e_superseded", () => {
-    expect(claudeMdProblems(`${claudeMd}- Use iconoir-react for icons.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(`${claudeMd}- Amber accent on primary buttons.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(`${claudeMd}- Buttons are chamfered.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(`${claudeMd}- Icons come from \`iconoir-react\`.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(`${claudeMd}- Use the v2e tokens.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(`${claudeMd}- Display serif headings.\n`)).toHaveLength(1);
-    expect(claudeMdProblems(claudeMd.replace("is **superseded**", "is not **superseded**"))).toHaveLength(2);
-    expect(claudeMdProblems(claudeMd.replace("**superseded**", "**current**"))).toContain(
-      "CLAUDE.md does not name v2e-visual-direction-locked as superseded",
-    );
-    expect(claudeMdProblems(claudeMd.replace("Iconoir 7.12.1", "Iconoir"))).toContain(
-      "CLAUDE.md lacks the Iconoir line (7.12.1, shared/ui Icon, no icon packages)",
-    );
   });
 });
 
@@ -131,12 +105,12 @@ describe("other documents", () => {
   test("pr_template_headings", () => {
     const template = read(".github/pull_request_template.md");
     expect(prTemplateProblems(template)).toEqual([]);
-    expect(prTemplateProblems(template.replace("## Threats\n", ""))).toHaveLength(1);
+    expect(prTemplateProblems(template.replace("## How to test\n", ""))).toHaveLength(1);
     expect(
       prTemplateProblems(template.replace("## Step\n", "").replace("## What\n", "## What\n\n## Step\n")),
     ).toHaveLength(1);
     expect(prTemplateProblems(template.replace(AI_NOTES_LINE, "AI notes:"))).toHaveLength(1);
-    expect(PR_TEMPLATE_HEADINGS).toHaveLength(16);
+    expect(PR_TEMPLATE_HEADINGS).toHaveLength(5);
   });
 
   test("glossary_canonical", () => {

@@ -7,6 +7,10 @@ export const WELCOME = {
   month: "Month",
   year: "Year",
   continue: "Continue",
+  ageConfirmTitle: "Is this date right?",
+  ageConfirmLead: "You entered",
+  ageConfirm: "Yes, continue",
+  ageChange: "Change the date",
   termsTitle: "Terms and privacy",
   termsLead: "unset.sh is invite-only. The terms and the privacy notice say what joining means.",
   termsLink: "Terms",
@@ -21,4 +25,5 @@ export const WELCOME = {
   appealUnpublished: "The review address is not published on this page yet.",
   privacyNoticeTitle: "Privacy notice",
   privacyNotice: "The privacy notice has changed.",
+  signOut: "Sign out",
 } as const;

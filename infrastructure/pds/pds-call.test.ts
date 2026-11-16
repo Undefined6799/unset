@@ -50,7 +50,8 @@ function harness(
   return { ...api, ended, lines, fetches: () => fetches, ctx };
 }
 
-const far = () => Date.now() + 60_000;
+// `deadlineAt` is on performance.now()'s clock, like the route handler's (shared/http routes.ts).
+const far = () => performance.now() + 60_000;
 const httpError = (status: number, name = "XRPCError") => Object.assign(new Error(name), { status, name });
 
 describe("pdsCall", () => {
@@ -58,7 +59,7 @@ describe("pdsCall", () => {
     let calls = 0;
     const { pdsCall, ctx } = harness();
     const result = await pdsCall(
-      ctx(Date.now() + 50),
+      ctx(performance.now() + 50),
       DID,
       async () => {
         calls += 1;
@@ -68,6 +69,24 @@ describe("pdsCall", () => {
     );
     expect(result).toEqual({ kind: "transient", code: "pds_unavailable" });
     expect(calls).toBe(1);
+  });
+
+  test("pdsCall.retries_inside_the_request_deadline", async () => {
+    // P2.07a: a 30 s request (REQUEST_DEADLINE_MS's default) leaves room for the wait and one more 10 s call.
+    let calls = 0;
+    const { pdsCall, ctx } = harness();
+    const result = await pdsCall(
+      ctx(performance.now() + 30_000),
+      DID,
+      async () => {
+        calls += 1;
+        if (calls === 1) throw httpError(503);
+        return "ok";
+      },
+      { idempotent: true },
+    );
+    expect(result).toEqual({ kind: "ok", value: "ok" });
+    expect(calls).toBe(2);
   });
 
   test("pdsCall.handshake_retry_once", async () => {

@@ -43,3 +43,15 @@ export function ageInYears(birth: BirthDate, today: Date): number {
   if (month < birth.month || (month === birth.month && day < birth.day)) age -= 1;
   return age;
 }
+
+const LATEST_ZONE_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * `now` moved to the latest time zone on Earth (UTC+14), for `parseBirthDate` and `ageInYears`, which read the UTC
+ * fields. We do not know where the person is, so the calendar day is the latest one anywhere: nobody whose birthday
+ * has arrived where they live is counted a year younger (P2.12e). The cost is that a birthday can count up to 26 hours
+ * early for someone further west.
+ */
+export function latestCalendarDay(now: Date): Date {
+  return new Date(now.getTime() + LATEST_ZONE_MS);
+}

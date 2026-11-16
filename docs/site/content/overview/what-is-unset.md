@@ -31,7 +31,7 @@ The same README calls the repository a rebuild of the 0x40 prototype around a sm
 | Server | Hono `4.13.13` and `@hono/node-server` `2.1.5` in `shared/http/package.json`. `shared/http/server.ts` imports `Hono`. |
 | Screens | React `19.3.1` in `apps/web/package.json`. Package `@unset/apps-web`. [web](../../areas/apps/web/) |
 | Shell | `apps/web/src/shell/AppShell.tsx`. With `navigation`, it renders `Navigation` (`shared/ui/components/Navigation/Navigation.tsx`). The human note is [`docs/human/features/core-shell.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/features/core-shell.md). |
-| OAuth client | `@atproto/oauth-client-node` `0.5.9` in `infrastructure/pds/package.json`. |
+| OAuth client | `@atproto/oauth-client-node` `0.5.12` in `infrastructure/pds/package.json`. |
 | Framework decision | [ADR 0015](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0015-web-framework-glue.md) |
 
 `interfaces/http/package.json` depends on `@unset/apps-web`, `@unset/domains-identity`, `@unset/infrastructure-pds`, `@unset/infrastructure-postgres`, `@unset/infrastructure-seal`, `@unset/infrastructure-session`, `@unset/infrastructure-net-guard` and `@unset/infrastructure-audit`.

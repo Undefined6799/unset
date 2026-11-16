@@ -19,6 +19,7 @@ import {
   type Service,
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
+import { edgeImageAnswer } from "./preflight/edge-image-double.ts";
 import { type Deps, preflight } from "./preflight/index.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 import {
@@ -984,7 +985,8 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
     const file = (path: string, mode: number, text = "fixture\n", uid = DEPLOY_UID) =>
       files.set(beside(path), { kind: "file", mode, uid, text });
     const secrets = parse("compose.local.yaml").secretFiles.map((path) => path.split("/").at(-1) as string);
-    const owner = (name: string) => (name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532);
+    const owner = (name: string) =>
+      name === "objects_s3" ? 1000 : name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532;
     dir("unset-dev-secrets", 0o700, secrets);
     for (const name of secrets) file(`unset-dev-secrets/${name}`, 0o400, "fixture\n", owner(name));
     dir("unset-dev-env", 0o700, ["dev-public.env", "pds.env", "local-leaf.pem"]);
@@ -1032,15 +1034,16 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
   ];
   const realLocalDeps = (): Deps => ({
     root: CHECKOUT,
-    run: async (file) =>
+    run: async (file, args, _signal, env) =>
       file === "timedatectl"
         ? { code: 0, stdout: "yes\n", stderr: "" }
         : file === "docker"
-          ? {
+          ? // C18's build and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+            (edgeImageAnswer(args, env) ?? {
               code: 0,
               stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }),
               stderr: "",
-            }
+            })
           : { code: 0, stdout: "", stderr: "" },
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),

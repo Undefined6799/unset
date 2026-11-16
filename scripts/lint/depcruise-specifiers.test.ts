@@ -21,7 +21,7 @@ test("unresolved_imports_fail", async () => {
   // rule, so our relative and @unset/* specifiers must resolve, from tests and from deployment/ too. Spelling (a
   // root-absolute path, a scheme) is the raw-specifier check's (specifiers.test.ts).
   await expectRefused(
-    unresolved("deployment/edge/caddyfile.test.ts", "../preflight/missing.ts"),
+    unresolved("deployment/edge/adapted.test.ts", "../preflight/missing.ts"),
     unresolved("apps/web/src/a.ts", "./missing.ts"),
     unresolved("domains/identity/a.ts", "../content/missing.ts"),
     unresolved("interfaces/http/a.ts", "@unset/x"),

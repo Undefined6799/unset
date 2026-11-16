@@ -68,6 +68,7 @@ keeps every other host account out:
 | `pg_web_password` (also) | `65532:65532` | web | the same file: web logs in as `web` with it (P2.04w) |
 | `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
+| `objects_s3` | `1000:1000` | objects | the object store's identities, with no Admin identity (P2.18s) |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -99,14 +100,28 @@ The legal pages' three values are not secrets and live in `deployment/compose.de
 `--env dev` if any value starts with `[to fill:` again (P1.38d), naming the service and keys. A change to them is a
 PR.
 
+## The object store's identities (P2.18s; ADR 0041 Decision 3, ADR 0050)
+
+`objects_s3` is SeaweedFS's identities file (`weed server -s3.config`), read only by the `objects` service, which runs
+as `1000`. It holds one identity per process that has a key. Since P2.18p that is the PDS's, `pds`, with exactly
+`Read:unset-pds`, `Write:unset-pds` and `List:unset-pds`; its key pair is also in `pds.env` (below). Make both at once
+with step 2 of `pds-blobstore-move.md`, which writes them without printing them. Before any process has a key, the
+file holds no identity at all, so the store denies every request:
+
+`printf '{"identities":[]}' > objects_s3`, then `chown 1000:1000` and `chmod 0400` as above.
+
+Never add an identity with the `Admin` action: buckets are created by the stack wrapper through the store's own shell
+(`deployment/preflight/objects-buckets.ts`), and removal goes through that shell too (ADR 0050 Decision 1). A file
+that is missing or empty stops the store at start; one with no identities starts it and refuses every request.
+
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
 The PDS reads its settings only from its environment (`@atproto/pds` 0.5.49, `dist/config/env.js`), so its secrets
 cannot be mounted files. They go in `unset-dev-env/pds.env`, yours, mode `0600`, which the preflight checks like
 `dev-public.env`. Start it from `deployment/env/pds.example.env`; every other PDS setting is written out in
 `compose.dev.yaml`. One env per host: the same file is loaded by both compose files, and the preflight requires its
-exact name set for the env it runs under (P1.36q). Under `--env local` it holds the first four names only; under dev
-and prod all six.
+exact name set for the env it runs under (P1.36q, C30). Under `--env local` it holds all but the two mail URLs; under
+dev all eight; under prod all but the store's key pair, until P5.01 picks prod's store.
 
 | Name | Make it with |
 | --- | --- |
@@ -114,6 +129,7 @@ and prod all six.
 | `PDS_ADMIN_PASSWORD` | `openssl rand -hex 32` (the preflight's C7 wants at least 32 characters) |
 | `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX` | `openssl ecparam --name secp256k1 --genkey --noout --outform DER \| tail --bytes=+8 \| head --bytes=32 \| xxd --plain --cols 32` (the PDS installer's own command, bluesky-social/pds v0.4.5049 `installer.sh:16`) |
 | `PDS_RECOVERY_DID_KEY` | the public `did:key` of a recovery key whose private half stays offline (below); set it before the first account, because it cannot be added to existing DID documents later (C6) |
+| `PDS_BLOBSTORE_S3_ACCESS_KEY_ID`, `PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY` | local and dev only: the `pds` identity's pair in `objects_s3`, made by step 2 of `pds-blobstore-move.md` (P2.18p, C33) |
 | `PDS_EMAIL_SMTP_URL` | dev and prod only: `smtps://resend:<key>@smtp.resend.com:465`, with a Resend sending-only key as `<key>` |
 | `PDS_MODERATION_EMAIL_SMTP_URL` | dev and prod only: the same form; a second sending-only key is recommended, the same key works |
 
@@ -399,10 +415,21 @@ npm run dev:source:up
 npm run dev:source:down
 ```
 
-It builds the five first-party images on the VM, so the preflight's last line says `SOURCE built from the checkout,
+It builds the six first-party images (the object store joined at P2.18s, ADR 0041) on the VM, so the preflight's last line says `SOURCE built from the checkout,
 unsigned`. Builds fill the disk over time (the reason rule 23 forbade them); when `df -h /` runs low, prune the
 builder cache with `docker builder prune -f`, which touches no volume. Commit and push what you tried afterwards;
 main still changes only by PR.
+
+The preflight runs the edge image before anything starts (C18; P1.39c, ADR 0046). It pulls the lock's edge image, or
+builds the edge from the checkout under `dev:source:up` and `local:up`, runs `caddy adapt` in it with no network and a
+read-only root, and requires the result to be the reviewed config in `deployment/edge/adapted/`. Two things follow:
+
+- The preflight needs Docker, and the registry the first time it meets a new edge image. C18 gives up after ten
+  minutes.
+- The lock's edge image must hold the checkout's edge config. After a change under `deployment/edge/` merges, `dev:up`
+  fails C18 with `the edge config Caddy adapts is not the reviewed one` until the newly published edge image is in
+  `deployment/images.lock.json` (the lock bump PR) and the checkout holds that bump. Wait for the bump and pull main,
+  or use `dev:source:up`, which builds the edge from the checkout. There is no flag to skip the check.
 
 The local stack (P1.34d) is `deployment/compose.local.yaml`, with the same wrapper under `--env local`:
 

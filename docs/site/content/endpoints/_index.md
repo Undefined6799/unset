@@ -33,8 +33,10 @@ The manifest field `group` is copied as recorded. `shared/http/csp/headers.ts` u
 | `csrf` | POST same-origin gate. The kit adds it for every POST (shared/http/server.ts). |
 | `hostCheck` | Host is present and allowed. Not applied to /health (shared/http/server.ts). |
 | `methodCheck` | Method is GET, HEAD or POST, and it matches the route (shared/http/server.ts). |
+| `rateLimitDid` | DID bucket. Present only when requiresSession is true (shared/http/server.ts). |
 | `rateLimitIp` | IP bucket of the named policy. Omitted when rateLimit is exempt (shared/http/server.ts). |
 | `requestId` | Request id, assigned before the route (shared/http/server.ts). |
+| `session` | Present only when requiresSession is true (shared/http/server.ts). |
 | `trustedProxy` | Client address from the trusted proxy. Not applied to /health (shared/http/server.ts). |
 
 ## Rate-limit policies
@@ -51,6 +53,7 @@ Every policy a process's `limits.ts` exports is listed, including one no current
 | `follow` | did: capacity 120, refillPerSec 2 |
 | `like` | did: capacity 120, refillPerSec 2 |
 | `login` | ip: capacity 10, refillPerSec 0.16666666666666666 |
+| `profile` | ip: capacity 60, refillPerSec 5; global: capacity 3000, refillPerSec 50; did: capacity 30, refillPerSec 0.5 |
 | `report` | ip: capacity 5, refillPerSec 0.08333333333333333; did: capacity 10, refillPerSec 0.16666666666666666 |
 | `search` | ip: capacity 60, refillPerSec 1; did: capacity 60, refillPerSec 1 |
 | `upload` | did: capacity 10, refillPerSec 0.16666666666666666 |

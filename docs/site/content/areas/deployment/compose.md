@@ -15,7 +15,7 @@ The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file.
 | --- | --- | --- | --- |
 | `postgres` | lock ref, image | same build as local | `deployment/images/postgres.Dockerfile` |
 | `migrate` | lock ref, image | same build as local | `deployment/images/migrate.Dockerfile` |
-| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5049` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | built from `deployment/pds/Dockerfile` |
+| `pds` | `ghcr.io/undefined6799/unset/pds` by the lock digest: the official `0.4.5051` image with its whole `@atproto/oauth-provider-ui` dist replaced: sign-in, consent, account and error pages (ADR 0027, P2.24y) | same build as local | built from `deployment/pds/Dockerfile` |
 | `edge` | lock ref, image | same build as local | `deployment/edge/Dockerfile`, context `deployment/edge` |
 | `web` | lock ref, image | same build as local | `deployment/images/node-app.Dockerfile` |
 | `newt` | lock ref, image. Address `10.250.37.2` on `newt_edge` | same image as dev | absent |
@@ -75,7 +75,7 @@ node deployment/preflight/stack.ts -- down --env local --compose deployment/comp
 
 `up` runs `scripts/dev-precheck.ts`, then `docker compose up -d`. Dev without `--source` adds `--no-build`. `--env dev --source` and local add `--build`. After a local `up`, the wrapper runs `deployment/preflight/served-leaf.ts`. `down` does not pass `-v`. `--source` on `down` is not passed to Compose. The flag list and the child environment are on [preflight](../preflight/).
 
-`.github/workflows/local-stack.yml` runs `npm run local:up` in jobs `green` and `red`. Its header says it is not a required check.
+`.github/workflows/local-stack.yml` runs `npm run local:up` in jobs `green` and `red`. Its `changes` job runs `scripts/guards/docs-only.ts` first, and a pull request whose every path is on the docs-only allowlist starts neither. Its header says it is not a required check.
 
 ## Data
 

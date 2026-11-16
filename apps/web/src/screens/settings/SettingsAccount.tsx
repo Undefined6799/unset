@@ -1,6 +1,7 @@
 // Settings › Account (P2.13c): the handle (shown only when it resolves back to the DID, P2.02), the DID, the link to
 // the sign-in server recorded at sign-in (P2.08b), where the password, email and deletion live, and a sign-out form
-// that posts with no script. Sign-out ends this browser's session only, which the note says.
+// that posts with no script. Sign-out ends this browser's session only, which the note says. P2.08j: a second form
+// signs out every browser, this one included, for a session the member no longer holds.
 import { Button, DescriptionList } from "@unset/shared-ui";
 import { PdsAccountLink } from "../PdsAccountLink.tsx";
 import { PrivacyNotice } from "../welcome/PrivacyNotice.tsx";
@@ -42,6 +43,10 @@ export function SettingsAccount({ handle, did, handleUnavailable, privacyNotice,
         <form method="post" action="/logout" className={styles.signOut}>
           <p>{SETTINGS.signOutNote}</p>
           <Button type="submit">{SETTINGS.signOut}</Button>
+        </form>
+        <form method="post" action="/logout/everywhere" className={styles.signOut}>
+          <p>{SETTINGS.signOutEverywhereNote}</p>
+          <Button type="submit">{SETTINGS.signOutEverywhere}</Button>
         </form>
       </SettingsShell>
     </>

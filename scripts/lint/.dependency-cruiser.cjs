@@ -31,6 +31,30 @@ const IO_BUILTINS = "fs|net|http|https|http2|dgram|dns|tls|child_process|worker_
 const escapeRegex = (path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const anyOf = (paths) => `^(${paths.map(escapeRegex).join("|")})`;
 const oneOfFiles = (paths) => `${anyOf(paths)}$`;
+
+/**
+ * The files through which a domain is reached from outside domains/: its index.ts and each file its package.json
+ * `exports` names (P0.09s, rule DC-2). Read here and never hard-coded, so a new subpath is a visible package.json
+ * change in a domain PR. dependency-cruiser does not judge `exports` itself (18.7.0 resolves with
+ * `exportsFields: []`, src/main/resolve-options/normalize.mjs:35), and a relative `../../domains/<x>/<file>.ts`
+ * bypasses the map anyway. A conditional (non-string) export target names no file and so allows none.
+ */
+function domainEntryFiles() {
+  const { existsSync, readdirSync, readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const root = join(__dirname, "../../domains");
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, "package.json")))
+    .flatMap((entry) => {
+      const targets = Object.values(
+        JSON.parse(readFileSync(join(root, entry.name, "package.json"), "utf8")).exports ?? {},
+      );
+      return ["./index.ts", ...targets]
+        .filter((target) => typeof target === "string" && /^\.\/[\w./-]+$/.test(target) && !target.includes(".."))
+        .map((target) => `domains/${entry.name}/${target.slice(2)}`);
+    });
+}
+const DOMAIN_ENTRY_FILES = domainEntryFiles();
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 /**
@@ -161,19 +185,21 @@ const MATRIX = [
   { name: "shared-host-pin", from: { path: "^(shared/host-pin/)" }, to: [{ path: "^$1" }, CORE] },
   // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
   // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
-  // child process, never by import, so no edge to scripts/. Outside itself it may import two files: the edge reader
-  // deployment/edge/caddyfile.ts, so C18 reads the Caddyfile with the parser the edge tests use and no second one
-  // (P1.30r, for P1.30u; architecture record 2026-10-07-p130s-networks-and-caddyfile-reader item 2; Alex's
-  // "Allow import", 2026-10-12T02:16:16Z), and shared/host-pin/index.ts only (P1.33i, DC-2; Alex's typed line
+  // child process, never by import, so no edge to scripts/. Outside itself it may import three files, exactly:
+  // deployment/edge/adapted.ts and adapted-rules.ts, so C18 judges what `caddy adapt` prints with the edge's own
+  // comparison and rules and no second copy (P1.39c, ADR 0046 decision 4; Alex's line "loosen preflight imports for
+  // adapted rules at 9ea2394", 2026-11-15), and shared/host-pin/index.ts only (P1.33i, DC-2; Alex's typed line
   // "yes P1.33i scripts/lint depcruise deployment-preflight row shared/host-pin", 2026-10-14). dependency-cruiser
   // 18.5.0 matches `to.path` as a regular expression against the resolved path (doc/rules-reference.md, `path`).
+  // The Caddyfile reader this row once named (P1.30r) was deleted in P1.39e, and its entry with it.
   // The edge may still never import the preflight (edge-not-preflight).
   {
     name: "deployment-preflight",
     from: { path: "^deployment/preflight/" },
     to: [
       { path: "^deployment/preflight/" },
-      { path: "^deployment/edge/caddyfile\\.ts$" },
+      { path: "^deployment/edge/adapted\\.ts$" },
+      { path: "^deployment/edge/adapted-rules\\.ts$" },
       { path: "^shared/host-pin/index\\.ts$" },
       { path: npmPackage("yaml") },
       CORE,
@@ -235,6 +261,12 @@ module.exports = {
       "A domain reaches another domain only through its index.ts (README readable-code rule 3).",
       { path: "^domains/([^/]+)/" },
       { path: "^domains/", pathNot: ["^domains/$1/", "^domains/[^/]+/index\\.ts$"] },
+    ),
+    forbidden(
+      "domain-via-exports",
+      "From apps/, interfaces/, infrastructure/ or shared/, a domain is reached only through its index.ts or a file its package.json exports names, tests included (P0.09s, rule DC-2).",
+      { path: "^(apps|interfaces|infrastructure|shared)/" },
+      { path: "^domains/", pathNot: oneOfFiles(DOMAIN_ENTRY_FILES) },
     ),
     forbidden(
       "infra-shared-via-index",
@@ -429,5 +461,6 @@ Object.defineProperties(module.exports, {
   E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
+  DOMAIN_ENTRY_FILES: { value: DOMAIN_ENTRY_FILES },
   LEXICON_SCRIPT_BUILTINS: { value: LEXICON_SCRIPT_BUILTINS },
 });
