@@ -1,0 +1,761 @@
+// P1.39b (ADR 0046 decision 3): the edge's rules on Caddy's adapted config. Each reviewed config in adapted/ passes
+// with real values in place of the sentinels, and each rule has a red built by changing one of them. No container:
+// the configs themselves are proved against the built image in adapted.image.test.ts.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vitest";
+import { SENTINELS } from "./adapted.ts";
+import {
+  type AdaptedEnv,
+  adaptedProblems,
+  DEV_APP,
+  DEV_LISTENER,
+  DEV_PROXY_ADDRESS,
+  DEV_TLS,
+  type EdgeMode,
+  ENV_NAMES,
+  type EnvName,
+  type Json,
+} from "./adapted-rules.ts";
+import * as reader from "./caddyfile.ts";
+
+const EDGE = import.meta.dirname;
+type Obj = Record<string, Json>;
+const o = (value: Json | undefined): Obj => value as Obj;
+const a = (value: Json | undefined): Json[] => value as Json[];
+const copy = (value: Json): Json => JSON.parse(JSON.stringify(value)) as Json;
+
+const PDS = { PDS_HOST: "pds.example.org", PDS_UPSTREAM: "pds:3000" } as const;
+const ENVS: Readonly<Record<EdgeMode, AdaptedEnv>> = {
+  shipped: { ...PDS, ACME_EMAIL: "edge@example.org" },
+  local: { ...PDS, APP_HOST: "app.example.org", APP_UPSTREAM: "web:8080" },
+  dev: { ...PDS, ...DEV_APP },
+};
+const FILES: Readonly<Record<EdgeMode, string>> = { shipped: "prod", local: "local", dev: "dev" };
+
+/** What Caddy adapts for `mode` with ENVS' values: the reviewed text with each sentinel replaced. */
+function adapted(mode: EdgeMode): Json {
+  const text = readFileSync(join(EDGE, "adapted", `${FILES[mode]}.generated.json`), "utf8");
+  const names = Object.keys(ENVS[mode]) as EnvName[];
+  return JSON.parse(names.reduce((out, name) => out.replaceAll(SENTINELS[name], ENVS[mode][name] as string), text));
+}
+
+// Where things sit in an adapted config, for a red to change in place.
+const servers = (config: Json): Obj => o(o(o(o(config).apps).http).servers);
+const publicServer = (config: Json): Obj =>
+  Object.values(servers(config))
+    .map(o)
+    .find((server) => !String(a(server.listen)[0]).startsWith("127.")) as Obj;
+const healthServer = (config: Json): Obj =>
+  Object.values(servers(config))
+    .map(o)
+    .find((server) => String(a(server.listen)[0]).startsWith("127.")) as Obj;
+const siteRoute = (config: Json, host: string): Obj =>
+  a(publicServer(config).routes)
+    .map(o)
+    .find((route) => JSON.stringify(route.match) === JSON.stringify([{ host: [host] }])) as Obj;
+/** A site's handlers: the security headers and the like, then the one subroute that is the site's `route`. */
+const site = (config: Json, host: string): Json[] => a(o(a(o(a(siteRoute(config, host).handle)[0]).routes)[0]).handle);
+/** The routes inside a site's `route`: the zones first, the deny routes, then the upstream. */
+const inner = (config: Json, host: string): Json[] =>
+  a(
+    site(config, host)
+      .map(o)
+      .find((handler) => handler.handler === "subroute")?.routes,
+  );
+const handlerIn = (routes: Json[], name: string): Obj =>
+  routes
+    .flatMap((route) => a(o(route).handle))
+    .map(o)
+    .find((handler) => handler.handler === name) as Obj;
+const proxy = (config: Json, host: string): Obj => handlerIn(inner(config, host), "reverse_proxy");
+const zones = (config: Json, host: string): Obj => o(handlerIn(inner(config, host), "rate_limit").rate_limits);
+const request = (config: Json, host: string): Obj => o(o(proxy(config, host).headers).request);
+const tls = (config: Json): Obj => o(o(o(config).apps).tls);
+const P = PDS.PDS_HOST;
+const APP_LOCAL = "app.example.org";
+const APP_DEV = DEV_APP.APP_HOST;
+const respond = (status: number): Json => ({ handler: "static_response", status_code: status });
+const routeNamed = (config: Json, host: string, text: string): number =>
+  inner(config, host).findIndex((route) => JSON.stringify(route).includes(text));
+
+type Red = readonly [what: string, mode: EdgeMode, change: (config: Json) => void, reason: string];
+
+const SHAPE: Red[] = [
+  [
+    "a top-level key",
+    "shipped",
+    (c) => void Object.assign(o(c), { storage: {} }),
+    "the config holds a key the rules do not read",
+  ],
+  [
+    "a third app",
+    "shipped",
+    (c) => void Object.assign(o(o(c).apps), { pki: {} }),
+    "apps holds a key the rules do not read",
+  ],
+  [
+    "a server key",
+    "local",
+    (c) => void Object.assign(publicServer(c), { protocols: ["h1"] }),
+    "a server holds a key the rules do not read",
+  ],
+  [
+    "a route group",
+    "local",
+    (c) => void Object.assign(o(inner(c, P)[0]), { group: "g" }),
+    "a route holds a key the rules do not read",
+  ],
+  [
+    "a matcher the rules do not read",
+    "local",
+    (c) => void Object.assign(o(inner(c, P)[0]), { match: [{ remote_ip: { ranges: ["10.0.0.0/8"] } }] }),
+    "a matcher holds a key the rules do not read",
+  ],
+  [
+    "a matcher under not",
+    "dev",
+    (c) => void Object.assign(o(a(o(a(o(inner(c, APP_DEV)[1]).match)[0]).not)[0]), { expression: "true" }),
+    "a matcher holds a key the rules do not read",
+  ],
+  [
+    "a handler the rules do not read",
+    "local",
+    (c) => void a(o(inner(c, P)[0]).handle).push({ handler: "rewrite", uri: "/" }),
+    "a handler the rules do not read",
+  ],
+  [
+    "a handler key",
+    "local",
+    (c) => void Object.assign(proxy(c, P), { load_balancing: {} }),
+    "a reverse_proxy handler holds a key the rules do not read",
+  ],
+  [
+    "a zone key",
+    "local",
+    (c) => void Object.assign(o(zones(c, P).global), { burst: 1 }),
+    "a zone holds a key the rules do not read",
+  ],
+  [
+    "a zone matcher the rules do not read",
+    "local",
+    (c) => void Object.assign(o(Object.values(zones(c, P))[0]), { match: [{ query: {} }] }),
+    "a matcher holds a key the rules do not read",
+  ],
+  [
+    "a transport key",
+    "local",
+    (c) => void Object.assign(o(proxy(c, P).transport), { tls: {} }),
+    "a transport holds a key the rules do not read",
+  ],
+  [
+    "a response header change at an upstream",
+    "local",
+    (c) => void Object.assign(o(proxy(c, P).headers), { response: {} }),
+    "an upstream's headers holds a key the rules do not read",
+  ],
+  [
+    "a request header operation the rules do not read",
+    "local",
+    (c) => void Object.assign(request(c, P), { add: { "X-Forwarded-For": ["1.2.3.4"] } }),
+    "an upstream's request headers holds a key the rules do not read",
+  ],
+  ["the admin API on", "shipped", (c) => void Object.assign(o(c), { admin: {} }), "the admin API is not off"],
+  [
+    "config persisted",
+    "shipped",
+    (c) => void Object.assign(o(o(c).admin), { config: { persist: true } }),
+    "the admin API is not off",
+  ],
+];
+
+const SERVERS: Red[] = [
+  [
+    "a health site that answers elsewhere",
+    "shipped",
+    (c) => void Object.assign(healthServer(c), { listen: ["0.0.0.0:8081"] }),
+    "not exactly one health site on loopback",
+  ],
+  [
+    "a second site without an upstream",
+    "shipped",
+    (c) => void Object.assign(servers(c), { extra: { listen: ["127.0.0.1:9000"] } }),
+    "not exactly one public server",
+  ],
+  [
+    "no public server",
+    "shipped",
+    (c) => void Object.assign(o(o(o(c).apps).http), { servers: { health: healthServer(c) } }),
+    "not exactly one public server",
+  ],
+  [
+    "a plain-http listener",
+    "shipped",
+    (c) => void a(publicServer(c).listen).push(":80"),
+    "the public server is not on :443 alone",
+  ],
+  [
+    "a dev site on every address",
+    "dev",
+    (c) => void Object.assign(publicServer(c), { listen: [":443"] }),
+    "not bound to the edge's newt_edge address alone",
+  ],
+  [
+    "automatic HTTPS changed",
+    "shipped",
+    (c) => void Object.assign(publicServer(c), { automatic_https: { disable: true } }),
+    "the public server changes automatic HTTPS",
+  ],
+  [
+    "another timeout",
+    "local",
+    (c) => void Object.assign(publicServer(c), { read_timeout: 1 }),
+    "a server does not keep the shared timeouts",
+  ],
+  [
+    "a trusted proxy outside dev",
+    "local",
+    (c) => void Object.assign(publicServer(c), { trusted_proxies: { source: "static", ranges: ["10.0.0.0/8"] } }),
+    "a server trusts a proxy outside dev",
+  ],
+  [
+    "a client address header outside dev",
+    "shipped",
+    (c) => void Object.assign(publicServer(c), { client_ip_headers: ["X-Forwarded-For"] }),
+    "a server trusts a proxy outside dev",
+  ],
+  [
+    "a wider trusted range",
+    "dev",
+    (c) => void Object.assign(o(publicServer(c).trusted_proxies), { ranges: ["10.250.37.0/24"] }),
+    `${DEV_LISTENER} does not trust exactly ${DEV_PROXY_ADDRESS}`,
+  ],
+  [
+    "left to right",
+    "dev",
+    (c) => void delete publicServer(c).trusted_proxies_strict,
+    `${DEV_LISTENER} does not read right to left`,
+  ],
+  [
+    "another client address header",
+    "dev",
+    (c) => void a(publicServer(c).client_ip_headers).push("X-Real-IP"),
+    `${DEV_LISTENER} reads a header other than X-Forwarded-For`,
+  ],
+  [
+    "a catch-all site",
+    "local",
+    (c) => void a(publicServer(c).routes).push({ handle: [respond(200)] }),
+    "the public server holds a site other than the env's own",
+  ],
+  [
+    "a site for a second host",
+    "shipped",
+    (c) => void a(o(a(siteRoute(c, P).match)[0]).host).push("other.example.org"),
+    "the public server holds a site other than the env's own",
+  ],
+  [
+    "a site route that falls through",
+    "local",
+    (c) => void delete siteRoute(c, P).terminal,
+    "the public server holds a site other than the env's own",
+  ],
+  [
+    "an access log for another name",
+    "shipped",
+    (c) => void Object.assign(o(o(publicServer(c).logs).logger_names), { "other.example.org": ["log0"] }),
+    "the access log does not name exactly the env's sites",
+  ],
+  [
+    "no site for the PDS",
+    "local",
+    (c) => void Object.assign(publicServer(c), { routes: [siteRoute(c, APP_LOCAL)] }),
+    "{$PDS_HOST}: no site",
+  ],
+];
+
+const CERTIFICATES: Red[] = [
+  [
+    "another ACME directory",
+    "shipped",
+    (c) =>
+      void Object.assign(o(a(o(a(o(tls(c).automation).policies)[0]).issuers)[0]), { ca: "https://ca.example.org/dir" }),
+    "the certificates are not Let's Encrypt's for {$PDS_HOST} alone",
+  ],
+  [
+    "an internal issuer beside it",
+    "shipped",
+    (c) => void a(o(a(o(tls(c).automation).policies)[0]).issuers).push({ module: "internal" }),
+    "the certificates are not Let's Encrypt's for {$PDS_HOST} alone",
+  ],
+  [
+    "a certificate for another name",
+    "shipped",
+    (c) => void a(o(a(o(tls(c).automation).policies)[0]).subjects).push("other.example.org"),
+    "the certificates are not Let's Encrypt's for {$PDS_HOST} alone",
+  ],
+  [
+    "a file certificate under prod",
+    "shipped",
+    (c) => void Object.assign(publicServer(c), { tls_connection_policies: [{}] }),
+    "a file certificate outside dev and local",
+  ],
+  [
+    "another leaf file",
+    "local",
+    (c) => void Object.assign(o(a(o(tls(c).certificates).load_files)[0]), { certificate: "/etc/caddy/leaf.pem" }),
+    "a certificate other than the local (tls)",
+  ],
+  [
+    "the dev leaf under local",
+    "local",
+    (c) => void Object.assign(o(a(o(tls(c).certificates).load_files)[0]), { certificate: DEV_TLS[0], key: DEV_TLS[1] }),
+    "a certificate other than the local (tls)",
+  ],
+  [
+    "the local leaf under dev",
+    "dev",
+    (c) =>
+      void Object.assign(o(a(o(tls(c).certificates).load_files)[0]), {
+        certificate: "/run/secrets/local_tls_cert",
+        key: "/run/secrets/local_tls_key",
+      }),
+    "a certificate other than the dev (tls)",
+  ],
+  [
+    "an issuer beside the leaf",
+    "dev",
+    (c) => void Object.assign(tls(c), { automation: { policies: [{ issuers: [{ module: "internal" }] }] } }),
+    "a certificate other than the dev (tls)",
+  ],
+  [
+    "a second leaf",
+    "local",
+    (c) => void a(o(tls(c).certificates).load_files).push({ certificate: "/a", key: "/b", tags: ["cert1"] }),
+    "a certificate other than the local (tls)",
+  ],
+  [
+    "the leaf selected for another name",
+    "local",
+    (c) => void a(o(o(a(publicServer(c).tls_connection_policies)[0]).match).sni).push("other.example.org"),
+    "the local leaf is not selected for exactly the env's hosts",
+  ],
+  [
+    "another certificate selected",
+    "dev",
+    (c) =>
+      void Object.assign(o(a(publicServer(c).tls_connection_policies)[0]), {
+        certificate_selection: { any_tag: ["cert1"] },
+      }),
+    "the dev leaf is not selected for exactly the env's hosts",
+  ],
+  [
+    "a client certificate rule on the fallback policy",
+    "dev",
+    (c) => void Object.assign(o(a(publicServer(c).tls_connection_policies)[1]), { client_authentication: {} }),
+    "the dev leaf is not selected for exactly the env's hosts",
+  ],
+];
+
+const SITES: Red[] = [
+  [
+    "a handler beside the site",
+    "local",
+    (c) => void a(siteRoute(c, P).handle).push(respond(200)),
+    "{$PDS_HOST}: not exactly one plain route",
+  ],
+  [
+    "a matched site body",
+    "local",
+    (c) => void Object.assign(o(a(o(a(siteRoute(c, P).handle)[0]).routes)[0]), { match: [{ path: ["/x"] }] }),
+    "{$PDS_HOST}: not exactly one plain route",
+  ],
+  [
+    "a second route in the site",
+    "local",
+    (c) => void site(c, P).push({ handler: "subroute", routes: [] }),
+    "{$PDS_HOST}: not exactly one plain route",
+  ],
+  [
+    "zones behind a matcher",
+    "local",
+    (c) => void Object.assign(o(inner(c, P)[0]), { match: [{ path: ["/xrpc/*"] }] }),
+    "{$PDS_HOST}: the route does not apply the zones first",
+  ],
+  [
+    "a route before the zones",
+    "local",
+    (c) => void inner(c, P).unshift({ match: [{ path: ["/open"] }], handle: [respond(200)] }),
+    "{$PDS_HOST}: the route does not apply the zones first",
+  ],
+  [
+    "an upstream before the zones",
+    "local",
+    (c) => void a(o(inner(c, APP_LOCAL)[0]).handle).reverse(),
+    "{$APP_HOST}: the route does not apply the zones first",
+  ],
+  ["no zones", "local", (c) => void a(o(inner(c, APP_LOCAL)[0]).handle).shift(), "{$APP_HOST}: 0 rate_limit blocks"],
+  [
+    "two zone blocks",
+    "local",
+    (c) => void inner(c, P).splice(1, 0, { handle: [copy(a(o(inner(c, P)[0]).handle)[0] as Json)] }),
+    "{$PDS_HOST}: 2 rate_limit blocks",
+  ],
+  ["no global zone", "local", (c) => void delete zones(c, P).global, "{$PDS_HOST}: there is no global zone"],
+  [
+    "a matched global zone",
+    "local",
+    (c) => void Object.assign(o(zones(c, P).global), { match: [{ path: ["/xrpc/*"] }] }),
+    "{$PDS_HOST}: the global zone has a matcher",
+  ],
+  [
+    "a matched app global zone",
+    "dev",
+    (c) => void Object.assign(o(zones(c, APP_DEV).app_global), { match: [{ method: ["POST"] }] }),
+    "{$APP_HOST}: the app_global zone has a matcher",
+  ],
+  [
+    "the PDS's zones on the dev app site",
+    "dev",
+    (c) => void Object.assign(zones(c, APP_DEV), { global: copy(zones(c, P).global as Json) }),
+    "{$APP_HOST}: the route applies another site's zones",
+  ],
+  [
+    "a zone keyed on a header",
+    "local",
+    (c) => void Object.assign(o(zones(c, P).global), { key: "{http.request.header.X-Forwarded-For}" }),
+    "{$PDS_HOST}: the global zone is not keyed on {client_ip}",
+  ],
+  [
+    "a zone keyed on nothing",
+    "dev",
+    (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { key: "static" }),
+    "{$APP_HOST}: the app_signin zone is not keyed on {client_ip}",
+  ],
+];
+
+const UPSTREAMS: Red[] = [
+  ["no upstream", "local", (c) => void inner(c, P).pop(), "{$PDS_HOST}: public site without an upstream"],
+  [
+    "an upstream outside the route",
+    "local",
+    (c) => void site(c, P).unshift(copy(proxy(c, P))),
+    "{$PDS_HOST}: a reverse_proxy is outside the route",
+  ],
+  [
+    "another upstream",
+    "local",
+    (c) => void Object.assign(proxy(c, P), { upstreams: [{ dial: "other:1" }] }),
+    "{$PDS_HOST}: a reverse_proxy does not name the site's one upstream",
+  ],
+  [
+    "the other site's upstream",
+    "local",
+    (c) => void Object.assign(proxy(c, APP_LOCAL), { upstreams: [{ dial: PDS.PDS_UPSTREAM }] }),
+    "{$APP_HOST}: a reverse_proxy does not name the site's one upstream",
+  ],
+  [
+    "a second upstream",
+    "local",
+    (c) => void a(proxy(c, P).upstreams).push({ dial: "other:1" }),
+    "{$PDS_HOST}: a reverse_proxy does not name the site's one upstream",
+  ],
+  [
+    "X-Forwarded-For kept",
+    "local",
+    (c) => void Object.assign(request(c, P), { delete: ["X-Real-IP", "Forwarded"] }),
+    "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-For",
+  ],
+  [
+    "Forwarded kept",
+    "dev",
+    (c) => void Object.assign(request(c, APP_DEV), { delete: ["X-Forwarded-For", "X-Real-IP"] }),
+    "{$APP_HOST}: a reverse_proxy passes Forwarded",
+  ],
+  [
+    "X-Real-IP set again",
+    "local",
+    (c) => void Object.assign(o(request(c, P).set), { "x-real-ip": ["{http.request.remote.host}"] }),
+    "{$PDS_HOST}: a reverse_proxy passes X-Real-IP",
+  ],
+  [
+    "X-Forwarded-Host not set",
+    "dev",
+    (c) => void delete o(request(c, P).set)["X-Forwarded-Host"],
+    "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host",
+  ],
+  [
+    "X-Forwarded-Host from a header",
+    "dev",
+    (c) => void Object.assign(o(request(c, P).set), { "X-Forwarded-Host": ["{http.request.header.X-Forwarded-Host}"] }),
+    "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host",
+  ],
+  [
+    "X-Forwarded-Host set twice",
+    "dev",
+    (c) => void Object.assign(o(request(c, P).set), { "x-forwarded-host": ["{http.request.host}"] }),
+    "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host",
+  ],
+  [
+    "X-Forwarded-Host removed too",
+    "dev",
+    (c) => void a(request(c, P).delete).push("x-forwarded-host"),
+    "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-Host",
+  ],
+];
+
+const DEV_SHAPE: Red[] = [
+  ["no HSTS", "dev", (c) => void site(c, APP_DEV).splice(0, 1), "{$APP_HOST}: does not import security-headers"],
+  [
+    "a weaker HSTS",
+    "dev",
+    (c) => {
+      const hsts = site(c, P)
+        .map(o)
+        .find((handler) => JSON.stringify(handler).includes("Strict-Transport-Security"));
+      Object.assign(o(o(hsts?.response).set), { "Strict-Transport-Security": ["max-age=1"] });
+    },
+    "{$PDS_HOST}: does not import security-headers",
+  ],
+  [
+    "indexable",
+    "dev",
+    (c) =>
+      void site(c, P).splice(
+        site(c, P).findIndex((handler) => JSON.stringify(handler).includes("X-Robots-Tag")),
+        1,
+      ),
+    "{$PDS_HOST}: does not import noindex",
+  ],
+  [
+    "the admin guard gone",
+    "dev",
+    (c) => void inner(c, P).splice(routeNamed(c, P, "xrpc_admin"), 1),
+    "{$PDS_HOST}: does not import xrpc-guard",
+  ],
+  [
+    "the admin guard after the upstream",
+    "dev",
+    (c) => void inner(c, P).push(...inner(c, P).splice(routeNamed(c, P, "xrpc_admin"), 1)),
+    "{$PDS_HOST}: does not import xrpc-guard",
+  ],
+  [
+    "blob routes open",
+    "dev",
+    (c) => void inner(c, P).splice(routeNamed(c, P, '"name":"blob"'), 1),
+    "{$PDS_HOST}: does not import blob-deny",
+  ],
+  [
+    "blob routes shut with another status",
+    "dev",
+    (c) => void Object.assign(o(inner(c, P)[routeNamed(c, P, '"name":"blob"')]), { handle: [respond(200)] }),
+    "{$PDS_HOST}: does not import blob-deny",
+  ],
+  [
+    "sign-in files writable",
+    "dev",
+    (c) => void inner(c, APP_DEV).splice(routeNamed(c, APP_DEV, "signin_files_write"), 1),
+    "{$APP_HOST}: does not import signin-files",
+  ],
+];
+
+const FONTS: Red[] = [
+  [
+    "no font files",
+    "local",
+    (c) => void inner(c, P).splice(routeNamed(c, P, "pds_font"), 1),
+    "{$PDS_HOST}: the route does not import pds-fonts once before its upstream",
+  ],
+  [
+    "the font files twice",
+    "local",
+    (c) => void inner(c, P).splice(1, 0, copy(inner(c, P)[routeNamed(c, P, "pds_font")] as Json)),
+    "{$PDS_HOST}: the route does not import pds-fonts once before its upstream",
+  ],
+  [
+    "the fonts after the upstream",
+    "local",
+    (c) => void inner(c, P).push(...inner(c, P).splice(routeNamed(c, P, "pds_font"), 2)),
+    "{$PDS_HOST}: the route does not import pds-fonts once before its upstream",
+  ],
+  [
+    "no font-src on the PDS pages",
+    "local",
+    (c) => void a(o(inner(c, P).at(-1)).handle).shift(),
+    "{$PDS_HOST}: the route does not import pds-fonts once before its upstream",
+  ],
+  [
+    "another font root",
+    "local",
+    (c) => void Object.assign(handlerIn(inner(c, P), "file_server"), { root: "/etc/caddy" }),
+    "serves files outside pds-fonts",
+  ],
+  [
+    "the fonts on the app site",
+    "local",
+    (c) => void inner(c, APP_LOCAL).unshift(copy(inner(c, P)[routeNamed(c, P, "pds_font")] as Json)),
+    "{$APP_HOST}: imports pds-fonts",
+  ],
+  [
+    "a file server elsewhere",
+    "local",
+    (c) => void inner(c, APP_LOCAL).push({ handle: [{ handler: "file_server", root: "/srv" }] }),
+    "serves files outside pds-fonts",
+  ],
+  [
+    "a response matcher elsewhere",
+    "local",
+    (c) =>
+      void site(c, P).unshift({
+        handler: "headers",
+        response: { require: { status_code: [2] }, set: { "X-Test": ["1"] } },
+      }),
+    "a response matcher outside pds-fonts",
+  ],
+  [
+    "a CSP set elsewhere",
+    "local",
+    (c) =>
+      void site(c, APP_LOCAL).unshift({
+        handler: "headers",
+        response: { set: { "content-security-policy": ["default-src *"] } },
+      }),
+    "changes a Content-Security-Policy outside pds-fonts",
+  ],
+  [
+    "a CSP removed",
+    "dev",
+    (c) => void site(c, P).unshift({ handler: "headers", response: { delete: ["Content-Security-Policy"] } }),
+    "changes a Content-Security-Policy outside pds-fonts",
+  ],
+];
+
+const header = (value: string): Json => ({ handler: "headers", response: { set: { "X-Test": [value] } } });
+const STRAY: Red[] = [
+  [
+    "the PDS host in a header",
+    "local",
+    (c) => void site(c, APP_LOCAL).unshift(header(`https://${P}/`)),
+    "{$PDS_HOST} is outside its position",
+  ],
+  [
+    "the upstream in a header",
+    "local",
+    (c) => void site(c, P).unshift(header(PDS.PDS_UPSTREAM)),
+    "{$PDS_UPSTREAM} is outside its position",
+  ],
+  [
+    "the ACME email in a header",
+    "shipped",
+    (c) => void site(c, P).unshift(header("edge@example.org")),
+    "{$ACME_EMAIL} is outside its position",
+  ],
+  [
+    "a secret path in a header",
+    "local",
+    (c) => void site(c, P).unshift(header("/run/secrets/pds_admin_password")),
+    "a secret path outside the certificate files",
+  ],
+  [
+    "the dev leaf named under local",
+    "local",
+    (c) => void site(c, P).unshift(header("dev_tls_cert")),
+    "the dev leaf outside dev",
+  ],
+  [
+    "the local leaf named under prod",
+    "shipped",
+    (c) => void site(c, P).unshift(header("local_tls_key")),
+    "the local leaf outside local",
+  ],
+];
+
+const REDS: readonly Red[] = [
+  ...SHAPE,
+  ...SERVERS,
+  ...CERTIFICATES,
+  ...SITES,
+  ...UPSTREAMS,
+  ...DEV_SHAPE,
+  ...FONTS,
+  ...STRAY,
+];
+const changed = ([, mode, change]: Red): string[] => {
+  const config = adapted(mode);
+  change(config);
+  return adaptedProblems(config, mode, ENVS[mode]);
+};
+
+describe("edge rules on the adapted config (P1.39b)", () => {
+  test("rules_constants_are_the_readers", () => {
+    expect(Object.fromEntries(Object.entries(ENV_NAMES).map(([name, shape]) => [name, shape.source]))).toEqual(
+      Object.fromEntries(Object.entries(reader.ENV_NAMES).map(([name, shape]) => [name, shape.source])),
+    );
+    expect(DEV_APP).toEqual(reader.DEV_APP);
+    expect(DEV_TLS).toEqual(reader.DEV_TLS);
+    expect(DEV_LISTENER).toBe(reader.DEV_LISTENER);
+    expect(DEV_PROXY_ADDRESS).toBe(reader.DEV_PROXY_ADDRESS);
+  });
+
+  test("rules_pass_each_reviewed_config", () => {
+    for (const mode of ["shipped", "local", "dev"] as const) {
+      expect(adaptedProblems(adapted(mode), mode, ENVS[mode]), mode).toEqual([]);
+    }
+  });
+
+  test("rules_pass_whatever_order_caddy_gives_the_two_sites", () => {
+    for (const mode of ["local", "dev"] as const) {
+      const config = adapted(mode);
+      a(publicServer(config).routes).reverse();
+      a(o(o(a(publicServer(config).tls_connection_policies)[0]).match).sni).reverse();
+      expect(adaptedProblems(config, mode, ENVS[mode]), mode).toEqual([]);
+    }
+  });
+
+  test("rules_fail_a_config_of_another_env", () => {
+    expect(adaptedProblems(adapted("local"), "shipped", ENVS.shipped)).not.toEqual([]);
+    expect(adaptedProblems(adapted("shipped"), "local", ENVS.local)).not.toEqual([]);
+    expect(adaptedProblems(adapted("local"), "dev", ENVS.local)).not.toEqual([]);
+    expect(adaptedProblems(adapted("dev"), "local", ENVS.dev)).not.toEqual([]);
+  });
+
+  test("rules_fail_values_that_do_not_fit", () => {
+    const fails = (mode: EdgeMode, env: AdaptedEnv, reason: string) =>
+      expect(adaptedProblems(adapted(mode), mode, env), reason).toContain(reason);
+    fails("shipped", { ...PDS }, "{$ACME_EMAIL} is not set");
+    fails("shipped", { ...ENVS.shipped, PDS_HOST: "pds.example.org/x" }, "{$PDS_HOST} is not set");
+    fails("shipped", { ...ENVS.shipped, PDS_HOST: "PDS.example.org" }, "{$PDS_HOST} is not lower case");
+    fails("shipped", { ...ENVS.shipped, PDS_UPSTREAM: "http://pds:3000" }, "{$PDS_UPSTREAM} is not set");
+    fails("local", { ...PDS }, "{$APP_HOST} is not set");
+    fails("local", { ...ENVS.local, APP_HOST: PDS.PDS_HOST }, "{$APP_HOST} equals {$PDS_HOST}");
+    fails("local", { ...ENVS.local, APP_UPSTREAM: PDS.PDS_UPSTREAM }, "{$APP_UPSTREAM} equals {$PDS_UPSTREAM}");
+    fails("dev", { ...ENVS.dev, APP_HOST: "app.example.org" }, "{$APP_HOST} is not the dev app site's ruled value");
+    fails("dev", { ...ENVS.dev, APP_UPSTREAM: "web:8081" }, "{$APP_UPSTREAM} is not the dev app site's ruled value");
+    // The sentinels the reviewed files hold are no dev app values either.
+    fails("dev", { ...ENVS.dev, APP_HOST: SENTINELS.APP_HOST }, "{$APP_HOST} is not the dev app site's ruled value");
+  });
+
+  test("rules_fail_what_is_not_a_config", () => {
+    for (const config of [null, [], "text", {}, { apps: { http: { servers: [] } } }] as Json[]) {
+      expect(adaptedProblems(config, "shipped", ENVS.shipped), JSON.stringify(config)).not.toEqual([]);
+    }
+  });
+
+  test.each(REDS.map((red) => [red[0], red] as const))("rules_fail_%s", (_what, red) => {
+    expect(changed(red)).toContain(red[3]);
+  });
+
+  test("rules_reds_are_named_once", () => {
+    const names = REDS.map(([what]) => what);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test("rules_messages_carry_no_configured_value", () => {
+    for (const red of REDS) {
+      const env = ENVS[red[1]];
+      for (const reason of changed(red)) {
+        for (const value of Object.values(env)) expect(reason.includes(value), `${red[0]}: ${reason}`).toBe(false);
+      }
+    }
+  });
+});

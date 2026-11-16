@@ -141,8 +141,9 @@ jobs:
   # push-to-main condition, from the checkout of the published commit, and runs one script. It holds contents: write
   # and pull-requests: write to push a `lock-bump/…` branch and open the pull request; it holds no id-token, no
   # packages scope and no environment, so it cannot sign or push an image, and the publish job gains nothing. It never
-  # merges: the pull request is judged by lock.yml (P2.26j) and the required checks like any other, and main's ruleset
-  # still refuses a direct push. scripts/guards/workflows.ts pins this job line for line (BUMP_JOB_LINES): an edit
+  # merges directly: the pull request is judged by lock.yml (P2.26j) and the required checks like any other, and
+  # main's ruleset still refuses a direct push. While that ruleset requires the `lock` check, the script turns on
+  # GitHub's auto-merge for the pull request it opened (P2.26n, ADR 0047); otherwise a person merges. scripts/guards/workflows.ts pins this job line for line (BUMP_JOB_LINES): an edit
   # here, an action bump included, edits the guard too.
   #
   # Operating it (GitHub docs read 2026-11-15; unverified until the first run on main):
@@ -154,7 +155,7 @@ jobs:
   #   runs "in an approval-required state"; the owner starts them with "Approve workflows to run" in the pull
   #   request's merge box (docs.github.com/en/actions/concepts/security/github_token). Should no banner show, closing
   #   and reopening the pull request as a person starts them.
-  # - Each publish run opens its own pull request. Merge the newest and close older ones: a bump names every
+  # - Each publish run opens its own pull request. Merge the newest (or let it merge itself) and close older ones: a bump names every
   #   first-party image, so the newest covers them, and lock.yml refuses an older one once a newer is merged.
   bump:
     needs: publish

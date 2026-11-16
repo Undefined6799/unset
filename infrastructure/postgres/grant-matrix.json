@@ -122,6 +122,12 @@
     "audit.chain": {
       "auditor": { "privileges": ["SELECT"], "wholeTable": true }
     },
+    "audit.redaction_log": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
+    "audit.segment": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
     "app.single_use": {
       "retention": {
         "columns": {
