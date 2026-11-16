@@ -566,3 +566,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0047 accepted (Alex, 2026-11-16 00:03:50Z, against 1b12ea7; own record:
   [0047](0047-lock-bump-auto-merge.md)):** a lock bump the publish run opened merges itself while main's ruleset
   requires the `lock` check. Before removing that check, disable auto-merge on any open bump pull request.
+- **ADR 0048 accepted (Alex, 2026-11-15 23:29:47Z, against f30636e; own record:
+  [0048](0048-session-issuer-origin.md)):** `app.session` gets a nullable `issuer_origin` column, written once at
+  sign-in from the issuer the OAuth library verified, so the account pages draw the sign-in server link from the
+  session row and stop unsealing the token set for it. Not new personal data; it leaves with the row.
