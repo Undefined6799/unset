@@ -202,7 +202,7 @@ function sharedRefProblems(lock: Lock): string[] {
  * `edge_runtime_has_no_package_manager`: P1.28o removed apk-tools from its Caddy Alpine runtime, and P1.28y fails any
  * edge image whose last apk command does not remove it.
  */
-type Kind = "node" | "edge" | "postgres";
+type Kind = "node" | "edge" | "postgres" | "objects";
 /** Lock entry to kind, in kinds.json so the built-image tests iterate the same map (package-manager.image.test.ts). */
 const KIND_BY_FINAL_ENTRY = new Map(
   Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, "kinds.json"), "utf8")) as Record<string, Kind>),
@@ -537,6 +537,7 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", [["cap_net_bind_service=+ep", "/usr/bin/caddy"]]], // edge/Dockerfile:26
   ["node", []],
   ["postgres", []],
+  ["objects", []],
 ]);
 
 /** dpkg's maintainer scripts, which the Debian kinds drop once dpkg is gone, word for word as written. */
@@ -559,6 +560,7 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
   ["node", [DPKG_SCRIPTS_RM]],
   ["postgres", [DPKG_SCRIPTS_RM]],
+  ["objects", []],
 ]);
 const GLOB = /[*?[{]/;
 /**
@@ -572,6 +574,7 @@ const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
   ["node", ["/opt/yarn-*", ...DPKG_SCRIPT_GLOBS]],
   ["postgres", DPKG_SCRIPT_GLOBS],
+  ["objects", []],
 ]);
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
@@ -713,6 +716,7 @@ const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
   ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
+  ["objects", []], // objects.Dockerfile copies nothing; its S3 identities are a run-time secret
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -788,6 +792,7 @@ const ENV_KEYS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
   ["node", ["NODE_ENV"]], // node-app.Dockerfile:30, migrate.Dockerfile:19
   ["postgres", []],
+  ["objects", []],
 ]);
 const ENV_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=\S*$/;
 
@@ -1010,16 +1015,19 @@ const NODE = lock.node as Base;
  * Node image is held to the Node runtime rules below without editing this test.
  */
 const nodeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "node");
-const edgeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "edge");
+/** P2.18s: the objects kind's SeaweedFS base is Alpine too and ships apk, so the edge's apk rule holds for it. */
+const alpineDockerfiles = dockerfiles.filter((file) => ["edge", "objects"].includes(kindOf(read(file), lock) ?? ""));
 const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
   test("base_digest_matches_lock", () => {
     for (const file of dockerfiles) {
       expect(baseProblems(read(file), lock), file).toEqual([]);
-      // The postgres image is one stage, the official image minus gosu (P1.29d); the others build in earlier stages.
+      // The postgres image is one stage, the official image minus gosu (P1.29d), and so is the objects image, SeaweedFS
+      // minus its root entrypoint and FUSE (P2.18s); the others build in earlier stages.
       const stages = fromImages(read(file)).length;
-      if (kindOf(read(file), lock) === "postgres") expect(stages, file).toBe(1);
+      const kind = kindOf(read(file), lock);
+      if (kind === "postgres" || kind === "objects") expect(stages, file).toBe(1);
       else expect(stages, file).toBeGreaterThanOrEqual(2);
     }
     const other = `sha256:${"1".repeat(64)}`;
@@ -2096,6 +2104,7 @@ const USER_BY_KIND = new Map<Kind, string>([
   ["edge", "USER 65532:65532"],
   ["node", "USER 65532:65532"],
   ["postgres", "USER 999:999"],
+  ["objects", "USER 1000:1000"],
 ]);
 
 /** The instructions of the last stage, the one that becomes the image, with continuation lines joined. */
@@ -2197,8 +2206,8 @@ describe("runtime stage", () => {
 
   test("edge_runtime_has_no_package_manager", () => {
     // The rule runs over every edge-kind image, edge/Dockerfile among them.
-    expect(edgeDockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile"]));
-    for (const file of edgeDockerfiles) expect(apkKeptProblems(read(file)), file).toEqual([]);
+    expect(alpineDockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile", "images/objects.Dockerfile"]));
+    for (const file of alpineDockerfiles) expect(apkKeptProblems(read(file)), file).toEqual([]);
     const caddy = lock.caddy as Base;
     const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
     const kept = "the final stage keeps apk: its last apk command does not remove apk-tools";

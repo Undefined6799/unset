@@ -377,6 +377,8 @@ const PRIVILEGES_BY_KIND = new Map<string, readonly string[]>([
   ["node", []],
   // postgres.Dockerfile removes the same eleven files from the official Postgres image, also Debian trixie (P1.29d).
   ["postgres", []],
+  // objects.Dockerfile removes fuse, whose /bin/fusermount is the SeaweedFS base's only setuid file (4.53, checked).
+  ["objects", []],
 ]);
 
 /** Every privilege in a listing: setuid and setgid files, and every member's extended attributes. */
