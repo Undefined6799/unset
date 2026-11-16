@@ -14,6 +14,7 @@ import {
   listDockerfiles,
   PDS_IGNOREFILE,
   PDS_RECIPE,
+  SEAWEEDFS_IGNOREFILE,
 } from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -75,16 +76,24 @@ describe("list dockerfiles", () => {
     // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
     // P2.24t: the pds-ui recipe reads the PDS image's file. P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the
     // two app images read the app file, which holds only the zod finding.
-    expect(IGNOREFILES).toEqual({ "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE });
+    // P2.18s (Alex's "yes seaweedfs waiver", 2026-11-15T23:36:23Z): the objects image ships upstream's weed binary,
+    // so its scan reads the SeaweedFS file, whose one entry names usr/bin/weed and x/net v0.61.0 only.
+    expect(SEAWEEDFS_IGNOREFILE).toBe(".github/trivyignore.seaweedfs.yaml");
+    expect(IGNOREFILES).toStrictEqual({
+      "node-app": APP_IGNOREFILE,
+      migrate: APP_IGNOREFILE,
+      objects: SEAWEEDFS_IGNOREFILE,
+    });
     for (const image of listed) {
       const expected =
         image.dockerfile === PDS_RECIPE
           ? PDS_IGNOREFILE
           : Object.hasOwn(IGNOREFILES, image.name)
-            ? APP_IGNOREFILE
+            ? IGNOREFILES[image.name]
             : "/dev/null";
       expect(image.ignorefile, image.name).toBe(expected);
     }
+    expect(listed.find((image) => image.name === "objects")?.ignorefile).toBe(SEAWEEDFS_IGNOREFILE);
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
     const cli = runCli(ROOT, output);
