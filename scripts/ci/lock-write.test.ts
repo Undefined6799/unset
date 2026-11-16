@@ -54,6 +54,7 @@ describe("lock write", () => {
     expect(bumpedFiles(JSON.stringify(Object.fromEntries(first)), lockText, composeText, commit)).toEqual({
       lock: lockText,
       compose: composeText,
+      skipped: [],
     });
   });
 
@@ -78,11 +79,20 @@ describe("lock write", () => {
     expect(() => bumpedFiles("{", "{}", "", NEW)).toThrow();
   });
 
-  test("refuses_to_add_drop_or_convert_an_entry", () => {
-    expect(() => write({ ...published, objects: ours("objects", "5", NEW) })).toThrow(
-      "objects: not a first-party entry of the committed lock",
-    );
+  test("skips_a_published_image_the_lock_does_not_name", () => {
+    // A new kind is published before a reviewed pull request adds it to the lock by hand; until then every bump skips
+    // it, so it neither blocks the bump of the images the lock names nor enters the lock or the compose file.
+    const result = write({ ...published, objects: ours("objects", "5", NEW) });
+    expect(result).toEqual({ ...write(published), skipped: ["objects"] });
+    expect(result.lock).not.toContain("objects");
+    expect(result.compose).not.toContain("objects");
+    // Still judged like every published entry: a malformed one fails the bump.
+    expect(() => write({ ...published, objects: ours("objects", "5", OLD) })).toThrow("objects: it names commit");
+  });
+
+  test("refuses_to_drop_or_convert_an_entry", () => {
     expect(() => write({ web: published.web })).toThrow("edge: locked but not published");
+    expect(() => write({ objects: ours("objects", "5", NEW) })).toThrow("web: locked but not published");
     // A mirror entry never becomes ours through a bump.
     const mirrorNamed = { ...published, newt: ours("newt", "5", NEW) };
     expect(() => write(mirrorNamed)).toThrow("newt: not a first-party entry of the committed lock");
