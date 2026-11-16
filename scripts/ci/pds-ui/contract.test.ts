@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { PAIRS, type Pair, parseLock, recipeContract, uiDirectoryOf } from "./contract.ts";
 
-const UI_DIRECTORY = uiDirectoryOf(PAIRS["0.4.5049"] as Pair);
+const UI_DIRECTORY = uiDirectoryOf(PAIRS["0.4.5051"] as Pair);
 
 const locked = {
   schema: 1,
   base: {
-    ref: "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf",
+    ref: "ghcr.io/bluesky-social/pds:0.4.5051@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6",
     platform: "linux/amd64",
   },
   builder: {
@@ -18,25 +18,26 @@ const locked = {
     pnpm: "11.11.0",
   },
   source: {
-    revision: "5d6febdd96671891bd82f07fece7eb089c6fe931",
-    archiveSha256: "d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be",
-    lockSha256: "b03bf840f28d91bb69a06b6252e61904611c104adc4d69e2282b2c866158cf07",
+    revision: "fb16c8e0247fb5159fd23ce0e5301249532d1b4e",
+    archiveSha256: "8ec64f48214236a37ffe739b17fe80bfd060c2cf438ff028484cb24ebcc4dc08",
+    lockSha256: "371a48189e93b5868a3538ffc9eb576a1dae48ad671aa029adda9851def1b2e5",
   },
   uiDirectory: UI_DIRECTORY,
 };
-/** The pair P1.38m dropped once the 0.4.5049 re-pin (P1.38h) merged. */
+/** The pair P1.38o dropped once the 0.4.5051 re-pin (#1611) merged; it had the same builder. */
 const dropped = {
   ...locked,
   base: {
     ...locked.base,
-    ref: "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    ref: "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf",
   },
-  builder: {
-    ref: "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
-    node: "26.10.0",
-    pnpm: "11.11.0",
-  },
-  uiDirectory: UI_DIRECTORY.replace("@0.10.7/", "@0.10.5/"),
+  uiDirectory: UI_DIRECTORY.replace("@0.11.0/", "@0.10.7/"),
+};
+/** The builder of 0.4.5037, which P1.38m dropped. */
+const oldBuilder = {
+  ref: "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
+  node: "26.10.0",
+  pnpm: "11.11.0",
 };
 const recipe = `FROM ${locked.builder.ref} AS ui-build\nADD --checksum=sha256:${locked.source.archiveSha256} https://codeload.github.com/bluesky-social/atproto/tar.gz/${locked.source.revision} /tmp/atproto.tar.gz\nFROM scratch AS ui-artifact\nCOPY --from=ui-build /build/dist/ /dist/\nFROM ${locked.base.ref}\nRUN rm -rf /${UI_DIRECTORY}\nCOPY --from=ui-artifact /dist/ /${UI_DIRECTORY}/\n`;
 function root() {
@@ -67,7 +68,7 @@ describe("derived PDS recipe contract", () => {
       expect(() => parseLock(JSON.stringify({ ...locked, ...delta }))).toThrow();
   });
   test("pds_lock_accepts_only_the_reviewed_pair_with_its_ui_directory", () => {
-    expect(Object.keys(PAIRS)).toEqual(["0.4.5049"]);
+    expect(Object.keys(PAIRS)).toEqual(["0.4.5051"]);
     expect(parseLock(JSON.stringify(locked))).toEqual(locked);
     expect(() => parseLock(JSON.stringify(dropped))).toThrow();
     expect(() => parseLock(JSON.stringify({ ...locked, uiDirectory: dropped.uiDirectory }))).toThrow();
@@ -75,11 +76,11 @@ describe("derived PDS recipe contract", () => {
     expect(() => parseLock(JSON.stringify({ ...locked, base: unreviewed }))).toThrow();
   });
   test("pds_lock_accepts_only_its_pairs_exact_builder", () => {
-    expect((PAIRS["0.4.5049"] as Pair).builder).toEqual({ ref: locked.builder.ref, node: locked.builder.node });
+    expect((PAIRS["0.4.5051"] as Pair).builder).toEqual({ ref: locked.builder.ref, node: locked.builder.node });
     for (const builder of [
-      dropped.builder,
+      oldBuilder,
       { ...locked.builder, node: "26.10.0" },
-      { ...locked.builder, ref: dropped.builder.ref },
+      { ...locked.builder, ref: oldBuilder.ref },
       { ...locked.builder, ref: `docker.io/library/node:26.12.1-trixie-slim@sha256:${"0".repeat(64)}` },
     ])
       expect(() => parseLock(JSON.stringify({ ...locked, builder }))).toThrow();

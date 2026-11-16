@@ -571,6 +571,14 @@ jobs:
               ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)
                 ignorefile=.github/trivyignore.pds.yaml
                 ;;
+              # P2.18s (Alex's "yes waiver", 2026-11-15T23:08:12Z): only docker.io/chrislusf/seaweedfs reads its own file.
+              docker.io/chrislusf/seaweedfs:*|docker.io/chrislusf/seaweedfs@*)
+                ignorefile=.github/trivyignore.seaweedfs.yaml
+                ;;
+              # P1.37m: only docker.io/fosrl/newt reads its own file (CVE-2026-78661, x/net/html not linked).
+              docker.io/fosrl/newt:*|docker.io/fosrl/newt@*)
+                ignorefile=.github/trivyignore.newt.yaml
+                ;;
             esac
             status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \

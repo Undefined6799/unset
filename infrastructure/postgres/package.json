@@ -12,6 +12,7 @@
     "unset-rewrap": "./rewrap-cli.ts"
   },
   "dependencies": {
+    "@unset/domains-identity": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/infrastructure-seal": "*",
     "@unset/shared-config": "*",

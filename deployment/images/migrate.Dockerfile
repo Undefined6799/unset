@@ -21,6 +21,10 @@ COPY --from=deps /app/shared /app/shared
 # config.ts checks PG_HOST through net-guard's address classes (its `classifyAddress`), so net-guard ships too.
 COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres
+# Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
+# base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
+# no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*
 # The CLI needs node only, so every package manager the base may ship leaves the runtime, apt and dpkg included, and
 # dpkg's maintainer scripts with them, then the base's setuid and setgid files, as in node-app.Dockerfile.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \

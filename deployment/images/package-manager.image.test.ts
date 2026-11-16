@@ -345,6 +345,12 @@ const DATABASE_BY_KIND = new Map([
     "edge",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
   ],
+  // The objects image's Alpine base keeps the same four apk files once apk-tools is gone (read from the built image on
+  // SeaweedFS 4.53, 2026-11-16).
+  [
+    "objects",
+    { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
+  ],
 ]);
 
 /** Every way a kind's package database holds more than inert data, or no longer names a package. */
@@ -377,6 +383,8 @@ const PRIVILEGES_BY_KIND = new Map<string, readonly string[]>([
   ["node", []],
   // postgres.Dockerfile removes the same eleven files from the official Postgres image, also Debian trixie (P1.29d).
   ["postgres", []],
+  // objects.Dockerfile removes fuse, whose /bin/fusermount is the SeaweedFS base's only setuid file (4.53, checked).
+  ["objects", []],
 ]);
 
 /** Every privilege in a listing: setuid and setgid files, and every member's extended attributes. */

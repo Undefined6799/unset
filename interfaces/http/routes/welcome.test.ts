@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { EmailCache } from "@unset/domains-identity";
-import { type Did, type Onboarding, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
+import {
+  type AccountRepository,
+  type Did,
+  type Onboarding,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
@@ -13,8 +19,7 @@ import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
-import type { AccountStore } from "../account.ts";
-import { type AppGate, openApp } from "../app-gate.ts";
+import { type AppGate, appSessionGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
@@ -74,7 +79,7 @@ function setup(world: World = {}) {
     env: "test",
     write: (line) => lines.push(line),
   });
-  const accounts: AccountStore = {
+  const accounts: AccountRepository = {
     get: async () =>
       row === null
         ? null
@@ -189,6 +194,7 @@ function setup(world: World = {}) {
     ],
     policies,
     log,
+    gate: appSessionGate((request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt)),
   });
   const send = (path: string, init: { method?: string; body?: string; theme?: string; csrf?: boolean } = {}) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
@@ -231,7 +237,7 @@ describe("POST /welcome/age", () => {
     const dumped = JSON.stringify({ calls, row: row(), lines });
     expect(dumped).not.toContain("2000-01-01");
     expect(dumped).not.toContain("year=2000");
-    const account = readFileSync(join(REPO, "interfaces/http/account.ts"), "utf8");
+    const account = readFileSync(join(REPO, "infrastructure/postgres/accountRepository.ts"), "utf8");
     const migration = readFileSync(join(REPO, "infrastructure/postgres/migrations/0015_app_account.sql"), "utf8");
     expect(account).toContain("confirmAdult(did, deadline)");
     expect(account).not.toMatch(/\b(birth_date|date_of_birth|born_on|dob)\b/);
@@ -329,7 +335,7 @@ describe("POST /welcome/age", () => {
     expect(revoked.order).toEqual(["block", "revoke", "end"]);
     expect(revoked.lines.join("\n")).toContain("oauth.revoke_failed");
 
-    const sources = ["interfaces/http/routes/welcome.ts", "interfaces/http/account.ts"]
+    const sources = ["interfaces/http/routes/welcome.ts", "infrastructure/postgres/accountRepository.ts"]
       .map((path) => readFileSync(join(REPO, path), "utf8"))
       .join("\n");
     expect(sources).not.toContain("deactivateAccount");

@@ -695,6 +695,16 @@ flowchart LR
   P1_38f["P1.38f blob methods denied on the public PDS name"]
   P1_38g["P1.38g dev directory bind dropped from C18"]
   P1_36c --> P1_38g
+  P1_39a["P1.39a reviewed caddy adapt output for each env"]
+  P1_39b["P1.39b edge rules on the adapted config"]
+  P1_39a --> P1_39b
+  P1_39c["P1.39c C18 runs caddy adapt in the edge image"]
+  P1_39b --> P1_39c
+  P1_39d["P1.39d edge tests on the adapted config"]
+  P1_39b --> P1_39d
+  P1_39e["P1.39e Caddyfile reader deleted"]
+  P1_39c --> P1_39e
+  P1_39d --> P1_39e
   P1_38d["P1.38d [to fill: values refused under dev"]
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
@@ -16346,6 +16356,75 @@ each required and used once, nothing else over `/etc/caddy`, no directory mount 
 bind under dev fails; the mixed shape fails; the three file binds pass; prod and local unchanged. Done when the
 real `compose.dev.yaml` passes C18's mount rule with the three binds and the directory fixture fails. It merges
 before any deploy: P1.34 depends on it, and the first `--env dev` on main that passes (P1.38e) counts it.
+
+---
+
+### P1.39a — Save the reviewed `caddy adapt` output for each env
+Tags: [SEC] trusted            Depends on: —
+Trusted base (`deployment/edge/adapted.ts`, `deployment/edge/adapted/`, their tests), lane the Caddy reader thread;
+ADR 0046 decisions 1 and 2 (proposed in this step). It adds checks and removes none, so nothing is needed from Alex.
+
+**What:** `deployment/edge/adapted/{prod,dev,local}.generated.json` hold what `caddy adapt --adapter caddyfile`
+prints for each env's files as its compose file mounts them, adapted with fixed sentinel values for the five
+`{$NAME}` placeholders. `reviewedDifference` says whether a config adapted with real values is the reviewed one,
+value for value, with the two orders Caddy derives from host length (site routes, SNI names) made fixed. Reds: a
+changed, added or removed value anywhere differs; another env's values differ; the swapped site order Caddy gives a
+longer host is equal; the message carries no value. `adapted.image.test.ts` builds the edge image and fails unless
+each file is exactly what the image adapts. Done when the image test is green in CI on the three files.
+
+---
+
+### P1.39b — Judge the adapted config with the edge rules
+Tags: [SEC] trusted            Depends on: P1.39a
+Trusted base (`deployment/edge/adapted-rules.ts` and its test); ADR 0046 decision 3 and its table. Additive.
+
+**What:** every rule of `edgeSiteProblems` (`deployment/edge/caddyfile.ts`) and of C18's `certificateProblems`
+(`deployment/preflight/checks/edge.ts`) restated on the adapted JSON as a pure function: zones first and unmatched
+global zone, client-keyed zones, proxies inside the one route, client address headers removed, `X-Forwarded-Host`
+from the request, one upstream per site, the health site alone on loopback, the public listener, the dev trusted
+proxy, each env's certificates, the dev snippets, the fonts, no stray file server, response matcher or CSP change,
+each configured value only in its position, and allowlists of modules, matchers and keys. Each rule has a red built
+by changing a reviewed config (TE-5). The three reviewed configs pass. Nothing reads the rules yet.
+
+---
+
+### P1.39c — Run `caddy adapt` in the edge image from C18
+Tags: [SEC]            Depends on: P1.39b
+Product (`deployment/preflight/checks/edge.ts`, the preflight's inputs, `scripts/lint/.dependency-cruiser.cjs` row
+for the two new imports in its own trusted PR if the guard requires); ADR 0046 decision 4. Threats section required.
+
+**What:** C18 keeps its compose rules, then runs `caddy adapt` in the edge image and requires `reviewedDifference`
+to be null and the P1.39b rules to pass, beside the reader until P1.39e. The image is the lock's edge reference by
+digest, only after C2 to C5 passed, or under `--env local` and `--env dev --source` an image the preflight builds
+from `deployment/edge/Dockerfile` after C26 passed. The container gets no network, a read-only root, no
+capability but `NET_BIND_SERVICE` (the binary's file capability needs it to start), the edge's uid 65532:65532 (the
+image's USER), the edge service's read-only `/etc/caddy` binds, and its values by variable name.
+Reds: no Docker fails; a non-zero exit, a timeout and non-JSON output fail; an image other than the lock's is never
+run; a failed C5 means no run; a reason never carries a value or Caddy's stderr.
+
+---
+
+### P1.39d — Move the edge tests to the adapted config
+Tags: [SEC] trusted            Depends on: P1.39b
+Trusted base (`deployment/edge/edge.test.ts`, `caddyfile.image.test.ts`). Additive, then a like-for-like move.
+
+**What:** every `edge.test.ts` expectation that reads the shipped config through the reader (issuer, memory-only
+zones, zones equal `limits.json`, admin off, log fields, fonts equal shared/ui, the local and dev files) reads the
+reviewed adapted configs. The image test's byte-for-byte check that the image holds the repository's config moves to
+`adapted.image.test.ts`. Reader-only tests (lexer, containment, imports) stay until P1.39e deletes them with it.
+
+---
+
+### P1.39e — Delete the Caddyfile reader
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.39c, P1.39d
+Trusted base (`deployment/edge/caddyfile.ts` and its four test files; the constants it exports move to
+`adapted.ts`); ADR 0046 decision 5. A loosening: it merges only after the coordinator's review and Alex's typed
+line naming the commit, and ADR 0046 is accepted on that line.
+
+**What:** C18 drops the reader call (its product half is a separate PR first), then `caddyfile.ts`,
+`caddyfile.test.ts`, `caddyfile.dev.test.ts`, `caddyfile.local.test.ts` and `caddyfile.image.test.ts` are deleted
+and the dependency-cruiser row names `adapted.ts` and `adapted-rules.ts` only. Done when no file imports the reader
+and every row of ADR 0046's table has a green test on the adapted config.
 
 ---
 

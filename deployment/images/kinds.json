@@ -1,5 +1,6 @@
 {
   "node": "node",
   "caddy": "edge",
-  "postgres": "postgres"
+  "postgres": "postgres",
+  "seaweedfs": "objects"
 }

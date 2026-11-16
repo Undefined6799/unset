@@ -62,7 +62,9 @@ describe("image workflows", () => {
         file === "images.yml" && id === "pins" ? { contents: "read", packages: "read" } : { contents: "read" };
       // P2.26m: publish-images.yml's bump job opens the lock-bump pull request; it holds these two writes and no more.
       const bump = file === "publish-images.yml" && id === "bump";
-      const held = bump ? { contents: "write", "pull-requests": "write" } : reads;
+      // P2.18t: mirror.yml's verdict job reads only its needed job's output, so it holds nothing.
+      const verdict = file === "mirror.yml" && id === "verdict";
+      const held = bump ? { contents: "write", "pull-requests": "write" } : verdict ? {} : reads;
       if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual(held);
     }
   });
@@ -172,6 +174,17 @@ describe("image workflows", () => {
     expect(run).toContain('test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"');
     expect(run).toContain('cosign sign --yes "$mirror@$digest"');
     expect(run).toContain('--arg ref "$mirror@$digest"');
+    // P2.18s: SeaweedFS is a base we build on, so its upstream keyless signature is checked before the copy: the
+    // release workflow at exactly the tag we pin, issued by GitHub Actions (seaweedfs/seaweedfs
+    // .github/workflows/container_release_unified.yml at 4.53).
+    const verify = [
+      "cosign verify --trusted-root deployment/sigstore/trusted_root.json",
+      '--certificate-identity "https://github.com/seaweedfs/seaweedfs/.github/workflows/container_release_unified.yml@refs/tags/$tag"',
+      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+      '"$source" < /dev/null > /dev/null',
+    ].join(" \\\n        ");
+    expect(run).toContain(verify);
+    expect(run.indexOf(verify)).toBeLessThan(run.indexOf('crane copy "$source"'));
     expect(job?.steps?.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"');
   });
 
