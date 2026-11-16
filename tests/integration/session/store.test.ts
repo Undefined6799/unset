@@ -292,7 +292,7 @@ describe("session store", () => {
 
   test("session.no_token_set_ends", async () => {
     // P2.04s: the library deletes a token set when its grant is dead, and that ends every browser session on it.
-    // P2.03t (migration 0025, ADR 0049): the rows go with the set, in the same statement, so a later sign-in that
+    // P2.03t (migration 0024, ADR 0049): the rows go with the set, in the same statement, so a later sign-in that
     // stores a new set cannot make an old cookie valid again.
     const { store, request } = setup();
     const owner = newDid();

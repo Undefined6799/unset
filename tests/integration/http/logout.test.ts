@@ -474,7 +474,7 @@ test("logout.remaining_sessions_match_the_store", async () => {
 });
 
 test("logout.replacing_sign_in_keeps_other_browsers", async () => {
-  // P2.03t (migration 0025, ADR 0049): deleting a token set now deletes the DID's sessions. A sign-in replaces the
+  // P2.03t (migration 0024, ADR 0049): deleting a token set now deletes the DID's sessions. A sign-in replaces the
   // set: the library revokes and deletes the old one, then stores the new one (@atproto/oauth-client 0.8.10
   // dist/oauth-client.js `callback`). sign-in-lock.ts drops that delete when a store follows, so the row is updated
   // in place and the member's other browsers stay signed in. This fails if a delete ever reaches the table there.

@@ -899,7 +899,7 @@ As built: merged at 2026-10-12T22:24:03Z as `88b79b6` (#637, head 2cea1a3) (merg
 Tags: [SEC]            Depends on: P2.03, P2.04s
 Trusted base (a migration, the session store's comment and tests) with its docs, in one PR under ADR 0044's
 security-review label. ADR 0049, accepted 2026-11-16. Found by Codex on #1566 (P2.08j), 2026-11-15, and wider than that PR.
-**What:** migration 0025 deletes the sessions whose DID has no token set, then adds a foreign key from
+**What:** migration 0024 deletes the sessions whose DID has no token set, then adds a foreign key from
 `app.session.did` to `app.oauth_session(did)` with ON DELETE CASCADE. Deleting a token set then deletes that DID's
 sessions in the same statement, and a session cannot be inserted before its token set. No grant, role or store method
 changes; the store's `has_token_set` check stays as a second line.

@@ -54,7 +54,7 @@ checked: 2026-11-16
   `withClient`. Only a SHA-256 of the session id is stored; its real-Postgres tests are `tests/integration/session/`.
   A session lasts only while its DID has a row in `app.oauth_session` (P2.04s). Migration 0014's definer
   `app.end_sessions_for_did` is the one SQL that deletes a DID's sessions; the store's `destroyAllForDid` calls it.
-  Migration 0025 (P2.03t, ADR 0049) makes the first rule the database's: `app.session.did` references
+  Migration 0024 (P2.03t, ADR 0049) makes the first rule the database's: `app.session.did` references
   `app.oauth_session(did)` with ON DELETE CASCADE, so deleting a token set deletes that DID's sessions in the same
   statement and a session cannot be inserted before its token set. Test helpers must store the token set first.
   Migration 0011's comment still names the old `infrastructure/postgres/session/`; applied migrations are
