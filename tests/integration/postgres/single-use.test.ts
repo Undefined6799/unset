@@ -1,5 +1,6 @@
 // P1.16 (infrastructure/postgres/singleUse/store.ts, migration 0006): the durable single-use store against real
-// Postgres, connected as the roles that use it (TE-2): web issues, consumes and claims; retention sweeps.
+// Postgres, connected as the roles that use it (TE-2): web issues, consumes and claims; web and retention sweeps
+// through app.sweep_single_use (migration 0023).
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
 import {
@@ -8,6 +9,7 @@ import {
   type Db,
   type ExternalId,
   type Pool,
+  PURPOSES,
   type Purpose,
   withClient,
 } from "@unset/infrastructure-postgres";
@@ -263,14 +265,52 @@ describe("single-use store", () => {
       );
     await insert(20, "2 days");
     await insert(21, "1 hour");
-    const swept = await withClient(retention, null, (db) => store.sweep(db));
+    const swept = await withClient(web, null, (db) => store.sweep(db));
     expect(swept).toBeGreaterThanOrEqual(1);
+    await expect(withClient(retention, null, (db) => store.sweep(db))).resolves.toBe(0);
     const left = await sql<{ fill: number }>(
       web,
       "SELECT get_byte(id, 0) AS fill FROM app.single_use WHERE id = ANY($1)",
       [[Buffer.alloc(32, 20), Buffer.alloc(32, 21)]],
     );
     expect(left).toEqual([{ fill: 21 }]);
+  });
+
+  test("purpose_caps_stay_far_inside_the_sweep_day", () => {
+    // claim() clamps expires_at to the cap and the sweep removes a row a day later. An external token must therefore
+    // never be accepted with a lifetime beyond its cap; a cap near a day would make that easy to get wrong.
+    for (const [purpose, cap] of Object.entries(PURPOSES)) expect(cap, purpose).toBeLessThanOrEqual(3600);
+  });
+
+  test("sweep_is_bounded_per_call", async () => {
+    // 5001 rows two days past expiry: one call of the function takes 5000, the store's loop takes the rest.
+    await sql(
+      web,
+      "INSERT INTO app.single_use (id, purpose, expires_at) " +
+        "SELECT sha256(convert_to('bulk ' || n, 'UTF8')), 'login.nonce', now() - interval '2 days' " +
+        "FROM generate_series(1, 5001) n",
+    );
+    const [row] = await sql<{ swept: number }>(web, "SELECT app.sweep_single_use() AS swept");
+    expect(row?.swept).toBe(5000);
+    const { store } = setup();
+    expect(await withClient(web, null, (db) => store.sweep(db))).toBeGreaterThanOrEqual(1);
+    const [left] = await sql<{ n: string }>(
+      web,
+      "SELECT count(*) AS n FROM app.single_use WHERE expires_at < now() - interval '1 day'",
+    );
+    expect(left?.n).toBe("0");
+  });
+
+  test("sweep_function_grants", async () => {
+    // P1.16w (migration 0023): web and retention run the fixed sweep; web still holds no DELETE of its own.
+    const id = Buffer.alloc(32, 22);
+    await sql(web, "INSERT INTO app.single_use (id, purpose, expires_at) VALUES ($1, 'login.nonce', now())", [id]);
+    await expect(sql(web, "DELETE FROM app.single_use WHERE id = $1", [id])).rejects.toMatchObject({ code: "42501" });
+    for (const pool of [web, retention]) {
+      const [row] = await sql<{ swept: number }>(pool, "SELECT app.sweep_single_use() AS swept");
+      expect(row?.swept).toBeGreaterThanOrEqual(0);
+    }
+    await expect(sql(web, "SELECT 1 AS live FROM app.single_use WHERE id = $1", [id])).resolves.toEqual([{ live: 1 }]);
   });
 
   test("db_error_throws", async () => {

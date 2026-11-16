@@ -359,12 +359,14 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
       return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
     },
   });
-  // P2.03s: expired sessions and abandoned sign-in states are deleted from the first boot on, then hourly. The
+  // P2.03s, P1.16w: expired sessions, abandoned sign-in states and one-time tokens a day past expiry are deleted
+  // from the first boot on, then hourly. The
   // timer starts in `boot`, after the budget check, so composing alone still opens no connection.
   let stopSweeps = (): void => undefined;
   const sweeps = [
     { job: "sweep.session", run: () => withClient(oauth.pool, null, (db) => sessions.sweep(db)) },
     { job: "sweep.oauth_state", run: oauth.sweepStates },
+    { job: "sweep.single_use", run: () => withClient(oauth.pool, null, (db) => nonces.sweep(db)) },
   ];
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];

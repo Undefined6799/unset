@@ -341,11 +341,54 @@ describe("session store", () => {
   });
 
   test("session.no_token_set_ends", async () => {
-    // P2.04s: the library deletes a token set when its grant is dead; the next read ends the browser session too.
-    const { store, request } = setup();
-    const value = await insertSession(newDid());
-    expect(await store.read(request(value))).toEqual({ session: null, clearCookie: true });
-    expect(await rowFor(value)).toBeUndefined();
+    // P2.04s: the library deletes a token set when its grant is dead, and that ends every browser session on it.
+    // P2.03t (migration 0024, ADR 0049): the rows go with the set, in the same statement, so a later sign-in that
+    // stores a new set cannot make an old cookie valid again.
+    const { store, logged, request } = setup();
+    const owner = newDid();
+    await giveTokenSet(owner);
+    const values = [await insertSession(owner), await insertSession(owner)];
+    expect((await store.read(request(values[0] as string))).session?.did).toBe(owner);
+    await tokenSets.del(owner);
+    for (const value of values) expect(await rowFor(value)).toBeUndefined();
+    await giveTokenSet(owner);
+    for (const value of values) {
+      expect(await store.read(request(value))).toEqual({ session: null, clearCookie: true });
+    }
+    // An ended session is an ordinary unknown cookie: nothing is logged about it.
+    expect(logged).toEqual([]);
+  });
+
+  test("session.needs_a_token_set", async () => {
+    // The order the constraint requires: the token set first, then the session row. 23503 is foreign_key_violation
+    // (https://www.postgresql.org/docs/18/errcodes-appendix.html). The store's create fails the same way, so a
+    // sign-in whose set is gone by the time its session is written fails closed.
+    const { store, logged } = setup();
+    const owner = newDid();
+    await expect(insertSession(owner)).rejects.toMatchObject({ code: "23503" });
+    await expect(withTransaction(web, null, (db) => store.create(db, owner))).rejects.toMatchObject({ code: "23503" });
+    expect(await sql("SELECT 1 FROM app.session WHERE did = $1", [owner])).toEqual([]);
+    // The store throws the database's error and logs nothing: no DID reaches a log line from here.
+    expect(logged).toEqual([]);
+  });
+
+  test("session.token_refresh_keeps_sessions", async () => {
+    // A refresh stores the new token set over the old one. If the store ever deleted and re-inserted the row, the
+    // cascade would sign every browser out on each refresh; this fails then.
+    const owner = newDid();
+    await giveTokenSet(owner);
+    const values = [await insertSession(owner), await insertSession(owner)];
+    await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "B" } });
+    for (const value of values) expect((await rowFor(value))?.did).toBe(owner);
+  });
+
+  test("session.token_set_constraint", async () => {
+    const rows = await sql<{ name: string; on_delete: string; target: string }>(
+      "SELECT conname AS name, confdeltype AS on_delete, confrelid::regclass::text AS target " +
+        "FROM pg_catalog.pg_constraint WHERE conrelid = 'app.session'::regclass AND contype = 'f'",
+    );
+    // 'c' is ON DELETE CASCADE (https://www.postgresql.org/docs/18/catalog-pg-constraint.html).
+    expect(rows).toEqual([{ name: "session_did_token_set", on_delete: "c", target: "app.oauth_session" }]);
   });
 
   test("session.destroyAllForDid_in_tx", async () => {

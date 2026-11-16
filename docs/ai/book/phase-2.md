@@ -895,6 +895,26 @@ As built: merged at 2026-10-12T22:24:03Z as `88b79b6` (#637, head 2cea1a3) (merg
   the repo's first `CREATE INDEX CONCURRENTLY` migration. The coordinator's post-merge verify parked F1 (a failed
   concurrent build leaves an INVALID index that a rerun skips), F2 and N2 in the refocus order, section 4.
 
+### P2.03t — End sessions with their token set in the database
+Tags: [SEC]            Depends on: P2.03, P2.04s
+Trusted base (a migration, the session store's comment and tests) with its docs, in one PR under ADR 0044's
+security-review label. ADR 0049, accepted 2026-11-16. Found by Codex on #1566 (P2.08j), 2026-11-15, and wider than that PR.
+**What:** migration 0024 deletes the sessions whose DID has no token set, then adds a foreign key from
+`app.session.did` to `app.oauth_session(did)` with ON DELETE CASCADE. Deleting a token set then deletes that DID's
+sessions in the same statement, and a session cannot be inserted before its token set. No grant, role or store method
+changes; the store's `has_token_set` check stays as a second line.
+Threats:
+- A token set is deleted and the step that ends the sessions fails (sign out everywhere, a dead grant, the under-16
+  block). The rows wait, and the member's next sign-in makes them valid again, a copied cookie included. Answered: the
+  rows go with the set (red: `session.no_token_set_ends`).
+- The constraint signs members out when it should not. Answered: a refresh is an in-place update and a replacing
+  sign-in never reaches the table with its delete (reds: `session.token_refresh_keeps_sessions`,
+  `logout.replacing_sign_in_keeps_other_browsers`).
+- A session is written for a DID with no token set. Answered: refused with 23503 (red: `session.needs_a_token_set`).
+- The migration locks sign-in. Accepted: one scan of a small indexed table under SHARE ROW EXCLUSIVE.
+ASVS 5.0: V7.4.1 and V7.4.2 gain the constraint's tests; the PR names the rows.
+Done when the reds are shown in CI (no Postgres here to run them), ADR 0049 is accepted, and check is green.
+
 ### P2.04 — OAuth client
 Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x (merged, #579), P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
 It needs the session table and its `(did)` index first, because P2.04s, which follows it, creates
