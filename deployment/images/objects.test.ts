@@ -32,6 +32,7 @@ describe("objects image", () => {
       "-s3.iam=false",
       "-s3.config=/run/secrets/objects_s3",
       "-volume.max=0",
+      "-master.volumeSizeLimitMB=1024",
       "-filer.encryptVolumeData",
       "-master.garbageThreshold=0.01",
     ]);

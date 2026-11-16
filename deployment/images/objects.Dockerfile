@@ -28,7 +28,11 @@ USER 1000:1000
 # ever published: the store sits only on its internal objects networks, and the compose tests hold that.
 # -filer.encryptVolumeData encrypts every chunk with its own key held in the filer, so no object's bytes are plaintext
 # in a volume file; it is not an erase mechanism (ADR 0041 Decision 6). -master.garbageThreshold=0.01 is the vacuum
-# backstop only; erasure runs the forced vacuum (Decision 7). -volume.max=0 sizes volumes to the disk.
+# backstop only; erasure runs the forced vacuum (Decision 7). -volume.max=0 sets the volume count from the disk: free
+# space divided by the volume size limit (weed/storage/store.go at 4.53). -master.volumeSizeLimitMB=1024 makes that a
+# volume per GB, not per 32 GB (the default): each bucket is its own collection, the master grows 7 volumes per
+# collection (weed/topology/volume_growth.go), and at 32 GB a 51 GB staging disk held one volume, which the filer's
+# own collection took, so no bucket could be written (2026-11-16). objects_each_bucket_takes_writes pins it.
 # -s3.config names the file Compose mounts for the secret objects_s3, at /run/secrets/<name> with no extension: the
 # preflight's parser takes only [a-z0-9_] secret names, and weed reads the file as JSON whatever its name (checked on
 # 4.53, 2026-11-16: an extensionless file with no identities loads and denies every request).
@@ -36,6 +40,6 @@ USER 1000:1000
 ENTRYPOINT ["/usr/bin/weed"]
 CMD ["server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1", "-s3", "-s3.ip.bind=0.0.0.0", \
   "-s3.port.iceberg=0", "-s3.port.lance=0", "-s3.iam=false", "-s3.config=/run/secrets/objects_s3", \
-  "-volume.max=0", "-filer.encryptVolumeData", "-master.garbageThreshold=0.01"]
+  "-volume.max=0", "-master.volumeSizeLimitMB=1024", "-filer.encryptVolumeData", "-master.garbageThreshold=0.01"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=20s --retries=3 \
   CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
