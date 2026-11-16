@@ -16,11 +16,13 @@ import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, test } from "vitest";
+import { appSessionGate } from "../app-gate.ts";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { testPage } from "../web/fixtures/page.ts";
+import type { AccountDeps } from "./account-issuer.ts";
 import { meRoutes } from "./me.ts";
 
 const ORIGIN = "https://unset.test";
@@ -53,11 +55,12 @@ function accountServer(signedOut = false) {
   const lines: string[] = [];
   const resolved: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: (line) => lines.push(line) });
+  const open: AccountDeps["open"] = async (_request, _deadline, next) =>
+    signedOut
+      ? new Response(null, { status: 303, headers: { location: `/login?${new URLSearchParams({ next })}` } })
+      : { session: SESSION, privacyNotice: false };
   const routes = meRoutes({
-    open: async (_request, _deadline, next) =>
-      signedOut
-        ? new Response(null, { status: 303, headers: { location: `/login?${new URLSearchParams({ next })}` } })
-        : { session: SESSION, privacyNotice: false },
+    open,
     verifyHandle: async (did) => {
       resolved.push(did);
       return { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
@@ -68,7 +71,8 @@ function accountServer(signedOut = false) {
     pdsIssuer: "https://pds.unset.test",
     log,
   });
-  return { server: createServer({ config: CONFIG, routes, policies, log }), lines, resolved };
+  const server = createServer({ config: CONFIG, routes, policies, log, gate: appSessionGate(open) });
+  return { server, lines, resolved };
 }
 
 /**

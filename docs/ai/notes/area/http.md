@@ -219,9 +219,15 @@ marker; CSRF-gated, in the route manifest.
 `readSession` then a 303 to `/login?next=`), never in the kit, so they declare `session: "handler"`: the manifest
 shows `handlerSession: true` and the kit enforces nothing. `"required"` (ADR 0045, P1.04g) has the kit run the
 server's `gate` before the handler: a refused request gets the gate's answer, an admitted one is limited per DID and
-its handler receives the session. A server with such a route and no gate refuses to start. The web server passes no
-gate yet; its routes move in the step after P1.04g. `routes.session.test.ts` calls every route signed out and fails when the routes
-that send to sign-in and the declared ones differ. A route that reads the session but works signed out (GET and POST
+its handler receives the session. A server with such a route and no gate refuses to start. P2.13t: the web
+server's gate is `appSessionGate` (`app-gate.ts`), the app gate with a return path taken from the route template
+(a GET page without parameters returns to itself; `/me` and POST `/profile` return to `/did`; any other route throws,
+which the kit denies). `/did`, `/me`, `/settings/profile`, `/settings/account` and POST `/profile` are `"required"`;
+POST `/profile` uses the `profile` policy, 30 saves a minute per member. `/:did`, `/welcome*` and `/verify-email*`
+stay `"handler"`: `/:did` must 404 a path that is no DID before any sign-in redirect, and the others must answer a
+visitor the app gate would refuse. A test that builds a server from these routes passes `gate: appSessionGate(open)`.
+`routes.session.test.ts` calls every route signed out and fails when the routes
+that send to sign-in and the ones declaring either need differ. A route that reads the session but works signed out (GET and POST
 /login, POST /logout, GET /signed-out, GET /welcome/blocked) stays `"none"`, as do routes that never read it (POST
 /signed-out, GET /settings's redirect). A new path parameter needs a sample value in that test.
 

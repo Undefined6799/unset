@@ -52,7 +52,7 @@ import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import { createAccountStore } from "./account.ts";
-import { type AppGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
+import { type AppGate, appSessionGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
 import { startSweeps } from "./jobs/sweeps.ts";
@@ -350,7 +350,6 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
   const settings = settingsRoutes(accountDeps);
   const me = meRoutes(accountDeps);
   const profile = profileRoutes({
-    open: accountDeps.open,
     saveProfile: async (did, fields, deadline, deadlineAt) => {
       const ctx = { memo: new Map(), deadline, deadlineAt };
       const now = new Date().toISOString();
@@ -407,6 +406,8 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
       config: cfg,
       routes,
       policies: policiesFor(cfg.TRUSTED_PROXY_MODE),
+      // ADR 0045: the kit runs the app gate before every `session: "required"` handler.
+      gate: appSessionGate(accountDeps.open),
       log,
       // `/health` answers 200 only while Postgres answers (P1.04w): a rollout must not swap in a replica that cannot
       // reach the database. The kit bounds the check at 1 s, caches it for 2 s and reads a throw as not ready

@@ -14,7 +14,7 @@ import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import type { AccountStore } from "../account.ts";
-import { type AppGate, openApp } from "../app-gate.ts";
+import { type AppGate, appSessionGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
@@ -189,6 +189,7 @@ function setup(world: World = {}) {
     ],
     policies,
     log,
+    gate: appSessionGate((request, deadline, next, deadlineAt) => openApp(gate, request, deadline, next, deadlineAt)),
   });
   const send = (path: string, init: { method?: string; body?: string; theme?: string; csrf?: boolean } = {}) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
