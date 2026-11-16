@@ -91,6 +91,12 @@
   output: "303 to /signed-out. A live session is destroyed. The last session also revokes the grant."
   errors: "logout.failed when destroySession throws."
   auth: "reads session"
+"POST /logout/everywhere":
+  why: "Signs the member out of every browser (interfaces/http/routes/logout.ts)."
+  input: "Form body. The handler reads the session cookie, not form fields."
+  output: "303 to /signed-out. The grant is revoked, and every session of the account and its stored token set are deleted."
+  errors: "logout.failed when destroyAllSessions still throws on its third try."
+  auth: "reads session"
 "GET /signed-out":
   why: "Page after sign-out (interfaces/http/routes/logout.ts)."
   input: "No request body. An issuer cookie may be present."

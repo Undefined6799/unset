@@ -1,0 +1,16 @@
+# Accepted findings in the upstream SeaweedFS image only (P2.18s; accepted ADR 0041).
+# Format: Trivy v0.76.1 docs/guide/configuration/filtering.md (.trivyignore.yaml).
+# `paths` and `purls` scope the id to the one binary and module version; `expired_at`
+# is yyyy-mm-dd, at most 30 days ahead (SEAWEEDFS_MAX_DAYS). Passed with --ignorefile
+# only when the source is docker.io/chrislusf/seaweedfs, in mirror.yml and images.yml.
+# Trivy v0.76.1 reported this one finding for 4.53 (ccad23e1) on 2026-11-15: x/net
+# v0.61.0 linked into weed, fixed in v0.62.0, which no SeaweedFS release ships yet
+# (4.53 is the newest tag). Removed when the pin moves to a release built with the fix.
+vulnerabilities:
+  - id: CVE-2026-78661
+    paths:
+      - "usr/bin/weed"
+    purls:
+      - "pkg:golang/golang.org/x/net@v0.61.0"
+    statement: "sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0: SeaweedFS 4.53, newest upstream release, no fixed build yet; removed on the re-pin to a release with x/net v0.62.0 or later"
+    expired_at: 2026-12-15

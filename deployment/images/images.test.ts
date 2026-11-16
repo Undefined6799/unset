@@ -11,7 +11,7 @@ import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 import { POSTGRES_IMAGE } from "../../tests/support/postgres.ts";
-import { VENDOR_IMAGES } from "./vendor.ts";
+import { VENDOR_BASES, VENDOR_IMAGES } from "./vendor.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
@@ -45,7 +45,7 @@ type Lock = Record<string, Base>;
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
 const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
-const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
+const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
@@ -1062,7 +1062,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1118,6 +1118,24 @@ describe("base images", () => {
     expect(lock.newt).toStrictEqual({
       ref: "docker.io/fosrl/newt",
       tag: expect.stringMatching(/^1\.\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+  });
+
+  test("vendor_bases_are_named_runtime_bases", () => {
+    // P2.18s (ADR 0041): SeaweedFS is the one vendor image a Dockerfile may build on, by its exact name, as a runtime
+    // base only. A run-only vendor image is never a base, and the two lists never share a name.
+    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs"]);
+    for (const ref of VENDOR_BASES) expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
+    for (const ref of ["docker.io/chrislusf/other", "docker.io/chrislusf/seaweedfs-x", "ghcr.io/chrislusf/seaweedfs"]) {
+      expect(allowed(ref), ref).toBe(false);
+    }
+    expect(lock.seaweedfs).toStrictEqual({
+      ref: "docker.io/chrislusf/seaweedfs",
+      tag: expect.stringMatching(/^\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",

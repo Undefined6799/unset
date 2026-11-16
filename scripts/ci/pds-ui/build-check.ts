@@ -67,6 +67,11 @@ async function main(): Promise<void> {
   const run = (cmd: string, args: string[]) =>
     execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit", timeout: 20 * 60_000 });
   try {
+    // The engine version and image store decide what `docker image save` and a RUN layer contain; a red run names
+    // them. docs.docker.com/reference/cli/docker/version and /system/info: --format takes a Go template; `.Driver`
+    // and `.DriverStatus` are the Engine API /info fields, proved by this job running rather than by that page.
+    run("docker", ["version", "--format", "pds-ui: docker engine {{.Server.Version}}"]);
+    run("docker", ["info", "--format", "pds-ui: storage driver {{.Driver}} {{.DriverStatus}}"]);
     const source = join(scratch, "source.tar.gz");
     run("curl", [
       "--fail",

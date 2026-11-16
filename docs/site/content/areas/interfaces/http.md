@@ -9,9 +9,9 @@ Route table: [Endpoints](/endpoints/).
 
 ## Owns
 
-Public pages, sign-in, the signed-in account page, and the adapters those routes call. `interfaces/http/compose.ts` is the only file here that builds adapters. It wires the `web` Postgres pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account store, then registers the route modules below. `main.ts` does not import `infrastructure/`.
+Public pages, sign-in, the signed-in account page, and the adapters those routes call. `interfaces/http/compose.ts` is the only file here that builds adapters. It wires the `web` Postgres pools, the sealer, net-guard, the identity network, the OAuth client, the session store and the account store, then registers the route modules below. `boot()` starts the expiry sweeps in `interfaces/http/jobs/sweeps.ts` after the connection-budget check. `main.ts` does not import `infrastructure/`.
 
-The kit adds `GET /health` in `shared/http/server.ts`. The body is status, service and commit (`shared/http/health.ts`). `compose.ts` registers one readiness check, a `SELECT 1` through the `web` pool, so `/health` answers 503 while Postgres does not answer. `main.ts` installs `fatal.ts` after compose: an unhandled rejection is logged by class name and the server drains; an uncaught exception is logged and the process exits 1.
+The kit adds `GET /health` in `shared/http/server.ts`. The body is status, service and commit (`shared/http/health.ts`). `compose.ts` registers one readiness check that runs through `ping` (`infrastructure/postgres/pool.ts`), which ends a connection that has not answered by 900 ms, so `/health` is 503 while Postgres does not answer. `main.ts` installs `fatal.ts` after compose: an unhandled rejection is logged by class name and the server drains; an uncaught exception is logged and the process exits 1.
 
 | Module | What it holds |
 | --- | --- |
@@ -39,6 +39,7 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/web/render-entry.ts` | Loads `@unset/apps-web/server`. |
 | `interfaces/http/routes/test-routes.ts` | Test-only pages. `compose.ts` imports this module only when `TEST_ROUTES` is on. `config.ts` allows that only when `UNSET_ENV` is `test`. |
 | `interfaces/http/limits.ts` | Rate-limit policy names `default`, `login`, `search`, `report`, `follow`, `like`, `upload`. Which route uses which name is on [Endpoints](/endpoints/). `policiesFor` drops the per-address entries in `socket` mode and adds a site-wide sign-in ceiling (ADR 0042). |
+| `interfaces/http/jobs/sweeps.ts` | `startSweeps`. `boot()` runs `sweep.session` (session store `sweep`) and `sweep.oauth_state` (OAuth state store `sweep`), in that order, once when `boot()` finishes and then every `SWEEP_EVERY_MS` (3_600_000), on an unref'd timer. The first close hook stops it. A failure logs `error` with `job` and the error's class name. A tick that finds a run still going does nothing. The `app.single_use` sweep is not run. |
 
 Routes in this process set `session` to `"handler"` or `"none"`. None set `"required"`. `defineRoute` writes `requiresSession` only for `"required"` and `handlerSession` only for `"handler"` (`shared/http/routes.ts`). The kit adds its `session` middleware only when `requiresSession` is set (`shared/http/server.ts`). `interfaces/http/routes.manifest.json` therefore has `handlerSession: true` on the fifteen `"handler"` routes and no `requiresSession` field. Those routes are `GET /did`, `GET /me` and `GET /:did` (`routes/me.ts`), `POST /profile` (`routes/profile.ts`), `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`), `GET /verify-email` and `POST /verify-email/reconsent` (`routes/verify-email.ts`), and `GET /welcome`, `GET` and `POST /welcome/age`, `GET` and `POST /welcome/terms`, and `GET` and `POST /welcome/chat` (`routes/welcome.ts`). The [Endpoints](/endpoints/http/) session column shows `required (handler)` for them. Once the handler reads the session, a missing session is a 303 to `/login` with `next`: `openApp` for the account, settings and profile routes (`interfaces/http/app-gate.ts`), `located` for the welcome routes, and `login` in `verify-email.ts`. `GET /:did` parses the path first, and a segment that is not a DID is `http.not_found` before `openApp` (`routes/me.ts`). `interfaces/http/routes.session.test.ts` calls every composed route with no cookie and fails when the routes that answer 303 to `/login` with `next` and no `error` differ from the routes with `handlerSession: true`.
 
@@ -51,6 +52,8 @@ The confirmed-email cache is rechecked at the next gated page view, at most `EMA
 Screens are `apps/web`. The loader requires `renderPage`, `islandName`, `screens` and `safeHref`.
 
 `pageResponse` uses `islands: "on"` when the route omits `islands` (`interfaces/http/web/page.ts`). `GET /:did` (`routes/me.ts`) and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`) omit it, so the drawer's theme picker can hydrate. The routes that pass `"off"` are `GET /` (`routes/home.ts`), the legal pages (`routes/legal.ts`), `GET /login` (`routes/login.ts`) and the welcome pages (`routes/welcome.ts`).
+
+`GET /` (`interfaces/http/routes/home.ts`) and `GET /legal/terms`, `GET /legal/privacy` and `GET /legal/domains` (`interfaces/http/routes/legal.ts`) send `Cache-Control: public, max-age=300` through `cachedPublicPage` in `interfaces/http/routes/home.ts`, because those pages read no cookie. No other public-group page does; `GET /login` (`interfaces/http/routes/login.ts`) does not.
 
 ## May import
 
@@ -93,7 +96,7 @@ Declared in `interfaces/http/package.json`:
 | Image | `ENTRYPOINT ["node", "interfaces/http/main.ts"]` in `deployment/images/node-app.Dockerfile` |
 | Compose | Service `web` in `deployment/compose.dev.yaml` and `deployment/compose.local.yaml` |
 
-`main.ts` reads config, composes, runs `boot()` (the connection-budget check), then `listen`.
+`main.ts` reads config, composes, runs `boot()` (the connection-budget check, then the expiry sweeps), then `listen`.
 
 From the repository root:
 
@@ -166,7 +169,7 @@ Keys defined in `interfaces/http/config.ts`.
 
 Role `web` in `infrastructure/postgres/roles.json`: class `service`, login, `connectionLimit` 40, `statement_timeout` `2s`, `passwordFrom` `pg_web_password`.
 
-`compose.ts` calls `createPool` with `application_name` `web` and `createLockPool` with `application_name` `web-lock`. The login is `PG_USER` from `connectionOf` (`infrastructure/postgres/config.ts`). Building the pool opens no connection (`infrastructure/postgres/pool.ts`). `boot()` calls `checkConnectionBudget` before listen.
+`compose.ts` calls `createPool` with `application_name` `web` and `createLockPool` with `application_name` `web-lock`. The login is `PG_USER` from `connectionOf` (`infrastructure/postgres/config.ts`). Building the pool opens no connection (`infrastructure/postgres/pool.ts`). `boot()` calls `checkConnectionBudget`, then starts the expiry sweeps, before listen.
 
 Grants for `web` in `infrastructure/postgres/grant-matrix.json`:
 

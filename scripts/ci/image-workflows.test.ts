@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
+import { listDockerfiles } from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const FILES = ["images.yml", "mirror.yml", "publish-images.yml", "sigstore-root.yml"] as const;
@@ -14,7 +15,7 @@ const SIGNING: Record<string, Record<string, Record<string, string>>> = {
 };
 const text = (file: string): string => readFileSync(join(ROOT, ".github", "workflows", file), "utf8");
 
-type Step = { name?: string; id?: string; if?: string; run?: string; uses?: string };
+type Step = { name?: string; id?: string; if?: string; run?: string; uses?: string; env?: Record<string, string> };
 type Job = {
   if?: string;
   permissions?: Record<string, string> | string;
@@ -59,7 +60,10 @@ describe("image workflows", () => {
       // P1.34m: images.yml's pins job alone also reads packages, for the GHCR push time of a newly pinned base.
       const reads =
         file === "images.yml" && id === "pins" ? { contents: "read", packages: "read" } : { contents: "read" };
-      if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual(reads);
+      // P2.26m: publish-images.yml's bump job opens the lock-bump pull request; it holds these two writes and no more.
+      const bump = file === "publish-images.yml" && id === "bump";
+      const held = bump ? { contents: "write", "pull-requests": "write" } : reads;
+      if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual(held);
     }
   });
 
@@ -107,7 +111,15 @@ describe("image workflows", () => {
     expect(run).toContain('docker pull --quiet --platform linux/amd64 "$ref" > /dev/null');
     expect(run).toContain(`docker image inspect --format '{{join .RepoDigests "\\n"}}' "$ref" | grep -qxF "$ref"`);
     expect(run).toContain('docker tag "$ref" "unset-scan/$name:ci"');
-    expect(steps.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"');
+    expect(steps.at(-2)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/images.lock.json"');
+    // P2.26m: the last step hands that lock on only after it verified, and no step can run past a failure.
+    expect(steps.at(-1)).toEqual({
+      name: "Hand the verified lock to the bump job",
+      id: "lock",
+      run: 'echo "lock=$(jq -c . "$RUNNER_TEMP/images.lock.json")" >> "$GITHUB_OUTPUT"',
+    });
+    for (const step of steps) expect(step.if, step.name).toBeUndefined();
+    expect(JSON.stringify(steps)).not.toContain("continue-on-error");
     // P2.26h: the lock entry names the commit the provenance attests, both from GITHUB_SHA, so verify-images can bind them.
     expect(run).toContain('--arg sha "$GITHUB_SHA"');
     expect(run).toContain("digest: {gitCommit: $sha}");
@@ -117,6 +129,37 @@ describe("image workflows", () => {
     );
     // cosign is installed from its release by checksum, before anything signs.
     expect(run).toContain('echo "$COSIGN_SHA256  $RUNNER_TEMP/cosign" | sha256sum -c -');
+  });
+
+  // P2.26m: the bump job gets the verified lock and the pushed commit, and nothing a pull request controls.
+  test("bump_job_runs_one_script_on_the_verified_lock", () => {
+    const wf = workflow("publish-images.yml") as Workflow & {
+      jobs: Record<string, Job & { needs?: unknown; outputs?: unknown }>;
+    };
+    expect(Object.keys(wf.jobs)).toEqual(["publish", "bump"]);
+    const gh = (expression: string) => `\${{ ${expression} }}`;
+    expect(wf.jobs.publish?.outputs).toEqual({ lock: gh("steps.lock.outputs.lock") });
+    const bump = wf.jobs.bump;
+    expect(bump?.needs).toBe("publish");
+    expect(bump?.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(bump?.environment).toBeUndefined();
+    const steps = bump?.steps ?? [];
+    expect(steps.map((step) => step.uses?.replace(/@.*/, "") ?? "run")).toEqual([
+      "actions/checkout",
+      "actions/setup-node",
+      "run",
+    ]);
+    expect(steps.at(-1)).toEqual({
+      env: {
+        GH_TOKEN: gh("secrets.GITHUB_TOKEN"),
+        REPO: gh("github.repository"),
+        COMMIT: gh("github.sha"),
+        RUN_ATTEMPT: gh("github.run_attempt"),
+        PUBLISHED_LOCK: gh("needs.publish.outputs.lock"),
+      },
+      run: "node scripts/ci/lock-bump-pr.ts",
+    });
+    for (const step of steps) expect(step.if).toBeUndefined();
   });
 
   // The mirror copy keeps the source's digest: the copy names it, the job reads it back, and the lock holds it.
@@ -129,6 +172,17 @@ describe("image workflows", () => {
     expect(run).toContain('test "$(crane digest "$mirror@$digest" < /dev/null)" = "$digest"');
     expect(run).toContain('cosign sign --yes "$mirror@$digest"');
     expect(run).toContain('--arg ref "$mirror@$digest"');
+    // P2.18s: SeaweedFS is a base we build on, so its upstream keyless signature is checked before the copy: the
+    // release workflow at exactly the tag we pin, issued by GitHub Actions (seaweedfs/seaweedfs
+    // .github/workflows/container_release_unified.yml at 4.53).
+    const verify = [
+      "cosign verify --trusted-root deployment/sigstore/trusted_root.json",
+      '--certificate-identity "https://github.com/seaweedfs/seaweedfs/.github/workflows/container_release_unified.yml@refs/tags/$tag"',
+      "--certificate-oidc-issuer https://token.actions.githubusercontent.com",
+      '"$source" < /dev/null > /dev/null',
+    ].join(" \\\n        ");
+    expect(run).toContain(verify);
+    expect(run.indexOf(verify)).toBeLessThan(run.indexOf('crane copy "$source"'));
     expect(job?.steps?.at(-1)?.run).toBe('node scripts/ci/verify-images.ts "$RUNNER_TEMP/mirror.lock.json"');
   });
 
@@ -167,6 +221,62 @@ describe("image workflows", () => {
         expect(step.run ?? "", `${id} ${step.name}`).not.toContain("skipped");
       }
     }
+  });
+
+  /** Every repository file a workflow names outside its comments. */
+  const filesRead = (file: string, from = ""): string[] => {
+    const whole = text(file);
+    const lines = whole
+      .slice(whole.indexOf(from))
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"));
+    const named = lines.join("\n").match(/(?<![\w./-])(?:\.github|deployment|scripts|docs|tests)\/[\w./-]*\w/g) ?? [];
+    return [...new Set(named)].sort();
+  };
+
+  // P2.26k: a push that changes only docs/ or tests/ publishes nothing. That is safe only while no image build and
+  // no step of the job reads either folder.
+  test("publish_skips_only_what_no_image_reads", () => {
+    const folders = ["docs", "tests"];
+    // P2.26m: the two files a lock bump changes, so a merged bump does not publish again.
+    const files = ["deployment/images.lock.json", "deployment/compose.dev.yaml"];
+    expect(workflow("publish-images.yml").on).toEqual({
+      push: { branches: ["main"], "paths-ignore": [...folders.map((folder) => `${folder}/**`), ...files] },
+    });
+    // The root build context (`.`, for a <name>.Dockerfile) leaves all of them out.
+    const dockerignore = readFileSync(join(ROOT, ".dockerignore"), "utf8").split("\n");
+    for (const path of [...folders, ...files]) expect(dockerignore, path).toContain(path);
+    expect(dockerignore.filter((line) => line.startsWith("!"))).toEqual([]);
+    // Every other context is the Dockerfile's own folder under deployment/, and neither file is inside one.
+    const images = listDockerfiles(ROOT);
+    expect(images.length).toBeGreaterThan(0);
+    for (const { dockerfile } of images) {
+      expect(dockerfile).toMatch(/^deployment\//);
+      if (!dockerfile.endsWith("/Dockerfile")) continue;
+      const context = dockerfile.slice(0, -"Dockerfile".length);
+      for (const file of files) expect(file.startsWith(context), `${file} in ${context}`).toBe(false);
+    }
+    // The jobs themselves read nothing that is ignored (the trigger above them names the ignored files).
+    const ignored = (path: string) => /^(?:docs|tests)\//.test(path) || files.includes(path);
+    const read = filesRead("publish-images.yml", "\njobs:\n");
+    expect(read).toContain("scripts/ci/list-dockerfiles.ts");
+    for (const path of read) expect(ignored(path), path).toBe(false);
+    for (const { ignorefile } of images) expect(ignored(ignorefile), ignorefile).toBe(false);
+  });
+
+  // P2.26k: a push starts the mirror only when it changes a file the workflow reads; the weekly scan stays.
+  test("mirror_runs_for_every_file_it_reads", () => {
+    const on = workflow("mirror.yml").on as { push: { branches: string[]; paths: string[] }; schedule: unknown[] };
+    expect(on.push.branches).toEqual(["main"]);
+    expect(on.schedule).toEqual([{ cron: "17 5 * * 1" }]);
+    expect(Object.keys(on).sort()).toEqual(["push", "schedule"]);
+    const read = filesRead("mirror.yml").filter((path) => path !== ".github/workflows/mirror.yml");
+    expect(read).toContain("deployment/mirror.list.json");
+    expect(read).toContain("scripts/ci/verify-images.ts");
+    for (const path of read) expect(existsSync(join(ROOT, path)), path).toBe(true);
+    expect([...on.push.paths].sort()).toEqual([...read, ".github/workflows/mirror.yml"].sort());
+    // Exact files only: no pattern that could match less than it seems to, and no exclusion.
+    for (const path of on.push.paths) expect(path).toMatch(/^[\w./-]+$/);
   });
 
   test("image_checks_present", () => {

@@ -26,6 +26,8 @@ Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read J
 The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
 public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
+Home and the three legal pages send `Cache-Control: public, max-age=300` (P1.25v, `cachedPublicPage` in
+`routes/home.ts`): they read no cookie, so a browser may keep them five minutes. No other public-group page does.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
 `routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
@@ -80,8 +82,17 @@ welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 **Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
 that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
-throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /logout/everywhere is an unknown route;
-`destroyAllForDid` stays for the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
+throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19) and is back (P2.08j; Alex, 2026-11-15; review
+security finding 5): a second form on Settings, Account posts to POST /logout/everywhere, which revokes the grant
+(dropping the stored set if that fails) and then calls `destroyAllForDid` with `user_signout_all`, so every browser,
+this one included, is signed out and lands on /signed-out. There is no "other browsers only" variant: the definer also
+deletes the token set, and `session.end_sessions_single_sql` (infrastructure/session, trusted base) allows no second
+DELETE of a DID's sessions. The revoke and the delete run under the account's sign-in lock. After the revoke the
+token set is gone, so a repeat of the POST reads no session: the request itself tries the delete three times, and if
+all fail it logs `auth.logout_everywhere_incomplete`, because rows left behind become valid again at the member's next
+sign-in (an open gap shared with auth_dead and the age gate; the fix is in trusted base). No confirmation box, no
+audit row (plan §6), and `auth.logout_everywhere` carries no field.
+`destroyAllForDid` also serves the age gate and auth_dead. The count is `logout-sessions.ts` (same transaction as the
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would
 keep the grant. P2.08e: compose hands one `sessionLimits` object to both the store and `browserLogout`, and
@@ -111,7 +122,9 @@ revoking.
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
-onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
+onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. The gate takes the cached answer
+and its check time from the session read (`emailConfirmed`, `emailCheckedAt`; P2.03m, P2.12f) and runs no query of
+its own; a session with no check time is asked at the PDS. `/verify-email` checks onboarding
 and then is the email page itself.
 
 **A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through
@@ -204,8 +217,10 @@ marker; CSRF-gated, in the route manifest.
 
 **Session in the manifest (#1279, P1.04s/u).** The web routes gate in their handlers (`openApp`, or
 `readSession` then a 303 to `/login?next=`), never in the kit, so they declare `session: "handler"`: the manifest
-shows `handlerSession: true` and the kit enforces nothing. `"required"` would have the kit read a session, and no
-reader is wired, so it answers 500. `routes.session.test.ts` calls every route signed out and fails when the routes
+shows `handlerSession: true` and the kit enforces nothing. `"required"` (ADR 0045, P1.04g) has the kit run the
+server's `gate` before the handler: a refused request gets the gate's answer, an admitted one is limited per DID and
+its handler receives the session. A server with such a route and no gate refuses to start. The web server passes no
+gate yet; its routes move in the step after P1.04g. `routes.session.test.ts` calls every route signed out and fails when the routes
 that send to sign-in and the declared ones differ. A route that reads the session but works signed out (GET and POST
 /login, POST /logout, GET /signed-out, GET /welcome/blocked) stays `"none"`, as do routes that never read it (POST
 /signed-out, GET /settings's redirect). A new path parameter needs a sample value in that test.

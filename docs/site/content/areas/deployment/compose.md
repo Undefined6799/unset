@@ -75,7 +75,7 @@ node deployment/preflight/stack.ts -- down --env local --compose deployment/comp
 
 `up` runs `scripts/dev-precheck.ts`, then `docker compose up -d`. Dev without `--source` adds `--no-build`. `--env dev --source` and local add `--build`. After a local `up`, the wrapper runs `deployment/preflight/served-leaf.ts`. `down` does not pass `-v`. `--source` on `down` is not passed to Compose. The flag list and the child environment are on [preflight](../preflight/).
 
-`.github/workflows/local-stack.yml` runs `npm run local:up` in jobs `green` and `red`. Its header says it is not a required check.
+`.github/workflows/local-stack.yml` runs `npm run local:up` in jobs `green` and `red`. Its `changes` job runs `scripts/guards/docs-only.ts` first, and a pull request whose every path is on the docs-only allowlist starts neither. Its header says it is not a required check.
 
 ## Data
 
