@@ -1077,8 +1077,8 @@ describe("base images", () => {
     // The builder only builds the edge binary; the runtime image is what ships.
     // P1.37w: the runtime image's own /usr/bin/caddy never ships, because the edge copies its build over it.
     for (const [name, tag, stage, buildStage, stripped] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true, {}],
-      ["caddy", /^2\.11\.7-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
+      ["caddy-builder", /^2\.11\.9-builder-alpine$/, "build", true, {}],
+      ["caddy", /^2\.11\.9-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
