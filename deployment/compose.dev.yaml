@@ -24,7 +24,7 @@ name: unset-dev
 
 services:
   postgres:
-    image: ghcr.io/undefined6799/unset/postgres@sha256:244cbae4d54ccdac0a305b4f6e9e54f28f230be5e462ef5e3157de5d80ac4479
+    image: ghcr.io/undefined6799/unset/postgres@sha256:51bfa2f93f3bf6cb867f4773bc4ea9862f1889b4b66d267c9642e2e81c4b863c
     user: "999:999"
     read_only: true
     cap_drop: [ALL]
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/undefined6799/unset/migrate@sha256:72634dc29289d14f7a2ebb8bb16625ab8e3853d40e0d817f9e5312a727ce4999
+    image: ghcr.io/undefined6799/unset/migrate@sha256:ab0fdea619718d62aa40e07e878e95d407095918e774c5d50a83ce2e30b7e794
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -92,7 +92,7 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/undefined6799/unset/pds@sha256:3004cea8062769d5c434bb3ae0dd6e0a7be9dc304876ca2e4795e546468b5a85
+    image: ghcr.io/undefined6799/unset/pds@sha256:488abd006e134f570ed4fee0bfa51f05612c5a395e7cfb58134bd72da83ef6c6
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
@@ -136,7 +136,7 @@ services:
   # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
   # 0700 (P1.27o).
   edge:
-    image: ghcr.io/undefined6799/unset/edge@sha256:df6b764a925b1b335cc736a57b5b870326d4daedd280afb215bbb19d8af64ae3
+    image: ghcr.io/undefined6799/unset/edge@sha256:e2f7f901724c5c7aa0b5bc29c7ebc959d3abbdcc5e7f0e0edbb3f65269cb5087
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -176,7 +176,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/undefined6799/unset/web@sha256:9220ad067cca8d9dac844ed5bad2a848d14ba28eb6416c04343d57f9e24ed754
+    image: ghcr.io/undefined6799/unset/web@sha256:316570922f33b64d0c927b707b02b04c98344eec55a8929ab402be6437940819
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -238,7 +238,7 @@ services:
   # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
   # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
   objects:
-    image: ghcr.io/undefined6799/unset/objects@sha256:02e3a07fb0b1160dd54b23977749cabf8d82de53c295957ff70602635ff53796
+    image: ghcr.io/undefined6799/unset/objects@sha256:19baaf4db9679e60643507b5558350422e6b4d8ba037e29dc426b4356c98cf95
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
