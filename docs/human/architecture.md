@@ -72,6 +72,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, plan §5.1, P1.25o | An island (`*.island.tsx`) imports only `shared/ui`, the island runtime `shared/islands` (through its index, DC-2), type-only modules and the npm modules named in the rule (today React's JSX runtime) | checked: `island-import-boundary`, `island_import_boundary`, `island_imports_jsx_runtime_passes` |
 | ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
+| DC-2, P0.09s | From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names | checked: `domain-via-exports` |
 | DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
 | ADG §1 | No two tracked paths differ only in letter case | checked: `scripts/guards/case-collision.ts`, `case_pair_file_fails`, `case_pair_dir_fails` |
