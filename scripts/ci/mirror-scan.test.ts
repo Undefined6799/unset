@@ -239,6 +239,18 @@ describe("mirror scan per stage", () => {
     const errored = scan(entries, [[third, "ERROR"]]);
     expect(JSON.parse(errored.outputs.passed ?? "null")).toEqual([SOURCE.builder, SOURCE.runtime]);
     expect(errored.code).not.toBe(0);
+    // One source listed twice: if any entry with that source fails, the source is not passed, even though its
+    // build-only entry passed with HIGH findings.
+    const twice = scan(
+      [
+        { source: SOURCE.runtime, stage: "build" },
+        { source: SOURCE.runtime, stage: "runtime" },
+        { source: third, stage: "runtime" },
+      ],
+      [[SOURCE.runtime, "HIGH"]],
+    );
+    expect(JSON.parse(twice.outputs.passed ?? "null")).toEqual([third]);
+    expect(twice.code).not.toBe(0);
     // Nothing passing is an empty list, never a missing output.
     const none = scan([{ source: SOURCE.runtime, stage: "runtime" }], [[SOURCE.runtime, "CRITICAL"]]);
     expect(none.outputs.passed).toBe("[]");
@@ -250,6 +262,17 @@ describe("mirror scan per stage", () => {
     // The verdict is red on any count but 0, a missing output included.
     expect(verdict("0").code).toBe(0);
     for (const failed of ["2", "", undefined, "0 "]) expect(verdict(failed).code, String(failed)).not.toBe(0);
+  });
+
+  // P2.18t: the verdict always runs after the scan, and the copy still waits for it; neither has another condition
+  // or job between it and the scan.
+  test("mirror_verdict_and_copy_need_scan", () => {
+    const jobs = workflow("mirror.yml").jobs as Record<string, { needs?: unknown; if?: unknown }>;
+    expect(Object.keys(jobs)).toEqual(["scan", "verdict", "copy-and-sign"]);
+    expect(jobs.verdict?.needs).toBe("scan");
+    expect(jobs.verdict?.if).toBeUndefined();
+    expect(jobs["copy-and-sign"]?.needs).toBe("scan");
+    expect(verdictStep?.env).toEqual({ FAILED: "${{ needs.scan.outputs.failed }}" });
   });
 
   // P2.18t: copy-and-sign copies and signs exactly the sources the scan passed, matched whole, never a prefix.

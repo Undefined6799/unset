@@ -83,6 +83,7 @@ jobs:
           # docs.github.com workflow syntax, jobs.<job_id>.needs, read 2026-11-16).
           failed=0
           : > "$RUNNER_TEMP/passed"
+          : > "$RUNNER_TEMP/failed"
           while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
             # P1.33c (Alex's typed line "yes PDS exceptions .github/trivyignore.pds.yaml
@@ -132,7 +133,12 @@ jobs:
                 case "$status" in
                   0) ;;
                   2) echo "::warning title=mirror::HIGH findings in build-only base $source (reported, not failing)" ;;
-                  *) echo "::error title=mirror::scan failed (exit $status) for $source"; failed=$((failed + 1)); continue ;;
+                  *)
+                    echo "::error title=mirror::scan failed (exit $status) for $source"
+                    failed=$((failed + 1))
+                    echo "$source" >> "$RUNNER_TEMP/failed"
+                    continue
+                    ;;
                 esac
                 ;;
               *) echo "no known stage for $source: $stage"; exit 1 ;;
@@ -144,11 +150,14 @@ jobs:
             if [ "$status" -ne 0 ]; then
               echo "::error title=mirror::scan failed (exit $status) for $source"
               failed=$((failed + 1))
+              echo "$source" >> "$RUNNER_TEMP/failed"
             else
               echo "$source" >> "$RUNNER_TEMP/passed"
             fi
           done < "$RUNNER_TEMP/entries"
-          echo "passed=$(jq -cRn '[inputs]' < "$RUNNER_TEMP/passed")" >> "$GITHUB_OUTPUT"
+          # A source that failed under any entry is never passed, even if another entry with the same source passed.
+          passed="$(jq -cRn --rawfile failed "$RUNNER_TEMP/failed" '[inputs] - ($failed | split("\n"))' < "$RUNNER_TEMP/passed")"
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
           echo "failed=$failed" >> "$GITHUB_OUTPUT"
 
   # P2.18t: red for every source that failed the scan, on a push and on the weekly schedule alike. An output that is
@@ -157,8 +166,7 @@ jobs:
     needs: scan
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - name: Fail when any source failed the scan
         env:
