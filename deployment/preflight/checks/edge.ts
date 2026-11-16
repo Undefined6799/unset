@@ -8,6 +8,10 @@
 // mounts two files from deployment/edge/local/ beside its sites: the dev leaf's TLS snippet and the app site
 // (architecture records 2026-10-12-refocus-local-signin-rulings, Amendment 2, and 2026-10-13-p127l-local-gaps, items
 // 1 and 2). Every config rule still applies to what it serves; only where the image's identity comes from changes.
+//
+// Since P1.39c (ADR 0046 decision 4) C18 then asks Caddy itself: edge-adapt.ts runs `caddy adapt` in the edge image
+// on the same mounts and values and holds the output to the reviewed adapted config and its rules. The reader stays
+// beside it until P1.39e.
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
 import {
@@ -27,10 +31,11 @@ import {
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
+import { ADAPT_TIMEOUT_MS, adaptedEdge, type CaddyBind, type EdgeImage } from "./edge-adapt.ts";
 import { appHostProblem, localLeafProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
 import { pdsHostProblem } from "./pds-host.ts";
-import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
+import { type Check, type Earlier, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
@@ -521,19 +526,74 @@ function devHostsProblem(inputs: Inputs, pdsHost: string): Outcome | null {
   return null;
 }
 
+/** The checks that say the lock's images are the signed, verified ones: C18 runs the lock's edge only after them. */
+const IMAGE_CHECKS = ["C2", "C3", "C4", "C5"];
+
+/**
+ * The image `caddy adapt` may run in (P1.39c), or why none: the edge's own build under local and dev --source, which
+ * the compose rules above held to EDGE_DOCKERFILE and C26's rule; otherwise the lock's edge reference, and only when
+ * C2 to C5 each passed in this run, as a verified image and not a local stack's unsigned one.
+ */
+function adaptImage(inputs: Inputs, edge: Service, earlier: Earlier): EdgeImage | Outcome {
+  if (edge.build !== null && (inputs.env === "local" || inputs.source)) {
+    return { dockerfile: edge.build.dockerfile, context: edge.build.context };
+  }
+  const verified = IMAGE_CHECKS.every((id) => earlier.get(id)?.pass === true && earlier.get(id)?.unsigned !== true);
+  if (!verified) return fail("the edge image was not run: C2 to C5 did not all pass");
+  const ref = readLock(inputs)?.edge?.ref;
+  return typeof ref === "string" && ref === edge.image
+    ? { ref }
+    : fail("the edge image was not run: it is not the lock's");
+}
+
+/** The edge's binds at or under /etc/caddy, each one the compose rules above required to be a read-only bind. */
+function caddyBinds(edge: Service): CaddyBind[] | Outcome {
+  const binds: CaddyBind[] = [];
+  for (const mount of edge.mounts) {
+    const target = mountTarget(mount);
+    if (target !== CADDY_ROOT && !target.startsWith(`${CADDY_ROOT}/`)) continue;
+    if (mount.type !== "bind" || mount.source === null || !mount.readOnly) {
+      return fail("an edge mount cannot be given to caddy adapt");
+    }
+    binds.push({ source: mount.source, target });
+  }
+  return binds;
+}
+
+/** C18's compose rules and the reader's verdict, as before P1.39c. */
+function composeRules(inputs: Inputs): Outcome {
+  switch (inputs.env) {
+    case "local":
+      return localEdgeZones(inputs);
+    case "dev":
+    case "prod":
+      return deployedEdgeZones(inputs);
+    default: {
+      const unknown: never = inputs.env;
+      return fail(`no C18 rule for the env ${String(unknown)}`);
+    }
+  }
+}
+
+/**
+ * C18: the compose rules and the reader first, then Caddy's own reading of the same files in the edge image
+ * (edge-adapt.ts). It pulls or builds that image, so it is a network check with its own deadline.
+ */
 export const c18: Check = {
   id: "C18",
-  run: (inputs) => {
-    switch (inputs.env) {
-      case "local":
-        return localEdgeZones(inputs);
-      case "dev":
-      case "prod":
-        return deployedEdgeZones(inputs);
-      default: {
-        const unknown: never = inputs.env;
-        return fail(`no C18 rule for the env ${String(unknown)}`);
-      }
-    }
+  network: true,
+  timeoutMs: ADAPT_TIMEOUT_MS,
+  run: async (inputs, signal, earlier) => {
+    const rules = composeRules(inputs);
+    if (!rules.pass) return rules;
+    const edge = inputs.compose.services.find((service) => service.name === "edge");
+    const env = inputs.serviceEnv.get("edge");
+    if (edge === undefined || env === undefined) return missing("the edge service");
+    const image = adaptImage(inputs, edge, earlier ?? new Map());
+    if ("pass" in image) return image;
+    const binds = caddyBinds(edge);
+    if (!Array.isArray(binds)) return binds;
+    const mode = inputs.env === "local" ? "local" : inputs.env === "dev" ? "dev" : "shipped";
+    return adaptedEdge(inputs, image, binds, env, mode, signal);
   },
 };

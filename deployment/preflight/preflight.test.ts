@@ -26,15 +26,19 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { SENTINELS } from "../edge/adapted.ts";
 import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
+import { c18 } from "./checks/edge.ts";
 import { C21_DEV_WAIVER, c21 } from "./checks/host.ts";
+import { CHECKS } from "./checks/index.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
+import { BUILT_EDGE_ID, edgeImageAnswer } from "./edge-image-double.ts";
 import { type Deps, type Run, preflight as runPreflight, SOURCE_LAST_LINE } from "./index.ts";
 import { loadInputs, lstatOrNull } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -312,7 +316,7 @@ function stack({
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
   // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
   const edge = join(root, "deployment/edge");
-  for (const part of ["Caddyfile", "snippets", "sites", "dev"])
+  for (const part of ["Caddyfile", "snippets", "sites", "dev", "adapted"])
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
   // C9 judges every bind source and its parents too (P1.27u), so these get fixed modes whatever the umask.
   for (const dir of [edge, join(edge, "sites"), join(edge, "dev")]) chmodSync(dir, 0o755);
@@ -355,13 +359,16 @@ const TRACKING = (offset: string) => ok(`Stratum         : 3\nSystem time     : 
  * every call is recorded. */
 function fakeRun(answers: Answers = {}) {
   const calls: string[][] = [];
-  const run: Run = async (file, args) => {
+  const run: Run = async (file, args, _signal, env) => {
     calls.push([file, ...args]);
     if (file === "timedatectl") return answers.ntp ?? SYNCED;
     if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
     // The pinned x64 cosign (P2.26b), unless a test hands another sum.
     if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256.x64}  ${COSIGN.path}\n`);
     if (file === "docker") {
+      // C18's pull, build and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+      const edge = edgeImageAnswer(args, env);
+      if (edge !== null) return edge;
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
     }
@@ -471,9 +478,18 @@ async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   });
 }
 const failed = (lines: string[]) => lines.filter((l) => l.startsWith("FAIL")).map((l) => l.split(" ")[1]);
+/** C18's line when C2 to C5 did not all pass (P1.39c): it then never runs the lock's edge image, and fails. */
+const EDGE_NOT_RUN = "FAIL C18 the edge image was not run: C2 to C5 did not all pass";
+const IMAGE_CHECKS = ["C2", "C3", "C4", "C5"];
+/** `failed` without C18, after checking that C18 failed only for want of C2 to C5. */
+function failedBesideEdgeRun(lines: string[]): (string | undefined)[] {
+  expect(lines).toContain(EDGE_NOT_RUN);
+  return failed(lines).filter((id) => id !== "C18");
+}
 async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
   const result = await check(s, env, deps);
-  expect(failed(result.lines)).toEqual([id]);
+  // A failed image check fails C18 with it, by that one reason.
+  expect(IMAGE_CHECKS.includes(id) ? failedBesideEdgeRun(result.lines) : failed(result.lines)).toEqual([id]);
   expect(result.code).toBe(1);
   return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
 }
@@ -483,7 +499,8 @@ const BUILD_REFUSED = /^FAIL C2 \S+ has a build; dev and prod run only registry 
 /** `failed` without C2, after checking that C2 failed on the build and on nothing else. */
 function failedBesideBuild(lines: string[]): (string | undefined)[] {
   expect(lines.find((l) => l.startsWith("FAIL C2"))).toMatch(BUILD_REFUSED);
-  return failed(lines).filter((id) => id !== "C2");
+  // C2 failed, so C18 never ran the edge image (P1.39c).
+  return failedBesideEdgeRun(lines).filter((id) => id !== "C2");
 }
 /** `expectOnly` for a stack with a build: `id` fails, and C2 fails only on the build. */
 async function expectOnlyBesideBuild(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
@@ -590,7 +607,7 @@ describe("preflight", () => {
     await expectOnly("C4", {}, "prod", { run: pds.run });
     // A failure that names no entry (a spawn error) fails both.
     const both = await check({}, "prod", { run: fakeRun({ verify: { code: 1, stderr: "" } }).run });
-    expect(failed(both.lines)).toEqual(["C3", "C4"]);
+    expect(failedBesideEdgeRun(both.lines)).toEqual(["C3", "C4"]);
   });
 
   test("c3_c4_unknown_origin_fails_both", async () => {
@@ -598,7 +615,7 @@ describe("preflight", () => {
     const lock = { ...LOCK, web: { ...LOCK.web, origin: "third-party" } };
     const stderr = "web: ref is not ours by digest, signed keyless\n";
     const result = await check({ lock }, "prod", { run: fakeRun({ verify: { code: 1, stderr } }).run });
-    expect(failed(result.lines)).toEqual(["C3", "C4"]);
+    expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4"]);
     expect(result.lines).toContain("FAIL C4 web: ref is not ours by digest, signed keyless");
   });
 
@@ -611,7 +628,7 @@ describe("preflight", () => {
     for (const cosign of [other, otherArch, ok(""), { code: 1, stdout: "", stderr: "No such file" }]) {
       const { run, calls } = fakeRun({ cosign });
       const result = await check({}, "prod", { run });
-      expect(failed(result.lines)).toEqual(["C3", "C4"]);
+      expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4"]);
       expect(result.lines).toContain(`FAIL C3 cosign at ${COSIGN.path} is not the pinned v3.1.3 binary`);
       expect(calls.some(([file]) => file === "/usr/bin/env")).toBe(false);
     }
@@ -678,7 +695,7 @@ describe("preflight", () => {
       new Promise((done) => signal.addEventListener("abort", () => done({ code: 1, stdout: "", stderr: "" })));
     const result = await check({}, "prod", { run, timeoutMs: 20 });
     // C4 shares C3's verifier run, so it fails on that run's aborted answer rather than its own clock.
-    expect(failed(result.lines)).toEqual(["C3", "C4", "C5", "C24"]);
+    expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4", "C5", "C24"]);
     const timedOut = result.lines.filter((l) => l.endsWith("timed out")).map((l) => l.split(" ")[1]);
     expect(timedOut).toEqual(["C3", "C5", "C24"]);
   });
@@ -3109,6 +3126,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     });
     expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
+      EDGE_NOT_RUN,
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
     ]);
     const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
@@ -3120,6 +3138,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     });
     expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
+      EDGE_NOT_RUN,
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
     ]);
   });
@@ -5603,5 +5622,222 @@ describe("--source builds staging from the checkout (P1.37y)", () => {
     expect(await run("prod", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
     expect(await run("local", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
     expect(await run("dev", ["--source", "--source"])).toEqual(["ERROR --source may be given once"]);
+  });
+});
+
+// P1.39c (ADR 0046 decision 4): after its compose rules, C18 runs `caddy adapt` in the edge image and holds what it
+// prints to the reviewed adapted config and the rules on it. The image is the lock's by digest, only after C2 to C5
+// passed, or the edge's own build; the container can reach and write nothing, and a failure is fixed words.
+describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
+  type Reply = Awaited<ReturnType<Run>>;
+  /** fakeRun, with `answer` deciding C18's docker calls (`pull`, `build`, `run`) when it returns one. */
+  function edgeRun(
+    answer: (args: string[], env: Readonly<Record<string, string>>) => Reply | null | Promise<Reply | null>,
+  ) {
+    const { run, calls } = fakeRun();
+    const envs: Readonly<Record<string, string>>[] = [];
+    const wrapped: Run = async (file, args, signal, env) => {
+      const edge = file === "docker" && ["pull", "build", "run"].includes(args[0] ?? "");
+      if (!edge) return run(file, args, signal, env);
+      calls.push([file, ...args]);
+      envs.push(env ?? {});
+      return (await answer(args, env ?? {})) ?? (edgeImageAnswer(args, env) as Reply);
+    };
+    return { run: wrapped, calls, envs };
+  }
+  const edgeCalls = (calls: string[][]) =>
+    calls.filter(([file, verb]) => file === "docker" && ["pull", "build", "run"].includes(verb ?? ""));
+  const HARDENED = [
+    ...["docker", "run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--cap-drop", "ALL"],
+    ...["--security-opt", "no-new-privileges", "--user", "65532:65532", "--entrypoint", "caddy"],
+  ];
+  const ADAPT = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"];
+  const VALUES = { PDS_HOST: "pds.example.test", PDS_UPSTREAM: "pds:3000", ACME_EMAIL: "edge@example.test" };
+  const only = (answer: Reply) => (args: string[]) => (args[0] === "run" ? answer : null);
+
+  test("c18_adapts_in_the_locks_edge_with_nothing_to_reach_or_write", async () => {
+    const { run, calls, envs } = edgeRun(() => null);
+    const result = await check({}, "prod", { run });
+    expect(result.lines).toContain("PASS C18 ok");
+    const [pull, adapt, ...more] = edgeCalls(calls);
+    // The lock's reference by digest, pulled, then run with no pull of its own; no other image, no other call.
+    expect(pull).toEqual(["docker", "pull", EDGE]);
+    expect(more).toEqual([]);
+    expect(adapt?.map((arg) => arg.replace(/^\/.*\/deployment\/edge\//, "edge/"))).toEqual([
+      ...HARDENED,
+      ...["-v", "edge/sites/enabled:/etc/caddy/sites/enabled:ro"],
+      ...["-e", "PDS_HOST", "-e", "PDS_UPSTREAM", "-e", "ACME_EMAIL"],
+      EDGE,
+      ...ADAPT,
+    ]);
+    expect(adapt?.find((arg) => arg.endsWith(":ro"))?.startsWith("/")).toBe(true);
+    // The values reach the client by name: in its environment, never in its arguments.
+    expect(envs.at(-1)).toEqual(VALUES);
+    for (const value of Object.values(VALUES)) expect(adapt?.some((arg) => arg.includes(value))).toBe(false);
+  });
+
+  test("c18_dev_mounts_its_three_files_and_names_five_values", async () => {
+    const { run, calls } = edgeRun(() => null);
+    const result = await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev", { run });
+    expect(result.lines).toContain("PASS C18 ok");
+    const adapt = edgeCalls(calls).find(([, verb]) => verb === "run") ?? [];
+    expect(adapt.slice(0, HARDENED.length)).toEqual(HARDENED);
+    expect(adapt.filter((arg) => arg.includes(":/etc/caddy/")).map((arg) => arg.replace(/^.*\/edge\//, ""))).toEqual([
+      "dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro",
+      "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro",
+      "dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro",
+    ]);
+    expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
+      expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM"]),
+    );
+  });
+
+  test("c18_without_docker_fails", async () => {
+    const gone: Reply = { code: 1, stdout: "", stderr: "run failed", missing: true };
+    const { run, calls } = edgeRun(() => gone);
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 docker is not installed, so the edge config could not be adapted");
+    // The pull failed, so nothing was run.
+    expect(edgeCalls(calls).map(([, verb]) => verb)).toEqual(["pull"]);
+  });
+
+  test("c18_pull_failure_runs_nothing", async () => {
+    const { run, calls } = edgeRun((args) => (args[0] === "pull" ? { code: 1, stdout: "", stderr: "denied" } : null));
+    const result = await check({}, "prod", { run });
+    expect(result.lines).toContain("FAIL C18 the edge image could not be pulled");
+    expect(edgeCalls(calls).map(([, verb]) => verb)).toEqual(["pull"]);
+  });
+
+  test("c18_caddy_failure_is_fixed_words_without_its_stderr", async () => {
+    // Caddy's errors quote the config, values included; nothing it prints is repeated.
+    const stderr = "Error: adapting config: pds.example.test: unrecognized directive: probe";
+    const { run } = edgeRun(only({ code: 1, stdout: "probe-stdout", stderr }));
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 caddy adapt failed in the edge image");
+    expect(result.lines.join("\n")).not.toMatch(/unrecognized|probe/);
+  });
+
+  test("c18_output_that_is_not_json_fails", async () => {
+    for (const stdout of ["", "not json", '{"apps":']) {
+      const { run } = edgeRun(only({ code: 0, stdout, stderr: "" }));
+      const result = await check({}, "prod", { run });
+      expect(result.lines, stdout).toContain("FAIL C18 caddy adapt printed no JSON config");
+    }
+  });
+
+  test("c18_config_other_than_the_reviewed_one_fails", async () => {
+    // What the image adapts differs from the reviewed file by one value: the admin API is on.
+    const reviewed = edgeImageAnswer(["run", "adapt"], VALUES)?.stdout ?? "";
+    const config = JSON.parse(reviewed) as { admin: { disabled: boolean } };
+    config.admin.disabled = false;
+    const { run } = edgeRun(only({ code: 0, stdout: JSON.stringify(config), stderr: "" }));
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 the edge config Caddy adapts is not the reviewed one");
+  });
+
+  test("c18_rules_judge_the_adapted_config_beside_the_reviewed_file", async () => {
+    // The reviewed file itself is changed to turn the admin API on, and the image adapts exactly that: equal, and
+    // still refused by the rules on the adapted config.
+    const { root, file } = stack({});
+    const path = join(root, "deployment/edge/adapted/prod.generated.json");
+    const config = JSON.parse(readFileSync(path, "utf8")) as { admin: { disabled: boolean } };
+    config.admin.disabled = false;
+    writeFileSync(path, JSON.stringify(config));
+    let stdout = JSON.stringify(config);
+    for (const [name, value] of Object.entries(VALUES)) {
+      stdout = stdout.replaceAll(SENTINELS[name as keyof typeof VALUES], value);
+    }
+    const { run } = edgeRun(only({ code: 0, stdout, stderr: "" }));
+    const result = await preflight(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines.find((line) => line.startsWith("FAIL C18"))).toMatch(/admin/);
+  });
+
+  test("c18_missing_reviewed_config_fails_before_any_run", async () => {
+    const { root, file } = stack({});
+    rmSync(join(root, "deployment/edge/adapted/prod.generated.json"));
+    const { run, calls } = edgeRun(() => null);
+    const result = await preflight(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(result.lines).toContain("FAIL C18 input missing: deployment/edge/adapted/prod.generated.json");
+    expect(edgeCalls(calls)).toEqual([]);
+  });
+
+  test("c18_failed_image_check_means_no_run", async () => {
+    // C5 fails (a platform manifest), then C3 and C4 (a signature): the lock's edge is neither pulled nor run.
+    const c5 = fakeRun({ mediaType: "application/vnd.oci.image.manifest.v1+json" });
+    const c3 = fakeRun({ verify: { code: 1, stderr: "edge: signature does not verify: bad\n" } });
+    for (const { run, calls } of [c5, c3]) {
+      const result = await check({}, "prod", { run });
+      expect(result.lines).toContain(EDGE_NOT_RUN);
+      expect(edgeCalls(calls)).toEqual([]);
+    }
+    // Called with no earlier outcomes at all, C18 reads that as nothing having passed.
+    const { root, file } = stack({});
+    const { run, calls } = fakeRun();
+    const { inputs } = loadInputs(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(await c18.run(inputs, AbortSignal.timeout(5_000))).toEqual(fail(EDGE_NOT_RUN.slice("FAIL C18 ".length)));
+    const unsignedOnly = new Map(IMAGE_CHECKS.map((id) => [id, { pass: true, reason: "ok", unsigned: true as const }]));
+    expect((await c18.run(inputs, AbortSignal.timeout(5_000), unsignedOnly)).pass).toBe(false);
+    expect(edgeCalls(calls)).toEqual([]);
+  });
+
+  test("c18_deadline_is_its_own_and_a_hung_run_times_out", async () => {
+    // Ten minutes, set on the check; the run's own timeout (a test's 20 ms here) does not shorten it.
+    expect(c18.timeoutMs).toBe(600_000);
+    const slow = edgeRun(async (args) => {
+      if (args[0] === "run") await new Promise((done) => setTimeout(done, 100));
+      return null;
+    });
+    const passed: Check[] = IMAGE_CHECKS.map((id) => ({ id, run: () => pass() }));
+    const patient = await check({}, "prod", { run: slow.run, timeoutMs: 20, checks: [...passed, c18] });
+    expect(patient.lines).toContain("PASS C18 ok");
+    // With a short deadline in its definition, a run that never answers fails as timed out.
+    const hung = edgeRun((args) => (args[0] === "run" ? Promise.withResolvers<Reply>().promise : null));
+    const checks = CHECKS.map((each) => (each.id === "C18" ? { ...each, timeoutMs: 30 } : each));
+    const result = await check({}, "prod", { run: hung.run, checks });
+    expect(result.lines).toContain("FAIL C18 timed out");
+  });
+
+  test("c18_built_edge_is_built_then_run_with_the_same_hardening", async () => {
+    // dev --source with the edge built from its Dockerfile: no pull, the build's id is what runs, flags unchanged.
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    const { root, file } = stack({
+      compose: DEV.replace(`    image: ${EDGE}\n`, edgeBuild),
+      pdsEnv: DEV_ENV,
+      report: PART_A_DONE,
+      networks: DEV_TABLE,
+      files: { "deployment/edge/Dockerfile": "FROM scratch\n" },
+    });
+    const { run, calls } = edgeRun(() => null);
+    const result = await runPreflight(["--env", "dev", "--compose", file, "--source"], { root, run, ...fakeFs(root) });
+    expect(result.lines).toContain("PASS C18 ok");
+    const [build, adapt, ...more] = edgeCalls(calls);
+    expect(build).toEqual([
+      "docker",
+      "build",
+      "-q",
+      "-f",
+      `${root}/deployment/edge/Dockerfile`,
+      `${root}/deployment/edge`,
+    ]);
+    expect(adapt?.slice(0, HARDENED.length)).toEqual(HARDENED);
+    expect(adapt?.at(-ADAPT.length - 1)).toBe(BUILT_EDGE_ID);
+    expect(more).toEqual([]);
+    // A build that prints anything but an image id is not run.
+    const odd = edgeRun((args) => (args[0] === "build" ? { code: 0, stdout: "--privileged\n", stderr: "" } : null));
+    const refused = await runPreflight(["--env", "dev", "--compose", file, "--source"], {
+      root,
+      run: odd.run,
+      ...fakeFs(root),
+    });
+    expect(refused.lines).toContain("FAIL C18 the edge image could not be built");
+    expect(
+      edgeCalls(odd.calls)
+        .map(([, verb]) => verb)
+        .join(),
+    ).toBe("build");
   });
 });

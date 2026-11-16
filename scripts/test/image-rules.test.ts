@@ -26,6 +26,14 @@ const BUILD = [
   ),
   new RegExp(`\\b${WRAPPER}\\b`),
 ];
+/**
+ * Modules that build an image only through a process runner handed to them (P1.39c; ADR 0046 decision 4): the
+ * preflight's C18 builds the edge under local and dev --source through `Inputs.run`. A unit test may reach one, since
+ * it hands it a double and nothing is built. The exemption holds only while the module imports no child_process of its
+ * own, so it cannot start a process itself; the preflight's real runner is private to its CLI entry.
+ */
+const INJECTED_BUILDS: readonly string[] = ["deployment/preflight/checks/edge-adapt.ts"];
+const OWN_PROCESS = /["'](?:node:)?child_process["']/;
 const SKIP = /\b(?:runIf|skipIf|todo)\b|\.skip\b/;
 /** Each module dependency-cruiser reaches from `root`, with its imports resolved by the repository's own resolver
  * settings (scripts/lint/.dependency-cruiser.cjs): extensionless and `.js` imports, folder indexes and `@unset/*`
@@ -47,7 +55,7 @@ const ours = (dependency: IDependency): boolean =>
 const followed = (dependency: IDependency): boolean =>
   !dependency.couldNotResolve && !dependency.coreModule && !dependency.resolved.split("/").includes("node_modules");
 
-type Walk = { graph: Map<string, IDependency[]>; allowed: Set<string> };
+type Walk = { graph: Map<string, IDependency[]>; allowed: Set<string>; injected: readonly string[] };
 
 /** Why an unresolved import of ours fails the guard; the one allowed edge is recorded instead. */
 function unresolvedProblem(walk: Walk, file: string, dependency: IDependency): string | null {
@@ -77,7 +85,9 @@ function buildProblem(root: string, walk: Walk, test: string): string | null {
 /** Why `file`, reached from `test`, breaks the rule on its own: it builds an image, or one of its imports does not
  * resolve. */
 function moduleProblem(root: string, walk: Walk, test: string, file: string): string | null {
-  if (BUILD.some((pattern) => pattern.test(readFileSync(join(root, file), "utf8")))) {
+  const text = readFileSync(join(root, file), "utf8");
+  const injected = walk.injected.includes(file) && !OWN_PROCESS.test(text);
+  if (!injected && BUILD.some((pattern) => pattern.test(text))) {
     const by = file === test ? "builds an image" : `imports ${file}, which builds an image`;
     return `${test} ${by}, so it must be named *.image.test.ts`;
   }
@@ -90,8 +100,11 @@ function moduleProblem(root: string, walk: Walk, test: string, file: string): st
 
 /** Every unit test that builds an image itself or through a module it reaches, and the allowed unresolved edges the
  * walk met. */
-async function imageBuildProblems(root: string): Promise<{ problems: string[]; allowed: string[] }> {
-  const walk: Walk = { graph: await importGraph(root), allowed: new Set() };
+async function imageBuildProblems(
+  root: string,
+  injected: readonly string[] = INJECTED_BUILDS,
+): Promise<{ problems: string[]; allowed: string[] }> {
+  const walk: Walk = { graph: await importGraph(root), allowed: new Set(), injected };
   const problems = [...walk.graph.keys()]
     .filter((file) => TEST.test(file) && !IMAGE_TEST.test(file))
     .flatMap((file) => buildProblem(root, walk, file) ?? [])
@@ -174,6 +187,26 @@ describe("image tests", () => {
       named("b/js.test.ts", "imports b/helper.ts, which builds an image"),
       named("b/workspace.test.ts", "imports shared/pkg/index.ts, which builds an image"),
     ]);
+  });
+
+  test("injected_build_is_exempt_only_when_listed_and_spawning_nothing", async () => {
+    // P1.39c: a module that builds through a runner it is handed, and one that also imports child_process.
+    const handed = `export const make = (run) => run("docker", ${JSON.stringify([BUILD_WORD, "-q", "."])});\n`;
+    const root = tree({
+      "e/handed.ts": handed,
+      "e/handed.test.ts": using("./handed.ts"),
+      "e/unlisted.ts": handed,
+      "e/unlisted.test.ts": using("./unlisted.ts"),
+      "e/spawns.ts": `import { execFile } from "node:child_process";\n${handed}`,
+      "e/spawns.test.ts": using("./spawns.ts"),
+    });
+    expect((await imageBuildProblems(root, ["e/handed.ts", "e/spawns.ts"])).problems).toEqual([
+      named("e/spawns.test.ts", "imports e/spawns.ts, which builds an image"),
+      named("e/unlisted.test.ts", "imports e/unlisted.ts, which builds an image"),
+    ]);
+    // The list is one file, and the listed file exists and starts no process itself.
+    expect(INJECTED_BUILDS).toEqual(["deployment/preflight/checks/edge-adapt.ts"]);
+    for (const file of INJECTED_BUILDS) expect(readFileSync(join(ROOT, file), "utf8")).not.toMatch(OWN_PROCESS);
   });
 
   test("unresolved_import_fails", async () => {

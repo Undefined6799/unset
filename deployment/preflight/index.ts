@@ -14,13 +14,14 @@
 //
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
 // malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3
-// to C5, and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> [key=<k>] [service=<s>] <reason>` line per
-// check and never a secret value: env files are read into SecretMaps, Compose is parsed here, never through `docker
-// compose config`, and a reason that holds any configured value is withheld whole.
+// to C5, and C24) give up after 30 s and fail, and C18, which pulls or builds the edge image, after its own ten
+// minutes. Output is one `PASS|FAIL <id> [key=<k>] [service=<s>] <reason>` line per check and never a secret value:
+// env files are read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason
+// that holds any configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CHECKS, LOCAL_CHECKS } from "./checks/index.ts";
-import { type Check, type Inputs, MISSING, NAMED_KEYS, type Outcome, type Run } from "./checks/types.ts";
+import { type Check, type Earlier, type Inputs, MISSING, NAMED_KEYS, type Outcome, type Run } from "./checks/types.ts";
 import { ParseError } from "./compose-parse.ts";
 import { CannotRun, type Deps, type Loaded, loadInputs } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -34,8 +35,8 @@ export type Result = { code: 0 | 1 | 2; lines: string[] };
 const NETWORK_TIMEOUT_MS = 30_000;
 
 /** One check, failing closed: a throw is a failure, and a network check that outlasts its timeout fails. */
-async function runCheck(check: Check, loaded: Loaded, timeoutMs: number): Promise<Outcome> {
-  return withheldIfValued(await settle(check, loaded.inputs, timeoutMs), loaded.configured);
+async function runCheck(check: Check, loaded: Loaded, timeoutMs: number, earlier: Earlier): Promise<Outcome> {
+  return withheldIfValued(await settle(check, loaded.inputs, timeoutMs, earlier), loaded.configured);
 }
 
 const WITHHELD = "reason withheld (it contained a configured value)";
@@ -53,13 +54,13 @@ function withheldIfValued(outcome: Outcome, configured: ConfiguredValues): Outco
 }
 
 /** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */
-async function settle(check: Check, inputs: Inputs, timeoutMs: number): Promise<Outcome> {
+async function settle(check: Check, inputs: Inputs, timeoutMs: number, earlier: Earlier): Promise<Outcome> {
   const signal = AbortSignal.timeout(timeoutMs);
   const timedOut = new Promise<Outcome>((done) => {
     signal.addEventListener("abort", () => done({ pass: false, reason: "timed out" }), { once: true });
   });
   try {
-    const outcome = Promise.resolve(check.run(inputs, signal));
+    const outcome = Promise.resolve(check.run(inputs, signal, earlier));
     return await (check.network ? Promise.race([outcome, timedOut]) : outcome);
   } catch {
     return { pass: false, reason: "check error" };
@@ -79,8 +80,13 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
   let failed = false;
   const local = loaded.inputs.env === "local";
   const services = new Set(loaded.inputs.compose.services.map((service) => service.name));
+  // What each check may know of the ones before it (P1.39c): C18 runs the lock's edge image only after C2 to C5 passed.
+  const earlier = new Map<string, Outcome>();
   for (const check of [...(deps.checks ?? CHECKS), ...(local ? LOCAL_CHECKS : [])]) {
-    const outcome = await runCheck(check, loaded, deps.timeoutMs ?? NETWORK_TIMEOUT_MS);
+    // A check's own deadline comes from its definition alone, before the default or a test's.
+    const timeoutMs = check.timeoutMs ?? deps.timeoutMs ?? NETWORK_TIMEOUT_MS;
+    const outcome = await runCheck(check, loaded, timeoutMs, new Map(earlier));
+    earlier.set(check.id, outcome);
     failed ||= !outcome.pass;
     lines.push(`${verdict(outcome)} ${check.id}${named(outcome, services)} ${printable(outcome.reason)}`);
   }
@@ -115,10 +121,14 @@ export const LOCAL_LAST_LINE = "LOCAL unsigned, local-only stack: never deploy i
 /** The line that ends every `--env dev --source` run: staging built from its checkout, which no signature covers. */
 export const SOURCE_LAST_LINE = "SOURCE built from the checkout, unsigned: staging only";
 
-/** Child processes with no shell and a bounded output; a spawn error reads as a failed run. */
-const run: Run = (file, args, signal) =>
+/**
+ * Child processes with no shell and a bounded output; a spawn error reads as a failed run. `env`, when given, is added
+ * to this process's environment for the child alone (Node v26 child_process.execFile, `options.env`).
+ */
+const run: Run = (file, args, signal, env) =>
   new Promise((done) => {
-    execFile(file, args, { signal, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const options = { signal, maxBuffer: 16 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}) };
+    execFile(file, args, options, (error, stdout, stderr) => {
       const missing = (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
       done({
         code: error === null ? 0 : 1,
