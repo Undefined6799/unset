@@ -427,12 +427,20 @@ test("logout.last_browser_revoke_fails", async () => {
 });
 
 test("logout.remaining_sessions_need_a_token_set", async () => {
+  // P2.03t (migration 0024, ADR 0049): a session cannot be written before its token set and is deleted with it, so
+  // "a session with no token set" can no longer be seeded. What is held now: once the set is gone the DID counts no
+  // browser, and storing a new set does not bring one back.
   const owner = newDid();
-  await open(owner);
+  const giveTokenSet = () => tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
   const count = (tx: SessionDb) => remainingSessions(tx, owner, LIMITS.idleS);
-  expect(await withTransaction(webPool, null, count)).toBe(0);
-  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  await expect(open(owner)).rejects.toMatchObject({ code: "23503" });
+  await giveTokenSet();
+  await open(owner);
   expect(await withTransaction(webPool, null, count)).toBe(1);
+  await tokenSets.del(owner);
+  expect(await withTransaction(webPool, null, count)).toBe(0);
+  await giveTokenSet();
+  expect(await withTransaction(webPool, null, count)).toBe(0);
 });
 
 // P2.08c, pinned to the store. now() does not move inside one transaction, so the count and the store's own read judge
@@ -471,4 +479,28 @@ test("logout.remaining_sessions_match_the_store", async () => {
     });
     expect(judged).toEqual({ edge, counted: live ? 1 : 0, accepted: live });
   }
+});
+
+test("logout.replacing_sign_in_keeps_other_browsers", async () => {
+  // P2.03t (migration 0024, ADR 0049): deleting a token set now deletes the DID's sessions. A sign-in replaces the
+  // set: the library revokes and deletes the old one, then stores the new one (@atproto/oauth-client 0.8.10
+  // dist/oauth-client.js `callback`). sign-in-lock.ts drops that delete when a store follows, so the row is updated
+  // in place and the member's other browsers stay signed in. This fails if a delete ever reaches the table there.
+  const { createSignInLock } = await import(join(HTTP, "sign-in-lock.ts"));
+  const signIn = createSignInLock({ store: tokenSets, lock: createRequestLock(lockPool) });
+  const owner = newDid();
+  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  const other = await open(owner);
+  await signIn.during(async () => {
+    await signIn.tokenSets.del(owner);
+    await signIn.tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "B" } });
+  });
+  expect(await sessionsOf(owner)).toBe(1);
+  expect((await get(`/${owner}`, other.cookieValue)).status).toBe(200);
+  // A sign-in whose new set was never stored leaves a real delete, and that ends every browser, as it must.
+  await signIn.during(async () => {
+    await signIn.tokenSets.del(owner);
+  });
+  expect(await hasToken(owner)).toBe(false);
+  expect(await sessionsOf(owner)).toBe(0);
 });
