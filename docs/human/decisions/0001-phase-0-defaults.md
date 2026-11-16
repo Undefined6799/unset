@@ -574,3 +574,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0050](0050-object-store-admin-through-its-shell.md)):** no S3 identity has `Admin`. The stack script creates the
   buckets through `weed shell` inside `objects`, and vacuum and takedown run the same way from the runbook. This
   supersedes the admin-identity clause of ADR 0041 Decision 3 and the one-shot-admin-job clauses of Decision 7.
+- **ADR 0048 accepted (Alex, 2026-11-15 23:29:47Z, against f30636e; own record:
+  [0048](0048-session-issuer-origin.md)):** `app.session` gets a nullable `issuer_origin` column, written once at
+  sign-in from the issuer the OAuth library verified, so the account pages draw the sign-in server link from the
+  session row and stop unsealing the token set for it. Not new personal data; it leaves with the row.
