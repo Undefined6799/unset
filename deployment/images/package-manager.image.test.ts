@@ -345,6 +345,12 @@ const DATABASE_BY_KIND = new Map([
     "edge",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
   ],
+  // The objects image's Alpine base keeps the same four apk files once apk-tools is gone (read from the built image on
+  // SeaweedFS 4.53, 2026-11-16).
+  [
+    "objects",
+    { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
+  ],
 ]);
 
 /** Every way a kind's package database holds more than inert data, or no longer names a package. */
