@@ -29,6 +29,12 @@
     "gitCommit": "0e5b0324a13fa2f9e6a4a9c4295d5c116078dffd",
     "verify": "cosign-keyless"
   },
+  "objects": {
+    "ref": "ghcr.io/undefined6799/unset/objects@sha256:f4c9d04156c0245f9ce8161069eb93edb4f9051d4c18240f6fd3385fe1f99881",
+    "origin": "first-party",
+    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "verify": "cosign-keyless"
+  },
   "newt": {
     "ref": "ghcr.io/undefined6799/mirror/newt@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e",
     "origin": "upstream",
