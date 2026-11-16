@@ -33,8 +33,10 @@ Run these in this order (ADR 0041 Decision 7). Never put them on a schedule that
 1. **Delete the objects.** For a member's erasure, delete the member's own folders:
    - `fs.rm -r /buckets/unset-private/drafts/<did>`
    - `fs.rm -r /buckets/unset-private/media/<did>`
-   - in the PDS bucket, once P2.18p moves the PDS there: `fs.rm -r /buckets/unset-pds/blocks/<did>`, the same under
-     `tmp/<did>`, and under `quarantine/` for the DID's CIDs.
+   - in the PDS bucket, from P2.18p: `fs.rm -r /buckets/unset-pds/blocks/<did>`, `fs.rm -r
+     /buckets/unset-pds/tmp/<did>` and `fs.rm -r /buckets/unset-pds/quarantine/<did>`. The PDS's own account
+     deletion removes only some of `blocks/<did>/` and none of the other two (`pds-blobstore-move.md`, "Erasure after
+     the move").
 2. **Purge the filer's metadata log** with `fs.log.purge -daysAgo 1`. The log's files are themselves stored in
    volumes, and they keep key names, DIDs included. This removes every day's log before today's. Today's log, and
    anything written between runs, keeps the names until the next run.

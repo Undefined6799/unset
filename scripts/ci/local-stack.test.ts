@@ -8,6 +8,7 @@ import {
   CLIENT_ID,
   generate,
   maskLines,
+  objectsIdentities,
   p256DidKey,
   probeVerdict,
   psRows,
@@ -53,6 +54,16 @@ describe("generated values (D2)", () => {
     expect(v.jwtSecret).toMatch(/^[0-9a-f]{64}$/);
     expect(v.adminPassword).toMatch(/^[0-9a-f]{64}$/);
     expect(v.rotationKey).toMatch(/^[0-9a-f]{64}$/);
+    // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
+    expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
+    expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
+    const [identity, ...others] = JSON.parse(objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret)).identities;
+    expect(others).toEqual([]);
+    expect(identity).toEqual({
+      name: "pds",
+      credentials: [{ accessKey: v.pdsStoreKeyId, secretKey: v.pdsStoreSecret }],
+      actions: ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"],
+    });
     expect(isP256DidKey(v.recoveryDidKey)).toBe(true);
     const keyring = JSON.parse(v.keyring);
     expect(keyring.active).toBe("k1");

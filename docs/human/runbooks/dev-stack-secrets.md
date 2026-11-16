@@ -103,8 +103,10 @@ PR.
 ## The object store's identities (P2.18s; ADR 0041 Decision 3, ADR 0050)
 
 `objects_s3` is SeaweedFS's identities file (`weed server -s3.config`), read only by the `objects` service, which runs
-as `1000`. Until a process gets its own key (the draft store in P2.18, the PDS in P2.18p), it holds no identity at all,
-so the store denies every request:
+as `1000`. It holds one identity per process that has a key. Since P2.18p that is the PDS's, `pds`, with exactly
+`Read:unset-pds`, `Write:unset-pds` and `List:unset-pds`; its key pair is also in `pds.env` (below). Make both at once
+with step 2 of `pds-blobstore-move.md`, which writes them without printing them. Before any process has a key, the
+file holds no identity at all, so the store denies every request:
 
 `printf '{"identities":[]}' > objects_s3`, then `chown 1000:1000` and `chmod 0400` as above.
 
@@ -118,8 +120,8 @@ The PDS reads its settings only from its environment (`@atproto/pds` 0.5.49, `di
 cannot be mounted files. They go in `unset-dev-env/pds.env`, yours, mode `0600`, which the preflight checks like
 `dev-public.env`. Start it from `deployment/env/pds.example.env`; every other PDS setting is written out in
 `compose.dev.yaml`. One env per host: the same file is loaded by both compose files, and the preflight requires its
-exact name set for the env it runs under (P1.36q). Under `--env local` it holds the first four names only; under dev
-and prod all six.
+exact name set for the env it runs under (P1.36q, C30). Under `--env local` it holds all but the two mail URLs; under
+dev all eight; under prod all but the store's key pair, until P5.01 picks prod's store.
 
 | Name | Make it with |
 | --- | --- |
@@ -127,6 +129,7 @@ and prod all six.
 | `PDS_ADMIN_PASSWORD` | `openssl rand -hex 32` (the preflight's C7 wants at least 32 characters) |
 | `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX` | `openssl ecparam --name secp256k1 --genkey --noout --outform DER \| tail --bytes=+8 \| head --bytes=32 \| xxd --plain --cols 32` (the PDS installer's own command, bluesky-social/pds v0.4.5049 `installer.sh:16`) |
 | `PDS_RECOVERY_DID_KEY` | the public `did:key` of a recovery key whose private half stays offline (below); set it before the first account, because it cannot be added to existing DID documents later (C6) |
+| `PDS_BLOBSTORE_S3_ACCESS_KEY_ID`, `PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY` | local and dev only: the `pds` identity's pair in `objects_s3`, made by step 2 of `pds-blobstore-move.md` (P2.18p, C33) |
 | `PDS_EMAIL_SMTP_URL` | dev and prod only: `smtps://resend:<key>@smtp.resend.com:465`, with a Resend sending-only key as `<key>` |
 | `PDS_MODERATION_EMAIL_SMTP_URL` | dev and prod only: the same form; a second sending-only key is recommended, the same key works |
 
