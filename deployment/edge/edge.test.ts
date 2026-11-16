@@ -17,6 +17,8 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { ADAPTED_ENVS, type AdaptedEnvName, type Json, SENTINELS } from "./adapted.ts";
+import { adaptedProblems } from "./adapted-rules.ts";
 import { type EdgeFiles, edgeSiteProblems, readEdgeConfig } from "./caddyfile.ts";
 
 const EDGE = import.meta.dirname;
@@ -188,38 +190,48 @@ const shippedConfig = (edits: Record<string, string | null> = {}) => {
 };
 const siteProblems = (edits: Record<string, string | null> = {}) => edgeSiteProblems(shippedConfig(edits));
 
-/** The zones of the pds-ratelimit snippet's first rate_limit block, in order. */
-function zones() {
-  const limit = shippedConfig()
-    .snippet("pds-ratelimit")
-    .find((directive) => directive.name === "rate_limit");
-  return (limit?.block ?? [])
-    .filter((directive) => directive.name === "zone")
-    .map((zone) => {
-      const value = (name: string) => zone.block?.find((directive) => directive.name === name)?.args[0];
-      return {
-        name: zone.args[0] ?? "",
-        key: value("key"),
-        ipv6Prefix: value("ipv6_prefix"),
-        events: Number(value("events")),
-        window: value("window"),
-      };
-    });
+type Obj = { [key: string]: Json };
+const isObj = (value: Json | undefined): value is Obj =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * The edge config as Caddy adapts it for one env's files (P1.39d; ADR 0046): the reviewed adapted/<env>.generated.json,
+ * which adapted.image.test.ts holds equal to what the built image adapts, with SENTINELS for the configured values.
+ */
+const reviewed = (env: AdaptedEnvName): Obj => JSON.parse(read(`adapted/${env}.generated.json`)) as Obj;
+/** Every object in a config, at any depth. */
+function objects(value: Json): Obj[] {
+  if (Array.isArray(value)) return value.flatMap(objects);
+  return isObj(value) ? [value, ...Object.values(value).flatMap(objects)] : [];
+}
+/** Every handler of one module in a config, wherever it sits (Caddy v2.11.7 modules/caddyhttp, `handler` inline key). */
+const handlers = (config: Json, name: string): Obj[] => objects(config).filter((each) => each.handler === name);
+/** The value at a path of keys, or undefined. */
+const at = (value: Json | undefined, ...keys: string[]): Json | undefined =>
+  keys.reduce<Json | undefined>((each, key) => (isObj(each) ? each[key] : undefined), value);
+
+/** A window as limits.json writes it (`5m`, `24h`, `10s`), in the nanoseconds Caddy adapts a duration to. */
+function nanoseconds(window: string): number {
+  const [, count, unit] = /^(\d+)([smh])$/.exec(window) ?? [];
+  const seconds = { s: 1, m: 60, h: 3600 }[unit as "s" | "m" | "h"];
+  if (count === undefined || seconds === undefined) throw new Error(`limits.json window ${window} is not Ns, Nm or Nh`);
+  return Number(count) * seconds * 1_000_000_000;
 }
 
-/** Why the shipped Caddy config could keep or share a rate-limit key beyond memory; empty when it cannot. */
-function memoryOnlyProblems(text: string): string[] {
-  const found = [];
-  for (const [word, pattern] of [
-    ["distributed", /\bdistributed\b/],
-    ["storage", /\bstorage\b/],
-    ["log_key", /\blog_key\b/],
-  ] as const) {
-    if (pattern.test(text)) found.push(`config sets ${word}`);
+/**
+ * Why an adapted config could keep or share a rate-limit key beyond memory; empty when it cannot. The names are the
+ * limiter's JSON fields (mholt/caddy-ratelimit 5625512f24f6 handler.go: `distributed`, `storage`, `log_key`,
+ * `disable_metrics`); `storage` at the top is Caddy's own, and a `metrics` key anywhere turns metrics on.
+ */
+function memoryOnlyProblems(config: Json): string[] {
+  const found: string[] = [];
+  const limiters = handlers(config, "rate_limit");
+  if (limiters.some((limiter) => "distributed" in limiter)) found.push("config sets distributed");
+  if (limiters.some((limiter) => "storage" in limiter) || at(config, "storage") !== undefined) {
+    found.push("config sets storage");
   }
-  if (/^\s*metrics\b/m.test(text)) found.push("config enables global metrics");
-  if (/\brate_limit \{/.test(text) && !/\bdisable_metrics\b/.test(text))
-    found.push("rate_limit without disable_metrics");
+  if (limiters.some((limiter) => "log_key" in limiter)) found.push("config sets log_key");
+  if (objects(config).some((each) => "metrics" in each)) found.push("config enables global metrics");
+  if (limiters.some((limiter) => limiter.disable_metrics !== true)) found.push("rate_limit without disable_metrics");
   return found;
 }
 
@@ -242,48 +254,116 @@ function pinProblems(text: string): string[] {
 
 describe("edge config", () => {
   test("edge_tls_issuer_letsencrypt", () => {
-    const tls = read("snippets/tls.caddy").replaceAll(/^\s*#.*$/gm, "");
-    expect([...tls.matchAll(/\bissuer\s+(\S+)/g)].map((m) => m[1])).toEqual(["acme"]);
-    expect([...tls.matchAll(/\bdir\s+(\S+)/g)].map((m) => m[1])).toEqual([
-      "https://acme-v02.api.letsencrypt.org/directory",
-    ]);
-    // No other CA anywhere: no global acme_ca, no ZeroSSL, no internal issuer in what ships.
-    expect(config()).not.toMatch(/\bacme_ca\b|zerossl|\binternal\b|local_certs/i);
-    // The contact address is not committed.
-    expect(tls).toMatch(/\bemail \{\$ACME_EMAIL\}/);
+    // What ships (prod) gets its certificate for the PDS host from Let's Encrypt, with the contact address from the
+    // env, never committed: the sentinel stands where {$ACME_EMAIL} was.
+    expect(at(reviewed("prod"), "apps", "tls")).toEqual({
+      automation: {
+        policies: [
+          {
+            subjects: [SENTINELS.PDS_HOST],
+            issuers: [
+              { module: "acme", ca: "https://acme-v02.api.letsencrypt.org/directory", email: SENTINELS.ACME_EMAIL },
+            ],
+          },
+        ],
+      },
+    });
+    // No other CA anywhere, in any env: that policy holds the only issuer, there is no pki app (Caddy's internal CA),
+    // and dev and local serve the leaf files alone (ADR 0032; refocus Amendment 1).
+    for (const env of ADAPTED_ENVS) {
+      const config = reviewed(env);
+      expect(Object.keys(at(config, "apps") as Obj).sort(), env).toEqual(["http", "tls"]);
+      expect(objects(config).filter((each) => "issuers" in each).length, env).toBe(env === "prod" ? 1 : 0);
+      expect(JSON.stringify(config), env).not.toMatch(/zerossl|"internal"|acme_ca|local_certs/i);
+    }
+    for (const env of ["dev", "local"] as const) {
+      expect(at(reviewed(env), "apps", "tls"), env).toEqual({
+        certificates: {
+          load_files: [
+            { certificate: `/run/secrets/${env}_tls_cert`, key: `/run/secrets/${env}_tls_key`, tags: ["cert0"] },
+          ],
+        },
+      });
+    }
   });
 
   test("edge_ratelimit_memory_only", () => {
-    expect(memoryOnlyProblems(config())).toEqual([]);
-    // Every zone is keyed by the client address, IPv6 by its /64.
-    for (const zone of zones()) {
-      expect(zone.key, zone.name).toBe("{client_ip}");
-      expect(zone.ipv6Prefix, zone.name).toBe("64");
+    for (const env of ADAPTED_ENVS) {
+      const config = reviewed(env);
+      expect(memoryOnlyProblems(config), env).toEqual([]);
+      // Every zone is keyed by the client address, IPv6 by its /64.
+      const zones = handlers(config, "rate_limit").flatMap((limiter) => Object.entries(limiter.rate_limits as Obj));
+      expect(zones.length, env).toBeGreaterThan(0);
+      for (const [name, zone] of zones) {
+        expect(at(zone, "key"), `${env} ${name}`).toBe("{http.vars.client_ip}");
+        expect(at(zone, "ipv6_prefix"), `${env} ${name}`).toBe(64);
+      }
     }
-    // A fixture with shared state, storage or a metrics label fails.
-    const shipped = config();
-    const withMetrics = shipped.replaceAll("disable_metrics", "");
+    // A config with shared state, storage, a logged key or metrics fails.
+    const edited = (edit: (config: Obj, limiter: Obj) => void): Obj => {
+      const config = reviewed("prod");
+      edit(config, handlers(config, "rate_limit")[0] as Obj);
+      return config;
+    };
     for (const fixture of [
-      shipped.replace("rate_limit {", "rate_limit {\n\t\tdistributed {\n\t\t}"),
-      `${shipped}\n{\n\tstorage file_system /data\n}`,
-      shipped.replace("rate_limit {", "rate_limit {\n\t\tlog_key"),
-      `{\n\tmetrics\n}\n${shipped}`,
+      edited((_config, limiter) => {
+        limiter.distributed = {};
+      }),
+      edited((config) => {
+        config.storage = { module: "file_system", root: "/data" };
+      }),
+      edited((_config, limiter) => {
+        limiter.storage = { module: "file_system", root: "/data" };
+      }),
+      edited((_config, limiter) => {
+        limiter.log_key = true;
+      }),
+      edited((config) => {
+        (at(config, "apps", "http") as Obj).metrics = {};
+      }),
     ]) {
       expect(memoryOnlyProblems(fixture)).not.toEqual([]);
     }
+    const withMetrics = edited((_config, limiter) => {
+      delete limiter.disable_metrics;
+    });
     expect(memoryOnlyProblems(withMetrics)).toEqual(["rate_limit without disable_metrics"]);
   });
 
   test("edge_ratelimit_matches_limits", () => {
     // The zone values are architecture's (record 2026-10-07-p1b-a1-pds-no-forwarded-address, 01:52Z), kept once in
-    // limits.json; the snippet must say the same.
-    const limits = JSON.parse(read("limits.json")) as { rateLimitZones: Record<string, unknown> };
-    const shipped = Object.fromEntries(zones().map((z) => [z.name, { events: z.events, window: z.window }]));
-    expect(shipped).toEqual(limits.rateLimitZones);
+    // limits.json; what Caddy adapts must say the same, for the PDS's zones and the dev app site's.
+    const limits = JSON.parse(read("limits.json")) as Record<
+      string,
+      Record<string, { events: number; window: string }>
+    >;
+    const ruled = (zones: Record<string, { events: number; window: string }>) =>
+      Object.fromEntries(
+        Object.entries(zones).map(([name, zone]) => [name, { events: zone.events, window: nanoseconds(zone.window) }]),
+      );
+    const adapted = (env: AdaptedEnvName) =>
+      handlers(reviewed(env), "rate_limit").map((limiter) =>
+        Object.fromEntries(
+          Object.entries(limiter.rate_limits as Obj).map(([name, zone]) => [
+            name,
+            { events: at(zone, "max_events"), window: at(zone, "window") },
+          ]),
+        ),
+      );
+    const pds = ruled(limits.rateLimitZones as Record<string, { events: number; window: string }>);
+    const app = ruled(limits.appRateLimitZones as Record<string, { events: number; window: string }>);
+    expect(adapted("prod")).toEqual([pds]);
+    // Dev: the app site's own zones and the PDS's. Local: both sites count on the PDS's zones (local/app.caddy).
+    expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds]));
+    expect(adapted("dev").length).toBe(2);
+    expect(adapted("local")).toEqual([pds, pds]);
   });
 
   test("every_pds_route_has_a_zone", () => {
     expect(siteProblems()).toEqual([]);
+    // The same verdict on what Caddy adapts, for each env's files (P1.39d): the rules on the adapted config pass.
+    expect(adaptedProblems(reviewed("prod"), "shipped", SENTINELS)).toEqual([]);
+    expect(adaptedProblems(reviewed("local"), "local", SENTINELS)).toEqual([]);
   });
 
   test("pds_route_without_zone_fails", () => {
@@ -392,14 +472,44 @@ describe("edge config", () => {
   });
 
   test("edge_admin_api_off_in_config", () => {
-    expect(read("Caddyfile")).toMatch(/^\tadmin off$/m);
-    expect(read("Caddyfile")).toMatch(/^\tpersist_config off$/m);
-    // The one trust is the dev listener's (P1.36j); caddyfile.dev.test.ts holds its reds.
-    expect(
-      config()
-        .match(/^\s*(?:trusted_proxies|client_ip_headers).*$/gm)
-        ?.map((line) => line.trim()),
-    ).toEqual(["trusted_proxies static 10.250.37.2/32", "trusted_proxies_strict", "client_ip_headers X-Forwarded-For"]);
+    for (const env of ADAPTED_ENVS) {
+      expect(at(reviewed(env), "admin"), env).toEqual({ disabled: true, config: { persist: false } });
+    }
+    // The one trust is the dev listener's (P1.36j); adapted-rules.test.ts holds its reds.
+    const trust = (env: AdaptedEnvName) =>
+      objects(reviewed(env)).flatMap((each) =>
+        "trusted_proxies" in each || "client_ip_headers" in each || "trusted_proxies_strict" in each
+          ? [[each.listen, each.trusted_proxies, each.trusted_proxies_strict, each.client_ip_headers]]
+          : [],
+      );
+    expect(trust("prod")).toEqual([]);
+    expect(trust("local")).toEqual([]);
+    expect(trust("dev")).toEqual([
+      [["10.250.37.3:443"], { source: "static", ranges: ["10.250.37.2/32"] }, 1, ["X-Forwarded-For"]],
+    ]);
+  });
+
+  test("edge_logs_drop_addresses_headers_and_uris", () => {
+    // SE-7, on what Caddy adapts (P1.39d): the process log and every access log delete the fields that carry a client
+    // address, a header, a URI or a TLS detail, and nothing else writes a log.
+    const carried = ["request>client_ip", "request>headers", "request>remote_ip", "request>remote_port"];
+    for (const env of ADAPTED_ENVS) {
+      const logs = at(reviewed(env), "logging", "logs") as Obj;
+      const sites = env === "prod" ? 1 : 2;
+      expect(Object.keys(logs).sort(), env).toEqual(["default", ...Array.from({ length: sites }, (_, n) => `log${n}`)]);
+      for (const [name, log] of Object.entries(logs)) {
+        expect(at(log, "encoder", "format"), `${env} ${name}`).toBe("filter");
+        const fields = at(log, "encoder", "fields") as Obj;
+        for (const field of [...carried, "request>tls", "request>uri", "resp_headers"]) {
+          expect(fields[field], `${env} ${name} ${field}`).toEqual({ filter: "delete" });
+        }
+      }
+      // The process log also drops the bare address fields Caddy's own messages use.
+      const own = at(logs.default, "encoder", "fields") as Obj;
+      for (const field of ["client_ip", "remote", "remote_addr", "remote_ip", "data>remote_ip"]) {
+        expect(own[field], `${env} ${field}`).toEqual({ filter: "delete" });
+      }
+    }
   });
 });
 
@@ -1268,6 +1378,16 @@ describe("local stack files (P1.34c)", () => {
 
   test("local_tls_serves_only_the_dev_leaf", () => {
     expect(local("tls.caddy")).toBe("(tls) {\n\ttls /run/secrets/local_tls_cert /run/secrets/local_tls_key\n}");
+    // As Caddy adapts the local files (P1.39d): the leaf's two files and no issuer of any kind.
+    const config = JSON.parse(read("adapted/local.generated.json")) as { apps: { tls: unknown } };
+    expect(config.apps.tls).toEqual({
+      certificates: {
+        load_files: [
+          { certificate: "/run/secrets/local_tls_cert", key: "/run/secrets/local_tls_key", tags: ["cert0"] },
+        ],
+      },
+    });
+    expect(JSON.stringify(config)).not.toMatch(/"issuers"|"automation"/);
   });
 
   test("local_app_site_has_the_pds_sites_shared_snippets", () => {
