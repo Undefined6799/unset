@@ -69,3 +69,30 @@ test("age.underage_blocks", async () => {
     { did: MOVED, onboarding: "terms" },
   ]);
 });
+
+test("age.audit_failure_rolls_block_back", async () => {
+  const did = parseDid(`did:plc:${"d".repeat(24)}`);
+  if (did === null) throw new Error("test DID did not parse");
+  const accountRows = () =>
+    withClient(pool, null, async (db) => {
+      const found = await db.query("SELECT onboarding FROM app.account WHERE did = $1", [did]);
+      return found.rows;
+    });
+  // The writer appends the real audit row through the block's transaction and then fails, as a database error
+  // after the append would. Neither the block nor that audit row may survive.
+  let written: { lane: string; seq: number } | null = null;
+  const failing = createAccountRepository(pool, {
+    recordUnderageBlock: async (tx, subject, hosted) => {
+      written = await recordUnderageBlock(tx, subject, hosted);
+      throw new Error("audit failed");
+    },
+  });
+  await expect(failing.blockUnderage(did, false, AbortSignal.timeout(5_000))).rejects.toThrow("audit failed");
+  expect(written).not.toBeNull();
+  expect(await accountRows()).toEqual([]);
+
+  // The account is still at the age step, so the next block commits and writes its one audit row.
+  const appended = await store.blockUnderage(did, false, AbortSignal.timeout(5_000));
+  expect(appended).not.toBeNull();
+  expect(await accountRows()).toEqual([{ onboarding: "blocked_underage" }]);
+});

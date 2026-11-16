@@ -3,16 +3,16 @@
 // a failed audit rolls the block back. It sits in the interface because infrastructure/postgres may not import
 // infrastructure/audit; the composition root joins the two.
 import type { Did, UnderageBlockRecord } from "@unset/domains-identity";
-import { type AuditDb, appendAudit } from "@unset/infrastructure-audit";
-import type { PoolClient } from "@unset/infrastructure-postgres";
+import { appendAudit } from "@unset/infrastructure-audit";
+import type { BlockTransaction } from "@unset/infrastructure-postgres";
 
-/** PoolClient satisfies AuditDb; the wrapper keeps the call typed without a cast of the client. */
-function asAuditDb(tx: PoolClient): AuditDb {
-  return { query: (text, values) => tx.query(text, values) };
-}
-
-export async function recordUnderageBlock(tx: PoolClient, did: Did, hosted: boolean): Promise<UnderageBlockRecord> {
-  const appended = await appendAudit(asAuditDb(tx), {
+/** `tx` is the block's own transaction; the audit row is written through it and nothing else. */
+export async function recordUnderageBlock(
+  tx: BlockTransaction,
+  did: Did,
+  hosted: boolean,
+): Promise<UnderageBlockRecord> {
+  const appended = await appendAudit(tx, {
     action: "age_gate.blocked",
     outcome: "succeeded",
     actorDid: did,
