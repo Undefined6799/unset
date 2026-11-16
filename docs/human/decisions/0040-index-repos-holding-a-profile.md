@@ -1,14 +1,14 @@
 # 0040 — Index any repo that holds our profile record
 
-Status: Proposed, awaiting Alex. Alex chose the direction on 2026-10-30: "Yes use sh.unset.profile" (00:27:43Z,
-cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR) and, after being shown that it reverses decision 5, the card
-option "Switch to signal mode" (00:47:06Z, card cmsg_01GKYqaAGu4Vob5JHVyDmG7AG9LygBzMQmD5f2igv9fZCT). Acceptance is
-his typed line on the pull request that adds this record. Once accepted it supersedes, in decision 5 (ADR 0001 log,
-"Indexer source") and plan §5.2's Tap row, the clause "repos are added at first login or signup, never by
-network-wide discovery" and the rejection of collection-signal mode. It also narrows plan §5.2's "`indexer` has no
-rights on app or plugin schemas" by one column grant: SELECT (`did`) on `app.account`, so ingest can tell members
-from non-members (P3.02's `app.track_request` grant is the earlier exception). "No own relay or full-network index"
-stands.
+Status: Accepted by Alex, 2026-11-16 21:47:20Z, against 45c42a8, replying with the line "accept ADR 0040 at 45c42a8"
+that the coordinator's project-chat post asked for on the head it had reviewed. Alex chose the direction on
+2026-10-30: "Yes use sh.unset.profile" (00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR) and, after
+being shown that it reverses decision 5, the card option "Switch to signal mode" (00:47:06Z, card
+cmsg_01GKYqaAGu4Vob5JHVyDmG7AG9LygBzMQmD5f2igv9fZCT). It supersedes, in decision 5 (ADR 0001 log, "Indexer source")
+and plan §5.2's Tap row, the clause "repos are added at first login or signup, never by network-wide discovery" and
+the rejection of collection-signal mode. It also narrows plan §5.2's "`indexer` has no rights on app or plugin
+schemas" by one column grant: SELECT (`did`) on `app.account`, so ingest can tell members from non-members (P3.02's
+`app.track_request` grant is the earlier exception). "No own relay or full-network index" stands.
 
 ## Context
 Tap (indigo `cmd/tap`, README at 51095ab, "Network Boundary Modes") can track every repo that holds at least one

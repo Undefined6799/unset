@@ -488,7 +488,7 @@ Algorithm (contract: what is measured and the pass rules; the harness itself is 
 | M16 | `@atproto/tap` message types vs the pinned wire | match, or list differences |
 | M17 | S1 behind `egress-public` with no other route out: do the relay WebSocket and every repo and identity fetch go through `HTTPS_PROXY` | all through the proxy; otherwise **stop** for book revision (P3.02's egress design depends on it; editor pass) |
 | M18 | S2 delete while Tap is stopped, then restart | records whether the delete is replayed from the relay cursor (it should be: only resync loses deletes) |
-| M19 | S3 (ADR 0040, proposed): S1's shape plus `TAP_SIGNAL_COLLECTION=sh.unset.profile`, its own database. (a) A test account on a foreign PDS that never signed in here writes its profile record; (b) a test account that already holds one and writes nothing | (a) discovered from the firehose with no `/repos/add`, time recorded; (b) record whether the daily `listReposByCollection` crawl finds it (the indigo relay source does not serve that endpoint; `cmd/collectiondir` does). Also record that the crawler resumes from its saved cursor (`crawler.go` at 51095ab) and how often it retries when the endpoint fails. (a) fails → **stop** for book revision of P3.08d |
+| M19 | S3 (ADR 0040, accepted 2026-11-16): S1's shape plus `TAP_SIGNAL_COLLECTION=sh.unset.profile`, its own database. (a) A test account on a foreign PDS that never signed in here writes its profile record; (b) a test account that already holds one and writes nothing | (a) discovered from the firehose with no `/repos/add`, time recorded; (b) record whether the daily `listReposByCollection` crawl finds it (the indigo relay source does not serve that endpoint; `cmd/collectiondir` does). Also record that the crawler resumes from its saved cursor (`crawler.go` at 51095ab) and how often it retries when the endpoint fails. (a) fails → **stop** for book revision of P3.08d |
 | M20 | S3: `/repos/remove` a signal-discovered test DID, then write its profile record again | expected yes from the source (indigo `cmd/tap/firehose.go`: any op in the signal collection, deletes included, tracks an untracked repo); confirm. Also record what Tap stores per tracked repo (metadata, buffered bodies) |
 
 Outcomes and what changes:
@@ -659,7 +659,7 @@ Outputs (contract):
     [ALL]`, no published ports, its own database and admin password:
     - `tap-relay`: `TAP_RELAY_URL=https://relay1.us-east.bsky.network`; network `ingest-relay` (shared only with
       `indexer`) and `tap-egress`; tracks every DID whose PDS is not ours. Dynamic mode only here; P3.08d later adds
-      `TAP_SIGNAL_COLLECTION` (ADR 0040, proposed).
+      `TAP_SIGNAL_COLLECTION` (ADR 0040, accepted 2026-11-16).
     - `tap-own`: `TAP_RELAY_URL` = our PDS's internal URL; network `ingest-own` (shared only with `indexer`) and
       the PDS's internal network plus PLC egress only; tracks DIDs hosted on our PDS. In the dev stack this is the
       dev PDS (the dev PDS never sets `PDS_CRAWLERS`).
@@ -1404,7 +1404,7 @@ trusted-base parts and table are P3.08k
 Size: estimated in P3.00's refinement; this text fixes what must hold, the build PR designs how
 
 Book edit 2026-10-30. Alex: "Yes use sh.unset.profile" (00:27:43Z, cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR)
-and, told it reverses decision 5, the card choice "Switch to signal mode" (00:47:06Z). ADR 0040 (proposed) records
+and, told it reverses decision 5, the card choice "Switch to signal mode" (00:47:06Z). ADR 0040 (accepted 2026-11-16) records
 the decision; this step and P3.08k do not start until Alex accepts it. They come after ingest, erasure and the handle
 rule, so everything they need exists.
 

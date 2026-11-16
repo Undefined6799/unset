@@ -582,3 +582,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0040](0040-index-repos-holding-a-profile.md)):** `tap-relay` also tracks any repo holding `sh.unset.profile`, under
   caps, with non-member notice, lawful basis and erasure. Supersedes decision 5's "never by network-wide discovery"
   clause once accepted; "no own relay or full-network index" stands. Proposed, awaiting Alex.
+- **ADR 0040 accepted (Alex, 2026-11-16 21:47:20Z, against 45c42a8; own record:
+  [0040](0040-index-repos-holding-a-profile.md)):** the indexer may track any repo that holds an `sh.unset.profile`
+  record, with caps and non-member privacy; it stays off until the non-member erasure route exists and Alex turns it
+  on (P3.08d).
