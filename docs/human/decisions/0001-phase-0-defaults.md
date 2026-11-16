@@ -586,3 +586,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0039](0039-request-scopes-per-feature.md)):** sign-in asks only for our permission set, image upload and the
   e-mail address; Bluesky scopes, video upload and reports join with the features that use them, each with one
   re-consent. Supersedes the "requested from day one" clause of plan §3.
+- **ADR 0040 proposed (Alex chose the direction 2026-10-30 00:27:43Z and 00:47:06Z; own record:
+  [0040](0040-index-repos-holding-a-profile.md)):** `tap-relay` also tracks any repo holding `sh.unset.profile`, under
+  caps, with non-member notice, lawful basis and erasure. Supersedes decision 5's "never by network-wide discovery"
+  clause once accepted; "no own relay or full-network index" stands. Proposed, awaiting Alex.
+- **ADR 0040 accepted (Alex, 2026-11-16 21:47:20Z, against 45c42a8; own record:
+  [0040](0040-index-repos-holding-a-profile.md)):** the indexer may track any repo that holds an `sh.unset.profile`
+  record, with caps and non-member privacy; it stays off until the non-member erasure route exists and Alex turns it
+  on (P3.08d).
