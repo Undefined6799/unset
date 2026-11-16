@@ -22,7 +22,7 @@ import { removeEveryTag } from "./image-cleanup.ts";
 const EDGE = import.meta.dirname;
 const docker = (args: readonly string[], timeoutMs: number) => runOrKill(spawnSync, "docker", args, timeoutMs);
 const built: string[] = [];
-const BUILDS = 1;
+const BUILDS = 2;
 
 /** Each env's read-only file binds under /etc/caddy, as its compose file mounts them (prod: P5; ADR 0032 Decision 3). */
 const bind = (file: string, target: string): string => `${join(EDGE, file)}:/etc/caddy/${target}:ro`;
@@ -106,16 +106,20 @@ describe("reviewed adapted configs against caddy adapt (P1.39a)", () => {
     if (built.length > BUILDS) throw new Error(`${built.length} builds, but this hook's budget covers ${BUILDS}`);
   }, removalBudget(BUILDS));
 
-  // Its docker calls after the build: ls, stat and cat of the config (3), then one adapt per env (3).
-  test("adapted_reviewed_configs_are_what_the_image_adapts", {
-    timeout: buildTestBudget(3 + ADAPTED_ENVS.length),
-  }, () => {
+  /** Builds deployment/edge/Dockerfile with deployment/edge as the context under its own tag; the tag. */
+  const buildEdgeImage = (): string => {
     const tag = `unset-test-${randomBytes(8).toString("hex")}`;
     const build = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_CALL_MS);
     if (build.code !== 0) throw new Error(`edge image build failed: ${build.err.slice(-4_000)}`);
     built.push(tag);
-    // First, the image holds the repository's config byte for byte (moved here from caddyfile.image.test.ts, P1.39d),
-    // so what it adapts below is the checkout's files and no others.
+    return tag;
+  };
+
+  // The image holds the repository's config byte for byte (moved here from caddyfile.image.test.ts, P1.39d), so what
+  // it adapts in the next test is the checkout's files and no others. A test of its own: with the three adapts its
+  // budget would reach run.ts's 600 s, which buildTestBudget refuses.
+  // Its docker calls after the build: ls, stat and cat of the config (3).
+  test("adapted_image_holds_the_repository_config", { timeout: buildTestBudget(3) }, () => {
     const repository = Object.fromEntries(
       [
         "Caddyfile",
@@ -125,7 +129,12 @@ describe("reviewed adapted configs against caddy adapt (P1.39a)", () => {
           .map((f) => `snippets/${f}`),
       ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
     );
-    expect(imageConfig(tag)).toStrictEqual(repository);
+    expect(imageConfig(buildEdgeImage())).toStrictEqual(repository);
+  });
+
+  // Its docker calls after the build: one adapt per env (3).
+  test("adapted_reviewed_configs_are_what_the_image_adapts", { timeout: buildTestBudget(ADAPTED_ENVS.length) }, () => {
+    const tag = buildEdgeImage();
     for (const env of ADAPTED_ENVS) {
       const reviewed = JSON.parse(readFileSync(join(EDGE, "adapted", `${env}.generated.json`), "utf8")) as Json;
       const adapted = adapt(tag, env);
