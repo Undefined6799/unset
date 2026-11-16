@@ -1,8 +1,12 @@
 # 0050 — The object store's buckets and clean-up run through its own shell; no S3 admin key
 
-Status: Proposed. Alex chose it on 2026-11-16 00:46Z, on the card "Choose how the object store gets its buckets and
-runs its clean-up" in the storage thread. He picked "Store's own shell, no admin key" in words, after saying
-production "will likely be an hosted S3". Once accepted, it supersedes two clauses of ADR 0041:
+Status: Accepted by Alex, 2026-11-16 00:58:07Z, against 372aaff (his line "accept ADR 0050 at 372aaff", typed in
+the project chat in answer to the coordinator's request after its review of that head). The only changes since
+that head are this status paragraph, the index row's status and the ADR 0001 acceptance line. The choice came from the card "Choose how the object store gets its buckets and runs
+its clean-up" in the storage thread. Alex did not tap an option there. He asked which option would be easier to
+bring to production and answered that production "will likely be an hosted S3". The thread then took "Store's own
+shell, no admin key", closed the card with it and told him, and his acceptance line confirms it. From here the
+record changes only to be marked superseded. It supersedes two clauses of ADR 0041:
 - Decision 3: "Only the store's one-shot setup holds the admin identity, which creates the buckets; its secret file is
   readable only by the setup's uid, and no long-running process mounts it".
 - Decision 7: "from the store's one-shot admin job", and, in the takedown item, "with the setup's admin key".

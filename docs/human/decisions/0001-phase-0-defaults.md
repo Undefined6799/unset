@@ -570,3 +570,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0050](0050-object-store-admin-through-its-shell.md)):** the object store's buckets, vacuum and takedown run through
   `weed shell` inside the `objects` container, and no S3 identity has `Admin`. Supersedes two clauses of ADR 0041
   Decisions 3 and 7 once accepted. Proposed, awaiting Alex.
+- **ADR 0050 accepted (Alex, 2026-11-16 00:58:07Z, against 372aaff; own record:
+  [0050](0050-object-store-admin-through-its-shell.md)):** no S3 identity has `Admin`. The stack script creates the
+  buckets through `weed shell` inside `objects`, and vacuum and takedown run the same way from the runbook. This
+  supersedes the admin-identity clause of ADR 0041 Decision 3 and the one-shot-admin-job clauses of Decision 7.
