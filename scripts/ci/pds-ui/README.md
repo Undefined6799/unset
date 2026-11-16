@@ -15,8 +15,9 @@ fail. Only timestamps are excluded from comparison. No running-container filesys
 
 The trust roots are the reviewed source lock and a clean checkout's actual Git revision. The verifier checks blob
 and uncompressed-layer digests, exact stored official layer prefix, complete Config and effective outside tree.
-The only mutable path is the exact `uiDirectory` below; neither its parent package nor a glob is allowed. Added
-ancestor directory records must preserve all metadata. UI output must contain regular files and match the installed
+The only mutable path is the exact `uiDirectory` below; neither its parent package nor a glob is allowed. A layer
+may repeat a directory record outside it only when the base holds that directory with the same metadata (an engine
+records `etc` on a RUN step); any other outside entry fails. UI output must contain regular files and match the installed
 candidate bytes, including the native manifest. It must name exactly the four upstream entries and resolve every
 manifest item/dynamic reference with a final-byte SHA256. Inline manifest `data` is refused because this pinned
 build does not use it and the provider would serve those bytes instead of the file.
