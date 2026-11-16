@@ -1,24 +1,13 @@
-// The OAuth scope strings (P1.31, plan §3 "Granular permissions + permission sets"). Our own collections come from
-// the permission set; what a set may not hold (foreign NSIDs, blob, account, Bluesky reads) is requested beside it.
+// The OAuth scope strings (P1.31, plan §3 "Granular permissions + permission sets", narrowed by ADR 0039). Our own
+// collections come from the permission set; what a set may not hold (blob, account) is requested beside it.
 // Syntax: atproto.com/specs/permission and @atproto/oauth-scopes 0.5.13, dist/scopes/include-scope.js.
 import authApp from "../schemas/sh.unset.authApp.json" with { type: "json" };
 
-const BSKY_APPVIEW = "did:web:api.bsky.app#bsky_appview";
-const BSKY_READS = ["getFeed", "getTimeline", "getPosts", "getFeedGenerators", "getPostThread"];
-
-/** Scopes requested beside the permission set, in plan §3's order. */
-const OUTSIDE_THE_SET = [
-  "repo:app.bsky.feed.like?action=create&action=delete",
-  "repo:app.bsky.feed.post",
-  "repo:app.bsky.graph.follow",
-  "repo:app.bsky.actor.profile",
-  "blob:image/*",
-  "blob:video/*",
-  "account:email?action=read",
-  ...BSKY_READS.map((method) => `rpc:app.bsky.feed.${method}?aud=${BSKY_APPVIEW}`),
-  // Reports reach our own Ozone in Phase 5, whose DID does not exist yet (step-book answer 36).
-  "rpc:com.atproto.moderation.createReport?aud=*",
-];
+/**
+ * Scopes requested beside the permission set: an image upload for the avatar and banner, and the e-mail address. ADR
+ * 0039: only what a shipped feature uses. Bluesky writes and reads, video upload and reports join with their features.
+ */
+const OUTSIDE_THE_SET = ["blob:image/*", "account:email?action=read"];
 
 type Permission = { resource: string; collection?: string[]; action?: string[] };
 
