@@ -28,6 +28,22 @@ function identities(body: string): string {
   return file;
 }
 
+/** The bucket setup's own calls, `compose … exec -T objects <command>`, run in `container` instead. */
+function inContainer(container: string, inputs: string[] = []): Docker {
+  return {
+    run: (args, input, timeoutMs) => {
+      const command = args.slice(args.indexOf("objects") + 1);
+      inputs.push(input);
+      const ran = docker(["exec", "-i", container, ...command], { timeoutMs, input });
+      return { status: ran.code, stdout: ran.out };
+    },
+    now: () => performance.now(),
+    sleep: (ms) => {
+      docker(["exec", container, "sleep", `${Math.ceil(ms / 1000)}`], { timeoutMs: CALL_MS });
+    },
+  };
+}
+
 /** The anonymous S3 answer to GET `path` from inside the container, once the server answers at all (busybox wget). */
 function anonymousAnswer(container: string, path = "/"): string {
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -86,21 +102,9 @@ describe("objects image", () => {
           const container = started.out.trim();
           withCleanup(
             () => {
-              // The setup's own calls, `compose … exec -T objects <command>`, run in this container instead.
               const inputs: string[] = [];
-              const inContainer: Docker = {
-                run: (args, input, timeoutMs) => {
-                  const command = args.slice(args.indexOf("objects") + 1);
-                  inputs.push(input);
-                  const ran = docker(["exec", "-i", container, ...command], { timeoutMs, input });
-                  return { status: ran.code, stdout: ran.out };
-                },
-                now: () => performance.now(),
-                sleep: (ms) => {
-                  docker(["exec", container, "sleep", `${Math.ceil(ms / 1000)}`], { timeoutMs: CALL_MS });
-                },
-              };
-              expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer)).toBeNull();
+              const store = inContainer(container, inputs);
+              expect(ensureBuckets(["compose", "-f", "x.yaml"], store)).toBeNull();
               const shell = (line: string) =>
                 docker(["exec", "-i", container, "weed", "shell"], { timeoutMs: CALL_MS, input: `${line}\n` }).out;
               expect(listedBuckets(shell("s3.bucket.list")).sort()).toEqual([...BUCKETS].sort());
@@ -117,7 +121,7 @@ describe("objects image", () => {
               }
               // A second `up` finds both buckets and creates nothing.
               inputs.length = 0;
-              expect(ensureBuckets(["compose", "-f", "x.yaml"], inContainer)).toBeNull();
+              expect(ensureBuckets(["compose", "-f", "x.yaml"], store)).toBeNull();
               expect(inputs.filter((line) => line.startsWith("s3.bucket.create"))).toEqual([]);
             },
             () => docker(["rm", "-f", container], { timeoutMs: CALL_MS }),
