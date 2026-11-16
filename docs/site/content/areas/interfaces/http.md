@@ -29,7 +29,7 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |
 | `interfaces/http/routes/profile.ts` | `POST /profile`, the owner's profile save. Body limit `PROFILE_BODY_LIMIT_BYTES` is 96 KiB. The DID comes from the session. `domains/profile` reads the fields. `infrastructure/pds/profile-record.ts` writes the record. |
-| `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). |
+| `interfaces/http/routes/account-issuer.ts` | `AccountDeps` and `accountProps`: the deps `me.ts` and `settings.ts` share, and the account props they show (the checked handle and the issuer origin recorded at sign-in). The origin comes from the session row (`Session.issuerOrigin`, written by the OAuth callback, [ADR 0048](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0048-session-issuer-origin.md)); a session without one reads the stored token set instead. |
 | `interfaces/http/routes/me.ts` | Signed-in account page. |
 | `interfaces/http/age-gate-audit.ts` | `recordUnderageBlock`. `compose.ts` passes it to `createAccountRepository`. It calls `appendAudit` on the block's transaction. |
 | `interfaces/http/sign-in-lock.ts` | Holds the account's OAuth lock during a sign-in and a last-browser sign-out, so one can't revoke the token set the other just stored. |

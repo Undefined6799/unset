@@ -13,6 +13,8 @@ export const MAX_DAYS = 90;
 export const PDS_MAX_DAYS = 30;
 /** P2.18s: the SeaweedFS file expires within 30 days too (Alex's "yes waiver", 2026-11-15T23:08:12Z). */
 export const SEAWEEDFS_MAX_DAYS = 30;
+/** P1.37m: the Newt file expires within 30 days too. */
+export const NEWT_MAX_DAYS = 30;
 const SECTIONS = ["vulnerabilities", "misconfigurations", "secrets", "licenses"] as const;
 const DAY_MS = 86_400_000;
 

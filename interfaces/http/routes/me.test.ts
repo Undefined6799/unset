@@ -39,6 +39,7 @@ type World = {
 function setup(world: World = {}) {
   const checked: string[] = [];
   const openedPaths: string[] = [];
+  const tokenSetReads: string[] = [];
   const log = silentLog();
   const deps: AccountDeps = {
     open: async (_request, _deadline, next) => {
@@ -60,7 +61,8 @@ function setup(world: World = {}) {
     },
     page: testPage(log),
     screens: web.screens,
-    issuerOf: async () => {
+    issuerOf: async (did) => {
+      tokenSetReads.push(did);
       const issuer = world.issuer === undefined ? "https://pds.unset.test" : world.issuer;
       if (issuer instanceof Error) throw issuer;
       return issuer;
@@ -82,7 +84,7 @@ function setup(world: World = {}) {
       }),
       "10.0.0.1",
     );
-  return { get, checked, openedPaths };
+  return { get, checked, openedPaths, tokenSetReads };
 }
 
 describe("GET /:did", () => {
@@ -132,6 +134,51 @@ describe("GET /:did", () => {
     const html = await (await setup().get()).text();
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).toContain("You are going to pds.unset.test, our sign-in server");
+  });
+
+  test("me_links_the_session_issuer_without_reading_the_token_set", async () => {
+    // ADR 0048: the session row carries the origin, so the page never unseals the token set for the link.
+    const world = { session: { ...SESSION, issuerOrigin: "https://pds.example" }, issuer: new Error("not read") };
+    const { get, tokenSetReads } = setup(world);
+    const html = await (await get()).text();
+    expect(html).toContain('href="https://pds.example/"');
+    expect(html).toContain("your sign-in server (pds.example)");
+    expect(tokenSetReads).toEqual([]);
+  });
+
+  test("me_session_issuer_equal_to_ours_is_ours", async () => {
+    const { get, tokenSetReads } = setup({ session: { ...SESSION, issuerOrigin: "https://pds.unset.test" } });
+    const html = await (await get()).text();
+    expect(html).toContain('href="https://pds.unset.test/account"');
+    expect(tokenSetReads).toEqual([]);
+  });
+
+  test("me_session_without_an_issuer_reads_the_token_set", async () => {
+    // A session created before the column: null on the row, so the recorded issuer comes from the token set.
+    const { get, tokenSetReads } = setup({
+      session: { ...SESSION, issuerOrigin: null },
+      issuer: "https://pds.example",
+    });
+    const html = await (await get()).text();
+    expect(html).toContain('href="https://pds.example/"');
+    expect(tokenSetReads).toEqual([DID]);
+  });
+
+  test("me_hides_a_stored_issuer_that_is_not_a_bare_origin", async () => {
+    // The row's value is checked again on the way out. A bad one hides the link and is not replaced by another read.
+    for (const issuerOrigin of [
+      "https://198.51.100.1",
+      "https://localhost",
+      "https://pds.example/",
+      "http://pds.example",
+    ]) {
+      const { get, tokenSetReads } = setup({ session: { ...SESSION, issuerOrigin }, issuer: "https://pds.unset.test" });
+      const html = await (await get()).text();
+      expect(html, issuerOrigin).not.toContain("Your account on");
+      expect(html, issuerOrigin).not.toContain("your sign-in server");
+      expect(html, issuerOrigin).not.toContain('href="https://pds.unset.test');
+      expect(tokenSetReads, issuerOrigin).toEqual([]);
+    }
   });
 
   test("me_links_a_foreign_recorded_issuer", async () => {
