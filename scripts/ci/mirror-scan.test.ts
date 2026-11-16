@@ -11,6 +11,9 @@
 // P1.29v: a runtime entry whose lock entry declares `stripped` paths is scanned without them, because every final
 // stage on that base deletes them (stripped_paths_removed_in_every_final_stage) and the shipped image is scanned in
 // full. P1.29b: a build-only entry is scanned in full, its declared paths included.
+//
+// P2.18t: the scan step records the sources that passed and how many failed, and the verdict job turns the run red
+// for any failure, so a test's `code` is the run's: the scan step's own exit, else the verdict step's on its output.
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,13 +22,29 @@ import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
 
 const ROOT = join(import.meta.dirname, "..", "..");
-type Step = { name?: string; run?: string; shell?: string };
+type Step = { name?: string; run?: string; shell?: string; env?: Record<string, string> };
 type Workflow = { jobs: Record<string, { env?: Record<string, string>; steps?: Step[] }> };
 const workflow = (file: string): Workflow =>
   parse(readFileSync(join(ROOT, ".github", "workflows", file), "utf8")) as Workflow;
 
 const step = workflow("mirror.yml").jobs.scan?.steps?.find((candidate) => candidate.name?.startsWith("Scan"));
 const scanStep = step?.run ?? "";
+const verdictStep = workflow("mirror.yml").jobs.verdict?.steps?.at(-1);
+
+/** The `name=value` lines a step wrote to $GITHUB_OUTPUT. */
+function outputsOf(file: string): Record<string, string> {
+  const lines = readFileSync(file, "utf8").split("\n").filter(Boolean);
+  return Object.fromEntries(lines.map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]));
+}
+
+/** Runs the verdict job's step with FAILED as the scan job's `failed` output, a missing one as an empty string. */
+function verdict(failed: string | undefined) {
+  const ran = spawnSync("bash", ["-e", "-c", verdictStep?.run ?? "exit 9"], {
+    env: { PATH: process.env.PATH, FAILED: failed ?? "" },
+    encoding: "utf8",
+  });
+  return { code: ran.status, out: ran.stdout + ran.stderr };
+}
 
 // How Actions runs a `run:` step on Linux for its `shell:` key (docs.github.com, workflow syntax,
 // jobs.<job_id>.steps[*].shell): unspecified is `bash -e {0}`, and `bash` is `bash --noprofile --norc -eo pipefail
@@ -92,12 +111,14 @@ function scan(entries: Entry[] | null, findings: string[][], lock: Record<string
   writeFileSync(join(dir, "findings"), findings.map((pair) => `${pair.join(" ")}\n`).join(""));
   writeFileSync(join(dir, "calls"), "");
   writeFileSync(join(dir, "summary"), "");
+  writeFileSync(join(dir, "output"), "");
   const env = {
     PATH: `${bin}:${process.env.PATH}`,
     MIRROR_LIST: join(dir, "mirror.list.json"),
     BASES_LOCK: join(dir, "bases.lock.json"),
     RUNNER_TEMP: dir,
     GITHUB_STEP_SUMMARY: join(dir, "summary"),
+    GITHUB_OUTPUT: join(dir, "output"),
     TRIVY_IMAGE: "trivy",
     FAKE_CALLS: join(dir, "calls"),
     FAKE_FINDINGS: join(dir, "findings"),
@@ -111,9 +132,14 @@ function scan(entries: Entry[] | null, findings: string[][], lock: Record<string
   const skips = logged.filter((line) => line.startsWith("skip ")).map((line) => line.slice("skip ".length));
   const caches = logged.filter((line) => line.startsWith("cache ")).map((line) => line.slice("cache ".length));
   const ignores = logged.filter((line) => line.startsWith("ignore ")).map((line) => line.slice("ignore ".length));
+  const outputs = outputsOf(env.GITHUB_OUTPUT);
+  // A failed scan step fails its job, and then no job that needs it runs.
+  const judged = ran.status === 0 ? verdict(outputs.failed) : { code: ran.status, out: "" };
   return {
-    code: ran.status,
-    out: ran.stdout + ran.stderr,
+    code: judged.code,
+    step: ran.status,
+    outputs,
+    out: ran.stdout + ran.stderr + judged.out,
     calls,
     skips,
     caches,
@@ -190,6 +216,93 @@ describe("mirror scan per stage", () => {
     const clean = scan(entries, []);
     expect(clean.code, clean.out).toBe(0);
     expect(clean.out).not.toContain("::error");
+  });
+
+  // P2.18t: a red source no longer stops the others reaching the mirror; it still turns the run red.
+  test("mirror_scan_passes_on_only_clean_sources", () => {
+    const third = `docker.io/library/t${digest(3)}`;
+    const entries = [
+      { source: SOURCE.builder, stage: "build" },
+      { source: SOURCE.runtime, stage: "runtime" },
+      { source: third, stage: "runtime" },
+    ];
+    // HIGH in a build-only base passes (it is reported), HIGH in a runtime base fails, and a Trivy error fails.
+    const mixed = scan(entries, [
+      [SOURCE.builder, "HIGH"],
+      [SOURCE.runtime, "HIGH"],
+    ]);
+    expect(mixed.step, mixed.out).toBe(0);
+    expect(JSON.parse(mixed.outputs.passed ?? "null")).toEqual([SOURCE.builder, third]);
+    expect(mixed.outputs.failed).toBe("1");
+    expect(mixed.code, mixed.out).not.toBe(0);
+    expect(mixed.out).toContain("1 upstream source(s) failed the scan");
+    const errored = scan(entries, [[third, "ERROR"]]);
+    expect(JSON.parse(errored.outputs.passed ?? "null")).toEqual([SOURCE.builder, SOURCE.runtime]);
+    expect(errored.code).not.toBe(0);
+    // Nothing passing is an empty list, never a missing output.
+    const none = scan([{ source: SOURCE.runtime, stage: "runtime" }], [[SOURCE.runtime, "CRITICAL"]]);
+    expect(none.outputs.passed).toBe("[]");
+    expect(none.code).not.toBe(0);
+    // A list, lock or stage problem fails the step itself and records nothing, so copy-and-sign never starts.
+    const unstaged = scan([{ source: SOURCE.runtime }, { source: third, stage: "runtime" }], []);
+    expect(unstaged.step).not.toBe(0);
+    expect(unstaged.outputs).toEqual({});
+    // The verdict is red on any count but 0, a missing output included.
+    expect(verdict("0").code).toBe(0);
+    for (const failed of ["2", "", undefined, "0 "]) expect(verdict(failed).code, String(failed)).not.toBe(0);
+  });
+
+  // P2.18t: copy-and-sign copies and signs exactly the sources the scan passed, matched whole, never a prefix.
+  test("mirror_copies_only_passed_sources", () => {
+    const copy = workflow("mirror.yml").jobs["copy-and-sign"];
+    expect(copy?.env?.PASSED).toBe("${{ needs.scan.outputs.passed }}");
+    const run = copy?.steps?.find((candidate) => candidate.name?.startsWith("Copy"))?.run ?? "";
+    const third = `docker.io/library/t${digest(3)}`;
+    const list = [SOURCE.builder, SOURCE.runtime, third].map((source) => ({ source, mirror: "ghcr.io/example/m" }));
+    const copied = (passed: string) => {
+      const dir = mkdtempSync(join(tmpdir(), "mirror-copy-"));
+      const bin = join(dir, "bin");
+      spawnSync("mkdir", [bin]);
+      // crane and cosign stand-ins log each call; `crane digest REF` answers the digest REF names.
+      const fake = (name: string) =>
+        `#!/bin/bash\necho "${name} $*" >> "$CALLS"\n[ "$1" = digest ] && echo "\${2##*@}"\nexit 0\n`;
+      for (const name of ["crane", "cosign"]) {
+        writeFileSync(join(bin, name), fake(name));
+        chmodSync(join(bin, name), 0o755);
+      }
+      writeFileSync(join(dir, "list.json"), JSON.stringify(list));
+      writeFileSync(join(dir, "calls"), "");
+      writeFileSync(join(dir, "summary"), "");
+      const ran = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", run], {
+        env: {
+          PATH: `${bin}:${process.env.PATH}`,
+          MIRROR_LIST: join(dir, "list.json"),
+          RUNNER_TEMP: dir,
+          GITHUB_STEP_SUMMARY: join(dir, "summary"),
+          CALLS: join(dir, "calls"),
+          PASSED: passed,
+        },
+        encoding: "utf8",
+      });
+      const calls = readFileSync(join(dir, "calls"), "utf8").split("\n");
+      const signed = calls.filter((line) => line.startsWith("cosign sign")).map((line) => line.split(" ").at(-1));
+      return { code: ran.status, out: ran.stdout + ran.stderr, signed };
+    };
+    const atDigest = (source: string) => `ghcr.io/example/m${source.slice(source.indexOf("@"))}`;
+    const two = copied(JSON.stringify([SOURCE.builder, third]));
+    expect(two.code, two.out).toBe(0);
+    expect(two.signed).toEqual([atDigest(SOURCE.builder), atDigest(third)]);
+    // A prefix of a source, or one not on the list, copies nothing; nothing passed, or no output at all, fails.
+    for (const passed of [
+      JSON.stringify([SOURCE.runtime.slice(0, -1)]),
+      JSON.stringify(["docker.io/x@sha256:1"]),
+      "[]",
+      "",
+    ]) {
+      const none = copied(passed);
+      expect(none.code, passed).not.toBe(0);
+      expect(none.signed, passed).toEqual([]);
+    }
   });
 
   test("trivy_runs_share_one_cache_dir", () => {
