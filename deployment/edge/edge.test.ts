@@ -227,7 +227,7 @@ function memoryOnlyProblems(text: string): string[] {
 function pinProblems(text: string): string[] {
   const instructions = text.replaceAll(/^\s*#.*$/gm, "");
   const found = [];
-  if (!/^RUN xcaddy build v2\.11\.7 \\$/m.test(instructions)) found.push("Caddy version not pinned");
+  if (!/^RUN xcaddy build v2\.11\.9 \\$/m.test(instructions)) found.push("Caddy version not pinned");
   if (!/--with github\.com\/mholt\/caddy-ratelimit@v0\.1\.1-0\.20260612195517-5625512f24f6 \\$/m.test(instructions))
     found.push("plugin pseudo-version not pinned");
   if ([...instructions.matchAll(/--with /g)].length !== 1) found.push("not exactly one plugin");
@@ -1118,8 +1118,8 @@ describe("edge image", () => {
       `docker.io/library/caddy:${lock["caddy-builder"]?.tag}@${lock["caddy-builder"]?.digest}`,
       `docker.io/library/caddy:${lock.caddy?.tag}@${lock.caddy?.digest}`,
     ]);
-    expect(lock.caddy?.tag).toMatch(/^2\.11\.7-alpine$/);
-    expect(lock["caddy-builder"]?.tag).toMatch(/^2\.11\.7-builder-alpine$/);
+    expect(lock.caddy?.tag).toMatch(/^2\.11\.9-alpine$/);
+    expect(lock["caddy-builder"]?.tag).toMatch(/^2\.11\.9-builder-alpine$/);
     // The DL3026 ignore sits directly above each upstream FROM, the reason comment above it (as P1.27).
     const lines = dockerfile.split("\n");
     for (const [at, line] of lines.entries()) {
@@ -1134,7 +1134,7 @@ describe("edge image", () => {
     // A fixture missing either pin, or turning the checksum database or the proxy off, fails.
     const plugin = "caddy-ratelimit@v0.1.1-0.20260612195517-5625512f24f6";
     for (const fixture of [
-      dockerfile.replace("xcaddy build v2.11.7", "xcaddy build latest"),
+      dockerfile.replace("xcaddy build v2.11.9", "xcaddy build latest"),
       dockerfile.replace(plugin, "caddy-ratelimit"),
       dockerfile.replace("ENV GOFLAGS=-mod=readonly", "ENV GOFLAGS=-mod=mod"),
       dockerfile.replace("ENV GOFLAGS=-mod=readonly", "ENV GOFLAGS=-mod=readonly GONOSUMDB=*"),
