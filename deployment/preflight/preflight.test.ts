@@ -5649,7 +5649,8 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     calls.filter(([file, verb]) => file === "docker" && ["pull", "build", "run"].includes(verb ?? ""));
   const HARDENED = [
     ...["docker", "run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--cap-drop", "ALL"],
-    ...["--security-opt", "no-new-privileges", "--user", "65532:65532", "--entrypoint", "caddy"],
+    ...["--cap-add", "NET_BIND_SERVICE", "--security-opt", "no-new-privileges", "--user", "65532:65532"],
+    ...["--entrypoint", "caddy"],
   ];
   const ADAPT = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"];
   const VALUES = { PDS_HOST: "pds.example.test", PDS_UPSTREAM: "pds:3000", ACME_EMAIL: "edge@example.test" };

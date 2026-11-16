@@ -3,8 +3,10 @@
 // reviewed adapted config (deployment/edge/adapted.ts) and break none of the rules on it
 // (deployment/edge/adapted-rules.ts). Both are imported here and nowhere duplicated.
 //
-// The container is given nothing to act with: no network, a read-only root, no capability, no new privileges, the
-// edge's own uid, and only the edge service's read-only binds under /etc/caddy, which C18's first half has judged.
+// The container is given nothing to act with (ADAPT_RUN_FLAGS in deployment/edge/adapted.ts, the same for a pulled and
+// a built image, and the flags adapted.image.test.ts runs the real image with): no network, a read-only root, no
+// capability but the one the binary's file capability needs to start, no new privileges, the edge's own uid, and
+// only the edge service's read-only binds under /etc/caddy, which C18's first half has judged.
 // The values go to the docker client's environment and are named, never written, in its arguments (`-e NAME`). Every
 // failure is fixed words: nothing Docker or Caddy printed is repeated, since Caddy's errors quote the config.
 //
@@ -15,7 +17,7 @@
 // both read 2026-11-16. The same `-v source:target:ro` binds, `--read-only` and `--network none` are what
 // deployment/edge/adapted.image.test.ts runs against the built image in CI.
 import { join } from "node:path";
-import { type Json, reviewedDifference } from "../../edge/adapted.ts";
+import { ADAPT_COMMAND, ADAPT_RUN_FLAGS, type Json, reviewedDifference } from "../../edge/adapted.ts";
 import { type AdaptedEnv, adaptedProblems, type EdgeMode, ENV_NAMES, type EnvName } from "../../edge/adapted-rules.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
@@ -32,25 +34,6 @@ export const ADAPT_TIMEOUT_MS = 600_000;
 const BY_DIGEST = /^[a-z0-9][a-z0-9./-]*(?::[\w.-]+)?@sha256:[0-9a-f]{64}$/;
 /** What `docker build -q` prints: the image's id. */
 const IMAGE_ID = /^sha256:[0-9a-f]{64}$/;
-
-/** The same for the lock's image and a built one: nothing to reach, nothing to write, nothing to gain. */
-const HARDENING = [
-  "--rm",
-  "--pull",
-  "never",
-  "--network",
-  "none",
-  "--read-only",
-  "--cap-drop",
-  "ALL",
-  "--security-opt",
-  "no-new-privileges",
-  "--user",
-  "65532:65532",
-  "--entrypoint",
-  "caddy",
-];
-const ADAPT = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"];
 
 /** The reviewed config each mode is held to, by its file in deployment/edge/adapted/. */
 const REVIEWED: Record<EdgeMode, string> = { shipped: "prod", dev: "dev", local: "local" };
@@ -130,7 +113,7 @@ export async function adaptedEdge(
   const names = Object.keys(values).flatMap((name) => ["-e", name]);
   const ran = await inputs.run(
     "docker",
-    ["run", ...HARDENING, ...mounts, ...names, runnable, ...ADAPT],
+    ["run", ...ADAPT_RUN_FLAGS, ...mounts, ...names, runnable, ...ADAPT_COMMAND],
     signal,
     values,
   );

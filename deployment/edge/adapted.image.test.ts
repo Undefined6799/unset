@@ -7,7 +7,15 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { ADAPTED_ENVS, type AdaptedEnvName, type Json, reviewedDifference, SENTINELS } from "./adapted.ts";
+import {
+  ADAPT_COMMAND,
+  ADAPT_RUN_FLAGS,
+  ADAPTED_ENVS,
+  type AdaptedEnvName,
+  type Json,
+  reviewedDifference,
+  SENTINELS,
+} from "./adapted.ts";
 import { BUILD_CALL_MS, buildTestBudget, CALL_MS, removalBudget, runOrKill } from "./docker-call.ts";
 import { removeEveryTag } from "./image-cleanup.ts";
 
@@ -32,25 +40,16 @@ const MOUNTS: Readonly<Record<AdaptedEnvName, readonly string[]>> = {
   ],
 };
 
-/** `caddy adapt` in `image` with one env's mounts and the sentinel values: no network, a read-only root. */
+/** `caddy adapt` in `image` with one env's mounts and the sentinel values, under the flags the preflight's C18 runs it with. */
 function adapt(image: string, env: AdaptedEnvName): Json {
   const result = docker(
     [
       "run",
-      "--rm",
-      "--read-only",
-      "--network",
-      "none",
-      "--entrypoint",
-      "caddy",
+      ...ADAPT_RUN_FLAGS,
       ...Object.entries(SENTINELS).flatMap(([name, value]) => ["-e", `${name}=${value}`]),
       ...MOUNTS[env].flatMap((mount) => ["-v", mount]),
       image,
-      "adapt",
-      "--config",
-      "/etc/caddy/Caddyfile",
-      "--adapter",
-      "caddyfile",
+      ...ADAPT_COMMAND,
     ],
     CALL_MS,
   );
