@@ -1,6 +1,9 @@
 # 0047 — A lock bump the publish run opened merges itself once `lock` is required and green
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-11-16 00:03:50Z, against 1b12ea7 (his line "accept ADR 0047 at 1b12ea7", typed in the
+project chat in answer to the coordinator's request after its review of that head). The one change since that head
+is the last two sentences of Decision 3, added from a review finding on the pull request. From here the record
+changes only to be marked superseded.
 
 ## Context
 The 2026-11-15 whole-project review (delivery finding 8) found that every release took four hand steps: merge, approve
@@ -34,7 +37,9 @@ today.
    could merge before its signatures were checked.
 3. **Alex adds `lock` to the ruleset's required checks.** That is the switch for this record: until he does, nothing
    merges itself. `lock.yml` has no path filter and passes at once when the lock did not change, so requiring it does
-   not block other pull requests. Removing it from the ruleset switches auto-merge off again.
+   not block other pull requests. Removing it from the ruleset stops auto-merge for bumps opened afterwards. A bump
+   pull request that is already open keeps the auto-merge it was given, and would then merge without waiting for
+   `lock`: disable auto-merge on it, or close it, before removing the check.
 4. **What merges it.** GitHub, once every required check has passed on the pull request. The checks do not start by
    themselves on a pull request opened with `GITHUB_TOKEN`: Alex starts them with "Approve workflows to run" on the
    pull request (GitHub docs, `GITHUB_TOKEN` concept page, read 2026-11-15). So a release is two clicks, the signing

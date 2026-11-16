@@ -563,3 +563,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0047 proposed (Alex chose "All four steps" on the image-publishing card, 2026-11-15; own record:
   [0047](0047-lock-bump-auto-merge.md)):** the lock-bump pull request that `publish-images.yml` opens turns on squash
   auto-merge for itself, only while main's ruleset requires the `lock` check. Proposed, awaiting Alex.
+- **ADR 0047 accepted (Alex, 2026-11-16 00:03:50Z, against 1b12ea7; own record:
+  [0047](0047-lock-bump-auto-merge.md)):** a lock bump the publish run opened merges itself while main's ruleset
+  requires the `lock` check. Before removing that check, disable auto-merge on any open bump pull request.
