@@ -24,7 +24,7 @@ The kit adds `GET /health` in `shared/http/server.ts`. The body is status, servi
 | `interfaces/http/routes/login.ts` | Sign-in form and the start of authorization. Browser binding: `interfaces/http/routes/sign-in-state.ts`. |
 | `interfaces/http/routes/oauth-callback.ts` | Authorization callback. |
 | `interfaces/http/routes/logout.ts` | Sign-out for this browser. Session count: `interfaces/http/logout-sessions.ts`. |
-| `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: `interfaces/http/account.ts`. |
+| `interfaces/http/routes/welcome.ts` | Onboarding. Account rows: the `AccountRepository` contract (`domains/identity/account.ts`), implemented by `infrastructure/postgres/accountRepository.ts`. |
 | `interfaces/http/routes/revoke.ts` | `withRevokeTimeout`, the 10 s grant-revocation limit shared by `logout.ts` and `welcome.ts`. |
 | `interfaces/http/routes/verify-email.ts` | Email confirmation page. Refresh: `interfaces/http/email-refresh.ts`. |
 | `interfaces/http/routes/settings.ts` | Settings pages: `GET /settings` (303 to `/settings/profile`, query kept), `GET /settings/profile` (Profile), `GET /settings/account` (Account). |

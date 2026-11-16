@@ -7,6 +7,7 @@
 // set, so revoke runs first. Read 2026-10-17 from the published 0.8.9 file.
 import { randomUUID } from "node:crypto";
 import {
+  type AccountRepository,
   ageInYears,
   type Did,
   latestCalendarDay,
@@ -19,7 +20,6 @@ import { AppError, type ErrorCode, withErrorParam } from "@unset/shared-errors";
 import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
-import type { AccountStore } from "../account.ts";
 import { single } from "../form-field.ts";
 import { redirect } from "../redirect.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
@@ -29,7 +29,7 @@ import { withRevokeTimeout } from "./revoke.ts";
 
 export type WelcomeDeps = {
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
-  accounts: AccountStore;
+  accounts: AccountRepository;
   versions: { readonly terms: string; readonly privacy: string };
   minAge: number;
   countryRule: boolean;

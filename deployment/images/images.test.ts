@@ -845,6 +845,24 @@ function apkKeptProblems(dockerfile: string): string[] {
   return removesApk ? [] : ["the final stage keeps apk: its last apk command does not remove apk-tools"];
 }
 
+/**
+ * The one OS-package upgrade a shipped stage may run, a temporary exception (Alex, 2026-11-16T00:53:59Z, "yes zlib
+ * exception"): Debian fixed zlib1g CVE-2026-76844 and CVE-2026-85091 in 1:1.3.dfsg+really1.3.1-1+deb13u1, but no
+ * upstream node:26-trixie-slim, postgres:18-trixie or debian:trixie-slim index ships it yet (Trivy 0.76.1 on
+ * 2026-11-16), so every node and postgres image fails its HIGH scan. Only this exact line, only in a node or postgres
+ * final stage before USER, and only until `expires`. The version is pinned, so apt upgrades nothing else and the
+ * build fails if no configured Debian source offers it.
+ */
+const ZLIB_UPGRADE = {
+  line:
+    "RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade " +
+    "zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*",
+  kinds: new Set<Kind>(["node", "postgres"]),
+  expires: "2026-11-30T00:00:00Z",
+} as const;
+const isZlibUpgrade = (text: string, kind: Kind | undefined): boolean =>
+  text === ZLIB_UPGRADE.line && kind !== undefined && ZLIB_UPGRADE.kinds.has(kind);
+
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
 function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
   try {
@@ -853,7 +871,7 @@ function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
     const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
     const user = all.find(({ line, text }) => line > finalFrom && /^USER\s/i.test(text))?.line ?? Infinity;
     const exact = (line: number, text: string) =>
-      line > finalFrom && line < user && isListedRun(text, listed ?? listedRunsOf(kind));
+      line > finalFrom && line < user && (isListedRun(text, listed ?? listedRunsOf(kind)) || isZlibUpgrade(text, kind));
     return shippedInstructions(all)
       .filter(({ line, text }) => !exact(line, text))
       .flatMap(({ line, text }) =>
@@ -1085,8 +1103,8 @@ describe("base images", () => {
     // The builder only builds the edge binary; the runtime image is what ships.
     // P1.37w: the runtime image's own /usr/bin/caddy never ships, because the edge copies its build over it.
     for (const [name, tag, stage, buildStage, stripped] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true, {}],
-      ["caddy", /^2\.11\.7-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
+      ["caddy-builder", /^2\.11\.9-builder-alpine$/, "build", true, {}],
+      ["caddy", /^2\.11\.9-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
@@ -1357,6 +1375,35 @@ describe("base images", () => {
     for (const file of nodeDockerfiles) {
       for (const image of fromImages(read(file))) expect(image, file).toBe(pinnedNode);
     }
+  });
+
+  test("zlib_upgrade_is_exempt_only_as_written_in_a_node_or_postgres_final_stage", () => {
+    const floor = "a package manager is named outside a removal command";
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    expect(osPackageProblems(`${node}${ZLIB_UPGRADE.line}\nUSER 65532:65532`)).toEqual([]);
+    // After USER, in a stage the final stage builds on, or with any other package, version or command, it is an
+    // install again and meets the floor.
+    expect(osPackageProblems(`${node}USER 65532:65532\n${ZLIB_UPGRADE.line}`)).toContain(`line 4: ${floor}`);
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\n${ZLIB_UPGRADE.line}\nFROM base`)).toContain(
+      `line 2: ${floor}`,
+    );
+    for (const changed of [
+      ZLIB_UPGRADE.line.replace("deb13u1", "deb13u2"),
+      ZLIB_UPGRADE.line.replace("zlib1g=", "curl zlib1g="),
+      ZLIB_UPGRADE.line.replace(" --only-upgrade", ""),
+      `${ZLIB_UPGRADE.line} && apt-get install -y curl`,
+    ]) {
+      expect(osPackageProblems(`${node}${changed}`), changed).toContain(`line 3: ${floor}`);
+    }
+    expect(ZLIB_UPGRADE.kinds.has("edge")).toBe(false);
+  });
+
+  test("zlib_upgrade_exception_has_not_expired", () => {
+    // On expiry: drop the line from the Dockerfiles and this exception if the locked bases ship deb13u1, or bring Alex
+    // a new date. It fails closed, like a waiver.
+    expect(Date.now(), `ZLIB_UPGRADE expired at ${ZLIB_UPGRADE.expires}`).toBeLessThan(
+      Date.parse(ZLIB_UPGRADE.expires),
+    );
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
