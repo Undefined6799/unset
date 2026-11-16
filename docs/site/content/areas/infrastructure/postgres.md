@@ -139,6 +139,7 @@ Migrations and the objects they add:
 | `0017_audit_retention.sql` | `audit.segment`, `audit.redaction_log`. |
 | `0018_audit_retention_functions.sql` | `audit.redact`, `audit.erase_subject`, `audit.seal_segment`, `audit.mark_anchored`, `audit.drop_segment`, `audit.segment_transition`. Replaces `audit.refuse_change`. No `GRANT`. |
 | `0019_app_session_issuer.sql` | `app.session.issuer_origin`, nullable, no default, https-origin check. No grant in this file. |
+| `0020_app_session_issuer_grants.sql` | `SELECT` (`issuer_origin`) and `INSERT` (`issuer_origin`) on `app.session` for `web`. |
 
 `sealed-columns.json`: `app.oauth_session.sealed` row key `did`; `app.oauth_state.sealed` row key `key`.
 
