@@ -6,33 +6,47 @@ automatically yet: the indexer, the admin action and the member's own request ge
 
 What it removes: the app account row, every browser session, the OAuth token set, one-time tokens bound to the person,
 and the security-lane audit rows that name them as subject or actor. It writes one audit record, `account.erased`, with
-the reason and no DID.
+the reason and no DID. That is not every row that ever named the person; the limits are listed next.
 
 What it does not remove, and who does:
-- **The PDS account** (repository, blobs, email, password). Delete it in the PDS yourself (step 4).
-- **Moderation audit rows** about the person. They stay until their retention class ends (admin design 8).
+- **The PDS account** (repository, blobs, email, password). Delete it in the PDS yourself (step 5).
+- **Moderation audit rows** about the person. They keep the DID by design until their retention class ends (admin
+  design 8).
+- **A sign-in in progress.** Its state row (`app.oauth_state`) holds no DID column; it leaves with the hourly sweep,
+  and a sign-in that completes after the run creates new rows. That is why step 5 says to run the function again.
 - **Files in the object store.** The app stores none per person today. When it does, that part of erasure is gated on
   the store's forced vacuum (ADR 0041 Decision 7).
 - **Indexed network data and legal holds.** Neither exists yet. When the indexer stores records (Phase 3) and holds
   exist (Phase 4), their steps extend the function; until then it knows nothing about them.
 - **Backups.** They age out on the backup schedule.
 
-The function refuses to run (`erase_uncovered_did_column`) while the database has a DID column it has no statement
-for, so it never reports a person erased while a newer table still names them. A test checks the same before merge.
+The function refuses to run (`erase_uncovered_did_column`) while the database has a column of the DID or AT-URI type
+it has no statement for, so it never reports a person erased while a newer table still names them. That check goes by
+column type only: a DID kept in a plain text column is invisible to it. The other half is the CI check on column names
+and the coverage test, which run before merge.
 
 ## Steps
 1. Confirm the request and the DID. Resolve the handle to its DID in both directions; never erase by handle.
 2. Open `psql` on the `unset` database, logged in as `migrator` itself (the credentials the `migrate` service uses).
    No other role may run the function, and a superuser who switches with `SET ROLE migrator` is refused at the audit
    step: the audit records the login role, and only `migrator` may write this record.
-3. Run it with one of the reasons `user_request`, `account_deleted`, `moderator_foreign`, `legal_hold_closed`:
-   `SELECT core.erase_did('did:plc:…', 'user_request');`
+3. Keep the DID out of the shell history, the `psql` history and the server log (SE-7). Type these three lines; the
+   second asks for the DID, so paste it at the prompt and never on a command line:
+   `\set HISTFILE /dev/null`
+   `\prompt 'DID: ' did`
+   `SHOW log_statement; SHOW log_parameter_max_length_on_error;`
+   The last line must answer `none` and `0` (the defaults). If it does not, stop: the server would log the DID.
+4. Run it with one of the reasons `user_request`, `account_deleted`, `moderator_foreign`, `legal_hold_closed`:
+   `SELECT core.erase_did($1, $2) \bind :did user_request \g`
+   The DID travels as a bound parameter, so the statement text the server logs when a call fails holds only `$1`.
+   Never write the DID into the statement as a literal: a failed call would copy the whole statement, DID included,
+   into the server log, and `migrator` may not turn that logging off for its session.
    It answers with `"outcome": "erased"` and the number of rows removed per table. Any error removes nothing. A second
    run is safe and answers with zeros (it writes a second audit record).
-4. Delete the account in the PDS. Do this after step 3, so a session cannot recreate rows in between; if the person
-   signs in again before the PDS account is gone, run step 3 again.
-5. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
-   repository, in a PR or in a log.
+5. Delete the account in the PDS. Do this after step 4, so a session cannot recreate rows in between; if the person
+   signs in again before the PDS account is gone, or was part-way through a sign-in, run step 4 again.
+6. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
+   repository, in a PR or in a log. Close `psql` when done.
 
 ## If it fails
 - `erase_bad_input`: the reason is not on the list, or the DID is empty.

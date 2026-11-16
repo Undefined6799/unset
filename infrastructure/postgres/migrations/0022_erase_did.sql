@@ -24,7 +24,9 @@ RESET ROLE;
 
 CREATE FUNCTION core.erase_did(p_did types.did, p_why text) RETURNS jsonb
   LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = pg_catalog
+  -- pg_temp is listed last on purpose: left out, it is searched first for relations, and a temporary table named
+  -- like a catalog could answer the check in step 2. The catalogs there are schema-qualified as well.
+  SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
   v_single_use bigint;
@@ -44,10 +46,10 @@ BEGIN
   --    row still names the person. The catalog is the list, as in infrastructure/postgres/didColumns.ts.
   IF EXISTS (
     SELECT 1
-      FROM pg_attribute a
-      JOIN pg_class c ON c.oid = a.attrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      JOIN pg_type t ON t.oid = a.atttypid
+      FROM pg_catalog.pg_attribute a
+      JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
      WHERE t.typname IN ('did', '_did', 'at_uri', '_at_uri') AND t.typnamespace = 'types'::regnamespace
        AND c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped
        AND (n.nspname::text || '.' || c.relname::text || '.' || a.attname::text) NOT IN (
