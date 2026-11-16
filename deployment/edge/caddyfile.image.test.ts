@@ -34,7 +34,8 @@ import { removeEveryTag } from "./image-cleanup.ts";
 // by the built edge image (`caddy adapt`, Caddy v2.11.7). It carries no skip of its own (P1.28j): without Docker it
 // fails, and whether the images project runs locally is run.ts's decision (P1.28r). The test builds and runs
 // the image itself with node built-ins (architecture amendment 3 to 2026-10-07-p130s-networks-and-caddyfile-reader):
-// a trusted test owns its inputs, and first proves the image holds the repository's config byte for byte.
+// a trusted test owns its inputs. That the image holds the repository's config byte for byte is
+// adapted.image.test.ts's to prove (P1.39d).
 const EDGE = import.meta.dirname;
 const docker = (args: readonly string[], timeoutMs: number) => runOrKill(spawnSync, "docker", args, timeoutMs);
 const PDS_HOST = "pds.unset.test";
@@ -65,45 +66,6 @@ function failedStep(stderr: string): string {
   return (from === -1 ? stderr : stderr.slice(from + 1)).slice(-4_000);
 }
 
-/**
- * The config files the image holds under /etc/caddy, by their repository path under deployment/edge, in three calls
- * whatever the number of snippets (P1.27h, N1): the snippet names, each file's size in bytes (busybox `stat -c %s`, one
- * line per file in the order given), and every file through one `cat`, cut at those sizes.
- */
-function imageConfig(image: string): Record<string, string> {
-  const listed = docker(["run", "--rm", "--entrypoint", "ls", image, "/etc/caddy/snippets"], CALL_MS);
-  if (listed.code !== 0) throw new Error(`listing the image's snippets failed: ${listed.err.slice(-2000)}`);
-  const files = [
-    "Caddyfile",
-    "sites/pds.caddy",
-    ...listed.out
-      .split("\n")
-      .filter((f) => f !== "")
-      .map((f) => `snippets/${f}`),
-  ];
-  const paths = files.map((file) => `/etc/caddy/${file}`);
-  const stat = docker(["run", "--rm", "--entrypoint", "stat", image, "-c", "%s", ...paths], CALL_MS);
-  if (stat.code !== 0) throw new Error(`sizing the image's config failed: ${stat.err.slice(-2000)}`);
-  const sizes = stat.out
-    .split("\n")
-    .filter((line) => line !== "")
-    .map(Number);
-  if (sizes.length !== files.length) throw new Error(`stat gave ${sizes.length} sizes for ${files.length} files`);
-  const read = docker(["run", "--rm", "--entrypoint", "cat", image, ...paths], CALL_MS);
-  if (read.code !== 0) throw new Error(`reading the image's config failed: ${read.err.slice(-2000)}`);
-  const bytes = Buffer.from(read.out, "utf8");
-  if (bytes.length !== sizes.reduce((sum, size) => sum + size, 0)) throw new Error("cat and stat disagree on the size");
-  let at = 0;
-  return Object.fromEntries(
-    files.map((file, index) => {
-      const size = sizes[index] ?? 0;
-      const content = bytes.subarray(at, at + size).toString("utf8");
-      at += size;
-      return [file, content];
-    }),
-  );
-}
-
 describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
@@ -116,19 +78,10 @@ describe("caddyfile reader against caddy adapt", () => {
     if (built.length > BUILDS) throw new Error(`${built.length} builds, but this hook's budget covers ${BUILDS}`);
   }, removalBudget(BUILDS));
 
-  // Its docker calls after the build: ls, stat and cat of the config, then one adapt (4).
-  test("caddyfile_reader_matches_caddy_adapt", { timeout: buildTestBudget(4) }, () => {
+  // Its docker calls after the build: one adapt (1). The byte-for-byte check that the image holds the repository's
+  // config moved to adapted.image.test.ts (P1.39d).
+  test("caddyfile_reader_matches_caddy_adapt", { timeout: buildTestBudget(1) }, () => {
     const image = buildEdgeImage();
-    const repository = Object.fromEntries(
-      [
-        "Caddyfile",
-        "sites/pds.caddy",
-        ...readdirSync(join(EDGE, "snippets"))
-          .sort()
-          .map((f) => `snippets/${f}`),
-      ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
-    );
-    expect(imageConfig(image)).toStrictEqual(repository);
     const theirs = adapt(image, env, [PDS_SITE]);
     const ours = shippedConfig(env);
     expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());

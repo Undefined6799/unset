@@ -44,7 +44,7 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 | `snippets/upstream.caddy` | image `COPY` | Upstream timeout and the forwarding headers the file deletes. |
 | `snippets/xrpc-guard.caddy` | image `COPY` | PDS admin surface. The dev PDS site also shuts blob routes. |
 
-`(pds-fonts)` as written in `snippets/pds-fonts.caddy`. `sites/pds.caddy` imports it after `xrpc-guard`. `dev/pds.caddy` imports it after `blob-deny`. Both imports are inside `route`, before `import upstream`. Inside `route`, Caddy v2.11.7 runs the directives in the order written.
+`(pds-fonts)` as written in `snippets/pds-fonts.caddy`. `sites/pds.caddy` imports it after `xrpc-guard`. `dev/pds.caddy` imports it after `blob-deny`. Both imports are inside `route`, before `import upstream`. Inside `route`, Caddy v2.11.9 runs the directives in the order written.
 
 | Line | Effect |
 | --- | --- |
@@ -57,17 +57,23 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 
 The licence files copied to `/etc/caddy/static/licenses/` sit outside `/_unset/`, so this snippet does not serve them. The PDS sites import `security-headers` at site level, which sets `X-Content-Type-Options nosniff`. In Caddy's default order that `header` runs before `route`.
 
-Read against Caddy v2.11.7: `caddyconfig/httpcaddyfile/directives.go` (`route` is the ordered group; `header` precedes it in the default order), `modules/caddyhttp/fileserver/staticfiles.go` (GET and HEAD only; `notFound` returns 404 when `pass_thru` is unset; an existing Content-Type is kept), `modules/caddyhttp/headers/caddyfile.go` (`>` sets the replace deferred) and `modules/caddyhttp/headers/headers.go` (`responseWriterWrapper` applies it at `WriteHeader`). `modules/caddyhttp/matchers.go` `matchHeaders` treats a trailing `*` as a prefix. A replace of `^(.+)$` needs one character, so a response with no Content-Security-Policy is left as the upstream wrote it.
+Read against Caddy v2.11.9: `caddyconfig/httpcaddyfile/directives.go` (`route` is the ordered group; `header` precedes it in the default order), `modules/caddyhttp/fileserver/staticfiles.go` (GET and HEAD only; `notFound` returns 404 when `pass_thru` is unset; an existing Content-Type is kept), `modules/caddyhttp/headers/caddyfile.go` (`>` sets the replace deferred) and `modules/caddyhttp/headers/headers.go` (`responseWriterWrapper` applies it at `WriteHeader`). `modules/caddyhttp/matchers.go` `matchHeaders` treats a trailing `*` as a prefix. A replace of `^(.+)$` needs one character, so a response with no Content-Security-Policy is left as the upstream wrote it.
 
 `deployment/edge/image-cleanup.ts` exports `removeEveryTag` for the image tests. It imports nothing.
 
+`deployment/edge/adapted.ts` compares JSON Caddy adapted with an env's values to the reviewed JSON for that env (P1.39a; [ADR 0046](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0046-edge-checks-read-caddy-adapt.md), Proposed). It imports nothing, and it does not run Caddy. Its header says `caddy adapt --adapter caddyfile` turns the Caddyfile, its snippets and the enabled sites into the JSON config Caddy runs, and that `adapted/<env>.generated.json` holds that output for each env, adapted with `SENTINELS`, and is reviewed as trusted base. Those values are `PDS_HOST` `pds-host.invalid`, `PDS_UPSTREAM` `pds-upstream.invalid:1`, `ACME_EMAIL` `acme-email@sentinel.invalid`, `APP_HOST` `app-host.invalid` and `APP_UPSTREAM` `app-upstream.invalid:2`. `ADAPTED_ENVS` is `prod`, `dev` and `local`. `reviewedDifference` returns null when the adapted JSON equals the reviewed one after each sentinel the env sets is replaced, and after two orders Caddy derives from the host names are fixed: a server's site routes, sorted by each route's canonical JSON, and the names in a connection policy's SNI matcher. A server's routes are reordered only when every one is a terminal host route; a route that is not keeps its place. Any other difference returns `the edge config Caddy adapts is not the reviewed one`. That message carries none of the env's values. The function reads no file and runs no process.
+
+The reviewed files are `deployment/edge/adapted/prod.generated.json`, `deployment/edge/adapted/dev.generated.json` and `deployment/edge/adapted/local.generated.json`. `deployment/edge/adapted.test.ts` requires that directory to hold exactly those three names, requires each reviewed file to equal itself and to equal the same JSON with the sentinels replaced by real values, and requires every other change it tries to return that message. `deployment/edge/adapted.image.test.ts` builds `deployment/edge/Dockerfile` and runs `caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile` in that image once per env, with `--read-only`, `--network none`, the sentinel environment and that env's read-only binds. Prod binds `sites/pds.caddy` at `sites/enabled/pds.caddy`. Dev binds `dev/app.caddy` and `dev/pds.caddy` under `sites/enabled/` and `dev/tls.caddy` over `snippets/tls.caddy`. Local binds `sites/pds.caddy` and `local/app.caddy` under `sites/enabled/` and `local/tls.caddy` over `snippets/tls.caddy`. The test fails unless the image's JSON equals the reviewed file.
+
+`deployment/edge/adapted-rules.ts` (P1.39b; [ADR 0046](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0046-edge-checks-read-caddy-adapt.md) decision 3) judges that JSON. It imports nothing. `adaptedProblems` returns why the JSON breaks a rule. Its header says every module, matcher and key it does not name fails, that it reads no file and runs no process, and that nothing but `deployment/edge/adapted-rules.test.ts` reads it until P1.39c.
+
 ## May import
 
-No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts` and `image-cleanup.ts` have no import. An import from this folder would fail as `not-in-allowed`.
+No `MATRIX` row has `from` under `deployment/edge/`. `caddyfile.ts`, `image-cleanup.ts`, `adapted.ts` and `adapted-rules.ts` have no import. An import from this folder would fail as `not-in-allowed`.
 
 `edge-not-preflight` (`scripts/lint/.dependency-cruiser.cjs`): no file under `deployment/edge/`, tests included, imports `deployment/preflight/`.
 
-The preflight row may reach `deployment/edge/caddyfile.ts` and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
+The preflight row may reach `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts` and `deployment/edge/adapted-rules.ts`, and no other file under `deployment/edge/`. Tests are the tooling row. The full table is on [deployment](../).
 
 ## Entry points
 

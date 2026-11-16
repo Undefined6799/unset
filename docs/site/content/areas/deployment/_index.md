@@ -67,12 +67,22 @@ No `main.ts`. The commands and the workflows are on [compose](compose/), [prefli
 | Workflow | File | Jobs |
 | --- | --- | --- |
 | `images` | `.github/workflows/images.yml` | `changes`, `images`, `edge`, `discover`, `scan-image`, `pds-ui`, `scan`, `pins` |
-| `publish-images` | `.github/workflows/publish-images.yml` | `publish` |
+| `publish-images` | `.github/workflows/publish-images.yml` | `publish`, `bump` |
+| `lock` | `.github/workflows/lock.yml` | `lock` |
 | `mirror` | `.github/workflows/mirror.yml` | `scan`, `verdict`, `copy-and-sign` |
 | `sigstore-root` | `.github/workflows/sigstore-root.yml` | `fetch` (`workflow_dispatch` only) |
 | `local-stack` | `.github/workflows/local-stack.yml` | `changes`, `green`, `red` |
 
 `pds-ui` runs `node scripts/ci/pds-ui/build-check.ts`. With `deployment/pds/Dockerfile` and `source.lock.json` present, that script builds the recipe and writes `pds-ui-proof.json` under `RUNNER_TEMP` only after `verifyInputs` returns. Both files absent, it prints `pds-ui: no candidate recipe or source lock` and returns. The script is under `scripts/`.
+
+| Job | File | What runs |
+| --- | --- | --- |
+| `lock` | `.github/workflows/lock.yml` | `scripts/ci/lock-bump.ts`. When `steps.bump.outputs.changed` is `true`, the pinned cosign, then `scripts/ci/verify-images.ts deployment/images.lock.json --trusted-root deployment/sigstore/trusted_root.json`. |
+| `bump` | `.github/workflows/publish-images.yml` | `scripts/ci/lock-bump-pr.ts` with `needs.publish.outputs.lock`. Holds `contents: write` and `pull-requests: write`, and opens the lock-bump pull request. `scripts/ci/lock-write.ts` writes `deployment/images.lock.json` and `deployment/compose.dev.yaml`. |
+
+| Workflow | File | Push `paths-ignore` |
+| --- | --- | --- |
+| `publish-images` | `.github/workflows/publish-images.yml` | `docs/**`, `tests/**`, `deployment/images.lock.json`, `deployment/compose.dev.yaml` |
 
 ## Data
 

@@ -34,7 +34,6 @@ export const CHECKS: readonly Check[] = [
   c15,
   c16,
   c17,
-  c18,
   c19,
   c20,
   c21,
@@ -43,6 +42,8 @@ export const CHECKS: readonly Check[] = [
   c24,
   c25,
   c26,
+  // C18 follows C26: it builds the edge only when C26 passed in this run (P1.39c).
+  c18,
   c27,
   c28,
   c29,
