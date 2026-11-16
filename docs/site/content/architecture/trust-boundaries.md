@@ -31,7 +31,7 @@ Ways out of the stack, from `deployment/networks.dev.json`: `web_egress` (web on
 
 ## Trusted base
 
-A pull request that touches a trusted-base path touches only trusted-base files, their tests and docs. A pull request that touches a `# checks:` path touches no product path (`apps/`, `interfaces/`, `domains/`, `infrastructure/`, `shared/`, `deployment/`). The check is `trusted_base_isolated` (SE-6). This docs change is not a trusted-base change.
+A pull request that changes a trusted-base path, or a `# checks:` path, carries the `security-review` label and merges on a recorded security review of its exact head; a loosening also needs Alex's own line (SE-6, ADR 0044, ADR 0019). It may change other paths too. `pr-shape` fails without the label (`trusted_path_needs_label`) and lists the trusted paths with it.
 
 Paths the section names that are in the tree:
 

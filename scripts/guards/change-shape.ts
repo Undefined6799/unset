@@ -1,24 +1,13 @@
-// The pr-shape CI job (P0.09c): the title, every commit, the size, the template headings, the trusted base and the
-// performance evidence of one pull request. `runChangeShape` is pure; `main` gathers its input from git and the
+// The pr-shape CI job (P0.09c): the title, every commit, the size, the template headings, the trusted-path label and
+// the performance evidence of one pull request. `runChangeShape` is pure; `main` gathers its input from git and the
 // environment and fails closed: a missing variable or a failed git call exits 1, never "nothing to check".
 
 import { execFileSync } from "node:child_process";
-import { isDeepStrictEqual } from "node:util";
 import { checkCommitMessage, checkPrTitle } from "./commit-msg.ts";
-import { type ChangedPath, classifyGrantChanges, type GrantFinding, type GrantSide } from "./grant-parse.ts";
 import { checkPerfEvidence } from "./perf-evidence.ts";
 import { measurePrSize, NUMSTAT_ARGS, numstatLines } from "./pr-size.ts";
 import { checkPrTemplate } from "./pr-template.ts";
-import {
-  checkPathsMixed,
-  checkTrustedBaseIsolation,
-  type DocFacts,
-  EDGE_DOCKERFILE,
-  edgeFromReplacements,
-  readTrustedBase,
-  type TrustedBase,
-  unionTrustedBase,
-} from "./trusted-base.ts";
+import { readTrustedBase, type TrustedBase, trustedPathsChanged, unionTrustedBase } from "./trusted-base.ts";
 
 export type ShapeInput = {
   title: string;
@@ -30,25 +19,35 @@ export type ShapeInput = {
   numstat: string;
   template: string;
   changedPaths: readonly string[];
-  docs: DocFacts;
   trustedBase: TrustedBase;
-  grantFindings: readonly GrantFinding[];
   migrationDiff: string;
 };
 export type ShapeResult = { errors: string[]; warnings: string[]; notices: string[] };
 
 const MIGRATIONS = "infrastructure/postgres/migrations/";
-const GRANT_MATRIX = "infrastructure/postgres/grant-matrix.json";
-const ERASURE_REGISTRY = "infrastructure/postgres/erasure-registry.json";
-/** The `# parsed:` paths this guard knows how to read; any other is an error, so nothing goes unparsed. */
-const KNOWN_PARSED = [`/${MIGRATIONS}`, `/${GRANT_MATRIX}`, `/${ERASURE_REGISTRY}`];
 const TEMPLATE = ".github/pull_request_template.md";
 const GIT_TIMEOUT_MS = 30_000;
 /** Renovate writes its own PR body, so it alone skips the template headings (P0.09i, rule DL-3). */
 const isRenovate = (author: ShapeInput["author"]): boolean => author.login === "renovate[bot]" && author.type === "Bot";
 
-const describeFinding = (f: GrantFinding): string =>
-  `[SE-6] ${f.path}:${f.line} ${f.reason}: ${f.statement.replace(/\s+/g, " ").trim().slice(0, 80)}`;
+/** The label a pull request that changes a trusted path must carry (rule SE-6 as amended by ADR 0044). */
+export const SECURITY_REVIEW = "security-review";
+const LISTED_AT_MOST = 20;
+
+/**
+ * SE-6 (ADR 0044): a change to a trusted path is named, not isolated. Without the label the job fails. With it the job
+ * lists the trusted paths as a notice, so the reviewer sees what the review must cover. No author is exempt: Renovate
+ * labels its own pull requests (`.github/renovate.json`), so a commit pushed to one of its branches gets no free pass.
+ */
+function trustedPathLines(input: ShapeInput): { error?: string; notice?: string } {
+  const trusted = trustedPathsChanged(input.changedPaths, input.trustedBase);
+  if (trusted.length === 0) return {};
+  const more = trusted.length > LISTED_AT_MOST ? `, and ${trusted.length - LISTED_AT_MOST} more` : "";
+  const paths = `${trusted.slice(0, LISTED_AT_MOST).join(", ")}${more}`;
+  if (!input.labels.includes(SECURITY_REVIEW))
+    return { error: `[SE-6] a PR that changes a trusted path carries the ${SECURITY_REVIEW} label: ${paths}` };
+  return { notice: `[SE-6] trusted paths in this PR, for the security review of this head: ${paths}` };
+}
 
 function kindLabelWarning(labels: readonly string[]): string[] {
   const kinds = labels.filter((label) => label.startsWith("kind/"));
@@ -73,24 +72,9 @@ export function runChangeShape(input: ShapeInput): ShapeResult {
   const missing = isRenovate(input.author) ? [] : checkPrTemplate(input.body, input.template);
   if (missing.length > 0) out.errors.push(`[DL-3] PR body is missing headings: ${missing.join(", ")}`);
 
-  const { patterns, parsedPaths, checks } = input.trustedBase;
-  const mixed = checkPathsMixed(input.changedPaths, checks, input.docs);
-  if (mixed.length > 0)
-    out.errors.push(`[SE-6] a PR that changes a check path changes no product path: ${mixed.join(", ")}`);
-  const isolation = checkTrustedBaseIsolation(input.changedPaths, patterns, {
-    parsedPaths,
-    findings: input.grantFindings,
-    docs: input.docs,
-  });
-  const trusted = input.grantFindings.filter((f) => f.kind === "trusted").map(describeFinding);
-  if (!isolation.ok) {
-    out.errors.push(
-      `[SE-6] outside the trusted base in a trusted-base PR: ${isolation.outside.join(", ")}`,
-      ...trusted,
-    );
-  } else {
-    out.notices.push(...trusted);
-  }
+  const trusted = trustedPathLines(input);
+  if (trusted.error !== undefined) out.errors.push(trusted.error);
+  if (trusted.notice !== undefined) out.notices.push(trusted.notice);
 
   if (checkPerfEvidence(input.migrationDiff, input.body)) {
     out.errors.push("[PF-1] a `-- why: speed` index needs p50, p95 and p99 before and after in Performance evidence");
@@ -115,140 +99,23 @@ function trustedBaseOf(base: string, head: string): TrustedBase {
   }) as [TrustedBase, TrustedBase];
   const merged = unionTrustedBase(baseSection, headSection);
   if (merged.checks.length === 0) throw new Error('neither CODEOWNERS section has "# checks:" paths');
-  const unknown = merged.parsedPaths.filter((p) => !KNOWN_PARSED.includes(p));
-  if (unknown.length > 0) throw new Error(`the guard cannot parse "# parsed:" path(s) ${unknown.join(", ")}`);
   return merged;
 }
 
 /** `-z` output split on NUL. Without -z, git quotes a non-ASCII path (`"gat\303\251.ts"`) and no pattern matches. */
 const fields = (output: string): string[] => output.split("\0").filter((field) => field !== "");
 
-type RawChange = ChangedPath & { mode: string };
-
-/** `git diff -z --raw` rows: status and the head-side mode, so a symlink (120000) is never read as a regular file. */
-function changedFiles(base: string, head: string): RawChange[] {
-  const parts = fields(git("diff", "-z", "--raw", "--no-renames", `${base}...${head}`));
-  const changed: RawChange[] = [];
-  for (let i = 0; i + 1 < parts.length; i += 2) {
-    const [, mode = "", , , status = ""] = (parts[i] as string).split(" ");
-    changed.push({ path: parts[i + 1] as string, status: status.charAt(0) as ChangedPath["status"], mode });
-  }
-  return changed;
-}
-
-/** A modified package.json whose base and head parse to the same object once `license` is dropped. */
-function changesOnlyLicence(base: string, head: string, path: string): boolean {
-  try {
-    const [before, after] = [base, head].map((sha) => {
-      const { license: _, ...rest } = JSON.parse(git("show", `${sha}:${path}`)) as Record<string, unknown>;
-      return rest;
-    });
-    return isDeepStrictEqual(before, after);
-  } catch {
-    return false; // unreadable either side: not documentation
-  }
-}
-
-const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
-
-/** A package.json whose dependency fields differ between base and head; an added or deleted one has none on the
- * missing side. Unreadable JSON is not a dependency change, so the lockfile does not ride (fail closed). */
-function changesDependencies(base: string, head: string, change: RawChange): boolean {
-  try {
-    const [before, after] = [base, head].map((sha) => {
-      const absent = (sha === base && change.status === "A") || (sha === head && change.status === "D");
-      const manifest = absent ? {} : (JSON.parse(git("show", `${sha}:${change.path}`)) as Record<string, unknown>);
-      return DEPENDENCY_FIELDS.map((field) => manifest[field]);
-    });
-    return !isDeepStrictEqual(before, after);
-  } catch {
-    return false;
-  }
-}
-
-/** Both sides of a modified root JSON file (the lockfile, the root tsconfig.json), parsed; null when the PR does not
- * modify it or a side is unreadable. */
-function bothSides(base: string, head: string, changed: readonly RawChange[], path: string): DocFacts["lockfiles"] {
-  if (!changed.some((c) => c.path === path && c.status === "M")) return null;
-  try {
-    const [before, after] = [base, head].map((sha) => JSON.parse(git("show", `${sha}:${path}`)) as unknown);
-    return { base: before, head: after };
-  } catch {
-    return null;
-  }
-}
-
-/** Each package.json the PR adds, with the `name` it declares ("" when unreadable or not a string). */
-function addedManifests(head: string, manifests: readonly RawChange[]): Map<string, string> {
-  const nameOf = (path: string): string => {
-    try {
-      const { name } = JSON.parse(git("show", `${head}:${path}`)) as { name?: unknown };
-      return typeof name === "string" ? name : "";
-    } catch {
-      return "";
-    }
-  };
-  return new Map(manifests.filter((c) => c.status === "A").map((c) => [c.path, nameOf(c.path)]));
-}
-
-const EDGE_BUMP_TEXTS = [EDGE_DOCKERFILE, "deployment/images/bases.lock.json", "deployment/mirror.list.json"] as const;
-
-/** The bump object, or null. Not undefined: DocFacts.edgeBaseBump is optional, and exactOptionalPropertyTypes rejects an explicit undefined. */
-type EdgeBump = NonNullable<DocFacts["edgeBaseBump"]>;
-
-/** Base and head text of the edge Dockerfile and the pins that may ride with a digest bump (P1.28a). */
-function edgeBaseBump(base: string, head: string, changed: readonly RawChange[]): EdgeBump | null {
-  if (!changed.some((c) => c.path === EDGE_DOCKERFILE && c.status !== "D")) return null;
-  const dockerfile = { base: fileAt(base, EDGE_DOCKERFILE) ?? "", head: fileAt(head, EDGE_DOCKERFILE) ?? "" };
-  const replacements = edgeFromReplacements(dockerfile.base, dockerfile.head);
-  if (replacements === null) return null;
-  const texts = new Map<string, { base: string; head: string }>();
-  for (const path of changed.map((c) => c.path)) {
-    if (
-      !(EDGE_BUMP_TEXTS as readonly string[]).includes(path) &&
-      !path.endsWith(".test.ts") &&
-      !path.includes("/fixtures/")
-    )
-      continue;
-    texts.set(path, { base: fileAt(base, path) ?? "", head: fileAt(head, path) ?? "" });
-  }
-  return { replacements, texts };
-}
-
-function docFacts(base: string, head: string, changed: readonly RawChange[]): DocFacts {
-  const regular = changed.filter((c) => c.mode === "100644").map((c) => c.path);
-  const packageManifests = changed.filter((c) => /^[^/]+\/[^/]+\/package\.json$/.test(c.path));
-  const modified = packageManifests.filter((c) => c.status === "M");
-  return {
-    regular: new Set(regular),
-    licenceOnly: new Set(modified.filter((c) => changesOnlyLicence(base, head, c.path)).map((c) => c.path)),
-    dependencyChanges: new Set(packageManifests.filter((c) => changesDependencies(base, head, c)).map((c) => c.path)),
-    lockfiles: bothSides(base, head, changed, "package-lock.json"),
-    addedManifests: addedManifests(head, packageManifests),
-    rootTsconfig: bothSides(base, head, changed, "tsconfig.json"),
-    edgeBaseBump: edgeBaseBump(base, head, changed),
-  };
-}
+/** The changed paths. With `--no-renames` a rename is a deletion and an addition, so both its paths are named. */
+const changedPaths = (base: string, head: string): string[] =>
+  fields(git("diff", "-z", "--name-only", "--no-renames", `${base}...${head}`));
 
 /** The numstat lines measurePrSize reads, with renames paired (P0.09h). */
 const numstat = (base: string, head: string): string => numstatLines(git("diff", ...NUMSTAT_ARGS, `${base}...${head}`));
-
-function grantSide(sha: string, migrations: readonly string[]): GrantSide {
-  return {
-    migrations: migrations.map((path) => ({ path, sql: git("show", `${sha}:${path}`) })),
-    grantMatrix: fileAt(sha, GRANT_MATRIX),
-    erasureRegistry: fileAt(sha, ERASURE_REGISTRY),
-  };
-}
 
 function gather(env: Record<string, string>, base: string, head: string): ShapeInput {
   const labels: unknown = JSON.parse(env.PR_LABELS as string);
   if (!Array.isArray(labels) || !labels.every((l) => typeof l === "string"))
     throw new Error("PR_LABELS is not a JSON array of names");
-  const trustedBase = trustedBaseOf(base, head);
-  const changed = changedFiles(base, head);
-  const baseMigrations = fields(git("ls-tree", "-z", "-r", "--name-only", base, "--", MIGRATIONS));
-  const headMigrations = changed.filter((c) => c.path.startsWith(MIGRATIONS) && c.status !== "D").map((c) => c.path);
   // A commit message cannot hold a NUL, so sha and message alternate between NULs.
   const log = git("log", "--no-merges", "--format=%H%x00%B%x00", `${base}..${head}`).split("\0");
   const commits: { sha: string; message: string }[] = [];
@@ -264,15 +131,8 @@ function gather(env: Record<string, string>, base: string, head: string): ShapeI
     numstat: numstat(base, head),
     // The base's template: a PR cannot drop a heading by deleting it from the template.
     template: fileAt(base, TEMPLATE) ?? "",
-    changedPaths: changed.map((c) => c.path),
-    docs: docFacts(base, head, changed),
-    trustedBase,
-    grantFindings: classifyGrantChanges({
-      base: grantSide(base, baseMigrations),
-      head: grantSide(head, headMigrations),
-      changed,
-      trustedFunctions: trustedBase.trustedFunctions,
-    }),
+    changedPaths: changedPaths(base, head),
+    trustedBase: trustedBaseOf(base, head),
     migrationDiff: git("diff", "-U0", `${base}...${head}`, "--", MIGRATIONS),
   };
 }
@@ -310,7 +170,7 @@ function main(): number {
   for (const line of result.warnings) console.log(`::warning::${commandData(line)}`);
   for (const line of result.errors) console.log(`::error::${commandData(line)}`);
   if (result.errors.length === 0)
-    console.log("pr-shape: title, commits, size, template, trusted base and evidence pass");
+    console.log("pr-shape: title, commits, size, template, trusted-path label and evidence pass");
   return result.errors.length === 0 ? 0 : 1;
 }
 
