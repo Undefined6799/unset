@@ -5366,7 +5366,12 @@ networks:
     expect(linked.lines.find((line) => / C18 /.test(line))).toBe(
       "FAIL C18 pds.caddy: the mount is not one regular file",
     );
-    expect(await c18((text) => text.replace(pds, `${pds}${pds}`))).toMatch(/^FAIL C18 /);
+    expect(await c18((text) => text.replace(pds, `${pds}${pds}`))).toBe("FAIL C18 pds.caddy: mounted more than once");
+    // A file named app.caddy in sites/ would be enabled under the mounted app site's own name.
+    const collided = await local((text) => text, { files: { "deployment/edge/sites/app.caddy": "# a site\n" } });
+    expect(collided.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 app.caddy: an enabled site has the mounted app site's name",
+    );
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(await c18((text) => text.replace(tls, ""))).toBe("FAIL C18 the TLS snippet is not mounted");
     expect(

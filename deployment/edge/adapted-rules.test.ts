@@ -465,6 +465,12 @@ const UPSTREAMS: Red[] = [
     "{$PDS_HOST}: a reverse_proxy passes X-Forwarded-For",
   ],
   [
+    "X-Real-IP kept",
+    "local",
+    (c) => void Object.assign(request(c, P), { delete: ["X-Forwarded-For", "Forwarded"] }),
+    "{$PDS_HOST}: a reverse_proxy passes X-Real-IP",
+  ],
+  [
     "Forwarded kept",
     "dev",
     (c) => void Object.assign(request(c, APP_DEV), { delete: ["X-Forwarded-For", "X-Real-IP"] }),
@@ -554,6 +560,55 @@ const DEV_SHAPE: Red[] = [
     "dev",
     (c) => void inner(c, APP_DEV).splice(routeNamed(c, APP_DEV, "signin_files_write"), 1),
     "{$APP_HOST}: does not import signin-files",
+  ],
+];
+
+/** The PDS route's deferred CSP append (pds-fonts), and the one replacement it makes. */
+const fontAppend = (c: Json): Obj => o(o(a(o(inner(c, P).at(-1)).handle)[0]).response);
+const fontReplace = (c: Json): Obj => o(a(o(fontAppend(c).replace)["Content-Security-Policy"])[0]);
+const NOT_THE_FONTS = "{$PDS_HOST}: the route does not import pds-fonts once before its upstream";
+/** A wider font policy, each from the reader's pds_fonts tests (P1.39e): the rule compares the append whole. */
+const FONT_POLICY: Red[] = [
+  [
+    "a remote font-src",
+    "local",
+    (c) => void Object.assign(fontReplace(c), { replace: "$1; font-src https://fonts.example/" }),
+    NOT_THE_FONTS,
+  ],
+  [
+    "a data font-src",
+    "local",
+    (c) => void Object.assign(fontReplace(c), { replace: "$1; font-src data:" }),
+    NOT_THE_FONTS,
+  ],
+  [
+    "another directive appended to the CSP",
+    "local",
+    (c) => void Object.assign(fontReplace(c), { replace: "$1; style-src 'unsafe-inline'" }),
+    NOT_THE_FONTS,
+  ],
+  [
+    "a CSP append that also matches an empty policy",
+    "local",
+    (c) => void Object.assign(fontReplace(c), { search_regexp: "^(.*)$" }),
+    NOT_THE_FONTS,
+  ],
+  [
+    "the CSP append on every content type",
+    "local",
+    (c) => void Object.assign(fontAppend(c), { require: { headers: { "Content-Type": ["*"] } } }),
+    NOT_THE_FONTS,
+  ],
+  ["the CSP append on every response", "local", (c) => void delete fontAppend(c).require, NOT_THE_FONTS],
+  ["a CSP append that is not deferred", "local", (c) => void delete fontAppend(c).deferred, NOT_THE_FONTS],
+  [
+    "a wider font path",
+    "local",
+    (c) =>
+      void Object.assign(o(inner(c, P)[routeNamed(c, P, "pds_font")]), {
+        match: [{ path_regexp: { name: "pds_font", pattern: "^/_unset/fonts/.+$" } }],
+      }),
+    NOT_THE_FONTS,
   ],
 ];
 
@@ -983,6 +1038,13 @@ describe("edge rules on the adapted config (P1.39b)", () => {
 
   test.each(REDS.map((red) => [red[0], red] as const))("rules_fail_%s", (_what, red) => {
     expect(changed(red)).toContain(red[3]);
+  });
+
+  test("rules_fail_a_wider_font_policy", () => {
+    // P2.24e, as the reader's pds_fonts_wider_policy_fails and pds_fonts_html_only_and_deferred held it: any other
+    // font-src, an appended directive, a looser search, another content type, a missing condition, an append that is
+    // not deferred and a wider file path each fail.
+    for (const red of FONT_POLICY) expect(changed(red), red[0]).toContain(red[3]);
   });
 
   test("rules_reds_are_named_once", () => {
