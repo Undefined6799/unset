@@ -68,8 +68,9 @@ moderation runbook says, never the key's content.
 
 Each of these is accepted for staging only, and each is a P5.01 gate before any real member's draft is stored:
 
-- **The filer's LevelDB keeps tombstones until it compacts on its own.** A deleted object's name and chunk key may
-  survive in `/data/filerldb2` until then. SeaweedFS 4.53's shell has no command to force that compaction (`help`
+- **The filer's LevelDB keeps tombstones until it compacts on its own.** Until then, a deleted entry's metadata may
+  survive in `/data/filerldb2`: its full object path and its chunk keys. Anything we put in a path, such as the DID
+  in `drafts/<did>/`, survives with it. This is why new key layouts avoid DIDs and handles wherever the caller allows. SeaweedFS 4.53's shell has no command to force that compaction (`help`
   lists none; checked 2026-11-16). P5.01 must move the filer store to one that deletes for real, or find the control.
 - **Freed disk blocks are not overwritten.** On staging that rests on the host's disk as it stands. P5.01 puts the
   store on an encrypted disk (ADR 0041 Decision 6).
