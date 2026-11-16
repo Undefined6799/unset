@@ -23,6 +23,7 @@ import {
   clearIssuerCookie,
   clearNonceCookie,
   clearSignedOutCookie,
+  issuerOrigin,
   nonceFromCookies,
   parseAppState,
 } from "./sign-in-state.ts";
@@ -32,10 +33,15 @@ export type CallbackDeps = {
   complete: (query: URLSearchParams) => Promise<CallbackResult>;
   /** P1.16 consume of a `login.nonce`. */
   consumeNonce: (nonce: string, deadline: AbortSignal) => Promise<"ok" | "invalid">;
-  /** P2.03 create in its own transaction, deleting the session `replacingCookie` named (fixation). */
+  /**
+   * P2.03 create in its own transaction, deleting the session `replacingCookie` named (fixation). `issuerOrigin` is
+   * the origin of the issuer the library verified, kept on the session row for the account pages (ADR 0048), or null
+   * when it is not a bare https origin on a DNS name.
+   */
   createSession: (
     did: Did,
     replacingCookie: string | null,
+    issuerOrigin: string | null,
     deadline: AbortSignal,
   ) => Promise<{ cookieValue: string; expiresAt: Date }>;
   /** SESSION_ABSOLUTE_S: the cookie lives as long as the session can. */
@@ -115,7 +121,7 @@ export function oauthCallbackRoutes(deps: CallbackDeps): Route[] {
     const replacing = sessionCookieValue(request.headers.get("cookie"));
     let created: { cookieValue: string };
     try {
-      created = await deps.createSession(completed.did, replacing, deadline);
+      created = await deps.createSession(completed.did, replacing, issuerOrigin(completed.issuer), deadline);
     } catch (error) {
       deps.log.warn("oauth.callback_failed", { kind: error instanceof Error ? error.constructor.name : "unknown" });
       return deny("login.failed", spent);
