@@ -61,8 +61,13 @@ function waitFor(container: string, probe: () => boolean): boolean {
   return false;
 }
 
-/** Every regular file under `dir` that holds `needle`. */
-function filesHolding(dir: string, needle: Buffer): string[] {
+/**
+ * Every regular file under the store's /data, at `dir` on the host, that holds `needle`. The store writes its files as
+ * its own uid (1000), some of them 0600, and CI's runner is another uid, so the store first makes them readable.
+ */
+function filesHolding({ container, data: dir }: { container: string; data: string }, needle: Buffer): string[] {
+  const readable = inStore(container, "find /data -mindepth 1 -exec chmod a+rX {} +");
+  expect(readable.code, readable.err).toBe(0);
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
     .map((name) => join(dir, name))
     .filter((path) => statSync(path).isFile() && readFileSync(path).includes(needle));
@@ -131,10 +136,11 @@ describe("objects erasure (P2.18s)", () => {
   test(
     "objects_no_plaintext_at_rest",
     () => {
-      withStore(({ container, data }) => {
+      withStore((store) => {
+        const { container } = store;
         const stored = putDraft(container);
-        expect(filesHolding(data, stored)).not.toEqual([]);
-        expect(filesHolding(data, Buffer.from(MARKER))).toEqual([]);
+        expect(filesHolding(store, stored)).not.toEqual([]);
+        expect(filesHolding(store, Buffer.from(MARKER))).toEqual([]);
       });
     },
     TEST_MS,
@@ -143,18 +149,19 @@ describe("objects erasure (P2.18s)", () => {
   test(
     "objects_erase_removes_bytes",
     () => {
-      withStore(({ container, data }) => {
+      withStore((store) => {
+        const { container } = store;
         const stored = putDraft(container);
-        expect(filesHolding(data, stored)).not.toEqual([]);
+        expect(filesHolding(store, stored)).not.toEqual([]);
         // The delete alone is a tombstone: the bytes stay until the vacuum, so skipping it fails this test.
         const removed = shell(container, `fs.rm ${KEY}`);
         expect(removed.code, removed.err).toBe(0);
         expect(waitFor(container, () => deletedCount(container) >= 1)).toBe(true);
-        expect(filesHolding(data, stored)).not.toEqual([]);
+        expect(filesHolding(store, stored)).not.toEqual([]);
         const vacuumed = shell(container, "lock", "volume.vacuum -garbageThreshold 0", "unlock");
         expect(vacuumed.code, vacuumed.err).toBe(0);
-        expect(filesHolding(data, stored)).toEqual([]);
-        expect(filesHolding(data, stored.subarray(0, 64))).toEqual([]);
+        expect(filesHolding(store, stored)).toEqual([]);
+        expect(filesHolding(store, stored.subarray(0, 64))).toEqual([]);
       });
     },
     TEST_MS,
