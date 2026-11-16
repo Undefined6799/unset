@@ -26,15 +26,19 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { SENTINELS } from "../edge/adapted.ts";
 import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
+import { c18 } from "./checks/edge.ts";
 import { C21_DEV_WAIVER, c21 } from "./checks/host.ts";
+import { CHECKS } from "./checks/index.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { c32 } from "./checks/placeholders.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./checks/types.ts";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN, cosignProblem } from "./cosign.ts";
+import { BUILT_EDGE_ID, edgeImageAnswer } from "./edge-image-double.ts";
 import { type Deps, type Run, preflight as runPreflight, SOURCE_LAST_LINE } from "./index.ts";
 import { loadInputs, lstatOrNull } from "./inputs.ts";
 import { printable } from "./printable.ts";
@@ -166,7 +170,6 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C15",
   "C16",
   "C17",
-  "C18",
   "C19",
   "C20",
   "C21",
@@ -175,16 +178,20 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C24",
   "C25",
   "C26",
+  "C18", // after C26, whose outcome it needs to build the edge (P1.39c)
   "C27",
   "C28",
   "C29",
   "C30",
   "C31",
   "C32",
+  "C33",
 ]);
 
 type Stack = {
   compose?: string;
+  /** Whether the PDS gets the object store's settings (PDS_STORE_ENV); by default under every env but prod. */
+  store?: boolean;
   pdsEnv?: Record<string, string | null>;
   /** Raw lines appended to pds.env, after the ones pdsEnv writes there (C30). */
   pdsEnvFile?: string;
@@ -233,7 +240,19 @@ const PDS_ENV_FILE_NAMES = new Set([
   "PDS_RECOVERY_DID_KEY",
   "PDS_EMAIL_SMTP_URL",
   "PDS_MODERATION_EMAIL_SMTP_URL",
+  "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
+  "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
 ]);
+/** The PDS's object store settings under local and dev (P2.18p, C33): the key pair goes to pds.env, the rest are
+ * literals. Prod keeps none until P5.01. */
+const PDS_STORE_ENV: Record<string, string> = {
+  PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+  PDS_BLOBSTORE_S3_REGION: "us-east-1",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+  PDS_BLOBSTORE_S3_ACCESS_KEY_ID: `${CANARY}-s3-id`,
+  PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: `${CANARY}-s3-secret`,
+};
 
 /** The names newt.env holds (C31). */
 const NEWT_ENV_NAMES = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
@@ -241,6 +260,7 @@ const NEWT_ENV_NAMES = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
   compose = COMPOSE,
+  store: withStore,
   pdsEnv = {},
   pdsEnvFile = "",
   newtEnvFile,
@@ -267,7 +287,10 @@ function stack({
   };
   // As in the real stack (C30, P1.36q): pds.env holds the PDS's secrets and mail URLs, and every other setting is a
   // literal at the top of the pds service's environment. A compose whose pds has no environment keeps them in pds.env.
-  const entries = Object.entries({ ...PDS_ENV, ...pdsEnv }).filter((e): e is [string, string] => e[1] !== null);
+  const store = (withStore ?? !compose.startsWith("name: unset-prod")) ? PDS_STORE_ENV : {};
+  const entries = Object.entries({ ...PDS_ENV, ...store, ...pdsEnv }).filter(
+    (e): e is [string, string] => e[1] !== null,
+  );
   const pdsBlock = /\n {2}pds:\n(?: {4}.*\n)*? {4}environment:\n/.exec(compose);
   // A setting the test already wrote into pds's environment stays as written there.
   const pdsText = pdsBlock === null ? "" : (compose.slice(pdsBlock.index + 1).split(/\n {2}\S/)[0] ?? "");
@@ -312,7 +335,7 @@ function stack({
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
   // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
   const edge = join(root, "deployment/edge");
-  for (const part of ["Caddyfile", "snippets", "sites", "dev"])
+  for (const part of ["Caddyfile", "snippets", "sites", "dev", "adapted"])
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
   // C9 judges every bind source and its parents too (P1.27u), so these get fixed modes whatever the umask.
   for (const dir of [edge, join(edge, "sites"), join(edge, "dev")]) chmodSync(dir, 0o755);
@@ -355,13 +378,16 @@ const TRACKING = (offset: string) => ok(`Stratum         : 3\nSystem time     : 
  * every call is recorded. */
 function fakeRun(answers: Answers = {}) {
   const calls: string[][] = [];
-  const run: Run = async (file, args) => {
+  const run: Run = async (file, args, _signal, env) => {
     calls.push([file, ...args]);
     if (file === "timedatectl") return answers.ntp ?? SYNCED;
     if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
     // The pinned x64 cosign (P2.26b), unless a test hands another sum.
     if (file === "sha256sum") return answers.cosign ?? ok(`${COSIGN.sha256.x64}  ${COSIGN.path}\n`);
     if (file === "docker") {
+      // C18's pull, build and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+      const edge = edgeImageAnswer(args, env);
+      if (edge !== null) return edge;
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
     }
@@ -459,7 +485,10 @@ const unwalkedEnv: Pick<Deps, "readEnv"> = {
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   // A dev pass fixture carries the complete report unless the test names its own (`report: undefined` for none).
-  const withReport = env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s;
+  const withReport = {
+    store: env !== "prod",
+    ...(env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s),
+  };
   const { root, file } = stack(
     env === "dev" && !("networks" in s) ? { ...withReport, networks: DEV_TABLE } : withReport,
   );
@@ -471,9 +500,18 @@ async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   });
 }
 const failed = (lines: string[]) => lines.filter((l) => l.startsWith("FAIL")).map((l) => l.split(" ")[1]);
+/** C18's line when C2 to C5 did not all pass (P1.39c): it then never runs the lock's edge image, and fails. */
+const EDGE_NOT_RUN = "FAIL C18 the edge image was not run: C2 to C5 did not all pass";
+const IMAGE_CHECKS = ["C2", "C3", "C4", "C5"];
+/** `failed` without C18, after checking that C18 failed only for want of C2 to C5. */
+function failedBesideEdgeRun(lines: string[]): (string | undefined)[] {
+  expect(lines).toContain(EDGE_NOT_RUN);
+  return failed(lines).filter((id) => id !== "C18");
+}
 async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
   const result = await check(s, env, deps);
-  expect(failed(result.lines)).toEqual([id]);
+  // A failed image check fails C18 with it, by that one reason.
+  expect(IMAGE_CHECKS.includes(id) ? failedBesideEdgeRun(result.lines) : failed(result.lines)).toEqual([id]);
   expect(result.code).toBe(1);
   return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
 }
@@ -483,7 +521,8 @@ const BUILD_REFUSED = /^FAIL C2 \S+ has a build; dev and prod run only registry 
 /** `failed` without C2, after checking that C2 failed on the build and on nothing else. */
 function failedBesideBuild(lines: string[]): (string | undefined)[] {
   expect(lines.find((l) => l.startsWith("FAIL C2"))).toMatch(BUILD_REFUSED);
-  return failed(lines).filter((id) => id !== "C2");
+  // C2 failed, so C18 never ran the edge image (P1.39c).
+  return failedBesideEdgeRun(lines).filter((id) => id !== "C2");
 }
 /** `expectOnly` for a stack with a build: `id` fails, and C2 fails only on the build. */
 async function expectOnlyBesideBuild(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
@@ -521,7 +560,7 @@ describe("preflight", () => {
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C17", "C18", "C25"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C17", "C25", "C18"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -575,11 +614,11 @@ describe("preflight", () => {
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
     // C18 reads the lock's edge ref (P1.30w), C25 does for the edge's cap_add (P1.30x), and C17 to know the edge beside
     // the PDS (P1.35o), so all three fail closed without the lock, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C18", "C25"]);
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C25", "C18"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C17", "C18", "C25"]);
+    expect(failed(unlisted)).toEqual(["C2", "C17", "C25", "C18"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -590,7 +629,7 @@ describe("preflight", () => {
     await expectOnly("C4", {}, "prod", { run: pds.run });
     // A failure that names no entry (a spawn error) fails both.
     const both = await check({}, "prod", { run: fakeRun({ verify: { code: 1, stderr: "" } }).run });
-    expect(failed(both.lines)).toEqual(["C3", "C4"]);
+    expect(failedBesideEdgeRun(both.lines)).toEqual(["C3", "C4"]);
   });
 
   test("c3_c4_unknown_origin_fails_both", async () => {
@@ -598,7 +637,7 @@ describe("preflight", () => {
     const lock = { ...LOCK, web: { ...LOCK.web, origin: "third-party" } };
     const stderr = "web: ref is not ours by digest, signed keyless\n";
     const result = await check({ lock }, "prod", { run: fakeRun({ verify: { code: 1, stderr } }).run });
-    expect(failed(result.lines)).toEqual(["C3", "C4"]);
+    expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4"]);
     expect(result.lines).toContain("FAIL C4 web: ref is not ours by digest, signed keyless");
   });
 
@@ -611,7 +650,7 @@ describe("preflight", () => {
     for (const cosign of [other, otherArch, ok(""), { code: 1, stdout: "", stderr: "No such file" }]) {
       const { run, calls } = fakeRun({ cosign });
       const result = await check({}, "prod", { run });
-      expect(failed(result.lines)).toEqual(["C3", "C4"]);
+      expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4"]);
       expect(result.lines).toContain(`FAIL C3 cosign at ${COSIGN.path} is not the pinned v3.1.3 binary`);
       expect(calls.some(([file]) => file === "/usr/bin/env")).toBe(false);
     }
@@ -678,7 +717,7 @@ describe("preflight", () => {
       new Promise((done) => signal.addEventListener("abort", () => done({ code: 1, stdout: "", stderr: "" })));
     const result = await check({}, "prod", { run, timeoutMs: 20 });
     // C4 shares C3's verifier run, so it fails on that run's aborted answer rather than its own clock.
-    expect(failed(result.lines)).toEqual(["C3", "C4", "C5", "C24"]);
+    expect(failedBesideEdgeRun(result.lines)).toEqual(["C3", "C4", "C5", "C24"]);
     const timedOut = result.lines.filter((l) => l.endsWith("timed out")).map((l) => l.split(" ")[1]);
     expect(timedOut).toEqual(["C3", "C5", "C24"]);
   });
@@ -719,9 +758,10 @@ describe("preflight", () => {
     ] as const) {
       expect(await expectOnly("C8", { pdsEnv: { [name]: value } })).toBe(`FAIL C8 ${name} is set in pds`);
     }
-    // In any service, not only the PDS.
-    const edgeEnv = COMPOSE.replace("      ACME_EMAIL: edge@example.test", "$&\n      PDS_RATE_LIMIT_BYPASS_KEY: x");
-    await expectOnly("C8", { compose: edgeEnv });
+    // In any service, not only the PDS (web here: C18 refuses any name on the edge beside its own, P1.39e).
+    const webEnv = COMPOSE.replace("      FINGERPRINT_CHECK: arachnid", "$&\n      PDS_RATE_LIMIT_BYPASS_KEY: x");
+    expect(webEnv).not.toBe(COMPOSE);
+    await expectOnly("C8", { compose: webEnv });
   });
 
   // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
@@ -2006,19 +2046,6 @@ describe("preflight", () => {
     expect(result.lines.join("\n")).not.toContain("PDS_ADMIN_PASSWORD");
   });
 
-  test("c18_sentinel_withheld_end_to_end", async () => {
-    // The edge reader's own scrub (P1.30h) is the first layer; the runner withholds whatever still holds a value.
-    // PDS_HOSTNAME carries the sentinel too, so C18 passes its PDS host tie (P1.35l) and reaches the reader.
-    const sentinel = "sentinelhost.example.test";
-    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`).replace(
-      "      PDS_HOSTNAME: pds.example.test",
-      `      PDS_HOSTNAME: ${sentinel}`,
-    );
-    const result = await check({ compose, sites: { "probe.caddy": '"{$PDS_HOST}" {\n\trespond 204\n}\n' } });
-    expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable/);
-    expect(result.lines.join("\n")).not.toContain(sentinel);
-  });
-
   test("c18_prod_refuses_the_dev_mount", async () => {
     // P1.36c: the dev sites and the dev (tls) are the dev stack's alone; prod mounting either fails C18.
     const sites = "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n";
@@ -2026,7 +2053,7 @@ describe("preflight", () => {
       (await check({ compose: edit(COMPOSE) }, "prod")).lines.find((line) => / C18 /.test(line));
     expect(await c18((text) => text)).toBe("PASS C18 ok");
     expect(await c18((text) => text.replace(sites, "      - ./edge/dev:/etc/caddy/sites/enabled:ro\n"))).toBe(
-      "FAIL C18 the edge config is unreadable: the enabled sites directory is not inside sites/",
+      "FAIL C18 the enabled sites directory is not inside sites/",
     );
     expect(
       await c18((text) =>
@@ -2096,7 +2123,7 @@ describe("preflight", () => {
     // ADR 0032 Decision 3: exactly the three file binds, each read-only from dev/ by its own name; no directory.
     const appMount = "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
     const pdsMount = "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
-    const unreadable = "FAIL C18 the edge config is unreadable: ";
+    const unreadable = "FAIL C18 ";
     cases.push(
       // P1.38g: no directory at the enabled sites under dev, alone or beside the binds.
       [
@@ -2147,43 +2174,16 @@ describe("preflight", () => {
     expect(await c18(app("./edge/dev/../sites/pds.caddy"))).toBe(
       `${unreadable}app.caddy: not mounted from dev/app.caddy`,
     );
-    // The dev (tls) itself: anything but the leaf's two files fails, an issuer and Caddy's internal CA included.
-    for (const other of [
-      "(tls) {\n\ttls internal\n}\n",
-      "(tls) {\n\ttls {\n\t\tissuer acme {\n\t\t\tdir https://acme-v02.api.letsencrypt.org/directory\n\t\t}\n\t}\n}\n",
-      "(tls) {\n\ttls /run/secrets/dev_tls_key /run/secrets/dev_tls_cert\n}\n",
-    ]) {
-      expect(await c18(same, { "deployment/edge/dev/tls.caddy": other }), other).toBe(
-        "FAIL C18 the dev (tls) is not the self-signed leaf's files",
-      );
-    }
-    // No :80 site under dev.
-    const plain = readFileSync(join(EDGE_DIR, "dev/pds.caddy"), "utf8").replace(
-      "{$PDS_HOST} {",
-      "http://{$PDS_HOST} {",
-    );
-    expect(await c18(same, { "deployment/edge/dev/pds.caddy": plain })).toMatch(
-      /^FAIL C18 \{\$PDS_HOST\}: a plain-http dev site/,
-    );
-    // Both dev sites stay bound to the newt_edge address alone, the listener P1.36j's trusted proxy names.
-    for (const name of ["app", "pds"]) {
-      const site = readFileSync(join(EDGE_DIR, `dev/${name}.caddy`), "utf8");
-      expect(site).toContain("\tbind 10.250.37.3\n");
-      expect(
-        await c18(same, { [`deployment/edge/dev/${name}.caddy`]: site.replace("\tbind 10.250.37.3\n", "") }),
-      ).toMatch(/^FAIL C18 \{\$(APP|PDS)_HOST\}: not bound to the edge's newt_edge address alone/);
-    }
+    // What the dev files say is Caddy's to show since P1.39e: another (tls), a plain-http site and a site off the
+    // newt_edge address each change the adapted config, and adapted-rules.test.ts holds a red for each ("an issuer
+    // beside the leaf", "another leaf file", "a plain-http listener", "a dev site on every address").
     // The app site takes only its ruled name under dev.
     expect(await c18((t) => t.replace("APP_HOST: staging.unset.sh", "APP_HOST: other.unset.sh"))).toMatch(
-      /^FAIL C18 the edge config is unreadable: \{\$APP_HOST\} is not the dev app site's ruled value/,
+      /^FAIL C18 \{\$APP_HOST\} is not the dev app site's ruled value/,
     );
-    // Prod is unchanged: the shipped sites with Let's Encrypt, and a file certificate fails.
+    // Prod is unchanged: the shipped sites with Let's Encrypt (a file certificate there is adapted-rules.test.ts's
+    // "a file certificate under prod").
     expect(await c18(same, {}, "prod")).toBe("PASS C18 ok");
-    const file = "{$PDS_HOST} {\n\ttls /run/secrets/x_cert /run/secrets/x_key\n";
-    const shipped = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8").replace("{$PDS_HOST} {\n", file);
-    expect(await c18(same, { "deployment/edge/sites/pds.caddy": shipped }, "prod")).toMatch(
-      /\{\$PDS_HOST\}: a file certificate outside dev and local/,
-    );
   });
 
   test("c18_pds_host_is_the_pds_hostname_in_every_env", async () => {
@@ -3110,6 +3110,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      EDGE_NOT_RUN,
     ]);
     const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
     symlinkSync(join(folder.root, "deployment/images"), join(folder.root, "deployment/linked"));
@@ -3121,6 +3122,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C2 web has a build; dev and prod run only registry images",
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      EDGE_NOT_RUN,
     ]);
   });
 
@@ -3422,13 +3424,12 @@ describe("preflight C32 (P1.38d)", () => {
       expect(await expectOnly("C32", withWeb(env, PLACEHOLDERS), env), env).toBe(
         "FAIL C32 service=web still a placeholder to fill: SUPPORT_EMAIL, PRIVACY_OFFICER_TITLE",
       );
-      // In any service.
-      const edge = (env === "dev" ? DEV : COMPOSE).replace(
-        "      ACME_EMAIL: edge@example.test",
-        '$&\n      CONTACT: "[to fill: CONTACT]"',
-      );
-      expect(await expectOnly("C32", { compose: edge, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
-        "FAIL C32 service=edge still a placeholder to fill: a name",
+      // In any service (the PDS here: C18 refuses any name on the edge beside its own, P1.39e).
+      const base = env === "dev" ? DEV : COMPOSE;
+      const pds = base.replace(/^ {6}PDS_HOSTNAME: .*$/m, '$&\n      CONTACT: "[to fill: CONTACT]"');
+      expect(pds).not.toBe(base);
+      expect(await expectOnly("C32", { compose: pds, ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}) }, env), env).toBe(
+        "FAIL C32 service=pds still a placeholder to fill: a name",
       );
     }
   });
@@ -3472,6 +3473,68 @@ describe("preflight C32 (P1.38d)", () => {
 
 // P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
 // stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
+describe("preflight C33 the PDS's blobs in the object store (P2.18p)", () => {
+  const dev = (pdsEnv: Record<string, string | null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...pdsEnv } });
+
+  test("pds_s3_only_internal_store", async () => {
+    expect(failed((await check(dev({}), "dev")).lines)).toEqual([]);
+    const wrong: [string, string | null][] = [
+      ["PDS_BLOBSTORE_S3_BUCKET", null],
+      ["PDS_BLOBSTORE_S3_BUCKET", "unset-private"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", null],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "https://s3.amazonaws.com"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "http://objects:8333/"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "http://objects:8888"],
+      ["PDS_BLOBSTORE_S3_REGION", null],
+      ["PDS_BLOBSTORE_S3_REGION", "eu-west-1"],
+      ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", null],
+      ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", "false"],
+    ];
+    for (const [name, value] of wrong) {
+      const line = await expectOnly("C33", dev({ [name]: value }), "dev");
+      expect(line, `${name}=${value}`).toBe(`FAIL C33 ${name} is not the pinned value`);
+    }
+    // Either half of the key pair missing or empty: C33 says which, and C30 misses the name when it is absent.
+    for (const name of ["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"]) {
+      const { lines } = await check(dev({ [name]: null }), "dev");
+      expect(lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+        `FAIL C30 ${name} is missing from the pds env file`,
+        `FAIL C33 ${name} is not set`,
+      ]);
+      expect(await expectOnly("C33", dev({ [name]: "" }), "dev")).toBe(`FAIL C33 ${name} is not set`);
+    }
+    // No AWS_ name reaches the PDS, in any case, from the compose file or pds.env; a name that is not one of ours is
+    // not printed. A value is never printed.
+    const aws = await check({ ...dev({}), pdsEnvFile: "AWS_PROFILE=other\n" }, "dev");
+    expect(aws.lines).toContain("FAIL C33 AWS_PROFILE is set for the PDS");
+    for (const name of ["AWS_ENDPOINT_URL_S3", "AWS_REGION", "aws_access_key_id"]) {
+      const line = (await check(dev({ [name]: "x" }), "dev")).lines.find((l) => l.startsWith("FAIL C33"));
+      expect(line, name).toBe(`FAIL C33 ${name === "aws_access_key_id" ? "an AWS_ name" : name} is set for the PDS`);
+    }
+    const all = (await check(dev({ PDS_BLOBSTORE_S3_ENDPOINT: "https://canary-7f3c.example" }), "dev")).lines;
+    expect(all.join("\n")).not.toContain("canary");
+  });
+
+  test("pds_s3_and_disk_refused", async () => {
+    for (const location of ["/home/node/blocks", ""]) {
+      expect(await expectOnly("C33", dev({ PDS_BLOBSTORE_DISK_LOCATION: location }), "dev"), location).toBe(
+        "FAIL C33 PDS_BLOBSTORE_DISK_LOCATION is set beside the object store",
+      );
+    }
+    // Under prod the store is not pinned yet (P5.01), so the fixture's disk-less prod PDS passes as skipped.
+    expect((await check()).lines).toContain("PASS C33 skipped: P5.01 pins the production store");
+  });
+
+  test("prod_pds_env_holds_no_store_key_pair", async () => {
+    // P5.01 picks prod's store, so until then the key pair in prod's pds.env is a stray secret (C30).
+    const { lines } = await check({ store: true });
+    expect(failed(lines)).toEqual(["C30"]);
+    expect(lines).toContain(
+      "FAIL C30 PDS_BLOBSTORE_S3_ACCESS_KEY_ID is in the pds env file, which under prod holds only its set",
+    );
+  });
+});
+
 describe("preflight C22 pinned upload bounds (P1.36p)", () => {
   const PINNED_TMP = '"/tmp:uid=1000,gid=1000,mode=1777,size=20m"';
   const devWith = (pdsEnv: Record<string, string | null>, tmpfs = `    tmpfs: [${PINNED_TMP}]\n`): Stack => ({
@@ -3480,10 +3543,16 @@ describe("preflight C22 pinned upload bounds (P1.36p)", () => {
   });
 
   test("c22_temp_blob_location_set_fails", async () => {
+    // A disk key beside the object store fails C33 too (P2.18p).
     for (const location of ["/tmp/pds/blobs", "/home/node/tempt", ""]) {
-      expect(await expectOnly("C22", devWith({ PDS_BLOBSTORE_DISK_TMP_LOCATION: location }), "dev"), location).toBe(
+      const { lines } = await check(devWith({ PDS_BLOBSTORE_DISK_TMP_LOCATION: location }), "dev");
+      expect(
+        lines.filter((l) => l.startsWith("FAIL")),
+        location,
+      ).toEqual([
         "FAIL C22 PDS_BLOBSTORE_DISK_TMP_LOCATION is set",
-      );
+        "FAIL C33 PDS_BLOBSTORE_DISK_TMP_LOCATION is set beside the object store",
+      ]);
     }
   });
 
@@ -4216,6 +4285,26 @@ networks:
       };
       expect(await onLocal(linked), entry).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
     }
+    // P1.39c (Codex on #1609): the CA key hard-linked into the edge's build context. C18 builds the edge only when the
+    // whole of C26 passes, so the alias is never sent to the daemon: no build, no run.
+    const alias = (root: string) => {
+      mkdirSync(join(root, "deployment/edge/fonts"), { recursive: true });
+      linkSync(join(folder(root), "root.key"), join(root, "deployment/edge/fonts/alias.txt"));
+    };
+    const { run, calls } = fakeRun();
+    const { lines } = await local((text) => text, { setUp: alias, deps: { run } });
+    expect(c26(lines)).toMatch(/^FAIL C26 dev CA file has extra hard links: /);
+    expect(lines).toContain("FAIL C18 the edge image was not built: C26 does not pass");
+    const edgeCalls = calls.filter(([file, verb]) => file === "docker" && (verb === "build" || verb === "run"));
+    expect(edgeCalls).toEqual([]);
+    // Run with no C26 outcome before it, or after a C26 that failed, C18 builds nothing: it fails closed.
+    const failing: Check = { id: "C26", run: () => fail("x") };
+    for (const checks of [[c18], [failing, c18]]) {
+      const lone = fakeRun();
+      const alone = await local((text) => text, { deps: { run: lone.run, checks } });
+      expect(alone.lines).toContain("FAIL C18 the edge image was not built: C26 does not pass");
+      expect(lone.calls.filter(([f, verb]) => f === "docker" && (verb === "build" || verb === "run"))).toEqual([]);
+    }
     // N1: a link inside the folder, here to a folder outside it, is never followed.
     const pointing = (root: string) => {
       mkdirSync(join(dirname(root), "outside"));
@@ -4467,6 +4556,7 @@ networks:
       });
       expect(lines.filter((line) => /C26/.test(line))).toEqual([
         `FAIL C26 dev CA file has extra hard links: ${printable(path)}`,
+        "FAIL C18 the edge image was not built: C26 does not pass",
       ]);
       expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
     }
@@ -4700,7 +4790,7 @@ networks:
       "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
     );
     expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/dev/pds.caddy:"))).toBe(
-      "FAIL C18 the edge config is unreadable: pds.caddy: not mounted from sites/pds.caddy",
+      "FAIL C18 pds.caddy: not mounted from sites/pds.caddy",
     );
   });
 
@@ -5184,8 +5274,9 @@ networks:
     expect(code).toBe(0);
   });
 
-  test("local_c30_four_names", async () => {
-    // P1.36q red 5: one env per host, so a six-name pds.env under --env local fails, beside C11's and C19's refusals.
+  test("local_c30_refuses_the_mail_urls", async () => {
+    // P1.36q red 5: one env per host, so under --env local a pds.env with the mail URLs beside its set (the four secrets
+    // and, from P2.18p, the store's key pair) fails, beside C11's and C19's refusals.
     const mail = {
       PDS_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
       PDS_MODERATION_EMAIL_SMTP_URL: "smtps://m.test",
@@ -5193,6 +5284,52 @@ networks:
     const { lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...mail } });
     expect(failed(lines)).toEqual(["C11", "C19", "C30"]);
     expect(lines).toContain("FAIL C30 PDS_EMAIL_SMTP_URL is in the pds env file, which under local holds only its set");
+  });
+
+  test("local_pds_store_is_pinned", async () => {
+    // P2.18p: under local, C30 wants the store's key pair in pds.env and C33 pins the rest, as under dev.
+    const bare = await local((text) => text, { store: false });
+    expect(failed(bare.lines)).toEqual(["C30", "C33"]);
+    expect(bare.lines).toContain("FAIL C30 PDS_BLOBSTORE_S3_ACCESS_KEY_ID is missing from the pds env file");
+    expect(bare.lines).toContain("FAIL C33 PDS_BLOBSTORE_S3_BUCKET is not the pinned value");
+    const empty = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: "" } });
+    expect(failed(empty.lines)).toEqual(["C33"]);
+    expect(empty.lines).toContain("FAIL C33 PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY is not set");
+    const elsewhere = await local((text) => text, {
+      pdsEnv: { ...LOCAL_ENV, PDS_BLOBSTORE_S3_ENDPOINT: "http://web:3000" },
+    });
+    expect(failed(elsewhere.lines)).toEqual(["C33"]);
+  });
+
+  test("local_store_beside_the_pds_is_built_from_its_dockerfile", async () => {
+    // P2.18p: under local the store is known by its build of deployment/images/objects.Dockerfile, the only way it
+    // may share objects_pds with the PDS; an image under its name, or another Dockerfile, is refused.
+    const OBJECTS = "deployment/images/objects.Dockerfile";
+    const withStore = (store: string) => (text: string) =>
+      text
+        .replace(
+          "    env_file: ../../unset-dev-env/pds.env\n",
+          "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, objects_pds]\n",
+        )
+        .replace("networks:\n  back: {}\n", `networks:\n  back: {}\n  objects_pds:\n    internal: true\n`)
+        .replace("secrets:\n  db_password:", `${store}secrets:\n  db_password:`);
+    const built = (dockerfile: string) =>
+      `  objects:\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n    networks: [objects_pds]\n`;
+    const files = { [OBJECTS]: "FROM scratch\n", "deployment/images/other.Dockerfile": "FROM scratch\n" };
+    const c17 = async (store: string) =>
+      (
+        await local(withStore(store), {
+          files: { ...LOCAL_FILES, ...files },
+          networks: { ...TABLE, objects_pds: { internal: true, members: ["pds", "objects"] } },
+        })
+      ).lines.find((l) => / C17 /.test(l));
+    expect(await c17(built(OBJECTS))).toBe("PASS C17 ok");
+    expect(await c17(built("deployment/images/other.Dockerfile"))).toBe(
+      "FAIL C17 objects shares a network with the pds",
+    );
+    expect(await c17("  objects:\n    image: o\n    networks: [objects_pds]\n")).toBe(
+      "FAIL C17 objects shares a network with the pds",
+    );
   });
 
   test("local_any_smtp_key_refused", async () => {
@@ -5260,7 +5397,7 @@ networks:
       "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
     );
     expect(await c18((text) => text.replace("./edge/local/app.caddy:", "./edge/dev/app.caddy:"))).toBe(
-      "FAIL C18 the edge config is unreadable: app.caddy: not mounted from local/app.caddy",
+      "FAIL C18 app.caddy: not mounted from local/app.caddy",
     );
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
@@ -5286,11 +5423,6 @@ networks:
           ),
       ),
     ).toBe("FAIL C18 the edge reads a secret other than the dev leaf's");
-    // The reader's local mode: the snippet C18 judges is local/tls.caddy, not the shipped snippets/tls.caddy.
-    const broken = await local((text) => text, {
-      files: { "deployment/edge/local/tls.caddy": "this is { not caddy\n" },
-    });
-    expect(broken.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable: /);
     expect(
       await c18((text) =>
         text.replace("secrets: [local_tls_cert, local_tls_key]", "secrets: [local_tls_cert, db_password]"),
@@ -5341,10 +5473,10 @@ networks:
         "FAIL C18 input missing: the edge's site mounts in /etc/caddy/sites/enabled",
         (text) => text.replace(pds, "").replace(app, ""),
       ],
-      ["FAIL C18 the edge config is unreadable: app.caddy: not mounted", (text) => text.replace(app, "")],
-      ["FAIL C18 the edge config is unreadable: pds.caddy: not mounted", (text) => text.replace(pds, "")],
+      ["FAIL C18 app.caddy: not mounted", (text) => text.replace(app, "")],
+      ["FAIL C18 pds.caddy: not mounted", (text) => text.replace(pds, "")],
       [
-        "FAIL C18 the edge config is unreadable: second.caddy: not a site the local stack mounts",
+        "FAIL C18 second.caddy: not a site the local stack mounts",
         (text) => text.replace(app, `${app}${app.replace("enabled/app", "enabled/second")}`),
       ],
       [
@@ -5362,6 +5494,21 @@ networks:
     expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/pds.caddy/x.caddy:"))).toBe(
       "FAIL C18 check error",
     );
+    // P1.39e: the reader's own tests held these two until it was deleted (a_linked_mount_fails,
+    // two_mounts_at_one_target_fail). A site's source is one regular file, never a link, even a link to the right
+    // file; and no site file is mounted under two names.
+    const linked = await local((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/link.caddy:"), {
+      links: { "deployment/edge/sites/link.caddy": "pds.caddy" },
+    });
+    expect(linked.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 pds.caddy: the mount is not one regular file",
+    );
+    expect(await c18((text) => text.replace(pds, `${pds}${pds}`))).toBe("FAIL C18 pds.caddy: mounted more than once");
+    // A file named app.caddy in sites/ would be enabled under the mounted app site's own name.
+    const collided = await local((text) => text, { files: { "deployment/edge/sites/app.caddy": "# a site\n" } });
+    expect(collided.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 app.caddy: an enabled site has the mounted app site's name",
+    );
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(await c18((text) => text.replace(tls, ""))).toBe("FAIL C18 the TLS snippet is not mounted");
     expect(
@@ -5375,26 +5522,13 @@ networks:
   test("local_c18_serves_only_the_leaf_snippet", async () => {
     const c18 = async (edit: (text: string) => string, files: Record<string, string> = {}) =>
       (await local(edit, { files })).lines.find((line) => / C18 /.test(line));
-    const site = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8");
-    const leaf = readFileSync(join(EDGE_DIR, "local/tls.caddy"), "utf8");
     // Without its mount Caddy serves snippets/tls.caddy, which is not what C18 read under local.
     expect(
       await c18((text) => text.replace("      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n", "")),
     ).toBe("FAIL C18 the TLS snippet is not mounted");
-    expect(await c18((text) => text, { "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "") })).toBe(
-      "FAIL C18 {$PDS_HOST}: does not import tls",
-    );
-    expect(
-      await c18((text) => text, {
-        "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "$&\ttls internal\n"),
-      }),
-    ).toBe("FAIL C18 {$PDS_HOST}: has its own tls directive");
-    expect(
-      await c18((text) => text, {
-        "deployment/edge/local/tls.caddy": leaf.replace("(tls) {", "(tls-leaf) {"),
-        "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n",
-      }),
-    ).toBe("FAIL C18 the (tls) snippet served is not local/tls.caddy");
+    // A site without the (tls), with a tls of its own, or a (tls) from another file is Caddy's to show since P1.39e:
+    // each changes the adapted config (adapted-rules.test.ts: "an issuer beside the leaf", "another leaf file",
+    // "a second leaf").
     // The #789 verify's pins (E7, E9, E10): the snippet's mount twice, another local/ file at its target, and the
     // leaf reached through a link inside local/.
     const mount = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
@@ -5418,14 +5552,6 @@ networks:
     expect(
       await c18((text) => text.replace("      context: ./edge\n      dockerfile: Dockerfile\n", OFF_CONTEXT_EDGE)),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
-    // With snippets/tls.caddy gone, the reader reads no leaf in its place, so another file's (tls) is what it judged.
-    const gone = await local((text) => text, {
-      remove: ["deployment/edge/snippets/tls.caddy"],
-      files: { "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n" },
-    });
-    expect(gone.lines.find((line) => / C18 /.test(line))).toBe(
-      "FAIL C18 the (tls) snippet served is not local/tls.caddy",
-    );
   });
 
   test("dev_and_prod_still_refuse_the_local_file_mounts", async () => {
@@ -5443,7 +5569,7 @@ networks:
       const devLine =
         file === "tls.caddy"
           ? "FAIL C18 the edge mounts /etc/caddy/snippets/tls.caddy more than once"
-          : "FAIL C18 the edge config is unreadable: app.caddy: not mounted from dev/app.caddy";
+          : "FAIL C18 app.caddy: not mounted from dev/app.caddy";
       for (const [env, s, line] of [
         [
           "dev",
@@ -5603,5 +5729,337 @@ describe("--source builds staging from the checkout (P1.37y)", () => {
     expect(await run("prod", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
     expect(await run("local", ["--source"])).toEqual(["ERROR --source is for --env dev only"]);
     expect(await run("dev", ["--source", "--source"])).toEqual(["ERROR --source may be given once"]);
+  });
+});
+
+// P1.39c (ADR 0046 decision 4): after its compose rules, C18 runs `caddy adapt` in the edge image and holds what it
+// prints to the reviewed adapted config and the rules on it. The image is the lock's by digest, only after C2 to C5
+// passed, or the edge's own build; the container can reach and write nothing, and a failure is fixed words.
+describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
+  type Reply = Awaited<ReturnType<Run>>;
+  /** fakeRun, with `answer` deciding C18's docker calls (`pull`, `build`, `run`) when it returns one. */
+  function edgeRun(
+    answer: (args: string[], env: Readonly<Record<string, string>>) => Reply | null | Promise<Reply | null>,
+  ) {
+    const { run, calls } = fakeRun();
+    const envs: Readonly<Record<string, string>>[] = [];
+    const wrapped: Run = async (file, args, signal, env) => {
+      const edge = file === "docker" && ["pull", "build", "run"].includes(args[0] ?? "");
+      if (!edge) return run(file, args, signal, env);
+      calls.push([file, ...args]);
+      envs.push(env ?? {});
+      return (await answer(args, env ?? {})) ?? (edgeImageAnswer(args, env) as Reply);
+    };
+    return { run: wrapped, calls, envs };
+  }
+  const edgeCalls = (calls: string[][]) =>
+    calls.filter(([file, verb]) => file === "docker" && ["pull", "build", "run"].includes(verb ?? ""));
+  const HARDENED = [
+    ...["docker", "run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--cap-drop", "ALL"],
+    ...["--cap-add", "NET_BIND_SERVICE", "--security-opt", "no-new-privileges", "--user", "65532:65532"],
+    ...["--entrypoint", "caddy"],
+  ];
+  const ADAPT = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"];
+  const VALUES = { PDS_HOST: "pds.example.test", PDS_UPSTREAM: "pds:3000", ACME_EMAIL: "edge@example.test" };
+  const only = (answer: Reply) => (args: string[]) => (args[0] === "run" ? answer : null);
+
+  test("c18_adapts_in_the_locks_edge_with_nothing_to_reach_or_write", async () => {
+    const { run, calls, envs } = edgeRun(() => null);
+    const result = await check({}, "prod", { run });
+    expect(result.lines).toContain("PASS C18 ok");
+    const [pull, adapt, ...more] = edgeCalls(calls);
+    // The lock's reference by digest, pulled, then run with no pull of its own; no other image, no other call.
+    expect(pull).toEqual(["docker", "pull", EDGE]);
+    expect(more).toEqual([]);
+    expect(adapt?.map((arg) => arg.replace(/^\/.*\/deployment\/edge\//, "edge/"))).toEqual([
+      ...HARDENED,
+      ...["-v", "edge/sites/enabled:/etc/caddy/sites/enabled:ro"],
+      ...["-e", "PDS_HOST", "-e", "PDS_UPSTREAM", "-e", "ACME_EMAIL"],
+      EDGE,
+      ...ADAPT,
+    ]);
+    expect(adapt?.find((arg) => arg.endsWith(":ro"))?.startsWith("/")).toBe(true);
+    // The values reach the client by name: in its environment, never in its arguments.
+    expect(envs.at(-1)).toEqual(VALUES);
+    for (const value of Object.values(VALUES)) expect(adapt?.some((arg) => arg.includes(value))).toBe(false);
+  });
+
+  test("c18_dev_mounts_its_three_files_and_names_five_values", async () => {
+    const { run, calls } = edgeRun(() => null);
+    const result = await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev", { run });
+    expect(result.lines).toContain("PASS C18 ok");
+    const adapt = edgeCalls(calls).find(([, verb]) => verb === "run") ?? [];
+    expect(adapt.slice(0, HARDENED.length)).toEqual(HARDENED);
+    expect(adapt.filter((arg) => arg.includes(":/etc/caddy/")).map((arg) => arg.replace(/^.*\/edge\//, ""))).toEqual([
+      "dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro",
+      "dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro",
+      "dev/tls.caddy:/etc/caddy/snippets/tls.caddy:ro",
+    ]);
+    expect(adapt.filter((_arg, at) => adapt[at - 1] === "-e")).toEqual(
+      expect.arrayContaining(["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL", "APP_HOST", "APP_UPSTREAM"]),
+    );
+  });
+
+  test("c18_without_docker_fails", async () => {
+    const gone: Reply = { code: 1, stdout: "", stderr: "run failed", missing: true };
+    const { run, calls } = edgeRun(() => gone);
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 docker is not installed, so the edge config could not be adapted");
+    // The pull failed, so nothing was run.
+    expect(edgeCalls(calls).map(([, verb]) => verb)).toEqual(["pull"]);
+  });
+
+  test("c18_pull_failure_runs_nothing", async () => {
+    const { run, calls } = edgeRun((args) => (args[0] === "pull" ? { code: 1, stdout: "", stderr: "denied" } : null));
+    const result = await check({}, "prod", { run });
+    expect(result.lines).toContain("FAIL C18 the edge image could not be pulled");
+    expect(edgeCalls(calls).map(([, verb]) => verb)).toEqual(["pull"]);
+  });
+
+  test("c18_caddy_failure_is_fixed_words_without_its_stderr", async () => {
+    // Caddy's errors quote the config, values included; nothing it prints is repeated.
+    const stderr = "Error: adapting config: pds.example.test: unrecognized directive: probe";
+    const { run } = edgeRun(only({ code: 1, stdout: "probe-stdout", stderr }));
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 caddy adapt failed in the edge image");
+    expect(result.lines.join("\n")).not.toMatch(/unrecognized|probe/);
+  });
+
+  test("c18_output_that_is_not_json_fails", async () => {
+    for (const stdout of ["", "not json", '{"apps":']) {
+      const { run } = edgeRun(only({ code: 0, stdout, stderr: "" }));
+      const result = await check({}, "prod", { run });
+      expect(result.lines, stdout).toContain("FAIL C18 caddy adapt printed no JSON config");
+    }
+  });
+
+  test("c18_config_other_than_the_reviewed_one_fails", async () => {
+    // What the image adapts differs from the reviewed file by one value: the admin API is on.
+    const reviewed = edgeImageAnswer(["run", "adapt"], VALUES)?.stdout ?? "";
+    const config = JSON.parse(reviewed) as { admin: { disabled: boolean } };
+    config.admin.disabled = false;
+    const { run } = edgeRun(only({ code: 0, stdout: JSON.stringify(config), stderr: "" }));
+    const result = await check({}, "prod", { run });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines).toContain("FAIL C18 the edge config Caddy adapts is not the reviewed one");
+  });
+
+  test("c18_sentinel_withheld_end_to_end", async () => {
+    // A configured value where no rule expects it. The rules' messages hold no value (P1.39b), and the runner
+    // withholds a reason that does (P1.30m), so whatever C18 says, the value is not printed.
+    const sentinel = "sentinelhost.example.test";
+    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`).replace(
+      "      PDS_HOSTNAME: pds.example.test",
+      `      PDS_HOSTNAME: ${sentinel}`,
+    );
+    const reviewed = edgeImageAnswer(["run", "adapt"], { ...VALUES, PDS_HOST: sentinel })?.stdout ?? "";
+    const config = JSON.parse(reviewed) as Record<string, unknown>;
+    config.storage = { root: sentinel };
+    const { run } = edgeRun(only({ code: 0, stdout: JSON.stringify(config), stderr: "" }));
+    const result = await check({ compose }, "prod", { run });
+    expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 /);
+    expect(result.lines.join("\n")).not.toContain(sentinel);
+  });
+
+  test("c18_values_are_judged_before_any_run", async () => {
+    // P1.39e: a value that does not fit its shape, or is missing, fails in placeholder names before the edge image
+    // is pulled or run, and is never printed (the reader refused these until then).
+    const sentinel = "c18 sentinel!never printed";
+    for (const name of ["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL"] as const) {
+      for (const value of [sentinel, `${VALUES[name]}${sentinel}`, null]) {
+        const line = `      ${name}: ${VALUES[name]}\n`;
+        expect(COMPOSE).toContain(line);
+        const compose = COMPOSE.replace(line, value === null ? "" : `      ${name}: "${value}"\n`);
+        const { run, calls } = edgeRun(() => null);
+        const result = await check({ compose }, "prod", { run });
+        const c18 = result.lines.find((l) => / C18 /.test(l)) ?? "";
+        expect(c18, `${name}=${value}`).toMatch(/^FAIL C18 /);
+        expect(result.lines.join("\n")).not.toContain(sentinel);
+        expect(edgeCalls(calls), `${name}=${value}`).toEqual([]);
+      }
+    }
+  });
+
+  test("c18_dev_values_are_judged_before_any_run", async () => {
+    // The same under dev, where the app's two values are also the ruled ones exactly.
+    const dev = { pdsEnv: DEV_ENV };
+    const edits: [string, string][] = [
+      ["      APP_UPSTREAM: web:8080\n", "      APP_UPSTREAM: web:8081\n"],
+      ["      APP_UPSTREAM: web:8080\n", ""],
+      ["      APP_HOST: staging.unset.sh\n", '      APP_HOST: "staging.unset.sh c18 sentinel!"\n'],
+    ];
+    for (const [from, to] of edits) {
+      expect(DEV).toContain(from);
+      const { run, calls } = edgeRun(() => null);
+      const result = await check({ ...dev, compose: DEV.replace(from, to) }, "dev", { run });
+      expect(result.lines.find((l) => / C18 /.test(l)) ?? "", to).toMatch(/^FAIL C18 /);
+      expect(result.lines.join("\n")).not.toContain("c18 sentinel!");
+      expect(edgeCalls(calls), to).toEqual([]);
+    }
+  });
+
+  test("c18_edge_environment_holds_only_its_placeholders", async () => {
+    // Caddy replaces `{$NAME}` from its process environment before it lexes, and an unset name with no default
+    // becomes nothing (v2.11.7 caddyconfig/caddyfile/parse.go:63-64, replaceEnvVars :67-108). `caddy adapt` is given
+    // the five names only, so a name beside them on the edge service would be read by the running edge and by no
+    // check: a placeholder for it adapts to the reviewed config and expands at run time. The reader refused such a
+    // placeholder; since P1.39e C18 refuses the name, from `environment` or an env file, before any run.
+    const reason = "FAIL C18 the edge's environment sets a name other than its five placeholders";
+    const line = "      PDS_UPSTREAM: pds:3000\n";
+    const extra = `${line}      EXTRA_UPSTREAM: evil:9\n`;
+    const cases: [Parameters<typeof check>[0], "prod" | "dev"][] = [
+      [{ compose: COMPOSE.replace(line, extra) }, "prod"],
+      [{ compose: DEV.replace(line, extra), pdsEnv: DEV_ENV }, "dev"],
+      [
+        {
+          compose: COMPOSE.replace(
+            "    environment:\n      PDS_HOST:",
+            "    env_file: ../../unset-dev-env/pds.env\n$&",
+          ),
+        },
+        "prod",
+      ],
+    ];
+    for (const [stackOf, env] of cases) {
+      const { run, calls } = edgeRun(() => null);
+      const result = await check(stackOf, env, { run });
+      expect(result.lines.find((l) => / C18 /.test(l))).toBe(reason);
+      expect(edgeCalls(calls)).toEqual([]);
+    }
+  });
+
+  test("c18_rules_judge_the_adapted_config_beside_the_reviewed_file", async () => {
+    // The reviewed file itself is changed to turn the admin API on, and the image adapts exactly that: equal, and
+    // still refused by the rules on the adapted config.
+    const { root, file } = stack({});
+    const path = join(root, "deployment/edge/adapted/prod.generated.json");
+    const config = JSON.parse(readFileSync(path, "utf8")) as { admin: { disabled: boolean } };
+    config.admin.disabled = false;
+    writeFileSync(path, JSON.stringify(config));
+    let stdout = JSON.stringify(config);
+    for (const [name, value] of Object.entries(VALUES)) {
+      stdout = stdout.replaceAll(SENTINELS[name as keyof typeof VALUES], value);
+    }
+    const { run } = edgeRun(only({ code: 0, stdout, stderr: "" }));
+    const result = await preflight(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(failed(result.lines)).toEqual(["C18"]);
+    expect(result.lines.find((line) => line.startsWith("FAIL C18"))).toMatch(/admin/);
+  });
+
+  test("c18_missing_reviewed_config_fails_before_any_run", async () => {
+    const { root, file } = stack({});
+    rmSync(join(root, "deployment/edge/adapted/prod.generated.json"));
+    const { run, calls } = edgeRun(() => null);
+    const result = await preflight(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(result.lines).toContain("FAIL C18 input missing: deployment/edge/adapted/prod.generated.json");
+    expect(edgeCalls(calls)).toEqual([]);
+  });
+
+  test("c18_failed_image_check_means_no_run", async () => {
+    // C5 fails (a platform manifest), then C3 and C4 (a signature): the lock's edge is neither pulled nor run.
+    const c5 = fakeRun({ mediaType: "application/vnd.oci.image.manifest.v1+json" });
+    const c3 = fakeRun({ verify: { code: 1, stderr: "edge: signature does not verify: bad\n" } });
+    for (const { run, calls } of [c5, c3]) {
+      const result = await check({}, "prod", { run });
+      expect(result.lines).toContain(EDGE_NOT_RUN);
+      expect(edgeCalls(calls)).toEqual([]);
+    }
+    // Called with no earlier outcomes at all, C18 reads that as nothing having passed.
+    const { root, file } = stack({});
+    const { run, calls } = fakeRun();
+    const { inputs } = loadInputs(["--env", "prod", "--compose", file], { root, run, ...fakeFs(root) });
+    expect(await c18.run(inputs, AbortSignal.timeout(5_000))).toEqual(fail(EDGE_NOT_RUN.slice("FAIL C18 ".length)));
+    const unsignedOnly = new Map(IMAGE_CHECKS.map((id) => [id, { pass: true, reason: "ok", unsigned: true as const }]));
+    expect((await c18.run(inputs, AbortSignal.timeout(5_000), unsignedOnly)).pass).toBe(false);
+    expect(edgeCalls(calls)).toEqual([]);
+  });
+
+  test("c18_deadline_is_its_own_and_a_hung_run_times_out", async () => {
+    // Ten minutes, set on the check; the run's own timeout (a test's 20 ms here) does not shorten it.
+    expect(c18.timeoutMs).toBe(600_000);
+    const slow = edgeRun(async (args) => {
+      if (args[0] === "run") await new Promise((done) => setTimeout(done, 100));
+      return null;
+    });
+    const passed: Check[] = IMAGE_CHECKS.map((id) => ({ id, run: () => pass() }));
+    const patient = await check({}, "prod", { run: slow.run, timeoutMs: 20, checks: [...passed, c18] });
+    expect(patient.lines).toContain("PASS C18 ok");
+    // With a short deadline in its definition, a run that never answers fails as timed out.
+    const hung = edgeRun((args) => (args[0] === "run" ? Promise.withResolvers<Reply>().promise : null));
+    const checks = CHECKS.map((each) => (each.id === "C18" ? { ...each, timeoutMs: 30 } : each));
+    const result = await check({}, "prod", { run: hung.run, checks });
+    expect(result.lines).toContain("FAIL C18 timed out");
+  });
+
+  test("a_later_check_cannot_change_an_earlier_outcome", async () => {
+    // The outcomes handed to a check are frozen: one that tries to turn an earlier failure into a pass throws, which
+    // is its own failure, and the next check still sees the failure.
+    const seen: (boolean | undefined)[] = [];
+    const checks: Check[] = [
+      { id: "C2", run: () => fail("not verified") },
+      {
+        id: "X1",
+        run: (_inputs, _signal, earlier) => {
+          const first = earlier?.get("C2") as Outcome;
+          first.pass = true;
+          return pass();
+        },
+      },
+      {
+        id: "X2",
+        run: (_inputs, _signal, earlier) => {
+          seen.push(earlier?.get("C2")?.pass);
+          (earlier as Map<string, Outcome>).set("C2", pass());
+          return pass();
+        },
+      },
+      { id: "X3", run: (_inputs, _signal, earlier) => (seen.push(earlier?.get("C2")?.pass), pass()) },
+    ];
+    const result = await check({}, "prod", { checks });
+    expect(result.lines).toEqual(["FAIL C2 not verified", "FAIL X1 check error", "PASS X2 ok", "PASS X3 ok"]);
+    // X2 replaced the entry in its own copy of the map only.
+    expect(seen).toEqual([false, false]);
+  });
+
+  test("c18_built_edge_is_built_then_run_with_the_same_hardening", async () => {
+    // dev --source with the edge built from its Dockerfile: no pull, the build's id is what runs, flags unchanged.
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    const { root, file } = stack({
+      compose: DEV.replace(`    image: ${EDGE}\n`, edgeBuild),
+      pdsEnv: DEV_ENV,
+      report: PART_A_DONE,
+      networks: DEV_TABLE,
+      files: { "deployment/edge/Dockerfile": "FROM scratch\n" },
+    });
+    const { run, calls } = edgeRun(() => null);
+    const result = await runPreflight(["--env", "dev", "--compose", file, "--source"], { root, run, ...fakeFs(root) });
+    expect(result.lines).toContain("PASS C18 ok");
+    const [build, adapt, ...more] = edgeCalls(calls);
+    expect(build).toEqual([
+      "docker",
+      "build",
+      "-q",
+      "-f",
+      `${root}/deployment/edge/Dockerfile`,
+      `${root}/deployment/edge`,
+    ]);
+    expect(adapt?.slice(0, HARDENED.length)).toEqual(HARDENED);
+    expect(adapt?.at(-ADAPT.length - 1)).toBe(BUILT_EDGE_ID);
+    expect(more).toEqual([]);
+    // A build that prints anything but an image id is not run.
+    const odd = edgeRun((args) => (args[0] === "build" ? { code: 0, stdout: "--privileged\n", stderr: "" } : null));
+    const refused = await runPreflight(["--env", "dev", "--compose", file, "--source"], {
+      root,
+      run: odd.run,
+      ...fakeFs(root),
+    });
+    expect(refused.lines).toContain("FAIL C18 the edge image could not be built");
+    expect(
+      edgeCalls(odd.calls)
+        .map(([, verb]) => verb)
+        .join(),
+    ).toBe("build");
   });
 });

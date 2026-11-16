@@ -16,4 +16,6 @@ export const SETTINGS = {
   accountLead: "Your password, your email and deleting your account are on your sign-in server.",
   signOutNote: "Signs this browser out of unset.sh.",
   signOut: "Sign out",
+  signOutEverywhereNote: "Signs out every browser, this one too. You will sign in again.",
+  signOutEverywhere: "Sign out everywhere",
 } as const;

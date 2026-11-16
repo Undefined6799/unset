@@ -15,9 +15,14 @@ the list: a column holds a DID when its type is one of the `types` domains, and
    - `set_null`: erasure sets the column to null; the column must be nullable.
    - `retain`: kept, with `class` (the retention class) and `reason` (why the law or the product needs it).
    - `audit_redact`: the audit side tables (P1.15a); erasure calls `audit.erase_subject(did)`. It needs `class: "mod"`
-     and a `reason`.
+     and a `reason`. `audit.event_body` has two such columns, `subject` (the target) and `actor` (the person who
+     caused the event, ADR 0043); a side row goes when either one is erased.
    - `retain_legal_hold`: defined by P4.07; erasure skips held rows only.
-3. P3.07 erases by the registry; nothing else needs a list.
+3. In the same PR, add its statement to `core.erase_did` in a new migration (one hand-written statement per
+   registry row, P3.07k) and seed the column in `tests/integration/postgres/erase-did.test.ts`. That test reads the
+   catalog and fails while a DID column was not seeded or still names the erased person.
+
+Until the Phase 3 callers exist, an owner runs `core.erase_did` by hand: [the erasure runbook](../runbooks/erasure.md).
 
 A `text` column whose name looks like a DID (`did`, `*_did`, `*_uri`, `subject`, `actor`, `author`, `owner`, `target`)
 fails the test unless it uses a domain. If it really holds no DID, list it in the test's `NOT_A_DID` with a comment

@@ -21,6 +21,7 @@ Definitions are [`docs/human/glossary.md`](https://github.com/Undefined6799/unse
 | seal | `seal` and `unseal` in `infrastructure/seal/seal.ts`. `sealStream` and `unsealStream` in `infrastructure/seal/sealStream.ts`. |
 | session | `infrastructure/session`. Table `app.session` in `infrastructure/postgres/migrations/0011_app_session.sql`. |
 | audit | `appendAudit` in `infrastructure/audit` |
+| storage | `createObjectStore` in `infrastructure/storage/object-store.ts`. |
 
 The glossary's word `step` names one entry of `docs/ai/book/`.
 

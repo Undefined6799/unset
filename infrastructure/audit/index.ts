@@ -13,4 +13,5 @@ export { type AuditEvent, appendAudit } from "./append.ts";
 export type { AuditDb } from "./db.ts";
 export { type AuditCode, AuditError } from "./error.ts";
 export { type ChainRow, rowHash, toMicros } from "./rowHash.ts";
+export { chainStart, type SegmentVerdict, verifySegments } from "./segments.ts";
 export { type ChainStart, type ChainVerdict, verifyChain } from "./verify.ts";

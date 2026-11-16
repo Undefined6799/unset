@@ -7,7 +7,9 @@
 // INSERT, and only for a same-origin form, which a fixture request (no body, no Origin) never is; a route whose
 // statements a fixture can reach passes this test's counting pool into compose(). The web server's config needs secret files
 // (P2.04c), which a JSON fixture cannot hold, so its env gets them from interfaces/http/test-env.ts at run time.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+// `/health` runs its one readiness statement on the server's own pool (P1.04w), which this test points at the test
+// database; that pool is not the counting one, so the probe is outside the count.
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { createPool, type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
@@ -75,7 +77,19 @@ async function envOf(name: string, fixture: Fixture): Promise<Record<string, str
     legalTestEnv: () => Record<string, string>;
     webSecretEnv: (dir: string) => Record<string, string>;
   };
-  return { ...fixture.env, ...legalTestEnv(), ...webSecretEnv(SECRETS) };
+  return { ...fixture.env, ...legalTestEnv(), ...webSecretEnv(SECRETS), ...webDatabaseEnv() };
+}
+/** Points the web server's own pool at this file's database as `web` (P1.04w): `/health` asks Postgres before 200. */
+function webDatabaseEnv(): Record<string, string> {
+  const passwordFile = join(SECRETS, "pg_web_password");
+  writeFileSync(passwordFile, provided.roles.web.password);
+  return {
+    PG_HOST: provided.host,
+    PG_PORT: String(provided.port),
+    PG_DATABASE: database,
+    PG_USER: provided.roles.web.user,
+    PG_PASSWORD_FILE: passwordFile,
+  };
 }
 
 describe("query budget", () => {

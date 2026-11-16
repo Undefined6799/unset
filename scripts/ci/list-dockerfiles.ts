@@ -26,8 +26,14 @@ const NAME = /^[a-z0-9-]+$/;
 
 /** P1.29v: our two app images, which ship the same npm tree. */
 export const APP_IGNOREFILE = ".github/trivyignore.app.yaml";
+/** P2.18s: the objects image ships upstream's weed binary, so it reads the waiver the mirror scan of its base reads. */
+export const SEAWEEDFS_IGNOREFILE = ".github/trivyignore.seaweedfs.yaml";
 /** Images whose scan reads an ignore file. Every other image gets /dev/null, but for the pds-ui recipe below. */
-export const IGNOREFILES: Readonly<Record<string, string>> = { "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE };
+export const IGNOREFILES: Readonly<Record<string, string>> = {
+  "node-app": APP_IGNOREFILE,
+  migrate: APP_IGNOREFILE,
+  objects: SEAWEEDFS_IGNOREFILE,
+};
 
 /**
  * P2.24t (Alex's line): the pds-ui recipe is the official PDS image with only its frontend replaced (ADR 0027), so

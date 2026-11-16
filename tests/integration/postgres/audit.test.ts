@@ -1,10 +1,11 @@
-// P1.15g (infrastructure/postgres/migrations/0008 to 0010): the audit lanes against real Postgres, connected as the
-// roles that write them (TE-2): admin, web and indexer call audit.append; nobody writes the tables directly; the
-// owner cannot rewrite them; the row hash matches a vector computed outside Postgres.
+// P1.15g and P1.15k (infrastructure/postgres/migrations/0008 to 0010 and 0016): the audit lanes against real
+// Postgres, connected as the roles that write them (TE-2): admin, web and indexer call audit.append; nobody writes
+// the tables directly; the owner cannot rewrite them; the row hash matches a vector computed outside Postgres.
 //
 // It runs on its own container through tests/support/postgres.ts, like grants.test.ts: the cases need admin, which
 // the shared cluster does not hand out, and the owner's view of the side tables.
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Pool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -19,6 +20,7 @@ import {
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
+const MIGRATIONS = join(REPOSITORY, "infrastructure", "postgres", "migrations");
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
 const registry = readJson<Record<string, { strategy: string }>>(
   join(REPOSITORY, "infrastructure", "postgres", "erasure-registry.json"),
@@ -100,7 +102,9 @@ describe("audit lanes", () => {
     );
     const body = JSON.parse(postgres.sql("unset", `SELECT body_text FROM audit.event_body WHERE ${where}`));
     expect(body).toMatchObject({ actor: ACTOR, actor_key: "credential-id", target: TARGET, writer: "admin" });
-    expect(postgres.sql("unset", `SELECT subject FROM audit.event_body WHERE ${where}`)).toBe(TARGET);
+    expect(postgres.sql("unset", `SELECT subject, actor FROM audit.event_body WHERE ${where}`)).toBe(
+      `${TARGET}|${ACTOR}`,
+    );
     // The MAC covers the stored text, and the stored row hash is the one audit.row_hash computes from the row.
     const checks = asOwner(
       "SELECT b.body_mac_ok, c.row_hash = audit.row_hash(c.lane, c.seq, c.ts, c.action, c.writer, c.retention_class, " +
@@ -109,6 +113,38 @@ describe("audit lanes", () => {
         `(c.lane, c.seq)) b WHERE c.${where}`,
     );
     expect(checks).toBe("t|t");
+  });
+
+  test("member_event_fills_actor_column", async () => {
+    // ADR 0043: the reporter is the actor and the reported account the subject, each in its own DID column, so
+    // erasure finds the row from either side.
+    const { lane, seq } = await append("web", { action: "report.submitted", actorDid: ACTOR, target: TARGET });
+    expect(
+      postgres.sql("unset", `SELECT subject, actor FROM audit.event_body WHERE (lane, seq) = ('${lane}', ${seq})`),
+    ).toBe(`${TARGET}|${ACTOR}`);
+  });
+
+  test("system_event_has_no_actor", async () => {
+    // No person caused it: chain.writer names the process, and the actor column stays null.
+    const { lane, seq } = await append("indexer", { action: "index.account_state", target: TARGET });
+    expect(
+      postgres.sql("unset", `SELECT actor IS NULL FROM audit.event_body WHERE (lane, seq) = ('${lane}', ${seq})`),
+    ).toBe("t");
+  });
+
+  test("person_event_needs_actor", async () => {
+    // A member's or an operator's event with no actor would be out of erasure's reach, so append refuses it.
+    const before = count("chain");
+    for (const [role, action] of [
+      ["web", "report.submitted"],
+      ["web", "age_gate.blocked"],
+      ["admin", "mod.takedown"],
+    ] as const)
+      await expect(append(role, { action, target: TARGET }), action).rejects.toMatchObject({
+        code: "UA003",
+        message: "audit_bad_input",
+      });
+    expect(count("chain")).toBe(before);
   });
 
   test("writer_denied", async () => {
@@ -182,14 +218,57 @@ describe("audit lanes", () => {
 
   test("audit_flood_does_not_block", { timeout: 60_000 }, async () => {
     // web's user_triggered cap is 300 a minute; an operator append by admin is a different writer and class.
-    for (let i = 0; i < 300; i++) await append("web", { action: "report.submitted", target: TARGET });
-    await expect(append("web", { action: "report.submitted", target: TARGET })).rejects.toMatchObject({
-      code: "UA004",
-      message: "audit_rate_limited",
-    });
+    // Earlier cases wrote web rows inside the same minute, so the flood runs until it is refused.
+    const report = { action: "report.submitted", actorDid: ACTOR, target: TARGET };
+    let accepted = 0;
+    const flood = async () => {
+      for (;;) {
+        await append("web", report);
+        accepted++;
+      }
+    };
+    await expect(flood()).rejects.toMatchObject({ code: "UA004", message: "audit_rate_limited" });
+    expect(accepted).toBeLessThanOrEqual(300);
     await expect(append("admin", { action: "mod.delist", actorDid: ACTOR, target: TARGET })).resolves.toMatchObject({
       lane: "mod",
     });
+  });
+
+  test("rows_before_actor_column_survive", async () => {
+    // ADR 0043: 0016 rewrites event_body to add the column. A row written before it keeps a null actor, its body
+    // still matches its MAC, and the next append links to it.
+    const database = "before_actor";
+    const before = mkdtempSync(join(tmpdir(), "unset-migrations-"));
+    try {
+      for (const file of readdirSync(MIGRATIONS).filter((name) => name < "0016"))
+        cpSync(join(MIGRATIONS, file), join(before, file));
+      postgres.sql("postgres", `CREATE DATABASE ${database} OWNER migrator`);
+      // As deployment/postgres/init does for the unset database: PUBLIC revoked, pgcrypto in public.
+      postgres.sql(
+        database,
+        `REVOKE ALL ON DATABASE ${database} FROM PUBLIC; REVOKE ALL ON SCHEMA public FROM PUBLIC; ` +
+          "CREATE EXTENSION pgcrypto SCHEMA public",
+      );
+      await migrateAsMigrator(postgres, migratorPassword, database, before);
+    } finally {
+      rmSync(before, { recursive: true, force: true });
+    }
+    const web = pools.open(postgres, database, "web", passwords.web, { max: 1 });
+    const blocked = (client: { query: (text: string) => Promise<unknown> }) =>
+      client.query(
+        `SELECT * FROM audit.append('age_gate.blocked', 'succeeded', '${ACTOR}', NULL, '${ACTOR}', NULL, NULL, ` +
+          "NULL, NULL, NULL)",
+      );
+    await withClient(web, null, blocked);
+    await migrateAsMigrator(postgres, migratorPassword, database);
+    await withClient(web, null, blocked);
+    const rows = postgres.sql(
+      database,
+      "SELECT c.seq, e.subject, coalesce(e.actor::text, 'none'), public.hmac(convert_to(e.body_text, 'UTF8'), e.k_body, " +
+        "'sha256') = c.body_mac, c.prev_hash = lag(c.row_hash, 1, c.prev_hash) OVER (ORDER BY c.seq) " +
+        "FROM audit.chain c JOIN audit.event_body e USING (lane, seq) WHERE c.lane = 'sec' ORDER BY c.seq",
+    );
+    expect(rows.split("\n")).toEqual([`1|${ACTOR}|none|t|t`, `2|${ACTOR}|${ACTOR}|t|t`]);
   });
 
   test("row_hash_known_answer", () => {
@@ -203,6 +282,10 @@ describe("audit lanes", () => {
 
   test("registry_rows", () => {
     expect(registry["audit.event_body.subject"]?.strategy).toBe("audit_redact");
-    expect(Object.keys(registry).filter((column) => column.startsWith("audit."))).toEqual(["audit.event_body.subject"]);
+    expect(registry["audit.event_body.actor"]?.strategy).toBe("audit_redact");
+    expect(Object.keys(registry).filter((column) => column.startsWith("audit."))).toEqual([
+      "audit.event_body.subject",
+      "audit.event_body.actor",
+    ]);
   });
 });

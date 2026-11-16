@@ -11,6 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseCompose } from "./compose-parse.ts";
 import { COSIGN } from "./cosign.ts";
+import { edgeImageAnswer } from "./edge-image-double.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 import { type VirtualEntry, virtualCheckout } from "./virtual-checkout.ts";
 
@@ -60,7 +61,8 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     const secrets = parseCompose(readFileSync(COMPOSE, "utf8"), COMPOSE).secretFiles.map(
       (path) => path.split("/").at(-1) as string,
     );
-    const owner = (name: string) => (name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532);
+    const owner = (name: string) =>
+      name === "objects_s3" ? 1000 : name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532;
     dir("unset-dev-secrets", 0o700, secrets);
     for (const name of secrets) file(`unset-dev-secrets/${name}`, 0o400, "fixture\n", owner(name));
     files.set(beside("unset-dev-secrets/dev_tls_cert"), {
@@ -100,12 +102,15 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   const { aboveCheckout, look, real } = virtualCheckout({ checkout: CHECKOUT, files, deployUid: DEPLOY_UID, dev: DEV });
 
   /** The pinned cosign, verify-images passing, an OCI index for every ref, and a synchronised clock. */
-  const run: Run = async (file) => {
+  const run: Run = async (file, args, _signal, env) => {
     if (file === "sha256sum") return { code: 0, stdout: `${COSIGN.sha256.x64}  ${COSIGN.path}\n`, stderr: "" };
     if (file === "timedatectl") return { code: 0, stdout: "yes\n", stderr: "" };
     if (file === "chronyc")
       return { code: 0, stdout: "System time     : 0.000006523 seconds fast of NTP time\n", stderr: "" };
     if (file === "docker") {
+      // C18's pull and `caddy adapt` in the edge image (P1.39c), answered as the real image would.
+      const edge = edgeImageAnswer(args, env);
+      if (edge !== null) return edge;
       return { code: 0, stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }), stderr: "" };
     }
     return { code: 0, stdout: "", stderr: "" };
@@ -141,10 +146,10 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   test("preflight_passes_the_real_dev_file", async () => {
     const result = await preflight(args, deps);
     expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([]);
-    // P2.24y: five first-party images (the PDS recipe joined them) and newt the one upstream. The C3 line reads
-    // "reason withheld" because its count, 5, equals a configured value, which the preflight never prints
-    // (preflight/index.ts withheldIfValued); only the verdict of that line is pinned.
-    expect(result.lines.filter((line) => line.startsWith("PASS C3 "))).toHaveLength(1);
+    // Six first-party images (the PDS recipe joined them at P2.24y, objects at P2.18s) and newt the one upstream. While
+    // the count was 5 it equalled a configured value, so C3's reason was withheld (preflight/index.ts withheldIfValued);
+    // at 6 it reads plainly, and the whole line is pinned.
+    expect(result.lines).toContain("PASS C3 6 first-party images verified");
     expect(result.lines).toContain("PASS C4 1 upstream images verified");
     // Waived under --env dev without a retirement report; only the verdict is pinned, not the reason text.
     expect(result.lines.filter((line) => line.startsWith("PASS C21"))).toHaveLength(1);

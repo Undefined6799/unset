@@ -245,7 +245,7 @@ describe("grants", () => {
     const audit = postgres.sql("unset", "SELECT nspowner::regrole, nspacl FROM pg_namespace WHERE nspname = 'audit'");
     expect(audit).toBe(
       "audit_owner|{audit_owner=UC/audit_owner,web=U/audit_owner,indexer=U/audit_owner,admin=U/audit_owner," +
-        "retention=U/audit_owner,auditor=U/audit_owner}",
+        "retention=U/audit_owner,auditor=U/audit_owner,migrator=U/audit_owner}",
     );
   });
 
@@ -319,13 +319,16 @@ describe("grants", () => {
 
   test("audit_routines_execute_exact", () => {
     // Architecture record 2026-10-06-p115m-tailnet-pii-deferred (i): 0008 left every audit function to its owner; 0010
-    // (P1.15g) grants audit.append to its writers and nothing else.
+    // (P1.15g) grants audit.append to its writers and nothing else. 0021 (P3.07k) adds migrator on append and
+    // erase_subject, for the owner-run core.erase_did; no service role gains anything.
     const query =
       "SELECT string_agg(p.proname || ' ' || a.grantee::regrole::text, ',' " +
       "ORDER BY p.proname, a.grantee::regrole::text) FROM pg_proc p, " +
       "aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.pronamespace = 'audit'::regnamespace " +
       "AND a.privilege_type = 'EXECUTE' AND a.grantee <> p.proowner";
-    expect(postgres.sql("unset", query)).toBe("append admin,append indexer,append web");
+    expect(postgres.sql("unset", query)).toBe(
+      "append admin,append indexer,append migrator,append web,erase_subject migrator",
+    );
   });
 
   test("api_cannot_read_app", async () => {
@@ -338,7 +341,7 @@ describe("grants", () => {
 
   test("no_ddl_for_services", { timeout: 60_000 }, () => {
     for (const role of SERVICE_OR_JOB)
-      for (const schema of ["app", "idx", "audit", "types", "public"])
+      for (const schema of ["app", "core", "idx", "audit", "types", "public"])
         expect(
           () => postgres.sql("unset", `SET ROLE ${role}; CREATE TABLE ${schema}.ddl_probe (id int)`),
           `${role} ${schema}`,

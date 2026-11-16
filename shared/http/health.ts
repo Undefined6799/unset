@@ -30,13 +30,23 @@ export function createHealth(options: {
   let everReady = false;
   let cached: { at: number; ready: boolean } | undefined;
 
-  const ready = async (): Promise<boolean> => {
-    const now = options.now();
-    if (cached && now - cached.at < CACHE_MS) return cached.ready;
+  let inFlight: Promise<boolean> | undefined;
+
+  const runChecks = async (now: number): Promise<boolean> => {
     const results = await Promise.all(options.checks.map(passes));
     cached = { at: now, ready: results.every(Boolean) };
     everReady ||= cached.ready;
     return cached.ready;
+  };
+
+  /** One run of the checks at a time: probes that arrive while it is pending share its answer (P1.04y). */
+  const ready = (): Promise<boolean> => {
+    const now = options.now();
+    if (cached && now - cached.at < CACHE_MS) return Promise.resolve(cached.ready);
+    inFlight ??= runChecks(now).finally(() => {
+      inFlight = undefined;
+    });
+    return inFlight;
   };
 
   const body = (status: string, code: number) =>

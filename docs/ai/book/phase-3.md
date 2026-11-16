@@ -1262,6 +1262,8 @@ Threats: the one function that removes a person's data (GDPR erasure).
   - R The audit chain broken by erasure → still valid (`audit-chain-valid-after-erase`).
 
 Done when (tests):
+  - Ship gate (ADR 0041 Decision 7): the object-store part of erasure does not reach real members until the forced
+    vacuum follows it automatically, either here or in P5.08b; until then the store's bytes go by the manual runbook.
   - `erase-covers-every-did-column`: seed every registry column and every AT-URI column for DIDs X and Y →
     `erase_did(X)` → zero rows naming X in any `types.did` column (query from `pg_catalog`) or AT-URI column;
     Y untouched; outcome `erased`.

@@ -141,15 +141,27 @@ function whiteout(tree: Map<string, Entry>, path: string, entry: Entry, ui: stri
     for (const key of tree.keys()) if (key.startsWith(`${target}/`)) tree.delete(key);
   } else remove(tree, target);
 }
+/**
+ * Why a candidate entry outside the UI directory changes the filesystem, or null when it is a directory record the
+ * base already holds with the same metadata. A RUN layer can carry such a record: on PR #1581 (job 133007258859)
+ * the `rm -rf` layer held `etc`, on other runs of the same recipe it did not. The likely reason, not proved, is the
+ * engine mounting resolv.conf and hosts under /etc for the step. Times are not compared, so the record changes
+ * nothing, and compareImages still holds the whole outside tree equal to the base afterwards.
+ */
+function outsideChange(tree: Map<string, Entry>, path: string, entry: Entry): string | null {
+  if (entry.header.type !== "directory") return `a ${entry.header.type}, not a directory`;
+  if (!tree.has(path)) return "absent from the base";
+  // metadata() is JSON, so a control character in an owner name reaches the log escaped.
+  const [was, now] = [metadata(tree.get(path) as Entry), metadata(entry)];
+  return was === now ? null : `metadata differs from the base: base ${was}, layer ${now}`;
+}
 function install(tree: Map<string, Entry>, path: string, entry: Entry, ui: string | null): void {
-  if (ui !== null && !inside(ui, path))
-    requireThat(
-      ui.startsWith(`${path}/`) &&
-        entry.header.type === "directory" &&
-        tree.has(path) &&
-        metadata(tree.get(path) as Entry) === metadata(entry),
-      "outside UI filesystem change",
-    );
+  if (ui !== null && !inside(ui, path)) {
+    // The reason names the path and the first rule it broke, so a red run says what the layer held. A path here
+    // passed pathName (no control character, no backslash), so it cannot start a workflow command in the log.
+    const broke = outsideChange(tree, path, entry);
+    requireThat(broke === null, `outside UI filesystem change: ${path} (${broke})`);
+  }
   if (["link", "symlink"].includes(entry.header.type)) {
     const target = linkTarget(path, entry.header.linkname, entry.header.type === "link");
     requireThat(ui === null || !inside(ui, path) || inside(ui, target), "link escapes UI directory");

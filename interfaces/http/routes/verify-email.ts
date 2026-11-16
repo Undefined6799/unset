@@ -22,7 +22,7 @@ export type VerifyEmailDeps = {
   versions: OnboardingVersions;
   setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
   /** P2.07 pdsSessionInfo. The only PDS read this route makes. */
-  sessionInfo: (did: Did, deadline: AbortSignal) => Promise<PdsResult<SessionInfo>>;
+  sessionInfo: (did: Did, deadline: AbortSignal, deadlineAt: number) => Promise<PdsResult<SessionInfo>>;
   issueNonce: (deadline: AbortSignal) => Promise<string>;
   authorize: (
     input: string,
@@ -51,9 +51,14 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
     return away === null ? null : redirect(away);
   }
 
-  async function show(request: Request, deadline: AbortSignal, session: Session): Promise<Response> {
+  async function show(
+    request: Request,
+    deadline: AbortSignal,
+    deadlineAt: number,
+    session: Session,
+  ): Promise<Response> {
     // Always a fresh read. The cache is for other pages (emailGate); this page is the check.
-    const info = await deps.sessionInfo(session.did, deadline);
+    const info = await deps.sessionInfo(session.did, deadline, deadlineAt);
     if (info.kind === "auth_dead") {
       return redirect(withErrorParam("/login", "login.session_ended"), [sessionClearCookie()]);
     }
@@ -80,12 +85,12 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "handler",
-      handler: async ({ request, deadline }) => {
+      handler: async ({ request, deadline, deadlineAt }) => {
         const session = await deps.readSession(request, deadline);
         if (session === null) return login("/verify-email");
         const away = await onboarded(session, deadline);
         if (away !== null) return away;
-        return show(request, deadline, session);
+        return show(request, deadline, deadlineAt, session);
       },
     }),
     defineRoute({

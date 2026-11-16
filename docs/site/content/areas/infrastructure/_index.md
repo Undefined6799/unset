@@ -14,7 +14,7 @@ External systems behind small contracts. Decision 34 is recorded in [ADR 0001](h
 
 One package per folder. `SDK_ADAPTERS` in `scripts/lint/.dependency-cruiser.cjs` names one adapter path per vendor SDK.
 
-The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit` and `session`. These pages follow the tree.
+The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session` and `storage`. These pages follow the tree.
 
 | Package | Path | Page |
 | --- | --- | --- |
@@ -24,6 +24,7 @@ The tree has `postgres`, `pds`, `net-guard`, `seal`, `audit` and `session`. Thes
 | postgres | `infrastructure/postgres` | [postgres](postgres/) |
 | seal | `infrastructure/seal` | [seal](seal/) |
 | session | `infrastructure/session` | [session](session/) |
+| storage | `infrastructure/storage` | [storage](storage/) |
 
 ## May import
 
@@ -49,19 +50,22 @@ Rules that refuse an edge a row would otherwise allow:
 
 `@unset/infrastructure-seal` does not depend on `age-encryption`. `infrastructure/seal/seal.ts` calls `node:crypto`. The cruiser row is the import rule; the package is absent.
 
+`@unset/infrastructure-storage` depends on `aws4fetch` 1.0.20. It does not depend on `@aws-sdk/client-s3`. The cruiser row is the import rule; that package is absent.
+
 ## Entry points
 
 No `main.ts` under `infrastructure/`. Each package publishes `index.ts` (`package.json` export `.`). Rule DC-2 (`infra-shared-via-index`) is that file.
 
 | Package | Public module | Process |
 | --- | --- | --- |
-| audit | `infrastructure/audit/index.ts` | None. `interfaces/http/compose.ts` does not construct it. `interfaces/http/account.ts` calls `appendAudit`. |
+| audit | `infrastructure/audit/index.ts` | None. `interfaces/http/compose.ts` does not construct it. `interfaces/http/age-gate-audit.ts` calls `appendAudit`. |
 | net-guard | `infrastructure/net-guard/index.ts` | None. `interfaces/http/compose.ts` calls `createNetGuard`. |
 | pds | `infrastructure/pds/index.ts` | None. `interfaces/http/compose.ts` calls `createIdentityNetwork`, `createOAuthClient` and `createPdsCall`. |
 | postgres | `infrastructure/postgres/index.ts` | `unset-migrate` and `unset-rewrap`. See [postgres](postgres/). |
 | seal | `infrastructure/seal/index.ts` | None. `interfaces/http/compose.ts` calls `createSealer`. |
 | session | `infrastructure/session/index.ts` | None. `interfaces/http/compose.ts` calls `createSessionStore`. |
+| storage | `infrastructure/storage/index.ts` | None. No file under `interfaces/` or `apps/` calls `createObjectStore`. |
 
 ## Data
 
-Schemas, roles, grants and migrations live under [postgres](postgres/). `net-guard` and `seal` run no SQL. The other packages name the tables their statements touch on their own pages. `idx` has schema `USAGE` in `grant-matrix.json` and no `CREATE TABLE` in `infrastructure/postgres/migrations/`.
+Schemas, roles, grants and migrations live under [postgres](postgres/). `net-guard`, `seal` and `storage` run no SQL. The other packages name the tables their statements touch on their own pages. `idx` has schema `USAGE` in `grant-matrix.json` and no `CREATE TABLE` in `infrastructure/postgres/migrations/`.

@@ -1,9 +1,11 @@
 // The signed-in account (P2.13) lives at /<DID>; /did and legacy /me resolve the caller's own destination.
 // This is still an owner-only app page, not a public profile: the gate runs before the ownership check and
-// handle verification. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
+// handle verification. The shortcuts sit behind the server's gate (ADR 0045); /:did opens the gate itself, after it
+// has refused a path that is no DID, so an unknown one-segment path stays a 404 and never a trip to sign-in. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
 import { parseDid } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
+import type { OpenedApp } from "../app-gate.ts";
 import { type AccountDeps, accountProps } from "./account-issuer.ts";
 
 export function meRoutes(deps: AccountDeps): Route[] {
@@ -11,21 +13,18 @@ export function meRoutes(deps: AccountDeps): Route[] {
 
   return [
     ...["/did", "/me"].map((path) =>
-      defineRoute({
+      defineRoute<OpenedApp>({
         method: "GET",
         path,
         group: "app",
         rateLimit: "default",
-        session: "handler",
-        handler: async ({ request, deadline }) => {
-          const opened = await deps.open(request, deadline, "/did");
-          if (opened instanceof Response) return opened;
-          // The session store keeps only DIDs this server wrote after the callback parsed them.
-          return new Response(null, {
+        session: "required",
+        // The session store keeps only DIDs this server wrote after the callback parsed them.
+        handler: ({ session }) =>
+          new Response(null, {
             status: 303,
-            headers: { location: `/${opened.session.did}`, "cache-control": "private, no-store", vary: "Cookie" },
-          });
-        },
+            headers: { location: `/${session.session.did}`, "cache-control": "private, no-store", vary: "Cookie" },
+          }),
       }),
     ),
     defineRoute({
@@ -34,12 +33,12 @@ export function meRoutes(deps: AccountDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "handler",
-      handler: async ({ request, params, deadline }) => {
+      handler: async ({ request, params, deadline, deadlineAt }) => {
         // shared/http decodes path parameters once; identity's parser accepts only supported DID syntax.
         const did = parseDid(params.did ?? "");
         if (did === null) throw new AppError("http.not_found");
         const accountPath = `/${did}`;
-        const opened = await deps.open(request, deadline, accountPath);
+        const opened = await deps.open(request, deadline, accountPath, deadlineAt);
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
         const { verdict, props } = await accountOf(opened, deadline);

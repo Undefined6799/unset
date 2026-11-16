@@ -11,7 +11,7 @@ import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 import { POSTGRES_IMAGE } from "../../tests/support/postgres.ts";
-import { VENDOR_IMAGES } from "./vendor.ts";
+import { VENDOR_BASES, VENDOR_IMAGES } from "./vendor.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
@@ -45,7 +45,7 @@ type Lock = Record<string, Base>;
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
 const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
-const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
+const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || VENDOR_BASES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
@@ -202,7 +202,7 @@ function sharedRefProblems(lock: Lock): string[] {
  * `edge_runtime_has_no_package_manager`: P1.28o removed apk-tools from its Caddy Alpine runtime, and P1.28y fails any
  * edge image whose last apk command does not remove it.
  */
-type Kind = "node" | "edge" | "postgres";
+type Kind = "node" | "edge" | "postgres" | "objects";
 /** Lock entry to kind, in kinds.json so the built-image tests iterate the same map (package-manager.image.test.ts). */
 const KIND_BY_FINAL_ENTRY = new Map(
   Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, "kinds.json"), "utf8")) as Record<string, Kind>),
@@ -537,6 +537,7 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", [["cap_net_bind_service=+ep", "/usr/bin/caddy"]]], // edge/Dockerfile:26
   ["node", []],
   ["postgres", []],
+  ["objects", []],
 ]);
 
 /** dpkg's maintainer scripts, which the Debian kinds drop once dpkg is gone, word for word as written. */
@@ -559,6 +560,7 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
   ["node", [DPKG_SCRIPTS_RM]],
   ["postgres", [DPKG_SCRIPTS_RM]],
+  ["objects", []],
 ]);
 const GLOB = /[*?[{]/;
 /**
@@ -572,6 +574,7 @@ const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
   ["node", ["/opt/yarn-*", ...DPKG_SCRIPT_GLOBS]],
   ["postgres", DPKG_SCRIPT_GLOBS],
+  ["objects", []],
 ]);
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
@@ -713,6 +716,7 @@ const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
   ["postgres", ["/etc/unset/pg_hba.conf"]], // postgres.Dockerfile, the server's only pg_hba.conf (P1.11y)
+  ["objects", []], // objects.Dockerfile copies nothing; its S3 identities are a run-time secret
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -788,6 +792,7 @@ const ENV_KEYS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
   ["node", ["NODE_ENV"]], // node-app.Dockerfile:30, migrate.Dockerfile:19
   ["postgres", []],
+  ["objects", []],
 ]);
 const ENV_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=\S*$/;
 
@@ -840,6 +845,24 @@ function apkKeptProblems(dockerfile: string): string[] {
   return removesApk ? [] : ["the final stage keeps apk: its last apk command does not remove apk-tools"];
 }
 
+/**
+ * The one OS-package upgrade a shipped stage may run, a temporary exception (Alex, 2026-11-16T00:53:59Z, "yes zlib
+ * exception"): Debian fixed zlib1g CVE-2026-76844 and CVE-2026-85091 in 1:1.3.dfsg+really1.3.1-1+deb13u1, but no
+ * upstream node:26-trixie-slim, postgres:18-trixie or debian:trixie-slim index ships it yet (Trivy 0.76.1 on
+ * 2026-11-16), so every node and postgres image fails its HIGH scan. Only this exact line, only in a node or postgres
+ * final stage before USER, and only until `expires`. The version is pinned, so apt upgrades nothing else and the
+ * build fails if no configured Debian source offers it.
+ */
+const ZLIB_UPGRADE = {
+  line:
+    "RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade " +
+    "zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 && rm -rf /var/lib/apt/lists/*",
+  kinds: new Set<Kind>(["node", "postgres"]),
+  expires: "2026-11-30T00:00:00Z",
+} as const;
+const isZlibUpgrade = (text: string, kind: Kind | undefined): boolean =>
+  text === ZLIB_UPGRADE.line && kind !== undefined && ZLIB_UPGRADE.kinds.has(kind);
+
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
 function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
   try {
@@ -848,7 +871,7 @@ function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
     const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
     const user = all.find(({ line, text }) => line > finalFrom && /^USER\s/i.test(text))?.line ?? Infinity;
     const exact = (line: number, text: string) =>
-      line > finalFrom && line < user && isListedRun(text, listed ?? listedRunsOf(kind));
+      line > finalFrom && line < user && (isListedRun(text, listed ?? listedRunsOf(kind)) || isZlibUpgrade(text, kind));
     return shippedInstructions(all)
       .filter(({ line, text }) => !exact(line, text))
       .flatMap(({ line, text }) =>
@@ -1010,16 +1033,19 @@ const NODE = lock.node as Base;
  * Node image is held to the Node runtime rules below without editing this test.
  */
 const nodeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "node");
-const edgeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "edge");
+/** P2.18s: the objects kind's SeaweedFS base is Alpine too and ships apk, so the edge's apk rule holds for it. */
+const alpineDockerfiles = dockerfiles.filter((file) => ["edge", "objects"].includes(kindOf(read(file), lock) ?? ""));
 const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
   test("base_digest_matches_lock", () => {
     for (const file of dockerfiles) {
       expect(baseProblems(read(file), lock), file).toEqual([]);
-      // The postgres image is one stage, the official image minus gosu (P1.29d); the others build in earlier stages.
+      // The postgres image is one stage, the official image minus gosu (P1.29d), and so is the objects image, SeaweedFS
+      // minus its root entrypoint and FUSE (P2.18s); the others build in earlier stages.
       const stages = fromImages(read(file)).length;
-      if (kindOf(read(file), lock) === "postgres") expect(stages, file).toBe(1);
+      const kind = kindOf(read(file), lock);
+      if (kind === "postgres" || kind === "objects") expect(stages, file).toBe(1);
       else expect(stages, file).toBeGreaterThanOrEqual(2);
     }
     const other = `sha256:${"1".repeat(64)}`;
@@ -1062,7 +1088,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds", "newt", "seaweedfs"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1077,8 +1103,8 @@ describe("base images", () => {
     // The builder only builds the edge binary; the runtime image is what ships.
     // P1.37w: the runtime image's own /usr/bin/caddy never ships, because the edge copies its build over it.
     for (const [name, tag, stage, buildStage, stripped] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true, {}],
-      ["caddy", /^2\.11\.7-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
+      ["caddy-builder", /^2\.11\.9-builder-alpine$/, "build", true, {}],
+      ["caddy", /^2\.11\.9-alpine$/, "runtime", false, { stripped: ["/usr/bin/caddy"] }],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
@@ -1118,6 +1144,24 @@ describe("base images", () => {
     expect(lock.newt).toStrictEqual({
       ref: "docker.io/fosrl/newt",
       tag: expect.stringMatching(/^1\.\d+\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+  });
+
+  test("vendor_bases_are_named_runtime_bases", () => {
+    // P2.18s (ADR 0041): SeaweedFS is the one vendor image a Dockerfile may build on, by its exact name, as a runtime
+    // base only. A run-only vendor image is never a base, and the two lists never share a name.
+    expect([...VENDOR_BASES]).toEqual(["docker.io/chrislusf/seaweedfs"]);
+    for (const ref of VENDOR_BASES) expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
+    for (const ref of ["docker.io/chrislusf/other", "docker.io/chrislusf/seaweedfs-x", "ghcr.io/chrislusf/seaweedfs"]) {
+      expect(allowed(ref), ref).toBe(false);
+    }
+    expect(lock.seaweedfs).toStrictEqual({
+      ref: "docker.io/chrislusf/seaweedfs",
+      tag: expect.stringMatching(/^\d+\.\d+$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
@@ -1331,6 +1375,35 @@ describe("base images", () => {
     for (const file of nodeDockerfiles) {
       for (const image of fromImages(read(file))) expect(image, file).toBe(pinnedNode);
     }
+  });
+
+  test("zlib_upgrade_is_exempt_only_as_written_in_a_node_or_postgres_final_stage", () => {
+    const floor = "a package manager is named outside a removal command";
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    expect(osPackageProblems(`${node}${ZLIB_UPGRADE.line}\nUSER 65532:65532`)).toEqual([]);
+    // After USER, in a stage the final stage builds on, or with any other package, version or command, it is an
+    // install again and meets the floor.
+    expect(osPackageProblems(`${node}USER 65532:65532\n${ZLIB_UPGRADE.line}`)).toContain(`line 4: ${floor}`);
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\n${ZLIB_UPGRADE.line}\nFROM base`)).toContain(
+      `line 2: ${floor}`,
+    );
+    for (const changed of [
+      ZLIB_UPGRADE.line.replace("deb13u1", "deb13u2"),
+      ZLIB_UPGRADE.line.replace("zlib1g=", "curl zlib1g="),
+      ZLIB_UPGRADE.line.replace(" --only-upgrade", ""),
+      `${ZLIB_UPGRADE.line} && apt-get install -y curl`,
+    ]) {
+      expect(osPackageProblems(`${node}${changed}`), changed).toContain(`line 3: ${floor}`);
+    }
+    expect(ZLIB_UPGRADE.kinds.has("edge")).toBe(false);
+  });
+
+  test("zlib_upgrade_exception_has_not_expired", () => {
+    // On expiry: drop the line from the Dockerfiles and this exception if the locked bases ship deb13u1, or bring Alex
+    // a new date. It fails closed, like a waiver.
+    expect(Date.now(), `ZLIB_UPGRADE expired at ${ZLIB_UPGRADE.expires}`).toBeLessThan(
+      Date.parse(ZLIB_UPGRADE.expires),
+    );
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
@@ -2078,6 +2151,7 @@ const USER_BY_KIND = new Map<Kind, string>([
   ["edge", "USER 65532:65532"],
   ["node", "USER 65532:65532"],
   ["postgres", "USER 999:999"],
+  ["objects", "USER 1000:1000"],
 ]);
 
 /** The instructions of the last stage, the one that becomes the image, with continuation lines joined. */
@@ -2179,8 +2253,8 @@ describe("runtime stage", () => {
 
   test("edge_runtime_has_no_package_manager", () => {
     // The rule runs over every edge-kind image, edge/Dockerfile among them.
-    expect(edgeDockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile"]));
-    for (const file of edgeDockerfiles) expect(apkKeptProblems(read(file)), file).toEqual([]);
+    expect(alpineDockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile", "images/objects.Dockerfile"]));
+    for (const file of alpineDockerfiles) expect(apkKeptProblems(read(file)), file).toEqual([]);
     const caddy = lock.caddy as Base;
     const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
     const kept = "the final stage keeps apk: its last apk command does not remove apk-tools";

@@ -112,7 +112,13 @@ describe("session store", () => {
     const { cookieValue, expiresAt } = await withClient(web, null, (db) => store.create(db, DID_A));
     expect(cookieValue).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const raw = Buffer.from(cookieValue, "base64url");
-    const rows = await sql<Record<string, unknown>>("SELECT * FROM app.session WHERE did = $1", [DID_A]);
+    // Every column web may read, by name: web holds column grants only, so `SELECT *` is refused as soon as the
+    // table has a column web was not granted.
+    const rows = await sql<Record<string, unknown>>(
+      "SELECT id_hash, did, created_at, last_seen_at, absolute_expires_at, email_confirmed, email_checked_at, " +
+        "issuer_origin FROM app.session WHERE did = $1",
+      [DID_A],
+    );
     const row = rows.find((r) => (r.id_hash as Buffer).equals(sha256(raw)));
     expect(row).toBeDefined();
     for (const value of Object.values(row ?? {})) {
@@ -134,7 +140,58 @@ describe("session store", () => {
     expect(read.clearCookie).toBe(false);
     expect(read.session?.did).toBe(DID_A);
     expect(read.session?.emailConfirmed).toBeNull();
+    expect(read.session?.emailCheckedAt).toBeNull();
     expect(read.session?.idHash.equals(sha256(Buffer.from(cookieValue, "base64url")))).toBe(true);
+  });
+
+  test("session.issuer_origin_roundtrip", async () => {
+    const { store, request } = setup();
+    const create = (issuerOrigin?: string | null) =>
+      withClient(web, null, (db) => store.create(db, DID_A, issuerOrigin === undefined ? {} : { issuerOrigin }));
+    const readBack = async (created: { cookieValue: string }) =>
+      (await store.read(request(created.cookieValue))).session?.issuerOrigin;
+    // Written once at creation as web (INSERT on the column, migration 0020) and returned by the read (SELECT).
+    expect(await readBack(await create("https://pds.example.com"))).toBe("https://pds.example.com");
+    expect(await readBack(await create("https://xn--bcher-kva.example"))).toBe("https://xn--bcher-kva.example");
+    // No origin, and a session row from before the column, read as null.
+    expect(await readBack(await create())).toBeNull();
+    expect(await readBack(await create(null))).toBeNull();
+    expect((await store.read(request(await insertSession(DID_A)))).session?.issuerOrigin).toBeNull();
+  });
+
+  test("session.issuer_origin_outside_the_column_check_is_stored_as_null", async () => {
+    const { store, request } = setup();
+    // Each of these would fail migration 0019's check; the session is still created, without the origin.
+    const refused = [
+      "http://pds.example.com",
+      "https://pds.example.com:8443",
+      "https://pds.example.com/",
+      "https://PDS.example.com",
+      "https://under_score.example.com",
+      "https://user@pds.example.com",
+      `https://${"a".repeat(254)}`,
+      "https://pds.example.com\n",
+      "",
+    ];
+    for (const issuerOrigin of refused) {
+      const { cookieValue } = await withClient(web, null, (db) => store.create(db, DID_A, { issuerOrigin }));
+      const read = await store.read(request(cookieValue));
+      expect(read.session?.did).toBe(DID_A);
+      expect(read.session?.issuerOrigin).toBeNull();
+    }
+  });
+
+  test("session.issuer_origin_is_never_updated_by_web", async () => {
+    const { store } = setup();
+    const { cookieValue } = await withClient(web, null, (db) =>
+      store.create(db, DID_A, { issuerOrigin: "https://pds.example.com" }),
+    );
+    const idHash = sha256(Buffer.from(cookieValue, "base64url"));
+    await expect(
+      withClient(web, null, (db) =>
+        db.query("UPDATE app.session SET issuer_origin = 'https://evil.example' WHERE id_hash = $1", [idHash]),
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
   });
 
   test("session.rotation", async () => {
@@ -284,11 +341,54 @@ describe("session store", () => {
   });
 
   test("session.no_token_set_ends", async () => {
-    // P2.04s: the library deletes a token set when its grant is dead; the next read ends the browser session too.
-    const { store, request } = setup();
-    const value = await insertSession(newDid());
-    expect(await store.read(request(value))).toEqual({ session: null, clearCookie: true });
-    expect(await rowFor(value)).toBeUndefined();
+    // P2.04s: the library deletes a token set when its grant is dead, and that ends every browser session on it.
+    // P2.03t (migration 0024, ADR 0049): the rows go with the set, in the same statement, so a later sign-in that
+    // stores a new set cannot make an old cookie valid again.
+    const { store, logged, request } = setup();
+    const owner = newDid();
+    await giveTokenSet(owner);
+    const values = [await insertSession(owner), await insertSession(owner)];
+    expect((await store.read(request(values[0] as string))).session?.did).toBe(owner);
+    await tokenSets.del(owner);
+    for (const value of values) expect(await rowFor(value)).toBeUndefined();
+    await giveTokenSet(owner);
+    for (const value of values) {
+      expect(await store.read(request(value))).toEqual({ session: null, clearCookie: true });
+    }
+    // An ended session is an ordinary unknown cookie: nothing is logged about it.
+    expect(logged).toEqual([]);
+  });
+
+  test("session.needs_a_token_set", async () => {
+    // The order the constraint requires: the token set first, then the session row. 23503 is foreign_key_violation
+    // (https://www.postgresql.org/docs/18/errcodes-appendix.html). The store's create fails the same way, so a
+    // sign-in whose set is gone by the time its session is written fails closed.
+    const { store, logged } = setup();
+    const owner = newDid();
+    await expect(insertSession(owner)).rejects.toMatchObject({ code: "23503" });
+    await expect(withTransaction(web, null, (db) => store.create(db, owner))).rejects.toMatchObject({ code: "23503" });
+    expect(await sql("SELECT 1 FROM app.session WHERE did = $1", [owner])).toEqual([]);
+    // The store throws the database's error and logs nothing: no DID reaches a log line from here.
+    expect(logged).toEqual([]);
+  });
+
+  test("session.token_refresh_keeps_sessions", async () => {
+    // A refresh stores the new token set over the old one. If the store ever deleted and re-inserted the row, the
+    // cascade would sign every browser out on each refresh; this fails then.
+    const owner = newDid();
+    await giveTokenSet(owner);
+    const values = [await insertSession(owner), await insertSession(owner)];
+    await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "B" } });
+    for (const value of values) expect((await rowFor(value))?.did).toBe(owner);
+  });
+
+  test("session.token_set_constraint", async () => {
+    const rows = await sql<{ name: string; on_delete: string; target: string }>(
+      "SELECT conname AS name, confdeltype AS on_delete, confrelid::regclass::text AS target " +
+        "FROM pg_catalog.pg_constraint WHERE conrelid = 'app.session'::regclass AND contype = 'f'",
+    );
+    // 'c' is ON DELETE CASCADE (https://www.postgresql.org/docs/18/catalog-pg-constraint.html).
+    expect(rows).toEqual([{ name: "session_did_token_set", on_delete: "c", target: "app.oauth_session" }]);
   });
 
   test("session.destroyAllForDid_in_tx", async () => {
@@ -338,8 +438,16 @@ describe("session store", () => {
     const second = await insertSession(owner);
     const one = await store.read(request(first));
     await withClient(web, null, (db) => store.setEmailConfirmed(db, one.session?.idHash as Buffer, true));
-    expect((await store.read(request(first))).session?.emailConfirmed).toBe(true);
-    expect((await store.read(request(second))).session?.emailConfirmed).toBeNull();
+    const checked = (await store.read(request(first))).session;
+    expect(checked?.emailConfirmed).toBe(true);
+    // P2.03m: the read carries when the answer was written, the row's own email_checked_at.
+    const [{ at }] = (await sql<{ at: Date }>("SELECT email_checked_at AS at FROM app.session WHERE id_hash = $1", [
+      checked?.idHash,
+    ])) as [{ at: Date }];
+    expect(checked?.emailCheckedAt).toEqual(at);
+    const unchecked = (await store.read(request(second))).session;
+    expect(unchecked?.emailConfirmed).toBeNull();
+    expect(unchecked?.emailCheckedAt).toBeNull();
     await withClient(web, null, (db) => store.setEmailConfirmed(db, { did: owner }, false));
     expect((await store.read(request(first))).session?.emailConfirmed).toBe(false);
     expect((await store.read(request(second))).session?.emailConfirmed).toBe(false);

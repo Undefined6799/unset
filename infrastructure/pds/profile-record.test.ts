@@ -26,7 +26,7 @@ function load(answer: (url: URL) => Response) {
     tokenSetRemains: async () => true,
     log,
   });
-  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: Date.now() + 60_000 };
+  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: performance.now() + 60_000 };
   return { result: loadProfileRecord(pdsCall, ctx, DID), urls };
 }
 
@@ -72,7 +72,7 @@ function save(answer: (url: URL, body: unknown) => Response) {
     tokenSetRemains: async () => true,
     log,
   });
-  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: Date.now() + 60_000 };
+  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: performance.now() + 60_000 };
   const seen: unknown[] = [];
   const result = saveProfileRecord(pdsCall, ctx, DID, (existing) => {
     seen.push(existing);
@@ -141,7 +141,7 @@ test("a refused build writes nothing", async () => {
     tokenSetRemains: async () => true,
     log,
   });
-  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: Date.now() + 60_000 };
+  const ctx = { memo: new Map(), deadline: new AbortController().signal, deadlineAt: performance.now() + 60_000 };
   const result = await saveProfileRecord(pdsCall, ctx, DID, () => ({ ok: false, code: "profile.name_required" }));
   expect(result).toEqual({ kind: "ok", value: { kind: "refused", code: "profile.name_required" } });
   expect(calls.map((url) => url.pathname)).toEqual(["/xrpc/com.atproto.repo.getRecord"]);
