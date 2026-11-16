@@ -2,6 +2,7 @@
 // per request, expired by the database clock. Trusted base (SE-6): the bearer-credential store.
 export {
   type CreatedSession,
+  type CreateOptions,
   createSessionStore,
   END_SESSIONS_REASONS,
   type EndSessionsReason,

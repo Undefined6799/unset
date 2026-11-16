@@ -51,7 +51,11 @@ Objects created for this store:
 | `audit.segment`, `audit.redaction_log` | `0017_audit_retention.sql` |
 | `audit.redact`, `audit.erase_subject`, `audit.seal_segment`, `audit.mark_anchored`, `audit.drop_segment`, `audit.segment_transition` | `0018_audit_retention_functions.sql` |
 
-`0008_audit.sql` runs `SET ROLE audit_owner` before the functions. `0009_audit_tables.sql` creates the tables as `audit_owner`.
+`0008_audit.sql` runs `SET ROLE audit_owner` before the functions. `0009_audit_tables.sql` and `0017_audit_retention.sql` create their tables as `audit_owner`.
+
+`audit.segment` is one segment per lane and calendar month (UTC), numbered YYYYMM. `prev_hash` is the hash before `first_seq` and `head_hash` the `row_hash` of `last_seq`. No personal data.
+
+`audit.redaction_log` is why a body row is missing: the lane, the seq, the part (`redact`, `erase` or `drop`) and the login role. It keeps the month only, never the instant. No personal data.
 
 `0018_audit_retention_functions.sql` runs `SET ROLE audit_owner` and replaces `audit.refuse_change`. A `DELETE` passes only when `current_user` is `audit_owner` and `current_setting('audit.maintenance', true)` is `body` or `segment` on `audit.event_body`, or `segment` on `audit.chain`. `UPDATE` and `TRUNCATE` still raise `audit is append-only` (`UA005`). The file adds triggers `segment_append_only`, `segment_transitions` and `redaction_log_append_only`. `audit.segment_transition` lets an `UPDATE` of `audit.segment` set `anchored_at` or `dropped_at` once, and refuses any other change.
 

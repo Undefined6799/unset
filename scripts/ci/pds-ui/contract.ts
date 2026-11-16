@@ -6,13 +6,15 @@ import { join } from "node:path";
  * tag) and the exact builder its frontend is built with. P1.38j: atproto at 0.5.49 (5d6febdd) sets devEngines Node
  * "^22.23.4 || ^24.22.1 || ^26.12.1" and pnpm 11.11.0 refuses Node 26.10.0, so the pair names the
  * node:26.12.1-trixie-slim index (registry-1.docker.io, read 2026-10-28). P1.38m: 0.4.5037 was dropped once the
- * 0.4.5049 re-pin (P1.38h) merged, as Alex's line of 2026-10-26T20:20:14Z allowed it only until then.
+ * 0.4.5049 re-pin (P1.38h) merged, as Alex's line of 2026-10-26T20:20:14Z allowed it only until then. 0.4.5051 ships
+ * @atproto/pds 0.5.51 (atproto fb16c8e0, tag @atproto/pds@0.5.51), whose devEngines are unchanged, so it keeps the
+ * same builder. P1.38o: 0.4.5049 was dropped once the 0.4.5051 re-pin (#1611) merged.
  */
 export const PAIRS: Readonly<Record<string, Pair>> = {
-  "0.4.5049": {
-    pds: "0.5.49",
-    oauthProvider: "0.24.3",
-    oauthProviderUi: "0.10.7",
+  "0.4.5051": {
+    pds: "0.5.51",
+    oauthProvider: "0.25.1",
+    oauthProviderUi: "0.11.0",
     builder: {
       ref: "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec",
       node: "26.12.1",

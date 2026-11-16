@@ -26,6 +26,35 @@ type EnvName = keyof typeof SENTINELS;
 /** The values a config was adapted with; a name the env does not set is absent. */
 export type AdaptedEnv = Readonly<Partial<Record<EnvName, string>>>;
 
+/**
+ * How `caddy adapt` is run in the edge image, by the preflight's C18 and by adapted.image.test.ts alike (P1.39c), so
+ * the flags C18 uses are run against the real image in CI. Nothing to reach, write or gain: no pull, no network, a
+ * read-only root, no new privileges, the edge's uid, and every capability dropped but the one the binary's own file
+ * capability names (Dockerfile: `setcap cap_net_bind_service=+ep`). Without that one the kernel refuses to start the
+ * binary at all (capabilities(7), "Capabilities and execution of programs by root" and the EPERM note on execve); the
+ * compose edge service has the same pair. With no network there is nothing to bind.
+ */
+export const ADAPT_RUN_FLAGS = [
+  "--rm",
+  "--pull",
+  "never",
+  "--network",
+  "none",
+  "--read-only",
+  "--cap-drop",
+  "ALL",
+  "--cap-add",
+  "NET_BIND_SERVICE",
+  "--security-opt",
+  "no-new-privileges",
+  "--user",
+  "65532:65532",
+  "--entrypoint",
+  "caddy",
+] as const;
+/** The command after the image: adapt the image's own Caddyfile. */
+export const ADAPT_COMMAND = ["adapt", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"] as const;
+
 /** The envs with a reviewed config, by file name in adapted/. */
 export const ADAPTED_ENVS = ["prod", "dev", "local"] as const;
 export type AdaptedEnvName = (typeof ADAPTED_ENVS)[number];

@@ -14,6 +14,7 @@ import {
   listDockerfiles,
   PDS_IGNOREFILE,
   PDS_RECIPE,
+  SEAWEEDFS_IGNOREFILE,
 } from "./list-dockerfiles.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -75,16 +76,24 @@ describe("list dockerfiles", () => {
     // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
     // P2.24t: the pds-ui recipe reads the PDS image's file. P1.29v follow-up (Alex's card 2026-10-28T01:40:52Z): the
     // two app images read the app file, which holds only the zod finding.
-    expect(IGNOREFILES).toEqual({ "node-app": APP_IGNOREFILE, migrate: APP_IGNOREFILE });
+    // P2.18s (Alex's "yes seaweedfs waiver", 2026-11-15T23:36:23Z): the objects image ships upstream's weed binary,
+    // so its scan reads the SeaweedFS file, whose one entry names usr/bin/weed and x/net v0.61.0 only.
+    expect(SEAWEEDFS_IGNOREFILE).toBe(".github/trivyignore.seaweedfs.yaml");
+    expect(IGNOREFILES).toStrictEqual({
+      "node-app": APP_IGNOREFILE,
+      migrate: APP_IGNOREFILE,
+      objects: SEAWEEDFS_IGNOREFILE,
+    });
     for (const image of listed) {
       const expected =
         image.dockerfile === PDS_RECIPE
           ? PDS_IGNOREFILE
           : Object.hasOwn(IGNOREFILES, image.name)
-            ? APP_IGNOREFILE
+            ? IGNOREFILES[image.name]
             : "/dev/null";
       expect(image.ignorefile, image.name).toBe(expected);
     }
+    expect(listed.find((image) => image.name === "objects")?.ignorefile).toBe(SEAWEEDFS_IGNOREFILE);
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
     const cli = runCli(ROOT, output);
@@ -206,12 +215,12 @@ describe("native realpath containment (P0.09v)", () => {
 
 describe("the pds-ui recipe's ignore file (P2.24t)", () => {
   const BASE =
-    "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf";
+    "ghcr.io/bluesky-social/pds:0.4.5051@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6";
   const BUILDER =
     "docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec";
-  const REVISION = "5d6febdd96671891bd82f07fece7eb089c6fe931";
-  const ARCHIVE = "d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be";
-  const UI = "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist";
+  const REVISION = "fb16c8e0247fb5159fd23ce0e5301249532d1b4e";
+  const ARCHIVE = "8ec64f48214236a37ffe739b17fe80bfd060c2cf438ff028484cb24ebcc4dc08";
+  const UI = "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.11.0/node_modules/@atproto/oauth-provider-ui/dist";
   const lock = JSON.stringify({
     schema: 1,
     base: { ref: BASE, platform: "linux/amd64" },
@@ -219,7 +228,7 @@ describe("the pds-ui recipe's ignore file (P2.24t)", () => {
     source: {
       revision: REVISION,
       archiveSha256: ARCHIVE,
-      lockSha256: "b03bf840f28d91bb69a06b6252e61904611c104adc4d69e2282b2c866158cf07",
+      lockSha256: "371a48189e93b5868a3538ffc9eb576a1dae48ad671aa029adda9851def1b2e5",
     },
     uiDirectory: UI,
   });

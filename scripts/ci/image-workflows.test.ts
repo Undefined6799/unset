@@ -62,7 +62,9 @@ describe("image workflows", () => {
         file === "images.yml" && id === "pins" ? { contents: "read", packages: "read" } : { contents: "read" };
       // P2.26m: publish-images.yml's bump job opens the lock-bump pull request; it holds these two writes and no more.
       const bump = file === "publish-images.yml" && id === "bump";
-      const held = bump ? { contents: "write", "pull-requests": "write" } : reads;
+      // P2.18t: mirror.yml's verdict job reads only its needed job's output, so it holds nothing.
+      const verdict = file === "mirror.yml" && id === "verdict";
+      const held = bump ? { contents: "write", "pull-requests": "write" } : verdict ? {} : reads;
       if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual(held);
     }
   });

@@ -45,7 +45,7 @@ files and 32 directory levels. Larger/unsupported inputs fail for review.
 {
   "schema": 1,
   "base": {
-    "ref": "ghcr.io/bluesky-social/pds:0.4.5049@sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf",
+    "ref": "ghcr.io/bluesky-social/pds:0.4.5051@sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6",
     "platform": "linux/amd64"
   },
   "builder": {
@@ -54,11 +54,11 @@ files and 32 directory levels. Larger/unsupported inputs fail for review.
     "pnpm": "11.11.0"
   },
   "source": {
-    "revision": "5d6febdd96671891bd82f07fece7eb089c6fe931",
-    "archiveSha256": "d607296e338b066c6efb1282a8bbc05fd76009907453b20c6098c0fa739bb9be",
-    "lockSha256": "b03bf840f28d91bb69a06b6252e61904611c104adc4d69e2282b2c866158cf07"
+    "revision": "fb16c8e0247fb5159fd23ce0e5301249532d1b4e",
+    "archiveSha256": "8ec64f48214236a37ffe739b17fe80bfd060c2cf438ff028484cb24ebcc4dc08",
+    "lockSha256": "371a48189e93b5868a3538ffc9eb576a1dae48ad671aa029adda9851def1b2e5"
   },
-  "uiDirectory": "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.10.7/node_modules/@atproto/oauth-provider-ui/dist"
+  "uiDirectory": "app/node_modules/.pnpm/@atproto+oauth-provider-ui@0.11.0/node_modules/@atproto/oauth-provider-ui/dist"
 }
 ```
 
@@ -67,8 +67,9 @@ and the immutable image's package JSON must agree on the `@atproto/pds`, `@atpro
 `@atproto/oauth-provider-ui` versions that `PAIRS` in `contract.ts` lists for the lock's base tag, and `uiDirectory`
 must name that pair's `oauth-provider-ui` version. `builder.ref` and `builder.node` must equal the pair's exact
 builder. A new upstream tag needs a reviewed `PAIRS` row first (trusted base), then the re-pin. Today `PAIRS` holds
-only 0.4.5049 (0.5.49, 0.24.3, 0.10.7; builder `node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because
-atproto at 0.5.49 requires Node ^26.12.1); 0.4.5037 was dropped after the P1.38h re-pin (P1.38m).
+only 0.4.5051 (0.5.51, 0.25.1, 0.11.0; builder `node:26.12.1-trixie-slim@sha256:36793bcb…`, Node 26.12.1, because
+atproto at 0.5.51 requires Node ^26.12.1); 0.4.5037 was dropped after the P1.38h re-pin to 0.4.5049 (P1.38m), and
+0.4.5049 after the re-pin to 0.4.5051 (P1.38o).
 
 The Dockerfile has exactly three stages: `FROM <builder.ref> AS ui-build`, `FROM scratch AS ui-artifact`, and
 `FROM <base.ref>`. Its one ADD is exactly:

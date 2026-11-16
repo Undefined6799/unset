@@ -49,11 +49,15 @@ jobs:
       MIRROR_LIST: deployment/mirror.list.json
       BASES_LOCK: deployment/images/bases.lock.json
       TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    outputs:
+      passed: ${{ steps.scan.outputs.passed }}
+      failed: ${{ steps.scan.outputs.failed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Scan every upstream source by digest
+        id: scan
         # `shell: bash` runs the step as `bash --noprofile --norc -eo pipefail {0}`; with no shell key Actions runs
         # `bash -e {0}`, and the HIGH run's status would be tee's (P1.28w; docs.github.com workflow syntax, "shell").
         shell: bash
@@ -71,9 +75,15 @@ jobs:
           # finds anything at --severity, so exit 2 below means HIGH findings and any other non-zero is a failure.
           # P1.34m (record unset-plan/book-edits/2026-10-13-p134m-pr-scan-new-runtime-pins.md, Amendment 2): a failing
           # scan no longer stops the loop, so one red base cannot hide the ones after it. Each failing source gets an
-          # error annotation naming it (docs.github.com workflow commands, "Setting an error message"), and the step
-          # fails after the last source. A list or lock problem still fails at once.
+          # error annotation naming it (docs.github.com workflow commands, "Setting an error message").
+          # P2.18t: the step then records which sources passed and how many failed, instead of failing, so
+          # copy-and-sign mirrors the ones that passed while a red base waits for its fix; the verdict job turns the
+          # run red for any failure. A list, lock or stage problem still fails this step at once, and then neither the
+          # verdict nor copy-and-sign runs ("If a job fails or is skipped, all jobs that need it are skipped",
+          # docs.github.com workflow syntax, jobs.<job_id>.needs, read 2026-11-16).
           failed=0
+          : > "$RUNNER_TEMP/passed"
+          : > "$RUNNER_TEMP/failed"
           while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
             # P1.33c (Alex's typed line "yes PDS exceptions .github/trivyignore.pds.yaml
@@ -123,7 +133,12 @@ jobs:
                 case "$status" in
                   0) ;;
                   2) echo "::warning title=mirror::HIGH findings in build-only base $source (reported, not failing)" ;;
-                  *) echo "::error title=mirror::scan failed (exit $status) for $source"; failed=$((failed + 1)); continue ;;
+                  *)
+                    echo "::error title=mirror::scan failed (exit $status) for $source"
+                    failed=$((failed + 1))
+                    echo "$source" >> "$RUNNER_TEMP/failed"
+                    continue
+                    ;;
                 esac
                 ;;
               *) echo "no known stage for $source: $stage"; exit 1 ;;
@@ -135,13 +150,34 @@ jobs:
             if [ "$status" -ne 0 ]; then
               echo "::error title=mirror::scan failed (exit $status) for $source"
               failed=$((failed + 1))
+              echo "$source" >> "$RUNNER_TEMP/failed"
+            else
+              echo "$source" >> "$RUNNER_TEMP/passed"
             fi
           done < "$RUNNER_TEMP/entries"
-          if [ "$failed" -gt 0 ]; then
-            echo "$failed upstream source(s) failed the scan"
+          # A source that failed under any entry is never passed, even if another entry with the same source passed.
+          passed="$(jq -cRn --rawfile failed "$RUNNER_TEMP/failed" '[inputs] - ($failed | split("\n"))' < "$RUNNER_TEMP/passed")"
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+  # P2.18t: red for every source that failed the scan, on a push and on the weekly schedule alike. An output that is
+  # not a count of 0, a missing one included, is red.
+  verdict:
+    needs: scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail when any source failed the scan
+        env:
+          FAILED: ${{ needs.scan.outputs.failed }}
+        run: |
+          if [ "$FAILED" != 0 ]; then
+            echo "::error title=mirror::${FAILED:-an unknown number of} upstream source(s) failed the scan"
             exit 1
           fi
 
+  # P2.18t: only the sources this run's scan passed are copied and signed; with none, the copy step fails.
   copy-and-sign:
     needs: scan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -159,6 +195,7 @@ jobs:
       CRANE_VERSION: v0.22.1
       CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PASSED: ${{ needs.scan.outputs.passed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -183,7 +220,10 @@ jobs:
       - name: Copy, sign and lock each source
         shell: bash
         run: |
-          jq -r '.[] | [.source, .mirror] | @tsv' "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
+          # The passed list only narrows the mirror list: an entry is copied when its source is, exactly, one that passed.
+          jq -r --argjson passed "$PASSED" \
+            '.[] | select(.source as $source | any($passed[]; . == $source)) | [.source, .mirror] | @tsv' \
+            "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
           test -s "$RUNNER_TEMP/entries"
           echo '{}' > "$RUNNER_TEMP/mirror.lock.json"
           while IFS=$'\t' read -r source mirror; do
