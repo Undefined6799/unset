@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { DEV_EDGE_ADDRESS, DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/caddyfile.ts";
+import { DEV_LISTENER, DEV_PROXY_ADDRESS } from "./edge/adapted-rules.ts";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
@@ -585,7 +585,10 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_SERVICE_HANDLE_DOMAINS: "${PDS_SERVICE_HANDLE_DOMAINS}",
       PDS_PORT: "3000",
       PDS_DATA_DIRECTORY: "/home/node",
-      PDS_BLOBSTORE_DISK_LOCATION: "/home/node/blocks",
+      PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+      PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+      PDS_BLOBSTORE_S3_REGION: "us-east-1",
+      PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
       PDS_BLOB_UPLOAD_LIMIT: "5242880",
       PDS_DID_PLC_URL: "https://plc.directory",
       PDS_INVITE_REQUIRED: "true",
@@ -623,6 +626,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       "PDS_ADMIN_PASSWORD",
       "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
       "PDS_RECOVERY_DID_KEY",
+      "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
+      "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
       "PDS_EMAIL_SMTP_URL",
       "PDS_MODERATION_EMAIL_SMTP_URL",
     ]);
@@ -681,7 +686,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // only the mount point exists in a fresh volume (the first CI start of the stack crashed on /home/node/pds).
     const env = envOf(pds);
     expect(env.get("PDS_DATA_DIRECTORY")).toBe("/home/node");
-    expect(env.get("PDS_BLOBSTORE_DISK_LOCATION")?.startsWith("/home/node/")).toBe(true);
+    // Blobs are in the object store since P2.18p, so no disk store points anywhere.
+    expect(env.has("PDS_BLOBSTORE_DISK_LOCATION")).toBe(false);
   });
 
   test("no_pds_disable_or_dev_mode_variable", () => {
@@ -724,7 +730,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // to public unicast addresses. The PDS is still never on the app network (architecture 2026-10-15 02:05Z, option C).
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
     expect(raw.services.edge?.networks).toEqual({ edge: null, app: null, newt_edge: { ipv4_address: EDGE_ADDRESS } });
-    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress"]);
+    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress", "objects_pds"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
     expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
   });
@@ -849,10 +855,13 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // The PDS half: @atproto/pds 0.5.37 makes its public URL `https://${hostname}` unless the hostname is localhost
     // (dist/config/config.js:10-13), and it trusts X-Forwarded-Proto from private addresses (dist/index.js:178), which
     // the edge sets to https itself. So its hostname comes from configuration, is never localhost, and nothing in its
-    // env names a plain-http URL.
+    // env names a plain-http URL. The one exception is the object store's internal S3 origin (P2.18p; ADR 0041
+    // Decision 6: plain HTTP on an internal network, each request signed), which is no public URL, pinned exactly.
     const pds = new Map(envOf(service(dev(), "pds")));
     expect(pds.get("PDS_HOSTNAME")).toBe("${PDS_HOSTNAME}");
     expect(example).toMatch(/^PDS_HOSTNAME=(?!localhost$)\S+$/m);
+    expect(pds.get("PDS_BLOBSTORE_S3_ENDPOINT")).toBe("http://objects:8333");
+    pds.delete("PDS_BLOBSTORE_S3_ENDPOINT");
     const pdsEnv = [...pds.values(), read("env/pds.example.env")].join("\n");
     expect(pdsEnv).not.toMatch(/http:\/\//i);
     expect(read("edge/snippets/upstream.caddy")).toMatch(/^\t\theader_up X-Forwarded-Proto https$/m);
@@ -885,6 +894,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     web_oauth_client_keys: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
+    objects_s3: 1000,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1038,7 +1048,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 11 mounted secrets" },
+      { pass: true, reason: "3 files, 12 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
@@ -1084,7 +1094,7 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
     // The cross reds (P1.37v): the address the edge's dev sites bind and its one trusted proxy, both in
     // deployment/edge (P1.36b, P1.36j), are exactly the addresses this file gives the edge and Newt on newt_edge; the
     // trusted listener is the dev sites' https listener; every zone keys on the client address behind Newt.
-    expect([DEV_EDGE_ADDRESS, DEV_PROXY_ADDRESS]).toEqual([EDGE_ADDRESS, NEWT_ADDRESS]);
+    expect(DEV_PROXY_ADDRESS).toBe(NEWT_ADDRESS);
     expect(DEV_LISTENER).toBe(`${EDGE_ADDRESS}:443`);
     const caddyfile = read("edge/Caddyfile");
     expect(caddyfile).toContain(`\tservers ${EDGE_ADDRESS}:443 {\n\t\ttrusted_proxies static ${NEWT_ADDRESS}/32\n`);

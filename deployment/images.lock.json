@@ -1,32 +1,38 @@
 {
   "postgres": {
-    "ref": "ghcr.io/undefined6799/unset/postgres@sha256:81c34ec547797dd37c669b4b72f22f7424a0767e47804674b27cd21c97af5018",
+    "ref": "ghcr.io/undefined6799/unset/postgres@sha256:244cbae4d54ccdac0a305b4f6e9e54f28f230be5e462ef5e3157de5d80ac4479",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
     "verify": "cosign-keyless"
   },
   "migrate": {
-    "ref": "ghcr.io/undefined6799/unset/migrate@sha256:2731b8d4e7de4dbb84a1d0cded71b22ec1646e188bcb1bd629bf16530ddedac1",
+    "ref": "ghcr.io/undefined6799/unset/migrate@sha256:72634dc29289d14f7a2ebb8bb16625ab8e3853d40e0d817f9e5312a727ce4999",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
     "verify": "cosign-keyless"
   },
   "pds": {
-    "ref": "ghcr.io/undefined6799/unset/pds@sha256:cbe91f4582b10a3e20f068759084c2b89aa5ecc819defbf1958f15c9cd34d1c3",
+    "ref": "ghcr.io/undefined6799/unset/pds@sha256:3004cea8062769d5c434bb3ae0dd6e0a7be9dc304876ca2e4795e546468b5a85",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
     "verify": "cosign-keyless"
   },
   "edge": {
-    "ref": "ghcr.io/undefined6799/unset/edge@sha256:a7a28e05567b92b49b654432a89bdeec5b8ace72fea02ad581095364fe453088",
+    "ref": "ghcr.io/undefined6799/unset/edge@sha256:df6b764a925b1b335cc736a57b5b870326d4daedd280afb215bbb19d8af64ae3",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
     "verify": "cosign-keyless"
   },
   "web": {
-    "ref": "ghcr.io/undefined6799/unset/web@sha256:1e1aee1c618f0b0220adb47e3911b713102ce271f30aa19f5db60ef11aeddad3",
+    "ref": "ghcr.io/undefined6799/unset/web@sha256:9220ad067cca8d9dac844ed5bad2a848d14ba28eb6416c04343d57f9e24ed754",
     "origin": "first-party",
-    "gitCommit": "a4f8dbf49fa96fbb0d3ff0e401582e3611637453",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
+    "verify": "cosign-keyless"
+  },
+  "objects": {
+    "ref": "ghcr.io/undefined6799/unset/objects@sha256:02e3a07fb0b1160dd54b23977749cabf8d82de53c295957ff70602635ff53796",
+    "origin": "first-party",
+    "gitCommit": "cb976b93eae0e91c9eda454a532cc681d38b1520",
     "verify": "cosign-keyless"
   },
   "newt": {

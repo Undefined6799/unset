@@ -76,6 +76,15 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * tag or digest, or built from the PDS Dockerfile (dev --source and local, P1.37y; Codex on #1309), and more than one
  * fails; the edge is the service running the edge image as C25 knows it (runsBuilt).
  * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
+ *
+ * One exemption, as narrow as it can be (P2.18p, ADR 0041 Decision 5): under local and dev only, the service named
+ * objects that runs the lock's objects image (or, under local, builds deployment/images/objects.Dockerfile) may share
+ * objects_pds, and that network alone, with the PDS, so the PDS reaches the store's S3 port. Prod has no exemption,
+ * as C33 pins no S3 setting there until P5.01 picks the production store. objects_pds holds exactly those two; the edge, a third
+ * member, or the store on any other PDS network fails. The PDS still trusts the store as a proxy, because @atproto/pds
+ * 0.5.51 hard-codes the private ranges in `trust proxy` and listens on every interface (packages/pds/src/index.ts at
+ * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
+ * address.
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
   const { services } = inputs.compose;
@@ -90,11 +99,25 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   const [pds] = pdses;
   if (pds === undefined) return [];
   const isEdge = (s: Service) => runsBuilt(s, inputs, lock.edge?.ref, EDGE_DOCKERFILE) === "yes";
-  const allowed = (s: Service, network: string) => !pds.networks.includes(network) || isEdge(s);
-  return services
+  const isStore = (s: Service) =>
+    inputs.env !== "prod" &&
+    s.name === "objects" &&
+    runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
+  const allowed = (s: Service, network: string) =>
+    !pds.networks.includes(network) || (network === STORE_NETWORK ? isStore(s) : isEdge(s));
+  const problems = services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
+  const onStoreNetwork = services.filter((s) => s.networks.includes(STORE_NETWORK));
+  if (onStoreNetwork.length > 0 && !(onStoreNetwork.length === 2 && onStoreNetwork.includes(pds))) {
+    problems.push(`${STORE_NETWORK} holds a service other than the pds and the store`);
+  }
+  return problems;
 }
+
+/** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */
+const STORE_NETWORK = "objects_pds";
+const OBJECTS_DOCKERFILE = "deployment/images/objects.Dockerfile";
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The Dockerfile a built PDS runs from (compose.local.yaml and compose.dev.source.yaml). */

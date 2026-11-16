@@ -97,6 +97,8 @@ describe("session store without a database", () => {
 
   test("session.end_sessions_single_sql", () => {
     // One mechanism (phase-3 Notes): only the definer's migration deletes a DID's sessions; TypeScript calls it.
+    // P2.03t (migration 0024, ADR 0049): the database also ends them when the DID's token set is deleted, through a
+    // foreign key's cascade. That is no statement anyone writes, so this list is unchanged.
     const root = join(import.meta.dirname, "..", "..");
     const pattern = "DELETE FROM app[.]session WHERE did";
     const files = execFileSync("git", ["grep", "--untracked", "-l", "-i", "-E", pattern, "--", "*.ts", "*.sql"], {

@@ -8,6 +8,7 @@ import {
   CLIENT_ID,
   generate,
   maskLines,
+  objectsIdentities,
   p256DidKey,
   probeVerdict,
   psRows,
@@ -53,6 +54,16 @@ describe("generated values (D2)", () => {
     expect(v.jwtSecret).toMatch(/^[0-9a-f]{64}$/);
     expect(v.adminPassword).toMatch(/^[0-9a-f]{64}$/);
     expect(v.rotationKey).toMatch(/^[0-9a-f]{64}$/);
+    // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
+    expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
+    expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
+    const [identity, ...others] = JSON.parse(objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret)).identities;
+    expect(others).toEqual([]);
+    expect(identity).toEqual({
+      name: "pds",
+      credentials: [{ accessKey: v.pdsStoreKeyId, secretKey: v.pdsStoreSecret }],
+      actions: ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"],
+    });
     expect(isP256DidKey(v.recoveryDidKey)).toBe(true);
     const keyring = JSON.parse(v.keyring);
     expect(keyring.active).toBe("k1");
@@ -133,16 +144,18 @@ describe("the one bounded wait (D4)", () => {
     { Service: "pds", State: "running", Health: "" },
     { Service: "edge", State: "running", Health: "" },
     { Service: "web", State: "running", Health: "" },
+    { Service: "objects", State: "running", Health: "healthy" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
 
   test("wait_passes_only_when_every_service_is_up", () => {
-    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web"]);
+    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects"]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");
     expect(servicesVerdict(swap("migrate", { State: "exited", ExitCode: 1 }))).toBe("failed: migrate exited");
     expect(servicesVerdict(swap("pds", { State: "exited", ExitCode: 0 }))).toBe("failed: pds exited");
+    expect(servicesVerdict(swap("objects", { State: "running", Health: "starting" }))).toBe("starting");
     expect(servicesVerdict(swap("postgres", { State: "running", Health: "unhealthy" }))).toBe(
       "failed: postgres unhealthy",
     );

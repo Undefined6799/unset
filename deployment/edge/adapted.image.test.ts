@@ -1,6 +1,6 @@
 // P1.39a (ADR 0046): each reviewed config in adapted/ is exactly what the built edge image adapts for that env's
 // files with the sentinel values. It builds the edge image, so it is an *.image.test.ts file (P1.28i), and carries no
-// skip of its own (P1.28j): without Docker it fails. Like caddyfile.image.test.ts, it makes its own Docker calls with
+// skip of its own (P1.28j): without Docker it fails. It makes its own Docker calls with
 // node built-ins, so a trusted test owns its inputs.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -98,7 +98,7 @@ function imageConfig(image: string): Record<string, string> {
 
 describe("reviewed adapted configs against caddy adapt (P1.39a)", () => {
   afterAll(() => {
-    // The tag only, never -f, and every tag tried (P1.27z, P1.11r), as caddyfile.image.test.ts removes its own.
+    // The tag only, never -f, and every tag tried (P1.27z, P1.11r).
     removeEveryTag(built, (tag) => {
       const removed = docker(["rmi", tag], CALL_MS);
       if (removed.code !== 0) throw new Error(removed.err.trim().slice(-500));
@@ -115,7 +115,7 @@ describe("reviewed adapted configs against caddy adapt (P1.39a)", () => {
     return tag;
   };
 
-  // The image holds the repository's config byte for byte (moved here from caddyfile.image.test.ts, P1.39d), so what
+  // The image holds the repository's config byte for byte (moved here from the reader's image test, P1.39d), so what
   // it adapts in the next test is the checkout's files and no others. A test of its own: with the three adapts its
   // budget would reach run.ts's 600 s, which buildTestBudget refuses.
   // Its docker calls after the build: ls, stat and cat of the config (3).

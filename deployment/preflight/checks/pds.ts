@@ -196,13 +196,16 @@ const PDS_ENV_SECRETS = [
   "PDS_RECOVERY_DID_KEY",
 ];
 const PDS_ENV_MAIL = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL"];
+/** The PDS's key pair for the object store (P2.18p, C33), under local and dev; P5.01 decides prod's. */
+export const PDS_STORE_KEYS = ["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"];
 /** A name C30 may print: one of ours. Anything else in a key slot might be a pasted value, so it is not named. */
 const PRINTABLE = /^PDS_[A-Z0-9_]+$/;
 
 /**
  * C30: the PDS's env file holds exactly its set of names (P1.36q), so no unreviewed setting or stray secret rides in
- * beside the secrets; every other setting is a compose literal. One env per host: four names under local, which sends
- * no mail, and six under dev and prod. Names only; a value is never read.
+ * beside the secrets; every other setting is a compose literal. One env per host: the four secrets and the store's key
+ * pair under local, which sends no mail; those and both mail URLs under dev; the four secrets and the mail URLs under
+ * prod, until P5.01 picks its store. Names only; a value is never read.
  */
 export const c30: Check = {
   id: "C30",
@@ -214,9 +217,14 @@ export const c30: Check = {
     if (pds !== undefined && pds.envFiles.length !== 1)
       return fail(`the pds service reads ${pds.envFiles.length} env files; its set lives in pds.env alone`);
     // Compose's environment wins over env_file, so a name of the set written there would shadow pds.env's value.
-    const inCompose = pds?.environment.find(([name]) => [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL].includes(name));
+    const kept = [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL, ...PDS_STORE_KEYS];
+    const inCompose = pds?.environment.find(([name]) => kept.includes(name));
     if (inCompose !== undefined) return fail(`${inCompose[0]} is set in the pds service's environment, not pds.env`);
-    const expected = stage === "local" ? PDS_ENV_SECRETS : [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL];
+    const expected = [
+      ...PDS_ENV_SECRETS,
+      ...(stage === "local" ? [] : PDS_ENV_MAIL),
+      ...(stage === "prod" ? [] : PDS_STORE_KEYS),
+    ];
     const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
     const repeated = names.find((name, i) => names.indexOf(name) !== i);
     if (repeated !== undefined) return fail(`${label(repeated)} is repeated in the pds env file`);

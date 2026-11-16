@@ -21,7 +21,7 @@ describe("schemas", () => {
       const result = await client.query<{ name: string; owner: string }>(
         "SELECT nspname AS name, nspowner::regrole::text AS owner FROM pg_catalog.pg_namespace " +
           "WHERE nspname = ANY($1) ORDER BY nspname",
-        [["app", "audit", "idx", "index", "types"]],
+        [["app", "audit", "core", "idx", "index", "types"]],
       );
       return result.rows;
     });
@@ -29,6 +29,7 @@ describe("schemas", () => {
     expect(rows).toEqual([
       { name: "app", owner: "migrator" },
       { name: "audit", owner: "audit_owner" },
+      { name: "core", owner: "migrator" },
       { name: "idx", owner: "migrator" },
       { name: "types", owner: "migrator" },
     ]);

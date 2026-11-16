@@ -50,7 +50,8 @@ one-paragraph entry; new decisions also get their own file.
 | [0043](0043-audit-actor-column.md) | The audit side row names its actor in a DID column, so erasure finds a person's rows as actor as well as subject (P1.15k) | Accepted 2026-11-15 |
 | [0044](0044-trusted-paths-labelled-not-isolated.md) | A trusted-path change carries the `security-review` label and is reviewed at its exact head; the trusted-base split and its guards are retired; five template headings (P0.09c) | Accepted 2026-11-15 |
 | [0045](0045-kit-enforces-the-session-gate.md) | The request kit enforces the session gate on routes that require one (P1.04g) | Accepted 2026-11-15 |
-| [0046](0046-edge-checks-read-caddy-adapt.md) | The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile (P1.39a to P1.39e) | Proposed |
+| [0046](0046-edge-checks-read-caddy-adapt.md) | The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile (P1.39a to P1.39e) | Accepted |
 | [0047](0047-lock-bump-auto-merge.md) | A lock bump the publish run opened merges itself once the `lock` check is required and green (P2.26n) | Accepted 2026-11-16 |
 | [0050](0050-object-store-admin-through-its-shell.md) | The object store's buckets and clean-up run through its own shell; no S3 admin key; supersedes two clauses of 0041 (P2.18s) | Accepted 2026-11-16 |
 | [0048](0048-session-issuer-origin.md) | The session row records the sign-in server's origin, so account pages stop unsealing the token set for a link (P2.03n) | Accepted 2026-11-15 |
+| [0049](0049-sessions-end-with-their-token-set.md) | A browser session ends with its token set, enforced by a foreign key with ON DELETE CASCADE (P2.03t) | Accepted 2026-11-16 |

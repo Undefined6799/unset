@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { ADAPTED_ENVS, type AdaptedEnvName, canonical, type Json, reviewedDifference, SENTINELS } from "./adapted.ts";
-import { ENV_NAMES, type EnvName } from "./caddyfile.ts";
+import { ENV_NAMES, type EnvName } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
 const NAMES = Object.keys(ENV_NAMES) as EnvName[];

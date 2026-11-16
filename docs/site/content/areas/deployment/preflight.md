@@ -46,9 +46,10 @@ Checks, in `CHECKS` order (`deployment/preflight/checks/index.ts`). `LOCAL_CHECK
 | C27 | `checks/build.ts` | A tmpfs on `/var/run/postgresql` is only on the service that runs the postgres image. |
 | C28 | `checks/pds.ts` | `PDS_DID_PLC_URL` is set and is `https://plc.directory`. |
 | C29 | `checks/local-only-keys.ts` | Dev and prod: no `LOCAL_ONLY_KEY_NAMES` key, and each origin key is `https:` (`ASSETS_BASE` may be empty). Local skips. |
-| C30 | `checks/pds.ts` | The `pds` service has one env file. Its names are the four `PDS_ENV_SECRETS`, plus the two mail URLs under dev and prod. Those names are not also set in the compose `environment`. |
+| C30 | `checks/pds.ts` | The `pds` service has one env file. Its names are the four `PDS_ENV_SECRETS`, plus the two mail URLs under dev and prod, plus the store's key pair `PDS_STORE_KEYS` under local and dev. Those names are not also set in the compose `environment`. |
 | C31 | `checks/newt.ts` | Dev requires a `newt` service. Its one env file holds `PANGOLIN_ENDPOINT`, `NEWT_ID` and `NEWT_SECRET`. Compose `environment` is the six `NEWT_SETTINGS` literals. No mount and no secret. Outside local it runs the lock's `newt` ref. Local may omit it. |
 | C32 | `checks/placeholders.ts` | Dev and prod: no environment value starts with `[to fill:`. Local skips. |
+| C33 | `checks/settings.ts` | Local and dev: the PDS keeps blobs in the object store's `unset-pds` bucket at `http://objects:8333`, path style, region `us-east-1`, with its key pair set, no disk blobstore key and no `AWS_` variable. Prod skips until P5.01. |
 | L1 | `checks/local.ts` | Every published port binds `127.0.0.1`. |
 | L2 | `checks/local.ts` | `PDS_HOSTNAME` matches a `.localhost` name. |
 
@@ -62,7 +63,7 @@ The `deployment-preflight` row. dependency-cruiser 18.7.0 is pinned in `package.
 
 | From | May reach |
 | --- | --- |
-| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/caddyfile.ts`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, npm package `yaml` (2.9.1), Node built-ins. |
+| `deployment/preflight/` | `deployment/preflight/`, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, npm package `yaml` (2.9.1), Node built-ins. |
 
 `stack.ts` imports `hostWalk`, `localDockerHost` and `UsageError` from `@unset/shared-host-pin`. `checks/build.ts` and `checks/secrets.ts` import `resolveChecked` and the walk reasons from the same package index.
 

@@ -5,5 +5,7 @@
   "newt_edge": { "internal": true, "members": ["newt", "edge"] },
   "newt_egress": { "internal": false, "members": ["newt"] },
   "pds_egress": { "internal": false, "members": ["pds"] },
-  "web_egress": { "internal": false, "members": ["web"] }
+  "objects_pds": { "internal": true, "members": ["pds", "objects"] },
+  "web_egress": { "internal": false, "members": ["web"] },
+  "objects": { "internal": true, "members": ["objects"] }
 }

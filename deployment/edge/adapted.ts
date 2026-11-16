@@ -11,8 +11,8 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 type Obj = { [key: string]: Json };
 
 /**
- * The values the reviewed configs were adapted with, one for each `{$NAME}` the edge's files use (caddyfile.ts
- * ENV_NAMES; adapted.test.ts holds the two lists equal). Each fits its shape there, none is part of another, and none
+ * The values the reviewed configs were adapted with, one for each `{$NAME}` the edge's files use
+ * (adapted-rules.ts ENV_NAMES; adapted.test.ts holds the two lists equal). Each fits its shape there, none is part of another, and none
  * occurs in our config files, so replacing one in the adapted text replaces only that value.
  */
 export const SENTINELS = {

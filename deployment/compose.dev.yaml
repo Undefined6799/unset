@@ -24,7 +24,7 @@ name: unset-dev
 
 services:
   postgres:
-    image: ghcr.io/undefined6799/unset/postgres@sha256:81c34ec547797dd37c669b4b72f22f7424a0767e47804674b27cd21c97af5018
+    image: ghcr.io/undefined6799/unset/postgres@sha256:244cbae4d54ccdac0a305b4f6e9e54f28f230be5e462ef5e3157de5d80ac4479
     user: "999:999"
     read_only: true
     cap_drop: [ALL]
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/undefined6799/unset/migrate@sha256:2731b8d4e7de4dbb84a1d0cded71b22ec1646e188bcb1bd629bf16530ddedac1
+    image: ghcr.io/undefined6799/unset/migrate@sha256:72634dc29289d14f7a2ebb8bb16625ab8e3853d40e0d817f9e5312a727ce4999
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -92,13 +92,14 @@ services:
   # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
   # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
-    image: ghcr.io/undefined6799/unset/pds@sha256:cbe91f4582b10a3e20f068759084c2b89aa5ecc819defbf1958f15c9cd34d1c3
+    image: ghcr.io/undefined6799/unset/pds@sha256:3004cea8062769d5c434bb3ae0dd6e0a7be9dc304876ca2e4795e546468b5a85
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    # /tmp is capped (P1.36p). C22 checks only that PDS_BLOBSTORE_DISK_TMP_LOCATION stays unset, so temporary
-    # blobs follow PDS_BLOBSTORE_DISK_LOCATION into its tempt folder; that location is not pinned yet (P1.37t).
+    # /tmp is capped (P1.36p). Blobs live in the object store's unset-pds bucket (P2.18p, ADR 0041 Decision 5): the
+    # S3 keys below are the only shape C33 accepts, and the key pair is in pds.env. Temporary uploads go to the
+    # bucket's tmp/ prefix, not the disk (@atproto/aws s3.ts at atproto fb16c8e0).
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=1777,size=20m
     volumes:
@@ -109,7 +110,10 @@ services:
       PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
       PDS_PORT: "3000"
       PDS_DATA_DIRECTORY: /home/node
-      PDS_BLOBSTORE_DISK_LOCATION: /home/node/blocks
+      PDS_BLOBSTORE_S3_BUCKET: unset-pds
+      PDS_BLOBSTORE_S3_ENDPOINT: http://objects:8333
+      PDS_BLOBSTORE_S3_REGION: us-east-1
+      PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true"
       PDS_BLOB_UPLOAD_LIMIT: "5242880"
       PDS_DID_PLC_URL: https://plc.directory
       PDS_INVITE_REQUIRED: "true"
@@ -120,7 +124,7 @@ services:
       PDS_MODERATION_EMAIL_ADDRESS: moderation@staging.unset.sh
       LOG_ENABLED: "false"
       NODE_OPTIONS: --max-old-space-size=768
-    networks: [edge, pds_egress]
+    networks: [edge, pds_egress, objects_pds]
     mem_limit: 1g
     cpus: 1
     pids_limit: 256
@@ -132,7 +136,7 @@ services:
   # as C18 reads them; /data (ACME state, unused under dev) and /config are named volumes the image seeds as caddy's,
   # 0700 (P1.27o).
   edge:
-    image: ghcr.io/undefined6799/unset/edge@sha256:a7a28e05567b92b49b654432a89bdeec5b8ace72fea02ad581095364fe453088
+    image: ghcr.io/undefined6799/unset/edge@sha256:df6b764a925b1b335cc736a57b5b870326d4daedd280afb215bbb19d8af64ae3
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -142,7 +146,7 @@ services:
       - /tmp:uid=65532,gid=65532,mode=1777
     # The two dev sites and the dev (tls) over the shipped one, three read-only file binds (P1.36c; ADR 0032 Decisions
     # 1 and 3): https with one self-signed leaf for both staging names, read from the edge's own two secrets; the app
-    # site's name and upstream are the reader's ruled values (deployment/edge/caddyfile.ts DEV_APP).
+    # site's name and upstream are the ruled values (deployment/edge/adapted-rules.ts DEV_APP).
     volumes:
       - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
@@ -172,7 +176,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/undefined6799/unset/web@sha256:1e1aee1c618f0b0220adb47e3911b713102ce271f30aa19f5db60ef11aeddad3
+    image: ghcr.io/undefined6799/unset/web@sha256:9220ad067cca8d9dac844ed5bad2a848d14ba28eb6416c04343d57f9e24ed754
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]
@@ -227,12 +231,35 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
+  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
+  # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
+  # publishes nothing and sits on internal networks only: its own, and objects_pds, which it shares with the PDS alone
+  # (P2.18p). Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
+  # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
+  # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
+  objects:
+    image: ghcr.io/undefined6799/unset/objects@sha256:02e3a07fb0b1160dd54b23977749cabf8d82de53c295957ff70602635ff53796
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - objectsdata:/data
+    secrets: [objects_s3]
+    networks: [objects, objects_pds]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    restart: unless-stopped
+
   # Newt (ADR 0030 Decision 2, P1.37v): Pangolin's site connector, the edge's only way in under dev. It dials out to
   # Pangolin over newt_egress and forwards Pangolin's targets, https to the edge's newt_edge address with each
   # resource's TLS Server Name set (ADR 0032 Decision 5), as a userspace WireGuard peer, so it needs no capability.
   # Upstream image run as shipped, from its mirror by the lock digest. Its credentials are newt.env's three names; it
   # saves them back to CONFIG_FILE, on its tmpfs. No SSH, no client access, no Docker socket, no metrics or pprof
-  # listener (newt 1.19.0 newtconfig/newtconfig.go:452-503).
+  # listener (newt 1.20.0 newtconfig/newtconfig.go:452-503).
   newt:
     image: ghcr.io/undefined6799/mirror/newt@sha256:2170e673c4c72d905764fa22e83d0ae0aa3239fb1ab3b9fcaefb2b00fffb2d6e
     user: "65532:65532"
@@ -285,12 +312,20 @@ networks:
         - subnet: 10.250.37.0/29
   # Newt's own way out: its tunnel to Pangolin.
   newt_egress:
+  # The object store's own network (ADR 0041): internal, so the store has no way out, and nothing else joins it.
+  objects:
+    internal: true
+  # The PDS's way to the store's S3 port and nothing else (P2.18p): internal, the two of them only. C17 exempts
+  # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
+  objects_pds:
+    internal: true
 
 volumes:
   pgdata:
   pdsdata:
   edgedata:
   edgeconfig:
+  objectsdata:
 
 secrets:
   pg_superuser_password:
@@ -317,3 +352,7 @@ secrets:
     file: ../../unset-dev-secrets/dev_tls_cert
   dev_tls_key:
     file: ../../unset-dev-secrets/dev_tls_key
+  # The object store's identities (ADR 0041 Decision 3, ADR 0050 Decision 1): SeaweedFS's s3.json, with no Admin
+  # identity; read by objects (uid 1000) only.
+  objects_s3:
+    file: ../../unset-dev-secrets/objects_s3

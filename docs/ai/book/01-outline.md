@@ -527,6 +527,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
 | P2.03c | CODEOWNERS: session trusted path /infrastructure/postgres/session/ → /infrastructure/session/ | [SEC] | — | `phase-2.md` |
 | P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e, P2.03c | `phase-2.md` |
+| P2.03t | End sessions with their token set in the database | [SEC] | P2.03, P2.04s | `phase-2.md` |
 | P2.03i | Session index (did), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i | `phase-2.md` |
 | P2.04s | Session prelude for OAuth: destroyAllForDid, EndSessionsReason, has_token_set probe (trusted, split from P2.04) | [SEC] | P2.03, P2.04 | `phase-2.md` |
@@ -850,6 +851,7 @@ flowchart TD
   P2_03q["P2.03q session store trusted path"]
   P2_03x["P2.03x session table and timeouts"]
   P2_03e["P2.03e session log events"]
+  P2_03t["P2.03t sessions end with their token set"]
   P2_03c["P2.03c session workspace trusted path"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_03i["P2.03i session index"]
@@ -1057,6 +1059,8 @@ flowchart TD
   P2_03q --> P2_03
   P2_03x --> P2_03
   P2_03e --> P2_03
+  P2_03 --> P2_03t
+  P2_04s --> P2_03t
   P2_03c --> P2_03
   P2_03 --> P2_03i
   P2_03x --> P2_03i
