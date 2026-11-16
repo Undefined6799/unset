@@ -412,7 +412,7 @@ npm run dev:source:up
 npm run dev:source:down
 ```
 
-It builds the five first-party images on the VM, so the preflight's last line says `SOURCE built from the checkout,
+It builds the six first-party images (the object store joined at P2.18s, ADR 0041) on the VM, so the preflight's last line says `SOURCE built from the checkout,
 unsigned`. Builds fill the disk over time (the reason rule 23 forbade them); when `df -h /` runs low, prune the
 builder cache with `docker builder prune -f`, which touches no volume. Commit and push what you tried afterwards;
 main still changes only by PR.

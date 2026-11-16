@@ -146,7 +146,7 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
   test("preflight_passes_the_real_dev_file", async () => {
     const result = await preflight(args, deps);
     expect(result.lines.filter((line) => !line.startsWith("PASS "))).toEqual([]);
-    // P2.24y: five first-party images (the PDS recipe joined them) and newt the one upstream. The C3 line reads
+    // P2.24y: five first-party images (the PDS recipe joined them; objects makes six at P2.18s) and newt the one upstream. The C3 line reads
     // "reason withheld" because its count, 5, equals a configured value, which the preflight never prints
     // (preflight/index.ts withheldIfValued); only the verdict of that line is pinned.
     expect(result.lines.filter((line) => line.startsWith("PASS C3 "))).toHaveLength(1);

@@ -1,4 +1,4 @@
-// P1.37y (ADR 0036): compose.dev.source.yaml is compose.dev.yaml with its five first-party services built from the
+// P1.37y (ADR 0036): compose.dev.source.yaml is compose.dev.yaml with its first-party services (six since P2.18s, ADR 0041) built from the
 // checkout, as compose.local.yaml builds them, and nothing else changed. Derived here from the two files, so the dev
 // file stays the one place a dev service is written.
 import { readFileSync } from "node:fs";
