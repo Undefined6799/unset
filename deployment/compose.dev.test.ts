@@ -585,7 +585,10 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_SERVICE_HANDLE_DOMAINS: "${PDS_SERVICE_HANDLE_DOMAINS}",
       PDS_PORT: "3000",
       PDS_DATA_DIRECTORY: "/home/node",
-      PDS_BLOBSTORE_DISK_LOCATION: "/home/node/blocks",
+      PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+      PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+      PDS_BLOBSTORE_S3_REGION: "us-east-1",
+      PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
       PDS_BLOB_UPLOAD_LIMIT: "5242880",
       PDS_DID_PLC_URL: "https://plc.directory",
       PDS_INVITE_REQUIRED: "true",
@@ -623,6 +626,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       "PDS_ADMIN_PASSWORD",
       "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
       "PDS_RECOVERY_DID_KEY",
+      "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
+      "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
       "PDS_EMAIL_SMTP_URL",
       "PDS_MODERATION_EMAIL_SMTP_URL",
     ]);
@@ -681,7 +686,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // only the mount point exists in a fresh volume (the first CI start of the stack crashed on /home/node/pds).
     const env = envOf(pds);
     expect(env.get("PDS_DATA_DIRECTORY")).toBe("/home/node");
-    expect(env.get("PDS_BLOBSTORE_DISK_LOCATION")?.startsWith("/home/node/")).toBe(true);
+    // Blobs are in the object store since P2.18p, so no disk store points anywhere.
+    expect(env.has("PDS_BLOBSTORE_DISK_LOCATION")).toBe(false);
   });
 
   test("no_pds_disable_or_dev_mode_variable", () => {
@@ -724,7 +730,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // to public unicast addresses. The PDS is still never on the app network (architecture 2026-10-15 02:05Z, option C).
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
     expect(raw.services.edge?.networks).toEqual({ edge: null, app: null, newt_edge: { ipv4_address: EDGE_ADDRESS } });
-    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress"]);
+    expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress", "objects_pds"]);
     expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
     expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
   });
@@ -849,10 +855,13 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // The PDS half: @atproto/pds 0.5.37 makes its public URL `https://${hostname}` unless the hostname is localhost
     // (dist/config/config.js:10-13), and it trusts X-Forwarded-Proto from private addresses (dist/index.js:178), which
     // the edge sets to https itself. So its hostname comes from configuration, is never localhost, and nothing in its
-    // env names a plain-http URL.
+    // env names a plain-http URL. The one exception is the object store's internal S3 origin (P2.18p; ADR 0041
+    // Decision 6: plain HTTP on an internal network, each request signed), which is no public URL, pinned exactly.
     const pds = new Map(envOf(service(dev(), "pds")));
     expect(pds.get("PDS_HOSTNAME")).toBe("${PDS_HOSTNAME}");
     expect(example).toMatch(/^PDS_HOSTNAME=(?!localhost$)\S+$/m);
+    expect(pds.get("PDS_BLOBSTORE_S3_ENDPOINT")).toBe("http://objects:8333");
+    pds.delete("PDS_BLOBSTORE_S3_ENDPOINT");
     const pdsEnv = [...pds.values(), read("env/pds.example.env")].join("\n");
     expect(pdsEnv).not.toMatch(/http:\/\//i);
     expect(read("edge/snippets/upstream.caddy")).toMatch(/^\t\theader_up X-Forwarded-Proto https$/m);

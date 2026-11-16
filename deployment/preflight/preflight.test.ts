@@ -185,10 +185,13 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C30",
   "C31",
   "C32",
+  "C33",
 ]);
 
 type Stack = {
   compose?: string;
+  /** Whether the PDS gets the object store's settings (PDS_STORE_ENV); by default under every env but prod. */
+  store?: boolean;
   pdsEnv?: Record<string, string | null>;
   /** Raw lines appended to pds.env, after the ones pdsEnv writes there (C30). */
   pdsEnvFile?: string;
@@ -237,7 +240,19 @@ const PDS_ENV_FILE_NAMES = new Set([
   "PDS_RECOVERY_DID_KEY",
   "PDS_EMAIL_SMTP_URL",
   "PDS_MODERATION_EMAIL_SMTP_URL",
+  "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
+  "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
 ]);
+/** The PDS's object store settings under local and dev (P2.18p, C33): the key pair goes to pds.env, the rest are
+ * literals. Prod keeps none until P5.01. */
+const PDS_STORE_ENV: Record<string, string> = {
+  PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+  PDS_BLOBSTORE_S3_REGION: "us-east-1",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+  PDS_BLOBSTORE_S3_ACCESS_KEY_ID: `${CANARY}-s3-id`,
+  PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: `${CANARY}-s3-secret`,
+};
 
 /** The names newt.env holds (C31). */
 const NEWT_ENV_NAMES = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
@@ -245,6 +260,7 @@ const NEWT_ENV_NAMES = ["PANGOLIN_ENDPOINT", "NEWT_ID", "NEWT_SECRET"];
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
   compose = COMPOSE,
+  store: withStore,
   pdsEnv = {},
   pdsEnvFile = "",
   newtEnvFile,
@@ -271,7 +287,10 @@ function stack({
   };
   // As in the real stack (C30, P1.36q): pds.env holds the PDS's secrets and mail URLs, and every other setting is a
   // literal at the top of the pds service's environment. A compose whose pds has no environment keeps them in pds.env.
-  const entries = Object.entries({ ...PDS_ENV, ...pdsEnv }).filter((e): e is [string, string] => e[1] !== null);
+  const store = (withStore ?? !compose.startsWith("name: unset-prod")) ? PDS_STORE_ENV : {};
+  const entries = Object.entries({ ...PDS_ENV, ...store, ...pdsEnv }).filter(
+    (e): e is [string, string] => e[1] !== null,
+  );
   const pdsBlock = /\n {2}pds:\n(?: {4}.*\n)*? {4}environment:\n/.exec(compose);
   // A setting the test already wrote into pds's environment stays as written there.
   const pdsText = pdsBlock === null ? "" : (compose.slice(pdsBlock.index + 1).split(/\n {2}\S/)[0] ?? "");
@@ -466,7 +485,10 @@ const unwalkedEnv: Pick<Deps, "readEnv"> = {
 const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   // A dev pass fixture carries the complete report unless the test names its own (`report: undefined` for none).
-  const withReport = env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s;
+  const withReport = {
+    store: env !== "prod",
+    ...(env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s),
+  };
   const { root, file } = stack(
     env === "dev" && !("networks" in s) ? { ...withReport, networks: DEV_TABLE } : withReport,
   );
@@ -3451,6 +3473,59 @@ describe("preflight C32 (P1.38d)", () => {
 
 // P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
 // stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
+describe("preflight C33 the PDS's blobs in the object store (P2.18p)", () => {
+  const dev = (pdsEnv: Record<string, string | null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...pdsEnv } });
+
+  test("pds_s3_only_internal_store", async () => {
+    expect(failed((await check(dev({}), "dev")).lines)).toEqual([]);
+    const wrong: [string, string | null][] = [
+      ["PDS_BLOBSTORE_S3_BUCKET", null],
+      ["PDS_BLOBSTORE_S3_BUCKET", "unset-private"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", null],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "https://s3.amazonaws.com"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "http://objects:8333/"],
+      ["PDS_BLOBSTORE_S3_ENDPOINT", "http://objects:8888"],
+      ["PDS_BLOBSTORE_S3_REGION", null],
+      ["PDS_BLOBSTORE_S3_REGION", "eu-west-1"],
+      ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", null],
+      ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", "false"],
+    ];
+    for (const [name, value] of wrong) {
+      const line = await expectOnly("C33", dev({ [name]: value }), "dev");
+      expect(line, `${name}=${value}`).toBe(`FAIL C33 ${name} is not the pinned value`);
+    }
+    // Either half of the key pair missing or empty: C33 says which, and C30 misses the name when it is absent.
+    for (const name of ["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"]) {
+      const { lines } = await check(dev({ [name]: null }), "dev");
+      expect(lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+        `FAIL C30 ${name} is missing from the pds env file`,
+        `FAIL C33 ${name} is not set`,
+      ]);
+      expect(await expectOnly("C33", dev({ [name]: "" }), "dev")).toBe(`FAIL C33 ${name} is not set`);
+    }
+    // No AWS_ name reaches the PDS, in any case, from the compose file or pds.env; a name that is not one of ours is
+    // not printed. A value is never printed.
+    const aws = await check({ ...dev({}), pdsEnvFile: "AWS_PROFILE=other\n" }, "dev");
+    expect(aws.lines).toContain("FAIL C33 AWS_PROFILE is set for the PDS");
+    for (const name of ["AWS_ENDPOINT_URL_S3", "AWS_REGION", "aws_access_key_id"]) {
+      const line = (await check(dev({ [name]: "x" }), "dev")).lines.find((l) => l.startsWith("FAIL C33"));
+      expect(line, name).toBe(`FAIL C33 ${name === "aws_access_key_id" ? "an AWS_ name" : name} is set for the PDS`);
+    }
+    const all = (await check(dev({ PDS_BLOBSTORE_S3_ENDPOINT: "https://canary-7f3c.example" }), "dev")).lines;
+    expect(all.join("\n")).not.toContain("canary");
+  });
+
+  test("pds_s3_and_disk_refused", async () => {
+    for (const location of ["/home/node/blocks", ""]) {
+      expect(await expectOnly("C33", dev({ PDS_BLOBSTORE_DISK_LOCATION: location }), "dev"), location).toBe(
+        "FAIL C33 PDS_BLOBSTORE_DISK_LOCATION is set beside the object store",
+      );
+    }
+    // Under prod the store is not pinned yet (P5.01), so the fixture's disk-less prod PDS passes as skipped.
+    expect((await check()).lines).toContain("PASS C33 skipped: P5.01 pins the production store");
+  });
+});
+
 describe("preflight C22 pinned upload bounds (P1.36p)", () => {
   const PINNED_TMP = '"/tmp:uid=1000,gid=1000,mode=1777,size=20m"';
   const devWith = (pdsEnv: Record<string, string | null>, tmpfs = `    tmpfs: [${PINNED_TMP}]\n`): Stack => ({
@@ -3459,10 +3534,16 @@ describe("preflight C22 pinned upload bounds (P1.36p)", () => {
   });
 
   test("c22_temp_blob_location_set_fails", async () => {
+    // A disk key beside the object store fails C33 too (P2.18p).
     for (const location of ["/tmp/pds/blobs", "/home/node/tempt", ""]) {
-      expect(await expectOnly("C22", devWith({ PDS_BLOBSTORE_DISK_TMP_LOCATION: location }), "dev"), location).toBe(
+      const { lines } = await check(devWith({ PDS_BLOBSTORE_DISK_TMP_LOCATION: location }), "dev");
+      expect(
+        lines.filter((l) => l.startsWith("FAIL")),
+        location,
+      ).toEqual([
         "FAIL C22 PDS_BLOBSTORE_DISK_TMP_LOCATION is set",
-      );
+        "FAIL C33 PDS_BLOBSTORE_DISK_TMP_LOCATION is set beside the object store",
+      ]);
     }
   });
 

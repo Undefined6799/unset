@@ -97,8 +97,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    # /tmp is capped (P1.36p). C22 checks only that PDS_BLOBSTORE_DISK_TMP_LOCATION stays unset, so temporary
-    # blobs follow PDS_BLOBSTORE_DISK_LOCATION into its tempt folder; that location is not pinned yet (P1.37t).
+    # /tmp is capped (P1.36p). Blobs live in the object store's unset-pds bucket (P2.18p, ADR 0041 Decision 5): the
+    # S3 keys below are the only shape C33 accepts, and the key pair is in pds.env. Temporary uploads go to the
+    # bucket's tmp/ prefix, not the disk (@atproto/aws s3.ts at atproto fb16c8e0).
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=1777,size=20m
     volumes:
@@ -109,7 +110,10 @@ services:
       PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
       PDS_PORT: "3000"
       PDS_DATA_DIRECTORY: /home/node
-      PDS_BLOBSTORE_DISK_LOCATION: /home/node/blocks
+      PDS_BLOBSTORE_S3_BUCKET: unset-pds
+      PDS_BLOBSTORE_S3_ENDPOINT: http://objects:8333
+      PDS_BLOBSTORE_S3_REGION: us-east-1
+      PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true"
       PDS_BLOB_UPLOAD_LIMIT: "5242880"
       PDS_DID_PLC_URL: https://plc.directory
       PDS_INVITE_REQUIRED: "true"
@@ -120,7 +124,7 @@ services:
       PDS_MODERATION_EMAIL_ADDRESS: moderation@staging.unset.sh
       LOG_ENABLED: "false"
       NODE_OPTIONS: --max-old-space-size=768
-    networks: [edge, pds_egress]
+    networks: [edge, pds_egress, objects_pds]
     mem_limit: 1g
     cpus: 1
     pids_limit: 256
@@ -229,8 +233,8 @@ services:
 
   # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
   # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
-  # sits only on its own internal network and publishes nothing; until a process gets a key (P2.18, P2.18p), no service
-  # shares that network. Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
+  # publishes nothing and sits on internal networks only: its own, and objects_pds, which it shares with the PDS alone
+  # (P2.18p). Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
   # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
   # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
   objects:
@@ -244,7 +248,7 @@ services:
     volumes:
       - objectsdata:/data
     secrets: [objects_s3]
-    networks: [objects]
+    networks: [objects, objects_pds]
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 256
@@ -308,8 +312,12 @@ networks:
         - subnet: 10.250.37.0/29
   # Newt's own way out: its tunnel to Pangolin.
   newt_egress:
-  # The object store's only network (ADR 0041): internal, so the store has no way out, and nothing else joins it yet.
+  # The object store's own network (ADR 0041): internal, so the store has no way out, and nothing else joins it.
   objects:
+    internal: true
+  # The PDS's way to the store's S3 port and nothing else (P2.18p): internal, the two of them only. C17 exempts
+  # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
+  objects_pds:
     internal: true
 
 volumes:

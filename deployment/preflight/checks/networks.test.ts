@@ -50,6 +50,51 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
     expect(neighbours(stack("[default]", "[default]"))).toEqual(["web shares a network with the pds"]);
     expect(neighbours(compose("services:\n  edge:\n    image: e\n  pds:\n    image: p\n"))).toEqual([]);
   });
+
+  // P2.18p: the store, by its name and the lock's objects image, on objects_pds alone, which holds exactly the two.
+  const STORE_LOCK = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, objects: { ref: "o" } });
+  const withStore = (yaml: string) =>
+    pdsNeighbours({
+      env: "prod",
+      source: false,
+      root: "/repo",
+      lockPath: "/repo/lock",
+      compose: compose(yaml),
+      readText: (path: string) => (path === "/repo/lock" ? STORE_LOCK : null),
+    } as Inputs);
+  const storeStack = (store: string, extra = "", pds = "[edge, objects_pds]") =>
+    `services:\n  edge:\n    image: e\n    networks: [edge]\n  pds:\n    image: p\n    networks: ${pds}\n${store}${extra}` +
+    "networks:\n  edge: {}\n  objects:\n    internal: true\n  objects_pds:\n    internal: true\n";
+  const STORE = "  objects:\n    image: o\n    networks: [objects, objects_pds]\n";
+
+  test("pds_store_network_admits_only_the_locked_store", () => {
+    expect(withStore(storeStack(STORE))).toEqual([]);
+    // Another image under the store's name, or the store's image under another name.
+    expect(withStore(storeStack("  objects:\n    image: x\n    networks: [objects_pds]\n"))).toEqual([
+      "objects shares a network with the pds",
+    ]);
+    expect(withStore(storeStack("  store:\n    image: o\n    networks: [objects_pds]\n"))).toEqual([
+      "store shares a network with the pds",
+    ]);
+    // The store on another PDS network.
+    expect(withStore(storeStack("  objects:\n    image: o\n    networks: [edge, objects_pds]\n"))).toEqual([
+      "objects shares a network with the pds",
+    ]);
+    // A third member, the edge included.
+    expect(withStore(storeStack(STORE, "  web:\n    image: w\n    networks: [objects_pds]\n"))).toEqual([
+      "web shares a network with the pds",
+      "objects_pds holds a service other than the pds and the store",
+    ]);
+    const edgeJoins = storeStack(STORE).replace("networks: [edge]\n  pds", "networks: [edge, objects_pds]\n  pds");
+    expect(withStore(edgeJoins)).toEqual([
+      "edge shares a network with the pds",
+      "objects_pds holds a service other than the pds and the store",
+    ]);
+    // Without the PDS on it, the store's network still holds no one else.
+    expect(withStore(storeStack(STORE, "  web:\n    image: w\n    networks: [objects_pds]\n", "[edge]"))).toEqual([
+      "objects_pds holds a service other than the pds and the store",
+    ]);
+  });
 });
 
 describe("the dev edge's tunnel (P1.36i; ADR 0031 Decision 3)", () => {

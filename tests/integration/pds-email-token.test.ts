@@ -10,6 +10,7 @@ import {
   CLASSIFIED_KEYS,
   confirmLocalEmail,
   type LocalStack,
+  NAMES_FORMAT,
   outboundDrift,
   type PinnedPost,
 } from "../support/pds-email-token.ts";
@@ -80,6 +81,23 @@ const S3_JUDGED = {
   PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
   PDS_BLOBSTORE_S3_ACCESS_KEY_ID: "key-id-fixture",
 };
+/** The local object store's S3 settings (P2.18p), the one shape checkStore accepts, and its key pair by name. */
+const STORE_SHAPE = {
+  PDS_BLOBSTORE_S3_BUCKET: "unset-pds",
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://objects:8333",
+  PDS_BLOBSTORE_S3_REGION: "us-east-1",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+};
+const STORE_KEYS = {
+  PDS_BLOBSTORE_S3_ACCESS_KEY_ID: "pds-key-id-fixture",
+  PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: "s3-secret-fixture",
+};
+const OBJECTS_ID = "c".repeat(64);
+/** The world's PDS env with the store's settings and key pair, then `edits` (undefined removes a key). */
+function storeEnv(w: World, edits: Record<string, string | undefined>): Record<string, string> {
+  const merged: Record<string, string | undefined> = { ...w.pdsEnv, ...STORE_SHAPE, ...STORE_KEYS, ...edits };
+  return Object.fromEntries(Object.entries(merged).filter((e): e is [string, string] => e[1] !== undefined));
+}
 const local = (): World => ({
   caller: { PATH: "/usr/bin", HOME: "/home/dev", DOCKER_CONTEXT: "remote", COMPOSE_FILE: "x.yaml" },
   files: { [SOCKET]: "socket", [ROOT_PATH]: "file" },
@@ -157,6 +175,13 @@ async function attempt(world: World) {
     if (line.includes("label=com.docker.compose.service=edge")) return ids(world.edge);
     const service = /label=com\.docker\.compose\.service=(\S+)/.exec(line)?.[1];
     if (args[0] === "ps" && service !== undefined) return ids(world.services[service] ?? []);
+    if (args[0] === "inspect" && args[2] === NAMES_FORMAT) {
+      // Names only, never a value (P2.18p): the S3 key pair and AWS_ variables are judged by name.
+      const id = args.at(-1) as string;
+      if (id !== PDS_ID || args.length !== 4 || args[1] !== "--format") throw new Error(`unexpected command ${line}`);
+      const pairs = world.pdsEnvLines ?? Object.entries(world.pdsEnv);
+      return ok(`${pairs.map(([key]) => `${JSON.stringify(key)}\n`).join("")}\n`);
+    }
     if (args[0] === "inspect" && line.includes(".Config.Env")) {
       const id = args.at(-1) as string;
       const values =
@@ -471,13 +496,39 @@ describe("tests/support/pds-email-token.ts", () => {
         "PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID",
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_LEXICON_AUTHORITY_DID: did } }),
       ]),
-      // Any bucket (verify at d24dd55, B2): the locked S3 client still leaves the stack with every S3 key judged. With
-      // no region it asks instance metadata, AWS_DEFAULTS_MODE or the AWS config file can do the same, and some bucket
-      // names ignore both path style and the endpoint. The PDS keeps blobs on disk instead.
-      ...[{}, S3_JUDGED, { ...S3_JUDGED, PDS_BLOBSTORE_S3_REGION: "us-east-1" }].map(
-        (s3): [string, (w: World) => World] => [
-          "PDS_BLOBSTORE_S3_BUCKET is set, so the PDS stores blobs in S3",
-          (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_BLOBSTORE_S3_BUCKET: "blobs", ...s3 } }),
+      // Any bucket but the local object store's one shape (verify at d24dd55, B2; P2.18p): with no region the S3
+      // client asks instance metadata, with no key pair it walks the credential chain, AWS_DEFAULTS_MODE or the AWS
+      // config file can do the same, and some bucket names ignore both path style and the endpoint.
+      ...[
+        { PDS_BLOBSTORE_S3_BUCKET: "blobs" },
+        { PDS_BLOBSTORE_S3_BUCKET: "blobs", ...S3_JUDGED },
+        { PDS_BLOBSTORE_S3_BUCKET: "blobs", ...S3_JUDGED, PDS_BLOBSTORE_S3_REGION: "us-east-1" },
+        // Without the bucket the PDS uses no S3 at all, so only the other three are left out.
+        ...Object.keys(STORE_SHAPE).flatMap((name) => [
+          ...(name === "PDS_BLOBSTORE_S3_BUCKET" ? [] : [{ ...STORE_SHAPE, [name]: undefined }]),
+          { ...STORE_SHAPE, [name]: `${STORE_SHAPE[name as keyof typeof STORE_SHAPE]}x` },
+        ]),
+        { ...STORE_SHAPE, PDS_BLOBSTORE_S3_ENDPOINT: "http://plc:2582" },
+        { ...STORE_SHAPE, PDS_BLOBSTORE_S3_BUCKET: "unset-private" },
+      ].map((s3): [string, (w: World) => World] => [
+        "the PDS's S3 settings are not the local object store's",
+        (w) => ({ ...w, services: { ...w.services, objects: [OBJECTS_ID] }, pdsEnv: storeEnv(w, s3) }),
+      ]),
+      ...["PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY"].map(
+        (name): [string, (w: World) => World] => [
+          "the PDS's S3 key pair is not set",
+          (w) => ({
+            ...w,
+            services: { ...w.services, objects: [OBJECTS_ID] },
+            pdsEnv: storeEnv(w, { [name]: undefined }),
+          }),
+        ],
+      ),
+      // No AWS_ variable at all, store or not, in either case: each can redirect or re-credential the S3 client.
+      ...["AWS_PROFILE", "AWS_ENDPOINT_URL_S3", "AWS_DEFAULTS_MODE", "aws_region"].map(
+        (name): [string, (w: World) => World] => [
+          "an AWS_ variable is set for the PDS",
+          (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, [name]: "x" } }),
         ],
       ),
       // Process-level keys, pinned here: @did-plc/lib 0.0.4 bundles axios with proxy-from-env, which reads each name
@@ -564,6 +615,16 @@ describe("tests/support/pds-email-token.ts", () => {
       ).toBe(false);
       expectNothingLeaked(result);
     }
+    // The local object store passes (P2.18p): its one shape, with the key pair present by name, the store a stack
+    // service by its Compose label.
+    const store = await attempt({
+      ...local(),
+      services: { ...local().services, objects: [OBJECTS_ID] },
+      pdsEnv: storeEnv(local(), {}),
+    });
+    expect(store.error).toBeNull();
+    expect(store.asked.pds).not.toContain("PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY");
+    expect(store.asked.pds).not.toContain("PDS_BLOBSTORE_S3_ACCESS_KEY_ID");
     // The .localhost form passes: a PDS_HOSTNAME under it is local by definition (RFC 6761, section 6.3).
     const localhost = await attempt({ ...local(), pdsEnv: { ...local().pdsEnv, PDS_HOSTNAME: "pds.localhost" } });
     expect(localhost.error).toBeNull();
