@@ -210,6 +210,31 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
+  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
+  # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
+  # sits only on its own internal network and publishes nothing; until a process gets a key (P2.18, P2.18p), no service
+  # shares that network. Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
+  # 1): the stack wrapper creates the buckets through the store's own shell (deployment/preflight/objects-buckets.ts).
+  # Its data is a named volume at the image's /data, which the image owns as seaweed (uid 1000), so a fresh volume does.
+  objects:
+    build:
+      context: ..
+      dockerfile: deployment/images/objects.Dockerfile
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - objectsdata:/data
+    secrets: [objects_s3]
+    networks: [objects]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    restart: unless-stopped
+
   # The local email inbox stand-in (P1.29h; architecture record 2026-10-13-p129h-local-token-reader and its Amendment
   # 1), moved here from compose.dev.yaml (local-plc Amendment 6, Q2): tests/support/pds-email-token.ts runs it as
   # `docker compose --profile tools run --rm pds-token-reader /reader/read.ts <did>`, and `up` never starts it. It reads
@@ -247,12 +272,15 @@ networks:
   edge:
   pds_egress:
   web_egress:
+  objects:
+    internal: true
 
 volumes:
   pgdata:
   pdsdata:
   edgedata:
   edgeconfig:
+  objectsdata:
 
 secrets:
   pg_superuser_password:
@@ -277,3 +305,7 @@ secrets:
     file: ../../unset-dev-secrets/local_tls_cert
   local_tls_key:
     file: ../../unset-dev-secrets/local_tls_key
+  # The object store's identities (ADR 0041 Decision 3, ADR 0050 Decision 1): SeaweedFS's s3.json, with no Admin
+  # identity; read by objects (uid 1000) only.
+  objects_s3:
+    file: ../../unset-dev-secrets/objects_s3

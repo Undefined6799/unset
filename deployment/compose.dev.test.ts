@@ -885,6 +885,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     web_oauth_client_keys: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
+    objects_s3: 1000,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1038,7 +1039,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 11 mounted secrets" },
+      { pass: true, reason: "3 files, 12 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

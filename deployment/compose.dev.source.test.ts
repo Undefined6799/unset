@@ -10,8 +10,9 @@ const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const parse = (file: string): Compose => parseCompose(read(file), file);
 const SOURCE = "compose.dev.source.yaml";
-/** The services staging builds (ADR 0036 Decision 1); Newt is run from the mirror as under dev. */
-const BUILT = ["postgres", "migrate", "pds", "edge", "web"];
+/** The first-party services staging builds (ADR 0036 Decision 1), objects among them since P2.18s; Newt is run from
+ * the mirror as under dev. */
+const BUILT = ["postgres", "migrate", "pds", "edge", "web", "objects"];
 /** A file's YAML without its comment lines: the header differs by design, the services may not. */
 const code = (text: string): string =>
   text

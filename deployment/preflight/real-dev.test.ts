@@ -61,7 +61,8 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     const secrets = parseCompose(readFileSync(COMPOSE, "utf8"), COMPOSE).secretFiles.map(
       (path) => path.split("/").at(-1) as string,
     );
-    const owner = (name: string) => (name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532);
+    const owner = (name: string) =>
+      name === "objects_s3" ? 1000 : name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532;
     dir("unset-dev-secrets", 0o700, secrets);
     for (const name of secrets) file(`unset-dev-secrets/${name}`, 0o400, "fixture\n", owner(name));
     files.set(beside("unset-dev-secrets/dev_tls_cert"), {

@@ -985,7 +985,8 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
     const file = (path: string, mode: number, text = "fixture\n", uid = DEPLOY_UID) =>
       files.set(beside(path), { kind: "file", mode, uid, text });
     const secrets = parse("compose.local.yaml").secretFiles.map((path) => path.split("/").at(-1) as string);
-    const owner = (name: string) => (name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532);
+    const owner = (name: string) =>
+      name === "objects_s3" ? 1000 : name.startsWith("pg_superuser") || /^pg_(migrator|tap)_/.test(name) ? 999 : 65532;
     dir("unset-dev-secrets", 0o700, secrets);
     for (const name of secrets) file(`unset-dev-secrets/${name}`, 0o400, "fixture\n", owner(name));
     dir("unset-dev-env", 0o700, ["dev-public.env", "pds.env", "local-leaf.pem"]);
