@@ -111,6 +111,8 @@ Table and routine grants in `grant-matrix.json` (column lists are in that file):
 | `app.account` | `web` |
 | `audit.append` | `web`, `indexer`, `admin` (`EXECUTE`) |
 | `audit.chain` | `auditor` (`SELECT`, `wholeTable`) |
+| `audit.segment` | `auditor` (`SELECT`, `wholeTable`) |
+| `audit.redaction_log` | `auditor` (`SELECT`, `wholeTable`) |
 
 Migrations and the objects they add:
 
@@ -132,6 +134,7 @@ Migrations and the objects they add:
 | `0014_app_end_sessions.sql` | `app.end_sessions_for_did` (`SECURITY DEFINER`). |
 | `0015_app_account.sql` | `app.account`. |
 | `0016_audit_actor.sql` | `audit.event_body.actor`; `audit.append` replaced to fill it and to refuse a person's action with no actor. |
+| `0017_audit_retention.sql` | `audit.segment`, `audit.redaction_log`. |
 
 `sealed-columns.json`: `app.oauth_session.sealed` row key `did`; `app.oauth_state.sealed` row key `key`.
 
