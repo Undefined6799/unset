@@ -582,3 +582,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0039](0039-request-scopes-per-feature.md)):** sign-in asks only for our permission set, image upload and the
   e-mail address; Bluesky scopes, video upload and reports join with the features that use them, each with one
   re-consent. Supersedes the "requested from day one" clause of plan §3 once accepted. Proposed, awaiting Alex.
+- **ADR 0039 accepted (Alex, 2026-11-16 21:47:20Z, against c6b473c; own record:
+  [0039](0039-request-scopes-per-feature.md)):** sign-in asks only for our permission set, image upload and the
+  e-mail address; Bluesky scopes, video upload and reports join with the features that use them, each with one
+  re-consent. Supersedes the "requested from day one" clause of plan §3.

@@ -1,10 +1,12 @@
 # 0039 — Sign-in asks only for the scopes a shipped feature uses
 
-Status: Proposed, awaiting Alex. Alex chose the direction on 2026-10-30 00:27:43Z in the project thread
-(cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR, "Yes absolutely lets narrow it down"), answering the atproto
-review of 2026-10-29. Acceptance is his typed line on the pull request that adds this record. Once accepted it
-supersedes the "requested from day one" clause of plan §3's "Granular permissions + permission sets" row and the
-ADR 0001 log entries that added Bluesky scopes for that reason (Phase 2 and Phase 4 review batches).
+Status: Accepted by Alex, 2026-11-16 21:47:20Z, against c6b473c. The coordinator's project-chat post asked for the
+line "accept ADR 0039 at c6b473c", on the head it had reviewed; Alex replied with that line. He had chosen the
+direction on 2026-10-30 00:27:43Z in the project thread (cmsg_01GKYqaAGu4Vob5JHVyDmG7ASmYLKHDHqTf2XdQFiTrCuR, "Yes
+absolutely lets narrow it down"), answering the atproto review of 2026-10-29. It supersedes the "requested from day
+one" clause of plan §3's "Granular permissions + permission sets" row and the ADR 0001 log entries that added Bluesky
+scopes for that reason (Phase 2 and Phase 4 review batches). From here the record changes only to be marked
+superseded.
 
 ## Context
 Plan §3 asks, at every sign-in, for our permission set plus Bluesky likes, posts, follows and profile writes, image

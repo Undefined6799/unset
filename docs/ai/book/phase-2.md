@@ -981,7 +981,7 @@ Algorithm:
        rpc:app.bsky.feed.getFeedGenerators?aud=did:web:api.bsky.app%23bsky_appview
        rpc:app.bsky.feed.getPostThread?aud=did:web:api.bsky.app%23bsky_appview
        rpc:com.atproto.moderation.createReport?aud=*`.
-       **Book edit 2026-10-30 (ADR 0039, proposed, Alex 00:27:43Z):** `NS` is now `blob:image/*
+       **Book edit 2026-10-30 (ADR 0039, accepted 2026-11-16; direction Alex 00:27:43Z):** `NS` is now `blob:image/*
        account:email?action=read` only; each other scope here joins in the PR of the feature that uses it, which also
        adds it to `grantCovers`' required grant so a member whose grant lacks it signs in again (P1.31s).
        Why each one differs from the round-1 text (review r1-part1 F2, E4; coordinator defaults, 2026-10-03):

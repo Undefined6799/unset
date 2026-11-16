@@ -45,7 +45,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Accepted 2026-10-28 |
 | [0037](0037-profile-module-and-page.md) | The profile is its own module, stored on the member's PDS, edited by its owner (P2.20) | Accepted 2026-10-28; Decision 2's strict-validator clause superseded by 0038 |
 | [0038](0038-profile-save-keeps-unknown-fields.md) | A profile save keeps stored fields the lexicon does not define (P2.20f) | Accepted 2026-10-29 |
-| [0039](0039-request-scopes-per-feature.md) | Sign-in asks only for the scopes a shipped feature uses (P1.31s) | Proposed (awaiting Alex) |
+| [0039](0039-request-scopes-per-feature.md) | Sign-in asks only for the scopes a shipped feature uses (P1.31s) | Accepted 2026-11-16 |
 | [0041](0041-object-store.md) | One S3-compatible object store (SeaweedFS in our stacks) for app media and PDS blobs (P2.18s, P2.18p) | Accepted 2026-11-15 |
 | [0042](0042-app-limits-behind-the-edge.md) | Behind the edge, the app's rate limits are site-wide ceilings; the edge is the only per-client limiter (P1.06s) | Accepted 2026-11-15 |
 | [0043](0043-audit-actor-column.md) | The audit side row names its actor in a DID column, so erasure finds a person's rows as actor as well as subject (P1.15k) | Accepted 2026-11-15 |
