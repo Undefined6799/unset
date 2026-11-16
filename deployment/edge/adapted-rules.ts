@@ -287,8 +287,11 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   return [...found, ...strayProblems(top, server, mode, env)];
 }
 
-/** Each value the env's sites need is present and fits its shape; the app's differ from the PDS's (P1.34a, P1.36b). */
-function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
+/**
+ * Each value the env's sites need is present and fits its shape; the app's differ from the PDS's (P1.34a, P1.36b).
+ * Exported so the preflight judges the values before it hands them to a container (P1.39e).
+ */
+export function envProblems(mode: EdgeMode, env: AdaptedEnv): string[] {
   const needed: EnvName[] = hostsOf(mode).flatMap((host) => [host, UPSTREAM[host]]);
   if (mode === "shipped") needed.push("ACME_EMAIL");
   const found = needed.filter((name) => !ENV_NAMES[name].test(env[name] ?? "")).map((name) => `{$${name}} is not set`);

@@ -2023,19 +2023,6 @@ describe("preflight", () => {
     expect(result.lines.join("\n")).not.toContain("PDS_ADMIN_PASSWORD");
   });
 
-  test("c18_sentinel_withheld_end_to_end", async () => {
-    // The edge reader's own scrub (P1.30h) is the first layer; the runner withholds whatever still holds a value.
-    // PDS_HOSTNAME carries the sentinel too, so C18 passes its PDS host tie (P1.35l) and reaches the reader.
-    const sentinel = "sentinelhost.example.test";
-    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`).replace(
-      "      PDS_HOSTNAME: pds.example.test",
-      `      PDS_HOSTNAME: ${sentinel}`,
-    );
-    const result = await check({ compose, sites: { "probe.caddy": '"{$PDS_HOST}" {\n\trespond 204\n}\n' } });
-    expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable/);
-    expect(result.lines.join("\n")).not.toContain(sentinel);
-  });
-
   test("c18_prod_refuses_the_dev_mount", async () => {
     // P1.36c: the dev sites and the dev (tls) are the dev stack's alone; prod mounting either fails C18.
     const sites = "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n";
@@ -2043,7 +2030,7 @@ describe("preflight", () => {
       (await check({ compose: edit(COMPOSE) }, "prod")).lines.find((line) => / C18 /.test(line));
     expect(await c18((text) => text)).toBe("PASS C18 ok");
     expect(await c18((text) => text.replace(sites, "      - ./edge/dev:/etc/caddy/sites/enabled:ro\n"))).toBe(
-      "FAIL C18 the edge config is unreadable: the enabled sites directory is not inside sites/",
+      "FAIL C18 the enabled sites directory is not inside sites/",
     );
     expect(
       await c18((text) =>
@@ -2113,7 +2100,7 @@ describe("preflight", () => {
     // ADR 0032 Decision 3: exactly the three file binds, each read-only from dev/ by its own name; no directory.
     const appMount = "      - ./edge/dev/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
     const pdsMount = "      - ./edge/dev/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
-    const unreadable = "FAIL C18 the edge config is unreadable: ";
+    const unreadable = "FAIL C18 ";
     cases.push(
       // P1.38g: no directory at the enabled sites under dev, alone or beside the binds.
       [
@@ -2164,43 +2151,16 @@ describe("preflight", () => {
     expect(await c18(app("./edge/dev/../sites/pds.caddy"))).toBe(
       `${unreadable}app.caddy: not mounted from dev/app.caddy`,
     );
-    // The dev (tls) itself: anything but the leaf's two files fails, an issuer and Caddy's internal CA included.
-    for (const other of [
-      "(tls) {\n\ttls internal\n}\n",
-      "(tls) {\n\ttls {\n\t\tissuer acme {\n\t\t\tdir https://acme-v02.api.letsencrypt.org/directory\n\t\t}\n\t}\n}\n",
-      "(tls) {\n\ttls /run/secrets/dev_tls_key /run/secrets/dev_tls_cert\n}\n",
-    ]) {
-      expect(await c18(same, { "deployment/edge/dev/tls.caddy": other }), other).toBe(
-        "FAIL C18 the dev (tls) is not the self-signed leaf's files",
-      );
-    }
-    // No :80 site under dev.
-    const plain = readFileSync(join(EDGE_DIR, "dev/pds.caddy"), "utf8").replace(
-      "{$PDS_HOST} {",
-      "http://{$PDS_HOST} {",
-    );
-    expect(await c18(same, { "deployment/edge/dev/pds.caddy": plain })).toMatch(
-      /^FAIL C18 \{\$PDS_HOST\}: a plain-http dev site/,
-    );
-    // Both dev sites stay bound to the newt_edge address alone, the listener P1.36j's trusted proxy names.
-    for (const name of ["app", "pds"]) {
-      const site = readFileSync(join(EDGE_DIR, `dev/${name}.caddy`), "utf8");
-      expect(site).toContain("\tbind 10.250.37.3\n");
-      expect(
-        await c18(same, { [`deployment/edge/dev/${name}.caddy`]: site.replace("\tbind 10.250.37.3\n", "") }),
-      ).toMatch(/^FAIL C18 \{\$(APP|PDS)_HOST\}: not bound to the edge's newt_edge address alone/);
-    }
+    // What the dev files say is Caddy's to show since P1.39e: another (tls), a plain-http site and a site off the
+    // newt_edge address each change the adapted config, and adapted-rules.test.ts holds a red for each ("an issuer
+    // beside the leaf", "another leaf file", "a plain-http listener", "a dev site on every address").
     // The app site takes only its ruled name under dev.
     expect(await c18((t) => t.replace("APP_HOST: staging.unset.sh", "APP_HOST: other.unset.sh"))).toMatch(
-      /^FAIL C18 the edge config is unreadable: \{\$APP_HOST\} is not the dev app site's ruled value/,
+      /^FAIL C18 \{\$APP_HOST\} is not the dev app site's ruled value/,
     );
-    // Prod is unchanged: the shipped sites with Let's Encrypt, and a file certificate fails.
+    // Prod is unchanged: the shipped sites with Let's Encrypt (a file certificate there is adapted-rules.test.ts's
+    // "a file certificate under prod").
     expect(await c18(same, {}, "prod")).toBe("PASS C18 ok");
-    const file = "{$PDS_HOST} {\n\ttls /run/secrets/x_cert /run/secrets/x_key\n";
-    const shipped = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8").replace("{$PDS_HOST} {\n", file);
-    expect(await c18(same, { "deployment/edge/sites/pds.caddy": shipped }, "prod")).toMatch(
-      /\{\$PDS_HOST\}: a file certificate outside dev and local/,
-    );
   });
 
   test("c18_pds_host_is_the_pds_hostname_in_every_env", async () => {
@@ -4740,7 +4700,7 @@ networks:
       "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
     );
     expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/dev/pds.caddy:"))).toBe(
-      "FAIL C18 the edge config is unreadable: pds.caddy: not mounted from sites/pds.caddy",
+      "FAIL C18 pds.caddy: not mounted from sites/pds.caddy",
     );
   });
 
@@ -5300,7 +5260,7 @@ networks:
       "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
     );
     expect(await c18((text) => text.replace("./edge/local/app.caddy:", "./edge/dev/app.caddy:"))).toBe(
-      "FAIL C18 the edge config is unreadable: app.caddy: not mounted from local/app.caddy",
+      "FAIL C18 app.caddy: not mounted from local/app.caddy",
     );
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
@@ -5326,11 +5286,6 @@ networks:
           ),
       ),
     ).toBe("FAIL C18 the edge reads a secret other than the dev leaf's");
-    // The reader's local mode: the snippet C18 judges is local/tls.caddy, not the shipped snippets/tls.caddy.
-    const broken = await local((text) => text, {
-      files: { "deployment/edge/local/tls.caddy": "this is { not caddy\n" },
-    });
-    expect(broken.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable: /);
     expect(
       await c18((text) =>
         text.replace("secrets: [local_tls_cert, local_tls_key]", "secrets: [local_tls_cert, db_password]"),
@@ -5381,10 +5336,10 @@ networks:
         "FAIL C18 input missing: the edge's site mounts in /etc/caddy/sites/enabled",
         (text) => text.replace(pds, "").replace(app, ""),
       ],
-      ["FAIL C18 the edge config is unreadable: app.caddy: not mounted", (text) => text.replace(app, "")],
-      ["FAIL C18 the edge config is unreadable: pds.caddy: not mounted", (text) => text.replace(pds, "")],
+      ["FAIL C18 app.caddy: not mounted", (text) => text.replace(app, "")],
+      ["FAIL C18 pds.caddy: not mounted", (text) => text.replace(pds, "")],
       [
-        "FAIL C18 the edge config is unreadable: second.caddy: not a site the local stack mounts",
+        "FAIL C18 second.caddy: not a site the local stack mounts",
         (text) => text.replace(app, `${app}${app.replace("enabled/app", "enabled/second")}`),
       ],
       [
@@ -5415,26 +5370,13 @@ networks:
   test("local_c18_serves_only_the_leaf_snippet", async () => {
     const c18 = async (edit: (text: string) => string, files: Record<string, string> = {}) =>
       (await local(edit, { files })).lines.find((line) => / C18 /.test(line));
-    const site = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8");
-    const leaf = readFileSync(join(EDGE_DIR, "local/tls.caddy"), "utf8");
     // Without its mount Caddy serves snippets/tls.caddy, which is not what C18 read under local.
     expect(
       await c18((text) => text.replace("      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n", "")),
     ).toBe("FAIL C18 the TLS snippet is not mounted");
-    expect(await c18((text) => text, { "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "") })).toBe(
-      "FAIL C18 {$PDS_HOST}: does not import tls",
-    );
-    expect(
-      await c18((text) => text, {
-        "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "$&\ttls internal\n"),
-      }),
-    ).toBe("FAIL C18 {$PDS_HOST}: has its own tls directive");
-    expect(
-      await c18((text) => text, {
-        "deployment/edge/local/tls.caddy": leaf.replace("(tls) {", "(tls-leaf) {"),
-        "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n",
-      }),
-    ).toBe("FAIL C18 the (tls) snippet served is not local/tls.caddy");
+    // A site without the (tls), with a tls of its own, or a (tls) from another file is Caddy's to show since P1.39e:
+    // each changes the adapted config (adapted-rules.test.ts: "an issuer beside the leaf", "another leaf file",
+    // "a second leaf").
     // The #789 verify's pins (E7, E9, E10): the snippet's mount twice, another local/ file at its target, and the
     // leaf reached through a link inside local/.
     const mount = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
@@ -5458,14 +5400,6 @@ networks:
     expect(
       await c18((text) => text.replace("      context: ./edge\n      dockerfile: Dockerfile\n", OFF_CONTEXT_EDGE)),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
-    // With snippets/tls.caddy gone, the reader reads no leaf in its place, so another file's (tls) is what it judged.
-    const gone = await local((text) => text, {
-      remove: ["deployment/edge/snippets/tls.caddy"],
-      files: { "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n" },
-    });
-    expect(gone.lines.find((line) => / C18 /.test(line))).toBe(
-      "FAIL C18 the (tls) snippet served is not local/tls.caddy",
-    );
   });
 
   test("dev_and_prod_still_refuse_the_local_file_mounts", async () => {
@@ -5483,7 +5417,7 @@ networks:
       const devLine =
         file === "tls.caddy"
           ? "FAIL C18 the edge mounts /etc/caddy/snippets/tls.caddy more than once"
-          : "FAIL C18 the edge config is unreadable: app.caddy: not mounted from dev/app.caddy";
+          : "FAIL C18 app.caddy: not mounted from dev/app.caddy";
       for (const [env, s, line] of [
         [
           "dev",
@@ -5758,6 +5692,42 @@ describe("preflight C18 runs caddy adapt in the edge image (P1.39c)", () => {
     const result = await check({}, "prod", { run });
     expect(failed(result.lines)).toEqual(["C18"]);
     expect(result.lines).toContain("FAIL C18 the edge config Caddy adapts is not the reviewed one");
+  });
+
+  test("c18_sentinel_withheld_end_to_end", async () => {
+    // A configured value where no rule expects it. The rules' messages hold no value (P1.39b), and the runner
+    // withholds a reason that does (P1.30m), so whatever C18 says, the value is not printed.
+    const sentinel = "sentinelhost.example.test";
+    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`).replace(
+      "      PDS_HOSTNAME: pds.example.test",
+      `      PDS_HOSTNAME: ${sentinel}`,
+    );
+    const reviewed = edgeImageAnswer(["run", "adapt"], { ...VALUES, PDS_HOST: sentinel })?.stdout ?? "";
+    const config = JSON.parse(reviewed) as Record<string, unknown>;
+    config.storage = { root: sentinel };
+    const { run } = edgeRun(only({ code: 0, stdout: JSON.stringify(config), stderr: "" }));
+    const result = await check({ compose }, "prod", { run });
+    expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 /);
+    expect(result.lines.join("\n")).not.toContain(sentinel);
+  });
+
+  test("c18_values_are_judged_before_any_run", async () => {
+    // P1.39e: a value that does not fit its shape, or is missing, fails in placeholder names before the edge image
+    // is pulled or run, and is never printed (the reader refused these until then).
+    const sentinel = "c18 sentinel!never printed";
+    for (const name of ["PDS_HOST", "PDS_UPSTREAM", "ACME_EMAIL"] as const) {
+      for (const value of [sentinel, `${VALUES[name]}${sentinel}`, null]) {
+        const line = `      ${name}: ${VALUES[name]}\n`;
+        expect(COMPOSE).toContain(line);
+        const compose = COMPOSE.replace(line, value === null ? "" : `      ${name}: "${value}"\n`);
+        const { run, calls } = edgeRun(() => null);
+        const result = await check({ compose }, "prod", { run });
+        const c18 = result.lines.find((l) => / C18 /.test(l)) ?? "";
+        expect(c18, `${name}=${value}`).toMatch(/^FAIL C18 /);
+        expect(result.lines.join("\n")).not.toContain(sentinel);
+        expect(edgeCalls(calls), `${name}=${value}`).toEqual([]);
+      }
+    }
   });
 
   test("c18_rules_judge_the_adapted_config_beside_the_reviewed_file", async () => {
