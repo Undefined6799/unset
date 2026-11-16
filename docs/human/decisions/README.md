@@ -50,3 +50,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0043](0043-audit-actor-column.md) | The audit side row names its actor in a DID column, so erasure finds a person's rows as actor as well as subject (P1.15k) | Accepted 2026-11-15 |
 | [0045](0045-kit-enforces-the-session-gate.md) | The request kit enforces the session gate on routes that require one (P1.04g) | Accepted 2026-11-15 |
 | [0046](0046-edge-checks-read-caddy-adapt.md) | The edge's checks read Caddy's own adapted config, not our reading of the Caddyfile (P1.39a to P1.39e) | Proposed |
+| [0047](0047-lock-bump-auto-merge.md) | A lock bump the publish run opened merges itself once the `lock` check is required and green (P2.26n) | Accepted 2026-11-16 |

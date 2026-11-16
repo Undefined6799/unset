@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { checkCommitMessage, checkPrTitle } from "../guards/commit-msg.ts";
 import { checkPrTemplate } from "../guards/pr-template.ts";
-import { type BumpClient, type BumpEnv, bumpBody, bumpTitle, runBump } from "./lock-bump-pr.ts";
+import {
+  type BumpClient,
+  type BumpEnv,
+  bumpBody,
+  bumpTitle,
+  LOCK_CHECK,
+  requiredContexts,
+  runBump,
+} from "./lock-bump-pr.ts";
 import { COMPOSE_PATH, LOCK_PATH } from "./lock-write.ts";
 import type { ImageLock } from "./verify-images.ts";
 
@@ -26,7 +34,7 @@ function published(digit = "7"): string {
 }
 
 type Call = { op: string; args: unknown[] };
-function fakeGithub(failAt?: string): { github: BumpClient; calls: Call[] } {
+function fakeGithub(failAt?: string, required = ["check", LOCK_CHECK]): { github: BumpClient; calls: Call[] } {
   const calls: Call[] = [];
   const record =
     <T>(op: string, result: T) =>
@@ -40,24 +48,28 @@ function fakeGithub(failAt?: string): { github: BumpClient; calls: Call[] } {
     createTree: record("createTree", "tree-1"),
     createCommit: record("createCommit", "commit-1"),
     createBranch: record("createBranch", undefined),
-    openPull: record("openPull", 77),
+    openPull: record("openPull", { number: 77, nodeId: "PR_node" }),
+    requiredChecks: record("requiredChecks", required),
+    enableAutoMerge: record("enableAutoMerge", undefined),
   };
   return { github, calls };
 }
 
 const ENV: BumpEnv = { REPO: "Undefined6799/unset", COMMIT, RUN_ATTEMPT: "1", PUBLISHED_LOCK: published() };
-async function run(env: BumpEnv, failAt?: string) {
-  const { github, calls } = fakeGithub(failAt);
+async function run(env: BumpEnv, failAt?: string, required?: string[]) {
+  const { github, calls } = fakeGithub(failAt, required);
   const lines: string[] = [];
   const code = await runBump({ env, github, readText: read, log: (line) => lines.push(line) });
   return { code, calls, lines };
 }
 
+const OPEN = ["treeOf", "createTree", "createCommit", "createBranch", "openPull"];
+
 describe("lock bump pull request", () => {
   test("opens_one_pull_request_with_both_files_off_the_published_commit", async () => {
     const { code, calls, lines } = await run(ENV);
     expect(code).toBe(0);
-    expect(calls.map((call) => call.op)).toEqual(["treeOf", "createTree", "createCommit", "createBranch", "openPull"]);
+    expect(calls.map((call) => call.op)).toEqual([...OPEN, "requiredChecks", "enableAutoMerge"]);
     expect(calls[0]?.args).toEqual([COMMIT]);
     const [baseTree, files] = (calls[1]?.args ?? []) as [string, { path: string; content: string }[]];
     expect(baseTree).toBe("tree-0");
@@ -73,7 +85,7 @@ describe("lock bump pull request", () => {
     const pull = calls[4]?.args[0] as { title: string; head: string; body: string };
     expect(pull.head).toBe(`lock-bump/${COMMIT.slice(0, 12)}-1`);
     expect(pull.title).toBe(message.split("\n")[0]);
-    expect(lines.at(-1)).toContain("opened #77");
+    expect(lines.join("\n")).toContain("opened #77");
   });
 
   test("title_and_body_pass_pr_shape", () => {
@@ -120,5 +132,53 @@ describe("lock bump pull request", () => {
       expect(code, op).toBe(1);
       expect(lines.at(-1)).toBe(`lock-bump-pr: github 422 ${op}`);
     }
+  });
+
+  // P2.26n, ADR 0047: the bump merges itself only behind a required `lock` check, and only at the commit just made.
+  test("auto_merge_is_pinned_to_the_commit_it_made", async () => {
+    const { code, calls, lines } = await run(ENV);
+    expect(code).toBe(0);
+    expect(calls.at(-1)).toEqual({ op: "enableAutoMerge", args: ["PR_node", "commit-1"] });
+    expect(lines.at(-1)).toContain("merges itself");
+  });
+
+  test("no_auto_merge_unless_the_lock_check_is_required", async () => {
+    for (const required of [
+      [],
+      ["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape"],
+      ["Lock", "lock "],
+    ]) {
+      const { code, calls, lines } = await run(ENV, undefined, required);
+      expect(code).toBe(0);
+      expect(calls.map((call) => call.op)).toEqual([...OPEN, "requiredChecks"]);
+      expect(lines.at(-1)).toContain("not a required check");
+    }
+  });
+
+  test("auto_merge_failures_fail_the_job_and_never_retry_open", async () => {
+    // The rules cannot be read: nothing is enabled. The pull request stays open for a person.
+    const unread = await run(ENV, "requiredChecks");
+    expect(unread.code).toBe(1);
+    expect(unread.calls.map((call) => call.op)).toEqual([...OPEN, "requiredChecks"]);
+    const refused = await run(ENV, "enableAutoMerge");
+    expect(refused.code).toBe(1);
+    expect(refused.calls.filter((call) => call.op === "openPull")).toHaveLength(1);
+  });
+
+  test("required_checks_are_read_from_the_branch_rules", () => {
+    // The shape `GET /repos/{repo}/rules/branches/main` answered for this repository on 2026-11-15.
+    const checks = [{ context: "check", integration_id: 15368 }, { context: LOCK_CHECK }];
+    const rules = [
+      { type: "deletion", ruleset_id: 1 },
+      { type: "required_status_checks", parameters: { required_status_checks: checks } },
+    ];
+    expect(requiredContexts(rules)).toEqual(["check", LOCK_CHECK]);
+    expect(requiredContexts([{ type: "deletion" }])).toEqual([]);
+    // Anything unreadable throws, and a throw enables nothing.
+    for (const bad of [null, {}, "lock", [{ type: "required_status_checks" }]]) {
+      expect(() => requiredContexts(bad), JSON.stringify(bad)).toThrow();
+    }
+    const nameless = [{ type: "required_status_checks", parameters: { required_status_checks: [{ id: 1 }] } }];
+    expect(() => requiredContexts(nameless)).toThrow();
   });
 });
