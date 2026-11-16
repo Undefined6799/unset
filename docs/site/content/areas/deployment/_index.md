@@ -67,7 +67,8 @@ No `main.ts`. The commands and the workflows are on [compose](compose/), [prefli
 | Workflow | File | Jobs |
 | --- | --- | --- |
 | `images` | `.github/workflows/images.yml` | `changes`, `images`, `edge`, `discover`, `scan-image`, `pds-ui`, `scan`, `pins` |
-| `publish-images` | `.github/workflows/publish-images.yml` | `publish` |
+| `lock` | `.github/workflows/lock.yml` | `lock` |
+| `publish-images` | `.github/workflows/publish-images.yml` | `publish`, `bump` |
 | `mirror` | `.github/workflows/mirror.yml` | `scan`, `copy-and-sign` |
 | `sigstore-root` | `.github/workflows/sigstore-root.yml` | `fetch` (`workflow_dispatch` only) |
 | `local-stack` | `.github/workflows/local-stack.yml` | `changes`, `green`, `red` |
