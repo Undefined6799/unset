@@ -61,14 +61,21 @@ function takeAutolink(text: string, i: number): Taken | null {
   return { node: { kind: "link", href, children: [{ kind: "text", text: href }] }, next: i + match[0].length };
 }
 
+/** The longest link destination scanned: the lexicon's 2,000-byte address limit. */
+const MAX_DESTINATION = 2_000;
+
 /**
  * Where a link destination ends: the ")" that balances its parentheses, a backslash escaping the next character
- * (CommonMark 0.31.2, "Links"). -1 when none does.
+ * (CommonMark 0.31.2, "Links"). -1 when none does within MAX_DESTINATION characters, or before whitespace, which a
+ * destination may not hold, or a bracket, which this subset does not link. A scan therefore never crosses the next
+ * label, so all the scans together read each character at most once, however many links never close.
  */
 function destinationEnd(text: string, from: number): number {
   let open = 0;
-  for (let j = from; j < text.length; j += 1) {
-    const ch = text[j];
+  const limit = Math.min(text.length, from + MAX_DESTINATION);
+  for (let j = from; j < limit; j += 1) {
+    const ch = text[j] ?? "";
+    if (ch === "[" || ch === "]" || /\s/.test(ch)) return -1;
     if (ch === "\\") j += 1;
     else if (ch === "(") open += 1;
     else if (ch === ")") {
@@ -79,13 +86,34 @@ function destinationEnd(text: string, from: number): number {
   return -1;
 }
 
-function takeLink(text: string, i: number, depth: number): Taken | null {
+/**
+ * The next index of `needle` at or after a position, remembered: parseInline only moves forward, so the text is
+ * searched once per needle rather than once per opener (an unclosed "[" repeated would otherwise be quadratic).
+ */
+function nextIndex(text: string, needle: string): (from: number) => number {
+  let searched = Number.POSITIVE_INFINITY;
+  let found = -1;
+  return (from) => {
+    const stale = from < searched || (found !== -1 && found < from);
+    if (stale) {
+      searched = from;
+      found = text.indexOf(needle, from);
+    }
+    return found;
+  };
+}
+
+type Finders = { readonly labelClose: (from: number) => number; readonly bracket: (from: number) => number };
+
+function takeLink(text: string, i: number, depth: number, find: Finders): Taken | null {
   if (text[i] !== "[") return null;
-  const labelEnd = text.indexOf("](", i + 1);
-  if (labelEnd === -1 || text.slice(i + 1, labelEnd).includes("[")) return null;
+  const labelEnd = find.labelClose(i + 1);
+  if (labelEnd === -1) return null;
+  const inner = find.bracket(i + 1);
+  if (inner !== -1 && inner < labelEnd) return null;
   const urlEnd = destinationEnd(text, labelEnd + 2);
   const url = urlEnd === -1 ? "" : text.slice(labelEnd + 2, urlEnd);
-  const href = url === "" || /\s/.test(url) ? null : safeHref(url, WEB);
+  const href = url === "" ? null : safeHref(url, WEB);
   if (href === null) return null;
   const children = parseInline(text.slice(i + 1, labelEnd), depth + 1, false);
   return { node: { kind: "link", href, children }, next: urlEnd + 1 };
@@ -107,13 +135,14 @@ function takeEmphasis(text: string, i: number, depth: number, links: boolean): T
 /** Left to right; anything that does not open a construct is text. Nested constructs stop at MAX_DEPTH. */
 export function parseInline(text: string, depth = 0, links = true): Inline[] {
   const out: Inline[] = [];
+  const find: Finders = { labelClose: nextIndex(text, "]("), bracket: nextIndex(text, "[") };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
     const taken =
       depth >= MAX_DEPTH
         ? null
         : (takeCode(text, i) ??
-          (links ? (takeAutolink(text, i) ?? takeLink(text, i, depth)) : null) ??
+          (links ? (takeAutolink(text, i) ?? takeLink(text, i, depth, find)) : null) ??
           takeEmphasis(text, i, depth, links));
     if (taken === null) {
       buffer += text[i];

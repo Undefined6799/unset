@@ -101,6 +101,33 @@ describe("parseReadme, review findings on #1648", () => {
     expect(block).toMatchObject({ kind: "heading", level: 2 });
   });
 
+  // Member text is rendered on the server, so no input may make the parser quadratic. Each case is 100,000
+  // characters (the lexicon's limit) of an opener that never closes.
+  test.each([
+    ["unclosed link destinations", "[a](".repeat(25_000)],
+    ["unclosed labels", `${"[".repeat(99_996)}](x)`],
+    ["labels with no destination", "[a]".repeat(33_333)],
+    ["unclosed autolinks", "<https://a".repeat(10_000)],
+    ["lone backticks", "a`".repeat(50_000)],
+    ["emphasis openers before a run of marks", `${"*a".repeat(25_000)}${"*".repeat(50_000)}`],
+    ["strong openers", "**a".repeat(33_333)],
+    ["underscores", " _a".repeat(33_333)],
+    ["fence lines", "```\n~~~~\n".repeat(12_500)],
+    ["nested emphasis", "*_**".repeat(25_000)],
+  ])("%s parse in linear time", (_name, src) => {
+    expect(src.length).toBeGreaterThanOrEqual(99_000);
+    const started = performance.now();
+    parseReadme(src);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  test("a destination past the address limit, or holding a bracket, stays text", () => {
+    const long = `[a](https://a.example/${"x".repeat(2_000)})`;
+    expect(parseReadme(long)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: long }] }]);
+    const bracket = "[a](https://a.example/[x])";
+    expect(parseReadme(bracket)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: bracket }] }]);
+  });
+
   test("trailing hashes are a closing sequence only after a space", () => {
     expect(parseReadme("## C#")).toEqual([{ kind: "heading", level: 2, children: [{ kind: "text", text: "C#" }] }]);
     expect(parseReadme("## Title ##")).toEqual([
