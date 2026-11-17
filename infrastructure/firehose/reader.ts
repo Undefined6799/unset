@@ -1,4 +1,4 @@
-// The indexer's reader of our PDS's event stream (P3.05s, ADR 0052): one serial stream, the cursor written by the
+// The indexer's reader of our PDS's event stream (P3.05s, ADRs 0052 and 0058): one serial stream, the cursor written by the
 // consumer in the frame's own transaction, and any failure stops the stream and reconnects from that cursor, so no
 // frame is ever skipped in-process (book phase-3 P3.05s, "outcome C").
 //

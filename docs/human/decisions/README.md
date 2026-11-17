@@ -60,3 +60,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
 | [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17; decision 3's queue clause superseded by 0053 |
 | [0053](0053-queue-members-for-the-index-at-onboarding-end.md) | Queue members for the index when their onboarding ends, in `idx`; supersedes one clause of 0052 (P3.02s) | Accepted 2026-11-17 |
+| [0058](0058-read-the-stream-without-the-firehose-class.md) | Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class; supersedes one phrase of 0052 (P3.05s) | Proposed (awaiting Alex) |
