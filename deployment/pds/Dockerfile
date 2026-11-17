@@ -2,7 +2,7 @@
 # P1.27s keeps the existing pinned upstream builder pending mirror rollout.
 # P1.38h: atproto 0.5.49 (5d6febdd) and 0.5.51 (fb16c8e0) package.json devEngines require Node ^26.12.1; P1.38j pairs this builder.
 # hadolint ignore=DL3026
-FROM docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS ui-build
+FROM docker.io/library/node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS ui-build
 COPY source.lock.json /source.lock.json
 # P2.24x: the unset.sh theme, appended to upstream's stylesheet before the source is hashed.
 COPY ui/unset-theme.css /unset-theme.css
