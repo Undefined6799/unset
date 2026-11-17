@@ -8,7 +8,7 @@ import { Cancel } from "./Cancel.tsx";
 import type { CardView } from "./ProfileCards.tsx";
 
 /** Blank rows a list editor offers to add more. */
-const BLANK_ROWS = 3;
+const BLANK_ROWS = 10;
 
 /**
  * The stored rows, then blank ones while `max` allows. Every stored row is kept, so a save never drops one, even from a

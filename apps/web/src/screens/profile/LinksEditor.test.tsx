@@ -64,7 +64,12 @@ describe("links editor", () => {
   test("the page offers a new links card with blank rows, posted to /cards", () => {
     const doc = page({ profile, cards: [], cardEditLimits: limits });
     const form = doc.querySelector('form[action="/cards"] input[value="links"]')?.closest("form") ?? null;
-    expect(fields(form).filter((f) => f.endsWith(".uri="))).toEqual(["items.0.uri=", "items.1.uri=", "items.2.uri="]);
+    expect(fields(form).filter((f) => f.endsWith(".uri="))).toEqual([
+      "items.0.uri=",
+      "items.1.uri=",
+      "items.2.uri=",
+      "items.3.uri=",
+    ]);
     expect(fields(form)).toContain("layout=list");
     expect(doc.body.textContent).toContain("Add links");
   });
