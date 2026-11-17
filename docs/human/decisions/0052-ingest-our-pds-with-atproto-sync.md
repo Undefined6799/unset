@@ -1,6 +1,8 @@
 # 0052 — Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice
 
-Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-17 in the thread "Build the indexer for public
+Status: Accepted by Alex, 2026-11-17 06:29:25Z, against ca5b1dc, replying with the line "accept ADR 0052 at ca5b1dc"
+that the coordinator's project-chat post asked for on the head it had reviewed; this file is unchanged at ad62a7c,
+the head that merges. Alex chose the direction on 2026-11-17 in the thread "Build the indexer for public
 profiles": card "Own PDS first" (05:06:16Z), then card
 "Own small reader (no Tap yet)" (05:11:33Z). It takes the
 fallback that plan §5.2 ("The fallback is `@atproto/sync` on `subscribeRepos` (~300 lines)") and book P3.01 outcome C
