@@ -1,14 +1,16 @@
 // The owner's controls under each card (ADR 0051; mockup "Design profile card modules"): move up and down, delete
-// behind a confirm, and an editor in a Modal for a README or links card. Up and down replace the drag in the mockup,
+// behind a confirm, and an editor in a Modal for each kind of card. Up and down replace the drag in the mockup,
 // so every move is a labelled button the keyboard reaches. Each control is a plain form that posts to a card route
 // (interfaces/http/routes/cards.ts) and follows its 303 back here, as Settings › Profile posts POST /profile; no
 // island of ours runs. Every value is a React prop or child (escaped), never raw HTML. Moves work with no script;
 // the edit and delete forms sit in the Modal's <dialog>, which opens once script runs.
 import { Button, Modal, type SafeHref, Textarea } from "@unset/shared-ui";
-import { useId } from "react";
+import { ButtonsEditor } from "./ButtonsEditor.tsx";
 import { Cancel } from "./Cancel.tsx";
+import { CardFormDialog } from "./CardFormDialog.tsx";
+import { CollectionEditor } from "./CollectionEditor.tsx";
 import { LinksEditor } from "./LinksEditor.tsx";
-import { CARD_EDIT, LINKS_EDIT } from "./messages.ts";
+import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "./messages.ts";
 import styles from "./ProfileCards.module.css";
 import type { CardView } from "./ProfileCards.tsx";
 
@@ -36,36 +38,19 @@ type ReadmeFormProps = {
   readonly ownPage: SafeHref;
 };
 
-/** A README's text in a Modal: the same form adds a new README (POST /cards) or saves one (POST /cards/<key>). */
-export function ReadmeEditor({ trigger, title, action, label, text, width, ownPage }: ReadmeFormProps) {
-  const form = useId();
+/** A README's text in the card dialog: the same form adds a new README (POST /cards) or saves one. */
+export function ReadmeEditor({ text, ...dialog }: ReadmeFormProps) {
   return (
-    <Modal
-      trigger={trigger}
-      fallbackHref={ownPage}
-      title={title}
-      actions={
-        <>
-          <Cancel />
-          <Button type="submit" form={form}>
-            {label}
-          </Button>
-        </>
-      }
-    >
-      <form id={form} method="post" action={action}>
-        <input type="hidden" name="kind" value="readme" />
-        <input type="hidden" name="width" value={width} />
-        <Textarea
-          label={CARD_EDIT.readme}
-          hint={CARD_EDIT.readmeHint}
-          name="text"
-          defaultValue={text}
-          rows={12}
-          required
-        />
-      </form>
-    </Modal>
+    <CardFormDialog kind="readme" {...dialog}>
+      <Textarea
+        label={CARD_EDIT.readme}
+        hint={CARD_EDIT.readmeHint}
+        name="text"
+        defaultValue={text}
+        rows={12}
+        required
+      />
+    </CardFormDialog>
   );
 }
 
@@ -86,7 +71,7 @@ function Move({ keys, from, to, label }: { keys: readonly string[]; from: number
 }
 
 /** How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS, passed in by the page's route). */
-export type CardEditLimits = { readonly links: number };
+export type CardEditLimits = { readonly links: number; readonly collection: number; readonly buttons: number };
 
 export function CardControls({
   cards,
@@ -127,6 +112,30 @@ export function CardControls({
           content={card.content}
           width={card.width}
           max={limits.links}
+          ownPage={ownPage}
+        />
+      ) : null}
+      {card.content.kind === "collection" && limits !== undefined ? (
+        <CollectionEditor
+          trigger={CARD_EDIT.edit}
+          title={COLLECTION_EDIT.editTitle}
+          action={path}
+          label={CARD_EDIT.save}
+          content={card.content}
+          width={card.width}
+          max={limits.collection}
+          ownPage={ownPage}
+        />
+      ) : null}
+      {card.content.kind === "buttons" && limits !== undefined ? (
+        <ButtonsEditor
+          trigger={CARD_EDIT.edit}
+          title={BUTTONS_EDIT.editTitle}
+          action={path}
+          label={CARD_EDIT.save}
+          content={card.content}
+          width={card.width}
+          max={limits.buttons}
           ownPage={ownPage}
         />
       ) : null}

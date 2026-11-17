@@ -42,3 +42,33 @@ export const LINKS_EDIT = {
   hint: (max: number) =>
     `Up to ${max} links. Leave a link's fields empty to remove it; save and edit again for more rows.`,
 } as const;
+
+export const COLLECTION_EDIT = {
+  add: "Add collection",
+  editTitle: "Edit collection",
+  title: "Title",
+  row: (n: number) => `Entry ${n}`,
+  entryTitle: "Title",
+  tag: "Tag",
+  description: "Description",
+  uri: "Address",
+  hint: (max: number) =>
+    `Up to ${max} entries. Leave an entry's fields empty to remove it; save and edit again for more rows.`,
+} as const;
+
+export const BUTTONS_EDIT = {
+  add: "Add buttons",
+  editTitle: "Edit buttons",
+  heading: "Heading",
+  text: "Text",
+  row: (n: number) => `Button ${n}`,
+  kind: "Opens",
+  email: "Email",
+  link: "Web address",
+  address: "Email address",
+  preset: "Button text",
+  uri: "Web address",
+  label: "Your own text",
+  hint: (max: number) =>
+    `Up to ${max} buttons. An email button needs the email address; a link button needs the web address, and "${CARD_TEXT.custom}" uses your own text. Leave a button's addresses empty to remove it.`,
+} as const;
