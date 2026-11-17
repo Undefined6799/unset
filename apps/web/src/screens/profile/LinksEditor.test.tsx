@@ -9,7 +9,7 @@ import type { CardView } from "./ProfileCards.tsx";
 const DID = `did:plc:${"a".repeat(24)}`;
 const base: MeProps = { handle: "alice.test", did: DID, handleUnavailable: false, issuer: null, ours: false };
 const profile = { displayName: "Alice", headline: "", location: "", website: "" };
-const limits = { links: 4 };
+const limits = { links: 4, collection: 30, buttons: 5 };
 const links = (key: string, count: number): CardView => ({
   key,
   width: "half",
