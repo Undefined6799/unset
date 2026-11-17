@@ -278,6 +278,9 @@
         "wholeTable": true
       }
     },
+    "idx.is_erased": {
+      "indexer": ["EXECUTE"]
+    },
     "idx.profile": {
       "indexer": {
         "columns": {

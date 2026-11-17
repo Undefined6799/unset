@@ -24,6 +24,16 @@ the list: a column holds a DID when its type is one of the `types` domains, and
 
 Until the Phase 3 callers exist, an owner runs `core.erase_did` by hand: [the erasure runbook](../runbooks/erasure.md).
 
+`core.erase_did` also leaves a tombstone in `core.erased_did` (migration 0028, P3.07s). The tombstone is a keyed
+HMAC-SHA256 of the DID, never the DID itself, with the time, the reason and the outcome. The key is one row in
+`core.tombstone_key`, generated inside Postgres by the migration. No role can read either table; only `migrator`-owned
+definers can. The indexer asks `idx.is_erased(did)` before it tracks a DID, so an erased person is never indexed again.
+
+The tombstone has two limits. A backup holds both the key and the hashes, so a reader of a backup can test whether a
+known DID was erased. A database rebuilt from nothing has a new key and no tombstones.
+If the key row is missing, both `idx.is_erased` and `core.erase_did` fail with `tombstone_key_missing` rather than
+answer "not erased". A DID erased before migration 0028 has no tombstone.
+
 A `text` column whose name looks like a DID (`did`, `*_did`, `*_uri`, `subject`, `actor`, `author`, `owner`, `target`)
 fails the test unless it uses a domain. If it really holds no DID, list it in the test's `NOT_A_DID` with a comment
 saying why. A DID inside a JSONB body is invisible to the catalog, so its table needs a domain column for the owning DID,
