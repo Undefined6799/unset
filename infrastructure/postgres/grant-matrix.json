@@ -116,6 +116,10 @@
         "indexer": ["USAGE"],
         "web": ["USAGE"]
       }
+    },
+    "mod": {
+      "owner": "migrator",
+      "grants": {}
     }
   },
   "tables": {
@@ -129,13 +133,22 @@
       "migrator": ["EXECUTE"]
     },
     "audit.chain": {
-      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+      "auditor": {
+        "privileges": ["SELECT"],
+        "wholeTable": true
+      }
     },
     "audit.redaction_log": {
-      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+      "auditor": {
+        "privileges": ["SELECT"],
+        "wholeTable": true
+      }
     },
     "audit.segment": {
-      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+      "auditor": {
+        "privileges": ["SELECT"],
+        "wholeTable": true
+      }
     },
     "app.single_use": {
       "retention": {
@@ -208,6 +221,106 @@
           "sealed": ["SELECT", "INSERT", "UPDATE"],
           "client_kid": ["SELECT", "INSERT", "UPDATE"],
           "updated_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "idx.account": {
+      "indexer": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "handle": ["SELECT", "UPDATE"],
+          "handle_status": ["SELECT", "UPDATE"],
+          "handle_checked_at": ["SELECT", "UPDATE"],
+          "pds_active": ["SELECT", "UPDATE"],
+          "pds_status": ["SELECT", "UPDATE"],
+          "moderation_version": ["SELECT"],
+          "last_rev": ["SELECT", "UPDATE"],
+          "track_requested_at": ["SELECT", "INSERT", "UPDATE"],
+          "backfilled_at": ["SELECT", "UPDATE"],
+          "updated_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "idx.account_job": {
+      "indexer": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "kind": ["SELECT", "INSERT"],
+          "due_at": ["SELECT", "INSERT", "UPDATE"],
+          "attempts": ["SELECT", "INSERT", "UPDATE"],
+          "first_queued_at": ["SELECT", "INSERT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "idx.dead_letter": {
+      "indexer": {
+        "columns": {
+          "id": ["SELECT"],
+          "kind": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "collection": ["SELECT", "INSERT"],
+          "rkey": ["SELECT", "INSERT"],
+          "reason_code": ["SELECT", "INSERT"],
+          "attempts": ["SELECT", "INSERT"],
+          "first_seen": ["SELECT", "INSERT"],
+          "last_seen": ["SELECT", "INSERT"]
+        }
+      }
+    },
+    "idx.ingest_stat": {
+      "indexer": {
+        "privileges": ["SELECT", "INSERT", "UPDATE"],
+        "wholeTable": true
+      }
+    },
+    "idx.profile": {
+      "indexer": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "uri": ["SELECT", "INSERT", "UPDATE"],
+          "cid": ["SELECT", "INSERT", "UPDATE"],
+          "rev": ["SELECT", "INSERT", "UPDATE"],
+          "record": ["SELECT", "INSERT", "UPDATE"],
+          "display_name": ["SELECT", "INSERT", "UPDATE"],
+          "discoverable": ["SELECT", "INSERT", "UPDATE"],
+          "avatar_cid": ["SELECT", "INSERT", "UPDATE"],
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "idx.record_blob": {
+      "indexer": {
+        "columns": {
+          "uri": ["SELECT", "INSERT"],
+          "cid": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "mime": ["SELECT", "INSERT"],
+          "size": ["SELECT", "INSERT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "idx.relay_cursor": {
+      "indexer": {
+        "privileges": ["SELECT", "INSERT", "UPDATE"],
+        "wholeTable": true
+      }
+    },
+    "idx.section": {
+      "indexer": {
+        "columns": {
+          "uri": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "rkey": ["SELECT", "INSERT"],
+          "cid": ["SELECT", "INSERT", "UPDATE"],
+          "rev": ["SELECT", "INSERT", "UPDATE"],
+          "record": ["SELECT", "INSERT", "UPDATE"],
+          "position": ["SELECT", "INSERT", "UPDATE"],
+          "indexed_at": ["SELECT", "INSERT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }

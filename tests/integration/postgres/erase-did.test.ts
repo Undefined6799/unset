@@ -1,4 +1,4 @@
-// P3.07k (migrations 0021 and 0022): core.erase_did against real Postgres, connected as real roles (TE-2). The
+// P3.07k (migrations 0021 and 0022; 0025 adds the index): core.erase_did against real Postgres, connected as real roles (TE-2). The
 // catalog is the list of DID columns (didColumns, P1.13): the test seeds every one of them for two people, erases
 // one, and fails while any column still names that person or was never seeded, so a new DID table cannot land
 // without its statement in erase_did. The tests run in order on one database of its own container.
@@ -45,6 +45,24 @@ function seedApp(did: string, fill: string): void {
   );
 }
 
+/** One row in every index and moderation table that names `did` (migration 0025). */
+function seedIndex(did: string): void {
+  const uri = `at://${did}/sh.unset.section/3kaaaaaaaaaaa`;
+  postgres.sql(
+    "unset",
+    `INSERT INTO idx.account (did, updated_at) VALUES ('${did}', now());
+     INSERT INTO idx.account_job (did, kind, due_at, first_queued_at) VALUES ('${did}', 'backfill', now(), now());
+     INSERT INTO idx.profile (did, uri, cid, rev, record, discoverable, indexed_at)
+       VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'bafyprofile', '3kaaaaaaaaaaa', '{}', true, now());
+     INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
+       VALUES ('${uri}', '${did}', '3kaaaaaaaaaaa', 'bafysection', '3kaaaaaaaaaaa', '{}', now());
+     INSERT INTO idx.record_blob (uri, cid, did, mime, size) VALUES ('${uri}', 'bafyblob', '${did}', 'image/png', 1);
+     INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
+       VALUES ('event', '${did}', 'event_failed', 5, now(), now());
+     INSERT INTO mod.account_state (did, delisted, updated_at) VALUES ('${did}', true, now());`,
+  );
+}
+
 /** Audit rows as their real writers: a security row by and about `did`, and a moderation row about `did`. */
 async function seedAudit(did: string, moderator: string): Promise<void> {
   const append = "SELECT audit.append($1, 'succeeded', $2, NULL, $3, $4, NULL, NULL, NULL, NULL)";
@@ -54,14 +72,20 @@ async function seedAudit(did: string, moderator: string): Promise<void> {
 
 /** Rows naming `did` per DID column, as "schema.table.column" → count; the moderation lane is counted apart. */
 async function naming(did: string): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const { schema, table, column, kind } of await didColumns(migrator)) {
-    expect(kind, `${schema}.${table}.${column}: this test counts plain DID columns only`).toBe("did");
+  // One query for every column, so the count stays one round trip as DID columns are added.
+  const counts = (await didColumns(migrator)).map(({ schema, table, column, kind }) => {
+    expect(["did", "at_uri"], `${schema}.${table}.${column}: this test counts single DIDs and AT-URIs`).toContain(kind);
     const lane = schema === "audit" ? " AND lane = 'sec'" : "";
-    const [count] = lines(`SELECT count(*) FROM "${schema}"."${table}" WHERE "${column}" = '${did}'${lane}`);
-    counts[`${schema}.${table}.${column}`] = Number(count);
-  }
-  return counts;
+    const value = kind === "at_uri" ? `types.at_uri_did("${column}")` : `"${column}"`;
+    const key = `${schema}.${table}.${column}`;
+    return `SELECT '${key}' || ' ' || count(*) FROM "${schema}"."${table}" WHERE ${value} = '${did}'${lane}`;
+  });
+  return Object.fromEntries(
+    lines(counts.join(" UNION ALL ")).map((line) => {
+      const [key, count] = line.split(" ");
+      return [key, Number(count)];
+    }),
+  );
 }
 
 async function refused(pool: Pool, fn: (client: PoolClient) => Promise<unknown>, label: string): Promise<string> {
@@ -97,6 +121,8 @@ beforeAll(async () => {
   migrator = pools.open(postgres, "unset", "migrator", migratorPassword);
   seedApp(X, "0a");
   seedApp(Y, "0b");
+  seedIndex(X);
+  seedIndex(Y);
   await seedAudit(X, Y);
   await seedAudit(Y, X);
 }, 120_000);
@@ -149,6 +175,9 @@ describe("core.erase_did", () => {
       "app.session": 1,
       "app.oauth_session": 1,
       "app.single_use": 1,
+      "idx.account": 1,
+      "idx.dead_letter": 1,
+      "mod.account_state": 1,
     });
     expect(result.counts["audit.event_body"]).toBeGreaterThanOrEqual(1);
     for (const [column, count] of Object.entries(await naming(X))) expect(count, column).toBe(0);
@@ -180,6 +209,9 @@ describe("core.erase_did", () => {
       "app.oauth_session": 0,
       "app.single_use": 0,
       "audit.event_body": 0,
+      "idx.account": 0,
+      "idx.dead_letter": 0,
+      "mod.account_state": 0,
     });
   });
 });
