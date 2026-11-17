@@ -1,6 +1,7 @@
 // The confirmed-email gate (P2.11; plan §2 rules 3 and 4, §5.3 "Email-verify gate"). GET /verify-email reads
 // emailConfirmed from the PDS through P2.07 and never sends mail. A query string is ignored. POST
 // /verify-email/reconsent starts a new authorization with prompt=consent for the same account.
+// P2.11h: every state is shown to a signed-in member, so the shell offers no Sign in and the screen has Sign out.
 import { type Did, type OnboardingAccount, type OnboardingVersions, requireOnboarded } from "@unset/domains-identity";
 import type { AuthorizeResult, PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
@@ -74,7 +75,7 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
       request,
       title: "Confirm your email",
       body: deps.screens.verifyEmail({ state, pdsHost: deps.pdsHost }),
-      shell: {},
+      shell: { signedIn: true },
     });
   }
 

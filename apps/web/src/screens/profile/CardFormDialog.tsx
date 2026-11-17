@@ -1,10 +1,11 @@
-// The dialog every card editor opens (ADR 0051): a Modal holding one plain form that posts a card's kind and width with
-// its fields to POST /cards or /cards/<key>, as Settings › Profile posts POST /profile (ADR 0037 point 7). The browser
-// follows the 303 itself; no script of ours runs. List editors add rows of indexed fields (`items.2.uri`), which
-// interfaces/http/card-form.ts reads back into a list.
-import { Button, Modal, type SafeHref } from "@unset/shared-ui";
+// The dialog every card editor opens (ADR 0051): a Modal holding one plain form that posts a card's kind, its width
+// (full or half, chosen here as the mockup shows) and its fields to POST /cards or /cards/<key>, as Settings › Profile
+// posts POST /profile (ADR 0037 point 7). The browser follows the 303 itself; no script of ours runs. List editors add
+// rows of indexed fields (`items.2.uri`), which interfaces/http/card-form.ts reads back into a list.
+import { Button, Modal, RadioGroup, type SafeHref } from "@unset/shared-ui";
 import { type ReactNode, useId } from "react";
 import { Cancel } from "./Cancel.tsx";
+import { CARD_EDIT } from "./messages.ts";
 import type { CardView } from "./ProfileCards.tsx";
 
 /** Blank rows a list editor offers to add more. */
@@ -49,7 +50,15 @@ export function CardFormDialog({ trigger, title, action, label, kind, width, own
     >
       <form id={form} method="post" action={action}>
         <input type="hidden" name="kind" value={kind} />
-        <input type="hidden" name="width" value={width} />
+        <RadioGroup
+          label={CARD_EDIT.width}
+          name="width"
+          defaultValue={width}
+          options={[
+            { value: "full", label: CARD_EDIT.full },
+            { value: "half", label: CARD_EDIT.half },
+          ]}
+        />
         {children}
       </form>
     </Modal>

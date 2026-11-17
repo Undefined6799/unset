@@ -21,7 +21,10 @@ const page = (props: Partial<MeProps>) =>
 describe("card controls", () => {
   test("each card has a labelled group; the first cannot move up and the last cannot move down", () => {
     const doc = page({ profile, cards: [readme("k1", "Hi"), links("k2")] });
-    const groups = [...doc.querySelectorAll("fieldset")];
+    // Each card's own group (its legend is for assistive tech only), not a width choice in an editor.
+    const groups = [...doc.querySelectorAll("fieldset")].filter((g) =>
+      g.querySelector(":scope > legend")?.classList.contains("visually-hidden"),
+    );
     expect(groups.map((g) => g.querySelector("legend")?.textContent)).toEqual(["README card", "Elsewhere card"]);
     const labels = (g: Element) => [...g.querySelectorAll("button, a")].map((b) => b.textContent);
     expect(labels(groups[0] as Element)).toEqual(["Edit", "Cancel", "Save", "Move down", "Delete", "Cancel", "Delete"]);
@@ -33,7 +36,11 @@ describe("card controls", () => {
     const doc = page({ profile, cards: [readme("k1", "Hi"), links("k2"), readme("k3", "Bye")] });
     const forms = [...doc.querySelectorAll('fieldset form[method="post"]')].map((f) => [
       f.getAttribute("action"),
-      [...f.querySelectorAll("input")].map((i) => `${i.name}=${i.value}`).join("&"),
+      // What the browser posts: every input but an unchecked radio.
+      [...f.querySelectorAll("input")]
+        .filter((i) => i.type !== "radio" || i.checked)
+        .map((i) => `${i.name}=${i.value}`)
+        .join("&"),
     ]);
     expect(forms.filter(([action]) => action === "/card-order").map(([, body]) => body)).toEqual([
       "order=k2&order=k1&order=k3",
