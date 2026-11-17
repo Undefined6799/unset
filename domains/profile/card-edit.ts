@@ -31,6 +31,16 @@ const OWN_FIELDS: Record<CardKind, readonly string[]> = {
   buttons: ["heading", "text", "buttons"],
 };
 
+/**
+ * How many rows the editor may write per list, under the lexicon's (ADR 0051 point 5: app limits may change, the
+ * schema's may not). Reads keep the lexicon's limits, so a card another client wrote with more still shows in full.
+ */
+export const CARD_EDIT_LIMITS = {
+  links: 30,
+  collection: 30,
+  buttons: LIMITS.section.buttonsMax,
+} as const satisfies Partial<Record<CardKind, number>>;
+
 type Field<T> = { readonly ok: true; readonly value: T } | Failed;
 const fail = (code: CardError): Failed => ({ ok: false, code });
 
@@ -242,12 +252,31 @@ function keepElementFields(fresh: Obj, old: Obj, kind: CardKind): Obj {
   return { ...fresh, [list]: merged };
 }
 
+function rows(content: unknown, kind: CardKind): number {
+  const list = ELEMENTS[kind];
+  if (list === undefined || !isObject(content) || content.$type !== `${NSID}#${kind}`) return 0;
+  const value = content[list];
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/**
+ * A list may hold up to the editor's limit, or as many rows as the stored card of the same kind already has, so a
+ * card past the limit can still be edited or trimmed but never grown.
+ */
+function withinEditLimit(fresh: Obj, existing: unknown, kind: CardKind): boolean {
+  const limit: number | undefined = (CARD_EDIT_LIMITS as Partial<Record<CardKind, number>>)[kind];
+  if (limit === undefined) return true;
+  const stored = isObject(existing) ? rows(existing.content, kind) : 0;
+  return rows(fresh, kind) <= Math.max(limit, stored);
+}
+
 export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: string } & Obj;
 
 /**
  * The record to write over `existing` (the stored value, or null for a new card). Content is replaced; createdAt and
  * any field this version does not know are kept (ADR 0038), inside the content too while its kind stays the same.
- * Past the lexicon's limits is "too long". The whole record is validated once more before it is returned.
+ * Past the lexicon's limits, or a list grown past the editor's, is "too long". The whole record is validated once
+ * more before it is returned.
  */
 export function toCardRecord(
   content: CardContent,
@@ -258,6 +287,7 @@ export function toCardRecord(
   const fresh = toLexicon(content);
   const sized: CardRecord = { $type: NSID, content: fresh, ...(width === "half" ? { width } : {}), createdAt: now };
   if (!validateRecord(NSID, sized, "write").ok) return fail("card.too_long");
+  if (!withinEditLimit(fresh, existing, content.kind)) return fail("card.too_long");
   const stored = isObject(existing) ? existing : {};
   const sameKind = isObject(stored.content) && stored.content.$type === fresh.$type ? stored.content : {};
   const old = Object.fromEntries(Object.entries(sameKind).filter(([k]) => !OWN_FIELDS[content.kind].includes(k)));
