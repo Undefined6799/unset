@@ -72,6 +72,7 @@
       "owner": "migrator",
       "grants": {
         "admin": ["USAGE"],
+        "indexer": ["USAGE"],
         "retention": ["USAGE"],
         "web": ["USAGE"]
       },
@@ -184,7 +185,8 @@
       }
     },
     "app.end_sessions_for_did": {
-      "web": ["EXECUTE"]
+      "web": ["EXECUTE"],
+      "indexer": ["EXECUTE"]
     },
     "app.sweep_single_use": {
       "retention": ["EXECUTE"],

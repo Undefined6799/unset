@@ -264,15 +264,18 @@ describe("grants", () => {
 
   test("retention_has_app_usage", () => {
     // P1.16g: retention reaches app for the single-use sweep (P1.16), which grants its table rights by column list.
-    expect(postgres.sql("unset", schemaUsage("app"))).toBe("admin,retention,web");
-    // USAGE is all it holds on the schema, and no default privilege hands it anything on a future app object.
-    const onSchema =
-      "SELECT string_agg(a.privilege_type, ',') FROM pg_namespace n, aclexplode(n.nspacl) a " +
-      "WHERE n.nspname = 'app' AND a.grantee = 'retention'::regrole";
-    expect(postgres.sql("unset", onSchema)).toBe("USAGE");
-    const defaults =
-      "SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee = 'retention'::regrole";
-    expect(postgres.sql("unset", defaults)).toBe("0");
+    // P3.06g (migration 0027): indexer reaches app for app.end_sessions_for_did only
+    // (tests/integration/postgres/indexer-app-access.test.ts pins that).
+    expect(postgres.sql("unset", schemaUsage("app"))).toBe("admin,indexer,retention,web");
+    // USAGE is all each holds on the schema, and no default privilege hands it anything on a future app object.
+    for (const role of ["retention", "indexer"]) {
+      const onSchema =
+        "SELECT string_agg(a.privilege_type, ',') FROM pg_namespace n, aclexplode(n.nspacl) a " +
+        `WHERE n.nspname = 'app' AND a.grantee = '${role}'::regrole`;
+      expect(postgres.sql("unset", onSchema), role).toBe("USAGE");
+      const defaults = `SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee = '${role}'::regrole`;
+      expect(postgres.sql("unset", defaults), role).toBe("0");
+    }
   });
 
   test("retention_single_use_exact", () => {
