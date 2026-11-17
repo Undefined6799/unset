@@ -324,6 +324,21 @@
         },
         "rowPrivileges": ["DELETE"]
       }
+    },
+    "idx.track_request": {
+      "web": {
+        "columns": {
+          "did": ["INSERT"],
+          "requested_at": ["INSERT"]
+        }
+      },
+      "indexer": {
+        "columns": {
+          "did": ["SELECT"],
+          "requested_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
     }
   }
 }

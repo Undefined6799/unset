@@ -1,7 +1,8 @@
-// P3.07k (migrations 0021 and 0022; 0025 adds the index): core.erase_did against real Postgres, connected as real roles (TE-2). The
-// catalog is the list of DID columns (didColumns, P1.13): the test seeds every one of them for two people, erases
-// one, and fails while any column still names that person or was never seeded, so a new DID table cannot land
-// without its statement in erase_did. The tests run in order on one database of its own container.
+// P3.07k (migrations 0021 and 0022; 0025 adds the index, 0026 the track queue): core.erase_did against real
+// Postgres, connected as real roles (TE-2). The catalog is the list of DID columns (didColumns, P1.13): the test seeds
+// every one of them for two people, erases one, and fails while any column still names that person or was never
+// seeded, so a new DID table cannot land without its statement in erase_did. The tests run in order on one database
+// of its own container.
 import { join } from "node:path";
 import { verifyChain } from "@unset/infrastructure-audit";
 import { didColumns, type Pool, type PoolClient, withClient } from "@unset/infrastructure-postgres";
@@ -41,7 +42,8 @@ function seedApp(did: string, fill: string): void {
      INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at)
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');
      INSERT INTO app.single_use (id, purpose, bind_did, expires_at)
-       VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');`,
+       VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');
+     INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());`,
   );
 }
 
@@ -175,6 +177,7 @@ describe("core.erase_did", () => {
       "app.session": 1,
       "app.oauth_session": 1,
       "app.single_use": 1,
+      "idx.track_request": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -208,6 +211,7 @@ describe("core.erase_did", () => {
       "app.session": 0,
       "app.oauth_session": 0,
       "app.single_use": 0,
+      "idx.track_request": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,

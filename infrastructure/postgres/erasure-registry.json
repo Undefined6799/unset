@@ -64,5 +64,9 @@
   "idx.record_blob.uri": {
     "strategy": "delete_row",
     "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
+  },
+  "idx.track_request.did": {
+    "strategy": "delete_row",
+    "reason": "the request to index a member who signed in; it goes when they are erased"
   }
 }
