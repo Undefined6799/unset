@@ -47,11 +47,7 @@ const record = (n: number, value: unknown = card) => ({
   value,
 });
 /** A PDS holding `count` cards, paged by rkey as listRecords pages (cursor = the last key returned). */
-function holding(
-  count: number,
-  refuse: (n: number, limit: number) => boolean = () => false,
-  value: unknown = card,
-) {
+function holding(count: number, refuse: (n: number, limit: number) => boolean = () => false, value: unknown = card) {
   return (call: Call) => {
     const limit = Number(call.url.searchParams.get("limit"));
     const after = call.url.searchParams.get("cursor");
