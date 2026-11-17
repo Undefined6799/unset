@@ -44,14 +44,22 @@ export const MAX_DESTINATION = 2_000;
 /**
  * Where a link destination ends: the ")" that balances its parentheses, a backslash escaping the next character
  * (CommonMark 0.31.2, "Links"). -1 when none does within MAX_DESTINATION characters, or before whitespace, which a
- * destination may not hold, or a bracket, which this subset does not link. A scan therefore never crosses the next
- * label, so all the scans together read each character at most once, however many links never close.
+ * destination may not hold, or a bracket, which this subset does not link.
+ * Remembered like the other finders: a destination starting inside one already scanned follows a "](" whose "]"
+ * that scan read as escaped, so it closes no label (CommonMark 0.31.2, "Backslash escapes"), and no character is read
+ * twice however many labels never link.
  */
-export function destinationEnd(text: string, from: number): number {
-  return scanDestination(text, from)[0];
+export function destinationFinder(text: string): (from: number) => number {
+  let scanned = 0;
+  return (from) => {
+    if (from < scanned) return -1;
+    const [end, stop] = scanDestination(text, from);
+    scanned = stop;
+    return end;
+  };
 }
 
-/** destinationEnd, and where its scan stopped: the ")" it found, or the character or limit that ended the search. */
+/** Where a destination ends, and where its scan stopped: the ")" it found, or the character or limit that ended the search. */
 function scanDestination(text: string, from: number): readonly [end: number, stop: number] {
   let open = 0;
   const limit = Math.min(text.length, from + MAX_DESTINATION);

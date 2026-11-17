@@ -7,7 +7,7 @@ import { type SafeHref, safeHref } from "@unset/shared-ui";
 import { Children, type ReactNode } from "react";
 import {
   codeCloser,
-  destinationEnd,
+  destinationFinder,
   emphasisCloser,
   isWord,
   type Mark,
@@ -86,6 +86,7 @@ function takeAutolink(text: string, i: number): Taken | null {
 
 type Finders = {
   readonly labelClose: (from: number) => number;
+  readonly destination: (from: number) => number;
   readonly bracket: (from: number) => number;
   readonly codeClose: (length: number, from: number) => number;
   readonly emphasisClose: (mark: Mark, from: number) => number;
@@ -97,7 +98,7 @@ function takeLink(text: string, i: number, depth: number, find: Finders): Taken 
   if (labelEnd === -1) return null;
   const inner = find.bracket(i + 1);
   if (inner !== -1 && inner < labelEnd) return null;
-  const urlEnd = destinationEnd(text, labelEnd + 2);
+  const urlEnd = find.destination(labelEnd + 2);
   const url = urlEnd === -1 ? "" : unescapeDestination(text.slice(labelEnd + 2, urlEnd));
   const href = url === "" ? null : safeHref(url, WEB);
   if (href === null) return null;
@@ -123,6 +124,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
   const out: Inline[] = [];
   const find: Finders = {
     labelClose: nextIndex(text, "]("),
+    destination: destinationFinder(text),
     bracket: nextIndex(text, "["),
     codeClose: codeCloser(text),
     emphasisClose: emphasisCloser(text),

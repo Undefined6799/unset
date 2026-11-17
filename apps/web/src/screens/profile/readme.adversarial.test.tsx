@@ -70,6 +70,9 @@ describe("parseReadme, adversarial input", () => {
     "___",
   ];
   const PARSE_BUDGET_MS = 500;
+  // The inputs that once read each character thousands of times parse in a few milliseconds now; a tighter bar
+  // catches a scan that is linear only up to a large constant (each opener reading 2,000 characters).
+  const LINEAR_BUDGET_MS = 150;
 
   test(`${TOKENS.length} tokens and every ordered pair, at 100,000 characters, each parse in under ${PARSE_BUDGET_MS} ms`, () => {
     const shapes = [...TOKENS, ...TOKENS.flatMap((a) => TOKENS.map((b) => a + b))];
@@ -93,6 +96,15 @@ describe("parseReadme, adversarial input", () => {
     const started = performance.now();
     parseReadme(src);
     expect(performance.now() - started).toBeLessThan(PARSE_BUDGET_MS);
+  });
+
+  test.each([
+    ["labels whose destinations escape the next bracket", "[a\\](\\".repeat(16_667)],
+    ["escaped labels whose destinations escape the next bracket", "\\[a\\](".repeat(16_667)],
+  ])("%s read each destination once", (_name, src) => {
+    const started = performance.now();
+    parseReadme(src);
+    expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS);
   });
 
   test("a destination past the address limit, or holding a bracket, stays text", () => {
