@@ -32,7 +32,7 @@ Product rules for those fields. This folder does not open a socket.
 | `profile.url_invalid` | `website` or a link is not an `http` or `https` URL with a host and no user or password. |
 | `profile.name_required` | The record to write has no display name. |
 
-Bounds are `APP_LIMITS` in `profile.ts`, never above the lexicon's `LIMITS.profile` (ADR 0051). `displayName`, `headline` and `location` are counted in graphemes; `website` in bytes. A value with no scheme is prefixed with `https://` (`withScheme` in `web-address.ts`).
+Edits are bounded by `APP_LIMITS` in `profile.ts`, never above the lexicon's `LIMITS.profile` (ADR 0051). A stored record is read against the lexicon's own limits, so a field another client wrote validly still shows. `displayName`, `headline` and `location` are counted in graphemes; `website` in bytes. A value with no scheme is prefixed with `https://` (`withScheme` in `web-address.ts`).
 
 ## Cards
 
