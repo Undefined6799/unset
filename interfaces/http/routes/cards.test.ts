@@ -124,6 +124,17 @@ describe("card routes", () => {
     expect(calls).toEqual([]);
   });
 
+  test("the largest collection the lexicon allows fits under the body limit", async () => {
+    const { post, calls } = setup();
+    // Each grapheme is "a" and four combining accents: nine bytes, and the most that fit the schema's byte limits.
+    const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+    const uri = `https://a.example/${"x".repeat(2_000 - 18)}`;
+    const entry = { title: heavy(120), tag: heavy(40), description: heavy(300), uri };
+    const body = JSON.stringify({ kind: "collection", title: heavy(100), items: Array(100).fill(entry) });
+    expect((await post("/cards", body)).status).toBe(303);
+    expect(calls).toHaveLength(1);
+  });
+
   test("a cross-site post and a signed-out post never write", async () => {
     const crossSite = setup();
     expect((await crossSite.post("/cards", README, { csrf: false })).status).toBe(403);
