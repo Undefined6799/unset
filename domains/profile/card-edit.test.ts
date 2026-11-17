@@ -1,0 +1,168 @@
+// Writing profile cards (ADR 0051): the editor's input checked once, and the record that goes to the member's PDS.
+import { validateRecord } from "@unset/shared-lexicons";
+import { describe, expect, test } from "vitest";
+import { parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
+import { parseCardKey } from "./cards.ts";
+
+const NOW = "2026-11-17T05:00:00.000Z";
+const T1 = "2026-11-01T00:00:00.000Z";
+const key = (raw: string) => {
+  const parsed = parseCardKey(raw);
+  if (parsed === null) throw new Error(`bad key ${raw}`);
+  return parsed;
+};
+const stored = (content: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+  $type: "sh.unset.section",
+  content,
+  createdAt: T1,
+  ...extra,
+});
+const ref = (kind: string) => `sh.unset.section#${kind}`;
+
+describe("parseCardInput", () => {
+  test("trims fields, adds https to bare addresses and drops empty optional fields", () => {
+    const parsed = parseCardInput({
+      kind: "links",
+      width: "half",
+      title: "  Elsewhere ",
+      items: [{ uri: " github.com/alice ", label: "", description: " Code " }],
+    });
+    expect(parsed).toEqual({
+      ok: true,
+      width: "half",
+      content: {
+        kind: "links",
+        title: "Elsewhere",
+        layout: "list",
+        items: [{ uri: "https://github.com/alice", label: "", description: "Code" }],
+      },
+    });
+  });
+
+  test("README text keeps its line breaks, with CRLF made LF", () => {
+    expect(parseCardInput({ kind: "readme", text: "# Hi\r\n\r\nThere\n" })).toEqual({
+      ok: true,
+      width: "full",
+      content: { kind: "readme", text: "# Hi\n\nThere" },
+    });
+  });
+
+  test.each([
+    [{ kind: "video" }, "card.kind_unknown"],
+    [{ kind: "readme", text: "  " }, "card.required"],
+    [{ kind: "buttons", heading: "", buttons: [] }, "card.required"],
+    [{ kind: "collection", items: [{ title: "" }] }, "card.required"],
+    [{ kind: "links", items: [{ uri: "javascript:alert(1)" }] }, "card.url_invalid"],
+    [{ kind: "links", items: [{ uri: "https://a@b.example" }] }, "card.url_invalid"],
+    [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b" }] }, "card.email_invalid"],
+    [
+      { kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b.example?bcc=c@d.example" }] },
+      "card.email_invalid",
+    ],
+    [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "link", preset: "tip", uri: "x.example" }] }, "card.invalid"],
+    [{ kind: "links", items: "x" }, "card.invalid"],
+    [{ kind: "links", layout: "masonry", items: [] }, "card.invalid"],
+    [{ kind: "readme", text: "x", width: "third" }, "card.invalid"],
+    [{ kind: "links", title: ["x"], items: [] }, "card.invalid"],
+    [{ kind: "links", title: "a\nb", items: [] }, "card.invalid"],
+  ])("refuses %j with %s", (input, code) => {
+    expect(parseCardInput(input)).toEqual({ ok: false, code });
+  });
+
+  test("a list longer than the lexicon allows is refused", () => {
+    const items = Array.from({ length: 101 }, (_, i) => ({ uri: `https://x.example/${i}` }));
+    expect(parseCardInput({ kind: "links", items })).toEqual({ ok: false, code: "card.too_long" });
+    const buttons = Array.from({ length: 6 }, () => ({ kind: "email", address: "a@b.example" }));
+    expect(parseCardInput({ kind: "buttons", heading: "Hi", buttons })).toEqual({ ok: false, code: "card.too_long" });
+  });
+});
+
+describe("toCardRecord", () => {
+  const parsed = (input: Record<string, unknown>) => {
+    const result = parseCardInput(input);
+    if (!result.ok) throw new Error(result.code);
+    return result;
+  };
+
+  test.each([
+    { kind: "readme", text: "Hello" },
+    { kind: "links", title: "Me", layout: "grid", items: [{ uri: "https://x.example", label: "X", description: "d" }] },
+    { kind: "collection", items: [{ title: "A", tag: "T", description: "D", uri: "https://a.example" }] },
+    {
+      kind: "buttons",
+      heading: "Hi",
+      text: "Say hello",
+      buttons: [
+        { kind: "email", address: "a@b.example" },
+        { kind: "link", preset: "custom", uri: "https://x.example", label: "Go" },
+      ],
+    },
+  ])("a new $kind card passes the strict validator", (input) => {
+    const { content, width } = parsed(input);
+    const built = toCardRecord(content, width, null, NOW);
+    expect(built.ok).toBe(true);
+    expect(built.ok && built.record.createdAt).toBe(NOW);
+    expect(built.ok && validateRecord("sh.unset.section", built.record, "write")).toMatchObject({ ok: true });
+  });
+
+  test("empty optional fields and the default width are not written", () => {
+    const { content, width } = parsed({ kind: "collection", items: [{ title: "A" }] });
+    expect(toCardRecord(content, width, null, NOW)).toEqual({
+      ok: true,
+      record: {
+        $type: "sh.unset.section",
+        content: { $type: ref("collection"), layout: "carousel", items: [{ title: "A" }] },
+        createdAt: NOW,
+      },
+    });
+  });
+
+  test("an edit keeps createdAt and fields this version does not know", () => {
+    const existing = stored({ $type: ref("readme"), text: "old", mood: "calm" }, { pinned: true });
+    const { content, width } = parsed({ kind: "readme", text: "new", width: "half" });
+    expect(toCardRecord(content, width, existing, NOW)).toEqual({
+      ok: true,
+      record: {
+        $type: "sh.unset.section",
+        pinned: true,
+        width: "half",
+        content: { $type: ref("readme"), mood: "calm", text: "new" },
+        createdAt: T1,
+      },
+    });
+  });
+
+  test("changing a card's kind drops the old content's unknown fields", () => {
+    const existing = stored({ $type: ref("readme"), text: "old", mood: "calm" });
+    const { content, width } = parsed({ kind: "links", items: [] });
+    const built = toCardRecord(content, width, existing, NOW);
+    expect(built.ok && built.record.content).toEqual({ $type: ref("links"), layout: "list", items: [] });
+  });
+
+  test("text past the lexicon's limit is refused", () => {
+    const { content, width } = parsed({ kind: "buttons", heading: "x".repeat(121), buttons: [] });
+    expect(toCardRecord(content, width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
+  });
+
+  test("an emptied optional field is removed, never kept from the old record", () => {
+    const existing = stored({ $type: ref("links"), title: "Old", items: [] });
+    const { content, width } = parsed({ kind: "links", items: [] });
+    const built = toCardRecord(content, width, existing, NOW);
+    expect(built.ok && built.record.content).toEqual({ $type: ref("links"), layout: "list", items: [] });
+  });
+});
+
+describe("reorderCards", () => {
+  const keys = [key("a"), key("b"), key("c")];
+
+  test("accepts exactly the existing keys in a new order", () => {
+    expect(reorderCards(["c", "a", "b"], keys)).toEqual({ ok: true, order: ["c", "a", "b"] });
+  });
+
+  test.each([[["a", "b"]], [["a", "b", "c", "d"]], [["a", "a", "b"]], [["a", "b", 3]], ["a,b,c"]])(
+    "refuses %j, so a card added or removed meanwhile is never lost",
+    (requested) => {
+      expect(reorderCards(requested, keys)).toEqual({ ok: false, code: "card.order_invalid" });
+    },
+  );
+});

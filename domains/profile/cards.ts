@@ -1,0 +1,168 @@
+// Profile cards (ADR 0051): each card is one sh.unset.section record in the member's PDS, and the profile's `cards`
+// list sets their order. Readers are lenient, since any client may write these records: a card that does not
+// validate, or whose kind this version does not know, is hidden, and an address that is not plain http(s) is
+// dropped. Writing is in card-edit.ts.
+// Lexicon rules: https://atproto.com/specs/lexicon ("Lexicon Evolution", "Authority and Control").
+import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import { isWebAddress } from "./web-address.ts";
+
+declare const cardKey: unique symbol;
+/** A record key of one of the member's sh.unset.section records. */
+export type CardKey = string & { readonly [cardKey]: true };
+
+export type CardWidth = "full" | "half";
+export type CardLayout = "list" | "carousel" | "grid";
+export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
+/** Optional text is "" when unset. */
+export type CardLink = { readonly uri: string; readonly label: string; readonly description: string };
+export type CardEntry = {
+  readonly title: string;
+  readonly tag: string;
+  readonly description: string;
+  readonly uri: string;
+};
+export type CardButton =
+  | { readonly kind: "email"; readonly address: string }
+  | { readonly kind: "link"; readonly preset: LinkPreset; readonly uri: string; readonly label: string };
+export type CardContent =
+  | { readonly kind: "readme"; readonly text: string }
+  | { readonly kind: "links"; readonly title: string; readonly layout: CardLayout; readonly items: readonly CardLink[] }
+  | {
+      readonly kind: "collection";
+      readonly title: string;
+      readonly layout: CardLayout;
+      readonly items: readonly CardEntry[];
+    }
+  | {
+      readonly kind: "buttons";
+      readonly heading: string;
+      readonly text: string;
+      readonly buttons: readonly CardButton[];
+    };
+export type CardKind = CardContent["kind"];
+export type Card = {
+  readonly key: CardKey;
+  readonly width: CardWidth;
+  readonly createdAt: string;
+  readonly content: CardContent;
+};
+
+export type CardError =
+  | "card.invalid"
+  | "card.kind_unknown"
+  | "card.required"
+  | "card.too_long"
+  | "card.url_invalid"
+  | "card.email_invalid"
+  | "card.order_invalid";
+export type Failed = { readonly ok: false; readonly code: CardError };
+
+export const NSID = "sh.unset.section";
+const KINDS: readonly CardKind[] = ["readme", "links", "collection", "buttons"];
+export const WIDTHS: readonly CardWidth[] = ["full", "half"];
+export const LAYOUTS: readonly CardLayout[] = ["list", "carousel", "grid"];
+export const PRESETS: readonly LinkPreset[] = ["bookCall", "hire", "subscribe", "custom"];
+export const DEFAULT_LAYOUT = { links: "list", collection: "carousel" } as const;
+
+export type Obj = Readonly<Record<string, unknown>>;
+export const isObject = (value: unknown): value is Obj =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+export const oneOf = <T extends string>(list: readonly T[], value: unknown): value is T =>
+  typeof value === "string" && (list as readonly string[]).includes(value);
+const text = (value: unknown) => (typeof value === "string" ? value : "");
+const bytes = (value: string) => new TextEncoder().encode(value).length;
+
+/** atproto.com/specs/record-key: 1 to 512 of A-Za-z0-9 . - _ : ~, and never "." or "..". */
+export function parseCardKey(raw: unknown): CardKey | null {
+  if (typeof raw !== "string" || raw === "." || raw === "..") return null;
+  return /^[A-Za-z0-9._:~-]{1,512}$/.test(raw) ? (raw as CardKey) : null;
+}
+
+/**
+ * A published address of plain characters only: letters, digits and . _ + - before the @, dot-separated labels of
+ * letters, digits and - after it, at most the lexicon's 254 bytes. Nothing that means something in a mailto: URL
+ * (? & = # %) can pass, so a stored address can never add headers or recipients to the link (RFC 6068 section 2).
+ */
+export function isEmailAddress(value: string): boolean {
+  return bytes(value) <= LIMITS.section.emailBytes && /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(value);
+}
+
+function readButton(value: unknown): CardButton | null {
+  if (!isObject(value)) return null;
+  if (value.$type === `${NSID}#emailButton`) {
+    const address = text(value.address);
+    return isEmailAddress(address) ? { kind: "email", address } : null;
+  }
+  if (value.$type !== `${NSID}#linkButton` || !isWebAddress(text(value.uri))) return null;
+  const preset = oneOf(PRESETS, value.preset) ? value.preset : "custom";
+  return { kind: "link", preset, uri: text(value.uri), label: text(value.label) };
+}
+
+function readContent(content: Obj): CardContent | null {
+  const prefix = `${NSID}#`;
+  const type = text(content.$type);
+  const kind = type.startsWith(prefix) ? type.slice(prefix.length) : "";
+  if (!oneOf(KINDS, kind)) return null;
+  const items = Array.isArray(content.items) ? content.items.filter(isObject) : [];
+  const layout = (fallback: CardLayout) => (oneOf(LAYOUTS, content.layout) ? content.layout : fallback);
+  switch (kind) {
+    case "readme":
+      return { kind, text: text(content.text) };
+    case "links":
+      return {
+        kind,
+        title: text(content.title),
+        layout: layout(DEFAULT_LAYOUT.links),
+        items: items
+          .filter((item) => isWebAddress(text(item.uri)))
+          .map((item) => ({ uri: text(item.uri), label: text(item.label), description: text(item.description) })),
+      };
+    case "collection":
+      return {
+        kind,
+        title: text(content.title),
+        layout: layout(DEFAULT_LAYOUT.collection),
+        items: items.map((item) => ({
+          title: text(item.title),
+          tag: text(item.tag),
+          description: text(item.description),
+          uri: isWebAddress(text(item.uri)) ? text(item.uri) : "",
+        })),
+      };
+    case "buttons": {
+      const buttons = Array.isArray(content.buttons) ? content.buttons.map(readButton) : [];
+      return {
+        kind,
+        heading: text(content.heading),
+        text: text(content.text),
+        buttons: buttons.filter((b) => b !== null),
+      };
+    }
+  }
+}
+
+/** The card a stored record shows, or null when it is hidden. */
+export function readCard(key: CardKey, value: unknown): Card | null {
+  if (!isObject(value) || !validateRecord(NSID, value, "read").ok || !isObject(value.content)) return null;
+  const content = readContent(value.content);
+  if (content === null) return null;
+  const width = oneOf(WIDTHS, value.width) ? value.width : "full";
+  return { key, width, createdAt: text(value.createdAt), content };
+}
+
+/**
+ * Page order (ADR 0051 decision 2): cards the profile lists, in its order, skipping keys with no card and repeats;
+ * then the cards it does not list, oldest first. `order` is the stored profile's `cards`, unchecked.
+ */
+export function orderCards(order: unknown, cards: readonly Card[]): Card[] {
+  const byKey = new Map(cards.map((card) => [card.key as string, card]));
+  const listed: Card[] = [];
+  for (const raw of Array.isArray(order) ? order : []) {
+    const card = typeof raw === "string" ? byKey.get(raw) : undefined;
+    if (card === undefined) continue;
+    listed.push(card);
+    byKey.delete(raw);
+  }
+  const rest = [...byKey.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return [...listed, ...rest];
+}

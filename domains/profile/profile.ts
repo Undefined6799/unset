@@ -3,6 +3,7 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
@@ -27,11 +28,12 @@ export type ParsedProfile =
  * What the editor accepts. The lexicon's limits are permanent once published, so they sit above these, which the
  * product may change (ADR 0051): the headline is one line of 120 under a schema limit of 200.
  */
+type FieldLimits = Readonly<Record<Exclude<ProfileField, "website">, number>>;
 export const APP_LIMITS = {
   displayName: LIMITS.profile.displayName,
   headline: 120,
   location: LIMITS.profile.location,
-} as const satisfies Record<Exclude<ProfileField, "website">, number>;
+} as const satisfies FieldLimits;
 
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 function graphemes(text: string, stopAfter: number): number {
@@ -40,36 +42,28 @@ function graphemes(text: string, stopAfter: number): number {
   return count;
 }
 
-/** A web address as people type it: "alice.dev" means https://alice.dev; one with any scheme is left as it is. */
-const withScheme = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
-
-/** A plain http or https URL with a host and no credentials, as the lexicon's website and link fields expect. */
-function isWebsite(text: string): boolean {
-  if (!/^https?:\/\//i.test(text)) return false;
-  try {
-    const url = new URL(text);
-    return url.hostname !== "" && url.username === "" && url.password === "";
-  } catch {
-    return false;
-  }
-}
-
 type Checked = { ok: true; value: string } | { ok: false; code: ProfileError };
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 
-function checkField(field: ProfileField, raw: unknown): Checked {
+/** What a stored record may hold: the lexicon's limits, so a field another client wrote validly still shows. */
+const READ_LIMITS = {
+  displayName: LIMITS.profile.displayName,
+  headline: LIMITS.profile.headline,
+  location: LIMITS.profile.location,
+} as const satisfies FieldLimits;
+
+/** `limits` is APP_LIMITS for an edit and READ_LIMITS for a stored record. */
+function checkField(field: ProfileField, raw: unknown, limits: FieldLimits = APP_LIMITS): Checked {
   if (raw === undefined || raw === null) return { ok: true, value: "" };
   if (typeof raw !== "string") return { ok: false, code: "profile.invalid" };
   const trimmed = raw.trim();
   const value = field === "website" && trimmed !== "" ? withScheme(trimmed) : trimmed;
   if (/[\r\n]/.test(value)) return { ok: false, code: "profile.invalid" };
   const tooLong =
-    field === "website"
-      ? bytes(value) > LIMITS.profile.websiteBytes
-      : graphemes(value, APP_LIMITS[field]) > APP_LIMITS[field];
+    field === "website" ? bytes(value) > LIMITS.profile.websiteBytes : graphemes(value, limits[field]) > limits[field];
   if (tooLong) return { ok: false, code: "profile.too_long" };
-  if (field === "website" && value !== "" && !isWebsite(value)) return { ok: false, code: "profile.url_invalid" };
+  if (field === "website" && value !== "" && !isWebAddress(value)) return { ok: false, code: "profile.url_invalid" };
   return { ok: true, value };
 }
 
@@ -94,7 +88,7 @@ export function readProfileRecord(value: unknown): ProfileFields {
   const stored = value as Readonly<Record<string, unknown>>;
   const fields: Record<string, string> = {};
   for (const field of PROFILE_FIELDS) {
-    const checked = checkField(field, stored[field]);
+    const checked = checkField(field, stored[field], READ_LIMITS);
     fields[field] = checked.ok ? checked.value : "";
   }
   return fields as ProfileFields;
