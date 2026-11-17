@@ -1,7 +1,7 @@
 // Writing profile cards (ADR 0051): the editor's input checked once, and the record that goes to the member's PDS.
-import { validateRecord } from "@unset/shared-lexicons";
+import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
+import { CARD_EDIT_LIMITS, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
 import { parseCardKey } from "./cards.ts";
 
 const NOW = "2026-11-17T05:00:00.000Z";
@@ -203,6 +203,33 @@ describe("toCardRecord", () => {
   test("text past the lexicon's limit is refused", () => {
     const { content, width } = parsed({ kind: "buttons", heading: "x".repeat(121), buttons: [] });
     expect(toCardRecord(content, width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
+  });
+
+  test("the editor adds at most its own limit of rows, under the lexicon's", () => {
+    expect(CARD_EDIT_LIMITS.links).toBeLessThanOrEqual(LIMITS.section.linksMax);
+    expect(CARD_EDIT_LIMITS.collection).toBeLessThanOrEqual(LIMITS.section.entriesMax);
+    expect(CARD_EDIT_LIMITS.buttons).toBeLessThanOrEqual(LIMITS.section.buttonsMax);
+    const links = (n: number) => Array.from({ length: n }, (_, i) => ({ uri: `https://x.example/${i}` }));
+    const at = parsed({ kind: "links", items: links(CARD_EDIT_LIMITS.links) });
+    expect(toCardRecord(at.content, at.width, null, NOW).ok).toBe(true);
+    const past = parsed({ kind: "links", items: links(CARD_EDIT_LIMITS.links + 1) });
+    expect(toCardRecord(past.content, past.width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
+    const entries = Array.from({ length: CARD_EDIT_LIMITS.collection + 1 }, (_, i) => ({ title: `e${i}` }));
+    const many = parsed({ kind: "collection", items: entries });
+    expect(toCardRecord(many.content, many.width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
+  });
+
+  test("a stored card past the editor's limit can still be saved, but never grows", () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ uri: `https://x.example/${i}` }));
+    const existing = stored({ $type: ref("links"), layout: "list", items: rows(40) });
+    const same = parsed({ kind: "links", items: rows(40) });
+    expect(toCardRecord(same.content, same.width, existing, NOW).ok).toBe(true);
+    const fewer = parsed({ kind: "links", items: rows(35) });
+    expect(toCardRecord(fewer.content, fewer.width, existing, NOW).ok).toBe(true);
+    const more = parsed({ kind: "links", items: rows(41) });
+    expect(toCardRecord(more.content, more.width, existing, NOW)).toEqual({ ok: false, code: "card.too_long" });
+    const asReadme = stored({ $type: ref("readme"), text: "x" });
+    expect(toCardRecord(same.content, same.width, asReadme, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 
   test("an emptied optional field is removed, never kept from the old record", () => {
