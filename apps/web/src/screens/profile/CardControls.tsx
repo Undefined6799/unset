@@ -5,8 +5,8 @@
 // island of ours runs. Every value is a React prop or child (escaped), never raw HTML. Moves work with no script;
 // the edit and delete forms sit in the Modal's <dialog>, which opens once script runs.
 import { Button, Modal, type SafeHref, Textarea } from "@unset/shared-ui";
-import { useId } from "react";
 import { Cancel } from "./Cancel.tsx";
+import { CardFormDialog } from "./CardFormDialog.tsx";
 import { LinksEditor } from "./LinksEditor.tsx";
 import { CARD_EDIT, LINKS_EDIT } from "./messages.ts";
 import styles from "./ProfileCards.module.css";
@@ -36,36 +36,19 @@ type ReadmeFormProps = {
   readonly ownPage: SafeHref;
 };
 
-/** A README's text in a Modal: the same form adds a new README (POST /cards) or saves one (POST /cards/<key>). */
-export function ReadmeEditor({ trigger, title, action, label, text, width, ownPage }: ReadmeFormProps) {
-  const form = useId();
+/** A README's text in the card dialog: the same form adds a new README (POST /cards) or saves one. */
+export function ReadmeEditor({ text, ...dialog }: ReadmeFormProps) {
   return (
-    <Modal
-      trigger={trigger}
-      fallbackHref={ownPage}
-      title={title}
-      actions={
-        <>
-          <Cancel />
-          <Button type="submit" form={form}>
-            {label}
-          </Button>
-        </>
-      }
-    >
-      <form id={form} method="post" action={action}>
-        <input type="hidden" name="kind" value="readme" />
-        <input type="hidden" name="width" value={width} />
-        <Textarea
-          label={CARD_EDIT.readme}
-          hint={CARD_EDIT.readmeHint}
-          name="text"
-          defaultValue={text}
-          rows={12}
-          required
-        />
-      </form>
-    </Modal>
+    <CardFormDialog kind="readme" {...dialog}>
+      <Textarea
+        label={CARD_EDIT.readme}
+        hint={CARD_EDIT.readmeHint}
+        name="text"
+        defaultValue={text}
+        rows={12}
+        required
+      />
+    </CardFormDialog>
   );
 }
 
