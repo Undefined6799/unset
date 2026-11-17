@@ -594,3 +594,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0040](0040-index-repos-holding-a-profile.md)):** the indexer may track any repo that holds an `sh.unset.profile`
   record, with caps and non-member privacy; it stays off until the non-member erasure route exists and Alex turns it
   on (P3.08d).
+- **ADR 0051 proposed (Alex chose card modules and a clean start on 2026-11-17; own record:
+  [0051](0051-profile-cards-lexicon.md)):** `sh.unset.profile` keeps only the side column and the card order;
+  each card is one `sh.unset.section` record with an open union of kinds. Supersedes ADR 0037 decisions 4, 5, 8 and
+  the README half of 7 once accepted. Proposed, awaiting Alex.
+- **ADR 0051 accepted (Alex, 2026-11-17 05:17:25Z, against 90acb64; own record:
+  [0051](0051-profile-cards-lexicon.md)):** the minimal `sh.unset.profile` and one `sh.unset.section` record per
+  card, with the one-time replacement of the published `sh.unset.profile` snapshot that he allowed in the same
+  message. ADR 0037 decisions 4, 5, 8 and the README half of 7 are superseded.
