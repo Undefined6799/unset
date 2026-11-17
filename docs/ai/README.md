@@ -62,9 +62,9 @@ YAML would read as a boolean or number (`true`, `404`). `code:` paths are plain 
 paths (no `./`, `..` or `//`), and `checked` is never after today.
 
 Allowed `areas`: web, admin, chat, http, api, indexer, media, review, pds-admin,
-chat-admin, identity, content, social, feed, messaging, moderation, privacy,
-postgres, pds, tap, matrix, storage, arachnid, email, net-guard, seal, audit,
-lexicons, ui, config, errors, i18n, deployment, tests, ci, docs.
+chat-admin, identity, profile, content, social, feed, messaging, moderation, privacy,
+postgres, pds, tap, matrix, storage, arachnid, email, net-guard, session, seal, audit,
+lexicons, ui, config, errors, log, host-pin, i18n, deployment, tests, ci, docs.
 A new area is added here, and in `AREAS` in the guard, only when its folder is created.
 
 ## Body (keep under 60 lines; split if longer)

@@ -13,9 +13,9 @@ const STATUSES = ["current", "replaced"];
 const IMPORTANCE = ["high", "normal"];
 export const AREAS = [
   ...["web", "admin", "chat", "http", "api", "indexer", "media", "review", "pds-admin", "chat-admin"],
-  ...["identity", "content", "social", "feed", "messaging", "moderation", "privacy"],
-  ...["postgres", "pds", "tap", "matrix", "storage", "arachnid", "email", "net-guard", "seal", "audit"],
-  ...["lexicons", "ui", "config", "errors", "i18n", "deployment", "tests", "ci", "docs"],
+  ...["identity", "profile", "content", "social", "feed", "messaging", "moderation", "privacy"],
+  ...["postgres", "pds", "tap", "matrix", "storage", "arachnid", "email", "net-guard", "session", "seal", "audit"],
+  ...["lexicons", "ui", "config", "errors", "log", "host-pin", "i18n", "deployment", "tests", "ci", "docs"],
 ];
 const FIELDS = [
   ...["id", "type", "status", "areas", "summary", "code", "sources"],

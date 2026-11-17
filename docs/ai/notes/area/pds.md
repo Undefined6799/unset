@@ -7,7 +7,7 @@ summary: "Hub for infrastructure/pds: the atproto network adapter: identity's DI
 code: [infrastructure/pds/index.ts]
 sources: []
 importance: normal
-related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]", "[[seal]]"]
+related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]", "[[seal]]", "[[profile]]"]
 replaced_by: null
 tags: [area, pds]
 checked: 2026-10-28
