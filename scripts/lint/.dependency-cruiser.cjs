@@ -16,6 +16,12 @@ const SDK_ADAPTERS = [
   { sdk: "@atproto/oauth-client-node", adapter: "infrastructure/pds/" },
   { sdk: "@atproto/api", adapter: "infrastructure/pds/" },
   { sdk: "@aws-sdk/client-s3", adapter: "infrastructure/storage/" },
+  // The indexer's stream reader (ADR 0052, P3.05s); @atproto/repo, @atproto/crypto and ws are its tests' stand-in PDS.
+  { sdk: "@atproto/sync", adapter: "infrastructure/firehose/" },
+  { sdk: "@atproto/xrpc-server", adapter: "infrastructure/firehose/" },
+  { sdk: "@atproto/repo", adapter: "infrastructure/firehose/" },
+  { sdk: "@atproto/crypto", adapter: "infrastructure/firehose/" },
+  { sdk: "ws", adapter: "infrastructure/firehose/" },
   { sdk: "age-encryption", adapter: "infrastructure/seal/" },
   { sdk: "@atproto/lex[^/]*", adapter: "shared/lexicons/" },
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
