@@ -7,7 +7,7 @@ summary: "Hub for the web server process (interfaces/http) and the server kit in
 code: [interfaces/http/compose.ts, shared/http/index.ts]
 sources: []
 importance: normal
-related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
+related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]", "[[profile]]", "[[session]]"]
 replaced_by: null
 tags: [area, http]
 checked: 2026-11-16
