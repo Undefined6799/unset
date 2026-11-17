@@ -53,6 +53,8 @@ export const ERROR_CODES = {
   "card.kind_unknown": { status: 400, public: true },
   "card.required": { status: 400, public: true },
   "card.too_long": { status: 400, public: true },
+  // A card form past interfaces/http's form cap: a card saved elsewhere with many long rows, which this page cannot send.
+  "card.form_too_large": { status: 413, public: true },
   "card.url_invalid": { status: 400, public: true },
   "card.email_invalid": { status: 400, public: true },
   "card.order_invalid": { status: 409, public: true },
