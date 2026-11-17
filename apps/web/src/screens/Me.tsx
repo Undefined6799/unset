@@ -4,9 +4,11 @@
 // call to action with the Edit profile link; the draft avatar and name ride P2.18 and P2.19, the real state P2.22.
 import { Avatar, Button, Card, Link, safeHref } from "@unset/shared-ui";
 import { PdsAccountLink } from "./PdsAccountLink.tsx";
+import { ButtonsEditor } from "./profile/ButtonsEditor.tsx";
 import { CardControls, type CardEditLimits, ReadmeEditor } from "./profile/CardControls.tsx";
+import { CollectionEditor } from "./profile/CollectionEditor.tsx";
 import { LinksEditor } from "./profile/LinksEditor.tsx";
-import { CARD_EDIT, LINKS_EDIT } from "./profile/messages.ts";
+import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "./profile/messages.ts";
 import { type CardView, ProfileCards } from "./profile/ProfileCards.tsx";
 import { SETTINGS } from "./settings/messages.ts";
 import { PrivacyNotice } from "./welcome/PrivacyNotice.tsx";
@@ -58,7 +60,7 @@ function SideColumn({ profile, handle }: { profile: NonNullable<MeProps["profile
 
 const EDIT_PROFILE = safeHref("/settings/profile", ["path"]);
 
-/** The owner's cards with their controls, and a new README at the end (ADR 0051). Needs a published profile. */
+/** The owner's cards with their controls, and a new card of each kind at the end (ADR 0051). Needs a published profile. */
 function OwnCards({
   did,
   cards,
@@ -86,16 +88,38 @@ function OwnCards({
         ownPage={ownPage}
       />
       {limits === undefined ? null : (
-        <LinksEditor
-          trigger={LINKS_EDIT.add}
-          title={LINKS_EDIT.add}
-          action="/cards"
-          label={CARD_EDIT.add}
-          content={null}
-          width="full"
-          max={limits.links}
-          ownPage={ownPage}
-        />
+        <>
+          <LinksEditor
+            trigger={LINKS_EDIT.add}
+            title={LINKS_EDIT.add}
+            action="/cards"
+            label={CARD_EDIT.add}
+            content={null}
+            width="full"
+            max={limits.links}
+            ownPage={ownPage}
+          />
+          <CollectionEditor
+            trigger={COLLECTION_EDIT.add}
+            title={COLLECTION_EDIT.add}
+            action="/cards"
+            label={CARD_EDIT.add}
+            content={null}
+            width="full"
+            max={limits.collection}
+            ownPage={ownPage}
+          />
+          <ButtonsEditor
+            trigger={BUTTONS_EDIT.add}
+            title={BUTTONS_EDIT.add}
+            action="/cards"
+            label={CARD_EDIT.add}
+            content={null}
+            width="half"
+            max={limits.buttons}
+            ownPage={ownPage}
+          />
+        </>
       )}
       <noscript>
         <p>{CARD_EDIT.noScript}</p>
