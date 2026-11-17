@@ -155,7 +155,7 @@
   why: "Adds a card to the signed-in member's own page, written to their PDS (interfaces/http/routes/cards.ts, ADR 0051)."
   input: "JSON object: kind (readme, links, collection or buttons), optional width (full or half), and the kind's fields. Or a form with kind, width and text, each once, for a README card (at most 320 KiB)."
   output: "303 to the member's own page."
-  errors: "card.invalid, also for a form field sent twice or one the form does not hold, card.kind_unknown, card.required, card.too_long, card.url_invalid and card.email_invalid for a bad card. card.too_many when the member already has the most cards a page holds. card.pds_unavailable when the PDS does not answer. The kit's session gate answers a signed-out post with its redirect, and a member past their own limit with 429, before the handler runs (ADR 0045)."
+  errors: "card.invalid (also a repeated or unknown form field), card.kind_unknown, card.required, card.too_long, card.url_invalid, card.email_invalid for a bad card. card.too_many at the most cards a page holds; card.list_incomplete when the cards could not all be read to count. card.pds_unavailable when the PDS does not answer. The kit's session gate answers a signed-out post with its redirect, and a member past their own limit with 429, before the handler runs (ADR 0045)."
   auth: "gate: openApp"
 "POST /cards/:key":
   why: "Replaces one of the member's own cards, compare-and-swap on their PDS (interfaces/http/routes/cards.ts)."
@@ -173,7 +173,7 @@
   why: "Sets the order of the member's own cards in their profile record (interfaces/http/routes/cards.ts)."
   input: "JSON object with order, the record keys of the cards the page shows, each exactly once; or a form with one order field per key, in order."
   output: "303 to the member's own page."
-  errors: "card.order_invalid when the order does not name each shown card exactly once. profile.name_required when there is no profile yet. card.conflict when the profile changed since it was read, card.pds_unavailable when the PDS does not answer. The kit's session gate answers a signed-out post with its redirect, and a member past their own limit with 429, before the handler runs (ADR 0045)."
+  errors: "card.order_invalid when the order does not name each shown card exactly once. card.list_incomplete when the cards could not all be read in time to check it. profile.name_required when there is no profile yet. card.conflict when the profile changed since it was read, card.pds_unavailable when the PDS does not answer. The kit's session gate answers a signed-out post with its redirect, and a member past their own limit with 429, before the handler runs (ADR 0045)."
   auth: "gate: openApp"
 "GET /welcome/age":
   why: "Asks for a birth date. The date is not stored (interfaces/http/routes/welcome.ts)."

@@ -55,7 +55,9 @@ export function meRoutes(deps: AccountDeps, readOwnProfile: ReadOwnProfile): Rou
         }
         const body = deps.screens.me({
           ...props,
-          ...(own.kind === "ok" ? { profile: own.profile, cards: own.cards } : { profileUnavailable: true }),
+          ...(own.kind === "ok"
+            ? { profile: own.profile, cards: own.cards, ...(own.cardsComplete ? {} : { cardsIncomplete: true }) }
+            : { profileUnavailable: true }),
         });
         return deps.page({
           group: "app",

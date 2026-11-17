@@ -192,7 +192,7 @@ function setup(world: World = {}) {
           pdsIssuer: "https://pds.unset.test",
           log,
         },
-        async () => ({ kind: "ok", profile: null, cards: [] }),
+        async () => ({ kind: "ok", profile: null, cards: [], cardsComplete: true }),
       ),
     ],
     policies,

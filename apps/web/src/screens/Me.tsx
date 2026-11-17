@@ -28,9 +28,12 @@ export type MeProps = {
   cards?: readonly CardView[];
   /** Their PDS could not be read just now: the page shows the account without the profile. */
   profileUnavailable?: boolean;
+  /** Some cards could not be read in time: the page shows the rest and says so. */
+  cardsIncomplete?: boolean;
 };
 
 const PROFILE_UNAVAILABLE = "We could not load your profile just now.";
+const CARDS_INCOMPLETE = "Some of your cards could not be loaded just now. Reload to try again.";
 
 function SideColumn({ profile, handle }: { profile: NonNullable<MeProps["profile"]>; handle: string }) {
   const website = profile.website === "" ? null : safeHref(profile.website, ["http:", "https:"]);
@@ -98,6 +101,7 @@ export function Me(props: MeProps) {
       </p>
       {handleUnavailable ? <p>We could not check your handle just now.</p> : null}
       {props.profileUnavailable === true ? <p>{PROFILE_UNAVAILABLE}</p> : null}
+      {props.cardsIncomplete === true ? <p>{CARDS_INCOMPLETE}</p> : null}
       {profile === null || EDIT_PROFILE === null ? null : (
         <p>
           <Link href={EDIT_PROFILE} variant="standalone">
