@@ -9,10 +9,12 @@ import type { PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements, textContent } from "../web/fixtures/html.ts";
 import { silentLog, testPage } from "../web/fixtures/page.ts";
 import { verifyEmailRoutes } from "./verify-email.ts";
 
@@ -62,7 +64,7 @@ function setup(
       },
       safeHref: (value) => value as never,
       allowHttp: false,
-      page: testPage(log),
+      page: testPage(log, "pds.unset.test"),
       screens: web.screens,
       pdsHost: "pds.unset.test",
       log,
@@ -127,6 +129,28 @@ describe("GET /verify-email", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("is not answering");
     expect(saved).toEqual([]);
+  });
+
+  test("verify.signed_in_page_offers_sign_out_not_sign_in", async () => {
+    // P2.11h: every state is shown to a signed-in member. The shell offers no Sign in (no header action, no sign-in
+    // box, no footer /login link) and the page offers this browser's sign-out, as the welcome steps do (P2.12i/j).
+    const states = [
+      ["confirmed", info(true)],
+      ["unconfirmed", info(false)],
+      ["needs_consent", info(undefined)],
+      ["unavailable", { kind: "transient", code: "pds_unavailable" }],
+    ] as const;
+    for (const [name, answer] of states) {
+      const response = await setup({ info: answer }).send("/verify-email");
+      expect(response.status, name).toBe(200);
+      const doc = parse(await response.text());
+      expect(elements(doc, "form", { action: "/login" }), name).toHaveLength(0);
+      expect(elements(doc, "a", { href: "/login" }), name).toHaveLength(0);
+      expect(elements(doc, "dialog"), name).toHaveLength(0);
+      const signOut = elements(elements(doc, "main")[0], "form", { action: "/logout", method: "post" });
+      expect(signOut, name).toHaveLength(1);
+      expect(elements(signOut[0], "button", { type: "submit" }).map(textContent), name).toEqual(["Sign out"]);
+    }
   });
 
   test("verify.onboarding_required", async () => {

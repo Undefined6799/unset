@@ -67,7 +67,8 @@ export function pdsUnavailablePage(request: Request, body: ReactNode, page: (spe
     request,
     title: "Confirm your email",
     body,
-    shell: {},
+    // The gate kept the session (P2.11d): no Sign in, and the screen's own Sign out (P2.11h).
+    shell: { signedIn: true },
   });
 }
 

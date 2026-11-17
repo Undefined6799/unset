@@ -1,7 +1,9 @@
 // Confirming the account email (P2.11; plan §5.3). The server already read the PDS. This page never sends mail:
 // the member confirms it on the sign-in server. A query string cannot change the state.
+// P2.11h: the member is signed in in every state, so each ends in this browser's sign-out (welcome/SignOut, P2.12i).
 import { Button, Link, safeHref } from "@unset/shared-ui";
 import { PdsAccountLink } from "./PdsAccountLink.tsx";
+import { SignOut } from "./welcome/SignOut.tsx";
 
 export type VerifyEmailState = "confirmed" | "unconfirmed" | "needs_consent" | "unavailable";
 
@@ -58,6 +60,7 @@ export function VerifyEmail({ state, pdsHost, issuer, ours = true }: VerifyEmail
           )}
         </>
       ) : null}
+      <SignOut />
     </>
   );
 }
