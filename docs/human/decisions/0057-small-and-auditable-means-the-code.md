@@ -1,7 +1,7 @@
 # 0057 — "Small and auditable" means our code; established packages are used, not rebuilt
 
-Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-17 22:36Z in the thread "Find workarounds
-worth replacing". It amends engineering rule DO-1 (adopted by ADR 0002) and the D8 line of `CLAUDE.md`, and gives
+Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-17 22:36Z in the project chat, answering
+the review of hand-built tooling. It amends engineering rule DO-1 (adopted by ADR 0002) and the D8 line of `CLAUDE.md`, and gives
 plan §9 its meaning. No earlier record is edited.
 
 ## Context
