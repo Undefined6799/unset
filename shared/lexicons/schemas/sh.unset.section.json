@@ -1,124 +1,213 @@
 {
   "lexicon": 1,
   "id": "sh.unset.section",
-  "description": "One section of an unset.sh profile page, such as links or projects.",
+  "description": "One card on an unset.sh profile page. The profile record's cards list sets the order (ADR 0051).",
   "defs": {
     "main": {
       "type": "record",
       "key": "tid",
-      "description": "A profile section. Sections render in ascending position.",
+      "description": "A profile card: its width and its content.",
       "record": {
         "type": "object",
-        "required": ["type", "title", "position", "createdAt"],
+        "required": ["content", "createdAt"],
         "properties": {
-          "type": {
+          "content": {
+            "type": "union",
+            "refs": ["#readme", "#links", "#collection", "#buttons"],
+            "description": "What the card holds. A kind a reader does not know hides the card; it is never an error."
+          },
+          "width": {
             "type": "string",
             "maxLength": 32,
-            "knownValues": ["social", "links", "projects", "writing", "text", "cta"],
-            "description": "Section kind: decides which item fields apply and how it renders. An unknown value renders as links."
-          },
-          "title": {
-            "type": "string",
-            "maxGraphemes": 80,
-            "maxLength": 800,
-            "description": "Section heading."
-          },
-          "summary": {
-            "type": "string",
-            "maxGraphemes": 400,
-            "maxLength": 4000,
-            "description": "Text under the heading."
-          },
-          "position": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 49,
-            "description": "Order on the page, from 0, contiguous across the account's sections."
-          },
-          "items": {
-            "type": "array",
-            "maxLength": 50,
-            "items": {
-              "type": "ref",
-              "ref": "#item"
-            },
-            "description": "Entries, in display order."
+            "knownValues": ["full", "half"],
+            "description": "Width on wide screens. Absent or unknown means full."
           },
           "createdAt": {
             "type": "string",
             "format": "datetime",
-            "description": "When the section was first published."
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "datetime",
-            "description": "When the section was last published."
+            "description": "When the card was first published."
           }
         }
       }
     },
-    "item": {
+    "readme": {
       "type": "object",
-      "description": "One entry in a section. Which fields apply depends on the section type; the editor enforces per-type requirements, the schema stays open.",
+      "required": ["text"],
+      "description": "Text the member writes, shown like a README.",
       "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 100000,
+          "description": "Markdown (CommonMark). Readers never render raw HTML and keep only http and https links."
+        }
+      }
+    },
+    "links": {
+      "type": "object",
+      "required": ["items"],
+      "description": "Addresses elsewhere. Readers derive each one's icon and account name from its URL; nothing about the site is stored.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000
+        },
+        "layout": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["list", "carousel", "grid"],
+          "description": "Absent or unknown means list."
+        },
+        "items": {
+          "type": "array",
+          "maxLength": 100,
+          "items": {
+            "type": "ref",
+            "ref": "#link"
+          },
+          "description": "In display order."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["uri"],
+      "description": "One address.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL. A reader drops any other scheme."
+        },
+        "label": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Text shown when the URL names no account."
+        },
+        "description": {
+          "type": "string",
+          "maxGraphemes": 200,
+          "maxLength": 2000
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "required": ["items"],
+      "description": "Titled entries, such as projects, writing or talks.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000
+        },
+        "layout": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["list", "carousel", "grid"],
+          "description": "Absent or unknown means carousel."
+        },
+        "items": {
+          "type": "array",
+          "maxLength": 100,
+          "items": {
+            "type": "ref",
+            "ref": "#entry"
+          },
+          "description": "In display order."
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["title"],
+      "description": "One entry in a collection.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200
+        },
         "tag": {
           "type": "string",
           "maxGraphemes": 40,
           "maxLength": 400,
           "description": "Small label above the title."
         },
-        "title": {
+        "description": {
           "type": "string",
-          "maxGraphemes": 120,
-          "maxLength": 1200,
-          "description": "Entry title."
+          "maxGraphemes": 300,
+          "maxLength": 3000
         },
-        "summary": {
-          "type": "string",
-          "maxGraphemes": 400,
-          "maxLength": 4000,
-          "description": "Entry text."
-        },
-        "url": {
+        "uri": {
           "type": "string",
           "format": "uri",
           "maxLength": 2000,
-          "description": "Entry link: an http or https URL."
+          "description": "An http or https URL. A reader drops any other scheme."
+        }
+      }
+    },
+    "buttons": {
+      "type": "object",
+      "required": ["heading", "buttons"],
+      "description": "A short pitch with buttons; the first is the main one.",
+      "properties": {
+        "heading": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200
         },
-        "platform": {
+        "text": {
+          "type": "string",
+          "maxGraphemes": 400,
+          "maxLength": 4000
+        },
+        "buttons": {
+          "type": "array",
+          "maxLength": 5,
+          "items": {
+            "type": "union",
+            "refs": ["#emailButton", "#linkButton"]
+          },
+          "description": "In display order. A kind a reader does not know is skipped."
+        }
+      }
+    },
+    "emailButton": {
+      "type": "object",
+      "required": ["address"],
+      "description": "Opens an email to the address, which the member chose to publish.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "maxLength": 254
+        }
+      }
+    },
+    "linkButton": {
+      "type": "object",
+      "required": ["preset", "uri"],
+      "description": "Opens a link. Readers word the button from the preset.",
+      "properties": {
+        "preset": {
           "type": "string",
           "maxLength": 32,
-          "knownValues": [
-            "bluesky",
-            "github",
-            "x",
-            "linkedin",
-            "instagram",
-            "youtube",
-            "twitch",
-            "mastodon",
-            "email",
-            "rss",
-            "website"
-          ],
-          "description": "Social platform (social sections)."
+          "knownValues": ["bookCall", "hire", "subscribe", "custom"],
+          "description": "Absent from the known values means custom."
         },
-        "handle": {
+        "uri": {
           "type": "string",
-          "maxGraphemes": 100,
-          "maxLength": 1000,
-          "description": "Account name on the platform (social sections)."
-        },
-        "date": {
-          "type": "string",
-          "format": "datetime",
-          "description": "Publication date (writing sections)."
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "An http or https URL. A reader drops any other scheme."
         },
         "label": {
           "type": "string",
-          "maxGraphemes": 80,
-          "maxLength": 800,
-          "description": "Button text (cta sections)."
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "Button text for custom."
         }
       }
     }

@@ -43,7 +43,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0034](0034-docs-only-auto-merge.md) | Docs-only pull requests auto-merge when CI is green (P0.07e) | Proposed (awaiting Alex) |
 | [0035](0035-web-search-searxng.md) | Web search through our own SearXNG, queried by the server through net-guard (P3.14s) | Proposed (awaiting Alex) |
 | [0036](0036-staging-builds-from-source.md) | Staging builds its images from the checkout under `--env dev --source`; production stays signed and pinned (P1.37y) | Accepted 2026-10-28 |
-| [0037](0037-profile-module-and-page.md) | The profile is its own module, stored on the member's PDS, edited by its owner (P2.20) | Accepted 2026-10-28; Decision 2's strict-validator clause superseded by 0038 |
+| [0037](0037-profile-module-and-page.md) | The profile is its own module, stored on the member's PDS, edited by its owner (P2.20) | Accepted 2026-10-28; Decision 2's strict-validator clause superseded by 0038; decisions 4, 5, 8 and the README half of 7 superseded by 0051 |
 | [0038](0038-profile-save-keeps-unknown-fields.md) | A profile save keeps stored fields the lexicon does not define (P2.20f) | Accepted 2026-10-29 |
 | [0039](0039-request-scopes-per-feature.md) | Sign-in asks only for the scopes a shipped feature uses (P1.31s) | Accepted 2026-11-16 |
 | [0040](0040-index-repos-holding-a-profile.md) | Index any repo that holds our profile record, with caps and non-member privacy (P3.08d) | Accepted 2026-11-16 |
@@ -57,4 +57,5 @@ one-paragraph entry; new decisions also get their own file.
 | [0050](0050-object-store-admin-through-its-shell.md) | The object store's buckets and clean-up run through its own shell; no S3 admin key; supersedes two clauses of 0041 (P2.18s) | Accepted 2026-11-16 |
 | [0048](0048-session-issuer-origin.md) | The session row records the sign-in server's origin, so account pages stop unsealing the token set for a link (P2.03n) | Accepted 2026-11-15 |
 | [0049](0049-sessions-end-with-their-token-set.md) | A browser session ends with its token set, enforced by a foreign key with ON DELETE CASCADE (P2.03t) | Accepted 2026-11-16 |
+| [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
 | [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Proposed (awaiting Alex) |

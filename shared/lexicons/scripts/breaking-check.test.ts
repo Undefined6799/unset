@@ -25,13 +25,13 @@ describe("breaking-check", () => {
     // even while the lock has no entry for it.
     const root = mkdtempSync(join(tmpdir(), "unset-breaking-"));
     const next = original("sh.unset.profile");
-    delete record(next).properties.bio;
+    delete record(next).properties.location;
     for (const dir of ["schemas", "published"]) mkdirSync(join(root, dir));
     writeFileSync(join(root, "schemas", "sh.unset.profile.json"), JSON.stringify(next));
     writeFileSync(join(root, "published", "sh.unset.profile.json"), JSON.stringify(original("sh.unset.profile")));
     writeFileSync(join(root, "published.lock.json"), "{}");
     try {
-      expect(publishedProblems({}, root)).toEqual(["sh.unset.profile#main.bio: field removed"]);
+      expect(publishedProblems({}, root)).toEqual(["sh.unset.profile#main.location: field removed"]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -44,9 +44,9 @@ describe("breaking-check", () => {
 
   test("breaking_check_detects_removed_field", () => {
     const next = original("sh.unset.profile");
-    delete record(next).properties.bio;
+    delete record(next).properties.location;
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
-      "sh.unset.profile#main.bio: field removed",
+      "sh.unset.profile#main.location: field removed",
     ]);
   });
 
@@ -69,13 +69,13 @@ describe("breaking-check", () => {
   test("breaking_check_detects_other_narrowing", () => {
     const next = original("sh.unset.section");
     const props = record(next).properties;
-    Object.assign(props.type ?? {}, { type: "integer" });
-    Object.assign(props.position ?? {}, { minimum: 1 });
+    Object.assign(props.width ?? {}, { type: "integer" });
+    Object.assign(props.width ?? {}, { minimum: 1 });
     next.defs.main = { ...next.defs.main, key: "literal:self" };
     expect(breakingProblems(next, original("sh.unset.section"), {})).toEqual([
       "sh.unset.section#main: record key changed from tid to literal:self",
-      "sh.unset.section#main.type: type changed from string to integer",
-      "sh.unset.section#main.position: minimum changed from 0 to 1",
+      "sh.unset.section#main.width: type changed from string to integer",
+      "sh.unset.section#main.width: minimum changed from none to 1",
     ]);
   });
 
@@ -98,11 +98,11 @@ describe("breaking-check", () => {
     // because new data must stay valid under the old schema that other readers still hold.
     const next = original("sh.unset.profile");
     const props = record(next).properties;
-    Object.assign(props.bio ?? {}, { maxGraphemes: 800 });
+    Object.assign(props.location ?? {}, { maxGraphemes: 800 });
     delete props.displayName?.maxLength;
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
       "sh.unset.profile#main.displayName: maxLength changed from 640 to none",
-      "sh.unset.profile#main.bio: maxGraphemes changed from 600 to 800",
+      "sh.unset.profile#main.location: maxGraphemes changed from 100 to 800",
     ]);
   });
 
@@ -111,7 +111,7 @@ describe("breaking-check", () => {
     // can not change. An added enum value or blob type, or a dropped enum, lets new data fail the old schema.
     const next = original("sh.unset.profile");
     const props = record(next).properties;
-    Object.assign(props.avatar ?? {}, { accept: ["image/png", "image/jpeg", "image/webp", "image/gif"] });
+    Object.assign(props.avatar ?? {}, { accept: ["image/png", "image/jpeg", "image/webp", "image/avif", "image/gif"] });
     expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
       "sh.unset.profile#main.avatar: accept now also allows image/gif",
     ]);
