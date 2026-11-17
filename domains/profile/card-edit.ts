@@ -209,6 +209,39 @@ function toLexicon(content: CardContent): Record<string, unknown> {
   }
 }
 
+/** The fields this version writes on a list element; any other a stored element holds belongs to another client. */
+const ELEMENT_FIELDS: readonly string[] = ["$type", "uri", "label", "description", "title", "tag", "preset", "address"];
+/** The list each kind keeps its elements in. */
+const ELEMENTS: Partial<Record<CardKind, string>> = { links: "items", collection: "items", buttons: "buttons" };
+
+/**
+ * An element stays the same one while it keeps its place, its `$type` and its uri or address. One with neither (a
+ * collection entry may have no address) is the same only while every field this version writes is unchanged, so a
+ * deleted neighbour's fields never land on the entry that moves into its place.
+ */
+function sameElement(old: Obj, next: Obj): boolean {
+  const addressed = next.uri !== undefined || next.address !== undefined;
+  const fields = addressed ? ["$type", "uri", "address"] : ELEMENT_FIELDS;
+  return fields.every((field) => old[field] === next[field]);
+}
+
+/**
+ * Each new element keeps the unknown fields of the stored element in the same place when it is the same one
+ * (ADR 0038: fields we do not know are kept, inside list elements too). A changed element starts clean.
+ */
+function keepElementFields(fresh: Obj, old: Obj, kind: CardKind): Obj {
+  const list = ELEMENTS[kind];
+  if (list === undefined || !Array.isArray(fresh[list]) || !Array.isArray(old[list])) return fresh;
+  const before = old[list] as readonly unknown[];
+  const merged = (fresh[list] as readonly Obj[]).map((next, i) => {
+    const prior = before[i];
+    if (!isObject(prior) || !sameElement(prior, next)) return next;
+    const unknown = Object.entries(prior).filter(([field]) => !ELEMENT_FIELDS.includes(field));
+    return { ...Object.fromEntries(unknown), ...next };
+  });
+  return { ...fresh, [list]: merged };
+}
+
 export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: string } & Obj;
 
 /**
@@ -233,7 +266,7 @@ export function toCardRecord(
     $type: NSID,
     ...kept,
     ...(width === "half" ? { width } : {}),
-    content: { ...old, ...fresh },
+    content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
     createdAt: typeof createdAt === "string" ? createdAt : now,
   };
   return validateRecord(NSID, record, "read").ok ? { ok: true, record } : fail("card.invalid");

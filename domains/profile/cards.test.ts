@@ -154,6 +154,23 @@ describe("orderCards", () => {
     expect(orderCards(["gone", "b", "b"], [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
   });
 
+  test("unlisted cards are ordered by the instant they were made, whatever the offset or precision", () => {
+    const early = card("early", "2026-11-17T10:00:00+02:00");
+    const late = card("late", "2026-11-17T09:00:00Z");
+    const between = card("between", "2026-11-17T08:30:00.123456Z");
+    expect(orderCards([], [late, early, between]).map((x) => x.key)).toEqual(["early", "between", "late"]);
+  });
+
+  test("two cards made in the same millisecond are ordered by their finer digits", () => {
+    const second = card("second", "2026-11-17T08:30:00.123456Z");
+    const first = card("first", "2026-11-17T10:30:00.123123+02:00");
+    expect(orderCards([], [second, first]).map((x) => x.key)).toEqual(["first", "second"]);
+  });
+
+  test("a card whose time does not parse goes last", () => {
+    expect(orderCards([], [card("bad", "soon"), a]).map((x) => x.key)).toEqual(["a", "bad"]);
+  });
+
   test("a missing or broken list means creation order", () => {
     expect(orderCards(undefined, [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
     expect(orderCards([7, null], [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
