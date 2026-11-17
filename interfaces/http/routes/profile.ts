@@ -12,7 +12,7 @@ import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
 
 const FORM = "application/x-www-form-urlencoded";
-/** The links' 12 × 2,000 bytes, percent-encoded at worst three bytes a byte, plus the short fields. */
+/** The side column's short fields, percent-encoded at worst three bytes a byte, with room to spare. */
 export const PROFILE_BODY_LIMIT_BYTES = 96 * 1024;
 
 export type ProfileSave =

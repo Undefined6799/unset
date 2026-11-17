@@ -14,7 +14,7 @@ Product rules for those fields. This folder does not open a socket.
 | `domains/profile/index.ts` | Package root. Re-exports the names below. |
 | `domains/profile/profile.ts` | `parseProfileFields`, `readProfileRecord`, `toProfileRecord`, `PROFILE_FIELDS`, `EMPTY_PROFILE`. |
 
-`PROFILE_FIELDS` is `displayName`, `headline`, `location`, `website`, `links`. `EMPTY_PROFILE` sets each of them to `""`.
+`PROFILE_FIELDS` is `displayName`, `headline`, `location`, `website`; links live on Links cards (ADR 0051). `EMPTY_PROFILE` sets each of them to `""`.
 
 | Function | Result |
 | --- | --- |
@@ -25,11 +25,11 @@ Product rules for those fields. This folder does not open a socket.
 | Code | When |
 | --- | --- |
 | `profile.invalid` | A non-string, a line break in a one-line field, or `validateRecord("sh.unset.profile", record, "read")` refuses the built record (`profile.ts`): a defined field is invalid. A stored field the lexicon does not define is kept, never refused (ADR 0038). |
-| `profile.too_long` | Over a grapheme or byte bound, or more links than `LIMITS.profile.linksMax`. |
+| `profile.too_long` | Over a grapheme or byte bound. |
 | `profile.url_invalid` | `website` or a link is not an `http` or `https` URL with a host and no user or password. |
 | `profile.name_required` | The record to write has no display name. |
 
-Bounds are `LIMITS.profile` in `shared/lexicons/src/limits.ts`. `displayName`, `headline` and `location` are counted in graphemes. `website` and each link are counted in bytes. A value with no scheme is prefixed with `https://` (`withScheme` in `profile.ts`). `links` is one URL a line, blank lines dropped, and the record stores them as `{ uri }` objects.
+Bounds are `APP_LIMITS` in `profile.ts`, never above the lexicon's `LIMITS.profile` (ADR 0051). `displayName`, `headline` and `location` are counted in graphemes; `website` in bytes. A value with no scheme is prefixed with `https://` (`withScheme` in `profile.ts`).
 
 ## May import
 

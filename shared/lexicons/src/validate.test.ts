@@ -6,18 +6,22 @@ const CREATED = "2026-10-12T00:00:00.000Z";
 const DID = `did:plc:${"a".repeat(24)}`;
 const profile = { $type: "sh.unset.profile", displayName: "Ada", createdAt: CREATED };
 const follow = { $type: "sh.unset.follow", subject: DID, createdAt: CREATED };
+const S = "sh.unset.section";
+const ORIGIN = "https://a.example.com/";
+const card = (name: string, content: Record<string, unknown>) => ({
+  $type: S,
+  content: { $type: `${S}#${name}`, ...content },
+  createdAt: CREATED,
+});
+const links = (items: unknown[], extra: Record<string, unknown> = {}) => card("links", { items, ...extra });
 
 describe("validateRecord", () => {
   test("validate_write_rejects_unknown_field", () => {
     const top = validateRecord("sh.unset.profile", { ...profile, published: true }, "write");
     expect(top).toEqual({ ok: false, errors: ["$.published: unknown field"] });
     // Unknown fields are found inside nested objects and array items too.
-    const nested = validateRecord(
-      "sh.unset.profile",
-      { ...profile, stats: [{ label: "a", value: "1", x: 1 }] },
-      "write",
-    );
-    expect(nested).toEqual({ ok: false, errors: ["$.stats[0].x: unknown field"] });
+    const nested = validateRecord("sh.unset.section", links([{ uri: ORIGIN, x: 1 }]), "write");
+    expect(nested).toEqual({ ok: false, errors: ["$.content.items[0].x: unknown field"] });
     // A field named after an Object.prototype member is unknown like any other.
     for (const key of ["constructor", "toString", "__proto__"]) {
       const inherited = validateRecord(
@@ -30,31 +34,23 @@ describe("validateRecord", () => {
   });
 
   test("validate_write_rejects_unknown_field_in_union_member", () => {
-    // README blocks and text runs sit in unions; the member named by `$type` is checked like any nested object.
-    const P = "sh.unset.profile";
-    const run = { $type: `${P}#textRun`, text: "hi" };
-    const readme = (blocks: unknown[]) => ({ ...profile, readme: { blocks } });
-    const block = validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [], unexpected: true }]), "write");
-    expect(block).toEqual({ ok: false, errors: ["$.readme.blocks[0].unexpected: unknown field"] });
-    const inRun = validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [{ ...run, x: 1 }] }]), "write");
-    expect(inRun).toEqual({ ok: false, errors: ["$.readme.blocks[0].content[0].x: unknown field"] });
-    const column = { $type: `${P}#column`, blocks: [{ $type: `${P}#quote`, content: [run], x: 1 }] };
-    const columns = { $type: `${P}#columns`, columns: [column, { $type: `${P}#column`, blocks: [] }] };
-    expect(validateRecord(P, readme([columns]), "write")).toEqual({
-      ok: false,
-      errors: ["$.readme.blocks[0].columns[0].blocks[0].x: unknown field"],
-    });
-    const clean = readme([{ $type: `${P}#paragraph`, content: [run] }]);
-    expect(validateRecord(P, clean, "write")).toEqual({ ok: true, value: clean });
-    expect(validateRecord(P, readme([{ $type: `${P}#paragraph`, content: [], x: 1 }]), "read").ok).toBe(true);
+    // Card contents and buttons sit in unions; the member named by `$type` is checked like any nested object.
+    const content = validateRecord(S, card("readme", { text: "hi", unexpected: true }), "write");
+    expect(content).toEqual({ ok: false, errors: ["$.content.unexpected: unknown field"] });
+    const button = { $type: `${S}#emailButton`, address: "a@a.example.com", x: 1 };
+    const inButton = validateRecord(S, card("buttons", { heading: "Hi", buttons: [button] }), "write");
+    expect(inButton).toEqual({ ok: false, errors: ["$.content.buttons[0].x: unknown field"] });
+    const clean = card("readme", { text: "hi" });
+    expect(validateRecord(S, clean, "write")).toEqual({ ok: true, value: clean });
+    expect(validateRecord(S, card("readme", { text: "hi", x: 1 }), "read").ok).toBe(true);
   });
 
   test("validate_write_accepts_nested_type_discriminator", () => {
     // An object behind a ref may name its def (atproto.com/specs/lexicon, "$type"); the generated validator accepts it.
-    const typed = { ...profile, stats: [{ $type: "sh.unset.profile#stat", label: "a", value: "1" }] };
-    expect(validateRecord("sh.unset.profile", typed, "write")).toEqual({ ok: true, value: typed });
-    const wrong = { ...profile, stats: [{ $type: "sh.unset.profile#other", label: "a", value: "1" }] };
-    expect(validateRecord("sh.unset.profile", wrong, "write").ok).toBe(false);
+    const typed = links([{ $type: `${S}#link`, uri: ORIGIN }]);
+    expect(validateRecord(S, typed, "write")).toEqual({ ok: true, value: typed });
+    const wrong = links([{ $type: `${S}#other`, uri: ORIGIN }]);
+    expect(validateRecord(S, wrong, "write").ok).toBe(false);
   });
 
   test("validate_read_accepts_unknown_field", () => {
@@ -79,10 +75,22 @@ describe("validateRecord", () => {
       mimeType: "image/webp",
       size: 1000,
     };
-    const full = { ...profile, avatar: blob, listed: true, stats: [{ label: "a", value: "1" }], cta: { label: "Hi" } };
+    const full = { ...profile, avatar: blob, avatarShape: "roundedSquare", listed: true, cards: ["3jzfcijpj2z2a"] };
     expect(validateRecord("sh.unset.profile", full, "write")).toEqual({ ok: true, value: full });
-    const section = { $type: "sh.unset.section", type: "links", title: "Links", position: 0, createdAt: CREATED };
-    expect(validateRecord("sh.unset.section", { ...section, items: [{ title: "x" }] }, "write").ok).toBe(true);
+    for (const value of [
+      { ...card("readme", { text: "# Hi" }), width: "half" },
+      links([{ uri: ORIGIN, label: "Site", description: "Mine" }], { title: "Elsewhere", layout: "grid" }),
+      card("collection", { items: [{ title: "x", tag: "Radio", description: "d", uri: ORIGIN }] }),
+      card("buttons", {
+        heading: "Hi",
+        buttons: [
+          { $type: `${S}#emailButton`, address: "a@a.example.com" },
+          { $type: `${S}#linkButton`, preset: "bookCall", uri: ORIGIN },
+        ],
+      }),
+    ]) {
+      expect(validateRecord(S, value, "write"), JSON.stringify(value.content)).toEqual({ ok: true, value });
+    }
     const bsky = { $type: "app.bsky.actor.profile", displayName: "Ada", createdAt: CREATED };
     expect(validateRecord("app.bsky.actor.profile", bsky, "write").ok).toBe(true);
   });

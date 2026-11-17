@@ -11,65 +11,46 @@ type $nsid = typeof $nsid;
 
 export { $nsid };
 
-/** A profile section. Sections render in ascending position. */
+/** A profile card: its width and its content. */
 type Main = {
   $type: "sh.unset.section";
 
   /**
-   * Section kind: decides which item fields apply and how it renders. An unknown value renders as links.
+   * What the card holds. A kind a reader does not know hides the card; it is never an error.
    */
-  type: "social" | "links" | "projects" | "writing" | "text" | "cta" | l.UnknownString;
+  content: l.$Typed<Readme> | l.$Typed<Links> | l.$Typed<Collection> | l.$Typed<Buttons> | l.Unknown$TypedObject;
 
   /**
-   * Section heading.
+   * Width on wide screens. Absent or unknown means full.
    */
-  title: string;
+  width?: "full" | "half" | l.UnknownString;
 
   /**
-   * Text under the heading.
-   */
-  summary?: string;
-
-  /**
-   * Order on the page, from 0, contiguous across the account's sections.
-   */
-  position: number;
-
-  /**
-   * Entries, in display order.
-   */
-  items?: Item[];
-
-  /**
-   * When the section was first published.
+   * When the card was first published.
    */
   createdAt: l.DatetimeString;
-
-  /**
-   * When the section was last published.
-   */
-  updatedAt?: l.DatetimeString;
 };
 
 export type { Main };
 
-/** A profile section. Sections render in ascending position. */
+/** A profile card: its width and its content. */
 const main = /*#__PURE__*/ l.record<"tid", Main>(
   "tid",
   $nsid,
   /*#__PURE__*/ l.object({
-    type: /*#__PURE__*/ l.string<{
-      maxLength: 32;
-      knownValues: ["social", "links", "projects", "writing", "text", "cta"];
-    }>({ maxLength: 32 }),
-    title: /*#__PURE__*/ l.string({ maxGraphemes: 80, maxLength: 800 }),
-    summary: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 400, maxLength: 4000 })),
-    position: /*#__PURE__*/ l.integer({ minimum: 0, maximum: 49 }),
-    items: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Item>((() => item) as any), { maxLength: 50 }),
+    content: /*#__PURE__*/ l.typedUnion(
+      [
+        /*#__PURE__*/ l.typedRef<Readme>((() => readme) as any),
+        /*#__PURE__*/ l.typedRef<Links>((() => links) as any),
+        /*#__PURE__*/ l.typedRef<Collection>((() => collection) as any),
+        /*#__PURE__*/ l.typedRef<Buttons>((() => buttons) as any),
+      ],
+      false,
+    ),
+    width: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["full", "half"] }>({ maxLength: 32 }),
     ),
     createdAt: /*#__PURE__*/ l.string({ format: "datetime" }),
-    updatedAt: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "datetime" })),
   }),
 );
 
@@ -93,96 +74,240 @@ export const $safeParse = /*#__PURE__*/ main.safeParse.bind(main);
 export const $validate = /*#__PURE__*/ main.validate.bind(main);
 export const $safeValidate = /*#__PURE__*/ main.safeValidate.bind(main);
 
-/** One entry in a section. Which fields apply depends on the section type; the editor enforces per-type requirements, the schema stays open. */
-type Item = {
-  $type?: "sh.unset.section#item";
+/** Text the member writes, shown like a README. */
+type Readme = {
+  $type?: "sh.unset.section#readme";
+
+  /**
+   * Markdown (CommonMark). Readers never render raw HTML and keep only http and https links.
+   */
+  text: string;
+};
+
+export type { Readme };
+
+/** Text the member writes, shown like a README. */
+const readme = /*#__PURE__*/ l.typedObject<Readme>(
+  $nsid,
+  "readme",
+  /*#__PURE__*/ l.object({ text: /*#__PURE__*/ l.string({ maxLength: 100000 }) }),
+);
+
+export { readme };
+
+/** Addresses elsewhere. Readers derive each one's icon and account name from its URL; nothing about the site is stored. */
+type Links = {
+  $type?: "sh.unset.section#links";
+  title?: string;
+
+  /**
+   * Absent or unknown means list.
+   */
+  layout?: "list" | "carousel" | "grid" | l.UnknownString;
+
+  /**
+   * In display order.
+   */
+  items: Link[];
+};
+
+export type { Links };
+
+/** Addresses elsewhere. Readers derive each one's icon and account name from its URL; nothing about the site is stored. */
+const links = /*#__PURE__*/ l.typedObject<Links>(
+  $nsid,
+  "links",
+  /*#__PURE__*/ l.object({
+    title: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
+    layout: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["list", "carousel", "grid"] }>({ maxLength: 32 }),
+    ),
+    items: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Link>((() => link) as any), { maxLength: 100 }),
+  }),
+);
+
+export { links };
+
+/** One address. */
+type Link = {
+  $type?: "sh.unset.section#link";
+
+  /**
+   * An http or https URL. A reader drops any other scheme.
+   */
+  uri: l.UriString;
+
+  /**
+   * Text shown when the URL names no account.
+   */
+  label?: string;
+  description?: string;
+};
+
+export type { Link };
+
+/** One address. */
+const link = /*#__PURE__*/ l.typedObject<Link>(
+  $nsid,
+  "link",
+  /*#__PURE__*/ l.object({
+    uri: /*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 }),
+    label: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
+    description: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 200, maxLength: 2000 })),
+  }),
+);
+
+export { link };
+
+/** Titled entries, such as projects, writing or talks. */
+type Collection = {
+  $type?: "sh.unset.section#collection";
+  title?: string;
+
+  /**
+   * Absent or unknown means carousel.
+   */
+  layout?: "list" | "carousel" | "grid" | l.UnknownString;
+
+  /**
+   * In display order.
+   */
+  items: Entry[];
+};
+
+export type { Collection };
+
+/** Titled entries, such as projects, writing or talks. */
+const collection = /*#__PURE__*/ l.typedObject<Collection>(
+  $nsid,
+  "collection",
+  /*#__PURE__*/ l.object({
+    title: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
+    layout: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["list", "carousel", "grid"] }>({ maxLength: 32 }),
+    ),
+    items: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Entry>((() => entry) as any), { maxLength: 100 }),
+  }),
+);
+
+export { collection };
+
+/** One entry in a collection. */
+type Entry = {
+  $type?: "sh.unset.section#entry";
+  title: string;
 
   /**
    * Small label above the title.
    */
   tag?: string;
+  description?: string;
 
   /**
-   * Entry title.
+   * An http or https URL. A reader drops any other scheme.
    */
-  title?: string;
+  uri?: l.UriString;
+};
+
+export type { Entry };
+
+/** One entry in a collection. */
+const entry = /*#__PURE__*/ l.typedObject<Entry>(
+  $nsid,
+  "entry",
+  /*#__PURE__*/ l.object({
+    title: /*#__PURE__*/ l.string({ maxGraphemes: 120, maxLength: 1200 }),
+    tag: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 40, maxLength: 400 })),
+    description: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 300, maxLength: 3000 })),
+    uri: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
+  }),
+);
+
+export { entry };
+
+/** A short pitch with buttons; the first is the main one. */
+type Buttons = {
+  $type?: "sh.unset.section#buttons";
+  heading: string;
+  text?: string;
 
   /**
-   * Entry text.
+   * In display order. A kind a reader does not know is skipped.
    */
-  summary?: string;
+  buttons: (l.$Typed<EmailButton> | l.$Typed<LinkButton> | l.Unknown$TypedObject)[];
+};
+
+export type { Buttons };
+
+/** A short pitch with buttons; the first is the main one. */
+const buttons = /*#__PURE__*/ l.typedObject<Buttons>(
+  $nsid,
+  "buttons",
+  /*#__PURE__*/ l.object({
+    heading: /*#__PURE__*/ l.string({ maxGraphemes: 120, maxLength: 1200 }),
+    text: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 400, maxLength: 4000 })),
+    buttons: /*#__PURE__*/ l.array(
+      /*#__PURE__*/ l.typedUnion(
+        [
+          /*#__PURE__*/ l.typedRef<EmailButton>((() => emailButton) as any),
+          /*#__PURE__*/ l.typedRef<LinkButton>((() => linkButton) as any),
+        ],
+        false,
+      ),
+      { maxLength: 5 },
+    ),
+  }),
+);
+
+export { buttons };
+
+/** Opens an email to the address, which the member chose to publish. */
+type EmailButton = { $type?: "sh.unset.section#emailButton"; address: string };
+
+export type { EmailButton };
+
+/** Opens an email to the address, which the member chose to publish. */
+const emailButton = /*#__PURE__*/ l.typedObject<EmailButton>(
+  $nsid,
+  "emailButton",
+  /*#__PURE__*/ l.object({ address: /*#__PURE__*/ l.string({ maxLength: 254 }) }),
+);
+
+export { emailButton };
+
+/** Opens a link. Readers word the button from the preset. */
+type LinkButton = {
+  $type?: "sh.unset.section#linkButton";
 
   /**
-   * Entry link: an http or https URL.
+   * Absent from the known values means custom.
    */
-  url?: l.UriString;
+  preset: "bookCall" | "hire" | "subscribe" | "custom" | l.UnknownString;
 
   /**
-   * Social platform (social sections).
+   * An http or https URL. A reader drops any other scheme.
    */
-  platform?:
-    | "bluesky"
-    | "github"
-    | "x"
-    | "linkedin"
-    | "instagram"
-    | "youtube"
-    | "twitch"
-    | "mastodon"
-    | "email"
-    | "rss"
-    | "website"
-    | l.UnknownString;
+  uri: l.UriString;
 
   /**
-   * Account name on the platform (social sections).
-   */
-  handle?: string;
-
-  /**
-   * Publication date (writing sections).
-   */
-  date?: l.DatetimeString;
-
-  /**
-   * Button text (cta sections).
+   * Button text for custom.
    */
   label?: string;
 };
 
-export type { Item };
+export type { LinkButton };
 
-/** One entry in a section. Which fields apply depends on the section type; the editor enforces per-type requirements, the schema stays open. */
-const item = /*#__PURE__*/ l.typedObject<Item>(
+/** Opens a link. Readers word the button from the preset. */
+const linkButton = /*#__PURE__*/ l.typedObject<LinkButton>(
   $nsid,
-  "item",
+  "linkButton",
   /*#__PURE__*/ l.object({
-    tag: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 40, maxLength: 400 })),
-    title: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 120, maxLength: 1200 })),
-    summary: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 400, maxLength: 4000 })),
-    url: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
-    platform: /*#__PURE__*/ l.optional(
-      /*#__PURE__*/ l.string<{
-        maxLength: 32;
-        knownValues: [
-          "bluesky",
-          "github",
-          "x",
-          "linkedin",
-          "instagram",
-          "youtube",
-          "twitch",
-          "mastodon",
-          "email",
-          "rss",
-          "website",
-        ];
-      }>({ maxLength: 32 }),
-    ),
-    handle: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
-    date: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "datetime" })),
-    label: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 80, maxLength: 800 })),
+    preset: /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["bookCall", "hire", "subscribe", "custom"] }>({
+      maxLength: 32,
+    }),
+    uri: /*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 }),
+    label: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 40, maxLength: 400 })),
   }),
 );
 
-export { item };
+export { linkButton };

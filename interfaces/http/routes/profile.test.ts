@@ -62,6 +62,7 @@ const FORM = new URLSearchParams({
 }).toString();
 
 describe("POST /profile", () => {
+  // FORM still sends `links`, which moved to Links cards (ADR 0051): the save ignores it.
   test("saves the session's own profile and returns to it", async () => {
     const { post, saved } = setup();
     const response = await post(FORM);
@@ -75,7 +76,6 @@ describe("POST /profile", () => {
           headline: "Designer.",
           location: "",
           website: "https://alice.example",
-          links: "https://github.com/alicem\nhttps://bsky.app/profile/alice",
         },
       },
     ]);
