@@ -2,13 +2,17 @@
 // This is still an owner-only app page, not a public profile: the gate runs before the ownership check and
 // handle verification. The shortcuts sit behind the server's gate (ADR 0045); /:did opens the gate itself, after it
 // has refused a path that is no DID, so an unknown one-segment path stays a 404 and never a trip to sign-in. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
-import { parseDid } from "@unset/domains-identity";
+import { type Did, parseDid } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
+import type { OwnProfile } from "../own-profile.ts";
 import { type AccountDeps, accountProps } from "./account-issuer.ts";
 
-export function meRoutes(deps: AccountDeps): Route[] {
+/** The owner's profile and cards from their own PDS (own-profile.ts); only ever called for the signed-in DID. */
+export type ReadOwnProfile = (did: Did, deadline: AbortSignal, deadlineAt: number) => Promise<OwnProfile>;
+
+export function meRoutes(deps: AccountDeps, readOwnProfile: ReadOwnProfile): Route[] {
   const accountOf = accountProps(deps);
 
   return [
@@ -42,7 +46,17 @@ export function meRoutes(deps: AccountDeps): Route[] {
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
         const { verdict, props } = await accountOf(opened, deadline);
-        const body = deps.screens.me(props);
+        const own = await readOwnProfile(opened.session.did, deadline, deadlineAt);
+        if (own.kind === "redirect") {
+          return new Response(null, {
+            status: 303,
+            headers: { location: own.location, "cache-control": "private, no-store", vary: "Cookie" },
+          });
+        }
+        const body = deps.screens.me({
+          ...props,
+          ...(own.kind === "ok" ? { profile: own.profile, cards: own.cards } : { profileUnavailable: true }),
+        });
         return deps.page({
           group: "app",
           request,

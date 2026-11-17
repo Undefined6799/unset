@@ -59,18 +59,21 @@ function accountServer(signedOut = false) {
     signedOut
       ? new Response(null, { status: 303, headers: { location: `/login?${new URLSearchParams({ next })}` } })
       : { session: SESSION, privacyNotice: false };
-  const routes = meRoutes({
-    open,
-    verifyHandle: async (did) => {
-      resolved.push(did);
-      return { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
+  const routes = meRoutes(
+    {
+      open,
+      verifyHandle: async (did) => {
+        resolved.push(did);
+        return { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
+      },
+      page: testPage(log),
+      screens: web.screens,
+      issuerOf: async () => "https://pds.unset.test",
+      pdsIssuer: "https://pds.unset.test",
+      log,
     },
-    page: testPage(log),
-    screens: web.screens,
-    issuerOf: async () => "https://pds.unset.test",
-    pdsIssuer: "https://pds.unset.test",
-    log,
-  });
+    async () => ({ kind: "ok", profile: null, cards: [] }),
+  );
   const server = createServer({ config: CONFIG, routes, policies, log, gate: appSessionGate(open) });
   return { server, lines, resolved };
 }

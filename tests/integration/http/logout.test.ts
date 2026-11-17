@@ -165,15 +165,19 @@ beforeAll(async () => {
         pdsIssuer: "https://pds.unset.test",
         log,
       }),
-      ...meRoutes({
-        open,
-        verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
-        page,
-        screens: web.screens,
-        issuerOf: async () => "https://pds.unset.test",
-        pdsIssuer: "https://pds.unset.test",
-        log,
-      }),
+      ...meRoutes(
+        {
+          open,
+          verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
+          page,
+          screens: web.screens,
+          issuerOf: async () => "https://pds.unset.test",
+          pdsIssuer: "https://pds.unset.test",
+          log,
+        },
+        // The owner's page reads their records from their PDS; these tests are about sessions, so it has none yet.
+        async () => ({ kind: "ok", profile: null, cards: [] }),
+      ),
     ],
     policies,
     log,

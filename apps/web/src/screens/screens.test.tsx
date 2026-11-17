@@ -198,6 +198,59 @@ describe("me screen", () => {
     expect(tags(page, "a").map((a) => a.href)).toEqual(["/settings/profile"]);
   });
 
+  test("me_shows_the_published_profile_and_its_cards", () => {
+    const page = html(
+      screens.me({
+        handle: "alice.pds.example",
+        did: DID,
+        handleUnavailable: false,
+        ...OURS,
+        profile: {
+          displayName: "Alice Moreau",
+          headline: "Designer",
+          location: "Toronto",
+          website: "https://alice.dev",
+        },
+        cards: [{ key: "k1", width: "full", content: { kind: "readme", text: "# Hello" } }],
+      }),
+    );
+    expect(page).toContain(">Alice Moreau</h1>");
+    expect(page).toContain("Designer");
+    expect(page).toContain("Toronto");
+    expect(tags(page, "a").map((a) => a.href)).toContain("https://alice.dev/");
+    expect(page).toContain("<h3>Hello</h3>");
+    expect(page).not.toContain("Set up your profile");
+    expect(tags(page, "a").map((a) => a.href)).toContain("/settings/profile");
+  });
+
+  test("me_drops_an_unsafe_website", () => {
+    const page = html(
+      screens.me({
+        handle: "alice.pds.example",
+        did: DID,
+        handleUnavailable: false,
+        ...OURS,
+        profile: { displayName: "Alice", headline: "", location: "", website: "javascript:alert(1)" },
+        cards: [],
+      }),
+    );
+    expect(page).not.toContain("javascript:");
+  });
+
+  test("me_says_when_the_profile_could_not_be_loaded", () => {
+    const page = html(
+      screens.me({
+        handle: "alice.pds.example",
+        did: DID,
+        handleUnavailable: false,
+        ...OURS,
+        profileUnavailable: true,
+      }),
+    );
+    expect(page).toContain("We could not load your profile just now");
+    expect(page).not.toContain("Set up your profile");
+  });
+
   test("me_says_when_the_handle_could_not_be_checked", () => {
     const page = html(screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, ...OURS }));
     expect(page).toContain("handle.invalid");
