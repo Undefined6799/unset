@@ -20,6 +20,8 @@ export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Icon, type IconName, type IconProps } from "./components/Icon/Icon.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
+// The profile card editor (ADR 0051) opens its forms in the Modal and edits a README in the Textarea.
+export { Modal, type ModalProps } from "./components/Modal/Modal.tsx";
 export {
   Navigation,
   type NavigationAnchorProps,
@@ -32,6 +34,7 @@ export { ThemePickerSlot } from "./components/Navigation/ThemePickerSlot.tsx";
 export { RadioGroup, type RadioGroupProps } from "./components/RadioGroup/RadioGroup.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
+export { Textarea, type TextareaProps } from "./components/Textarea/Textarea.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 // P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.

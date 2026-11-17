@@ -14,7 +14,7 @@ import type { CardWrite } from "../card-writes.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
-import { CARD_BODY_LIMIT_BYTES, cardRoutes } from "./cards.ts";
+import { CARD_BODY_LIMIT_BYTES, CARD_FORM_LIMIT_BYTES, cardRoutes } from "./cards.ts";
 
 const ORIGIN = "https://unset.test";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
@@ -114,11 +114,57 @@ describe("card routes", () => {
     expect(calls).toEqual([]);
   });
 
-  test("a form post or a body past the limit is refused by the kit", async () => {
+  test("the owner's page posts the same writes as plain forms", async () => {
     const { post, calls } = setup();
-    expect((await post("/cards", "kind=readme&text=x", { type: "application/x-www-form-urlencoded" })).status).toBe(
-      415,
-    );
+    const type = "application/x-www-form-urlencoded";
+    const text = "# Hi & <b>bye</b>";
+    expect(
+      (await post("/cards", new URLSearchParams({ kind: "readme", width: "half", text }).toString(), { type })).status,
+    ).toBe(303);
+    const order = new URLSearchParams([
+      ["order", "b"],
+      ["order", "a"],
+    ]).toString();
+    expect((await post("/card-order", order, { type })).status).toBe(303);
+    expect((await post("/cards/3k2abc/delete", "", { type })).status).toBe(303);
+    expect(calls.map((c) => [c.op, ...c.args])).toEqual([
+      ["create", { kind: "readme", text }, "half"],
+      ["reorder", ["b", "a"]],
+      ["remove", "3k2abc"],
+    ]);
+  });
+
+  test("a form field sent twice, or one the form does not hold, is refused before any write", async () => {
+    const { post, calls } = setup();
+    const type = "application/x-www-form-urlencoded";
+    for (const [path, body] of [
+      ["/cards", "kind=readme&text=a&text=b"],
+      ["/cards", "kind=readme&text=a&title=x"],
+      ["/cards", "kind=readme&text=a&order=k"],
+      ["/cards/3k2abc/delete", "kind=readme"],
+      ["/card-order", "order=a&kind=readme"],
+    ] as const) {
+      const response = await post(path, body, { type });
+      expect(response.status, body).toBe(400);
+      expect(await errorCode(response)).toBe("card.invalid");
+    }
+    expect(calls).toEqual([]);
+  });
+
+  test("a form body is capped at what the largest README needs, below the JSON limit", async () => {
+    const { post, calls } = setup();
+    const type = "application/x-www-form-urlencoded";
+    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(50_000) }).toString();
+    expect(largest.length).toBeLessThan(CARD_FORM_LIMIT_BYTES);
+    expect((await post("/cards", largest, { type })).status).toBe(303);
+    expect((await post("/cards", `kind=readme&text=${"x".repeat(CARD_FORM_LIMIT_BYTES)}`, { type })).status).toBe(413);
+    expect(CARD_FORM_LIMIT_BYTES).toBeLessThan(CARD_BODY_LIMIT_BYTES);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("another media type or a body past the limit is refused by the kit", async () => {
+    const { post, calls } = setup();
+    expect((await post("/cards", "kind=readme&text=x", { type: "text/plain" })).status).toBe(415);
     const big = JSON.stringify({ kind: "readme", text: "x".repeat(CARD_BODY_LIMIT_BYTES) });
     expect((await post("/cards", big)).status).toBe(413);
     expect(calls).toEqual([]);
