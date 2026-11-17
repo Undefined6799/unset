@@ -14,12 +14,19 @@ import { type CommitBody, commitFrame, parseMessage, type RepoFrame } from "./fr
 
 /** What the indexer gives the reader. Every method may throw; a throw stops the stream. */
 export type FirehoseConsumer = {
-  /** The last sequence number applied, or null to start at the live tip. Read on every dial. */
+  /**
+   * The last sequence number applied, or null when none has been. Read on every dial. With null the first dial
+   * starts at the live tip (https://atproto.com/specs/event-stream, "Sequence Numbers"); a later one resumes from the
+   * first frame this reader saw, or calls missedEvents when it saw none it could number.
+   */
   readonly cursor: () => Promise<number | null>;
   /** Applies one frame and writes `frame.seq` as the cursor in the same transaction. Must accept a replayed frame. */
   readonly apply: (frame: RepoFrame) => Promise<void>;
-  /** The PDS said our cursor is older than the events it keeps: the consumer must backfill again. */
-  readonly outdatedCursor: () => Promise<void>;
+  /**
+   * Events may have been missed, so the consumer must backfill again: the PDS said our cursor is older than the
+   * events it keeps (`#info OutdatedCursor`), or the reader must resume with no cursor and no frame to resume from.
+   */
+  readonly missedEvents: () => Promise<void>;
 };
 
 /** Why the stream stopped. None of these carries a DID, a handle or record content (rule SE-7). */
@@ -87,7 +94,7 @@ async function handle(options: FirehoseReaderOptions, value: unknown): Promise<v
   const message = parseMessage(value);
   if (message === null) throw new Stop("stream_failed", new Error("unreadable frame"));
   if (message.kind === "info") {
-    if (message.name === "OutdatedCursor") await run("apply_failed", options.consumer.outdatedCursor);
+    if (message.name === "OutdatedCursor") await run("apply_failed", options.consumer.missedEvents);
     return;
   }
   const frame = message.kind === "commit" ? await verifiedCommit(options, message.body) : message.frame;
@@ -102,14 +109,32 @@ async function run(reason: StopReason, step: () => Promise<void>): Promise<void>
   }
 }
 
+/**
+ * Where to resume while the consumer has no cursor yet: just before the first frame this reader saw. Without it a
+ * redial after that frame failed would start at the live tip again and skip it for good.
+ */
+type Position = { floor: number | null };
+
+/** Records the first frame's sequence number, read from the raw body so even an unreadable frame can be retried. */
+function noteFrame(position: Position, value: unknown): void {
+  if (position.floor !== null || typeof value !== "object" || value === null) return;
+  const { seq } = value as { seq?: unknown };
+  if (Number.isSafeInteger(seq) && (seq as number) > 0) position.floor = (seq as number) - 1;
+}
+
 /** One connection's life: frames in order until a failure, which ends it. Returns normally only on abort. */
-async function readUntilStop(options: FirehoseReaderOptions, signal: AbortSignal, applied: () => void): Promise<void> {
+async function readUntilStop(
+  options: FirehoseReaderOptions,
+  signal: AbortSignal,
+  position: Position,
+  applied: () => void,
+): Promise<void> {
   const subscription = new Subscription({
     service: options.service.origin,
     method: METHOD,
     signal,
     getParams: async () => {
-      const cursor = await options.consumer.cursor();
+      const cursor = (await options.consumer.cursor()) ?? position.floor;
       return cursor === null ? {} : { cursor };
     },
     // Subscription skips a frame whose validate returns undefined, and it passes undefined for a body that is not
@@ -121,6 +146,7 @@ async function readUntilStop(options: FirehoseReaderOptions, signal: AbortSignal
   });
   try {
     for await (const value of subscription) {
+      noteFrame(position, value);
       await handle(options, value);
       applied();
     }
@@ -139,8 +165,19 @@ function report(options: FirehoseReaderOptions, stop: Stop): void {
   }
 }
 
+/** Before a redial with nothing to resume from, the consumer learns that it may have missed events. */
+async function resumeBlind(options: FirehoseReaderOptions, position: Position): Promise<void> {
+  if (position.floor !== null) return;
+  try {
+    if ((await options.consumer.cursor()) === null) await options.consumer.missedEvents();
+  } catch (error) {
+    report(options, new Stop("apply_failed", error));
+  }
+}
+
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
+    if (signal.aborted) return resolve(); // onStop may have aborted it: its abort event has already fired
     const done = () => {
       clearTimeout(timer);
       signal.removeEventListener("abort", done); // the signal outlives every wait
@@ -156,12 +193,13 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> =>
  */
 export async function readFirehose(options: FirehoseReaderOptions, signal: AbortSignal): Promise<void> {
   let delay = options.restartDelayMs;
+  const position: Position = { floor: null };
   while (!signal.aborted) {
     const connection = new AbortController();
     const stopConnection = () => connection.abort();
     signal.addEventListener("abort", stopConnection, { once: true });
     try {
-      await readUntilStop(options, connection.signal, () => {
+      await readUntilStop(options, connection.signal, position, () => {
         delay = options.restartDelayMs;
       });
     } catch (error) {
@@ -169,6 +207,7 @@ export async function readFirehose(options: FirehoseReaderOptions, signal: Abort
       report(options, stop);
       connection.abort(); // closes the socket before the wait
       await wait(delay, signal);
+      if (!signal.aborted) await resumeBlind(options, position);
       delay = Math.min(delay * 2, options.maxRestartDelayMs);
     } finally {
       signal.removeEventListener("abort", stopConnection);

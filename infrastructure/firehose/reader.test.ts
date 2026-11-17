@@ -17,7 +17,11 @@ const METHOD = "com.atproto.sync.subscribeRepos";
 
 type Sent = { seq: number; bytes: Uint8Array };
 
-/** Serves `frames()` from the dial's cursor on (exclusive, https://atproto.com/specs/event-stream), then idles. */
+/**
+ * Serves `frames()` after the dial's cursor (exclusive, https://atproto.com/specs/event-stream), then idles. A dial
+ * with no cursor starts at the live tip, as the spec says: the first such dial sees the frames as they arrive, a later
+ * one sees none of them again.
+ */
 async function fakePds(frames: () => Sent[]) {
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
   await new Promise((resolve) => server.once("listening", resolve));
@@ -26,7 +30,9 @@ async function fakePds(frames: () => Sent[]) {
     const url = new URL(request.url ?? "/", "http://x");
     expect(url.pathname).toBe(`/xrpc/${METHOD}`);
     const cursor = url.searchParams.get("cursor");
+    const live = cursor === null && dials.every((dial) => dial !== null);
     dials.push(cursor === null ? null : Number(cursor));
+    if (cursor === null && !live) return; // the tip has moved past everything sent so far
     for (const frame of frames()) if (cursor === null || frame.seq > Number(cursor)) socket.send(frame.bytes);
   });
   const { port } = server.address() as { port: number };
@@ -84,13 +90,13 @@ const create = (rkey: string, displayName: string) => ({
   record: { $type: PROFILE, displayName },
 });
 
-type Run = { applied: RepoFrame[]; stops: StopReason[]; outdated: number; stop: () => void; done: Promise<void> };
+type Run = { applied: RepoFrame[]; stops: StopReason[]; missed: number; stop: () => void; done: Promise<void> };
 
 /** Runs the reader with a consumer that keeps its cursor in memory, until `until` holds or two seconds pass. */
 function start(service: URL, keyFor: () => string, consumer: Partial<FirehoseConsumer> = {}): Run {
   const controller = new AbortController();
   let cursor: number | null = null;
-  const run: Run = { applied: [], stops: [], outdated: 0, stop: () => controller.abort(), done: Promise.resolve() };
+  const run: Run = { applied: [], stops: [], missed: 0, stop: () => controller.abort(), done: Promise.resolve() };
   run.done = readFirehose(
     {
       service,
@@ -101,8 +107,8 @@ function start(service: URL, keyFor: () => string, consumer: Partial<FirehoseCon
           run.applied.push(applied);
           cursor = applied.seq;
         },
-        outdatedCursor: async () => {
-          run.outdated += 1;
+        missedEvents: async () => {
+          run.missed += 1;
         },
         ...consumer,
       },
@@ -176,7 +182,7 @@ describe("readFirehose", () => {
     await until(() => run.stops.length >= 2);
     expect(run.stops.slice(0, 2)).toEqual(["commit_unverified", "commit_unverified"]);
     expect(run.applied).toEqual([]);
-    expect(pds.dials.slice(0, 2)).toEqual([null, null]); // nothing moved the cursor
+    expect(pds.dials.slice(0, 2)).toEqual([null, 0]); // nothing moved the cursor; the redial asks for frame 1 again
   });
 
   test("reader.refuses_a_commit_with_an_unproven_op", async () => {
@@ -213,6 +219,26 @@ describe("readFirehose", () => {
     expect(run.applied[0]).toEqual({ kind: "commit", seq: 1, did: DID, rev: null, changes: [] });
   });
 
+  test("reader.ends_promptly_when_on_stop_aborts", async () => {
+    const sent = [{ seq: 1, bytes: frame("#account", { seq: 1, did: DID, time: "t" }) }]; // unreadable
+    const pds = await fakePds(() => sent);
+    cleanups.push(() => pds.close());
+    const controller = new AbortController();
+    const started = Date.now();
+    await readFirehose(
+      {
+        service: pds.url,
+        signingKey: async () => "unused",
+        consumer: { cursor: async () => null, apply: async () => undefined, missedEvents: async () => undefined },
+        onStop: () => controller.abort(), // shut down on the first stop
+        restartDelayMs: 10_000,
+        maxRestartDelayMs: 10_000,
+      },
+      controller.signal,
+    );
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   test("reader.survives_a_throwing_on_stop", async () => {
     const sent = [{ seq: 1, bytes: frame("#account", { seq: 1, did: DID, time: "t" }) }]; // unreadable
     const pds = await fakePds(() => sent);
@@ -222,7 +248,7 @@ describe("readFirehose", () => {
       {
         service: pds.url,
         signingKey: async () => "unused",
-        consumer: { cursor: async () => null, apply: async () => undefined, outdatedCursor: async () => undefined },
+        consumer: { cursor: async () => null, apply: async () => undefined, missedEvents: async () => undefined },
         onStop: () => {
           stops += 1;
           throw new Error("logger down");
@@ -236,6 +262,27 @@ describe("readFirehose", () => {
     await until(() => stops >= 2); // it kept reading after the first throw
     controller.abort();
     await expect(done).resolves.toBeUndefined();
+  });
+
+  test("reader.first_frame_failure_replays_without_a_stored_cursor", async () => {
+    // No cursor yet: a redial with none would start at the live tip and skip the failed frame for good.
+    const sent = [
+      { seq: 5, bytes: frame("#identity", { seq: 5, did: DID, time: "t" }) },
+      { seq: 6, bytes: frame("#identity", { seq: 6, did: DID, time: "t" }) },
+    ];
+    let failures = 1;
+    const seen: number[] = [];
+    const { pds, run } = await setup(() => sent, {
+      cursor: async () => (seen.length === 0 ? null : (seen.at(-1) ?? null)),
+      apply: async (applied) => {
+        if (failures-- > 0) throw new Error("db down");
+        seen.push(applied.seq);
+      },
+    });
+    await until(() => seen.length === 2);
+    expect(seen).toEqual([5, 6]);
+    expect(run.stops).toEqual(["apply_failed"]);
+    expect(pds.dials).toEqual([null, 4]);
   });
 
   test("reader.handler_failure_replays_from_cursor", async () => {
@@ -278,14 +325,14 @@ describe("readFirehose", () => {
     expect(run.applied).toEqual([]);
   });
 
-  test("reader.passes_account_identity_and_outdated_cursor", async () => {
+  test("reader.passes_account_identity_and_missed_events", async () => {
     const sent = [
       { seq: 1, bytes: frame("#account", { seq: 1, did: DID, time: "t", active: false, status: "brand-new" }) },
       { seq: 2, bytes: frame("#identity", { seq: 2, did: DID, time: "t", handle: "someone.example" }) },
       { seq: 0, bytes: frame("#info", { name: "OutdatedCursor" }) },
     ];
     const { run } = await setup(() => sent);
-    await until(() => run.outdated === 1);
+    await until(() => run.missed === 1);
     expect(run.applied).toEqual([
       { kind: "account", seq: 1, did: DID, active: false, status: "unknown" },
       { kind: "identity", seq: 2, did: DID },
@@ -298,6 +345,7 @@ describe("readFirehose", () => {
     await until(() => run.stops.length >= 1);
     expect(run.stops[0]).toBe("stream_failed");
     expect(run.applied).toEqual([]);
+    await until(() => run.missed >= 1); // no frame to resume from: the consumer must backfill
   });
 });
 
@@ -326,7 +374,7 @@ describe("process", () => {
             console.log(JSON.stringify({ listens, servers }));
             controller.abort();
           },
-          outdatedCursor: async () => {},
+          missedEvents: async () => {},
         },
         onStop: (reason) => { console.log(JSON.stringify({ stop: reason })); process.exit(1); },
         restartDelayMs: 10,
