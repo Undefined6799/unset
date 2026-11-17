@@ -31,4 +31,5 @@ export {
   parseProfileFields,
   readProfileRecord,
   toProfileRecord,
+  withCardOrder,
 } from "./profile.ts";

@@ -3,6 +3,7 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import type { CardKey } from "./cards.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -123,6 +124,25 @@ export function toProfileRecord(
   }
   const createdAt = typeof stored.createdAt === "string" ? stored.createdAt : now;
   const record: ProfileRecord = { $type: "sh.unset.profile", ...merged, createdAt };
+  if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
+  return { ok: true, record };
+}
+
+/**
+ * The profile record with its card order set (ADR 0051: the `cards` list of record keys); every other field is kept,
+ * as toProfileRecord keeps it. An empty order is no order. There is no order without a profile to hold it.
+ */
+export function withCardOrder(
+  order: readonly CardKey[],
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
+  const built = toProfileRecord({}, existing, now);
+  if (!built.ok) return built;
+  const { cards: _old, ...rest } = built.record;
+  if (order.length > LIMITS.profile.cardsMax) return { ok: false, code: "profile.too_long" };
+  const record: ProfileRecord = order.length === 0 ? rest : { ...rest, cards: [...order] };
+  // "read" as in toProfileRecord: a field another client added is kept, and every field the lexicon defines is checked.
   if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
   return { ok: true, record };
 }
