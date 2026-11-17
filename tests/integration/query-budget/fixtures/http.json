@@ -188,6 +188,28 @@
       "method": "GET",
       "path": "/settings/account",
       "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/cards",
+      "status": 415
+    },
+    {
+      "method": "POST",
+      "path": "/cards/:key",
+      "requestPath": "/cards/3lzxample",
+      "status": 415
+    },
+    {
+      "method": "POST",
+      "path": "/cards/:key/delete",
+      "requestPath": "/cards/3lzxample/delete",
+      "status": 415
+    },
+    {
+      "method": "POST",
+      "path": "/card-order",
+      "status": 415
     }
   ]
 }
