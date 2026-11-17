@@ -24,6 +24,9 @@ export const CARD_EDIT = {
   remove: "Delete",
   removeTitle: "Delete this card?",
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
+  width: "Width",
+  full: "Full width",
+  half: "Half width",
   noScript: "Adding, editing or deleting a card needs JavaScript. Moving one does not.",
 } as const;
 
