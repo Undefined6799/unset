@@ -2,20 +2,16 @@
 // input once into checked fields; toProfileRecord builds the sh.unset.profile record we write to the member's PDS.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { EMPTY_PROFILE, parseProfileFields, readProfileRecord, toProfileRecord } from "./profile.ts";
+import { APP_LIMITS, EMPTY_PROFILE, parseProfileFields, readProfileRecord, toProfileRecord } from "./profile.ts";
 
 const good = {
   displayName: "Alice Moreau",
   headline: "Designer and front-end developer.",
   location: "Toronto, Ontario",
   website: "https://alice.dev",
-  links: "https://github.com/alicem\nhttps://bsky.app/profile/alice.bsky.social",
 };
-/** `good` as the record stores it: links are the lexicon's objects. */
-const goodStored = {
-  ...good,
-  links: [{ uri: "https://github.com/alicem" }, { uri: "https://bsky.app/profile/alice.bsky.social" }],
-};
+/** `good` as the record stores it: every field is a plain string. */
+const goodStored = good;
 
 describe("parseProfileFields", () => {
   test("accepts every field and trims the one-line ones", () => {
@@ -37,9 +33,9 @@ describe("parseProfileFields", () => {
   });
 
   test.each([
-    ["displayName", LIMITS.profile.displayName],
-    ["headline", LIMITS.profile.headline],
-    ["location", LIMITS.profile.location],
+    ["displayName", APP_LIMITS.displayName],
+    ["headline", APP_LIMITS.headline],
+    ["location", APP_LIMITS.location],
   ] as const)("%s counts graphemes up to its limit", (field, limit) => {
     const family = "👩‍👩‍👧";
     expect(parseProfileFields({ [field]: family.repeat(limit) }).ok).toBe(true);
@@ -48,6 +44,12 @@ describe("parseProfileFields", () => {
       field,
       code: "profile.too_long",
     });
+  });
+
+  test("app limits never exceed the lexicon's, which are permanent once published (ADR 0051)", () => {
+    for (const field of ["displayName", "headline", "location"] as const) {
+      expect(APP_LIMITS[field]).toBeLessThanOrEqual(LIMITS.profile[field]);
+    }
   });
 
   test("one-line fields refuse line breaks", () => {
@@ -69,7 +71,7 @@ describe("toProfileRecord", () => {
     const built = toProfileRecord({ ...EMPTY_PROFILE, displayName: "Alice", headline: "hi" }, null, NOW);
     expect(built).toEqual({
       ok: true,
-      record: { $type: "sh.unset.profile", displayName: "Alice", headline: "hi", createdAt: NOW, updatedAt: NOW },
+      record: { $type: "sh.unset.profile", displayName: "Alice", headline: "hi", createdAt: NOW },
     });
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
   });
@@ -79,7 +81,7 @@ describe("toProfileRecord", () => {
       $type: "sh.unset.profile",
       displayName: "Old",
       headline: "Old line",
-      bio: "Kept as it was.",
+      cards: ["3jzfcijpj2z2a"],
       listed: true,
       createdAt: "2026-10-01T00:00:00.000Z",
     };
@@ -88,14 +90,12 @@ describe("toProfileRecord", () => {
       ok: true,
       record: {
         $type: "sh.unset.profile",
-        bio: "Kept as it was.",
+        cards: ["3jzfcijpj2z2a"],
         listed: true,
         displayName: good.displayName,
         location: good.location,
         website: good.website,
-        links: goodStored.links,
         createdAt: "2026-10-01T00:00:00.000Z",
-        updatedAt: NOW,
       },
     });
     expect(built.ok && validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
@@ -106,7 +106,7 @@ describe("toProfileRecord", () => {
     const built = toProfileRecord({ location: "Montréal" }, existing, NOW);
     expect(built).toEqual({
       ok: true,
-      record: { ...existing, location: "Montréal", updatedAt: NOW },
+      record: { ...existing, location: "Montréal" },
     });
     const cleared = toProfileRecord({ headline: "" }, existing, NOW);
     expect(cleared.ok && "headline" in cleared.record).toBe(false);
@@ -126,7 +126,7 @@ describe("toProfileRecord", () => {
     const existing = { $type: "sh.unset.profile", ...goodStored, pronouns: "they/them", createdAt: NOW };
     expect(toProfileRecord({ location: "Montréal" }, existing, NOW)).toEqual({
       ok: true,
-      record: { ...existing, location: "Montréal", updatedAt: NOW },
+      record: { ...existing, location: "Montréal" },
     });
   });
 
@@ -156,56 +156,5 @@ describe("readProfileRecord", () => {
 
   test("anything that is not an object reads as an empty profile", () => {
     for (const value of [null, "profile", 3, ["a"]]) expect(readProfileRecord(value)).toEqual(EMPTY_PROFILE);
-  });
-});
-
-describe("links (Alex 2026-10-23 04:06Z: members add their own links)", () => {
-  test("reads one URL a line, trimmed, blank lines dropped", () => {
-    const parsed = parseProfileFields({ links: " https://a.example \r\n\n https://b.example/x \n" });
-    expect(parsed).toEqual({ ok: true, fields: { links: "https://a.example\nhttps://b.example/x" } });
-  });
-
-  test("a web address typed without a scheme gains https://, for the website and each link", () => {
-    expect(parseProfileFields({ website: "alice.dev", links: "github.com/alicem" })).toEqual({
-      ok: true,
-      fields: { website: "https://alice.dev", links: "https://github.com/alicem" },
-    });
-  });
-
-  test("refuses a link that is not a plain http(s) URL", () => {
-    for (const bad of ["javascript:alert(1)", "ftp://a.example", "https://u:p@a.example", "not a url"]) {
-      expect(parseProfileFields({ links: `https://a.example\n${bad}` })).toEqual({
-        ok: false,
-        field: "links",
-        code: "profile.url_invalid",
-      });
-    }
-  });
-
-  test("refuses more links than the lexicon allows, and a link past its byte bound", () => {
-    const many = Array.from({ length: LIMITS.profile.linksMax + 1 }, (_, i) => `https://a.example/${i}`).join("\n");
-    expect(parseProfileFields({ links: many })).toMatchObject({ ok: false, field: "links", code: "profile.too_long" });
-    const long = `https://a.example/${"p".repeat(LIMITS.profile.linkUriBytes)}`;
-    expect(parseProfileFields({ links: long })).toMatchObject({ ok: false, field: "links", code: "profile.too_long" });
-  });
-
-  test("are written as the lexicon's link objects and read back", () => {
-    const built = toProfileRecord(
-      { ...EMPTY_PROFILE, displayName: "Alice", links: good.links },
-      null,
-      "2026-10-23T04:10:00.000Z",
-    );
-    if (!built.ok) throw new Error(built.code);
-    expect(built.record.links).toEqual([
-      { uri: "https://github.com/alicem" },
-      { uri: "https://bsky.app/profile/alice.bsky.social" },
-    ]);
-    expect(validateRecord("sh.unset.profile", built.record, "write").ok).toBe(true);
-    expect(readProfileRecord(built.record).links).toBe(good.links);
-  });
-
-  test("a stored list another client broke reads as no links", () => {
-    expect(readProfileRecord({ displayName: "A", links: [{ uri: "javascript:x" }] }).links).toBe("");
-    expect(readProfileRecord({ displayName: "A", links: "https://a.example" }).links).toBe("");
   });
 });
