@@ -88,6 +88,7 @@ describe("parseReadme, adversarial input", () => {
     ["blank lines before many short fences", `${"\n".repeat(80_000)}${"```\nx\n```\n".repeat(2_000)}`],
     ["backtick runs of rising length", Array.from({ length: 445 }, (_, n) => `${"`".repeat(n + 1)}a`).join("")],
     ["emphasis openers before a run of marks", `${"*a".repeat(25_000)}${"*".repeat(50_000)}`],
+    ["an emphasis opener before escaped label closers", `*a${"\\](".repeat(33_330)}`],
   ])("%s parse in linear time", (_name, src) => {
     const started = performance.now();
     parseReadme(src);
@@ -136,6 +137,35 @@ describe("parseReadme, adversarial input", () => {
         children: [
           { kind: "link", href: "https://example.com/a*b" },
           { kind: "text", text: " here" },
+        ],
+      },
+    ]);
+  });
+
+  test("a ]( that opens no link does not hide an emphasis closer", () => {
+    expect(parseInline("*`a](b`c*)")).toEqual([
+      {
+        kind: "em",
+        children: [
+          { kind: "code", text: "a](b" },
+          { kind: "text", text: "c" },
+        ],
+      },
+      { kind: "text", text: ")" },
+    ]);
+    expect(parseInline("*a](b*)")).toEqual([
+      { kind: "em", children: [{ kind: "text", text: "a](b" }] },
+      { kind: "text", text: ")" },
+    ]);
+  });
+
+  test("a bracket inside code in a link label does not end the label", () => {
+    expect(parseInline("*[a `]` b](https://x/a*b) c*")).toMatchObject([
+      {
+        kind: "em",
+        children: [
+          { kind: "link", href: "https://x/a*b" },
+          { kind: "text", text: " c" },
         ],
       },
     ]);

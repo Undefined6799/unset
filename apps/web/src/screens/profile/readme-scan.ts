@@ -48,19 +48,24 @@ export const MAX_DESTINATION = 2_000;
  * label, so all the scans together read each character at most once, however many links never close.
  */
 export function destinationEnd(text: string, from: number): number {
+  return scanDestination(text, from)[0];
+}
+
+/** destinationEnd, and where its scan stopped: the ")" it found, or the character or limit that ended the search. */
+function scanDestination(text: string, from: number): readonly [end: number, stop: number] {
   let open = 0;
   const limit = Math.min(text.length, from + MAX_DESTINATION);
   for (let j = from; j < limit; j += 1) {
     const ch = text[j] ?? "";
-    if (ch === "[" || ch === "]" || /\s/.test(ch)) return -1;
+    if (ch === "[" || ch === "]" || /\s/.test(ch)) return [-1, j];
     if (ch === "\\") j += 1;
     else if (ch === "(") open += 1;
     else if (ch === ")") {
-      if (open === 0) return j;
+      if (open === 0) return [j, j];
       open -= 1;
     }
   }
-  return -1;
+  return [-1, limit];
 }
 
 /**
@@ -100,20 +105,54 @@ export function closes(text: string, j: number, mark: Mark): boolean {
  */
 export function codeSpans(text: string): readonly (readonly [number, number])[] {
   const closer = codeCloser(text);
-  const spans: [number, number][] = [];
+  const code: [number, number][] = [];
   for (let i = text.indexOf("`"); i !== -1; ) {
     const length = runLength(text, i, "`");
     const end = closer(length, i + length);
-    if (end !== -1) spans.push([i, end + length]);
+    if (end !== -1) code.push([i, end + length]);
     i = text.indexOf("`", end === -1 ? i + length : end + length);
   }
+  const autolink = /<https?:\/\/[^\s<>]+>/gi;
+  const links: [number, number][] = [];
+  for (let m = autolink.exec(text); m !== null; m = autolink.exec(text)) links.push([m.index, m.index + m[0].length]);
+  return mergeSpans([...code, ...destinations(text, code), ...links]);
+}
+
+/**
+ * The destinations of "](" that can close a label: outside code, after an open label. Each scan starts where the last
+ * one stopped: a "](" an earlier scan read past had its "]" escaped, so it closes no label, and no character is read
+ * twice however many destinations fail.
+ */
+function destinations(text: string, code: readonly (readonly [number, number])[]): [number, number][] {
+  const spans: [number, number][] = [];
+  const labelOpenAt = openLabels(text, code);
+  let scanned = 0;
   for (let i = text.indexOf("]("); i !== -1; i = text.indexOf("](", i + 2)) {
-    const end = destinationEnd(text, i + 2);
+    if (i < scanned || !labelOpenAt(i) || spanEnd(code, i) !== -1) continue;
+    const [end, stop] = scanDestination(text, i + 2);
+    scanned = stop;
     if (end !== -1) spans.push([i + 2, end]);
   }
-  const autolink = /<https?:\/\/[^\s<>]+>/gi;
-  for (let m = autolink.exec(text); m !== null; m = autolink.exec(text)) spans.push([m.index, m.index + m[0].length]);
-  return mergeSpans(spans);
+  return spans;
+}
+
+/**
+ * Whether a label is open at a rising position: a "[" with no "]" after it, brackets inside code not counting, so
+ * "[a `]` b](x)" is still one label. The text is walked once, however many positions are asked about.
+ */
+function openLabels(text: string, code: readonly (readonly [number, number])[]): (at: number) => boolean {
+  let walked = 0;
+  let lastOpen = -1;
+  let lastClose = -1;
+  return (at) => {
+    for (; walked < at; walked += 1) {
+      const inCode = spanEnd(code, walked);
+      if (inCode !== -1) walked = inCode - 1;
+      else if (text[walked] === "[") lastOpen = walked;
+      else if (text[walked] === "]") lastClose = walked;
+    }
+    return lastOpen > lastClose;
+  };
 }
 
 /** Sorted, with overlapping spans joined, so a binary search finds the one holding a position. */
