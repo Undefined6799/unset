@@ -606,3 +606,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0053](0053-queue-members-for-the-index-at-onboarding-end.md)):** members are queued for the index when their
   onboarding ends, in `idx.track_request`. The clause "(`app.track_request`, filled by the sign-in callback)" of ADR
   0052 decision 3 is superseded.
+- **ADR 0057 proposed (Alex chose the direction 2026-11-17 22:36Z; own record:
+  [0057](0057-small-and-auditable-means-the-code.md)):** "small" means the code we own and "auditable" means easy
+  to read and follow; a package that meets a written bar (established, maintained, not likely to be dropped, pinned,
+  audited) needs no ADR, except one touching auth, crypto, outbound requests or personal data. Amends rule DO-1 and
+  CLAUDE.md D8 once accepted. Proposed, awaiting Alex.
