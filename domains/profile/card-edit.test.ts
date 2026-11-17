@@ -195,13 +195,30 @@ describe("toCardRecord", () => {
 
   test("changing a card's kind drops the old content's unknown fields", () => {
     const existing = stored({ $type: ref("readme"), text: "old", mood: "calm" });
-    const { content, width } = parsed({ kind: "links", items: [] });
+    const { content, width } = parsed({ kind: "links", items: [{ uri: "https://x.example" }] });
     const built = toCardRecord(content, width, existing, NOW);
-    expect(built.ok && built.record.content).toEqual({ $type: ref("links"), layout: "list", items: [] });
+    expect(built.ok && built.record.content).toEqual({
+      $type: ref("links"),
+      layout: "list",
+      items: [{ uri: "https://x.example" }],
+    });
+  });
+
+  test.each([
+    { kind: "links", title: "Elsewhere", items: [] },
+    { kind: "links" },
+    { kind: "collection", title: "Work", items: [] },
+    { kind: "buttons", heading: "Work with me", buttons: [] },
+  ])("a list card with no rows is refused as empty: %j", (input) => {
+    expect(parseCardInput(input)).toEqual({ ok: false, code: "card.empty" });
   });
 
   test("text past the lexicon's limit is refused", () => {
-    const { content, width } = parsed({ kind: "buttons", heading: "x".repeat(121), buttons: [] });
+    const { content, width } = parsed({
+      kind: "buttons",
+      heading: "x".repeat(121),
+      buttons: [{ kind: "email", address: "a@b.example" }],
+    });
     expect(toCardRecord(content, width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 
@@ -233,10 +250,15 @@ describe("toCardRecord", () => {
   });
 
   test("an emptied optional field is removed, never kept from the old record", () => {
-    const existing = stored({ $type: ref("links"), title: "Old", items: [] });
-    const { content, width } = parsed({ kind: "links", items: [] });
+    const item = { uri: "https://x.example" };
+    const existing = stored({ $type: ref("links"), title: "Old", items: [item] });
+    const { content, width } = parsed({ kind: "links", items: [item] });
     const built = toCardRecord(content, width, existing, NOW);
-    expect(built.ok && built.record.content).toEqual({ $type: ref("links"), layout: "list", items: [] });
+    expect(built.ok && built.record.content).toEqual({
+      $type: ref("links"),
+      layout: "list",
+      items: [item],
+    });
   });
 });
 

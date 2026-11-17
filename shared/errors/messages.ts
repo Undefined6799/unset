@@ -46,6 +46,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.too_long": "Part of this card is too long, or it has too many items.",
   "card.form_too_large":
     "This card is too large to save from your page. Shorten some of its text or remove a few items, then save again.",
+  "card.empty": "Add at least one link, entry or button. To remove the card, delete it instead.",
   "card.url_invalid": "Links must be http or https addresses.",
   "card.email_invalid": "That email address does not look right.",
   "card.order_invalid": "Your cards changed since you opened the page. Reload, then move them again.",

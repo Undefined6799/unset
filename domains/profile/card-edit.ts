@@ -87,6 +87,11 @@ function all<T>(items: readonly Obj[], read: (item: Obj) => Field<T>): Field<T[]
   return { ok: true, value: out };
 }
 
+/** A list card needs at least one row: one with none shows an empty card, so the member deletes it instead. */
+function filled<T>(rows: Field<T[]>): Field<T[]> {
+  return rows.ok && rows.value.length === 0 ? fail("card.empty") : rows;
+}
+
 const readLink = (item: Obj) =>
   fields({ uri: address(item.uri, true), label: field(item.label), description: field(item.description) });
 
@@ -131,7 +136,7 @@ function readLinks(input: Obj): Field<CardContent> {
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
-  const items = all(raw.value, readLink);
+  const items = filled(all(raw.value, readLink));
   return items.ok
     ? { ok: true, value: { kind: "links", ...head.value, layout: layout.value, items: items.value } }
     : items;
@@ -144,7 +149,7 @@ function readCollection(input: Obj): Field<CardContent> {
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
-  const items = all(raw.value, readEntry);
+  const items = filled(all(raw.value, readEntry));
   const value = {
     kind: "collection",
     ...head.value,
@@ -160,7 +165,7 @@ function readButtons(input: Obj): Field<CardContent> {
   if (head.value.heading === "") return fail("card.required");
   const raw = list(input.buttons, LIMITS.section.buttonsMax);
   if (!raw.ok) return raw;
-  const buttons = all(raw.value, readButtonInput);
+  const buttons = filled(all(raw.value, readButtonInput));
   return buttons.ok ? { ok: true, value: { kind: "buttons", ...head.value, buttons: buttons.value } } : buttons;
 }
 

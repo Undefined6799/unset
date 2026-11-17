@@ -54,6 +54,7 @@ export type CardError =
   | "card.too_long"
   | "card.url_invalid"
   | "card.email_invalid"
+  | "card.empty"
   | "card.order_invalid";
 export type Failed = { readonly ok: false; readonly code: CardError };
 
