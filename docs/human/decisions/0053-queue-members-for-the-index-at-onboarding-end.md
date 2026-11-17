@@ -1,6 +1,9 @@
 # 0053 — Queue members for the index when their onboarding ends, in `idx`
 
-Status: Proposed. It supersedes one clause of ADR 0052 decision 3, and nothing else in it: the parenthesis
+Status: Accepted by Alex, 2026-11-17 13:51:50Z, against 2422ebf (his line "Accept ADR 0053 at 2422 EBF", typed in
+the thread "Build the indexer for public profiles" after he chose "At onboarding end (new ADR)" and the coordinator
+had reviewed that head). The only changes since that head are this status paragraph, the index rows and the ADR 0001
+acceptance line. It supersedes one clause of ADR 0052 decision 3, and nothing else in it: the parenthesis
 "(`app.track_request`, filled by the sign-in callback)". The rule of that decision, that only DIDs that signed in
 here are indexed and that the track queue creates their `idx.account` row, stands.
 
