@@ -58,7 +58,7 @@ function readPage(pdsCall: PdsCall, ctx: PdsContext | null, did: Did, limit: num
           const key = ownCardKey(r.uri, did);
           return key === null ? [] : [{ key, value: r.value, cid: r.cid }];
         });
-        const bytes = records.reduce((sum, r) => sum + JSON.stringify(r.value).length, 0);
+        const bytes = records.reduce((sum, r) => sum + Buffer.byteLength(JSON.stringify(r.value)), 0);
         const more = data.records.length > 0 && typeof data.cursor === "string" && data.cursor !== cursor;
         return { records, bytes, cursor: more ? data.cursor : undefined };
       } catch (error: unknown) {

@@ -47,7 +47,11 @@ const record = (n: number, value: unknown = card) => ({
   value,
 });
 /** A PDS holding `count` cards, paged by rkey as listRecords pages (cursor = the last key returned). */
-function holding(count: number, refuse: (n: number, limit: number) => boolean = () => false) {
+function holding(
+  count: number,
+  refuse: (n: number, limit: number) => boolean = () => false,
+  value: unknown = card,
+) {
   return (call: Call) => {
     const limit = Number(call.url.searchParams.get("limit"));
     const after = call.url.searchParams.get("cursor");
@@ -56,7 +60,7 @@ function holding(count: number, refuse: (n: number, limit: number) => boolean = 
     if (page.some((n) => refuse(n, limit))) throw new NetGuardError("egress.too_large");
     const last = page.at(-1);
     return Response.json({
-      records: page.map((n) => record(n)),
+      records: page.map((n) => record(n, value)),
       ...(last === undefined ? {} : { cursor: rkey(last) }),
     });
   };
@@ -119,6 +123,13 @@ describe("listCardRecords", () => {
     const ended = await listCardRecords(late.pdsCall, { ...late.ctx, deadline: done.signal }, DID);
     expect(keys(ended)).toEqual({ keys: [], complete: false });
     expect(late.calls).toEqual([]);
+  });
+
+  test("the byte budget counts UTF-8 bytes, so multibyte cards meet the same bound", async () => {
+    // 100 cards of 15,000 CJK characters: 1.5 million UTF-16 units but 4.5 MB of UTF-8, past the 4 MiB budget.
+    const big = { ...card, content: { $type: "sh.unset.section#readme", text: "\u6f22".repeat(15_000) } };
+    const { pdsCall, ctx } = pds(holding(100, () => false, big));
+    expect(keys(await listCardRecords(pdsCall, ctx, DID))).toMatchObject({ complete: false });
   });
 
   test("a failure before any card is the failure; after some, the list is incomplete", async () => {
