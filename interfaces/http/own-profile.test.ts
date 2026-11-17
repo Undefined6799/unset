@@ -17,8 +17,14 @@ const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
   cid: "c",
 });
 const card = (key: string, value: unknown): StoredCard => ({ key, value, cid: "c" });
-const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>) =>
-  loadOwnProfile({ profile: async () => p, cards: async () => c }, "pds.example");
+const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, complete = true) =>
+  loadOwnProfile(
+    {
+      profile: async () => p,
+      cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete } } : c),
+    },
+    "pds.example",
+  );
 
 describe("loadOwnProfile", () => {
   test("reads the side column and the cards in the profile's order", async () => {
@@ -31,6 +37,14 @@ describe("loadOwnProfile", () => {
       profile: { displayName: "Alice", headline: "Hi", location: "", website: "" },
     });
     expect(result.kind === "ok" && result.cards.map((c) => c.key)).toEqual(["b", "a", "c"]);
+  });
+
+  test("a card list the read cut short is shown, and says so", async () => {
+    const whole = await load(ok(profile()), ok([card("a", readme("A"))]));
+    const cut = await load(ok(profile()), ok([card("a", readme("A"))]), false);
+    expect(whole).toMatchObject({ kind: "ok", cardsComplete: true });
+    expect(cut).toMatchObject({ kind: "ok", cardsComplete: false });
+    expect(cut.kind === "ok" && cut.cards.map((c) => c.key)).toEqual(["a"]);
   });
 
   test("a hidden card or a key that is not a record key is left out", async () => {

@@ -49,6 +49,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.order_invalid": "Your cards changed since you opened the page. Reload, then move them again.",
   "card.missing": "That card is gone. Reload to see your cards.",
   "card.too_many": "You have the most cards a page can hold. Delete one to add another.",
+  "card.list_incomplete":
+    "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
   "card.pds_unavailable": "Your sign-in server is not answering, so your card was not saved. Try again.",
   "welcome.date_invalid": "That date is not a real calendar date.",

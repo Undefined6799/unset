@@ -1,6 +1,7 @@
 // The member's sh.unset.section records (profile cards, ADR 0051), over pdsCall. The XRPC client is the real
 // @atproto/api Agent over a fake fetchHandler, so the requests it sends and the errors it parses are the library's own.
 import type { Did } from "@unset/domains-identity";
+import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import { createCardRecord, deleteCardRecord, listCardRecords, saveCardRecord } from "./card-records.ts";
@@ -39,25 +40,98 @@ function pds(answer: (call: Call) => Response) {
 }
 const params = (call: Call | undefined) => Object.fromEntries(call?.url.searchParams ?? []);
 
-describe("listCardRecords", () => {
-  test("lists up to 100 section records of the member's own repo, keyed by record key", async () => {
-    const { pdsCall, ctx, calls } = pds(() =>
-      Response.json({
-        records: [
-          { uri: `at://${DID}/sh.unset.section/3jzfcijpj2z2a`, cid: CID, value: card },
-          { uri: `at://${DID}/sh.unset.section/3jzfcijpj2z2b`, cid: CID2, value: card },
-        ],
-      }),
-    );
-    expect(await listCardRecords(pdsCall, ctx, DID)).toEqual({
-      kind: "ok",
-      value: [
-        { key: "3jzfcijpj2z2a", cid: CID, value: card },
-        { key: "3jzfcijpj2z2b", cid: CID2, value: card },
-      ],
+const rkey = (n: number) => `3jzfcijpj2z${String(n).padStart(3, "0")}`;
+const record = (n: number, value: unknown = card) => ({
+  uri: `at://${DID}/sh.unset.section/${rkey(n)}`,
+  cid: CID,
+  value,
+});
+/** A PDS holding `count` cards, paged by rkey as listRecords pages (cursor = the last key returned). */
+function holding(count: number, refuse: (n: number, limit: number) => boolean = () => false) {
+  return (call: Call) => {
+    const limit = Number(call.url.searchParams.get("limit"));
+    const after = call.url.searchParams.get("cursor");
+    const from = after === null ? 0 : Number(after.slice(-3)) + 1;
+    const page = Array.from({ length: Math.max(0, Math.min(limit, count - from)) }, (_, i) => from + i);
+    if (page.some((n) => refuse(n, limit))) throw new NetGuardError("egress.too_large");
+    const last = page.at(-1);
+    return Response.json({
+      records: page.map((n) => record(n)),
+      ...(last === undefined ? {} : { cursor: rkey(last) }),
     });
-    expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.listRecords");
-    expect(params(calls[0])).toEqual({ repo: DID, collection: "sh.unset.section", limit: "100" });
+  };
+}
+const keys = (result: Awaited<ReturnType<typeof listCardRecords>>) =>
+  result.kind === "ok" ? { keys: result.value.cards.map((c) => c.key), complete: result.value.complete } : result;
+
+describe("listCardRecords", () => {
+  test("reads the member's own section records page by page, keyed by record key", async () => {
+    const { pdsCall, ctx, calls } = pds(holding(23));
+    const result = await listCardRecords(pdsCall, ctx, DID);
+    expect(keys(result)).toEqual({ keys: Array.from({ length: 23 }, (_, n) => rkey(n)), complete: true });
+    expect(result.kind === "ok" && result.value.cards[0]).toEqual({ key: rkey(0), cid: CID, value: card });
+    expect(calls.map(params)).toEqual([
+      { repo: DID, collection: "sh.unset.section", limit: "10" },
+      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(9) },
+      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(19) },
+      { repo: DID, collection: "sh.unset.section", limit: "10", cursor: rkey(22) },
+    ]);
+  });
+
+  test("exactly the most cards a page shows is all of them; one more is not", async () => {
+    expect(keys(await listCardRecords(pds(holding(100)).pdsCall, pds(holding(100)).ctx, DID))).toMatchObject({
+      complete: true,
+    });
+    const over = pds(holding(101));
+    const result = keys(await listCardRecords(over.pdsCall, over.ctx, DID));
+    expect(result).toMatchObject({ complete: false });
+    expect("keys" in result && result.keys).toHaveLength(100);
+  });
+
+  test("a page past the size cap is read again one card at a time", async () => {
+    // Card 12 is large: any page holding it with another card is past the cap; alone it fits.
+    const { pdsCall, ctx, calls } = pds(holding(15, (n, limit) => n === 12 && limit > 1));
+    expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
+      keys: Array.from({ length: 15 }, (_, n) => rkey(n)),
+      complete: true,
+    });
+    expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "1", "1", "1", "1", "1", "1"]);
+  });
+
+  test("one card alone past the cap stops the read before it, and the page keeps what it read", async () => {
+    // Real @atproto/xrpc wraps the guard's error as its cause (XRPCError.from), which the reader looks through.
+    const { pdsCall, ctx } = pds(holding(15, (n) => n === 12));
+    expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
+      keys: Array.from({ length: 12 }, (_, n) => rkey(n)),
+      complete: false,
+    });
+  });
+
+  test("the read stops at its call budget and when the deadline has passed", async () => {
+    // Every other card is large, so each page needs a retry and the budget runs out first.
+    const slow = pds(holding(100, (n, limit) => n % 2 === 1 && limit > 1));
+    const result = keys(await listCardRecords(slow.pdsCall, slow.ctx, DID));
+    expect(result).toMatchObject({ complete: false });
+    expect(slow.calls.length).toBeLessThanOrEqual(24);
+    const late = pds(holding(30));
+    const done = new AbortController();
+    done.abort();
+    const ended = await listCardRecords(late.pdsCall, { ...late.ctx, deadline: done.signal }, DID);
+    expect(keys(ended)).toEqual({ keys: [], complete: false });
+    expect(late.calls).toEqual([]);
+  });
+
+  test("a failure before any card is the failure; after some, the list is incomplete", async () => {
+    const refused = pds(() => Response.json({ error: "InvalidRequest", message: "no" }, { status: 400 }));
+    expect((await listCardRecords(refused.pdsCall, refused.ctx, DID)).kind).not.toBe("ok");
+    const pages = holding(30);
+    const flaky = pds((call) =>
+      call.url.searchParams.has("cursor") ? new Response(null, { status: 502 }) : pages(call),
+    );
+    expect(keys(await listCardRecords(flaky.pdsCall, flaky.ctx, DID))).toEqual({
+      keys: Array.from({ length: 10 }, (_, n) => rkey(n)),
+      complete: false,
+    });
   });
 
   test("a record from another repo or collection is never listed", async () => {
@@ -69,12 +143,7 @@ describe("listCardRecords", () => {
         ],
       }),
     );
-    expect(await listCardRecords(pdsCall, ctx, DID)).toEqual({ kind: "ok", value: [] });
-  });
-
-  test("a refusal is never read as no cards", async () => {
-    const { pdsCall, ctx } = pds(() => Response.json({ error: "InvalidRequest", message: "no" }, { status: 400 }));
-    expect((await listCardRecords(pdsCall, ctx, DID)).kind).not.toBe("ok");
+    expect(await listCardRecords(pdsCall, ctx, DID)).toEqual({ kind: "ok", value: { cards: [], complete: true } });
   });
 });
 

@@ -58,6 +58,7 @@ export const ERROR_CODES = {
   "card.order_invalid": { status: 409, public: true },
   "card.missing": { status: 404, public: true },
   "card.too_many": { status: 409, public: true },
+  "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },
   // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.

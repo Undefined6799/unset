@@ -72,7 +72,7 @@ function accountServer(signedOut = false) {
       pdsIssuer: "https://pds.unset.test",
       log,
     },
-    async () => ({ kind: "ok", profile: null, cards: [] }),
+    async () => ({ kind: "ok", profile: null, cards: [], cardsComplete: true }),
   );
   const server = createServer({ config: CONFIG, routes, policies, log, gate: appSessionGate(open) });
   return { server, lines, resolved };

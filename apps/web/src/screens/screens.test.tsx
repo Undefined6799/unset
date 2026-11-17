@@ -251,6 +251,12 @@ describe("me screen", () => {
     expect(page).not.toContain("Set up your profile");
   });
 
+  test("me_says_when_some_cards_could_not_be_loaded", () => {
+    const base = { handle: "alice.pds.example", did: DID, handleUnavailable: false, ...OURS, cards: [] };
+    expect(html(screens.me({ ...base, cardsIncomplete: true }))).toContain("Some of your cards could not be loaded");
+    expect(html(screens.me(base))).not.toContain("Some of your cards");
+  });
+
   test("me_says_when_the_handle_could_not_be_checked", () => {
     const page = html(screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, ...OURS }));
     expect(page).toContain("handle.invalid");

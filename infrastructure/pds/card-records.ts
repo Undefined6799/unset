@@ -2,14 +2,27 @@
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
 // createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts); record keys: atproto.com/specs/record-key.
 import type { Did } from "@unset/domains-identity";
+import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
 import { type BuiltRecord, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
 export const CARD_COLLECTION = "sh.unset.section";
-/** One page: the profile's cards list holds at most 100 keys (LIMITS.profile.cardsMax), and 100 is listRecords' max. */
-const CARDS_PAGE = 100;
+
+/**
+ * How the cards are read (Codex on #1657; coordinator 2026-11-17 07:04Z). Every PDS response is capped at 1 MiB
+ * (net-guard libraryFetch), and one card may be about 900 KB, so the cards come in pages of PAGE records; a page past
+ * the cap is read again one record at a time. One page load makes at most MAX_CALLS calls and keeps at most
+ * MAX_BYTES of record JSON, and stops at MAX_CARDS cards (LIMITS.profile.cardsMax), all inside the request's deadline.
+ * When it stops early, the list says it is incomplete, and the caller shows what it has, never more.
+ */
+const PAGE = 10;
+const MAX_CALLS = 24;
+const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_CARDS = 100;
 
 export type StoredCard = { readonly key: string; readonly value: unknown; readonly cid: string };
+/** The cards read, and whether that is all of them. */
+export type CardList = { readonly cards: readonly StoredCard[]; readonly complete: boolean };
 
 /** The record key of `uri` when it names a card in `did`'s own repo, else null. */
 function ownCardKey(uri: string, did: Did): string | null {
@@ -18,25 +31,86 @@ function ownCardKey(uri: string, did: Did): string | null {
   return /^[A-Za-z0-9._:~-]{1,512}$/.test(key) && key !== "." && key !== ".." ? key : null;
 }
 
-/** The member's cards, first page only. A record the PDS returns for another repo or collection is left out. */
-export function listCardRecords(pdsCall: PdsCall, ctx: PdsContext | null, did: Did): Promise<PdsResult<StoredCard[]>> {
+/** True when net-guard refused the response for its size; @atproto/xrpc wraps it as the cause (XRPCError.from). */
+function tooLarge(error: unknown): boolean {
+  for (let cause = error, depth = 0; cause instanceof Error && depth < 4; cause = cause.cause, depth += 1) {
+    if (cause instanceof NetGuardError && cause.code === "egress.too_large") return true;
+  }
+  return false;
+}
+
+type Page = { readonly records: StoredCard[]; readonly bytes: number; readonly cursor: string | undefined };
+const TOO_LARGE = "too_large" as const;
+
+function readPage(pdsCall: PdsCall, ctx: PdsContext | null, did: Did, limit: number, cursor: string | undefined) {
   return pdsCall(
     ctx,
     did,
-    async (agent) => {
-      const { data } = await agent.com.atproto.repo.listRecords({
-        repo: did,
-        collection: CARD_COLLECTION,
-        limit: CARDS_PAGE,
-      });
-      return data.records.flatMap((r) => {
-        const key = ownCardKey(r.uri, did);
-        return key === null ? [] : [{ key, value: r.value, cid: r.cid }];
-      });
+    async (agent): Promise<Page | typeof TOO_LARGE> => {
+      try {
+        const { data } = await agent.com.atproto.repo.listRecords({
+          repo: did,
+          collection: CARD_COLLECTION,
+          limit,
+          ...(cursor === undefined ? {} : { cursor }),
+        });
+        const records = data.records.flatMap((r) => {
+          const key = ownCardKey(r.uri, did);
+          return key === null ? [] : [{ key, value: r.value, cid: r.cid }];
+        });
+        const bytes = records.reduce((sum, r) => sum + JSON.stringify(r.value).length, 0);
+        const more = data.records.length > 0 && typeof data.cursor === "string" && data.cursor !== cursor;
+        return { records, bytes, cursor: more ? data.cursor : undefined };
+      } catch (error: unknown) {
+        if (tooLarge(error)) return TOO_LARGE;
+        throw error;
+      }
     },
     { idempotent: true },
   );
 }
+
+/**
+ * The member's cards, page by page within the budget above. A record the PDS returns for another repo or collection
+ * is left out. A failure before any card is read is the failure; after some are read, the list is incomplete.
+ */
+export async function listCardRecords(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+): Promise<PdsResult<CardList>> {
+  const cards: StoredCard[] = [];
+  let bytes = 0;
+  let cursor: string | undefined;
+  // After a page past the cap, the next PAGE cards are read one at a time, then pages resume.
+  let single = 0;
+  for (let calls = 0; calls < MAX_CALLS; calls += 1) {
+    const limit = single > 0 ? 1 : PAGE;
+    if (ctx?.deadline.aborted === true) break;
+    const page = await readPage(pdsCall, ctx, did, limit, cursor);
+    if (page.kind !== "ok") return cards.length === 0 || page.kind !== "transient" ? page : partial(cards);
+    if (page.value === TOO_LARGE) {
+      // One record alone past the cap cannot be read, and its key is unknown, so the read stops before it.
+      if (limit === 1) break;
+      single = PAGE;
+      continue;
+    }
+    single = Math.max(0, single - 1);
+    cards.push(...page.value.records);
+    bytes += page.value.bytes;
+    if (page.value.cursor === undefined)
+      return { kind: "ok", value: { cards: cards.slice(0, MAX_CARDS), complete: cards.length <= MAX_CARDS } };
+    cursor = page.value.cursor;
+    // One page past MAX_CARDS is read, so exactly MAX_CARDS cards still end with an empty last page and count as all.
+    if (cards.length > MAX_CARDS || bytes > MAX_BYTES) break;
+  }
+  return partial(cards);
+}
+
+const partial = (cards: readonly StoredCard[]): PdsResult<CardList> => ({
+  kind: "ok",
+  value: { cards: cards.slice(0, MAX_CARDS), complete: false },
+});
 
 /** Creates a card; the PDS picks its key (a TID). Not retried: a retry could create it twice. */
 export function createCardRecord(

@@ -3,6 +3,7 @@
 
 export {
   CARD_COLLECTION,
+  type CardList,
   createCardRecord,
   deleteCardRecord,
   listCardRecords,
