@@ -92,6 +92,42 @@ describe("parseReadme", () => {
   });
 });
 
+describe("parseReadme, review findings on #1648", () => {
+  test("a heading line of any length parses in linear time", () => {
+    const line = `## a${" ".repeat(90_000)}b`;
+    const started = performance.now();
+    const [block] = parseReadme(line);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(block).toMatchObject({ kind: "heading", level: 2 });
+  });
+
+  test("trailing hashes are a closing sequence only after a space", () => {
+    expect(parseReadme("## C#")).toEqual([{ kind: "heading", level: 2, children: [{ kind: "text", text: "C#" }] }]);
+    expect(parseReadme("## Title ##")).toEqual([
+      { kind: "heading", level: 2, children: [{ kind: "text", text: "Title" }] },
+    ]);
+    expect(parseReadme("#")).toEqual([{ kind: "heading", level: 1, children: [] }]);
+  });
+
+  test("a link destination keeps balanced parentheses", () => {
+    const [block] = parseReadme("[wiki](https://en.wikipedia.org/wiki/Function_(mathematics)) after");
+    expect(block).toMatchObject({
+      kind: "paragraph",
+      children: [
+        { kind: "link", href: "https://en.wikipedia.org/wiki/Function_(mathematics)" },
+        { kind: "text", text: " after" },
+      ],
+    });
+  });
+
+  test("a longer fence holds a shorter one as code", () => {
+    expect(parseReadme("````\n```js\nx\n```\n````\nafter")).toEqual([
+      { kind: "code", text: "```js\nx\n```" },
+      { kind: "paragraph", children: [{ kind: "text", text: "after" }] },
+    ]);
+  });
+});
+
 describe("Readme", () => {
   test("headings sit under the card's own heading", () => {
     expect(html("# A\n\n## B\n\n### C")).toBe("<h3>A</h3><h4>B</h4><h5>C</h5>");

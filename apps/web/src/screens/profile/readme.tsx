@@ -25,8 +25,9 @@ const MAX_BLOCKS = 2_000;
 const MAX_DEPTH = 3;
 
 const WEB = ["http:", "https:"] as const;
-const FENCE = /^\s{0,3}(```|~~~)/;
-const HEADING = /^\s{0,3}(#{1,6})(?:\s+(.*?))?\s*#*\s*$/;
+const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
+/** Only the opening marks: the rest of the line is scanned, so no member-written line can make the match backtrack. */
+const HEADING_START = /^ {0,3}(#{1,6})(?=[ \t]|$)/;
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 const BULLET = /^\s{0,3}[-*+]\s+(.*)$/;
 const ORDERED = /^\s{0,3}\d{1,9}[.)]\s+(.*)$/;
@@ -60,11 +61,29 @@ function takeAutolink(text: string, i: number): Taken | null {
   return { node: { kind: "link", href, children: [{ kind: "text", text: href }] }, next: i + match[0].length };
 }
 
+/**
+ * Where a link destination ends: the ")" that balances its parentheses, a backslash escaping the next character
+ * (CommonMark 0.31.2, "Links"). -1 when none does.
+ */
+function destinationEnd(text: string, from: number): number {
+  let open = 0;
+  for (let j = from; j < text.length; j += 1) {
+    const ch = text[j];
+    if (ch === "\\") j += 1;
+    else if (ch === "(") open += 1;
+    else if (ch === ")") {
+      if (open === 0) return j;
+      open -= 1;
+    }
+  }
+  return -1;
+}
+
 function takeLink(text: string, i: number, depth: number): Taken | null {
   if (text[i] !== "[") return null;
   const labelEnd = text.indexOf("](", i + 1);
   if (labelEnd === -1 || text.slice(i + 1, labelEnd).includes("[")) return null;
-  const urlEnd = text.indexOf(")", labelEnd + 2);
+  const urlEnd = destinationEnd(text, labelEnd + 2);
   const url = urlEnd === -1 ? "" : text.slice(labelEnd + 2, urlEnd);
   const href = url === "" || /\s/.test(url) ? null : safeHref(url, WEB);
   if (href === null) return null;
@@ -115,7 +134,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
 const startsBlock = (line: string) =>
   line.trim() === "" ||
   FENCE.test(line) ||
-  HEADING.test(line) ||
+  HEADING_START.test(line) ||
   RULE.test(line) ||
   BULLET.test(line) ||
   ORDERED.test(line) ||
@@ -132,11 +151,34 @@ function run(lines: readonly string[], at: number, pattern: RegExp): { items: st
   return { items, next: i };
 }
 
+/**
+ * A closing fence: only the opening fence's character, at least as many times, and spaces (CommonMark 0.31.2,
+ * "Fenced code blocks"), so a longer fence can show a shorter one.
+ */
+function closesFence(line: string, fence: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.length >= fence.length && [...trimmed].every((ch) => ch === fence[0]);
+}
+
 /** A fenced code block; an unclosed fence runs to the end of the text, as CommonMark says. */
 function takeFence(lines: readonly string[], i: number, fence: string): { block: Block; next: number } {
-  const close = lines.findIndex((l, j) => j > i && l.trim().startsWith(fence));
+  const close = lines.findIndex((l, j) => j > i && closesFence(l, fence));
   const end = close === -1 ? lines.length : close;
   return { block: { kind: "code", text: lines.slice(i + 1, end).join("\n") }, next: end + 1 };
+}
+
+/**
+ * A heading's text without its optional closing hashes, which count only after a space or tab (CommonMark 0.31.2,
+ * "ATX headings"): "## C#" keeps its hash. One pass from the end, so linear in the line.
+ */
+function headingText(rest: string): string {
+  const text = rest.trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "#") end -= 1;
+  if (end === text.length) return text;
+  if (end === 0) return "";
+  const before = text[end - 1];
+  return before === " " || before === "\t" ? text.slice(0, end).trim() : text;
 }
 
 function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
@@ -144,10 +186,11 @@ function takeBlock(lines: readonly string[], i: number): { block: Block | null; 
   if (line.trim() === "") return { block: null, next: i + 1 };
   const fence = FENCE.exec(line)?.[1];
   if (fence !== undefined) return takeFence(lines, i, fence);
-  const heading = HEADING.exec(line);
+  const heading = HEADING_START.exec(line);
   if (heading !== null) {
     const level = Math.min((heading[1] ?? "#").length, 3) as 1 | 2 | 3;
-    return { block: { kind: "heading", level, children: parseInline(heading[2] ?? "") }, next: i + 1 };
+    const text = headingText(line.slice(heading[0].length));
+    return { block: { kind: "heading", level, children: text === "" ? [] : parseInline(text) }, next: i + 1 };
   }
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
   for (const [pattern, ordered] of [
