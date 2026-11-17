@@ -78,12 +78,13 @@ export function parseCardKey(raw: unknown): CardKey | null {
   return /^[A-Za-z0-9._:~-]{1,512}$/.test(raw) ? (raw as CardKey) : null;
 }
 
-/** A published address: one @, no spaces or brackets, a dot in the domain, at most the lexicon's 254 bytes. */
+/**
+ * A published address of plain characters only: letters, digits and . _ + - before the @, dot-separated labels of
+ * letters, digits and - after it, at most the lexicon's 254 bytes. Nothing that means something in a mailto: URL
+ * (? & = # %) can pass, so a stored address can never add headers or recipients to the link (RFC 6068 section 2).
+ */
 export function isEmailAddress(value: string): boolean {
-  return (
-    bytes(value) <= LIMITS.section.emailBytes &&
-    /^[^\s@<>()[\]",;:\\]+@[^\s@<>()[\]",;:\\]+\.[^\s@<>()[\]",;:\\.]+$/.test(value)
-  );
+  return bytes(value) <= LIMITS.section.emailBytes && /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(value);
 }
 
 function readButton(value: unknown): CardButton | null {

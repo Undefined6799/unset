@@ -55,6 +55,10 @@ describe("parseCardInput", () => {
     [{ kind: "links", items: [{ uri: "javascript:alert(1)" }] }, "card.url_invalid"],
     [{ kind: "links", items: [{ uri: "https://a@b.example" }] }, "card.url_invalid"],
     [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b" }] }, "card.email_invalid"],
+    [
+      { kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b.example?bcc=c@d.example" }] },
+      "card.email_invalid",
+    ],
     [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "link", preset: "tip", uri: "x.example" }] }, "card.invalid"],
     [{ kind: "links", items: "x" }, "card.invalid"],
     [{ kind: "links", layout: "masonry", items: [] }, "card.invalid"],

@@ -121,6 +121,19 @@ describe("readCard", () => {
   });
 });
 
+describe("email buttons", () => {
+  test.each([
+    "name@host.tld?bcc=someone@else.example",
+    "a&b@x.example",
+    "a%0Ab@x.example",
+    "a@x.example#x",
+    "a=b@x.example",
+  ])("an address with mailto meaning is dropped on read: %s", (address) => {
+    const card = stored({ $type: ref("buttons"), heading: "Hi", buttons: [{ $type: ref("emailButton"), address }] });
+    expect(readCard(key(KEY), card)?.content).toMatchObject({ buttons: [] });
+  });
+});
+
 describe("orderCards", () => {
   const card = (k: string, createdAt: string): Card => ({
     key: key(k),
