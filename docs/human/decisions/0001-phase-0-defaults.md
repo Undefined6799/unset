@@ -602,3 +602,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0051](0051-profile-cards-lexicon.md)):** the minimal `sh.unset.profile` and one `sh.unset.section` record per
   card, with the one-time replacement of the published `sh.unset.profile` snapshot that he allowed in the same
   message. ADR 0037 decisions 4, 5, 8 and the README half of 7 are superseded.
+- **ADR 0053 accepted (Alex, 2026-11-17 13:51:50Z, against 2422ebf; own record:
+  [0053](0053-queue-members-for-the-index-at-onboarding-end.md)):** members are queued for the index when their
+  onboarding ends, in `idx.track_request`. The clause "(`app.track_request`, filled by the sign-in callback)" of ADR
+  0052 decision 3 is superseded.

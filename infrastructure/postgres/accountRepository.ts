@@ -85,13 +85,20 @@ export function createAccountRepository(pool: Pool, options: AccountRepositoryOp
       return onboarding === "chat" || onboarding === "done" ? onboarding : null;
     },
     async finishChat(did, deadline) {
-      const { rows } = await write(deadline, (tx) =>
-        tx.query(
+      return write(deadline, async (tx) => {
+        const { rows } = await tx.query(
           "UPDATE app.account SET onboarding = 'done' WHERE did = $1 AND onboarding = 'chat' RETURNING onboarding",
           [did],
-        ),
-      );
-      return rows.length === 1;
+        );
+        if (rows.length !== 1) return false;
+        // The member is now 16 or over and has accepted the terms and privacy notice, so the indexer may track them
+        // (migration 0026; book P3.02s). In this transaction: a failed finish queues nothing. `web` may only insert
+        // into the queue, so a repeat is a no-op that reads nothing back.
+        await tx.query("INSERT INTO idx.track_request (did, requested_at) VALUES ($1, now()) ON CONFLICT DO NOTHING", [
+          did,
+        ]);
+        return true;
+      });
     },
     async blockUnderage(did, hosted, deadline) {
       return write(deadline, async (tx) => {

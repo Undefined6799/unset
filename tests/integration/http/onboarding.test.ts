@@ -1,4 +1,5 @@
 // P2.12: the account row against Postgres as web. The birth date never reaches a parameter, so the row cannot hold it.
+// P3.02s: finishing onboarding queues the member for the indexer (migration 0026), read back as indexer.
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { createAccountRepository, createPool, withClient } from "@unset/infrastructure-postgres";
@@ -13,7 +14,13 @@ const pool = createPool({
   max: 2,
   connectTimeoutMs: 5000,
 });
-afterAll(() => pool.end());
+const indexer = createPool({
+  connection: { host: provided.host, port: provided.port, ...provided.roles.indexer, database, ssl: false },
+  service: "onboarding-indexer",
+  max: 1,
+  connectTimeoutMs: 5000,
+});
+afterAll(() => Promise.all([pool.end(), indexer.end()]));
 
 const did = (text: string): Did => {
   const parsed = parseDid(text);
@@ -95,4 +102,52 @@ test("age.audit_failure_rolls_block_back", async () => {
   const appended = await store.blockUnderage(did, false, AbortSignal.timeout(5_000));
   expect(appended).not.toBeNull();
   expect(await accountRows()).toEqual([{ onboarding: "blocked_underage" }]);
+});
+
+const queued = () =>
+  withClient(indexer, null, async (db) => {
+    const { rows } = await db.query<{ did: string }>("SELECT did FROM idx.track_request ORDER BY did");
+    return rows.map((row) => row.did);
+  });
+
+/** The SQLSTATE `sql` fails with as the role behind `on`, or "ran". */
+async function sqlState(on: typeof pool, sql: string, values: unknown[] = []): Promise<string> {
+  try {
+    await withClient(on, null, (db) => db.query(sql, values));
+  } catch (error) {
+    let at: unknown = error;
+    while (at instanceof Error && (at as { code?: unknown }).code === undefined && at.cause !== undefined)
+      at = at.cause;
+    return String((at as { code?: unknown }).code);
+  }
+  return "ran";
+}
+
+test("track.only_a_finished_onboarding_queues_the_member", async () => {
+  const deadline = () => AbortSignal.timeout(5_000);
+  // The tests above left ADULT and MOVED at the terms step and CHILD blocked: nobody is queued.
+  expect(await queued()).toEqual([]);
+  expect(await store.finishChat(ADULT, deadline())).toBe(false);
+  expect(await store.acceptTerms(ADULT, "2026-10-17", "2026-10-17", deadline())).toBe("chat");
+  expect(await queued()).toEqual([]);
+
+  expect(await store.finishChat(ADULT, deadline())).toBe(true);
+  expect(await queued()).toEqual([ADULT]);
+  // A repeat finishes nothing and queues nothing more; a blocked account never reaches the queue.
+  expect(await store.finishChat(ADULT, deadline())).toBe(false);
+  expect(await store.finishChat(CHILD, deadline())).toBe(false);
+  expect(await queued()).toEqual([ADULT]);
+});
+
+test("track.grant_web_insert_only", async () => {
+  // web adds rows and nothing else; indexer reads and deletes and cannot add (42501: insufficient_privilege).
+  expect(await sqlState(pool, "SELECT did FROM idx.track_request")).toBe("42501");
+  expect(await sqlState(pool, "UPDATE idx.track_request SET requested_at = now()")).toBe("42501");
+  expect(await sqlState(pool, "DELETE FROM idx.track_request WHERE did = $1", [ADULT])).toBe("42501");
+  const add = "INSERT INTO idx.track_request (did, requested_at) VALUES ($1, now())";
+  expect(await sqlState(indexer, add, [MOVED])).toBe("42501");
+  expect(await sqlState(indexer, "UPDATE idx.track_request SET requested_at = now()")).toBe("42501");
+  expect(await queued()).toEqual([ADULT]);
+  expect(await sqlState(indexer, "DELETE FROM idx.track_request WHERE did = $1", [ADULT])).toBe("ran");
+  expect(await queued()).toEqual([]);
 });
