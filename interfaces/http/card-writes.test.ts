@@ -64,6 +64,14 @@ describe("cardWrites", () => {
     ]);
   });
 
+  test("a member with the most cards a page shows cannot add another", async () => {
+    const full = Array.from({ length: 100 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
+    const { writes, calls } = store({ list: async () => ok(full) });
+    const { content, width } = input();
+    expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.too_many" });
+    expect(calls.created).toEqual([]);
+  });
+
   test("an edit is built over the stored card and saved under its key", async () => {
     const { writes, calls } = store();
     const { content, width } = input("New");

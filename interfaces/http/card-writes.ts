@@ -2,6 +2,7 @@
 // PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
 // the session's DID in the composition root, so no write here can reach another member's repo.
 import {
+  CARDS_MAX,
   type CardContent,
   type CardError,
   type CardKey,
@@ -34,7 +35,13 @@ export type CardStore = {
   ) => Promise<PdsResult<SaveOutcome<ProfileError>>>;
 };
 
-export type CardFailure = CardError | ProfileError | "card.missing" | "card.conflict" | "card.pds_unavailable";
+export type CardFailure =
+  | CardError
+  | ProfileError
+  | "card.missing"
+  | "card.too_many"
+  | "card.conflict"
+  | "card.pds_unavailable";
 export type CardWrite =
   | { readonly kind: "saved" }
   | { readonly kind: "failed"; readonly code: CardFailure }
@@ -65,9 +72,15 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
   };
 
   return {
+    // The page reads CARDS_MAX cards, so one past it would be stored and never shown. Counted before the write with no
+    // lock (DA-4): two tabs adding at once could both pass and store one more, which the page then leaves out until a
+    // card is deleted; a member editing their own page makes that rare, and nothing is lost.
     create: async (content, width) => {
       const built = toCardRecord(content, width, null, now());
       if (!built.ok) return failed(built.code);
+      const listed = await store.list();
+      if (listed.kind !== "ok") return pdsFailure(listed);
+      if (listed.value.length >= CARDS_MAX) return failed("card.too_many");
       const created = await store.create(built.record);
       return created.kind === "ok" ? SAVED : pdsFailure(created);
     },

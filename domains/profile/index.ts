@@ -3,6 +3,7 @@
 
 export { type CardRecord, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
 export {
+  CARDS_MAX,
   type Card,
   type CardButton,
   type CardContent,

@@ -13,10 +13,12 @@ import type { CardWrite, CardWrites } from "../card-writes.ts";
 
 const JSON_TYPE = "application/json";
 /**
- * The largest card the lexicon allows, as JSON, with room to spare: a collection of 100 entries, each with a 2000-byte
- * address and its text fields at four bytes a grapheme, is under 400 KiB.
+ * The largest card the lexicon allows, as JSON. A collection is the largest: a 1,000-byte title and 100 entries of
+ * 4,600 bytes of text (title, tag, description) and a 2,000-byte address. JSON escaping adds at most five bytes a
+ * grapheme (a control character becomes \u00XX; addresses need none), so the title is at most 1,500 bytes and an
+ * entry 8,900: about 896 KB with the keys, which 1 MiB holds.
  */
-export const CARD_BODY_LIMIT_BYTES = 512 * 1024;
+export const CARD_BODY_LIMIT_BYTES = 1024 * 1024;
 
 export type CardDeps = {
   /** The writes bound to this member's own repo and this request's deadline. */

@@ -58,6 +58,8 @@ export type CardError =
 export type Failed = { readonly ok: false; readonly code: CardError };
 
 export const NSID = "sh.unset.section";
+/** The most cards a member keeps: the profile's `cards` order holds this many, and the page reads this many. */
+export const CARDS_MAX = LIMITS.profile.cardsMax;
 const KINDS: readonly CardKind[] = ["readme", "links", "collection", "buttons"];
 export const WIDTHS: readonly CardWidth[] = ["full", "half"];
 export const LAYOUTS: readonly CardLayout[] = ["list", "carousel", "grid"];
