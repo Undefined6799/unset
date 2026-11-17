@@ -47,6 +47,9 @@
       "path": "../../shared/islands"
     },
     {
+      "path": "../../shared/lexicons"
+    },
+    {
       "path": "../../shared/log"
     },
     {
