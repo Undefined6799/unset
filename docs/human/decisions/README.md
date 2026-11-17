@@ -58,3 +58,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0048](0048-session-issuer-origin.md) | The session row records the sign-in server's origin, so account pages stop unsealing the token set for a link (P2.03n) | Accepted 2026-11-15 |
 | [0049](0049-sessions-end-with-their-token-set.md) | A browser session ends with its token set, enforced by a foreign key with ON DELETE CASCADE (P2.03t) | Accepted 2026-11-16 |
 | [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
+| [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17 |
