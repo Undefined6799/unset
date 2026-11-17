@@ -1,6 +1,14 @@
 // The atproto network behind small contracts (guideline §1): the identity domain's DID and handle lookups, and the one
 // OAuth client (P2.04) with its keys, metadata and scope check, and the start and end of a sign-in (P2.05, P2.06).
 
+export {
+  CARD_COLLECTION,
+  createCardRecord,
+  deleteCardRecord,
+  listCardRecords,
+  type StoredCard,
+  saveCardRecord,
+} from "./card-records.ts";
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
 export {
   ClientKeys,
