@@ -49,6 +49,14 @@ may gain members. So a field we are unsure of is left out now and added later at
 - Nothing new is stored on our side: profile and cards live in the member's PDS, so erasure and export stay the PDS's
   account deletion and repository export.
 
+## Compliance
+`shared/lexicons/src/limits.test.ts` holds one record at each limit and one past it for both schemas, and proves the
+card union is open (`an_unknown_card_kind_is_valid_since_the_union_is_open`) and the retired profile fields gone
+(`retired_profile_fields_are_gone_from_the_schema`). `shared/lexicons/scripts/breaking-check.ts` compares
+`schemas/` with `published/` on every pull request, so after this one any removal, rename or limit change fails CI.
+`domains/profile/profile.test.ts` keeps app limits at or under the lexicon's. Acceptance is Alex's line on the pull
+request that adds this record; ADR 0001 notes the proposal at its end.
+
 ## Alternatives
 - **Keep the published profile and deprecate fields.** Safe, but seven dead fields forever. Rejected while nothing is
   published.
