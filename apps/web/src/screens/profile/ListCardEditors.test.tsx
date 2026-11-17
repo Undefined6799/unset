@@ -100,4 +100,9 @@ describe("buttons editor", () => {
     expect(form?.querySelector('input[name="heading"]')?.hasAttribute("required")).toBe(true);
     expect(fields(form).filter((f) => f.endsWith(".address="))).toHaveLength(2);
   });
+
+  test("the hint says a button is removed only when its addresses and its own text are all empty", () => {
+    const form = addForm(page({ profile, cards: [], cardEditLimits: limits }), "buttons");
+    expect(form?.textContent).toContain("Leave a button's email address, web address and own text empty to remove it.");
+  });
 });
