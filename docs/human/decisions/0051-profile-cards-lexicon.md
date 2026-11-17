@@ -1,6 +1,9 @@
 # 0051 — The profile is a minimal record plus one card record per card
 
-Status: Proposed (awaiting Alex). It supersedes these parts of ADR 0037, and nothing else in it:
+Status: Accepted by Alex, 2026-11-17 05:17:25Z, against 90acb64 (his line "Accept ADR 0051 at 90acb64", typed in
+the profile cards thread after the coordinator's review of that head, with "Allow a one-time replacement of the
+published sh.unset.profile snapshot at 90acb64"). The only changes since that head are this status paragraph, the
+index row's status and the ADR 0001 acceptance line. It supersedes these parts of ADR 0037, and nothing else in it:
 - Decision 4 (the README as typed blocks edited with BlockNote) and decision 5 (BlockNote loading on the owner's page).
 - The README half of decision 7 (`POST /profile/readme`) and decision 8 (keeping a README stored as markdown).
 
