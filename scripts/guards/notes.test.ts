@@ -69,6 +69,18 @@ describe("header", () => {
   test("notes_header_missing_field", () => failsFor("notes-header", change(PITFALL, /^importance: high\n/m, "")));
   test("notes_header_area_not_listed", () =>
     failsFor("notes-header", change(AREA, 'areas: ["[[identity]]"]', 'areas: ["[[identity]]", "[[billing]]"]')));
+  test("notes_header_lists_every_existing_area_folder", () => {
+    // docs/ai/README.md: a new area is listed when its folder is created (#1523).
+    for (const area of ["profile", "session", "host-pin", "log"]) {
+      const listed = change(AREA, 'areas: ["[[identity]]"]', `areas: ["[[identity]]", "[[${area}]]"]`);
+      const tagged = change(AREA, "tags: [area, identity]", `tags: [area, identity, ${area}]`);
+      const root = vault((files) => {
+        listed(files);
+        tagged(files);
+      });
+      expect(errorsOf(root), area).toEqual([]);
+    }
+  });
   test("notes_header_shapes", () => {
     const good = readFileSync(join(GOOD, PITFALL), "utf8");
     const bad = (from: string | RegExp, to: string) => parseNote(PITFALL, good.replace(from, to));
