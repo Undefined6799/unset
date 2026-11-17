@@ -165,6 +165,34 @@ describe("toCardRecord", () => {
     });
   });
 
+  test("an entry with no address keeps its fields only while all its own fields match", () => {
+    const collection = stored({
+      $type: ref("collection"),
+      layout: "grid",
+      items: [
+        { title: "Project A", note: "belongs to A" },
+        { title: "Project B", note: "belongs to B" },
+      ],
+    });
+    // Project A is deleted, so Project B moves into its place: it must not take A's note.
+    const removed = parsed({ kind: "collection", layout: "grid", items: [{ title: "Project B" }] });
+    const built = toCardRecord(removed.content, removed.width, collection, NOW);
+    expect(built.ok && (built.record.content as { items: object[] }).items[0]).not.toHaveProperty("note");
+    // Unchanged in place, it keeps its own.
+    const same = parsed({
+      kind: "collection",
+      layout: "grid",
+      items: [{ title: "Project A" }, { title: "Project B" }],
+    });
+    const kept = toCardRecord(same.content, same.width, collection, NOW);
+    expect(kept.ok && kept.record.content).toMatchObject({
+      items: [
+        { title: "Project A", note: "belongs to A" },
+        { title: "Project B", note: "belongs to B" },
+      ],
+    });
+  });
+
   test("changing a card's kind drops the old content's unknown fields", () => {
     const existing = stored({ $type: ref("readme"), text: "old", mood: "calm" });
     const { content, width } = parsed({ kind: "links", items: [] });

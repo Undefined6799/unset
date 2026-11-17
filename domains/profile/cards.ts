@@ -163,15 +163,21 @@ export function orderCards(order: unknown, cards: readonly Card[]): Card[] {
     listed.push(card);
     byKey.delete(raw);
   }
-  const rest = [...byKey.values()].sort((a, b) => madeAt(a) - madeAt(b));
+  const rest = [...byKey.values()].sort(byMadeAt);
   return [...listed, ...rest];
 }
 
 /**
- * When a card was made, as an instant: lexicon datetimes may carry any offset and precision
- * (https://atproto.com/specs/lexicon#datetime), so their text does not sort. One that does not parse sorts last.
+ * Oldest first, by the instant each card was made: lexicon datetimes may carry any offset and precision
+ * (https://atproto.com/specs/lexicon#datetime), so their text does not sort. Date.parse stops at milliseconds, so
+ * within one millisecond the finer digits decide; offsets are whole minutes and never change them. A time that does
+ * not parse sorts last.
  */
-function madeAt(card: Card): number {
-  const instant = Date.parse(card.createdAt);
-  return Number.isNaN(instant) ? Number.POSITIVE_INFINITY : instant;
+function byMadeAt(a: Card, b: Card): number {
+  const [msA, msB] = [Date.parse(a.createdAt), Date.parse(b.createdAt)];
+  if (Number.isNaN(msA) || Number.isNaN(msB)) return Number(Number.isNaN(msA)) - Number(Number.isNaN(msB));
+  return msA - msB || finerDigits(a.createdAt).localeCompare(finerDigits(b.createdAt));
 }
+
+/** The fraction's digits past the millisecond, padded so that they compare as text. */
+const finerDigits = (datetime: string) => (/\.\d{3}(\d*)/.exec(datetime)?.[1] ?? "").padEnd(16, "0");

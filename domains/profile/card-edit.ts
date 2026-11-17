@@ -214,9 +214,16 @@ const ELEMENT_FIELDS: readonly string[] = ["$type", "uri", "label", "description
 /** The list each kind keeps its elements in. */
 const ELEMENTS: Partial<Record<CardKind, string>> = { links: "items", collection: "items", buttons: "buttons" };
 
-/** An element stays the same one while its type and address stay: same place, same `$type`, same uri or address. */
-const sameElement = (old: Obj, next: Obj) =>
-  old.$type === next.$type && old.uri === next.uri && old.address === next.address;
+/**
+ * An element stays the same one while it keeps its place, its `$type` and its uri or address. One with neither (a
+ * collection entry may have no address) is the same only while every field this version writes is unchanged, so a
+ * deleted neighbour's fields never land on the entry that moves into its place.
+ */
+function sameElement(old: Obj, next: Obj): boolean {
+  const addressed = next.uri !== undefined || next.address !== undefined;
+  const fields = addressed ? ["$type", "uri", "address"] : ELEMENT_FIELDS;
+  return fields.every((field) => old[field] === next[field]);
+}
 
 /**
  * Each new element keeps the unknown fields of the stored element in the same place when it is the same one
