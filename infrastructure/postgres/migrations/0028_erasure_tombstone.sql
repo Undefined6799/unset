@@ -50,11 +50,17 @@ BEGIN
 END
 $$;
 
+-- The HMAC is computed first, on its own: inside EXISTS, PostgreSQL need not evaluate the WHERE at all (for example on
+-- an empty table), and then a missing key would read as "not erased" instead of raising.
 CREATE FUNCTION idx.is_erased(p_did types.did) RETURNS boolean
-  LANGUAGE sql STABLE SECURITY DEFINER
+  LANGUAGE plpgsql STABLE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
 AS $$
-  SELECT EXISTS (SELECT 1 FROM core.erased_did WHERE did_hmac = core.erased_did_hmac(p_did))
+DECLARE
+  v_hmac bytea := core.erased_did_hmac(p_did);
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM core.erased_did WHERE did_hmac = v_hmac);
+END
 $$;
 GRANT EXECUTE ON FUNCTION idx.is_erased(types.did) TO indexer;
 

@@ -250,7 +250,8 @@ describe("core.erase_did", () => {
   });
 
   test("no_key_fails_closed", async () => {
-    // A missing key must not read as "nobody was erased": both calls fail and nothing is written.
+    // A missing key must not read as "nobody was erased": both calls fail and nothing is written. The tombstones are
+    // emptied too, so a scan with no rows cannot skip computing the HMAC (EXISTS need not evaluate its WHERE).
     const codes = await withClient(migrator, null, async (c) => {
       const code = async (sql: string, values: unknown[]) => {
         await c.query("SAVEPOINT s");
@@ -266,6 +267,7 @@ describe("core.erase_did", () => {
       await c.query("BEGIN");
       try {
         await c.query("DELETE FROM core.tombstone_key");
+        await c.query("DELETE FROM core.erased_did");
         return [
           await code("SELECT idx.is_erased($1)", [X]),
           await code("SELECT core.erase_did($1, 'user_request')", [Y]),
