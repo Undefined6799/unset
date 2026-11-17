@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { parse } from "yaml";
 import { type AuditReport, auditProblems, MAX_DAYS } from "./npm-audit.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -75,7 +76,17 @@ describe("npm audit gate (P0.07i)", () => {
 
   test("npm_audit_ignore_file_valid", () => {
     const yaml = readFileSync(join(ROOT, ".github", "npm-audit-ignore.yaml"), "utf8");
+    // One high advisory per entry, at the entry's own package and first version, so every entry is matched and only
+    // its shape is judged; whether it matches the real lockfile is the audit job's question.
+    const entries = (parse(yaml) as { advisories: { id: string; package: string; versions: string[] }[] }).advisories;
+    const vulnerabilities = Object.fromEntries(
+      entries.map((e) => [
+        e.package,
+        { via: [{ ...advisory("high", e.id), name: e.package }], nodes: [`node_modules/${e.package}`] },
+      ]),
+    );
+    const installed = Object.fromEntries(entries.map((e) => [`node_modules/${e.package}`, e.versions[0]]));
     // "shape": the audit job itself still refuses an expired entry; this required unit test does not turn on a date.
-    expect(auditProblems(report(advisory("high")), yaml, INSTALLED, new Date(), "shape")).toEqual([]);
+    expect(auditProblems({ auditReportVersion: 2, vulnerabilities }, yaml, installed, new Date(), "shape")).toEqual([]);
   });
 });
