@@ -57,6 +57,8 @@ type World = {
   revokeThrows?: boolean;
   endThrows?: boolean;
   email?: EmailCache;
+  /** Our PDS's host, so the default shell's Sign in would open in place (page.ts). */
+  pdsHost?: string;
 };
 
 const sessionOf = (emailConfirmed: boolean | null): Session => ({
@@ -137,7 +139,7 @@ function setup(world: World = {}) {
     emailRecheckS: 900,
     unavailablePage: () => new Response("unavailable", { status: 200 }),
   };
-  const page = testPage(log);
+  const page = testPage(log, world.pdsHost);
   const server = createServer({
     config: CONFIG,
     routes: [
@@ -545,6 +547,35 @@ describe("signing out from onboarding", () => {
       const submit = elements(forms[0], "button", { type: "submit" });
       expect(submit.map(textContent), page.name).toEqual(["Sign out"]);
     }
+  });
+
+  test("welcome.held_step_offers_no_sign_in", async () => {
+    // P2.12j: the member is signed in, so the shell offers no Sign in: no header action, no sign-in box and its
+    // POST /login form, no footer link to /login. The blocked page has no session and keeps Sign in.
+    const terms: Row = { onboarding: "terms", termsVersion: null, privacyVersion: null, ageConfirmedAt: "confirmed" };
+    const chat: Row = { ...terms, onboarding: "chat", termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION };
+    const pages = [
+      { name: "age", row: null, path: "/welcome/age", init: undefined },
+      { name: "age confirm", row: null, path: "/welcome/age", init: post("day=1&month=1&year=2000") },
+      { name: "terms", row: terms, path: "/welcome/terms", init: undefined },
+      { name: "chat", row: chat, path: "/welcome/chat", init: undefined },
+    ];
+    for (const page of pages) {
+      const response = await setup({ row: page.row, pdsHost: "pds.unset.test" }).send(page.path, page.init);
+      expect(response.status, page.name).toBe(200);
+      const doc = parse(await response.text());
+      expect(elements(doc, "form", { action: "/login" }), page.name).toHaveLength(0);
+      expect(elements(doc, "a", { href: "/login" }), page.name).toHaveLength(0);
+      expect(elements(doc, "dialog"), page.name).toHaveLength(0);
+      // The bar is the brand alone, with no menu that would open onto nothing.
+      expect(elements(elements(doc, "header")[0], "details"), page.name).toHaveLength(0);
+    }
+    const blocked = await setup({
+      row: { onboarding: "blocked_underage", termsVersion: null, privacyVersion: null, ageConfirmedAt: null },
+      session: null,
+      pdsHost: "pds.unset.test",
+    }).send("/welcome/blocked");
+    expect(elements(parse(await blocked.text()), "a", { href: "/login" }).length).toBeGreaterThan(0);
   });
 });
 

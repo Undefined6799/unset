@@ -28,6 +28,8 @@ export type ShellOptions = Readonly<{
   feed?: true;
   /** Sign in opens in place (AppShellProps["signIn"]). */
   signIn?: NonNullable<AppShellProps["signIn"]>;
+  /** The page has a session: no Sign in (AppShellProps["signedIn"]). */
+  signedIn?: true;
   /** The footer's theme form, on app pages only. */
   prefs?: NonNullable<AppShellProps["prefs"]>;
 }>;
@@ -69,6 +71,7 @@ export function Document(props: {
         {...(shell.navigation === undefined ? {} : { navigation: shell.navigation })}
         {...(shell.feed === undefined ? {} : { feed: shell.feed })}
         {...(shell.signIn === undefined ? {} : { signIn: shell.signIn })}
+        {...(shell.signedIn === undefined ? {} : { signedIn: shell.signedIn })}
         {...(shell.prefs === undefined ? {} : { prefs: shell.prefs })}
       >
         {props.children}

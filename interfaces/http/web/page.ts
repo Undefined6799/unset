@@ -9,6 +9,7 @@
 // A feed page asks for `feed`, which drops the footer.
 // P2.05p: with our PDS's host, the default shell's Sign in opens the sign-in box over the page, returning to the
 // page's path (re-checked by safeReturnPath, never the query; none for home, which keeps sign-in's own default).
+// P2.12j: a route that holds a session says `signedIn`, and the default shell then offers no Sign in.
 import type { ShellOptions } from "@unset/apps-web";
 import { ERROR_MESSAGES, readErrorParam } from "@unset/shared-errors";
 import { type ErrorPage, type RouteGroup, safeReturnPath } from "@unset/shared-http";
@@ -42,7 +43,7 @@ export type PageSpec = {
   body: ReactNode;
   islands?: "off";
   /** Render inside the app shell; `noindex` also sends `X-Robots-Tag`. */
-  shell?: { noindex?: true; navigation?: ShellOptions["navigation"]; feed?: true };
+  shell?: { noindex?: true; navigation?: ShellOptions["navigation"]; feed?: true; signedIn?: true };
 };
 
 const ISLAND_ENV = { dev: "development", test: "test", prod: "production" } as const;
@@ -64,7 +65,7 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
       ? { theme: prefs.htmlAttrs["data-theme"] ?? ("system" as const), returnTo: pageReturnTo(url) }
       : undefined;
   const signIn =
-    deps.pdsHost === undefined || page.shell?.navigation !== undefined
+    deps.pdsHost === undefined || page.shell?.navigation !== undefined || page.shell?.signedIn === true
       ? undefined
       : { pdsHost: deps.pdsHost, next: url.pathname === "/" ? null : safeReturnPath(url.pathname) };
   const shell = page.shell && {
@@ -72,6 +73,7 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
     noindex,
     ...(page.shell.navigation === undefined ? {} : { navigation: page.shell.navigation }),
     ...(page.shell.feed === undefined ? {} : { feed: page.shell.feed }),
+    ...(page.shell.signedIn === undefined ? {} : { signedIn: page.shell.signedIn }),
     ...(signIn === undefined ? {} : { signIn }),
     ...(footerPrefs === undefined ? {} : { prefs: footerPrefs }),
   };
