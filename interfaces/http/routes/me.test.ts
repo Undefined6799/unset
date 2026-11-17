@@ -13,6 +13,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { appSessionGate } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
+import type { OwnProfile } from "../own-profile.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import { webTestEnv } from "../test-env.ts";
 import { elements, textContent } from "../web/fixtures/html.ts";
@@ -34,12 +35,15 @@ type World = {
   verdict?: HandleVerdict;
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
   issuer?: string | null | Error;
+  /** What the owner's own PDS read returns (own-profile.ts is tested on its own). */
+  own?: OwnProfile;
 };
 
 function setup(world: World = {}) {
   const checked: string[] = [];
   const openedPaths: string[] = [];
   const tokenSetReads: string[] = [];
+  const profileReads: string[] = [];
   const log = silentLog();
   const deps: AccountDeps = {
     open: async (_request, _deadline, next) => {
@@ -72,7 +76,10 @@ function setup(world: World = {}) {
   };
   const server = createServer({
     config: CONFIG,
-    routes: meRoutes(deps),
+    routes: meRoutes(deps, async (did) => {
+      profileReads.push(did);
+      return world.own ?? { kind: "ok", profile: null, cards: [] };
+    }),
     policies,
     log,
     gate: appSessionGate(deps.open),
@@ -84,7 +91,7 @@ function setup(world: World = {}) {
       }),
       "10.0.0.1",
     );
-  return { get, checked, openedPaths, tokenSetReads };
+  return { get, checked, openedPaths, tokenSetReads, profileReads };
 }
 
 describe("GET /:did", () => {
@@ -254,11 +261,12 @@ describe("GET /:did", () => {
   });
 
   test("me_guards_signed_out", async () => {
-    const { get, checked } = setup({ session: null });
+    const { get, checked, profileReads } = setup({ session: null });
     const response = await get();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: ACCOUNT_PATH })}`);
     expect(checked).toEqual([]);
+    expect(profileReads).toEqual([]);
   });
 
   test.each([
@@ -274,8 +282,48 @@ describe("GET /:did", () => {
     expect(checked).toEqual([]);
   });
 
+  test("me_shows_the_owner_profile_and_cards", async () => {
+    const own: OwnProfile = {
+      kind: "ok",
+      profile: { displayName: "Alice Example", headline: "Builds things", location: "", website: "" },
+      cards: [
+        {
+          key: "3k2a" as never,
+          width: "full",
+          createdAt: "2026-11-01T00:00:00.000Z",
+          content: { kind: "readme", text: "Hello from my **readme**" },
+        },
+      ],
+    };
+    const { get, profileReads } = setup({ own });
+    const response = await get();
+    expect(response.status).toBe(200);
+    const main = elements(parse(await response.text()), "main")[0];
+    expect(textContent(main)).toContain("Alice Example");
+    expect(textContent(main)).toContain("Builds things");
+    expect(elements(main, "strong").map(textContent)).toContain("readme");
+    expect(textContent(main)).not.toContain("Set up your profile");
+    expect(profileReads).toEqual([DID]);
+  });
+
+  test("me_keeps_the_page_when_the_profile_cannot_be_read", async () => {
+    const response = await setup({ own: { kind: "unavailable" } }).get();
+    expect(response.status).toBe(200);
+    const main = elements(parse(await response.text()), "main")[0];
+    expect(textContent(main)).toContain("We could not load your profile just now.");
+    expect(textContent(main)).not.toContain("Set up your profile");
+  });
+
+  test("me_sends_an_ended_pds_session_to_sign_in", async () => {
+    const location = "/login?error=login.session_ended";
+    const response = await setup({ own: { kind: "redirect", location } }).get();
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(location);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+
   test("another DID cannot expose the caller's account controls or resolve the target", async () => {
-    const { get, checked } = setup();
+    const { get, checked, profileReads } = setup();
     const response = await get(`/did:plc:${"b".repeat(24)}`);
     expect(response.status).toBe(404);
     const html = await response.text();
@@ -283,6 +331,7 @@ describe("GET /:did", () => {
     expect(html).not.toContain("alice.pds.unset.test");
     expect(html).not.toContain("/logout");
     expect(checked).toEqual([]);
+    expect(profileReads).toEqual([]);
   });
 
   test("a supported did:web is scoped to its owner", async () => {

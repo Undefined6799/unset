@@ -28,6 +28,8 @@ import {
   createIdentityNetwork,
   createOAuthClient,
   createPdsCall,
+  listCardRecords,
+  loadProfileRecord,
   respondToPdsFailure,
   type SavedSession,
   saveProfileRecord,
@@ -60,6 +62,7 @@ import { emailRefresh } from "./email-refresh.ts";
 import { startSweeps } from "./jobs/sweeps.ts";
 import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
+import { loadOwnProfile } from "./own-profile.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { homeRoutes } from "./routes/home.ts";
 import { legalRoutes } from "./routes/legal.ts";
@@ -346,7 +349,13 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     log,
   };
   const settings = settingsRoutes(accountDeps);
-  const me = meRoutes(accountDeps);
+  const me = meRoutes(accountDeps, (did, deadline, deadlineAt) => {
+    const ctx = { memo: new Map(), deadline, deadlineAt };
+    return loadOwnProfile(
+      { profile: () => loadProfileRecord(pds.pdsCall, ctx, did), cards: () => listCardRecords(pds.pdsCall, ctx, did) },
+      cfg.PDS_HOSTNAME,
+    );
+  });
   const profile = profileRoutes({
     saveProfile: async (did, fields, deadline, deadlineAt) => {
       const ctx = { memo: new Map(), deadline, deadlineAt };
