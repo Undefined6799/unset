@@ -4,6 +4,8 @@
 // call to action with the Edit profile link; the draft avatar and name ride P2.18 and P2.19, the real state P2.22.
 import { Avatar, Button, Card, Link, safeHref } from "@unset/shared-ui";
 import { PdsAccountLink } from "./PdsAccountLink.tsx";
+import { CardControls, ReadmeEditor } from "./profile/CardControls.tsx";
+import { CARD_EDIT } from "./profile/messages.ts";
 import { type CardView, ProfileCards } from "./profile/ProfileCards.tsx";
 import { SETTINGS } from "./settings/messages.ts";
 import { PrivacyNotice } from "./welcome/PrivacyNotice.tsx";
@@ -50,6 +52,32 @@ function SideColumn({ profile, handle }: { profile: NonNullable<MeProps["profile
 
 const EDIT_PROFILE = safeHref("/settings/profile", ["path"]);
 
+/** The owner's cards with their controls, and a new README at the end (ADR 0051). Needs a published profile. */
+function OwnCards({ did, cards }: { did: string; cards: readonly CardView[] }) {
+  const ownPage = safeHref(`/${did}`, ["path"]);
+  if (ownPage === null) return <ProfileCards cards={cards} />;
+  return (
+    <>
+      <ProfileCards
+        cards={cards}
+        controls={(index) => <CardControls cards={cards} index={index} ownPage={ownPage} />}
+      />
+      <ReadmeEditor
+        trigger={CARD_EDIT.addReadme}
+        title={CARD_EDIT.addReadme}
+        action="/cards"
+        label={CARD_EDIT.add}
+        text=""
+        width="full"
+        ownPage={ownPage}
+      />
+      <noscript>
+        <p>{CARD_EDIT.noScript}</p>
+      </noscript>
+    </>
+  );
+}
+
 export function Me(props: MeProps) {
   const { handle, did, handleUnavailable, privacyNotice = false, issuer, ours } = props;
   const profile = props.profile ?? null;
@@ -77,7 +105,7 @@ export function Me(props: MeProps) {
           </Link>
         </p>
       )}
-      <ProfileCards cards={props.cards ?? []} />
+      {profile === null ? <ProfileCards cards={props.cards ?? []} /> : <OwnCards did={did} cards={props.cards ?? []} />}
       {!setUp || EDIT_PROFILE === null ? null : (
         <Card
           eyebrow={SETTINGS.setUpEyebrow}
