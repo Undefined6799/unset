@@ -72,6 +72,66 @@ Notes. If Alex chooses otherwise, the book is revised before the affected step i
   owner switches; P3.20b audit viewer, reports and reconciliation; P3.20c the `ops` schema, health board and
   monitor.
 
+## P3.00 refinement for the own-PDS profile slice (2026-11-17)
+
+Status: partial P3.00 revision, scoped by Alex on 2026-11-17 in the thread "Build the indexer for public profiles"
+(card "Own PDS first", 05:06:16Z; card "Own small reader (no Tap yet)", 05:11:33Z). It refines only the steps that
+public `/@handle` pages need, for accounts on our own PDS. Every other Phase 3 step keeps its text and still waits for
+a full P3.00. Where this section and a step below disagree, this section wins for the slice; the step's text is not
+edited, so the full refinement can still read it. ADR 0052 records the reader decision.
+
+**Slice goal.** A visitor opens `/@handle` for a member hosted on our PDS and sees their profile and cards, rendered
+with zero JavaScript from `idx`, never from the PDS on request. Hidden, deactivated, deleted and erased accounts read
+as not found.
+
+**Steps in the slice, in build order** (one PR each; ids keep the book's numbers, a suffix marks the cut-down form):
+
+| Step | What it builds in the slice | Main change from the step text |
+|---|---|---|
+| P3.03s | migration 0025: `idx.account`, `mod.account_state`, `idx.visible_account`, `idx.account_job`, `idx.profile`, `idx.section`, `idx.record_blob`, `idx.dead_letter`, `idx.ingest_stat`, `idx.relay_cursor`; grants by column list; erasure rows; `core.erase_did` replaced to cover them | no `idx.post`, `idx.label`, `idx.purge_request` (no posts, labels or Tap purge yet); no Tap columns (`tap_instance`, `tracked_at` mean "backfilled from our PDS"); `idx.relay_cursor(source text PK, seq bigint NOT NULL, updated_at)` added (outcome C); `media` role and grants wait for P3.09; `idx.profile` columns follow ADR 0051's record (`display_name`, `listed` as `discoverable`, `avatar_cid`; no banner) |
+| P3.02s | `app.track_request` and the one insert in the sign-in callback; the track loop in `interfaces/indexer` | no Tap services, Tap env, firewall or `tap_edge`; routing: a DID whose PDS is ours is tracked and backfilled (`getRepo`, P3.05s); any other DID stays queued with reason `foreign_pds` and is not indexed (relay slice) |
+| P3.04s | invariant tests for the slice | only the rows for profile, section, account state, erasure and handles; Tap-specific tests (acks, frame hash, identity split) become cursor tests: `cursor-advances-only-with-commit`, `handler-failure-replays-from-cursor`, `outdated-cursor-triggers-rebackfill` |
+| P3.05s | `infrastructure/firehose/` (the `@atproto/sync` adapter, `getRepo` backfill verified with `@atproto/repo`) and `interfaces/indexer` ingest | outcome C: one serial stream, no lanes; the cursor is written in the event's transaction; a failure stops the stream and reconnects from the cursor (no in-process skip); `#account` events from our PDS map to the `account` part directly; config `INDEXER_ENABLED` (default off), `INDEXER_PDS_URL` (internal) |
+| P3.06s | account state machine for our PDS's events | unchanged rules; reactivation is still confirmed by `getRepoStatus` on our PDS before `pds_active` turns true |
+| P3.07s | tombstone and its key, `core.is_erased`, `core.erase_did` covering `idx` | no Tap untrack hook and no outbox until Tap or per-DID storage exists (0022's header already defers the object-store part) |
+| P3.08s | handle rule for hosted handles | only `verifyHandle` for our PDS's members; foreign hosts wait for the relay slice |
+| P3.12s | public `/@handle` in `interfaces/http`, rendering the profile and cards from `idx.visible_account` | no images until P3.09 (the media proxy): the page shows the avatar's fallback; card rendering reuses the cards views built by the "Build profile cards for staging" thread (PRs 1645 to 1647) |
+
+**Not in the slice:** P3.01 (no Tap; its measurements apply when Tap arrives), the public relay and `tap-relay`,
+P3.08k/P3.08d discovery (ADR 0040 stays as accepted, off), P3.09 media proxy, P3.10/P3.11 `api`, P3.13, P3.14, P3.15
+onward (reports, `pds-admin`, admin console).
+
+**Contract changes (for Alex):**
+1. Reader: `@atproto/sync` on our PDS's internal `subscribeRepos` instead of `tap-own` (ADR 0052). New runtime
+   dependencies `@atproto/sync` and `@atproto/repo`, pinned exactly, imported only in `infrastructure/firehose/`.
+2. New process `interfaces/indexer` with its own `indexer_egress` network (the shape of `web_egress`), reached only
+   through `net-guard`, for PLC and did:web lookups. It sits on `db` and the PDS's internal network; it is on no
+   network with `edge`, `newt` or the object store.
+3. Data model: the `idx` tables above, minus posts, labels and Tap columns, plus `idx.relay_cursor` (no DID). New
+   personal data is only what a member already published on their PDS (profile and card records, handle, status);
+   it is erased by `core.erase_did`. The privacy notice does not mention the index today ("What we hold" and the
+   retention table at version 2026-10-17), so P3.03s adds a RoPA row "Indexing members' public profiles" and the
+   notice gains one "What we hold" sentence and one retention row (until the record is deleted or the account is
+   erased). Whether that notice change needs a new version and re-consent is Alex's call before P3.03s merges.
+4. Members hosted elsewhere who sign in here are not indexed until the relay slice (their `/@handle` reads as not
+   found).
+5. Tap facts re-checked (book algorithm step 3) at indigo `a39b2f94d516d6d450b840bd4ca68cb7e3edaf4c`: the identity
+   directory's HTTP client now uses `ssrf.PublicOnlyTransport()` (`cmd/tap/tap.go:66-76`; the table's "unverified"
+   row is changed), the PLC client is unguarded, and the public-only dialer also refuses a private `HTTPS_PROXY`
+   (`util/ssrf/ssrf.go:95-138`), so P3.02's `egress-public` design does not work for Tap's repo fetches. P3.01's M17
+   would fail as written; the relay slice must design Tap's egress again.
+
+**Interfaces assumed, as merged (slice rows only):** `loadConfig` (`shared/config/load.ts`); `createLogger`
+(`shared/log/logger.ts`); `createServer`, `defineRoute` (`shared/http`); `createRateLimiter` (`shared/http`);
+`withTransaction` (`infrastructure/postgres/tx.ts`); `createNetGuard`, `guardedFetch`, `libraryFetch`, policies
+`atproto` and `plc` (`infrastructure/net-guard`); `createDidResolver`, `createHandleVerifier`, `parseDid`
+(`domains/identity`); `validateRecord`, `NSID` (`shared/lexicons`); `core.erase_did` (migration 0022, P3.07k);
+`appendAudit`, `verifyChain` (`infrastructure/audit`). There is no `ProfileView` on main; P3.12s uses the cards
+views from the profile cards thread. P1.18b's `egress-public` proxy was never built.
+
+**Review:** this section goes through the coordinator's review on the PR head; the two-reviewer round of the full
+P3.00 is still owed for the rest of the phase.
+
 ## Interfaces assumed from earlier phases
 
 These are the names this file builds on. P3.00 replaces each with what was actually merged.
