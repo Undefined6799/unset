@@ -35,12 +35,5 @@ export {
   type SessionInfo,
 } from "./pds-call.ts";
 export { isDpopNonceHandshake } from "./pds-errors.ts";
-export {
-  type BuiltRecord,
-  loadProfileRecord,
-  PROFILE_COLLECTION,
-  PROFILE_RKEY,
-  type SaveOutcome,
-  type StoredRecord,
-  saveProfileRecord,
-} from "./profile-record.ts";
+export { loadProfileRecord, PROFILE_COLLECTION, PROFILE_RKEY, saveProfileRecord } from "./profile-record.ts";
+export type { BuiltRecord, SaveOutcome, StoredRecord } from "./repo-record.ts";
