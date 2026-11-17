@@ -18,6 +18,7 @@
     "@unset/shared-errors": "*",
     "@unset/shared-http": "*",
     "@unset/shared-islands": "*",
+    "@unset/shared-lexicons": "*",
     "@unset/shared-log": "*",
     "@unset/shared-ui": "*",
     "react": "19.3.1"

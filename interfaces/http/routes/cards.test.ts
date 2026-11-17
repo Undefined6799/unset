@@ -134,6 +134,36 @@ describe("card routes", () => {
     ]);
   });
 
+  test("a list card's form rows reach the same parser as a JSON body", async () => {
+    const { post, calls } = setup();
+    const type = "application/x-www-form-urlencoded";
+    const form = new URLSearchParams([
+      ["kind", "links"],
+      ["title", "Elsewhere"],
+      ["items.0.uri", "a.example"],
+      ["items.0.label", "A"],
+      ["items.1.uri", ""],
+      ["items.2.uri", "b.example"],
+    ]).toString();
+    expect((await post("/cards/3k2abc", form, { type })).status).toBe(303);
+    expect(calls.map((c) => [c.op, ...c.args])).toEqual([
+      [
+        "save",
+        "3k2abc",
+        {
+          kind: "links",
+          title: "Elsewhere",
+          layout: "list",
+          items: [
+            { uri: "https://a.example", label: "A", description: "" },
+            { uri: "https://b.example", label: "", description: "" },
+          ],
+        },
+        "full",
+      ],
+    ]);
+  });
+
   test("a form field sent twice, or one the form does not hold, is refused before any write", async () => {
     const { post, calls } = setup();
     const type = "application/x-www-form-urlencoded";
