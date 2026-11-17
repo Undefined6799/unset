@@ -35,9 +35,11 @@ awaits our handler per event when no runner is set. `@atproto/identity` 0.5.23 (
    `Firehose` (no runner: events are handled one at a time, in order). `@atproto/sync` and `@atproto/repo` are pinned
    exactly and imported only in `infrastructure/firehose/` (one adapter folder, enforced by dependency-cruiser like
    the other vendor SDKs).
-2. Every outbound HTTP call the reader makes (PLC and did:web resolution for commit verification, `getRepo` for a
-   backfill) goes through `net-guard`, using the existing `atproto` policy and its own-PDS exception (P1.18a). The
-   WebSocket goes only to the configured internal PDS URL, never to a URL from the network. Like `web`, the indexer
+2. Every outbound HTTP call the reader makes goes through `net-guard`: PLC and did:web resolution for commit
+   verification with the existing `plc` and `atproto` policies, and `getRepo` for a backfill with an exact-origin
+   `internalPolicy` for the configured internal PDS URL (`INDEXER_PDS_URL`, plain http on port 3000 in the dev stack;
+   the `atproto` policy refuses plain http and ports other than 443 before its own-PDS exception, net-guard
+   `src/request.ts` `checkTarget`). The WebSocket goes only to the configured internal PDS URL, never to a URL from the network. Like `web`, the indexer
    gets one egress network of its own (`indexer_egress`, the shape of `web_egress`) that its code reaches only
    through `net-guard`; it is on no network with `edge`, `newt` or the object store.
 3. Only DIDs that signed in here are indexed: the track queue of book P3.02 (`app.track_request`, filled by the
