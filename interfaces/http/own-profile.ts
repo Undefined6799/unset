@@ -36,11 +36,12 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
   return {
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
-    cards: orderCards(cardOrder(record), checkedCards(cards.value)),
+    cards: orderCards(cardOrder(record), shownCards(cards.value)),
   };
 }
 
-function checkedCards(stored: readonly StoredCard[]): Card[] {
+/** The cards the owner's page shows: a key that is not a record key, or a card that does not read, is left out. */
+export function shownCards(stored: readonly StoredCard[]): Card[] {
   const cards: Card[] = [];
   for (const item of stored) {
     const key = parseCardKey(item.key);

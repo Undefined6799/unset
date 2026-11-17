@@ -274,6 +274,94 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/cards",
+    "group": "app",
+    "accepts": ["application/json"],
+    "bodyLimit": 524288,
+    "rateLimit": "profile",
+    "mutates": true,
+    "requiresSession": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf",
+      "session",
+      "rateLimitDid"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/cards/:key",
+    "group": "app",
+    "accepts": ["application/json"],
+    "bodyLimit": 524288,
+    "rateLimit": "profile",
+    "mutates": true,
+    "requiresSession": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf",
+      "session",
+      "rateLimitDid"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/cards/:key/delete",
+    "group": "app",
+    "accepts": ["application/json"],
+    "bodyLimit": 524288,
+    "rateLimit": "profile",
+    "mutates": true,
+    "requiresSession": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf",
+      "session",
+      "rateLimitDid"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/card-order",
+    "group": "app",
+    "accepts": ["application/json"],
+    "bodyLimit": 524288,
+    "rateLimit": "profile",
+    "mutates": true,
+    "requiresSession": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf",
+      "session",
+      "rateLimitDid"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/:did",
     "group": "app",

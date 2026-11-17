@@ -48,6 +48,17 @@ export const ERROR_CODES = {
   "profile.name_required": { status: 400, public: true },
   "profile.conflict": { status: 409, public: true },
   "profile.pds_unavailable": { status: 503, public: true },
+  // P2.20r, the card writes (ADR 0051). Shown to the editor, which posts in the background.
+  "card.invalid": { status: 400, public: true },
+  "card.kind_unknown": { status: 400, public: true },
+  "card.required": { status: 400, public: true },
+  "card.too_long": { status: 400, public: true },
+  "card.url_invalid": { status: 400, public: true },
+  "card.email_invalid": { status: 400, public: true },
+  "card.order_invalid": { status: 409, public: true },
+  "card.missing": { status: 404, public: true },
+  "card.conflict": { status: 409, public: true },
+  "card.pds_unavailable": { status: 503, public: true },
   // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.
   "welcome.date_invalid": { status: 400, public: true },
   "welcome.terms_required": { status: 400, public: true },
