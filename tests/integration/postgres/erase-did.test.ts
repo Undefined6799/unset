@@ -218,4 +218,63 @@ describe("core.erase_did", () => {
       "mod.account_state": 0,
     });
   });
+
+  test("the_tombstone_marks_only_the_erased_person", async () => {
+    // P3.07s (migration 0028): idx.is_erased answers for the indexer from a keyed HMAC, never the DID itself.
+    const erased = async (did: string) =>
+      withClient(as.indexer, null, async (c) => (await c.query("SELECT idx.is_erased($1) AS e", [did])).rows[0]?.e);
+    expect(await erased(X)).toBe(true);
+    expect(await erased(Y)).toBe(false);
+    // One row after two erasures of X, and no column of it holds the DID's text.
+    expect(lines("SELECT count(*) || ' ' || bool_and(length(did_hmac) = 32) FROM core.erased_did")).toEqual(["1 true"]);
+    expect(lines(`SELECT count(*) FROM core.erased_did t WHERE position('${X}' in t::text) > 0`)).toEqual(["0"]);
+  });
+
+  test("only_definers_read_the_tombstone", async () => {
+    for (const role of ROLES) {
+      for (const table of ["core.erased_did", "core.tombstone_key"]) {
+        expect(await refused(as[role], (c) => c.query(`SELECT 1 FROM ${table}`), `${role} ${table}`)).toBe("42501");
+      }
+      if (role !== "indexer") {
+        const call = (c: PoolClient) => c.query("SELECT idx.is_erased($1)", [X]);
+        expect(await refused(as[role], call, `${role} is_erased`)).toBe("42501");
+      }
+      const hmac = (c: PoolClient) => c.query("SELECT core.erased_did_hmac($1)", [X]);
+      expect(await refused(as[role], hmac, `${role} erased_did_hmac`)).toBe("42501");
+    }
+    // Replacing erase_did kept its grants: its owner and nobody else.
+    const grantees =
+      "SELECT string_agg(a.grantee::regrole::text, ',' ORDER BY 1) FROM pg_catalog.pg_proc p, " +
+      "aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.oid = 'core.erase_did(types.did, text)'::regprocedure";
+    expect(lines(grantees)).toEqual(["migrator"]);
+  });
+
+  test("no_key_fails_closed", async () => {
+    // A missing key must not read as "nobody was erased": both calls fail and nothing is written.
+    const codes = await withClient(migrator, null, async (c) => {
+      const code = async (sql: string, values: unknown[]) => {
+        await c.query("SAVEPOINT s");
+        try {
+          await c.query(sql, values);
+          return "ran";
+        } catch (error) {
+          return String((error as { code?: unknown }).code);
+        } finally {
+          await c.query("ROLLBACK TO SAVEPOINT s");
+        }
+      };
+      await c.query("BEGIN");
+      try {
+        await c.query("DELETE FROM core.tombstone_key");
+        return [
+          await code("SELECT idx.is_erased($1)", [X]),
+          await code("SELECT core.erase_did($1, 'user_request')", [Y]),
+        ];
+      } finally {
+        await c.query("ROLLBACK");
+      }
+    });
+    expect(codes).toEqual(["55000", "55000"]);
+    expect(lines("SELECT count(*) FROM core.tombstone_key")).toEqual(["1"]);
+  });
 });
