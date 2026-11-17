@@ -169,6 +169,9 @@ test("session_gate.return_path_comes_from_the_route_template", async () => {
   expect(await returnPath("GET", "/did")).toBe("/did");
   expect(await returnPath("GET", "/me")).toBe("/did");
   expect(await returnPath("POST", "/profile")).toBe("/did");
+  for (const route of ["/cards", "/cards/:key", "/cards/:key/delete", "/card-order"]) {
+    expect(await returnPath("POST", route)).toBe("/did");
+  }
   // The kit answers HEAD from the GET route (shared/http/server.ts), so a HEAD returns where its GET would.
   expect(await returnPath("HEAD", "/settings/account")).toBe("/settings/account");
   expect(await returnPath("HEAD", "/me")).toBe("/did");

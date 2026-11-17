@@ -24,7 +24,7 @@ const cfg = loadConfig(
 const { server } = await compose(cfg, web);
 
 /** A well-formed value per path parameter, so a gate is reached before any not-found; an unknown name fails. */
-const SAMPLE: Readonly<Record<string, string>> = { did: `did:plc:${"a".repeat(24)}`, file: "app.js" };
+const SAMPLE: Readonly<Record<string, string>> = { did: `did:plc:${"a".repeat(24)}`, file: "app.js", key: "3k2abc" };
 const pathOf = (template: string): string =>
   template.replace(/:(\w+)/g, (_, name: string) => {
     const value = SAMPLE[name];
@@ -39,7 +39,8 @@ async function signedOut(route: RouteInfo, n: number): Promise<Response> {
     host: new URL(cfg.PUBLIC_ORIGIN).host,
     "x-forwarded-for": `198.51.100.${n}`,
   };
-  if (post) Object.assign(headers, { origin: cfg.PUBLIC_ORIGIN, "content-type": "application/x-www-form-urlencoded" });
+  // Each POST sends a media type it accepts, so the kit's media-type check never answers before the gate.
+  if (post) Object.assign(headers, { origin: cfg.PUBLIC_ORIGIN, "content-type": route.accepts[0] });
   const request = new Request(`${cfg.PUBLIC_ORIGIN}${pathOf(route.path)}`, {
     method: route.method,
     headers,
@@ -76,5 +77,9 @@ test("declared_session_matches_the_handler", async () => {
     "POST /welcome/chat",
     "POST /verify-email/reconsent",
     "POST /profile",
+    "POST /cards",
+    "POST /cards/:key",
+    "POST /cards/:key/delete",
+    "POST /card-order",
   ]);
 });

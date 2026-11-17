@@ -25,13 +25,16 @@ import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
   completeAuthorization,
+  createCardRecord,
   createIdentityNetwork,
   createOAuthClient,
   createPdsCall,
+  deleteCardRecord,
   listCardRecords,
   loadProfileRecord,
   respondToPdsFailure,
   type SavedSession,
+  saveCardRecord,
   saveProfileRecord,
 } from "@unset/infrastructure-pds";
 import {
@@ -57,6 +60,7 @@ import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { type AppGate, appSessionGate, openApp, pdsUnavailablePage } from "./app-gate.ts";
+import { type CardStore, cardWrites } from "./card-writes.ts";
 import { type config, pdsIssuerOf } from "./config.ts";
 import { emailRefresh } from "./email-refresh.ts";
 import { startSweeps } from "./jobs/sweeps.ts";
@@ -64,6 +68,7 @@ import { policiesFor } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { loadOwnProfile } from "./own-profile.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { cardRoutes } from "./routes/cards.ts";
 import { homeRoutes } from "./routes/home.ts";
 import { legalRoutes } from "./routes/legal.ts";
 import { authorizationTarget, type LoginDeps, loginRoutes } from "./routes/login.ts";
@@ -368,6 +373,20 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
       return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
     },
   });
+  // ADR 0051: the owner's card writes, bound to the session's DID and the request's deadline.
+  const cards = cardRoutes({
+    writes: (did, deadline, deadlineAt) => {
+      const ctx = { memo: new Map(), deadline, deadlineAt };
+      const store: CardStore = {
+        list: () => listCardRecords(pds.pdsCall, ctx, did),
+        create: (record) => createCardRecord(pds.pdsCall, ctx, did, record),
+        save: (key, build) => saveCardRecord(pds.pdsCall, ctx, did, key, build),
+        remove: (key) => deleteCardRecord(pds.pdsCall, ctx, did, key),
+        saveProfile: (build) => saveProfileRecord(pds.pdsCall, ctx, did, build),
+      };
+      return cardWrites(store, cfg.PDS_HOSTNAME, () => new Date().toISOString());
+    },
+  });
   // P2.03s, P1.16w: expired sessions, abandoned sign-in states and one-time tokens a day past expiry are deleted
   // from the first boot on, then hourly. The
   // timer starts in `boot`, after the budget check, so composing alone still opens no connection.
@@ -406,6 +425,7 @@ export async function compose(cfg: WebConfig, web?: WebRender, standIns: StandIn
     ...verifyEmail,
     ...settings,
     ...profile,
+    ...cards,
     ...testPages,
     // The DID parameter route must follow every explicit app/public route.
     ...me,

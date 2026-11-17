@@ -134,7 +134,15 @@ export async function openApp(
 }
 
 /** Where sign-in returns when the refused route is not itself a page to come back to. */
-const RETURN_TO: Readonly<Record<string, string>> = { "/me": "/did", "/profile": "/did" };
+const RETURN_TO: Readonly<Record<string, string>> = {
+  "/me": "/did",
+  "/profile": "/did",
+  // The card writes (routes/cards.ts) return to the member's own page.
+  "/cards": "/did",
+  "/cards/:key": "/did",
+  "/cards/:key/delete": "/did",
+  "/card-order": "/did",
+};
 
 /**
  * The app gate as the server's session gate (ADR 0045): the kit runs it before every `session: "required"` handler.

@@ -1,0 +1,93 @@
+// The card writes behind the card routes (ADR 0051): create, edit, delete and reorder a member's cards on their own
+// PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
+// the session's DID in the composition root, so no write here can reach another member's repo.
+import {
+  type CardContent,
+  type CardError,
+  type CardKey,
+  type CardWidth,
+  type ProfileError,
+  reorderCards,
+  toCardRecord,
+  withCardOrder,
+} from "@unset/domains-profile";
+import {
+  type BuiltRecord,
+  type PdsResult,
+  respondToPdsFailure,
+  type SaveOutcome,
+  type StoredCard,
+} from "@unset/infrastructure-pds";
+import { shownCards } from "./own-profile.ts";
+
+/** The member's own card and profile records, already bound to their DID and this request's deadline. */
+export type CardStore = {
+  readonly list: () => Promise<PdsResult<StoredCard[]>>;
+  readonly create: (record: Readonly<Record<string, unknown>>) => Promise<PdsResult<{ readonly key: string }>>;
+  readonly save: (
+    key: CardKey,
+    build: (existing: unknown) => BuiltRecord<CardError>,
+  ) => Promise<PdsResult<SaveOutcome<CardError | "card.missing">>>;
+  readonly remove: (key: CardKey) => Promise<PdsResult<void>>;
+  readonly saveProfile: (
+    build: (existing: unknown) => BuiltRecord<ProfileError>,
+  ) => Promise<PdsResult<SaveOutcome<ProfileError>>>;
+};
+
+export type CardFailure = CardError | ProfileError | "card.missing" | "card.conflict" | "card.pds_unavailable";
+export type CardWrite =
+  | { readonly kind: "saved" }
+  | { readonly kind: "failed"; readonly code: CardFailure }
+  /** The PDS grant is gone or lacks a scope; the sign-in pages take over. */
+  | { readonly kind: "redirect"; readonly location: string };
+
+export type CardWrites = {
+  readonly create: (content: CardContent, width: CardWidth) => Promise<CardWrite>;
+  readonly save: (key: CardKey, content: CardContent, width: CardWidth) => Promise<CardWrite>;
+  readonly remove: (key: CardKey) => Promise<CardWrite>;
+  readonly reorder: (requested: unknown) => Promise<CardWrite>;
+};
+
+const SAVED: CardWrite = { kind: "saved" };
+const failed = (code: CardFailure): CardWrite => ({ kind: "failed", code });
+
+export function cardWrites(store: CardStore, pdsHost: string, now: () => string): CardWrites {
+  const pdsFailure = (result: Exclude<PdsResult<unknown>, { kind: "ok" }>): CardWrite => {
+    const response = respondToPdsFailure("POST", result, pdsHost);
+    return response.action === "redirect"
+      ? { kind: "redirect", location: response.location }
+      : failed("card.pds_unavailable");
+  };
+  const outcome = <C extends CardFailure>(result: PdsResult<SaveOutcome<C>>): CardWrite => {
+    if (result.kind !== "ok") return pdsFailure(result);
+    if (result.value.kind === "conflict") return failed("card.conflict");
+    return result.value.kind === "refused" ? failed(result.value.code) : SAVED;
+  };
+
+  return {
+    create: async (content, width) => {
+      const built = toCardRecord(content, width, null, now());
+      if (!built.ok) return failed(built.code);
+      const created = await store.create(built.record);
+      return created.kind === "ok" ? SAVED : pdsFailure(created);
+    },
+    save: async (key, content, width) =>
+      outcome(await store.save(key, (existing) => toCardRecord(content, width, existing, now()))),
+    remove: async (key) => {
+      const removed = await store.remove(key);
+      return removed.kind === "ok" ? SAVED : pdsFailure(removed);
+    },
+    // The order names the cards the page shows (own-profile.ts reads them the same way), so a hidden card never
+    // makes a correct order look stale. A card added in another tab meanwhile fails the check; the editor reloads.
+    reorder: async (requested) => {
+      const listed = await store.list();
+      if (listed.kind !== "ok") return pdsFailure(listed);
+      const order = reorderCards(
+        requested,
+        shownCards(listed.value).map((card) => card.key),
+      );
+      if (!order.ok) return failed(order.code);
+      return outcome(await store.saveProfile((existing) => withCardOrder(order.order, existing, now())));
+    },
+  };
+}
