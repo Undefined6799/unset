@@ -154,6 +154,13 @@ describe("readProfileRecord", () => {
     expect(readProfileRecord(stored)).toEqual({ ...good, website: "", headline: "", location: "" });
   });
 
+  test("a field another client wrote within the lexicon's limit shows, even past the editor's", () => {
+    const headline = "h".repeat(APP_LIMITS.headline + 30);
+    expect(readProfileRecord({ ...goodStored, headline }).headline).toBe(headline);
+    expect(readProfileRecord({ ...goodStored, headline: "h".repeat(LIMITS.profile.headline + 1) }).headline).toBe("");
+    expect(parseProfileFields({ headline })).toMatchObject({ ok: false, code: "profile.too_long" });
+  });
+
   test("anything that is not an object reads as an empty profile", () => {
     for (const value of [null, "profile", 3, ["a"]]) expect(readProfileRecord(value)).toEqual(EMPTY_PROFILE);
   });

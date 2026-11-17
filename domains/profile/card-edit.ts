@@ -1,0 +1,258 @@
+// Writing profile cards (ADR 0051): the editor's input is read once into checked content (DM-1), and the record built
+// from it must validate before it goes to the member's PDS. Reading is in cards.ts.
+import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import {
+  type CardButton,
+  type CardContent,
+  type CardEntry,
+  type CardError,
+  type CardKey,
+  type CardKind,
+  type CardLayout,
+  type CardWidth,
+  DEFAULT_LAYOUT,
+  type Failed,
+  isEmailAddress,
+  isObject,
+  LAYOUTS,
+  NSID,
+  type Obj,
+  oneOf,
+  PRESETS,
+  WIDTHS,
+} from "./cards.ts";
+import { isWebAddress, withScheme } from "./web-address.ts";
+
+/** The content fields this version writes, per kind; an edit replaces these and keeps any other. */
+const OWN_FIELDS: Record<CardKind, readonly string[]> = {
+  readme: ["text"],
+  links: ["title", "layout", "items"],
+  collection: ["title", "layout", "items"],
+  buttons: ["heading", "text", "buttons"],
+};
+
+type Field<T> = { readonly ok: true; readonly value: T } | Failed;
+const fail = (code: CardError): Failed => ({ ok: false, code });
+
+/** A string field: absent reads as "", anything else that is not a string is refused. One-line unless `multiline`. */
+function field(raw: unknown, multiline = false): Field<string> {
+  if (raw === undefined || raw === null) return { ok: true, value: "" };
+  if (typeof raw !== "string") return fail("card.invalid");
+  const value = raw.replace(/\r\n?/g, "\n").trim();
+  if (!multiline && value.includes("\n")) return fail("card.invalid");
+  return { ok: true, value };
+}
+
+function address(raw: unknown, required: boolean): Field<string> {
+  const read = field(raw);
+  if (!read.ok) return read;
+  if (read.value === "") return required ? fail("card.required") : read;
+  const uri = withScheme(read.value);
+  return isWebAddress(uri) ? { ok: true, value: uri } : fail("card.url_invalid");
+}
+
+function list(raw: unknown, max: number): Field<readonly Obj[]> {
+  if (raw === undefined) return { ok: true, value: [] };
+  if (!Array.isArray(raw) || !raw.every(isObject)) return fail("card.invalid");
+  return raw.length > max ? fail("card.too_long") : { ok: true, value: raw };
+}
+
+/** Reads each field in turn; the first refusal is the answer. */
+function fields<K extends string>(reads: Record<K, Field<string>>): Field<Record<K, string>> {
+  const out = {} as Record<K, string>;
+  for (const [name, read] of Object.entries(reads) as [K, Field<string>][]) {
+    if (!read.ok) return read;
+    out[name] = read.value;
+  }
+  return { ok: true, value: out };
+}
+
+function all<T>(items: readonly Obj[], read: (item: Obj) => Field<T>): Field<T[]> {
+  const out: T[] = [];
+  for (const item of items) {
+    const one = read(item);
+    if (!one.ok) return one;
+    out.push(one.value);
+  }
+  return { ok: true, value: out };
+}
+
+const readLink = (item: Obj) =>
+  fields({ uri: address(item.uri, true), label: field(item.label), description: field(item.description) });
+
+function readEntry(item: Obj): Field<CardEntry> {
+  const read = fields({
+    title: field(item.title),
+    tag: field(item.tag),
+    description: field(item.description),
+    uri: address(item.uri, false),
+  });
+  return read.ok && read.value.title === "" ? fail("card.required") : read;
+}
+
+function readButtonInput(item: Obj): Field<CardButton> {
+  if (item.kind === "email") {
+    const read = field(item.address);
+    if (!read.ok) return read;
+    return isEmailAddress(read.value)
+      ? { ok: true, value: { kind: "email", address: read.value } }
+      : fail("card.email_invalid");
+  }
+  if (item.kind !== "link" || !oneOf(PRESETS, item.preset)) return fail("card.invalid");
+  const read = fields({ uri: address(item.uri, true), label: field(item.label) });
+  return read.ok ? { ok: true, value: { kind: "link", preset: item.preset, ...read.value } } : read;
+}
+
+function layoutOf(raw: unknown, kind: "links" | "collection"): Field<CardLayout> {
+  if (raw === undefined) return { ok: true, value: DEFAULT_LAYOUT[kind] };
+  return oneOf(LAYOUTS, raw) ? { ok: true, value: raw } : fail("card.invalid");
+}
+
+function readReadme(input: Obj): Field<CardContent> {
+  const read = field(input.text, true);
+  if (!read.ok) return read;
+  return read.value === "" ? fail("card.required") : { ok: true, value: { kind: "readme", text: read.value } };
+}
+
+function readLinks(input: Obj): Field<CardContent> {
+  const head = fields({ title: field(input.title) });
+  const layout = layoutOf(input.layout, "links");
+  const raw = list(input.items, LIMITS.section.linksMax);
+  if (!head.ok) return head;
+  if (!layout.ok) return layout;
+  if (!raw.ok) return raw;
+  const items = all(raw.value, readLink);
+  return items.ok
+    ? { ok: true, value: { kind: "links", ...head.value, layout: layout.value, items: items.value } }
+    : items;
+}
+
+function readCollection(input: Obj): Field<CardContent> {
+  const head = fields({ title: field(input.title) });
+  const layout = layoutOf(input.layout, "collection");
+  const raw = list(input.items, LIMITS.section.entriesMax);
+  if (!head.ok) return head;
+  if (!layout.ok) return layout;
+  if (!raw.ok) return raw;
+  const items = all(raw.value, readEntry);
+  const value = {
+    kind: "collection",
+    ...head.value,
+    layout: layout.value,
+    items: items.ok ? items.value : [],
+  } as const;
+  return items.ok ? { ok: true, value } : items;
+}
+
+function readButtons(input: Obj): Field<CardContent> {
+  const head = fields({ heading: field(input.heading), text: field(input.text, true) });
+  if (!head.ok) return head;
+  if (head.value.heading === "") return fail("card.required");
+  const raw = list(input.buttons, LIMITS.section.buttonsMax);
+  if (!raw.ok) return raw;
+  const buttons = all(raw.value, readButtonInput);
+  return buttons.ok ? { ok: true, value: { kind: "buttons", ...head.value, buttons: buttons.value } } : buttons;
+}
+
+const READERS: Record<string, (input: Obj) => Field<CardContent>> = {
+  readme: readReadme,
+  links: readLinks,
+  collection: readCollection,
+  buttons: readButtons,
+};
+
+/** Reads one card as the editor sends it (untrusted JSON): `kind`, optional `width`, then the kind's fields. */
+export function parseCardInput(
+  input: Obj,
+): { readonly ok: true; readonly content: CardContent; readonly width: CardWidth } | Failed {
+  if (input.width !== undefined && !oneOf(WIDTHS, input.width)) return fail("card.invalid");
+  const reader = typeof input.kind === "string" && Object.hasOwn(READERS, input.kind) ? READERS[input.kind] : undefined;
+  if (reader === undefined) return fail("card.kind_unknown");
+  const content = reader(input);
+  if (!content.ok) return content;
+  return { ok: true, content: content.value, width: oneOf(WIDTHS, input.width) ? input.width : "full" };
+}
+
+/** An object with the fields that are set; "" means unset and is not written. */
+const set = (entries: Record<string, string>) =>
+  Object.fromEntries(Object.entries(entries).filter(([, v]) => v !== ""));
+
+function toLexicon(content: CardContent): Record<string, unknown> {
+  const $type = `${NSID}#${content.kind}`;
+  switch (content.kind) {
+    case "readme":
+      return { $type, text: content.text };
+    case "links":
+      return {
+        $type,
+        ...set({ title: content.title }),
+        layout: content.layout,
+        items: content.items.map((i) => set(i)),
+      };
+    case "collection":
+      return {
+        $type,
+        ...set({ title: content.title }),
+        layout: content.layout,
+        items: content.items.map((i) => set(i)),
+      };
+    case "buttons":
+      return {
+        $type,
+        ...set({ heading: content.heading, text: content.text }),
+        buttons: content.buttons.map((b) =>
+          b.kind === "email"
+            ? { $type: `${NSID}#emailButton`, address: b.address }
+            : { $type: `${NSID}#linkButton`, ...set({ preset: b.preset, uri: b.uri, label: b.label }) },
+        ),
+      };
+  }
+}
+
+export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: string } & Obj;
+
+/**
+ * The record to write over `existing` (the stored value, or null for a new card). Content is replaced; createdAt and
+ * any field this version does not know are kept (ADR 0038), inside the content too while its kind stays the same.
+ * Past the lexicon's limits is "too long". The whole record is validated once more before it is returned.
+ */
+export function toCardRecord(
+  content: CardContent,
+  width: CardWidth,
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: CardRecord } | Failed {
+  const fresh = toLexicon(content);
+  const sized: CardRecord = { $type: NSID, content: fresh, ...(width === "half" ? { width } : {}), createdAt: now };
+  if (!validateRecord(NSID, sized, "write").ok) return fail("card.too_long");
+  const stored = isObject(existing) ? existing : {};
+  const sameKind = isObject(stored.content) && stored.content.$type === fresh.$type ? stored.content : {};
+  const old = Object.fromEntries(Object.entries(sameKind).filter(([k]) => !OWN_FIELDS[content.kind].includes(k)));
+  const { $type: _t, content: _c, width: _w, createdAt, ...kept } = stored;
+  const record: CardRecord = {
+    $type: NSID,
+    ...kept,
+    ...(width === "half" ? { width } : {}),
+    content: { ...old, ...fresh },
+    createdAt: typeof createdAt === "string" ? createdAt : now,
+  };
+  return validateRecord(NSID, record, "read").ok ? { ok: true, record } : fail("card.invalid");
+}
+
+/**
+ * A new order for the cards the member has. It must name each existing card exactly once, so a card added or removed
+ * in another tab meanwhile is never dropped from the page by a stale reorder; the editor reloads instead.
+ */
+export function reorderCards(
+  requested: unknown,
+  existing: readonly CardKey[],
+): { readonly ok: true; readonly order: CardKey[] } | Failed {
+  if (!Array.isArray(requested) || requested.length !== existing.length) return fail("card.order_invalid");
+  const known = new Set<string>(existing);
+  const seen = new Set<string>();
+  for (const raw of requested) {
+    if (typeof raw !== "string" || !known.has(raw) || seen.has(raw)) return fail("card.order_invalid");
+    seen.add(raw);
+  }
+  return { ok: true, order: requested as CardKey[] };
+}
