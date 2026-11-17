@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#status">Status</a> ·
+  <a href="#what-works-today">What works today</a> ·
   <a href="#how-it-is-built">How it is built</a> ·
   <a href="#development">Development</a> ·
   <a href="#security">Security</a> ·
@@ -26,14 +27,15 @@ It is a rebuild of the 0x40 prototype around a small core that one person can re
 ## What we care about
 
 - **Security and privacy first.** Every request is checked against who is asking and fails closed. We collect the
-  least data we can, logs never carry a handle, a DID, an IP address or a token, and anything personal can be
-  exported and erased.
+  least data we can, and logs never carry a handle, a DID, an IP address or a token. Today an owner can erase
+  everything the app's database holds about a member by hand
+  ([`docs/human/runbooks/erasure.md`](docs/human/runbooks/erasure.md)); asking for it yourself, and export, come later.
 - **Your identity stays yours.** Handles are checked against their DID in both directions, and your profile lives in
   your repository, so you can take it elsewhere.
 - **Small and auditable.** Each running process has its own folder, container, database role and network, and the
   boundaries between them are checked in CI rather than left to memory.
-- **Open source and self-hosted.** No per-user analytics, and the app, the PDS and chat all run on
-  servers we operate.
+- **Open source and self-hosted.** No per-user analytics, and the app and the PDS run on servers we operate. Chat
+  will too when it arrives.
 
 ## Status
 
@@ -44,13 +46,29 @@ Not usable yet. The project is being built in phases, one small reviewed step pe
 | 0 | Repository, CI and guard rails | done |
 | 1 | Platform and the first slice: sign in with an atproto account and see your own profile | in progress |
 | 2 | Sign-up, sessions and the profile editor | in progress |
-| 3 | Indexer, public profiles, directory and moderation | |
+| 3 | Indexer, public profiles, directory and moderation | started |
 | 4 | Social: short video, follows and likes | |
 | 5 | Production hosting, backups and the production PDS | |
 | 6 | Chat, on Matrix | |
 
 There is no public launch, invite-only included, until all six phases are done. The full plan is
 [`docs/ai/PLAN.md`](docs/ai/PLAN.md) and the step-by-step build order is [`docs/ai/book/`](docs/ai/book/).
+
+## What works today
+
+On a development or staging stack, with an account on our own PDS, you can:
+
+- sign in through atproto OAuth, sign out, and sign out everywhere;
+- go through onboarding: an age check (16 and over), the terms, and confirming your email;
+- see your own profile page at `/<your DID>` and edit its display name, headline, location and website in place,
+  saved to your PDS;
+- add, edit, reorder and remove profile cards: a README in markdown, links, a collection and buttons, each a
+  `sh.unset.section` record in your repository;
+- change your theme and open the profile and account settings;
+- read the terms, privacy notice and domains pages.
+
+Your profile page is visible only to you for now. Public profiles at `/@handle` wait for the indexer, which has its
+schema and queue on `main` but does not yet run as its own process.
 
 ## How it is built
 
@@ -65,13 +83,14 @@ apps/web  →  interfaces/http  →  domains/identity  →  infrastructure/pds  
 
 | Path | What lives there |
 | --- | --- |
-| `apps/` | Screens, islands and styles only: `web`, `admin`, and `chat` later |
-| `interfaces/` | Entry points, one process and container each: `http`, `admin`, `api`, `indexer`, `media`, `review`, and more as their phase arrives |
-| `domains/` | Product rules in product words: `identity`, `content`, `social`, `feed`, `messaging`, `moderation`, `privacy` |
-| `infrastructure/` | External systems behind small contracts, plus `net-guard` (the one egress check), `seal` and `audit` |
+| `apps/` | Screens, islands and styles only. Today `web`; `admin` and `chat` come later |
+| `interfaces/` | Entry points, one process and container each. Today `http`, the web server and its scheduled jobs; `admin`, `api`, `indexer`, `media` and `review` come with their phase |
+| `domains/` | Product rules in product words. Today `identity` and `profile`; `content`, `social`, `feed`, `messaging`, `moderation` and `privacy` come with their phase |
+| `infrastructure/` | External systems behind small contracts: `postgres`, `pds`, `storage` (S3-compatible objects) and `session`, plus `net-guard` (the one egress check), `seal` and `audit` |
 | `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `islands`, `http`, `config`, `errors`, `log`, `host-pin` |
-| `deployment/`, `tests/` | Compose, edge, backup and preflight; integration and end-to-end tests |
-| `docs/` | `human/` for guides, decisions and the engineering guidelines; `ai/` for the plan and step book |
+| `deployment/` | Compose files, the Caddy edge, container images, the PDS build, Postgres bootstrap and the preflight that checks a stack before it starts |
+| `tests/` | Integration and end-to-end tests; unit tests sit beside their file |
+| `docs/` | `human/` for guides, runbooks, decisions and the engineering guidelines; `ai/` for the plan and step book; `site/` for the Hugo docs site |
 | `scripts/` | Repository tooling: CI guards, budgets, docs tests, the dev-stack precheck |
 
 Folders appear with their first code. Where something belongs and why is in
@@ -90,6 +109,12 @@ npm run check                                # typecheck, lint, guards, tests
 
 `npm run check` needs Docker: the Postgres tests start the pinned image themselves and fail, rather than skip, without
 it.
+
+To run the whole stack (Postgres, the PDS, the edge, object storage and the web app) on your own machine, use
+`npm run local:up` and `npm run local:down`. Each goes through the preflight first and reads its settings from
+`../unset-dev-env/dev-public.env` beside the checkout; start that file from
+[`deployment/env/dev-public.example.env`](deployment/env/dev-public.example.env) and follow
+[`docs/human/runbooks/dev-stack-secrets.md`](docs/human/runbooks/dev-stack-secrets.md) for the secrets it needs.
 
 Changes land through pull requests, one step each and kept small; the template in
 [`.github/pull_request_template.md`](.github/pull_request_template.md) says what a PR must show. The rules every change
