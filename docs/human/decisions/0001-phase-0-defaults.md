@@ -611,3 +611,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   to read and follow; a package that meets a written bar (established, maintained, not likely to be dropped, pinned,
   audited) needs no ADR, except one touching auth, crypto, outbound requests or personal data. Amends rule DO-1 and
   CLAUDE.md D8 once accepted. Proposed, awaiting Alex.
+- **ADR 0057 accepted (Alex, 2026-11-17 22:44:29Z, against 15991f1; own record:
+  [0057](0057-small-and-auditable-means-the-code.md)):** "small" means the code we own and "auditable" means easy
+  to read and follow; a package meeting the written bar needs no ADR unless it touches auth, crypto, outbound
+  requests or personal data. Rule DO-1 and CLAUDE.md D8 are amended.

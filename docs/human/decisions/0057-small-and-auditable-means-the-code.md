@@ -1,7 +1,9 @@
 # 0057 — "Small and auditable" means our code; established packages are used, not rebuilt
 
-Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-17 22:36Z in the project chat, answering
-the review of hand-built tooling. It amends engineering rule DO-1 (adopted by ADR 0002) and the D8 line of `CLAUDE.md`, and gives
+Status: Accepted by Alex, 2026-11-17 22:44:29Z, against 15991f1 (his line "Accept ADR 0057 at 15991f1", typed in
+the project chat after the coordinator had reviewed that head). The only changes since that head are this status
+paragraph, the index row and the ADR 0001 acceptance line. Alex chose the direction on 2026-11-17 22:36Z in the
+project chat, answering the review of hand-built tooling. It amends engineering rule DO-1 (adopted by ADR 0002) and the D8 line of `CLAUDE.md`, and gives
 plan §9 its meaning. No earlier record is edited.
 
 ## Context
