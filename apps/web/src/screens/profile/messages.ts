@@ -70,5 +70,5 @@ export const BUTTONS_EDIT = {
   uri: "Web address",
   label: "Your own text",
   hint: (max: number) =>
-    `Up to ${max} buttons. An email button needs the email address; a link button needs the web address, and "${CARD_TEXT.custom}" uses your own text. Leave a button's addresses empty to remove it.`,
+    `Up to ${max} buttons. An email button needs the email address; a link button needs the web address, and "${CARD_TEXT.custom}" uses your own text. Leave a button's email address, web address and own text empty to remove it.`,
 } as const;
