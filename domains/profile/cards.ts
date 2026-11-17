@@ -163,6 +163,15 @@ export function orderCards(order: unknown, cards: readonly Card[]): Card[] {
     listed.push(card);
     byKey.delete(raw);
   }
-  const rest = [...byKey.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const rest = [...byKey.values()].sort((a, b) => madeAt(a) - madeAt(b));
   return [...listed, ...rest];
+}
+
+/**
+ * When a card was made, as an instant: lexicon datetimes may carry any offset and precision
+ * (https://atproto.com/specs/lexicon#datetime), so their text does not sort. One that does not parse sorts last.
+ */
+function madeAt(card: Card): number {
+  const instant = Date.parse(card.createdAt);
+  return Number.isNaN(instant) ? Number.POSITIVE_INFINITY : instant;
 }
