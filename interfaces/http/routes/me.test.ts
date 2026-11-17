@@ -305,6 +305,7 @@ describe("GET /:did", () => {
     expect(elements(main, "strong").map(textContent)).toContain("readme");
     expect(textContent(main)).not.toContain("Set up your profile");
     expect(textContent(main)).not.toContain("Some of your cards");
+    expect(textContent(main)).toContain("Up to 30 links.");
     expect(profileReads).toEqual([DID]);
     const cut = await setup({ own: { ...own, cardsComplete: false } }).get();
     const shown = textContent(elements(parse(await cut.text()), "main")[0]);
