@@ -79,7 +79,11 @@ test("app_gate.transient_past_cap_shows_unavailable_and_keeps_the_cookie", async
   const response = await open(gateAnswering("transient", pastCapMs));
   if (!(response instanceof Response)) throw new Error("the gate served a capped cache");
   expect(response.status).toBe(200);
-  expect(await response.text()).toContain(NOTICE);
+  const html = await response.text();
+  expect(html).toContain(NOTICE);
+  // P2.11h: the session is kept, so the page offers Sign out and never a link to sign in.
+  expect(html).toContain('action="/logout"');
+  expect(html).not.toContain('href="/login"');
   expect(response.headers.getSetCookie()).toEqual([]);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
 });
