@@ -705,6 +705,8 @@ Small PRs to a protected `main` (the decision 40 ruleset, applied 2026-10-06; AD
 
 ## 9. How we keep it small and auditable
 
+Small means the code we own, not the number of packages; auditable means easy to read and follow (ADR 0057, Alex 2026-11-17). An established, maintained package is used rather than rebuilt.
+
 - **Measured:** line budgets per top-level folder; graphify graphs diffed in PRs, so "who calls this" is a command, not a guess.
 - **One way to do each thing:** one config, CSRF gate, CSP builder, egress, validator, serialiser, `createRoom` and `profileHref`. A lint or static test enforces each. Every guard ships with a known-bad fixture it must fail on and proves it examined more than zero items, so a guard that silently sees nothing cannot pass (review against the engineering rules, 2026-10-04, rule AB-4). Every parser, validator, serialiser and encoder on a trust boundary (return path, island serialiser, handle normalisation, cursor codec, net-guard classifier, brand parsers) has a fast-check property test with fixed `numRuns` and the seed printed on failure (review against the engineering rules, 2026-10-04, rule TE-6).
 - **Small files:** a file-size cap as a lint warning; one feature per folder.

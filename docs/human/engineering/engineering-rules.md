@@ -403,12 +403,13 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - a data model or migration shape;
 - an external or lexicon contract;
 - a process, role or network boundary;
-- a runtime dependency or service;
+- a service, or a package that handles authentication, sessions, tokens, cryptography, signing, outbound requests or
+  personal data (ADR 0057; any other package meets the ADR 0057 dependency bar in its PR instead);
 - a new pattern or top-level folder;
 - a cross-domain dependency;
 - a security mechanism.
 
-**Each ADR has Context, Decision, Alternatives (at least two), Consequences and Compliance. A dev dependency needs only the EPA §5 note in its PR.**
+**Each ADR has Context, Decision, Alternatives (at least two), Consequences and Compliance. Any other package, runtime or dev, needs only the EPA §5 note and the ADR 0057 bar in its PR.**
 - Enforced by: the docs test (front matter, status values, the index lists every file). The DL-3 field "needs an ADR?".
 - Source: FoSA 1st ed. — ch. 19 (2nd ed. ch. 21); Documenting SA 2nd ed. — Prologue (rule 5, record rationale); APoSD 2nd ed. — ch. 11 (design it twice); Hard Parts — ch. 1.
 - Status: PARTLY — ADRs 0001 (append-only log, D8), 0002 (engineering rules), 0003 (bootstrap reconciliation), the no-orchestrator ADR (F-23), P0.09, AI §15–16, EW §7, EPA §5.
