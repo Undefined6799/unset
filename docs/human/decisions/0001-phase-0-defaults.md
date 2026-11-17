@@ -606,3 +606,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0053](0053-queue-members-for-the-index-at-onboarding-end.md)):** members are queued for the index when their
   onboarding ends, in `idx.track_request`. The clause "(`app.track_request`, filled by the sign-in callback)" of ADR
   0052 decision 3 is superseded.
+- **ADR 0058 accepted (Alex, 2026-11-17 22:51:02Z, against 7ddf33d; own record:
+  [0058](0058-read-the-stream-without-the-firehose-class.md)):** the indexer reads our PDS's stream with
+  `@atproto/sync`'s `parseCommitAuthenticated` and `@atproto/xrpc-server`'s `Subscription`, not the `Firehose`
+  class, and fails a commit with an unproven op. The phrase "with `@atproto/sync`'s `Firehose` (no runner: events are
+  handled one at a time, in order)" of ADR 0052 decision 1 is superseded.

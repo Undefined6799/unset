@@ -1,9 +1,11 @@
 # 0058 — Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class
 
-Status: Proposed (awaiting Alex). It supersedes one phrase of ADR 0052 decision 1, and nothing else in it: "with
-`@atproto/sync`'s `Firehose` (no runner: events are handled one at a time, in order)". The rest of that decision
-stands: a new process, `interfaces/indexer`, reads our PDS's `subscribeRepos` at its internal URL, and its stream
-packages are pinned exactly and imported only in `infrastructure/firehose/`.
+Status: Accepted by Alex, 2026-11-17 22:51:02Z, against 7ddf33d (his line "Accept ADR 0058 at 7ddf33d", typed in the
+project chat after the coordinator had reviewed that head). The only changes since that head are this status
+paragraph, the index rows and the ADR 0001 acceptance line. It supersedes one phrase of ADR 0052 decision 1, and
+nothing else in it: "with `@atproto/sync`'s `Firehose` (no runner: events are handled one at a time, in order)". The
+rest of that decision stands: a new process, `interfaces/indexer`, reads our PDS's `subscribeRepos` at its internal
+URL, and its stream packages are pinned exactly and imported only in `infrastructure/firehose/`.
 
 ## Context
 ADR 0052 decision 4 says a handler failure never advances the cursor: the reader stops, backs off and reconnects from
