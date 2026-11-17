@@ -28,7 +28,8 @@ export const CARD_BODY_LIMIT_BYTES = 1024 * 1024;
  * A form body's cap: a README card's 100,000-byte text, percent-encoded at three bytes a byte, its kind and width,
  * with room to spare. A list card the editor writes (30 rows, domains/profile CARD_EDIT_LIMITS) fits unless nearly
  * every field is filled to the lexicon's limit with text that encodes at nine bytes a character; that form is refused
- * as too large and nothing is written. Below CARD_BODY_LIMIT_BYTES, which the kit applies to both media types first.
+ * as card.form_too_large, which tells the member to shorten the card, and nothing is written. Below
+ * CARD_BODY_LIMIT_BYTES, which the kit applies to both media types first.
  */
 export const CARD_FORM_LIMIT_BYTES = 320 * 1024;
 /** The fields the delete and order forms may send; anything else, or a field sent twice, is card.invalid. */
@@ -75,7 +76,7 @@ async function bodyObject(request: Request, readForm: FormReader): Promise<Reado
   const type = (request.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
   const text = await request.text();
   if (type !== FORM) return jsonObject(text);
-  if (Buffer.byteLength(text) > CARD_FORM_LIMIT_BYTES) throw new AppError("http.payload_too_large");
+  if (Buffer.byteLength(text) > CARD_FORM_LIMIT_BYTES) throw new AppError("card.form_too_large");
   return readForm(new URLSearchParams(text));
 }
 

@@ -181,13 +181,15 @@ describe("card routes", () => {
     expect(calls).toEqual([]);
   });
 
-  test("a form body is capped at what the largest README needs, below the JSON limit", async () => {
+  test("a form body is capped at what the largest README needs, below the JSON limit, with a message to act on", async () => {
     const { post, calls } = setup();
     const type = "application/x-www-form-urlencoded";
     const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(50_000) }).toString();
     expect(largest.length).toBeLessThan(CARD_FORM_LIMIT_BYTES);
     expect((await post("/cards", largest, { type })).status).toBe(303);
-    expect((await post("/cards", `kind=readme&text=${"x".repeat(CARD_FORM_LIMIT_BYTES)}`, { type })).status).toBe(413);
+    const tooLarge = await post("/cards", `kind=readme&text=${"x".repeat(CARD_FORM_LIMIT_BYTES)}`, { type });
+    expect(tooLarge.status).toBe(413);
+    expect(await errorCode(tooLarge)).toBe("card.form_too_large");
     expect(CARD_FORM_LIMIT_BYTES).toBeLessThan(CARD_BODY_LIMIT_BYTES);
     expect(calls).toHaveLength(1);
   });
