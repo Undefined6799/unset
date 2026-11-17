@@ -111,9 +111,10 @@ async function run(reason: StopReason, step: () => Promise<void>): Promise<void>
 
 /**
  * Where to resume while the consumer has no cursor yet: just before the first frame this reader saw. Without it a
- * redial after that frame failed would start at the live tip again and skip it for good.
+ * redial after that frame failed would start at the live tip again and skip it for good. `blind` is set when a
+ * stop came before any numbered frame, so the next dial has nothing to resume from.
  */
-type Position = { floor: number | null };
+type Position = { floor: number | null; blind: boolean };
 
 /** Records the first frame's sequence number, read from the raw body so even an unreadable frame can be retried. */
 function noteFrame(position: Position, value: unknown): void {
@@ -165,14 +166,17 @@ function report(options: FirehoseReaderOptions, stop: Stop): void {
   }
 }
 
-/** Before a redial with nothing to resume from, the consumer learns that it may have missed events. */
-async function resumeBlind(options: FirehoseReaderOptions, position: Position): Promise<void> {
-  if (position.floor !== null) return;
-  try {
+/**
+ * Before a redial with nothing to resume from, the consumer learns that it may have missed events. That dial goes
+ * to the live tip, so it waits until the consumer has taken the news: a throw here stops like any other failure and
+ * leaves `blind` set, and the next attempt asks again.
+ */
+async function catchUp(options: FirehoseReaderOptions, position: Position): Promise<void> {
+  if (!position.blind) return;
+  await run("apply_failed", async () => {
     if ((await options.consumer.cursor()) === null) await options.consumer.missedEvents();
-  } catch (error) {
-    report(options, new Stop("apply_failed", error));
-  }
+  });
+  position.blind = false;
 }
 
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -193,12 +197,13 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> =>
  */
 export async function readFirehose(options: FirehoseReaderOptions, signal: AbortSignal): Promise<void> {
   let delay = options.restartDelayMs;
-  const position: Position = { floor: null };
+  const position: Position = { floor: null, blind: false };
   while (!signal.aborted) {
     const connection = new AbortController();
     const stopConnection = () => connection.abort();
     signal.addEventListener("abort", stopConnection, { once: true });
     try {
+      await catchUp(options, position);
       await readUntilStop(options, connection.signal, position, () => {
         delay = options.restartDelayMs;
       });
@@ -206,8 +211,8 @@ export async function readFirehose(options: FirehoseReaderOptions, signal: Abort
       const stop = error as Stop;
       report(options, stop);
       connection.abort(); // closes the socket before the wait
+      if (position.floor === null) position.blind = true;
       await wait(delay, signal);
-      if (!signal.aborted) await resumeBlind(options, position);
       delay = Math.min(delay * 2, options.maxRestartDelayMs);
     } finally {
       signal.removeEventListener("abort", stopConnection);

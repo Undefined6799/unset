@@ -347,6 +347,22 @@ describe("readFirehose", () => {
     expect(run.applied).toEqual([]);
     await until(() => run.missed >= 1); // no frame to resume from: the consumer must backfill
   });
+
+  test("reader.retries_a_failed_missed_events_before_redial", async () => {
+    // A redial with no cursor goes to the live tip, so a backfill request that failed must succeed before it.
+    const sent = [{ seq: 0, bytes: new ErrorFrame({ error: "FutureCursor", message: "ahead" }).toBytes() }];
+    let failures = 1;
+    const dialsAtSuccess: number[] = [];
+    const { pds, run } = await setup(() => sent, {
+      missedEvents: async () => {
+        if (failures-- > 0) throw new Error("db down");
+        dialsAtSuccess.push(pds.dials.length);
+      },
+    });
+    await until(() => pds.dials.length === 2);
+    expect(dialsAtSuccess).toEqual([1]); // taken before the second dial, and asked only once more
+    expect(run.stops).toEqual(["stream_failed", "apply_failed"]);
+  });
 });
 
 describe("process", () => {
