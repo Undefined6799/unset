@@ -1,8 +1,8 @@
 # 0052 — Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice
 
 Status: Proposed (awaiting Alex). Alex chose the direction on 2026-11-17 in the thread "Build the indexer for public
-profiles": card "Own PDS first" (05:06:16Z, card cmsg_01GKYqaAGu4Vob5JHVyDmG7ANPikYpiBE3L7CQJrYEviGP), then card
-"Own small reader (no Tap yet)" (05:11:33Z, card cmsg_01GKYqaAGu4Vob5JHVyDmG7AUpUVT7bWBVT6ZMKWKUqJdc). It takes the
+profiles": card "Own PDS first" (05:06:16Z), then card
+"Own small reader (no Tap yet)" (05:11:33Z). It takes the
 fallback that plan §5.2 ("The fallback is `@atproto/sync` on `subscribeRepos` (~300 lines)") and book P3.01 outcome C
 already name, for our own PDS only, without running the P3.01 spike first. Plan §5.2's Tap row, decision 5's
 "Indexer source" and ADR 0040 stand for the public relay; nothing here edits them.
