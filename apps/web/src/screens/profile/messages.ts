@@ -26,3 +26,19 @@ export const CARD_EDIT = {
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   noScript: "Adding, editing or deleting a card needs JavaScript. Moving one does not.",
 } as const;
+
+export const LINKS_EDIT = {
+  add: "Add links",
+  editTitle: "Edit links",
+  title: "Title",
+  layout: "Layout",
+  list: "List",
+  grid: "Grid",
+  carousel: "Carousel",
+  row: (n: number) => `Link ${n}`,
+  uri: "Address",
+  label: "Label",
+  description: "Description",
+  hint: (max: number) =>
+    `Up to ${max} links. Leave a link's fields empty to remove it; save and edit again for more rows.`,
+} as const;

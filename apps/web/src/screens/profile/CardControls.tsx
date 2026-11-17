@@ -1,23 +1,16 @@
 // The owner's controls under each card (ADR 0051; mockup "Design profile card modules"): move up and down, delete
-// behind a confirm, and for a README an editor in a Modal. Up and down replace the drag in the mockup, so every move
-// is a labelled button the keyboard reaches. Each control is a plain form that posts to a card route
+// behind a confirm, and an editor in a Modal for a README or links card. Up and down replace the drag in the mockup,
+// so every move is a labelled button the keyboard reaches. Each control is a plain form that posts to a card route
 // (interfaces/http/routes/cards.ts) and follows its 303 back here, as Settings › Profile posts POST /profile; no
 // island of ours runs. Every value is a React prop or child (escaped), never raw HTML. Moves work with no script;
 // the edit and delete forms sit in the Modal's <dialog>, which opens once script runs.
 import { Button, Modal, type SafeHref, Textarea } from "@unset/shared-ui";
 import { useId } from "react";
-import { CARD_EDIT } from "./messages.ts";
+import { Cancel } from "./Cancel.tsx";
+import { LinksEditor } from "./LinksEditor.tsx";
+import { CARD_EDIT, LINKS_EDIT } from "./messages.ts";
 import styles from "./ProfileCards.module.css";
 import type { CardView } from "./ProfileCards.tsx";
-
-/** Closes the dialog it sits in, with no script of ours (HTML Living Standard, form method="dialog"). */
-const Cancel = () => (
-  <form method="dialog">
-    <Button type="submit" variant="standalone">
-      {CARD_EDIT.cancel}
-    </Button>
-  </form>
-);
 
 /** The name a card's controls are grouped under, for assistive tech. */
 function cardName(content: CardView["content"]): string {
@@ -92,14 +85,20 @@ function Move({ keys, from, to, label }: { keys: readonly string[]; from: number
   );
 }
 
+/** How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS, passed in by the page's route). */
+export type CardEditLimits = { readonly links: number };
+
 export function CardControls({
   cards,
   index,
   ownPage,
+  limits,
 }: {
   readonly cards: readonly CardView[];
   readonly index: number;
   readonly ownPage: SafeHref;
+  /** Absent, the list editors are left out. */
+  readonly limits?: CardEditLimits | undefined;
 }) {
   const card = cards[index];
   if (card === undefined) return null;
@@ -116,6 +115,18 @@ export function CardControls({
           label={CARD_EDIT.save}
           text={card.content.text}
           width={card.width}
+          ownPage={ownPage}
+        />
+      ) : null}
+      {card.content.kind === "links" && limits !== undefined ? (
+        <LinksEditor
+          trigger={CARD_EDIT.edit}
+          title={LINKS_EDIT.editTitle}
+          action={path}
+          label={CARD_EDIT.save}
+          content={card.content}
+          width={card.width}
+          max={limits.links}
           ownPage={ownPage}
         />
       ) : null}
