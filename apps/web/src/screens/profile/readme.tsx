@@ -25,7 +25,13 @@ export type Inline =
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
-  | { readonly kind: "list"; readonly ordered: boolean; readonly items: readonly (readonly Inline[])[] }
+  | {
+      readonly kind: "list";
+      readonly ordered: boolean;
+      /** An ordered list's first number, when it is not 1. */
+      readonly start?: number;
+      readonly items: readonly (readonly Inline[])[];
+    }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
 
@@ -200,6 +206,16 @@ function headingText(rest: string): string {
   return before === " " || before === "\t" ? text.slice(0, end).trim() : text;
 }
 
+/** A bullet or ordered list; an ordered list keeps its first number when it is not 1 (CommonMark 0.31.2, "Lists"). */
+function takeList(lines: readonly string[], i: number): { block: Block; next: number } {
+  const line = lines[i] ?? "";
+  const ordered = !BULLET.test(line);
+  const { items, next } = run(lines, i, ordered ? ORDERED : BULLET);
+  const start = ordered ? Number(/\d+/.exec(line)?.[0] ?? 1) : 1;
+  const list = { kind: "list", ordered, items: items.map((item) => parseInline(item)) } as const;
+  return { block: start === 1 ? list : { ...list, start }, next };
+}
+
 function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
   const line = lines[i] ?? "";
   if (line.trim() === "") return { block: null, next: i + 1 };
@@ -212,14 +228,7 @@ function takeBlock(lines: readonly string[], i: number): { block: Block | null; 
     return { block: { kind: "heading", level, children: text === "" ? [] : parseInline(text) }, next: i + 1 };
   }
   if (RULE.test(line)) return { block: { kind: "rule" }, next: i + 1 };
-  for (const [pattern, ordered] of [
-    [BULLET, false],
-    [ORDERED, true],
-  ] as const) {
-    if (!pattern.test(line)) continue;
-    const { items, next } = run(lines, i, pattern);
-    return { block: { kind: "list", ordered, items: items.map((item) => parseInline(item)) }, next };
-  }
+  if (BULLET.test(line) || ORDERED.test(line)) return takeList(lines, i);
   if (QUOTE.test(line)) {
     const { items, next } = run(lines, i, QUOTE);
     return { block: { kind: "quote", children: parseInline(items.join(" ")) }, next };
@@ -289,7 +298,7 @@ function blockNode(block: Block): ReactNode {
       );
     case "list": {
       const List = block.ordered ? "ol" : "ul";
-      return <List>{keyed(block.items.map(listItem))}</List>;
+      return <List start={block.start}>{keyed(block.items.map(listItem))}</List>;
     }
     case "code":
       return (

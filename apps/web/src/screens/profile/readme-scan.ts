@@ -94,8 +94,9 @@ export function closes(text: string, j: number, mark: Mark): boolean {
 }
 
 /**
- * The code spans of a text as [start, end) pairs, paired left to right as parseInline pairs them, so an emphasis
- * mark inside one is never taken as a closer (CommonMark 0.31.2: code spans bind more tightly than emphasis).
+ * The spans an emphasis mark inside cannot close, as sorted [start, end) pairs: code spans, paired left to right as
+ * parseInline pairs them (CommonMark 0.31.2: code spans bind more tightly than emphasis), link destinations and
+ * autolinks, so "*[a](https://x/a*b) here*" keeps its link.
  */
 export function codeSpans(text: string): readonly (readonly [number, number])[] {
   const closer = codeCloser(text);
@@ -106,7 +107,24 @@ export function codeSpans(text: string): readonly (readonly [number, number])[] 
     if (end !== -1) spans.push([i, end + length]);
     i = text.indexOf("`", end === -1 ? i + length : end + length);
   }
-  return spans;
+  for (let i = text.indexOf("]("); i !== -1; i = text.indexOf("](", i + 2)) {
+    const end = destinationEnd(text, i + 2);
+    if (end !== -1) spans.push([i + 2, end]);
+  }
+  const autolink = /<https?:\/\/[^\s<>]+>/gi;
+  for (let m = autolink.exec(text); m !== null; m = autolink.exec(text)) spans.push([m.index, m.index + m[0].length]);
+  return mergeSpans(spans);
+}
+
+/** Sorted, with overlapping spans joined, so a binary search finds the one holding a position. */
+function mergeSpans(spans: [number, number][]): readonly (readonly [number, number])[] {
+  const merged: [number, number][] = [];
+  for (const [start, end] of spans.sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1);
+    if (last !== undefined && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
 }
 
 /** The end of the code span holding `j`, or -1 when `j` is outside every span. */
