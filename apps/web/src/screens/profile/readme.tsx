@@ -5,7 +5,16 @@
 // (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here throws: any input renders.
 import { type SafeHref, safeHref } from "@unset/shared-ui";
 import { Children, type ReactNode } from "react";
-import { codeCloser, destinationEnd, emphasisCloser, isWord, type Mark, nextIndex, runLength } from "./readme-scan.ts";
+import {
+  codeCloser,
+  destinationEnd,
+  emphasisCloser,
+  isWord,
+  type Mark,
+  nextIndex,
+  runLength,
+  unescapeDestination,
+} from "./readme-scan.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
@@ -83,7 +92,7 @@ function takeLink(text: string, i: number, depth: number, find: Finders): Taken 
   const inner = find.bracket(i + 1);
   if (inner !== -1 && inner < labelEnd) return null;
   const urlEnd = destinationEnd(text, labelEnd + 2);
-  const url = urlEnd === -1 ? "" : text.slice(labelEnd + 2, urlEnd);
+  const url = urlEnd === -1 ? "" : unescapeDestination(text.slice(labelEnd + 2, urlEnd));
   const href = url === "" ? null : safeHref(url, WEB);
   if (href === null) return null;
   const children = parseInline(text.slice(i + 1, labelEnd), depth + 1, false);

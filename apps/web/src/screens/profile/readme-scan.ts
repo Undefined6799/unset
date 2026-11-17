@@ -4,6 +4,12 @@
 
 export const isWord = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
+/**
+ * A link destination with its backslash escapes removed: "\\(" is "(" (CommonMark 0.31.2, "Backslash escapes": any
+ * ASCII punctuation), so an escaped parenthesis reaches safeHref as itself, not as a path separator.
+ */
+export const unescapeDestination = (destination: string) => destination.replace(/\\([!-/:-@[-`{-~])/g, "$1");
+
 /** The length of the run of `ch` starting at `i`. */
 export function runLength(text: string, i: number, ch: string): number {
   let j = i;
@@ -88,16 +94,53 @@ export function closes(text: string, j: number, mark: Mark): boolean {
 }
 
 /**
+ * The code spans of a text as [start, end) pairs, paired left to right as parseInline pairs them, so an emphasis
+ * mark inside one is never taken as a closer (CommonMark 0.31.2: code spans bind more tightly than emphasis).
+ */
+export function codeSpans(text: string): readonly (readonly [number, number])[] {
+  const closer = codeCloser(text);
+  const spans: [number, number][] = [];
+  for (let i = text.indexOf("`"); i !== -1; ) {
+    const length = runLength(text, i, "`");
+    const end = closer(length, i + length);
+    if (end !== -1) spans.push([i, end + length]);
+    i = text.indexOf("`", end === -1 ? i + length : end + length);
+  }
+  return spans;
+}
+
+/** The end of the code span holding `j`, or -1 when `j` is outside every span. */
+function spanEnd(spans: readonly (readonly [number, number])[], j: number): number {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const [start, end] = spans[mid] ?? [0, 0];
+    if (j < start) high = mid - 1;
+    else if (j >= end) low = mid + 1;
+    else return end;
+  }
+  return -1;
+}
+
+/**
  * The next closer for each mark at or after a position, remembered per mark: parseInline only moves forward and a
  * closer does not depend on its opener, so each mark's candidates are read once per text, however many openers fail.
+ * A mark inside a code span is skipped with the span.
  */
 export function emphasisCloser(text: string): (mark: Mark, from: number) => number {
   const memo = new Map<Mark, { searched: number; found: number }>();
+  let spans: readonly (readonly [number, number])[] | undefined;
   return (mark, from) => {
     const seen = memo.get(mark);
     if (seen !== undefined && from >= seen.searched && (seen.found === -1 || seen.found >= from)) return seen.found;
+    spans ??= codeSpans(text);
     let found = text.indexOf(mark, from);
-    while (found !== -1 && !closes(text, found, mark)) found = text.indexOf(mark, found + 1);
+    while (found !== -1) {
+      const inCode = spanEnd(spans, found);
+      if (inCode === -1 && closes(text, found, mark)) break;
+      found = text.indexOf(mark, inCode === -1 ? found + 1 : inCode);
+    }
     memo.set(mark, { searched: from, found });
     return found;
   };

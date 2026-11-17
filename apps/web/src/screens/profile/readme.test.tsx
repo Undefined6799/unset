@@ -198,6 +198,25 @@ describe("parseReadme, review findings on #1648", () => {
     expect(parseInline("a ``b` c")).toEqual([{ kind: "text", text: "a ``b` c" }]);
   });
 
+  test("an escaped parenthesis in a destination is the parenthesis itself", () => {
+    expect(parseInline("[wiki](https://example.com/a\\(b\\))")).toMatchObject([
+      { kind: "link", href: "https://example.com/a(b)" },
+    ]);
+  });
+
+  test("an emphasis mark inside a code span does not close the emphasis around it", () => {
+    expect(parseInline("*Use `a*b` here*")).toEqual([
+      {
+        kind: "em",
+        children: [
+          { kind: "text", text: "Use " },
+          { kind: "code", text: "a*b" },
+          { kind: "text", text: " here" },
+        ],
+      },
+    ]);
+  });
+
   test("trailing hashes are a closing sequence only after a space", () => {
     expect(parseReadme("## C#")).toEqual([{ kind: "heading", level: 2, children: [{ kind: "text", text: "C#" }] }]);
     expect(parseReadme("## Title ##")).toEqual([
