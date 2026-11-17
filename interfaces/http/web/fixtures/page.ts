@@ -7,7 +7,7 @@ export const silentLog = (): Logger =>
   createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
 
 /** Route tests' page renderer: apps/web's source render with a stub build, assets on the test origin. */
-export function testPage(log: Logger = silentLog()): (page: PageSpec) => Response {
+export function testPage(log: Logger = silentLog(), pdsHost?: string): (page: PageSpec) => Response {
   return (page) =>
     pageResponse(
       {
@@ -25,6 +25,7 @@ export function testPage(log: Logger = silentLog()): (page: PageSpec) => Respons
         assetsOrigin: "https://unset.test",
         env: "test",
         log,
+        ...(pdsHost === undefined ? {} : { pdsHost }),
       },
       page,
     );

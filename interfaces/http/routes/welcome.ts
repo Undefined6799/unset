@@ -114,6 +114,9 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     for (const cookie of cookies) response.headers.append("set-cookie", cookie);
     return response;
   };
+  /** A step shown to a signed-in member (P2.12j): the shell offers no Sign in; the screen has Sign out. */
+  const step = (request: Request, title: string, body: ReactNode): Response =>
+    deps.page({ group: "app", request, title, body, islands: "off", shell: { noindex: true, signedIn: true } });
 
   async function located(request: Request, deadline: AbortSignal, next: string): Promise<Located> {
     const { session, clearCookie } = await deps.readSession(request, deadline);
@@ -177,7 +180,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       const found = await located(request, deadline, "/welcome/age");
       if (found.kind === "out") return found.response;
       if (found.step !== "age") return elsewhere(found);
-      return show(request, "When were you born?", deps.screens.welcomeAge());
+      return step(request, "When were you born?", deps.screens.welcomeAge());
     },
   });
 
@@ -205,7 +208,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       // Every valid date is shown back once, whatever it is, and nothing is decided or stored until it returns
       // confirmed: a mistyped year must not block an account, and asking only some dates would hint at the rule.
       if (single(form, "confirmed") !== "yes") {
-        return show(request, "Is this date right?", deps.screens.welcomeAge({ confirm: birth }));
+        return step(request, "Is this date right?", deps.screens.welcomeAge({ confirm: birth }));
       }
       if (ageInYears(birth, today) < deps.minAge) return block(found.session, deadline);
       const wrote = await deps.accounts.confirmAdult(found.session.did, deadline);
@@ -228,7 +231,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (found.kind === "out") return found.response;
       if (found.step !== "terms") return elsewhere(found);
       const next = safeReturnPath(new URL(request.url).searchParams.get("next"));
-      return show(
+      return step(
         request,
         "Terms and privacy",
         deps.screens.welcomeTerms({
@@ -289,7 +292,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       const found = await located(request, deadline, "/welcome/chat");
       if (found.kind === "out") return found.response;
       if (found.step !== "chat") return elsewhere(found);
-      return show(request, "Chat comes later", deps.screens.welcomeChat());
+      return step(request, "Chat comes later", deps.screens.welcomeChat());
     },
   });
 

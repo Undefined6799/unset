@@ -32,8 +32,9 @@ three values as hidden fields and `confirmed=yes`, and a link back to the empty 
 every date and names no threshold.
 
 P2.12i: `Age` (both states), `Terms` and `ChatLater` end in `welcome/SignOut`, a standalone Button posting to
-`/logout` under a line, so a member held at a step can sign out; the default shell's Header still offers only Sign
-in. `UnderAge` has no session left and shows none.
+`/logout` under a line, so a member held at a step can sign out. `UnderAge` has no session left and shows none.
+P2.12j: those steps ask for `shell.signedIn` (page.ts), and the default shell then offers no Sign in: a brand-only
+Header, no sign-in box, no footer /login link. Any other page with a session in the default shell should pass it too.
 
 **The shell (P1.25).** `renderPage` takes `islands: "on" | "off"` and an optional `shell`. "off" (the public pages
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the

@@ -233,7 +233,8 @@ async function serveTest(): Promise<void> {
           { group: "app", request, title: "Kit", body: createElement(kit.Showcase) },
         ),
     }),
-    // P2.12a: the welcome screens as interfaces/http/routes/welcome.ts shows them, without the session they need there.
+    // P2.12a: the welcome screens as interfaces/http/routes/welcome.ts shows them, without the session they need there;
+    // P2.12j: signed in, as the route marks them, so the shell offers no Sign in.
     ...[
       { path: FIXTURES.welcomeAge, title: "When were you born?", body: () => render.screens.welcomeAge() },
       {
@@ -251,7 +252,14 @@ async function serveTest(): Promise<void> {
         rateLimit: "default",
         session: "none",
         handler: ({ request }) =>
-          pageResponse(deps, { group: "app", request, title, body: body(), islands: "off", shell: { noindex: true } }),
+          pageResponse(deps, {
+            group: "app",
+            request,
+            title,
+            body: body(),
+            islands: "off",
+            shell: { noindex: true, signedIn: true },
+          }),
       }),
     ),
     // P2.13c: the account page and the settings pages inside the core shell, as their routes render them.

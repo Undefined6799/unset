@@ -5,6 +5,8 @@
 // P2.05p: given our PDS's host, the default shell's Sign in opens the sign-in box over the page as a modal <dialog>
 // with no script (invoker commands, HeaderMenu.tsx): the page behind is inert, Escape and Close leave the visitor
 // where they were. The footer's Sign in stays a link to /login, the same box as a page, for older browsers.
+// P2.12j: a page with a session (`signedIn`, the welcome steps) offers no Sign in at all: no header action, no box,
+// no footer link. Its way out is the screen's own Sign out.
 // An `error` is a catalog code the server already checked (readErrorParam); only the catalog's text is shown for it.
 import { ERROR_MESSAGES, type ErrorCode } from "@unset/shared-errors";
 import {
@@ -52,8 +54,13 @@ const SIGN_OUT = (
   </form>
 );
 
+const HOME = { label: SHELL.home, href: path("/") };
 const COLUMNS = [
-  { title: SHELL.siteColumn, links: [{ label: SHELL.home, href: path("/") }, SIGN_IN] },
+  { title: SHELL.siteColumn, links: [HOME, SIGN_IN] },
+  { title: SHELL.legalColumn, links: LEGAL },
+];
+const SIGNED_IN_COLUMNS = [
+  { title: SHELL.siteColumn, links: [HOME] },
   { title: SHELL.legalColumn, links: LEGAL },
 ];
 
@@ -89,12 +96,14 @@ export type AppShellProps = {
   feed?: true;
   /** Our PDS's host and this page's checked return path: Sign in opens in place (the default shell only). */
   signIn?: SignInInPlace;
+  /** The page has a session (the default shell only): no Sign in anywhere, and `signIn` is ignored. */
+  signedIn?: true;
   /** The theme form; the server passes it on app pages only: the footer's, or the core drawer's picker. */
   prefs?: PrefsFormsProps;
   children: ReactNode;
 };
 
-export function AppShell({ error, navigation, feed, signIn, prefs, children }: AppShellProps) {
+export function AppShell({ error, navigation, feed, signIn, signedIn, prefs, children }: AppShellProps) {
   const message = error === null ? undefined : ERROR_MESSAGES[error as keyof typeof ERROR_MESSAGES];
   const content = (
     <>
@@ -140,21 +149,29 @@ export function AppShell({ error, navigation, feed, signIn, prefs, children }: A
       </>
     );
   }
+  const inPlace = signedIn ? undefined : signIn;
+  // Signed in with nothing else in the bar, the header is the brand alone: an empty menu would be a button to nothing.
+  const header =
+    signedIn && !feed ? (
+      <Header brandOnly />
+    ) : (
+      <Header
+        {...(signedIn ? {} : { action: inPlace === undefined ? SIGN_IN : { ...SIGN_IN, dialog: SIGN_IN_BOX } })}
+        menuLabel={SHELL.menu}
+        {...(feed ? { nav: LEGAL } : {})}
+      />
+    );
   return (
     <>
       <SkipLink>{SHELL.skip}</SkipLink>
       {/* The header and main fill the first screen, so the footer starts below it (Alex, 2026-10-23). */}
       <div className={styles.page}>
-        <Header
-          action={signIn === undefined ? SIGN_IN : { ...SIGN_IN, dialog: SIGN_IN_BOX }}
-          menuLabel={SHELL.menu}
-          {...(feed ? { nav: LEGAL } : {})}
-        />
+        {header}
         <main id="main">{content}</main>
       </div>
-      {signIn === undefined ? null : <SignInDialog {...signIn} />}
+      {inPlace === undefined ? null : <SignInDialog {...inPlace} />}
       {feed ? null : (
-        <Footer columns={COLUMNS} note={SHELL.note}>
+        <Footer columns={signedIn ? SIGNED_IN_COLUMNS : COLUMNS} note={SHELL.note}>
           {prefs === undefined ? null : <PrefsForms {...prefs} />}
         </Footer>
       )}
