@@ -78,7 +78,7 @@ function setup(world: World = {}) {
     config: CONFIG,
     routes: meRoutes(deps, async (did) => {
       profileReads.push(did);
-      return world.own ?? { kind: "ok", profile: null, cards: [] };
+      return world.own ?? { kind: "ok", profile: null, cards: [], cardsComplete: true };
     }),
     policies,
     log,
@@ -285,6 +285,7 @@ describe("GET /:did", () => {
   test("me_shows_the_owner_profile_and_cards", async () => {
     const own: OwnProfile = {
       kind: "ok",
+      cardsComplete: true,
       profile: { displayName: "Alice Example", headline: "Builds things", location: "", website: "" },
       cards: [
         {
@@ -303,7 +304,13 @@ describe("GET /:did", () => {
     expect(textContent(main)).toContain("Builds things");
     expect(elements(main, "strong").map(textContent)).toContain("readme");
     expect(textContent(main)).not.toContain("Set up your profile");
+    expect(textContent(main)).not.toContain("Some of your cards");
+    expect(textContent(main)).toContain("Up to 30 links.");
     expect(profileReads).toEqual([DID]);
+    const cut = await setup({ own: { ...own, cardsComplete: false } }).get();
+    const shown = textContent(elements(parse(await cut.text()), "main")[0]);
+    expect(shown).toContain("Some of your cards could not be loaded");
+    expect(shown).toContain("Alice Example");
   });
 
   test("me_keeps_the_page_when_the_profile_cannot_be_read", async () => {

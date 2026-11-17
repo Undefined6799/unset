@@ -28,10 +28,13 @@ function store(
   const calls: Calls = { created: [], saved: [], removed: [], profile: [] };
   const base: CardStore = {
     list: async () =>
-      ok([
-        { key: "a", value: readme("A"), cid: "c" },
-        { key: "b", value: readme("B"), cid: "c" },
-      ]),
+      ok({
+        cards: [
+          { key: "a", value: readme("A"), cid: "c" },
+          { key: "b", value: readme("B"), cid: "c" },
+        ],
+        complete: true,
+      }),
     create: async (record) => {
       calls.created.push(record);
       return ok({ key: "new" });
@@ -66,7 +69,7 @@ describe("cardWrites", () => {
 
   test("a member with the most cards a page shows cannot add another", async () => {
     const full = Array.from({ length: 100 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
-    const { writes, calls } = store({ list: async () => ok(full) });
+    const { writes, calls } = store({ list: async () => ok({ cards: full, complete: true }) });
     const { content, width } = input();
     expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.too_many" });
     expect(calls.created).toEqual([]);
@@ -98,6 +101,15 @@ describe("cardWrites", () => {
     expect(calls.removed).toEqual([KEY]);
   });
 
+  test("a list the read cut short is not a count: adding and moving are refused, nothing is written", async () => {
+    const cut = { cards: [{ key: "a", value: readme("A"), cid: "c" }], complete: false };
+    const { writes, calls } = store({ list: async () => ok(cut) });
+    const { content, width } = input();
+    expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect(await writes.reorder(["a"])).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect([calls.created, calls.profile]).toEqual([[], []]);
+  });
+
   test("a reorder names each shown card once and writes the order into the profile", async () => {
     const { writes, calls } = store();
     expect(await writes.reorder(["b", "a"])).toEqual({ kind: "saved" });
@@ -105,12 +117,12 @@ describe("cardWrites", () => {
   });
 
   test("a hidden card is not part of the order, so the page's order still matches", async () => {
-    const list = async (): Promise<PdsResult<StoredCard[]>> =>
-      ok([
-        { key: "a", value: readme("A"), cid: "c" },
-        { key: "h", value: { $type: "sh.unset.section", content: { $type: "x" } }, cid: "c" },
-        { key: "bad/key", value: readme("B"), cid: "c" },
-      ]);
+    const cards: StoredCard[] = [
+      { key: "a", value: readme("A"), cid: "c" },
+      { key: "h", value: { $type: "sh.unset.section", content: { $type: "x" } }, cid: "c" },
+      { key: "bad/key", value: readme("B"), cid: "c" },
+    ];
+    const list = async () => ok({ cards, complete: true });
     const { writes, calls } = store({ list });
     expect(await writes.reorder(["a"])).toEqual({ kind: "saved" });
     expect(calls.profile).toMatchObject([{ ok: true, record: { cards: ["a"] } }]);

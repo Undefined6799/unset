@@ -53,11 +53,14 @@ export const ERROR_CODES = {
   "card.kind_unknown": { status: 400, public: true },
   "card.required": { status: 400, public: true },
   "card.too_long": { status: 400, public: true },
+  // A card form past interfaces/http's form cap: a card saved elsewhere with many long rows, which this page cannot send.
+  "card.form_too_large": { status: 413, public: true },
   "card.url_invalid": { status: 400, public: true },
   "card.email_invalid": { status: 400, public: true },
   "card.order_invalid": { status: 409, public: true },
   "card.missing": { status: 404, public: true },
   "card.too_many": { status: 409, public: true },
+  "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },
   // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.

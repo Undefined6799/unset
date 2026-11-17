@@ -10,16 +10,28 @@ import {
   readCard,
   readProfileRecord,
 } from "@unset/domains-profile";
-import { type PdsResult, respondToPdsFailure, type StoredCard, type StoredRecord } from "@unset/infrastructure-pds";
+import {
+  type CardList,
+  type PdsResult,
+  respondToPdsFailure,
+  type StoredCard,
+  type StoredRecord,
+} from "@unset/infrastructure-pds";
 
 export type OwnProfile =
-  | { readonly kind: "ok"; readonly profile: ProfileFields | null; readonly cards: readonly Card[] }
+  | {
+      readonly kind: "ok";
+      readonly profile: ProfileFields | null;
+      readonly cards: readonly Card[];
+      /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
+      readonly cardsComplete: boolean;
+    }
   | { readonly kind: "unavailable" }
   | { readonly kind: "redirect"; readonly location: string };
 
 export type OwnProfileReads = {
   readonly profile: () => Promise<PdsResult<StoredRecord | null>>;
-  readonly cards: () => Promise<PdsResult<StoredCard[]>>;
+  readonly cards: () => Promise<PdsResult<CardList>>;
 };
 
 /**
@@ -36,7 +48,8 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
   return {
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
-    cards: orderCards(cardOrder(record), shownCards(cards.value)),
+    cards: orderCards(cardOrder(record), shownCards(cards.value.cards)),
+    cardsComplete: cards.value.complete,
   };
 }
 

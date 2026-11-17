@@ -14,16 +14,16 @@ import {
 } from "@unset/domains-profile";
 import {
   type BuiltRecord,
+  type CardList,
   type PdsResult,
   respondToPdsFailure,
   type SaveOutcome,
-  type StoredCard,
 } from "@unset/infrastructure-pds";
 import { shownCards } from "./own-profile.ts";
 
 /** The member's own card and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {
-  readonly list: () => Promise<PdsResult<StoredCard[]>>;
+  readonly list: () => Promise<PdsResult<CardList>>;
   readonly create: (record: Readonly<Record<string, unknown>>) => Promise<PdsResult<{ readonly key: string }>>;
   readonly save: (
     key: CardKey,
@@ -40,6 +40,7 @@ export type CardFailure =
   | ProfileError
   | "card.missing"
   | "card.too_many"
+  | "card.list_incomplete"
   | "card.conflict"
   | "card.pds_unavailable";
 export type CardWrite =
@@ -74,13 +75,15 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
   return {
     // The page reads CARDS_MAX cards, so one past it would be stored and never shown. Counted before the write with no
     // lock (DA-4): two tabs adding at once could both pass and store one more, which the page then leaves out until a
-    // card is deleted; a member editing their own page makes that rare, and nothing is lost.
+    // card is deleted; a member editing their own page makes that rare, and nothing is lost. A list cut short by the
+    // read budget (card-records.ts) is not a count: the add is refused rather than taken as under the cap.
     create: async (content, width) => {
       const built = toCardRecord(content, width, null, now());
       if (!built.ok) return failed(built.code);
       const listed = await store.list();
       if (listed.kind !== "ok") return pdsFailure(listed);
-      if (listed.value.length >= CARDS_MAX) return failed("card.too_many");
+      if (!listed.value.complete) return failed("card.list_incomplete");
+      if (listed.value.cards.length >= CARDS_MAX) return failed("card.too_many");
       const created = await store.create(built.record);
       return created.kind === "ok" ? SAVED : pdsFailure(created);
     },
@@ -92,12 +95,14 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
     },
     // The order names the cards the page shows (own-profile.ts reads them the same way), so a hidden card never
     // makes a correct order look stale. A card added in another tab meanwhile fails the check; the editor reloads.
+    // An incomplete list cannot check an order, so the move is refused.
     reorder: async (requested) => {
       const listed = await store.list();
       if (listed.kind !== "ok") return pdsFailure(listed);
+      if (!listed.value.complete) return failed("card.list_incomplete");
       const order = reorderCards(
         requested,
-        shownCards(listed.value).map((card) => card.key),
+        shownCards(listed.value.cards).map((card) => card.key),
       );
       if (!order.ok) return failed(order.code);
       return outcome(await store.saveProfile((existing) => withCardOrder(order.order, existing, now())));

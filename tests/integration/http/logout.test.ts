@@ -176,7 +176,7 @@ beforeAll(async () => {
           log,
         },
         // The owner's page reads their records from their PDS; these tests are about sessions, so it has none yet.
-        async () => ({ kind: "ok", profile: null, cards: [] }),
+        async () => ({ kind: "ok", profile: null, cards: [], cardsComplete: true }),
       ),
     ],
     policies,

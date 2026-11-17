@@ -3,6 +3,7 @@
 // handle verification. The shortcuts sit behind the server's gate (ADR 0045); /:did opens the gate itself, after it
 // has refused a path that is no DID, so an unknown one-segment path stays a 404 and never a trip to sign-in. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
 import { type Did, parseDid } from "@unset/domains-identity";
+import { CARD_EDIT_LIMITS } from "@unset/domains-profile";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { OpenedApp } from "../app-gate.ts";
@@ -55,7 +56,14 @@ export function meRoutes(deps: AccountDeps, readOwnProfile: ReadOwnProfile): Rou
         }
         const body = deps.screens.me({
           ...props,
-          ...(own.kind === "ok" ? { profile: own.profile, cards: own.cards } : { profileUnavailable: true }),
+          ...(own.kind === "ok"
+            ? {
+                profile: own.profile,
+                cards: own.cards,
+                cardEditLimits: CARD_EDIT_LIMITS,
+                ...(own.cardsComplete ? {} : { cardsIncomplete: true }),
+              }
+            : { profileUnavailable: true }),
         });
         return deps.page({
           group: "app",
