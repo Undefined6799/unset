@@ -119,27 +119,40 @@ export function codeSpans(text: string): readonly (readonly [number, number])[] 
 }
 
 /**
- * The destinations of "](" that can close a label: outside code, after a "[" with no "]" since. Each scan starts
- * where the last one stopped: a "](" an earlier scan read past had its "]" escaped, so it closes no label, and no
- * character is read twice however many destinations fail.
+ * The destinations of "](" that can close a label: outside code, after an open label. Each scan starts where the last
+ * one stopped: a "](" an earlier scan read past had its "]" escaped, so it closes no label, and no character is read
+ * twice however many destinations fail.
  */
 function destinations(text: string, code: readonly (readonly [number, number])[]): [number, number][] {
   const spans: [number, number][] = [];
+  const labelOpenAt = openLabels(text, code);
   let scanned = 0;
-  let walked = 0;
-  let lastOpen = -1;
-  let lastClose = -1;
   for (let i = text.indexOf("]("); i !== -1; i = text.indexOf("](", i + 2)) {
-    for (; walked < i; walked += 1) {
-      if (text[walked] === "[") lastOpen = walked;
-      else if (text[walked] === "]") lastClose = walked;
-    }
-    if (i < scanned || lastOpen <= lastClose || spanEnd(code, i) !== -1) continue;
+    if (i < scanned || !labelOpenAt(i) || spanEnd(code, i) !== -1) continue;
     const [end, stop] = scanDestination(text, i + 2);
     scanned = stop;
     if (end !== -1) spans.push([i + 2, end]);
   }
   return spans;
+}
+
+/**
+ * Whether a label is open at a rising position: a "[" with no "]" after it, brackets inside code not counting, so
+ * "[a `]` b](x)" is still one label. The text is walked once, however many positions are asked about.
+ */
+function openLabels(text: string, code: readonly (readonly [number, number])[]): (at: number) => boolean {
+  let walked = 0;
+  let lastOpen = -1;
+  let lastClose = -1;
+  return (at) => {
+    for (; walked < at; walked += 1) {
+      const inCode = spanEnd(code, walked);
+      if (inCode !== -1) walked = inCode - 1;
+      else if (text[walked] === "[") lastOpen = walked;
+      else if (text[walked] === "]") lastClose = walked;
+    }
+    return lastOpen > lastClose;
+  };
 }
 
 /** Sorted, with overlapping spans joined, so a binary search finds the one holding a position. */

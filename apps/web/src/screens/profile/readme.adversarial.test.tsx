@@ -159,6 +159,18 @@ describe("parseReadme, adversarial input", () => {
     ]);
   });
 
+  test("a bracket inside code in a link label does not end the label", () => {
+    expect(parseInline("*[a `]` b](https://x/a*b) c*")).toMatchObject([
+      {
+        kind: "em",
+        children: [
+          { kind: "link", href: "https://x/a*b" },
+          { kind: "text", text: " c" },
+        ],
+      },
+    ]);
+  });
+
   test("an ordered list keeps its first number", () => {
     expect(parseReadme("3. third\n4. fourth")).toMatchObject([{ kind: "list", ordered: true, start: 3 }]);
     expect(renderToStaticMarkup(<Readme text={"3. third\n4. fourth"} />)).toContain('<ol start="3">');
