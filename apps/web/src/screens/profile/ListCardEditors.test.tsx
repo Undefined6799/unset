@@ -105,4 +105,11 @@ describe("buttons editor", () => {
     const form = addForm(page({ profile, cards: [], cardEditLimits: limits }), "buttons");
     expect(form?.textContent).toContain("Leave a button's email address, web address and own text empty to remove it.");
   });
+
+  test("an editor offers ten blank rows while its limit allows, so ten new rows take one save", () => {
+    const doc = page({ profile, cards: [], cardEditLimits: { links: 30, collection: 30, buttons: 5 } });
+    expect(fields(addForm(doc, "links")).filter((f) => f.endsWith(".uri="))).toHaveLength(10);
+    expect(fields(addForm(doc, "collection")).filter((f) => f.endsWith(".tag="))).toHaveLength(10);
+    expect(fields(addForm(doc, "buttons")).filter((f) => f.endsWith(".address="))).toHaveLength(5);
+  });
 });
