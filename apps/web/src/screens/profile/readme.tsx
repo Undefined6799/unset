@@ -48,10 +48,46 @@ function clean(src: string): string {
 type Taken = { readonly node: Inline; readonly next: number };
 const isWord = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
-function takeCode(text: string, i: number): Taken | null {
+/** The length of the run of `ch` starting at `i`. */
+function runLength(text: string, i: number, ch: string): number {
+  let j = i;
+  while (text[j] === ch) j += 1;
+  return j - i;
+}
+
+/**
+ * Where the next run of exactly `length` backticks starts, at or after a position; -1 when none does. Remembered per
+ * length, as parseInline only moves forward, so a run that never closes is searched for once, not once per opener.
+ */
+function codeCloser(text: string): (length: number, from: number) => number {
+  const memo = new Map<number, { searched: number; found: number }>();
+  return (length, from) => {
+    const seen = memo.get(length);
+    if (seen !== undefined && from >= seen.searched && (seen.found === -1 || seen.found >= from)) return seen.found;
+    const ticks = "`".repeat(length);
+    let found = text.indexOf(ticks, from);
+    while (found !== -1) {
+      const run = runLength(text, found, "`");
+      if (run === length && text[found - 1] !== "`") break;
+      found = text.indexOf(ticks, found + run);
+    }
+    memo.set(length, { searched: from, found });
+    return found;
+  };
+}
+
+/**
+ * A code span: a backtick run closed by a run of the same length, so `` `x` `` shows its backticks; one space is
+ * stripped from each end when both are there (CommonMark 0.31.2, "Code spans"). A run that never closes is text.
+ */
+function takeCode(text: string, i: number, find: Finders): Taken | null {
   if (text[i] !== "`") return null;
-  const end = text.indexOf("`", i + 1);
-  return end === -1 ? null : { node: { kind: "code", text: text.slice(i + 1, end) }, next: end + 1 };
+  const length = runLength(text, i, "`");
+  const end = find.codeClose(length, i + length);
+  if (end === -1) return { node: { kind: "text", text: "`".repeat(length) }, next: i + length };
+  const raw = text.slice(i + length, end);
+  const padded = raw.length > 1 && raw.startsWith(" ") && raw.endsWith(" ") && raw.trim() !== "";
+  return { node: { kind: "code", text: padded ? raw.slice(1, -1) : raw }, next: end + length };
 }
 
 function takeAutolink(text: string, i: number): Taken | null {
@@ -103,7 +139,11 @@ function nextIndex(text: string, needle: string): (from: number) => number {
   };
 }
 
-type Finders = { readonly labelClose: (from: number) => number; readonly bracket: (from: number) => number };
+type Finders = {
+  readonly labelClose: (from: number) => number;
+  readonly bracket: (from: number) => number;
+  readonly codeClose: (length: number, from: number) => number;
+};
 
 function takeLink(text: string, i: number, depth: number, find: Finders): Taken | null {
   if (text[i] !== "[") return null;
@@ -135,18 +175,27 @@ function takeEmphasis(text: string, i: number, depth: number, links: boolean): T
 /** Left to right; anything that does not open a construct is text. Nested constructs stop at MAX_DEPTH. */
 export function parseInline(text: string, depth = 0, links = true): Inline[] {
   const out: Inline[] = [];
-  const find: Finders = { labelClose: nextIndex(text, "]("), bracket: nextIndex(text, "[") };
+  const find: Finders = {
+    labelClose: nextIndex(text, "]("),
+    bracket: nextIndex(text, "["),
+    codeClose: codeCloser(text),
+  };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
     const taken =
       depth >= MAX_DEPTH
         ? null
-        : (takeCode(text, i) ??
+        : (takeCode(text, i, find) ??
           (links ? (takeAutolink(text, i) ?? takeLink(text, i, depth, find)) : null) ??
           takeEmphasis(text, i, depth, links));
     if (taken === null) {
       buffer += text[i];
       i += 1;
+      continue;
+    }
+    if (taken.node.kind === "text") {
+      buffer += taken.node.text;
+      i = taken.next;
       continue;
     }
     if (buffer !== "") out.push({ kind: "text", text: buffer });
@@ -191,8 +240,8 @@ function closesFence(line: string, fence: string): boolean {
 
 /** A fenced code block; an unclosed fence runs to the end of the text, as CommonMark says. */
 function takeFence(lines: readonly string[], i: number, fence: string): { block: Block; next: number } {
-  const close = lines.findIndex((l, j) => j > i && closesFence(l, fence));
-  const end = close === -1 ? lines.length : close;
+  let end = i + 1;
+  while (end < lines.length && !closesFence(lines[end] ?? "", fence)) end += 1;
   return { block: { kind: "code", text: lines.slice(i + 1, end).join("\n") }, next: end + 1 };
 }
 

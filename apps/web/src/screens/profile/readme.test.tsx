@@ -2,7 +2,7 @@
 import fc from "fast-check";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { parseReadme, Readme } from "./readme.tsx";
+import { parseInline, parseReadme, Readme } from "./readme.tsx";
 
 const html = (src: string) => renderToStaticMarkup(<Readme text={src} />);
 
@@ -114,6 +114,9 @@ describe("parseReadme, review findings on #1648", () => {
     ["underscores", " _a".repeat(33_333)],
     ["fence lines", "```\n~~~~\n".repeat(12_500)],
     ["nested emphasis", "*_**".repeat(25_000)],
+    ["blank lines before many short fences", `${"\n".repeat(80_000)}${"```\nx\n```\n".repeat(2_000)}`],
+    ["backtick runs of rising length", Array.from({ length: 445 }, (_, n) => `${"`".repeat(n + 1)}a`).join("")],
+    ["unclosed double backticks", "``a`".repeat(25_000)],
   ])("%s parse in linear time", (_name, src) => {
     expect(src.length).toBeGreaterThanOrEqual(99_000);
     const started = performance.now();
@@ -126,6 +129,15 @@ describe("parseReadme, review findings on #1648", () => {
     expect(parseReadme(long)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: long }] }]);
     const bracket = "[a](https://a.example/[x])";
     expect(parseReadme(bracket)).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: bracket }] }]);
+  });
+
+  test("a code span closes only on a run of the same length, so it can show backticks", () => {
+    expect(parseInline("Use `` `x` `` here")).toEqual([
+      { kind: "text", text: "Use " },
+      { kind: "code", text: "`x`" },
+      { kind: "text", text: " here" },
+    ]);
+    expect(parseInline("a ``b` c")).toEqual([{ kind: "text", text: "a ``b` c" }]);
   });
 
   test("trailing hashes are a closing sequence only after a space", () => {
