@@ -3,6 +3,7 @@
 // from them. Limits come from the lexicon (shared/lexicons LIMITS, P1.31); graphemes are counted the way the
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
+import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
@@ -40,20 +41,6 @@ function graphemes(text: string, stopAfter: number): number {
   return count;
 }
 
-/** A web address as people type it: "alice.dev" means https://alice.dev; one with any scheme is left as it is. */
-const withScheme = (text: string) => (/^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`);
-
-/** A plain http or https URL with a host and no credentials, as the lexicon's website and link fields expect. */
-function isWebsite(text: string): boolean {
-  if (!/^https?:\/\//i.test(text)) return false;
-  try {
-    const url = new URL(text);
-    return url.hostname !== "" && url.username === "" && url.password === "";
-  } catch {
-    return false;
-  }
-}
-
 type Checked = { ok: true; value: string } | { ok: false; code: ProfileError };
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
@@ -69,7 +56,7 @@ function checkField(field: ProfileField, raw: unknown): Checked {
       ? bytes(value) > LIMITS.profile.websiteBytes
       : graphemes(value, APP_LIMITS[field]) > APP_LIMITS[field];
   if (tooLong) return { ok: false, code: "profile.too_long" };
-  if (field === "website" && value !== "" && !isWebsite(value)) return { ok: false, code: "profile.url_invalid" };
+  if (field === "website" && value !== "" && !isWebAddress(value)) return { ok: false, code: "profile.url_invalid" };
   return { ok: true, value };
 }
 
