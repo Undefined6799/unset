@@ -1,6 +1,14 @@
 // The atproto network behind small contracts (guideline §1): the identity domain's DID and handle lookups, and the one
 // OAuth client (P2.04) with its keys, metadata and scope check, and the start and end of a sign-in (P2.05, P2.06).
 
+export {
+  CARD_COLLECTION,
+  createCardRecord,
+  deleteCardRecord,
+  listCardRecords,
+  type StoredCard,
+  saveCardRecord,
+} from "./card-records.ts";
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
 export {
   ClientKeys,
@@ -35,12 +43,5 @@ export {
   type SessionInfo,
 } from "./pds-call.ts";
 export { isDpopNonceHandshake } from "./pds-errors.ts";
-export {
-  type BuiltRecord,
-  loadProfileRecord,
-  PROFILE_COLLECTION,
-  PROFILE_RKEY,
-  type SaveOutcome,
-  type StoredRecord,
-  saveProfileRecord,
-} from "./profile-record.ts";
+export { loadProfileRecord, PROFILE_COLLECTION, PROFILE_RKEY, saveProfileRecord } from "./profile-record.ts";
+export type { BuiltRecord, SaveOutcome, StoredRecord } from "./repo-record.ts";
