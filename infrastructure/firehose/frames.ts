@@ -25,14 +25,19 @@ export type AccountStatus = (typeof ACCOUNT_STATUSES)[number] | "unknown";
 
 /**
  * One frame of the stream with a sequence number. Every frame reaches the consumer, even a commit whose changes are
- * all in collections ingest ignores, so the cursor it writes moves past it.
+ * all in collections ingest ignores, so the cursor it writes moves past it. `seq` is never signed (it is the PDS's
+ * stream position, https://atproto.com/specs/event-stream), so ingest uses it only as the cursor.
  */
 export type RepoFrame =
   | {
       readonly kind: "commit";
       readonly seq: number;
       readonly did: string;
-      readonly rev: string;
+      /**
+       * The signed commit's rev, or null for a commit with no ops: parseCommitAuthenticated returns before it checks
+       * any signature when there is nothing to prove, so that rev is unauthenticated and ingest must not use it.
+       */
+      readonly rev: string | null;
       readonly changes: readonly RecordChange[];
     }
   /** `status` is null when the PDS sent none; a value the spec does not list arrives as `unknown`, never dropped. */
@@ -160,5 +165,6 @@ export function commitFrame(body: CommitBody, writes: readonly CommitEvt[]): Rep
             record: write.record,
           },
   );
-  return { kind: "commit", seq: body.seq, did: body.repo, rev: body.rev, changes };
+  const rev = changes.length === 0 ? null : body.rev;
+  return { kind: "commit", seq: body.seq, did: body.repo, rev, changes };
 }

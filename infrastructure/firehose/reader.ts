@@ -130,14 +130,24 @@ async function readUntilStop(options: FirehoseReaderOptions, signal: AbortSignal
   }
 }
 
+/** onStop is the caller's code: a throw there must not end the reader, which promises never to throw. */
+function report(options: FirehoseReaderOptions, stop: Stop): void {
+  try {
+    options.onStop(stop.reason, stop.cause);
+  } catch {
+    // Nothing safe to do with it here: logging it could carry what onStop failed on.
+  }
+}
+
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    const cancel = () => {
+    const done = () => {
       clearTimeout(timer);
+      signal.removeEventListener("abort", done); // the signal outlives every wait
       resolve();
     };
-    signal.addEventListener("abort", cancel, { once: true });
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
   });
 
 /**
@@ -156,7 +166,7 @@ export async function readFirehose(options: FirehoseReaderOptions, signal: Abort
       });
     } catch (error) {
       const stop = error as Stop;
-      options.onStop(stop.reason, stop.cause);
+      report(options, stop);
       connection.abort(); // closes the socket before the wait
       await wait(delay, signal);
       delay = Math.min(delay * 2, options.maxRestartDelayMs);

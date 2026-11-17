@@ -197,6 +197,47 @@ describe("readFirehose", () => {
     expect(run.applied).toEqual([]);
   });
 
+  test("reader.zero_op_commit_carries_no_rev", async () => {
+    // With no ops the parser returns before checking any signature, so a forged key still gets through: the rev
+    // must not reach ingest as if it were signed.
+    const key = await Secp256k1Keypair.create();
+    const forger = await Secp256k1Keypair.create();
+    const commit = await signedRepo(key);
+    const sent = [await commit(1, [], forger)];
+    const { run } = await setup(
+      () => sent,
+      undefined,
+      () => key.did(),
+    );
+    await until(() => run.applied.length === 1);
+    expect(run.applied[0]).toEqual({ kind: "commit", seq: 1, did: DID, rev: null, changes: [] });
+  });
+
+  test("reader.survives_a_throwing_on_stop", async () => {
+    const sent = [{ seq: 1, bytes: frame("#account", { seq: 1, did: DID, time: "t" }) }]; // unreadable
+    const pds = await fakePds(() => sent);
+    const controller = new AbortController();
+    let stops = 0;
+    const done = readFirehose(
+      {
+        service: pds.url,
+        signingKey: async () => "unused",
+        consumer: { cursor: async () => null, apply: async () => undefined, outdatedCursor: async () => undefined },
+        onStop: () => {
+          stops += 1;
+          throw new Error("logger down");
+        },
+        restartDelayMs: 5,
+        maxRestartDelayMs: 5,
+      },
+      controller.signal,
+    );
+    cleanups.push(() => pds.close());
+    await until(() => stops >= 2); // it kept reading after the first throw
+    controller.abort();
+    await expect(done).resolves.toBeUndefined();
+  });
+
   test("reader.handler_failure_replays_from_cursor", async () => {
     const key = await Secp256k1Keypair.create();
     const commit = await signedRepo(key);
