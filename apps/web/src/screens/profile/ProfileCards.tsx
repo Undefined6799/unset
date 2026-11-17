@@ -155,14 +155,21 @@ function CardBody({ content }: { readonly content: CardView["content"] }) {
   }
 }
 
-/** The cards in page order. An empty list renders nothing. */
-export function ProfileCards({ cards }: { readonly cards: readonly CardView[] }) {
+/** The cards in page order. An empty list renders nothing. On the owner's page `controls` adds each card's own. */
+export function ProfileCards({
+  cards,
+  controls,
+}: {
+  readonly cards: readonly CardView[];
+  readonly controls?: (index: number) => ReactNode;
+}) {
   if (cards.length === 0) return null;
   return (
     <div className={styles.cards}>
-      {cards.map((card) => (
+      {cards.map((card, index) => (
         <section key={card.key} className={styles.card} data-width={card.width}>
           <CardBody content={card.content} />
+          {controls?.(index)}
         </section>
       ))}
     </div>
