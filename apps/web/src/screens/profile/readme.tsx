@@ -5,6 +5,7 @@
 // (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here throws: any input renders.
 import { type SafeHref, safeHref } from "@unset/shared-ui";
 import { Children, type ReactNode } from "react";
+import { codeCloser, destinationEnd, emphasisCloser, isWord, type Mark, nextIndex, runLength } from "./readme-scan.ts";
 
 export type Inline =
   | { readonly kind: "text"; readonly text: string }
@@ -46,35 +47,6 @@ function clean(src: string): string {
 // ---- Inline ------------------------------------------------------------------------------------------------------
 
 type Taken = { readonly node: Inline; readonly next: number };
-const isWord = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
-
-/** The length of the run of `ch` starting at `i`. */
-function runLength(text: string, i: number, ch: string): number {
-  let j = i;
-  while (text[j] === ch) j += 1;
-  return j - i;
-}
-
-/**
- * Where the next run of exactly `length` backticks starts, at or after a position; -1 when none does. Remembered per
- * length, as parseInline only moves forward, so a run that never closes is searched for once, not once per opener.
- */
-function codeCloser(text: string): (length: number, from: number) => number {
-  const memo = new Map<number, { searched: number; found: number }>();
-  return (length, from) => {
-    const seen = memo.get(length);
-    if (seen !== undefined && from >= seen.searched && (seen.found === -1 || seen.found >= from)) return seen.found;
-    const ticks = "`".repeat(length);
-    let found = text.indexOf(ticks, from);
-    while (found !== -1) {
-      const run = runLength(text, found, "`");
-      if (run === length && text[found - 1] !== "`") break;
-      found = text.indexOf(ticks, found + run);
-    }
-    memo.set(length, { searched: from, found });
-    return found;
-  };
-}
 
 /**
  * A code span: a backtick run closed by a run of the same length, so `` `x` `` shows its backticks; one space is
@@ -97,52 +69,11 @@ function takeAutolink(text: string, i: number): Taken | null {
   return { node: { kind: "link", href, children: [{ kind: "text", text: href }] }, next: i + match[0].length };
 }
 
-/** The longest link destination scanned: the lexicon's 2,000-byte address limit. */
-const MAX_DESTINATION = 2_000;
-
-/**
- * Where a link destination ends: the ")" that balances its parentheses, a backslash escaping the next character
- * (CommonMark 0.31.2, "Links"). -1 when none does within MAX_DESTINATION characters, or before whitespace, which a
- * destination may not hold, or a bracket, which this subset does not link. A scan therefore never crosses the next
- * label, so all the scans together read each character at most once, however many links never close.
- */
-function destinationEnd(text: string, from: number): number {
-  let open = 0;
-  const limit = Math.min(text.length, from + MAX_DESTINATION);
-  for (let j = from; j < limit; j += 1) {
-    const ch = text[j] ?? "";
-    if (ch === "[" || ch === "]" || /\s/.test(ch)) return -1;
-    if (ch === "\\") j += 1;
-    else if (ch === "(") open += 1;
-    else if (ch === ")") {
-      if (open === 0) return j;
-      open -= 1;
-    }
-  }
-  return -1;
-}
-
-/**
- * The next index of `needle` at or after a position, remembered: parseInline only moves forward, so the text is
- * searched once per needle rather than once per opener (an unclosed "[" repeated would otherwise be quadratic).
- */
-function nextIndex(text: string, needle: string): (from: number) => number {
-  let searched = Number.POSITIVE_INFINITY;
-  let found = -1;
-  return (from) => {
-    const stale = from < searched || (found !== -1 && found < from);
-    if (stale) {
-      searched = from;
-      found = text.indexOf(needle, from);
-    }
-    return found;
-  };
-}
-
 type Finders = {
   readonly labelClose: (from: number) => number;
   readonly bracket: (from: number) => number;
   readonly codeClose: (length: number, from: number) => number;
+  readonly emphasisClose: (mark: Mark, from: number) => number;
 };
 
 function takeLink(text: string, i: number, depth: number, find: Finders): Taken | null {
@@ -159,15 +90,15 @@ function takeLink(text: string, i: number, depth: number, find: Finders): Taken 
   return { node: { kind: "link", href, children }, next: urlEnd + 1 };
 }
 
-function takeEmphasis(text: string, i: number, depth: number, links: boolean): Taken | null {
+function takeEmphasis(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
   const strong = text.startsWith("**", i) || text.startsWith("__", i);
-  const mark = strong ? text.slice(i, i + 2) : text[i];
-  if (mark === undefined || (mark !== "*" && mark !== "_" && !strong)) return null;
-  if (mark.startsWith("_") && isWord(text[i - 1])) return null;
+  const ch = text[i];
+  if (ch !== "*" && ch !== "_") return null;
+  if (ch === "_" && isWord(text[i - 1])) return null;
+  const mark: Mark = strong ? (ch === "*" ? "**" : "__") : ch;
   const from = i + mark.length;
-  let end = text.indexOf(mark, from);
-  while (!strong && end !== -1 && text[end + 1] === mark) end = text.indexOf(mark, end + 2);
-  if (end <= from || (mark.startsWith("_") && isWord(text[end + mark.length]))) return null;
+  const end = find.emphasisClose(mark, from);
+  if (end <= from) return null;
   const children = parseInline(text.slice(from, end), depth + 1, links);
   return { node: { kind: strong ? "strong" : "em", children }, next: end + mark.length };
 }
@@ -179,6 +110,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
     labelClose: nextIndex(text, "]("),
     bracket: nextIndex(text, "["),
     codeClose: codeCloser(text),
+    emphasisClose: emphasisCloser(text),
   };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
@@ -187,7 +119,7 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
         ? null
         : (takeCode(text, i, find) ??
           (links ? (takeAutolink(text, i) ?? takeLink(text, i, depth, find)) : null) ??
-          takeEmphasis(text, i, depth, links));
+          takeEmphasis(text, i, depth, links, find));
     if (taken === null) {
       buffer += text[i];
       i += 1;
