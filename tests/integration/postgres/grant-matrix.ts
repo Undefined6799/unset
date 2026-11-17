@@ -5,7 +5,7 @@
 import { type Pool, withClient } from "@unset/infrastructure-postgres";
 
 /** The schemas whose objects the matrix covers; `plugin_<id>` schemas join them (decision 25). */
-export const SCHEMAS = ["app", "core", "idx", "audit", "types", "public"];
+export const SCHEMAS = ["app", "core", "idx", "mod", "audit", "types", "public"];
 const AUDITOR_TABLES = ["audit.chain", "audit.segment", "audit.redaction_log"];
 
 export type Privileges = string[];

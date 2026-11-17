@@ -24,5 +24,45 @@
     "strategy": "audit_redact",
     "class": "mod",
     "reason": "the person who caused a moderation or security event; redacted with the same side row as its subject (P1.15k, ADR 0043)"
+  },
+  "idx.account.did": {
+    "strategy": "delete_row",
+    "reason": "the person's index row; deleted on erasure, and its jobs, profile, cards and blob rows go with it by cascade"
+  },
+  "idx.account_job.did": {
+    "strategy": "delete_row",
+    "reason": "pending index work for the person; removed with their index row"
+  },
+  "idx.profile.did": {
+    "strategy": "delete_row",
+    "reason": "the person's indexed public profile record; removed with their index row"
+  },
+  "idx.section.did": {
+    "strategy": "delete_row",
+    "reason": "the person's indexed public card records; removed with their index row"
+  },
+  "idx.record_blob.did": {
+    "strategy": "delete_row",
+    "reason": "the blobs the person's indexed records reference; removed with their index row"
+  },
+  "idx.dead_letter.did": {
+    "strategy": "delete_row",
+    "reason": "a failed index event or backfill for the person; it has no use once they are erased"
+  },
+  "mod.account_state.did": {
+    "strategy": "delete_row",
+    "reason": "a moderator's delist or suspension state for the person; the decision itself stays in the audit mod lane"
+  },
+  "idx.profile.uri": {
+    "strategy": "delete_row",
+    "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
+  },
+  "idx.section.uri": {
+    "strategy": "delete_row",
+    "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
+  },
+  "idx.record_blob.uri": {
+    "strategy": "delete_row",
+    "reason": "the AT-URI of the person's own indexed record; it names their DID and goes with their index row"
   }
 }

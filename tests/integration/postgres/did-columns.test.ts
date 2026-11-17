@@ -176,7 +176,7 @@ describe("DID columns", () => {
     const pool = await migratedWith(
       "CREATE TABLE idx.r (record_uri types.at_uri, uris types.at_uri[], dids types.did[]); CREATE TABLE idx.s (record_uri text)",
     );
-    const indexed = (await didColumns(pool)).filter((c) => c.schema === "idx");
+    const indexed = (await didColumns(pool)).filter((c) => c.schema === "idx" && ["r", "s"].includes(c.table));
     expect(indexed.map((c) => `${c.table}.${c.column} ${c.kind}`)).toEqual([
       "r.dids did[]",
       "r.record_uri at_uri",
