@@ -8,16 +8,29 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"; // guard-allow: egress inbound listener only, sends nothing out
-import { bootOrExit } from "@unset/shared-config";
+import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
 import { drain, exitOnSignals, headerSets, hostAllowed } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
 import { schema } from "./src/lib/server/config.ts";
-import { NOTE_KEY, type ProcessNote, type RequestNote } from "./src/lib/server/note.ts";
+import { NOTE_KEY, type ProcessNote, type RequestNote, STAND_INS_KEY, type StandIns } from "./src/lib/server/note.ts";
 
 const config = bootOrExit(schema);
 const log = createLogger({ service: "web", commit: config.UNSET_COMMIT, env: config.UNSET_ENV });
+// Last resort (as interfaces/http/fatal.ts): without these Node prints the raw error past the scrubbing logger, and a
+// library message can carry a DID or handle (SE-7). A rejection drains as on SIGTERM; an uncaught exception exits 1
+// at once (Node 26 doc/api/process.md, 'uncaughtException': not safe to resume).
+process.on("unhandledRejection", (reason: unknown) => {
+  log.logError(reason);
+  process.kill(process.pid, "SIGTERM");
+});
+process.on("uncaughtException", (error: unknown) => {
+  log.logError(error);
+  process.exit(1);
+});
+const standIns = (globalThis as Record<symbol, unknown>)[STAND_INS_KEY] as StandIns | undefined;
 const note: ProcessNote = {
   config,
+  ...(standIns === undefined ? {} : { standIns }),
   requests: new AsyncLocalStorage<RequestNote>(),
   shutdown: { draining: [], close: [] },
 };
@@ -29,8 +42,19 @@ process.env.ORIGIN = config.PUBLIC_ORIGIN;
 process.env.BODY_SIZE_LIMIT = String(config.HTTP_BODY_LIMIT_BYTES);
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
-/** Loaded by URL after the note is published, so the type checker does not walk the build output. */
-const { handler } = (await import(new URL("./build/handler.js", import.meta.url).href)) as { handler: NodeHandler };
+/**
+ * Loaded by URL after the note is published, so the type checker does not walk the build output. Loading it runs the
+ * `init` hook, which builds the services: a connection budget the role cannot hold is a ConfigError (exit 78, as
+ * interfaces/http/main.ts), and any other failure is logged by class only (SE-7) and exits 1 before we listen.
+ */
+const { handler } = (await import(new URL("./build/handler.js", import.meta.url).href).catch((error: unknown) => {
+  try {
+    exitOnConfigError(error);
+  } catch {
+    log.logError(error);
+    process.exit(1);
+  }
+})) as { handler: NodeHandler };
 
 /** Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). */
 const BASE_HEADERS = headerSets(config).static;
