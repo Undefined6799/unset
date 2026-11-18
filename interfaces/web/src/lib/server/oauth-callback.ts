@@ -52,7 +52,9 @@ async function askWithPage(request: Request, appState: string, deadline: AbortSi
   const again = appStateOf({ ...state, silent: false });
   const sent = await authorizationTarget(state.expectedDid ?? services().pdsIssuer, { appState: again, deadline });
   if (!sent.ok) deny(sent.code);
-  redirect(303, sent.target);
+  // Kit 3.2.0 refuses an external redirect unless allowed by origin (src/exports/url.js validate_redirect_location):
+  // only our PDS's, since only its accounts sign in (P1.36v).
+  redirect(303, sent.target, { external: [services().pdsIssuer] });
 }
 
 /** The book's steps 3 to 9, after the library has completed (or refused) the authorization. Always throws a 303. */
