@@ -626,3 +626,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0056](0056-web-boundary-by-file-kind.md)):** the web process moves to SvelteKit and Hono is removed, with the app
   CSP change written out in 0054; shadcn-svelte and one theme file replace the shared/ui approval rule; the boundary in
   the web process is by file kind and the request gate is `server.ts` plus the hook. 0015 and 0016 are superseded.
+- **ADR 0058 accepted (Alex, 2026-11-17 22:51:02Z, against 7ddf33d; own record:
+  [0058](0058-read-the-stream-without-the-firehose-class.md)):** the indexer reads our PDS's stream with
+  `@atproto/sync`'s `parseCommitAuthenticated` and `@atproto/xrpc-server`'s `Subscription`, not the `Firehose`
+  class, and fails a commit with an unproven op. The phrase "with `@atproto/sync`'s `Firehose` (no runner: events are
+  handled one at a time, in order)" of ADR 0052 decision 1 is superseded.

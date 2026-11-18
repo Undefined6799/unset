@@ -8,6 +8,7 @@
     { "path": "domains/identity" },
     { "path": "domains/profile" },
     { "path": "infrastructure/audit" },
+    { "path": "infrastructure/firehose" },
     { "path": "infrastructure/net-guard" },
     { "path": "infrastructure/pds" },
     { "path": "infrastructure/postgres" },
