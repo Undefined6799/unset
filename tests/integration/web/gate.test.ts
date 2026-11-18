@@ -88,12 +88,15 @@ afterAll(async () => {
 });
 
 /** A form post from our own origin, from `from` (a client address the edge names). */
+/** A fresh client address, so a test never shares the unknown-address bucket (shared/http rateLimit.ts). */
+const from = (): Record<string, string> => ({ "x-forwarded-for": clientAddress() });
 const formPost = (path: string, body: string, from = clientAddress(), headers: Record<string, string> = {}) =>
   web.fetch(path, {
     method: "POST",
     body,
     headers: {
       origin: ORIGIN,
+      accept: "text/html", // a browser's form post with no script; an enhanced one asks for JSON
       "content-type": "application/x-www-form-urlencoded",
       "x-forwarded-for": from,
       ...headers,
@@ -207,11 +210,61 @@ describe("session", () => {
   test("a_signed_in_page_sends_a_visitor_to_login", async () => {
     const response = await web.fetch("/test-routes/members");
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
   });
 
-  test("a_signed_in_write_without_a_session_is_401", async () => {
-    expect((await formPost("/test-routes/members", "x=1")).status).toBe(401);
+  test("a_page_with_a_parameter_returns_to_its_fixed_path_never_the_request", async () => {
+    const response = await web.fetch("/test-routes/members/abc?next=//evil.test", { headers: from() });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+  });
+
+  test("a_page_members_write_is_read_by_visitors_and_written_only_with_a_session", async () => {
+    const read = await web.fetch("/test-routes/writes/abc", { headers: from() });
+    expect(read.status).toBe(200);
+    expect(await read.text()).toContain("visitor");
+    const visitorWrite = await formPost("/test-routes/writes/abc?/save", "x=1");
+    expect(visitorWrite.status).toBe(303);
+    expect(visitorWrite.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+    const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"e".repeat(24)}`))}`;
+    expect((await formPost("/test-routes/writes/abc?/save", "x=1", clientAddress(), { cookie })).status).toBe(200);
+  });
+
+  test("a_members_writes_count_against_the_write_limit", async () => {
+    const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"f".repeat(24)}`))}`;
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i += 1) {
+      statuses.push((await formPost("/test-routes/writes/abc?/save", "x=1", clientAddress(), { cookie })).status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    // Reading the page is not a write: the member's write limit does not hold it back.
+    expect((await web.fetch("/test-routes/writes/abc", { headers: { cookie, ...from() } })).status).toBe(200);
+  });
+
+  test("an_app_page_is_private_and_varies_on_cookie_a_public_one_is_not", async () => {
+    const app = await web.fetch("/test-routes/form-post", { headers: from() });
+    expect(app.headers.get("cache-control")).toBe("private, no-store");
+    expect(app.headers.get("vary")).toContain("Cookie");
+    const open = await web.fetch("/test-routes/plain-page", { headers: from() });
+    expect(open.headers.get("cache-control")).toBeNull();
+    expect(open.headers.get("vary") ?? "").not.toContain("Cookie");
+  });
+
+  test("a_signed_in_write_without_a_session_goes_to_sign_in", async () => {
+    const response = await formPost("/test-routes/members", "x=1");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+    // The same post enhanced by SvelteKit's client gets the redirect as JSON its client follows (kit actions.js).
+    const enhanced = await formPost("/test-routes/members", "x=1", clientAddress(), {
+      accept: "application/json",
+      "x-sveltekit-action": "true",
+    });
+    expect(await enhanced.json()).toEqual({
+      type: "redirect",
+      status: 303,
+      location: "/login?next=%2Ftest-routes%2Fmembers",
+    });
   });
 
   test("a_session_reaches_the_page", async () => {
@@ -228,6 +281,14 @@ describe("session", () => {
       headers: { cookie: `__Host-sid=${one}; __Host-sid=${two}` },
     });
     expect(response.status).toBe(303);
+  });
+
+  test("a_page_with_no_script_reads_no_session", async () => {
+    const response = await web.fetch("/test-routes/plain-page", {
+      headers: { cookie: `__Host-sid=${"x".repeat(43)}`, ...from() },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toBeNull();
   });
 
   test("an_unknown_cookie_is_cleared_host_only", async () => {
@@ -293,6 +354,16 @@ describe("policies and logs", () => {
     expect(text).not.toContain("203.0.113.9");
     expect(text).not.toContain("did:plc:");
     expect(text).not.toContain("must never see");
+  });
+
+  test("stand_ins_are_refused_outside_the_test_profile", async () => {
+    const started = startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false" }, {});
+    const failure = await started.then(
+      () => "listened",
+      (error: unknown) => String(error),
+    );
+    expect(failure).toContain("exited before listening");
+    expect(failure).not.toContain("config.invalid");
   });
 
   test("the_process_drains_and_exits_0", async () => {

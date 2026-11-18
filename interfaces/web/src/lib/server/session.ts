@@ -1,7 +1,9 @@
 // Reading the browser session in the gate (P2.03; plan section 5.3). The cookie is `__Host-sid` as interfaces/http
 // sets it; signing in and out (P1.20e) write it. Read-only here: onboarding and the email recheck join in P1.20f.
 import type { RequestEvent } from "@sveltejs/kit";
+import type { Session } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
+import { issuerOrigin } from "./sign-in-state.ts";
 
 export const SESSION_COOKIE = "__Host-sid";
 
@@ -19,12 +21,19 @@ export function sessionCookieValue(header: string | null): string | null {
   return values.length === 1 ? (values[0] as string) : null;
 }
 
-/** The request's signed-in DID, from one store read; an unknown, malformed or expired cookie is cleared. */
-export async function sessionDidOf(event: RequestEvent, deadline: AbortSignal): Promise<string | undefined> {
+/** The request's live session, from one store read; an unknown, malformed or expired cookie is cleared. */
+export async function sessionOf(event: RequestEvent, deadline: AbortSignal): Promise<Session | undefined> {
   const cookieValue = sessionCookieValue(event.request.headers.get("cookie"));
   if (cookieValue === null) return undefined;
   const read = await services().sessions.read({ key: event.request, cookieValue, deadline });
   if (read.clearCookie)
     event.cookies.delete(SESSION_COOKIE, { path: "/", secure: true, httpOnly: true, sameSite: "lax" });
-  return read.session?.did;
+  return read.session ?? undefined;
+}
+
+/** The issuer origin a session carries, checked again on the way out (interfaces/http routes/account-issuer.ts). */
+export function sessionIssuerOrigin(session: Session | undefined): string | null | undefined {
+  const stored = session?.issuerOrigin ?? null;
+  if (stored === null) return undefined;
+  return issuerOrigin(stored) === stored ? stored : null;
 }
