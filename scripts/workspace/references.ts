@@ -218,6 +218,33 @@ function importProblems(root: string, ws: Workspace, byName: Map<string, string>
   });
 }
 
+/**
+ * The zero-dependency workspaces may not import their test runner (dependency-cruiser's admin-services-zero-deps and
+ * allowlist-zero-deps cover test files too), so their tests live in one named folder outside them. Exactly these two,
+ * and only that folder; a test there counts for a workspace when it imports that workspace (coordinator ruling
+ * 2026-11-18 13:25Z under ADR 0059, P2.09).
+ */
+const TESTS_ELSEWHERE: Readonly<Record<string, { folder: string; imports: RegExp }>> = {
+  "interfaces/pds-admin": {
+    folder: "tests/integration/pds-admin",
+    imports: /from\s+["'](?:\.\.\/)+interfaces\/pds-admin\/[^"']+["']/,
+  },
+  "shared/admin-envelope": {
+    folder: "tests/integration/pds-admin",
+    imports: /from\s+["']@unset\/shared-admin-envelope["']/,
+  },
+};
+
+/** Whether a workspace has a test: beside its code, or for the two named above, in their one test folder. */
+function hasTest(root: string, dir: string): boolean {
+  if (sourceFiles(root, [dir]).some((f) => TEST_FILE.test(f))) return true;
+  const elsewhere = TESTS_ELSEWHERE[dir];
+  if (elsewhere === undefined) return false;
+  return sourceFiles(root, [elsewhere.folder]).some(
+    (f) => TEST_FILE.test(f) && elsewhere.imports.test(readFileSync(join(root, f), "utf8")),
+  );
+}
+
 /** Every rule of the workspace convention, as a sorted list of problems; empty means the tree conforms. */
 export function workspaceProblems(root: string): string[] {
   const workspaces = findWorkspaces(root);
@@ -235,7 +262,7 @@ export function workspaceProblems(root: string): string[] {
       continue;
     }
     if (!rootRefs.has(ws.dir)) problems.push(`tsconfig.json: references no ${ws.dir}`);
-    if (!sourceFiles(root, [ws.dir]).some((f) => TEST_FILE.test(f))) problems.push(`${ws.dir}: has no *.test.ts`);
+    if (!hasTest(root, ws.dir)) problems.push(`${ws.dir}: has no *.test.ts`);
     problems.push(
       ...manifestProblems(ws),
       ...referenceProblems(ws, byName, pkgOf),
