@@ -15,7 +15,9 @@
     "./theme.css": "./theme.css",
     "./lib/utils": "./lib/utils.ts",
     "./lib/components/icon": "./lib/components/icon/index.ts",
-    "./lib/components/ui/*": "./lib/components/ui/*/index.ts"
+    "./lib/components/ui/*": "./lib/components/ui/*/index.ts",
+    "./lib/components/profile/*": "./lib/components/profile/*",
+    "./lib/profile/view": "./lib/profile/view.ts"
   },
   "scripts": {
     "build": "vite build --config vite.config.ts && vite build --config vite.config.ts --ssr render.tsx",
