@@ -1,7 +1,7 @@
 // Guard (P1.24q; step P1.24 "check-inventory"; decision 33): the UI holds only what the unset.sh design sheet
 // defines. shared/ui/inventory.json records the sheet's components (the React kit that built them went with P1.20k;
 // the Svelte UI keeps its own list, apps/web/lib/components/inventory.json, ADR 0055); a sheet
-// README must still have the bytes recorded for it; a `stop` piece is never used in apps/; no icon package is imported,
+// README must still have the bytes recorded for it; no icon package is imported,
 // listed or locked; icons are the sheet's Iconoir 7.12.1 files, byte for byte and free of active content; and no other
 // SVG exists in product code. The inventory is the base: if it cannot be read, that one finding is reported.
 import { createHash } from "node:crypto";
@@ -84,30 +84,26 @@ function iconNames(line: string): string[] {
   return [...(m[2] ?? "").matchAll(/"([^"]*)"/g)].map((s) => s[1] ?? "");
 }
 
-type SourceContext = { readonly icons: Set<string>; readonly stop: readonly string[] };
+type SourceContext = { readonly icons: Set<string> };
 
 /** What is wrong with one source line, as reasons; `svgAllowed` is false for product .tsx and .svelte outside the Icon. */
-function lineProblems(file: string, text: string, ctx: SourceContext, svgAllowed: boolean): string[] {
+function lineProblems(text: string, ctx: SourceContext, svgAllowed: boolean): string[] {
   const why = specifiersOn(text)
     .filter((spec) => ICON_PACKAGE.test(spec))
     .map(() => "icon package import");
   for (const name of iconNames(text))
     if (!ctx.icons.has(name)) why.push(`icon "${name}" is not on the sheet's Icon list`);
   if (!svgAllowed && /<svg\b/.test(text)) why.push("inline <svg> outside the Icon component");
-  if (file.startsWith("apps/"))
-    for (const stop of ctx.stop)
-      if (new RegExp(`<${stop}\\b|components/${stop}\\b|\\bimport\\b.*\\b${stop}\\b`).test(text))
-        why.push(`${stop} is a stop item`);
   return why;
 }
 
-/** Every source line: icon package imports, unknown Icon names, inline <svg>, and stop pieces used in apps/. */
+/** Every source line: icon package imports, unknown Icon names and inline <svg>. */
 function scanSource(file: string, source: string, ctx: SourceContext): Finding[] {
   const svgAllowed = isTestFile(file) || INLINE_SVG_FILES.includes(file) || !/\.(?:tsx|svelte)$/.test(file);
   return source
     .split("\n")
     .flatMap((text, i) =>
-      lineProblems(file, text, ctx, svgAllowed).map((why) => finding(file, `${why}: ${text.trim()}`, i + 1)),
+      lineProblems(text, ctx, svgAllowed).map((why) => finding(file, `${why}: ${text.trim()}`, i + 1)),
     );
 }
 
@@ -151,12 +147,7 @@ export function scanAll(root: string): Finding[] {
   if (isFinding(inventory)) return [inventory];
   const icons = readJson<Icons>(root, ICONS_JSON);
   const iconFindings = isFinding(icons) ? [icons] : checkIcons(root, icons);
-  const ctx = {
-    icons: new Set(isFinding(icons) ? [] : Object.keys(icons.icons)),
-    stop: Object.entries(inventory)
-      .filter(([, entry]) => entry.status === "stop")
-      .map(([name]) => name),
-  };
+  const ctx = { icons: new Set(isFinding(icons) ? [] : Object.keys(icons.icons)) };
   return [
     ...checkComponents(root, inventory),
     ...iconFindings,

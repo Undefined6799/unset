@@ -1,4 +1,3 @@
-// fixture: apps/web/src/Share.tsx findings=0
-import { Icon } from "@unset/shared-ui";
-export const Share = (out: boolean) => <Icon name={out ? "external" : "next"} size={16} />;
-export const Done = () => <Icon name="done" label="Saved" />;
+// fixture: apps/web/lib/components/profile/card-controls.svelte findings=0
+<Icon name={out ? "external" : "next"} size={16} />
+<Icon name="done" label="Saved" />
