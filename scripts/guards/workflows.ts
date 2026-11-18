@@ -92,11 +92,16 @@ function isPushedDigestPull(file: string, lines: readonly string[], i: number): 
 
 const UNPINNED_RUN = "container started without a digest-pinned image";
 
-/** Pinning, trigger and permission problems visible on one line. */
+/**
+ * Pinning, trigger and permission problems visible on one line. An action is a GitHub-owned repository at a full
+ * commit SHA. The only sub-actions accepted are actions/cache's restore and save (P0.07m: e2e.yml keeps apt packages
+ * after a failed install, which the combined action's post step, `post-if: success()`, does not); they are folders of
+ * the same repository at the same SHA (actions/cache v6.1.0 restore/README.md, save/README.md).
+ */
 function lineProblems(line: string): string[] {
   const found: string[] = [];
   const uses = /\buses["']?:\s*["']?([^\s"']+)/.exec(line)?.[1];
-  if (uses && !uses.startsWith("./") && !/^actions\/[\w.-]+@[0-9a-f]{40}$/.test(uses)) {
+  if (uses && !uses.startsWith("./") && !/^actions\/(?:[\w.-]+|cache\/restore|cache\/save)@[0-9a-f]{40}$/.test(uses)) {
     found.push(`action not GitHub-owned and SHA-pinned: ${uses}`);
   }
   // github-script runs its `script:` input as code, out of reach of the no-expression-in-run rule.

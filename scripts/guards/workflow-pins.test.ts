@@ -28,6 +28,16 @@ describe("workflows", () => {
   test("all_actions_sha_pinned", () => {
     expect(problems(withJob(job("    steps:\n      - uses: actions/checkout@v7\n")))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: someone/action@${"a".repeat(40)}\n`)))).toHaveLength(1);
+    // P0.07m: actions/cache's restore and save folders pass at a SHA; no other sub-path, and not at a tag.
+    for (const sub of ["cache/restore", "cache/save"]) {
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@${"a".repeat(40)}\n`)))).toEqual([]);
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@v6\n`)))).toHaveLength(1);
+    }
+    for (const sub of ["cache/other", "checkout/restore", "cache/../evil", "cache/restore/x"]) {
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@${"a".repeat(40)}\n`))), sub).toHaveLength(
+        1,
+      );
+    }
     expect(problems(withJob(job("    container: node:26\n")))).toHaveLength(1);
     expect(problems(withJob(job("    env:\n      X_IMAGE: alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
