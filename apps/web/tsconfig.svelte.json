@@ -1,0 +1,19 @@
+{
+  // The Svelte components (P1.20c), checked by svelte-check under TypeScript 6 (svelte-check 4.7.8 accepts
+  // typescript ^5 || ^6; ADR 0054 Consequences). tsconfig.json (tsc -b, TypeScript 7) excludes lib/ for that reason.
+  // exactOptionalPropertyTypes is off here as in the web folder (ADR 0056 point 8): stock components fail it.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2025", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "exactOptionalPropertyTypes": false,
+    "erasableSyntaxOnly": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true
+  },
+  "include": ["lib/**/*.ts", "lib/**/*.svelte"]
+}
