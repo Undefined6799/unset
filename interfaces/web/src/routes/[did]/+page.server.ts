@@ -17,11 +17,11 @@ import {
   saveProfileRecord,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
+import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
-import { accountView } from "./account.server.ts";
 import { cardForm } from "./card-form.server.ts";
 import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
@@ -58,7 +58,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
   const { pdsCall } = services().pds;
   const ctx = pdsContext(locals);
   const [account, own] = await Promise.all([
-    accountView(did, locals.issuerOrigin, locals.deadline),
+    accountView(services(), did, locals.issuerOrigin, locals.deadline),
     loadOwnProfile(
       { profile: () => loadProfileRecord(pdsCall, ctx, did), cards: () => listCardRecords(pdsCall, ctx, did) },
       config.PDS_HOSTNAME,
