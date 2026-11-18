@@ -17,6 +17,7 @@ import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote } from "./lib/server/runtime.ts";
 import { sessionIssuerOrigin, sessionOf } from "./lib/server/session.ts";
+import { themeChunk } from "./lib/server/theme.ts";
 
 /** Only these bodies are accepted. SvelteKit's Origin check covers exactly the form types, so refusing every other
  * type here puts every POST under that check. */
@@ -112,7 +113,7 @@ const gate: Handle = async ({ event, resolve }) => {
     const { did, refused } = await sessionProblem(event, policy, deadline);
     if (refused) return refused;
     event.locals.did = did;
-    return resolve(event);
+    return resolve(event, { transformPageChunk: themeChunk(policy.group, event.request.headers.get("cookie")) });
   });
 };
 

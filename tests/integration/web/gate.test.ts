@@ -242,6 +242,21 @@ describe("session", () => {
     expect((await web.fetch("/test-routes/writes/abc", { headers: { cookie, ...from() } })).status).toBe(200);
   });
 
+  test("an_app_page_wears_the_chosen_theme_and_a_public_one_never_reads_it", async () => {
+    const page = (path: string, cookie: string) => web.fetch(path, { headers: { cookie, ...from() } });
+    const dark = await (await page("/test-routes/form-post", "__Host-theme=dark")).text();
+    expect(dark).toContain('<html lang="en" data-theme="dark">');
+    expect(dark).toContain('<meta name="color-scheme" content="dark" />');
+    for (const junk of ["__Host-theme=%22%3E", "__Host-theme=dark; __Host-theme=light"]) {
+      const body = await (await page("/test-routes/form-post", junk)).text();
+      expect(body).toContain('<html lang="en">');
+      expect(body).toContain('content="dark light"');
+    }
+    const open = await (await page("/test-routes/plain-page", "__Host-theme=dark")).text();
+    expect(open).toContain('<html lang="en">');
+    expect(open).not.toContain("%unset.");
+  });
+
   test("an_app_page_is_private_and_varies_on_cookie_a_public_one_is_not", async () => {
     const app = await web.fetch("/test-routes/form-post", { headers: from() });
     expect(app.headers.get("cache-control")).toBe("private, no-store");
