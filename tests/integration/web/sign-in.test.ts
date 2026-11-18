@@ -35,7 +35,6 @@ const REQUEST_URI = "urn:ietf:params:oauth:request_uri:req-0123456789abcdef";
 const plcDocument = (did: string) => ({
   "@context": ["https://www.w3.org/ns/did/v1"],
   id: did,
-  alsoKnownAs: did === DID ? ["at://alice.example.com"] : [],
   verificationMethod: [{ id: `${did}#atproto`, type: "Multikey", controller: did, publicKeyMultibase: "zQ3sh" }],
   service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: PDS }],
 });
@@ -350,11 +349,13 @@ describe("signing out", () => {
 });
 
 describe("typed accounts", () => {
-  test("a_handle_that_resolves_starts_a_sign_in_for_its_did", async () => {
+  test("a_handle_that_resolves_is_checked_against_its_did_document", async () => {
+    // DNS names DID for the handle, but the stand-in document does not claim the handle back: the library's check
+    // (P2.05a) refuses before any server is asked, and no nonce reaches the browser.
     const response = await typed("@Alice.example.com");
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/login/continue");
-    expect(setCookies(response).has("__Host-oauth_nonce")).toBe(true);
+    expect(response.headers.get("location")).toBe("/login?error=login.handle_unverified");
+    expect(setCookies(response).has("__Host-oauth_nonce")).toBe(false);
   });
 
   test("a_did_starts_a_sign_in_as_typed", async () => {
