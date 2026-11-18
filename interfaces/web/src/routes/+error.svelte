@@ -4,11 +4,11 @@
   or header reaches it, so nothing the caller sent is echoed.
 -->
 <script lang="ts">
-  import { ERROR_MESSAGES } from "@unset/shared-errors";
-  import { page } from "$app/state";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
+import { page } from "$app/state";
 
-  const code = $derived(page.error?.message ?? "internal.error");
-  const text = $derived(ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] ?? code);
+const code = $derived(page.error?.message ?? "internal.error");
+const text = $derived(ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] ?? code);
 </script>
 
 <svelte:head><title>{text}</title></svelte:head>

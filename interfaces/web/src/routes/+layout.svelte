@@ -5,34 +5,33 @@
   (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.
 -->
 <script lang="ts">
-  import "@unset/apps-web/app.css";
-  import { Icon } from "@unset/apps-web/lib/components/icon";
-  import * as Alert from "@unset/apps-web/lib/components/ui/alert";
-  import { Button } from "@unset/apps-web/lib/components/ui/button";
-  import { ERROR_MESSAGES } from "@unset/shared-errors";
-  import type { Snippet } from "svelte";
-  import { page } from "$app/state";
-  import { SHELL_TEXT as T, type ShellData, SITE_SHELL } from "../lib/shell.ts";
-  import type { LayoutData } from "./$types";
+import "@unset/apps-web/app.css";
+import { Icon } from "@unset/apps-web/lib/components/icon";
+import * as Alert from "@unset/apps-web/lib/components/ui/alert";
+import { Button } from "@unset/apps-web/lib/components/ui/button";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
+import type { Snippet } from "svelte";
+import { page } from "$app/state";
+import { type ShellData, SITE_SHELL, SHELL_TEXT as T } from "../lib/shell.ts";
+import type { LayoutData } from "./$types";
 
-  let { data, children }: { data: LayoutData; children: Snippet } = $props();
+let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-  const shell: ShellData = $derived((page.data as { shell?: ShellData }).shell ?? SITE_SHELL);
-  const message = $derived(
-    data.error === null ? undefined : ERROR_MESSAGES[data.error as keyof typeof ERROR_MESSAGES],
-  );
-  const LEGAL = [
-    { label: T.terms, href: "/legal/terms" },
-    { label: T.privacy, href: "/legal/privacy" },
-    { label: T.domains, href: "/legal/domains" },
-  ];
-  const THEMES = [
-    { value: "dark", label: T.dark },
-    { value: "light", label: T.light },
-    { value: "system", label: T.system },
-  ] as const;
-  const MENU = "core-menu";
-  const row = "flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium";
+const shell: ShellData = $derived((page.data as { shell?: ShellData }).shell ?? SITE_SHELL);
+const message = $derived(data.error === null ? undefined : ERROR_MESSAGES[data.error as keyof typeof ERROR_MESSAGES]);
+const LEGAL = [
+  { label: T.terms, href: "/legal/terms" },
+  { label: T.privacy, href: "/legal/privacy" },
+  { label: T.domains, href: "/legal/domains" },
+];
+const THEMES = [
+  { value: "dark", label: T.dark },
+  { value: "light", label: T.light },
+  { value: "system", label: T.system },
+] as const;
+const MENU = "core-menu";
+const row =
+  "flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium";
 </script>
 
 <svelte:head>
