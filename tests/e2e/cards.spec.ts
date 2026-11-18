@@ -306,6 +306,43 @@ test("the_readme_editor_previews_the_text", async ({ page }) => {
   await page.keyboard.press("Escape");
 });
 
+// Alex 2026-11-18: card actions sit behind three dots. The menu is reached, opened and used by keyboard alone, and the
+// moved card's menu button keeps focus.
+test("the_card_menu_works_by_keyboard", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  for (const title of ["Alpha", "Beta"]) await addCard(page, linksCard(title));
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const titles = page.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta)$/ });
+  try {
+    const alphaMenu = menuButton(page, "Alpha card");
+    await alphaMenu.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem")).toHaveText(["Move down", "Delete"]);
+    // Enter opens the menu on its first item; the arrow keys walk the items.
+    await expect(menu.getByRole("menuitem", { name: "Move down" })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(menu.getByRole("menuitem", { name: "Move down" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(titles).toHaveText(["Beta", "Alpha"]);
+    await expect(alphaMenu).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText(["Move up", "Delete"]);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toBeHidden();
+    await expect(alphaMenu).toBeFocused();
+  } finally {
+    await page.keyboard.press("Escape");
+    for (const name of ["Alpha card", "Beta card"]) {
+      if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
+    }
+  }
+});
+
 // Alex 2026-11-18: on a large screen with a mouse a card is dragged by its top bar onto another to take its place.
 test("a_card_is_dragged_into_place_on_a_large_screen", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -318,6 +355,14 @@ test("a_card_is_dragged_into_place_on_a_large_screen", async ({ page }) => {
     await page
       .getByRole("heading", { level: 2, name: "Gamma" })
       .dragTo(page.getByRole("heading", { level: 2, name: "Alpha" }));
+    await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
+    // On a phone-width screen nothing drags: the menu's Move up and Move down do the reordering there.
+    await page.setViewportSize({ width: 390, height: 900 });
+    const bar = page.getByRole("group", { name: "Beta card" }).locator("xpath=..");
+    await expect(bar).toHaveAttribute("draggable", "false");
+    await page
+      .getByRole("heading", { level: 2, name: "Beta" })
+      .dragTo(page.getByRole("heading", { level: 2, name: "Gamma" }));
     await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
   } finally {
     for (const name of ["Alpha card", "Beta card", "Gamma card"]) {

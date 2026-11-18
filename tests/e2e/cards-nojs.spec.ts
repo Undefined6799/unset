@@ -57,8 +57,12 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("heading", { name: "Still without script" })).toBeVisible();
 
-  // Move the README below the links.
+  // Move the README below the links: with no script the moves are plain buttons, not the three-dot menu.
+  await expect(readme.getByRole("button", { name: /^More for/ })).toHaveCount(0);
+  const order = page.locator("[data-card-controls] legend");
+  await expect(order).toHaveText(["README card", "Offline card"]);
   await readme.getByRole("button", { name: "Move down" }).click();
+  await expect(order).toHaveText(["Offline card", "README card"]);
   await expect(readme.getByRole("button", { name: "Move up" })).toBeVisible();
   await expect(offline.getByRole("button", { name: "Move down" })).toBeVisible();
 
