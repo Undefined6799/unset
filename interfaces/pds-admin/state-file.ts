@@ -92,13 +92,18 @@ export function replaceLines(file: string, lines: readonly string[]): void {
 
 /**
  * fsyncs the folder holding `file`, so a new or renamed entry survives a crash: fsync on a file persists its data, not
- * its directory entry (fsync(2), Linux man-pages 6.19, https://man7.org/linux/man-pages/man2/fsync.2.html).
+ * its directory entry (fsync(2), Linux man-pages 6.19, https://man7.org/linux/man-pages/man2/fsync.2.html). By then the
+ * line or the rename is already in place, so a failure here leaves the file's durable state unknown: DurabilityLost.
  */
 function syncDirectory(file: string): void {
-  const fd = openSync(dirname(file), "r");
   try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    const fd = openSync(dirname(file), "r");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    throw new DurabilityLost("state folder not synced");
   }
 }
