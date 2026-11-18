@@ -1,5 +1,6 @@
-# CI gate for every ready pull request and every push to main (P0.07). A draft runs nothing here: it is checked
-# locally with `npm run check`, and marking it ready (ready_for_review) runs the full set (Alex 2026-10-05 20:34Z).
+# CI gate for every ready pull request and every push to main (P0.07). A draft runs only the `code` job
+# (typecheck, lint, guards, unit tests) so those failures show before review; marking it ready (ready_for_review)
+# runs the full set (Alex 2026-10-05 20:34Z; the draft `code` run since P0.07l, Alex 2026-11-18 11:38Z).
 #
 # Secrets and OIDC rule (enforced by scripts/guards/workflow-pins.test.ts):
 # - No repository-level secrets, ever. A secret lives in a GitHub Environment whose deployment
@@ -31,7 +32,6 @@ jobs:
   # P0.07d: the code checks and the image tests (*.image.test.ts, which build images) run as two parallel jobs.
   # `check`, the required name, is the gate that needs both (at the end of this file).
   code:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
