@@ -75,6 +75,41 @@ describe("cardForm", () => {
     });
   });
 
+  // Review of #1702: the editor hides the other kind's fields, so what they still hold never keeps a row.
+  test("a button row's fields for the kind it does not open never keep it", () => {
+    const body = read([
+      ["kind", "buttons"],
+      ["heading", "Work with me"],
+      ["buttons.0.kind", "link"],
+      ["buttons.0.preset", "custom"],
+      ["buttons.0.address", "left@example.com"],
+      ["buttons.0.uri", ""],
+      ["buttons.0.label", ""],
+      ["buttons.1.kind", "email"],
+      ["buttons.1.address", ""],
+      ["buttons.1.uri", "left.example"],
+      ["buttons.1.label", "Left"],
+    ]);
+    expect(body).toEqual({ kind: "buttons", heading: "Work with me", buttons: [] });
+  });
+
+  test.each(["constructor", "toString", "__proto__", "nope"])(
+    "a button row of the unknown kind %s keeps its fields",
+    (kind) => {
+      const body = read([
+        ["kind", "buttons"],
+        ["heading", "Work with me"],
+        [`buttons.0.kind`, kind],
+        ["buttons.0.address", "me@example.com"],
+      ]);
+      expect(body).toEqual({
+        kind: "buttons",
+        heading: "Work with me",
+        buttons: [{ kind, address: "me@example.com" }],
+      });
+    },
+  );
+
   test.each([
     [
       "a field another kind holds",

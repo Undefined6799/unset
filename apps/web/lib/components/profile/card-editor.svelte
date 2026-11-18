@@ -3,6 +3,10 @@
   stock Dialog holding one form that posts the card's kind, its width and its fields to this page's `create` or `save`
   action. List cards add rows of indexed fields (`items.2.uri`), read back into a list on the server; every stored row
   is shown, then blank rows while the editor's limit allows, so a save never drops one and clearing a row removes it.
+  With script a list starts with one blank row (none when it already has rows) and an Add row button adds the next,
+  up to the limit (Alex 2026-11-18); with none it offers ten. A buttons row shows only the fields of the kind it
+  opens, by CSS on its checked radio, so this holds with no script too. The README editor gets Write and Preview tabs
+  with script; the preview is the same parser and renderer the page uses, so what it shows is what the card will show.
   With no script (staging walkthrough 2026-11-18, finding 8) the trigger is a link to the page with the editor open
   in place (`?edit=<key>`, read by the page's load), drawn here as a panel: the same form, a Cancel link back, and an
   action that keeps the query, so a refused save shows the page again with the panel, what was typed and the reason.
@@ -11,14 +15,17 @@
 import { tick } from "svelte";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
+import { parseReadme } from "../../profile/parse.ts";
 import type { CardContent, CardPanelState, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
+import * as Tabs from "../ui/tabs/index.ts";
 import Choice from "./choice.svelte";
 import Field from "./field.svelte";
+import Readme from "./readme.svelte";
 
 type Kind = CardContent["kind"];
 let {
@@ -131,6 +138,8 @@ async function showRefusal(data: Record<string, unknown> | undefined) {
   const target = field === undefined || !(form instanceof HTMLFormElement) ? null : form.elements.namedItem(field);
   const text = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
   refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
+  // A refusal that blames the README text shows it on the Write tab, where the field can take focus.
+  if (text !== null) tab = "write";
   await tick();
   const shown = text ?? summary;
   shown?.focus();
@@ -140,10 +149,43 @@ async function showRefusal(data: Record<string, unknown> | undefined) {
 $effect(() => {
   if (!open && panel === undefined) refused = undefined;
 });
+$effect(() => {
+  if (open) tab = "write";
+});
 
-/** Blank rows a list editor offers to add more. */
+/** Blank rows a list editor offers with no script, where it cannot add one on request. */
 const BLANK_ROWS = 10;
-const blanks = (stored: number) => Math.max(0, Math.min(BLANK_ROWS, max - stored));
+/** Whether the page runs script: false while the server renders and until the first effect runs in the browser. */
+let hydrated = $state(false);
+$effect(() => {
+  hydrated = true;
+});
+/** Rows added with Add row since the editor opened. */
+let added = $state(0);
+$effect(() => {
+  if (open) added = 0;
+});
+/** Blank rows after the stored ones: one to start an empty list, then one per Add row, while the limit allows. */
+const blanks = (stored: number) =>
+  Math.max(0, Math.min(hydrated ? (stored === 0 ? 1 : 0) + added : BLANK_ROWS, max - stored));
+/** Add a blank row and put focus in its first field. */
+async function addRow() {
+  added += 1;
+  await tick();
+  const rows = document.getElementById(formId)?.querySelectorAll<HTMLElement>("[data-row]");
+  rows?.[rows.length - 1]?.querySelector<HTMLElement>("input")?.focus();
+}
+/** The README editor's open tab, and the text its preview shows, read from the field when Preview opens. */
+let tab = $state("write");
+let previewText = $state("");
+function showTab(value: string) {
+  if (value === "preview") {
+    const field = document.getElementById(formId)?.querySelector<HTMLTextAreaElement>('textarea[name="text"]');
+    previewText = field?.value ?? "";
+  }
+  tab = value;
+}
+const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
 const formId = $props.id();
 // The width and layout choices are icons with their words (Alex 2026-11-18 12:24Z; the profile-card mockup).
 const WIDTHS = [
@@ -212,31 +254,52 @@ const buttonRows = $derived([
   {/if}
 {/snippet}
 
+{#snippet addRowButton(rows: number, label: string)}
+  {#if hydrated && rows < max}
+    <Button type="button" variant="outline" class="justify-self-start" onclick={addRow}><Icon name="add" size={16} />{label}</Button>
+  {/if}
+{/snippet}
+
 {#snippet fields()}
-  <form id={formId} method="POST" {action} class="grid gap-4" use:enhance={saveCard}>
+  <form id={formId} method="POST" {action} class="grid gap-4" use:enhance={saveCard} oninvalidcapture={() => showTab("write")}>
     {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
-    {#if kind === "readme"}
+    {#if kind === "readme" && hydrated}
+      <Tabs.Root value={tab} onValueChange={showTab}>
+        <Tabs.List>
+          <Tabs.Trigger value="write">{CARD_EDIT.write}</Tabs.Trigger>
+          <Tabs.Trigger value="preview">{CARD_EDIT.preview}</Tabs.Trigger>
+        </Tabs.List>
+        <!-- An inactive tab's panel stays in the page, hidden (bits-ui 2.20.6 tabs-content.svelte), so the text still posts. -->
+        <Tabs.Content value="write">
+          <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
+        </Tabs.Content>
+        <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
+          {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
+        </Tabs.Content>
+      </Tabs.Root>
+    {:else if kind === "readme"}
       <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
     {:else if kind === "links"}
       <Field label={LINKS_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", links?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", links?.layout ?? "list")} options={LAYOUTS} />
       <p id={hintId}>{LINKS_EDIT.hint(max)}</p>
       {#each linkRows as link, i (i)}
-        <fieldset class="grid gap-2" aria-describedby={hintId}>
+        <fieldset data-row class="grid gap-2" aria-describedby={hintId}>
           <legend class="font-medium">{LINKS_EDIT.row(i + 1)}</legend>
           <Field label={LINKS_EDIT.uri} name="items.{i}.uri" error={errorFor(`items.${i}.uri`)} value={typedOr(`items.${i}.uri`, link.uri)} inputmode="url" autocomplete="url" />
           <Field label={LINKS_EDIT.label} name="items.{i}.label" error={errorFor(`items.${i}.label`)} value={typedOr(`items.${i}.label`, link.label)} />
           <Field label={LINKS_EDIT.description} name="items.{i}.description" error={errorFor(`items.${i}.description`)} value={typedOr(`items.${i}.description`, link.description)} />
         </fieldset>
       {/each}
+      {@render addRowButton(linkRows.length, LINKS_EDIT.addRow)}
     {:else if kind === "collection"}
       <Field label={COLLECTION_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", collection?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", collection?.layout ?? "carousel")} options={LAYOUTS} />
       <p id={hintId}>{COLLECTION_EDIT.hint(max)}</p>
       {#each entryRows as entry, i (i)}
-        <fieldset class="grid gap-2" aria-describedby={hintId}>
+        <fieldset data-row class="grid gap-2" aria-describedby={hintId}>
           <legend class="font-medium">{COLLECTION_EDIT.row(i + 1)}</legend>
           <Field label={COLLECTION_EDIT.entryTitle} name="items.{i}.title" error={errorFor(`items.${i}.title`)} value={typedOr(`items.${i}.title`, entry.title)} />
           <Field label={COLLECTION_EDIT.tag} name="items.{i}.tag" error={errorFor(`items.${i}.tag`)} value={typedOr(`items.${i}.tag`, entry.tag)} />
@@ -244,21 +307,25 @@ const buttonRows = $derived([
           <Field label={COLLECTION_EDIT.uri} name="items.{i}.uri" error={errorFor(`items.${i}.uri`)} value={typedOr(`items.${i}.uri`, entry.uri)} inputmode="url" autocomplete="url" />
         </fieldset>
       {/each}
+      {@render addRowButton(entryRows.length, COLLECTION_EDIT.addRow)}
     {:else}
       <Field label={BUTTONS_EDIT.heading} name="heading" error={errorFor("heading")} value={typedOr("heading", buttons?.heading ?? "")} required />
       <Field label={BUTTONS_EDIT.text} name="text" error={errorFor("text")} value={typedOr("text", buttons?.text ?? "")} rows={3} />
       <p id={hintId}>{BUTTONS_EDIT.hint(max)}</p>
       {#each buttonRows as button, i (i)}
-        <fieldset class="grid gap-2" aria-describedby={hintId}>
+        <fieldset data-row class="group/row grid gap-2" aria-describedby={hintId}>
           <legend class="font-medium">{BUTTONS_EDIT.row(i + 1)}</legend>
           <Choice label={BUTTONS_EDIT.kind} name="buttons.{i}.kind" value={typedOr(`buttons.${i}.kind`, button.kind)} options={KINDS} />
+          <div class="grid gap-2 group-has-[[value=link]:checked]/row:hidden">
           <Field
             label={BUTTONS_EDIT.address}
             name="buttons.{i}.address" error={errorFor(`buttons.${i}.address`)}
             value={typedOr(`buttons.${i}.address`, button.kind === "email" ? button.address : "")}
-            type="email"
+            inputmode="email"
             autocomplete="email"
           />
+          </div>
+          <div class="grid gap-2 group-has-[[value=email]:checked]/row:hidden">
           <Choice
             label={BUTTONS_EDIT.preset}
             name="buttons.{i}.preset"
@@ -273,8 +340,10 @@ const buttonRows = $derived([
             autocomplete="url"
           />
           <Field label={BUTTONS_EDIT.label} name="buttons.{i}.label" error={errorFor(`buttons.${i}.label`)} value={typedOr(`buttons.${i}.label`, button.kind === "link" ? button.label : "")} />
+          </div>
         </fieldset>
       {/each}
+      {@render addRowButton(buttonRows.length, BUTTONS_EDIT.addRow)}
     {/if}
   </form>
 {/snippet}
