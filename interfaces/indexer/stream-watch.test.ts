@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { streamWatch } from "./stream-watch.ts";
+import { streakEndsAfterMs, streamWatch } from "./stream-watch.ts";
 
 const MAX = 60_000;
 const UNHEALTHY = 300_000;
@@ -37,7 +37,7 @@ describe("stream watch", () => {
     // One stop, a dial that held, then hours with no frame: not a fault.
     const { w, tick } = watch();
     w.stopped();
-    tick(2 * MAX + 1);
+    tick(streakEndsAfterMs(MAX) + 1);
     expect(w.failingForMs()).toBeNull();
     tick(10 * UNHEALTHY);
     expect(w.healthy()).toBe(true);

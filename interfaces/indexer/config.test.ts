@@ -43,6 +43,19 @@ describe("indexer config", () => {
     expect(problems({ ...ENV, INDEXER_PDS_URL: "http://203.0.113.7:3000" })).toEqual([
       { key: "INDEXER_PDS_URL", reason: "invalid" },
     ]);
+    expect(problems({ ...ENV, INDEXER_PDS_URL: "http://user:pw@pds:3000" })).toEqual([
+      { key: "INDEXER_PDS_URL", reason: "invalid" },
+    ]);
+  });
+
+  test("config.unhealthy_threshold_exceeds_the_streak_window", () => {
+    // A 180 s restart delay ends a streak only after 2 x 180 s + 150 s = 510 s, past the 300 s default threshold.
+    expect(problems({ ...ENV, INDEXER_MAX_RESTART_DELAY_MS: "180000" })).toEqual([
+      { key: "INDEXER_STREAM_UNHEALTHY_MS", reason: "invalid" },
+    ]);
+    expect(problems({ ...ENV, INDEXER_MAX_RESTART_DELAY_MS: "180000", INDEXER_STREAM_UNHEALTHY_MS: "600000" })).toEqual(
+      [],
+    );
   });
 
   test("config.shutdown_grace_stays_under_docker_stop_grace", () => {

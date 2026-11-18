@@ -3,6 +3,7 @@
 // the process serves only its health endpoint and reads nothing.
 import { poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { bool, type Config, defineEntrypointConfig, int, netGuardFields, url, withRule } from "@unset/shared-config";
+import { streakEndsAfterMs } from "./stream-watch.ts";
 
 /** What the indexer reads and from where. */
 const indexerConfig = {
@@ -10,8 +11,9 @@ const indexerConfig = {
   /**
    * Our PDS's internal origin (the compose service, plain http on 3000 in the dev stack): the stream, getRepo and
    * getRepoStatus go here and nowhere else (ADR 0052 decision 2). Never a URL from the network. Plain http only to a
-   * one-label name (a compose service, which public DNS cannot answer), so a typo cannot send the stream in clear text
-   * across the internet; the stream's websocket does not pass net-guard, which checks only getRepo and getRepoStatus.
+   * one-label name, the shape of a compose service name, which Docker's embedded DNS answers inside the stack; a
+   * resolver's search domain could still extend one, so this narrows a typo, not an attacker. The stream's websocket
+   * does not pass net-guard (it checks getRepo, getRepoStatus and resolveHandle). No user or password in the URL.
    */
   INDEXER_PDS_URL: withRule(url({ protocols: ["http:", "https:"] }), (config) =>
     isInStackOrHttps(String(config.INDEXER_PDS_URL)),
@@ -34,8 +36,16 @@ const indexerConfig = {
   INDEXER_MAX_RESTART_DELAY_MS: int({ min: 1000, max: 600_000, default: 60_000 }),
   /** The health endpoint's port, on the process's internal network only. */
   HEALTH_PORT: int({ min: 1024, max: 65535, default: 8081 }),
-  /** How long the stream may keep stopping with no frame applied before health says unhealthy (stream-watch.ts). */
-  INDEXER_STREAM_UNHEALTHY_MS: int({ min: 60_000, max: 3_600_000, default: 300_000 }),
+  /**
+   * How long the stream may keep failing with no frame applied before health says unhealthy (stream-watch.ts). Must
+   * exceed the time with no failure that ends a streak, or one stop before a quiet, healthy connection would read as
+   * unhealthy.
+   */
+  INDEXER_STREAM_UNHEALTHY_MS: withRule(
+    int({ min: 60_000, max: 3_600_000, default: 300_000 }),
+    (config) =>
+      Number(config.INDEXER_STREAM_UNHEALTHY_MS) > streakEndsAfterMs(Number(config.INDEXER_MAX_RESTART_DELAY_MS)),
+  ),
   /**
    * How long SIGTERM waits for the stream and the pass in hand to stop and the pool to end. Below Docker's default
    * 10 s stop grace, so the process exits on its own rather than being killed.
@@ -43,9 +53,10 @@ const indexerConfig = {
   INDEXER_SHUTDOWN_GRACE_MS: int({ min: 1000, max: 9000, default: 8000 }),
 };
 
-/** https anywhere, or plain http to a name with no dot: a compose service on the stack's own network. */
+/** No credentials in the URL; then https anywhere, or plain http to a name with no dot (a compose service name). */
 function isInStackOrHttps(raw: string): boolean {
   const parsed = new URL(raw);
+  if (parsed.username !== "" || parsed.password !== "") return false;
   return parsed.protocol === "https:" || /^[a-z0-9-]+$/i.test(parsed.hostname);
 }
 

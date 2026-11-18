@@ -239,6 +239,35 @@ describe("readFirehose", () => {
     expect(Date.now() - started).toBeLessThan(2000);
   });
 
+  test("reader.reports_each_retry_of_an_unreachable_pds", async () => {
+    // The library retries a refused dial by itself and never ends the iteration, so onStop is silent; onRetry is how
+    // the process learns the PDS is unreachable (health, stream-watch.ts).
+    const closed = await fakePds(() => []);
+    const service = closed.url;
+    closed.close();
+    const controller = new AbortController();
+    let retries = 0;
+    const stops: string[] = [];
+    const done = readFirehose(
+      {
+        service,
+        signingKey: async () => "unused",
+        consumer: { cursor: async () => 1, apply: async () => undefined, missedEvents: async () => undefined },
+        onStop: (reason) => stops.push(reason),
+        onRetry: () => {
+          retries += 1;
+        },
+        restartDelayMs: 10,
+        maxRestartDelayMs: 1000,
+      },
+      controller.signal,
+    );
+    await until(() => retries >= 2, 5000);
+    controller.abort();
+    await done;
+    expect(stops).toEqual([]);
+  });
+
   test("reader.survives_a_throwing_on_stop", async () => {
     const sent = [{ seq: 1, bytes: frame("#account", { seq: 1, did: DID, time: "t" }) }]; // unreadable
     const pds = await fakePds(() => sent);

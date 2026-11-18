@@ -95,6 +95,7 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
   const retries: TrackRetries = new Map();
   let lastStop: string | null = null;
   let stops = 0;
+  let streamRetries = 0;
 
   const runner = runIndexer(
     {
@@ -115,6 +116,10 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
               stops += 1;
               watch.stopped();
               log.warn("indexer.stream_stopped", { reason, count: stops });
+            },
+            onRetry: () => {
+              streamRetries += 1;
+              watch.stopped();
             },
             restartDelayMs: config.INDEXER_RESTART_DELAY_MS,
             maxRestartDelayMs: config.INDEXER_MAX_RESTART_DELAY_MS,
@@ -144,7 +149,7 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
     async () => ({
       healthy: watch.healthy(),
       enabled: true,
-      stream: { ...consumer.health(), lastStop, stops, failingForMs: watch.failingForMs() },
+      stream: { ...consumer.health(), lastStop, stops, retries: streamRetries, failingForMs: watch.failingForMs() },
       loop: runner.health(),
       index: await index.health(),
       accounts: await accounts.health(),

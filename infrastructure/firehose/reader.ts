@@ -49,7 +49,17 @@ export type FirehoseReaderOptions = {
   readonly consumer: FirehoseConsumer;
   /** Called once per stop, before the wait; `error` is for the caller's own error classification, never a log line. */
   readonly onStop: (reason: StopReason, error: unknown) => void;
-  /** Milliseconds to wait after a stop, doubling up to `maxRestartDelayMs`; reset once a frame applies. */
+  /**
+   * Called on each dial the library retries by itself: a refused or failed dial, a socket error, a missed heartbeat
+   * or an abnormal close (@atproto/ws-client 0.2.1 dist/websocket.js retries these without ending the iteration, so
+   * onStop never hears of them; @atproto/xrpc-server 0.13.10 dist/stream/subscription.js reports each through
+   * onReconnectError). A connected, quiet PDS causes none. No argument: the error is not the caller's to log (SE-7).
+   */
+  readonly onRetry?: () => void;
+  /**
+   * Milliseconds to wait after a stop, doubling up to `maxRestartDelayMs`; reset once a frame applies. The library's
+   * own retry backoff is capped at the same maximum, so no wait between dials of either kind is longer.
+   */
   readonly restartDelayMs: number;
   readonly maxRestartDelayMs: number;
 };
@@ -134,6 +144,14 @@ async function readUntilStop(
     service: options.service.origin,
     method: METHOD,
     signal,
+    maxReconnectSeconds: Math.max(1, Math.floor(options.maxRestartDelayMs / 1000)),
+    onReconnectError: () => {
+      try {
+        options.onRetry?.();
+      } catch {
+        // The caller's code, as onStop: a throw there must not end the reader.
+      }
+    },
     // Called on every dial, including Subscription's own redials after a dropped socket. A throw here rejects the
     // iteration (@atproto/ws-client 0.2.1 dist/websocket.js resolves the url outside its retry), so a second
     // live-tip dial stops the stream and goes through catchUp first.
