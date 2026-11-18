@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { closureProblems, untypecheckedFiles, WORKSPACE_TOPS, workspaceProblems } from "./references.ts";
+import { closureProblems, mayReference, untypecheckedFiles, WORKSPACE_TOPS, workspaceProblems } from "./references.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const temps: string[] = [];
@@ -97,6 +97,15 @@ describe("workspace references", () => {
     for (const [from, to] of refused) {
       expect(reference(from, to), `${from} → ${to}`).toEqual([`${from}: may not reference ${to} (MATRIX)`]);
     }
+  });
+
+  test("a_subpath_the_package_exports_counts_as_its_entry", () => {
+    // interfaces/web imports apps/web's Svelte components by subpath (ADR 0056); apps/web has no index.ts row for it.
+    expect(mayReference("interfaces/web", "apps/web")).toBe(false);
+    const ui = { exports: { "./lib/components/ui/*": "./lib/components/ui/*/index.ts" } };
+    expect(mayReference("interfaces/web", "apps/web", ui)).toBe(true);
+    // An export the MATRIX does not open to the importer is still refused.
+    expect(mayReference("interfaces/web", "apps/web", { exports: { "./screens": "./src/screens/x.tsx" } })).toBe(false);
   });
 
   test("references_read_package_dependencies_too", () => {

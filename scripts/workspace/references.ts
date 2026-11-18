@@ -75,11 +75,26 @@ function matrixAllows(fromDir: string, toFile: string): boolean {
   });
 }
 
-/** A workspace may reference another when the MATRIX lets it import that workspace's index or render entry. */
-export function mayReference(fromDir: string, toDir: string): boolean {
+/** The files a package's `exports` map names, a `*` read as one segment; [] without a map. */
+function exportedFiles(dir: string, pkg: Record<string, unknown> | undefined): string[] {
+  const targets: string[] = [];
+  const walk = (value: unknown): void => {
+    if (typeof value === "string") targets.push(value);
+    else if (typeof value === "object" && value !== null) for (const inner of Object.values(value)) walk(inner);
+  };
+  walk(pkg?.exports);
+  return targets.map((target) => posix.join(dir, target.replaceAll("*", "x")));
+}
+
+/**
+ * A workspace may reference another when the MATRIX lets it import that workspace's index, render entry, or a file its
+ * package `exports` names (P1.20: interfaces/web imports apps/web's Svelte components by subpath, ADR 0056).
+ */
+export function mayReference(fromDir: string, toDir: string, toPkg?: Record<string, unknown>): boolean {
   const entries = [
     `${toDir}/index.ts`,
     ...Object.values(boundaries.RENDER_ENTRIES).filter((f) => f.startsWith(`${toDir}/`)),
+    ...exportedFiles(toDir, toPkg),
   ];
   return entries.some((file) => matrixAllows(fromDir, file));
 }
@@ -119,12 +134,13 @@ function manifestProblems({ dir, pkg, tsconfig }: Workspace): string[] {
     .map(([field, actual, want]) => `${dir}: ${field} is ${JSON.stringify(actual)}, expected ${JSON.stringify(want)}`);
 }
 
-function referenceProblems(ws: Workspace, byName: Map<string, string>): string[] {
+function referenceProblems(ws: Workspace, byName: Map<string, string>, pkgOf: Map<string, Workspace["pkg"]>): string[] {
   const problems: string[] = [];
   const refs = referencePaths(ws.tsconfig).map((ref) => resolveReference(ws.dir, ref));
   const deps = unsetDependencies(ws.pkg).map((d) => byName.get(d) ?? d);
   for (const target of new Set([...refs, ...deps])) {
-    if (!mayReference(ws.dir, target)) problems.push(`${ws.dir}: may not reference ${target} (MATRIX)`);
+    if (!mayReference(ws.dir, target, pkgOf.get(target)))
+      problems.push(`${ws.dir}: may not reference ${target} (MATRIX)`);
   }
   const hasDeps = allDependencies(ws.pkg).some((d) => !d.startsWith("@unset/"));
   if (ws.dir.startsWith("domains/") && hasDeps) problems.push(`${ws.dir}: a domain has no npm dependencies (AB-1)`);
@@ -206,6 +222,7 @@ function importProblems(root: string, ws: Workspace, byName: Map<string, string>
 export function workspaceProblems(root: string): string[] {
   const workspaces = findWorkspaces(root);
   const byName = new Map(workspaces.map((ws) => [String(ws.pkg.name), ws.dir]));
+  const pkgOf = new Map(workspaces.map((ws) => [ws.dir, ws.pkg]));
   const rootRefs = new Set(referencePaths(readJson(root, "tsconfig.json")).map((ref) => resolveReference(".", ref)));
   const problems = FORBIDDEN_TOPS.filter((top) => existsSync(join(root, top))).map(
     (top) => `${top}/: folder not allowed (decisions 25 and 34)`,
@@ -221,7 +238,7 @@ export function workspaceProblems(root: string): string[] {
     if (!sourceFiles(root, [ws.dir]).some((f) => TEST_FILE.test(f))) problems.push(`${ws.dir}: has no *.test.ts`);
     problems.push(
       ...manifestProblems(ws),
-      ...referenceProblems(ws, byName),
+      ...referenceProblems(ws, byName, pkgOf),
       ...zeroDependencyProblems(ws, byName),
       ...importProblems(root, ws, byName),
     );
