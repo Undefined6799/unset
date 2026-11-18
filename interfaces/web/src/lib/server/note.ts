@@ -24,6 +24,8 @@ export const STAND_INS_KEY = Symbol.for("unset.web.stand-ins");
 
 export type ProcessNote = {
   readonly config: WebConfig;
+  /** The build's stylesheet path (`/_app/immutable/assets/….css`), for the gate's refusal page; absent, it is plain. */
+  readonly stylesheet?: string;
   readonly standIns?: StandIns;
   readonly requests: AsyncLocalStorage<RequestNote>;
   readonly shutdown: Shutdown;

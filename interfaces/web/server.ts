@@ -29,9 +29,29 @@ process.on("uncaughtException", (error: unknown) => {
   log.logError(error);
   process.exit(1);
 });
+/** The path SvelteKit's build stylesheet is served at, kept only in the form the build writes it. */
+const BUILD_STYLESHEET = /^_app\/immutable\/assets\/[\w.-]+\.css$/;
+
+/**
+ * The app's stylesheet, read once from SvelteKit's build manifest (kit 3.2.0 writes `manifest.client.stylesheets` into
+ * build/server/manifest.js, whose top level only declares data; its nodes load lazily), for the gate's refusal page.
+ * Without it that page is plain, which is all a missing or odd entry costs; gate.test.ts checks the built server has
+ * it.
+ */
+async function buildStylesheet(): Promise<string | undefined> {
+  const loaded = (await import(new URL("./build/server/manifest.js", import.meta.url).href).catch(() => undefined)) as
+    | { manifest?: { client?: { stylesheets?: unknown } } }
+    | undefined;
+  const sheets = loaded?.manifest?.client?.stylesheets;
+  const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
+  return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
+}
+
 const standIns = (globalThis as Record<symbol, unknown>)[STAND_INS_KEY] as StandIns | undefined;
+const stylesheet = await buildStylesheet();
 const note: ProcessNote = {
   config,
+  ...(stylesheet === undefined ? {} : { stylesheet }),
   ...(standIns === undefined ? {} : { standIns }),
   requests: new AsyncLocalStorage<RequestNote>(),
   shutdown: { draining: [], close: [] },

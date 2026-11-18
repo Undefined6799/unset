@@ -167,8 +167,8 @@ test.describe("server markup", () => {
 // The watcher's own check: a page that asks for a script is seen asking.
 test("zero_js_detected", async ({ page }) => {
   const watched = watch(page);
-  const login = ALL_PAGES.find((entry) => entry.path === "/login");
-  if (login === undefined) throw new Error("/login is not in PAGES");
-  expect((await openPage(page, login))?.status()).toBe(200);
+  const signedOut = ALL_PAGES.find((entry) => entry.path === "/signed-out");
+  if (signedOut === undefined) throw new Error("/signed-out is not in PAGES");
+  expect((await openPage(page, signedOut))?.status()).toBe(200);
   expect(watched.scripts.length).toBeGreaterThan(0);
 });
