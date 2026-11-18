@@ -104,6 +104,15 @@ const ISLAND_NPM_MODULES = ["react/jsx-runtime"];
 const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\\.js)?$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
+// P1.20c (ADR 0055 point 4): the Svelte Icon draws the pinned Iconoir data, read through @unset/shared-ui's
+// "./icons.json" export, because shared/ui's index.ts brings React. It is the only file that may, and only that file.
+const SVELTE_ICON = "^apps/web/lib/components/icon/icon\\.svelte$";
+const ICON_DATA = "^shared/ui/icons/icons\\.json$";
+// P1.20c: stock shadcn-svelte dialog-content.svelte imports its own folder's index.ts, which re-exports it. The only
+// cycle allowed, and only inside that folder.
+const STOCK_DIALOG = "^apps/web/lib/components/ui/dialog/";
+// P1.20c: svelte.config.js exists only for svelte-check to read (nothing imports it), like a vite.config.ts.
+const SVELTE_CHECK_CONFIG = "^apps/web/svelte\\.config\\.js$";
 
 /** The allowlist matrix. Each row: a name, the importing folder, and what it may reach. */
 const MATRIX = [
@@ -271,8 +280,20 @@ module.exports = {
     forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
-      { pathNot: `^${WORKSPACE_WITH_INDEX}` },
+      { pathNot: [`^${WORKSPACE_WITH_INDEX}`, SVELTE_ICON] },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "The Svelte Icon reaches shared/ only through an index.ts, and shared/ui's icons.json through its package export.",
+      { path: SVELTE_ICON },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET, ICON_DATA] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "Outside shared/ui, icons.json is read through the @unset/shared-ui/icons.json export, never by a path (P1.20c).",
+      { pathNot: "^shared/ui/" },
+      { path: ICON_DATA, dependencyTypes: ["local"] },
     ),
     forbidden(
       "infra-shared-via-index",
@@ -416,11 +437,22 @@ module.exports = {
       {},
       { path: APP_BUILD_CONFIG },
     ),
-    forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
+    forbidden(
+      "no-circular",
+      "No dependency cycles; stock shadcn-svelte's dialog barrel is the one exception (P1.20c).",
+      { pathNot: STOCK_DIALOG },
+      { circular: true },
+    ),
+    forbidden(
+      "no-circular",
+      "A cycle that starts in the stock dialog folder must stay inside it.",
+      { path: STOCK_DIALOG },
+      { circular: true, pathNot: STOCK_DIALOG },
+    ),
     forbidden(
       "no-orphans",
       "A module nothing imports is usually dead code.",
-      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$"] },
+      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$", SVELTE_CHECK_CONFIG] },
       {},
       "warn",
     ),
