@@ -17,6 +17,10 @@ export default defineConfig({
     tailwindcss(),
     sveltekit({
       adapter: adapter(),
+      // One script and one stylesheet for the whole client (kit 3.2.0 types/index.d.ts, output.bundleStrategy, since
+      // 2.13.0). With 'split', a cold app page asked for 27 files, over the edge's app_burst of 20 per 10 s
+      // (deployment/edge/snippets/ratelimit.caddy); 'single' makes it 5, as the Hono pages were sized for (P1.20j).
+      output: { bundleStrategy: "single" },
       csp: {
         mode: "hash",
         directives: {
