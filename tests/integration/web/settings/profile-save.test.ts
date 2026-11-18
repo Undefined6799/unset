@@ -15,6 +15,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, PDS_HOST, type RunningWeb, startWeb } from "../built-server.ts";
+import { readyMember } from "../members.ts";
 import type { PdsWrite } from "../stand-in-pds.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -65,6 +66,7 @@ async function signedIn(): Promise<string> {
     },
   });
   const created = await withTransaction(pool, null, (tx) => sessions.create(tx, OWNER, { issuerOrigin: PDS }));
+  await readyMember(pool, OWNER);
   return `__Host-sid=${created.cookieValue}`;
 }
 
