@@ -92,8 +92,9 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     if (isRefusal(shaped)) return deny(shaped.status, shaped.reason);
     // Steps 4 to 6: key, verb, signature, claims.
     const payload = checkEnvelope(shaped, deps.keys, deps.expected, Math.floor(deps.now() / 1000));
-    const who = { kid: shaped.kid, jti: String(shaped.payload.jti), verb: String(shaped.payload.verb) };
-    if (isRefusal(payload)) return deny(payload.status, payload.reason, who);
+    // A refused envelope is unauthenticated: none of its fields is recorded, only the reason.
+    if (isRefusal(payload)) return deny(payload.status, payload.reason);
+    const who = { kid: shaped.kid, jti: payload.jti, verb: payload.verb };
     // Step 7: once only, recorded on disk before anything else happens.
     if (deps.jti.burn(payload.jti, payload.exp)) return deny(403, "replay", who);
     // Steps 8 to 12, one at a time.

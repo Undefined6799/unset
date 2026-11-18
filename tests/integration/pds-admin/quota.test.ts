@@ -17,6 +17,11 @@ describe("accountQuota", () => {
     expect(accountQuota(five, NOW, WINDOW, 5)).toEqual({ ok: false, availableAt: NOW - 5 * HOUR + WINDOW });
   });
 
+  test("issue.quota_clock_skew: codes dated after now (PDS clock ahead) still count", () => {
+    const ahead = [1, 2, 3, 4, 5].map((s) => NOW + s * 1000);
+    expect(accountQuota(ahead, NOW, WINDOW, 5)).toEqual({ ok: false, availableAt: NOW + WINDOW });
+  });
+
   test("codes older than the window do not count", () => {
     const old = [1, 2, 3, 4, 5].map((h) => NOW - WINDOW - h * HOUR);
     expect(accountQuota(old, NOW, WINDOW, 5)).toEqual({ ok: true, remaining: 4, availableAt: null });

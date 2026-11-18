@@ -42,6 +42,18 @@ describe("issue", () => {
     expect(text).not.toContain(PASSWORD);
   });
 
+  test("log.no_unauthenticated_fields: a refused envelope's kid, jti and verb never reach the log", async () => {
+    const forged = signed(webKey("other"), payloadFor({ verb: ALICE, jti: "pds-example-com-abcde" }));
+    const res = await service.post({ ...forged, kid: "did:plc:smuggledkid" });
+    expect(res.status).toBe(403);
+    const entry = lastLog();
+    expect(entry).toMatchObject({ outcome: "denied", reason: "unknown_kid" });
+    expect(entry.kid).toBeUndefined();
+    const text = readFileSync(service.logFile, "utf8");
+    expect(text).not.toContain("did:");
+    expect(text).not.toContain("pds-example-com");
+  });
+
   test.each([
     ["issue.not_found_400", () => (pds.account = "not_found"), "not_hosted"],
     ["issue.taken_down_via_subject_status", () => (pds.takedown = true), "taken_down"],

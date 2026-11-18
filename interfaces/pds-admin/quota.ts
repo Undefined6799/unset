@@ -11,7 +11,11 @@ export type QuotaResult =
  * none remain; on refusal, `availableAt` is when the oldest code in the window leaves it.
  */
 export function accountQuota(createdAt: readonly number[], now: number, windowMs: number, max: number): QuotaResult {
-  const inWindow = createdAt.filter((at) => at > now - windowMs && at <= now).sort((a, b) => a - b);
+  // A code dated after `now` (clock skew with the PDS) still counts, as if made now, so skew cannot free a slot.
+  const inWindow = createdAt
+    .filter((at) => at > now - windowMs)
+    .map((at) => Math.min(at, now))
+    .sort((a, b) => a - b);
   if (inWindow.length >= max) return { ok: false, availableAt: (inWindow[inWindow.length - max] ?? now) + windowMs };
   const remaining = max - inWindow.length - 1;
   const after = [...inWindow, now];

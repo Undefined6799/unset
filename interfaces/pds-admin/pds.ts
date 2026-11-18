@@ -50,6 +50,10 @@ export function createPds(origin: URL, password: string): Pds {
         });
         res.on("error", () => reject(new PdsUnavailable("read")));
       });
+      // `timeout` above is per idle socket; this is the whole call's deadline, so a dribbling answer cannot hold the
+      // serialized issuing chain (RE-1).
+      const deadline = setTimeout(() => req.destroy(new PdsUnavailable("deadline")), TIMEOUT_MS);
+      req.on("close", () => clearTimeout(deadline));
       req.on("timeout", () => req.destroy(new PdsUnavailable("timeout")));
       req.on("error", () => reject(new PdsUnavailable("connect")));
       req.end(payload);
