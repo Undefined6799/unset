@@ -35,7 +35,7 @@ const fixtureRepoTests = (): string[] =>
 
 // P1.23h: the presence rule reads each call, not the text. The file is parsed with oxc through vite's parseSync
 // (vite 8.3.4, node_modules/vite/dist/node/index.d.ts re-exports rolldown/utils' parseSync), as
-// scripts/budgets/count-glue-lines.ts and shared/ui-build/jsx-free.test.ts already do; TypeScript 7.0.2 ships no
+// shared/ui-build/jsx-free.test.ts already does; TypeScript 7.0.2 ships no
 // JavaScript API. Every execFileSync, execFile, spawn or spawnSync of the literal "git", called by name or as a
 // member, must pass an options object literal whose `env` is fixtureGitEnv(...) or an object that spreads it, and
 // fixtureGitEnv must be the one imported from git-env.ts. Options the rule cannot read fail closed.

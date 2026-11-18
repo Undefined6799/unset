@@ -1,5 +1,6 @@
-# The web server image (P1.27). Three stages on one base: build the SSR bundle, install production dependencies, then
-# copy only what `node interfaces/http/main.ts` loads into a runtime stage that runs as 65532 with no shell work after.
+# The web server image (P1.27; SvelteKit since P1.20j, ADR 0054). Three stages on one base: build the SvelteKit server,
+# install production dependencies, then copy only what `node interfaces/web/server.ts` loads into a runtime stage that
+# runs as 65532 with no shell work after.
 # Node runs the TypeScript sources directly (type stripping, Node 26). The base is the official Node Debian slim image,
 # trixie (Alex, 2026-10-07 01:29Z, P1.27d; the glibc builds of rolldown and lightningcss are in the lockfile), pinned by
 # its multi-arch index digest, recorded in deployment/images/bases.lock.json, and pulled from our GHCR mirror by that
@@ -12,7 +13,9 @@ ARG APP=web
 WORKDIR /app
 COPY . .
 RUN test "$APP" = web && npm ci --ignore-scripts
-RUN npm run build -w @unset/apps-web
+# .dockerignore leaves the test-only routes out of the context, so neither this bundle nor the route table server.ts
+# reads at start holds them (images.test.ts prod_image_has_ssr_build_only).
+RUN npm run build -w @unset/interfaces-web
 
 FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
 WORKDIR /app
@@ -29,7 +32,7 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/shared /app/shared
 # The OAuth client the server composes (P2.04c) and what it stands on: the identity domain, the atproto adapter,
 # Postgres, sealing and net-guard, the session store sign-in writes to (P2.06), the audit writer the age gate
-# calls (P2.12), and the profile domain the profile page and save route call (P2.20s).
+# calls (P2.12), the profile domain the profile page and save route call (P2.20s), and the record validator.
 # web_image_copies_every_workspace_the_server_reaches fails when one of them is missing.
 COPY --from=deps /app/domains/identity /app/domains/identity
 COPY --from=deps /app/domains/profile /app/domains/profile
@@ -39,9 +42,13 @@ COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres
 COPY --from=deps /app/infrastructure/seal /app/infrastructure/seal
 COPY --from=deps /app/infrastructure/session /app/infrastructure/session
-COPY --from=deps /app/interfaces/http /app/interfaces/http
-COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
-COPY --from=build /app/apps/web/dist /app/apps/web/dist
+# The web process: its entry, its package manifest, the built server, and its sources from the build stage, without
+# the test-only routes. server.ts imports its config and every route's policy.ts from src at start (body-cap.ts);
+# SvelteKit's bundle in build/ holds the pages, the components from apps/web and the svelte runtime.
+COPY --from=build /app/interfaces/web/package.json /app/interfaces/web/package.json
+COPY --from=build /app/interfaces/web/server.ts /app/interfaces/web/server.ts
+COPY --from=build /app/interfaces/web/src /app/interfaces/web/src
+COPY --from=build /app/interfaces/web/build /app/interfaces/web/build
 # Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
 # base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
 # no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
@@ -65,4 +72,4 @@ USER 65532:65532
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
   CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.LISTEN_PORT}/health`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-ENTRYPOINT ["node", "interfaces/http/main.ts"]
+ENTRYPOINT ["node", "interfaces/web/server.ts"]

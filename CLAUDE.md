@@ -32,11 +32,11 @@ guideline wins.
 ## Where does this go (decision 34; folders appear with their first code)
 | Kind of code | Folder |
 | --- | --- |
-| Screens, islands, styles | `apps/{web,admin,chat}`: UI only, no product rules, no DB |
-| Entry points, auth, CSRF gate, limits | `interfaces/{http,admin,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
+| Screens and styles | `apps/{web,admin,chat}`: UI only, no product rules, no DB |
+| Entry points, auth, CSRF gate, limits | `interfaces/{web,admin,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
 | Product rules | `domains/{identity,content,social,feed,messaging,moderation,privacy}` |
 | External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,session,seal,audit}` |
-| Generic, no product meaning (MIT) | `shared/{lexicons,ui,ui-build,islands,http,config,errors,log,host-pin}` |
+| Generic, no product meaning (MIT) | `shared/{lexicons,ui,ui-build,http,config,errors,log,host-pin}` |
 | Compose, edge, backup, preflight | `deployment/` |
 | Integration and e2e tests | `tests/`; unit tests sit beside their file |
 
@@ -64,13 +64,13 @@ Every change:
   Exception: `scripts/guards/docs-only-paths.ts` paths, `kind/docs`, green CI: `docs-auto-merge.yml` squash-merges it, outside D4.
 
 ## UI
-- All UI follows the unset.sh design sheet (plan §11 Q11): its `tokens.json` is the token source for the CSS Modules;
-  new components only when registered on the sheet with Alex's approval.
-- The 0x40 "v2e" visual direction (vault note `v2e-visual-direction-locked`) is **superseded** by the design sheet;
-  follow nothing from it.
+- Svelte UI (ADR 0055): stock shadcn-svelte in `apps/web/lib/components/ui`, themed only by `apps/web/theme.css`, seeded
+  from the design sheet (a reference). A stock one needs no approval; changing one or adding a non-shadcn one is called
+  out in the PR; `inventory.json` lists all. Tailwind classes only there and in the shell, never in pages.
+  `shared/ui` keeps only the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
-  `shared/ui/approved-extensions.json`, rendered by the `shared/ui` `Icon` component from the copied, pinned SVG
-  data. No icon npm package (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.
+  `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm
+  package (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG.
 
 ## Protocol work: read the source of truth first
 - AT Protocol: the specs at atproto.com/specs and the `@atproto/*` source for the pinned version. Pin `@atproto/*`

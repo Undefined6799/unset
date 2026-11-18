@@ -133,6 +133,11 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
+  "interface-web-sveltekit": [{ from: "interfaces/web/src/hooks.server.ts", spec: "$app/env", unresolved: true }],
+  "interface-web-components": [
+    edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/button/index.ts"),
+    edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/app.css"),
+  ],
   "interface-http-render-build": [
     {
       from: config.RENDER_BUILD_IMPORT.from,
@@ -141,6 +146,12 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
       unresolved: true,
     },
   ],
+  "interface-web-build": config.WEB_SERVER_BUILD.modules.map((spec) => ({
+    from: config.WEB_SERVER_BUILD.from,
+    spec,
+    kind: "dynamic" as const,
+    unresolved: true,
+  })),
   "interface-admin-render": [edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`)],
   "admin-service": [
     edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/index.ts"),
@@ -180,6 +191,8 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
   "shared-ui-islands": [edge("shared/ui/a.ts", "../islands/index.ts")],
   "shared-islands": [edge("shared/islands/a.ts", "./b.ts"), edge("shared/islands/a.ts", "left-pad")],
+  "shared-ui-safe-href": [edge("shared/ui/a.ts", "../safe-href/index.ts")],
+  "shared-safe-href": [edge("shared/safe-href/a.ts", "./b.ts")],
   "shared-ui-build": [
     edge("shared/ui-build/a.ts", "./b.ts"),
     edge("shared/ui-build/a.ts", "../ui/index.ts", "type"),
@@ -209,13 +222,13 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
 
 /** One real file per top-level area, cruised with the real config (P1.28z). */
 const REAL_FILES = [
-  "apps/web/render.tsx",
+  "apps/web/lib/profile/parse.ts",
   "domains/identity/index.ts",
   "shared/errors/index.ts",
   "shared/host-pin/index.ts",
   "shared/host-pin/index.test.ts",
   "infrastructure/net-guard/index.ts",
-  "interfaces/http/main.ts",
+  "interfaces/web/server.ts",
   "deployment/preflight/index.ts",
   "scripts/guards/files.ts",
 ];
@@ -729,6 +742,41 @@ describe("allowlist matrix", () => {
     await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
     await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
     await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
+  });
+
+  test("web_server_build_import_is_exact", async () => {
+    // P1.20k: server.ts loads its own build through two literal #kit specifiers; nothing near them passes.
+    const { from, modules } = config.WEB_SERVER_BUILD;
+    expect({ from, modules }).toEqual({ from: "interfaces/web/server.ts", modules: ["#kit/handler", "#kit/manifest"] });
+    const unresolved = (file: string, spec: string): Edge => ({ from: file, spec, kind: "dynamic", unresolved: true });
+    for (const spec of modules) await expectPass(unresolved(from, spec));
+    await expectFail("not-in-allowed", unresolved("interfaces/web/src/hooks.server.ts", "#kit/handler"));
+    await expectFail("not-in-allowed", unresolved(from, "#kit/other"), unresolved(from, "#kit/handlerx"));
+  });
+
+  test("web_process_takes_only_svelte_components_and_icon_data", async () => {
+    // P1.20c (ADR 0055, 0056): interfaces/web composes apps/web's Svelte components, theme and Tailwind entry, and the
+    // Svelte code takes only icons.json from shared/ui. The React render entry and the React UI stay out of reach.
+    await expectPass(
+      edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/card/index.ts"),
+      edge("interfaces/web/src/routes/b.ts", "../../../../apps/web/theme.css"),
+    );
+    // icons.json itself is reached only as the @unset/shared-ui/icons.json export (infra-shared-via-index); the real
+    // cruise over icon.svelte covers that edge.
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/render.tsx"));
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/src/b.tsx"));
+    // The legal texts: a .md file directly in apps/web/legal/, nothing else there and nothing nested.
+    // The pages import them with Vite's `?raw` suffix; dependency-cruiser 18 resolves that to the .md file itself
+    // (checked on the real tree), while a fixture would write a file named with the suffix, so the fixture omits it.
+    await expectPass(edge("interfaces/web/src/routes/c.ts", "../../../../apps/web/legal/terms.en.md"));
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal/x.ts"));
+    await expectFail(
+      "web-components-only",
+      edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal/a/b.md"),
+    );
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal.md"));
+    await expectFail("svelte-no-react-ui", edge("interfaces/web/src/routes/a.ts", "../../../../shared/ui/index.ts"));
+    await expectFail("svelte-no-react-ui", edge("apps/web/lib/components/a.ts", "../../../../shared/ui/index.ts"));
   });
 
   test("shared_host_pin_is_a_leaf", async () => {

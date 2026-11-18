@@ -48,34 +48,14 @@ function lastOwner(text: string, file: string): { pattern: string; owners: strin
   return found;
 }
 
-test("island_tsx_keeps_an_owner", () => {
-  // P1.25u (docs/ai/book/phase-1.md): the six kit islands stay under shared/ui/islands/, so that
-  // ownership line stays. The old props and readProps paths, and /shared/ui/src/islands/ once git
-  // ls-files shows it empty, leave. A remaining island must still have an owner.
+test("no_island_paths_are_left", () => {
+  // P1.20k: the React islands and their runtime are deleted, and so are their ownership lines. A .island.tsx that
+  // came back would need its owner again.
   const text = readFileSync(join(ROOT, ".github", "CODEOWNERS"), "utf8");
   const listed = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0");
-  const islands = listed.filter((path) => path.endsWith(".island.tsx"));
-  const kit = islands.filter((path) => path.startsWith("shared/ui/islands/"));
-  expect(kit.length).toBeGreaterThan(0);
-  for (const file of islands) {
-    const owner = lastOwner(text, file);
-    expect(owner?.owners.length, file).toBeGreaterThan(0);
-  }
-  for (const file of kit) {
-    expect(lastOwner(text, file), file).toEqual({
-      pattern: "/shared/ui/islands/",
-      owners: ["@Undefined6799"],
-    });
-  }
-  const dropped = text.replace("/shared/ui/islands/ @Undefined6799\n", "");
-  expect(lastOwner(dropped, "shared/ui/islands/copy.island.tsx")?.pattern).toBe("*");
-  expect(listed.filter((path) => path.startsWith("shared/ui/src/islands/"))).toEqual([]);
-  expect(text).not.toContain("/shared/ui/src/islands/");
-  const trusted = readTrustedBase(text);
-  if (!trusted.ok) expect.fail(trusted.error);
-  expect(trusted.section.patterns).not.toContain("/shared/ui/islands/props.ts");
-  expect(trusted.section.patterns).not.toContain("/shared/ui/src/islands/readProps.ts");
-  expect(trusted.section.patterns).toContain("/shared/islands/");
+  expect(listed.filter((path) => path.endsWith(".island.tsx"))).toEqual([]);
+  expect(text).not.toContain("/shared/islands/");
+  expect(text).not.toContain("/shared/ui/islands/");
 });
 
 test("codeowners_trusted_base_owns_local_postgres_init", () => {

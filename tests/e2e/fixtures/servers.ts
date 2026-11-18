@@ -1,109 +1,79 @@
-// Two processes for the browser harness (P1.26). Both render apps/web's production build.
-// P1.25 did not ship TEST_ROUTES, so fixture pages exist only in the test process. The kit's path
-// template rejects a leading underscore (shared/http/routes.ts), so the paths are /fixture/*.
-// The production process is compose(): the real routes, no fixture. Postgres init can take the
-// 90s budget in tests/support/postgres.ts, so `wait` allows 180s and then prints the server logs.
-//
-// HSTS is present on http in dev because shared/http/csp/headers.ts sets it for every group.
-// The http modules are package subpaths, not relative paths: a relative import pulls
-// interfaces/http into this project, whose rootDir is tests/ (TS6059).
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+// Two processes for the browser harness (P1.26; on the SvelteKit server since P1.20k). Each starts Postgres, runs the
+// migrations, and starts the built interfaces/web server (tests/integration/web/built-server.ts startWeb) behind a
+// TLS listener on 127.0.0.1, as the edge stands in front of it in production:
+// - `prod`: the real routes and nothing else (no test-only route, no stand-in).
+// - `test`: the test profile with TEST_ROUTES on, the stand-in network and PDS of tests/integration/web, and signed-in
+//   members at each onboarding step and one finished member, whose cookies it writes to SESSIONS_FILE for the specs.
+// Browsers reach both at https://unset.test (pages.ts): a name that is neither an IP nor loopback, as the OAuth
+// client's metadata needs, that SvelteKit's Origin check compares a form post against (server.ts sets ORIGIN), and
+// where every browser keeps a Secure __Host- cookie. Playwright gets there through the CONNECT proxy below. The
+// certificate is made per run by openssl and trusted by no one: the harness ignores certificate errors.
+// `wait` probes the plain listeners' /health (no host check there), so it needs no certificate.
+import { execFileSync } from "node:child_process";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer, request as httpRequest, type IncomingMessage } from "node:http"; // guard-allow: egress forwards to the loopback test servers only
+import { createServer as createTlsServer } from "node:https"; // guard-allow: egress inbound listener only
+import { connect } from "node:net"; // guard-allow: egress the proxy's tunnels reach the loopback TLS listeners only
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Duplex } from "node:stream";
+import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
-import { migrate } from "@unset/infrastructure-postgres";
-import { compose } from "@unset/interfaces-http/compose.ts";
-import { config } from "@unset/interfaces-http/config.ts";
-import { policies } from "@unset/interfaces-http/limits.ts";
-import { assetsRoutes } from "@unset/interfaces-http/routes/assets.ts";
-import { webTestEnv } from "@unset/interfaces-http/test-env.ts";
-import { loadWebBuild } from "@unset/interfaces-http/web/build.ts";
-import { pageResponse } from "@unset/interfaces-http/web/page.ts";
-import { loadWebRender, type WebRender } from "@unset/interfaces-http/web/render-entry.ts";
-import { loadConfig } from "@unset/shared-config";
-import { createServer, defineRoute, type Route } from "@unset/shared-http";
+import type { SavedSession } from "@unset/infrastructure-pds";
+import {
+  createAccountRepository,
+  createOAuthSessionStore,
+  createPool,
+  migrate,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
+import { buildOnce, PDS_HOST, type Postgres, type RunningWeb, startWeb } from "../../integration/web/built-server.ts";
+import { readyMember } from "../../integration/web/members.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
-import { FIXTURES, PROD_ORIGIN, PROD_PUBLIC_ORIGIN, TEST_ORIGIN } from "../pages.ts";
+import {
+  ACCOUNT,
+  HOST,
+  INNER,
+  LISTEN,
+  type MemberName,
+  PROD_ORIGIN,
+  PROXY,
+  SESSIONS_FILE,
+  TEST_ORIGIN,
+} from "../pages.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
-const BUILD = join(ROOT, "apps/web/dist/client");
 const LOGS = ["e2e-prod.log", "e2e-test.log"] as const;
-/** The signed-in account the account and settings fixtures show. */
-const ACCOUNT = {
-  handle: "alice.pds.unset.test",
-  did: `did:plc:${"a".repeat(24)}`,
-  handleUnavailable: false,
-  issuer: "https://pds.unset.test",
-  ours: true,
-};
+const quiet = createLogger({ service: "e2e", commit: "c".repeat(40), env: "test", write: () => undefined });
 
-// The wait process probes both listeners. scripts/guards/egress.ts scans tests/ and refuses a
-// dynamic fetch, so the probe is guardedFetch. An internal policy allows these exact http origins,
-// and a private answer may be loopback (infrastructure/net-guard/src/resolve.ts).
+// The wait process probes both plain listeners. scripts/guards/egress.ts scans tests/ and refuses a dynamic fetch, so
+// the probe is guardedFetch, with an internal policy for these exact loopback origins.
 const health = guardedFetch(
   createNetGuard({ internalHosts: [], allowLoopback: false, commit: "c".repeat(40) }),
-  internalPolicy("e2e-health", [PROD_ORIGIN, TEST_ORIGIN]),
+  internalPolicy("e2e-health", [`http://127.0.0.1:${INNER.prod}`, `http://127.0.0.1:${INNER.test}`]),
   { timeoutMs: 2_000, maxBytes: 4_096 },
 );
 
 type Mode = "prod" | "test" | "wait";
 
-function secretsDir(): string {
+function scratch(): string {
   const dir = mkdtempSync(join(tmpdir(), "unset-e2e-"));
-  process.on("exit", () => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
 
-function harnessEnv(dir: string, listen: string, extra: Record<string, string> = {}): Record<string, string> {
-  return webTestEnv(dir, {
-    UNSET_ENV: "dev",
-    LISTEN_PORT: new URL(listen).port,
-    PUBLIC_ORIGIN: listen,
-    HTTP_ALLOWED_HOSTS: new URL(listen).hostname,
-    MEDIA_ORIGIN: "http://media.test:9",
-    TRUSTED_PROXY_MODE: "socket",
-    OAUTH_ALLOW_HTTP: "true",
-    ...extra,
-  });
-}
-
-function html(body: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fixture</title></head><body><main id="main">${body}</main></body></html>`;
-}
-
-function htmlRoute(path: string, group: "app" | "public", body: string): Route {
-  return defineRoute({
-    method: "GET",
-    path,
-    group,
-    rateLimit: "default",
-    session: "none",
-    handler: () => new Response(html(body), { headers: { "content-type": "text/html; charset=utf-8" } }),
-  });
-}
-
-async function serveProd(): Promise<void> {
-  process.on("exit", () => {
-    stopAllPostgres();
-  });
+/** Postgres with the migrations applied, connected to as `web` with a password set for this run. */
+async function database(): Promise<Postgres> {
+  process.on("exit", () => stopAllPostgres());
   const migratorPassword = randomPassword();
   const postgres = await startPostgres({
     initDir: join(ROOT, "deployment/postgres/init"),
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
-  const dir = secretsDir();
-  // Styles and scripts stay on the HTTP listener. ASSETS_BASE may be http in dev
-  // (shared/http/config.ts); an empty value would point them at PROD_PUBLIC_ORIGIN.
-  const env = harnessEnv(dir, PROD_ORIGIN, {
-    PUBLIC_ORIGIN: PROD_PUBLIC_ORIGIN,
-    HTTP_ALLOWED_HOSTS: "unset.test,127.0.0.1",
-    ASSETS_BASE: `${PROD_ORIGIN}/assets/`,
-  });
-  env.PG_HOST = "127.0.0.1";
-  env.PG_PORT = String(postgres.port);
   const result = await migrate({
     connection: {
       host: "127.0.0.1",
@@ -116,200 +86,231 @@ async function serveProd(): Promise<void> {
     dir: join(ROOT, "infrastructure/postgres/migrations"),
     root: ROOT,
     checkQueryFiles: true,
-    log: createLogger({ service: "e2e-migrate", commit: "c".repeat(40), env: "dev" }),
+    log: quiet,
     retryDelaysMs: [],
   });
   if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
-  const password = readFileSync(env.PG_PASSWORD_FILE ?? "", "utf8").trim();
+  const password = randomPassword();
   postgres.sql("unset", `ALTER ROLE web PASSWORD '${password}'`);
-  const cfg = loadConfig(config, env);
-  const { server, boot } = await compose(cfg);
-  await boot();
-  const bound = await server.listen();
-  process.stderr.write(`e2e prod listening ${bound}\n`);
+  return { host: "127.0.0.1", port: postgres.port, database: "unset", user: "web", password };
+}
+
+/** A self-signed certificate for HOST, made by openssl for this run only. */
+function certificate(dir: string): { key: Buffer; cert: Buffer } {
+  const key = join(dir, "tls.key");
+  const cert = join(dir, "tls.crt");
+  execFileSync(
+    "openssl",
+    ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1"].concat([
+      "-subj",
+      `/CN=${HOST}`,
+      "-addext",
+      `subjectAltName=DNS:${HOST}`,
+      "-keyout",
+      key,
+      "-out",
+      cert,
+    ]),
+    { stdio: "ignore" },
+  );
+  return { key: readFileSync(key), cert: readFileSync(cert) };
 }
 
 /**
- * The production server build does not export the kit showcase, and Node cannot load TSX.
- * Vite 8.3.4 `ssrLoadModule` (node_modules/vite/dist/node/index.d.ts) loads the source render
- * and the showcase in one module graph, so IslandRendererContext is a single React context.
- * Class names come from the same scopedName the production CSS build used (apps/web/vite.config.ts).
+ * Loopback reads as an unknown client (the resolver skips trusted-proxy entries, shared/http/trustedProxy.ts), so the
+ * listener names a TEST-NET-3 address (RFC 5737), a new one per TLS connection: each test's own browser context reads
+ * as its own visitor. One address for the whole run outran one bucket (limits.ts: 60, 5 a second) and got 429s; the
+ * limit itself is tested in tests/integration/web/gate.test.ts.
  */
-type PageBody = Parameters<typeof pageResponse>[1]["body"];
-type CreateElement = (type: unknown, props?: unknown, ...children: unknown[]) => PageBody;
-type IslandComponent = (props: { name: string; props: object }) => PageBody;
+let connections = 0;
+const nextBrowserAddress = (): string => `203.0.113.${(connections++ % 254) + 1}`;
 
-// This file is not in a workspace, so the raw-specifier allowlist only permits packages
-// the root package.json declares (scripts/lint/specifiers.ts). react is not one of them.
-// A string variable is not a specifier. Node still loads the module the server build imports.
-async function loadReact(): Promise<CreateElement> {
-  const specifier: string = "react";
-  const react = (await import(specifier)) as { createElement?: CreateElement };
-  if (react.createElement === undefined) throw new Error("react did not load");
-  return react.createElement;
+/**
+ * The TLS listener in front of the web server, as the edge is: it forwards each request unchanged with its connection's
+ * address in X-Forwarded-For (the web server trusts that header from loopback only, TRUSTED_PROXY_MODE header).
+ */
+function tlsFront(dir: string, listen: number, inner: number): Promise<void> {
+  const addresses = new WeakMap<object, string>();
+  const server = createTlsServer(certificate(dir), (req, res) => {
+    const forwarded = httpRequest(
+      {
+        host: "127.0.0.1",
+        port: inner,
+        method: req.method,
+        path: req.url,
+        headers: { ...req.headers, "x-forwarded-for": addresses.get(req.socket) ?? nextBrowserAddress() },
+      },
+      (answer) => {
+        res.writeHead(answer.statusCode ?? 502, answer.rawHeaders);
+        answer.pipe(res);
+      },
+    );
+    forwarded.on("error", () => {
+      res.writeHead(502);
+      res.end();
+    });
+    req.pipe(forwarded);
+  });
+  server.on("secureConnection", (socket) => addresses.set(socket, nextBrowserAddress()));
+  return new Promise((done) => server.listen(listen, "127.0.0.1", () => done()));
 }
 
-async function loadKit(): Promise<{
-  renderPage: WebRender["renderPage"];
-  Showcase: (props: Record<string, never>) => PageBody;
-}> {
-  const { createServer } = await import("vite");
-  const vite = await createServer({
-    configFile: join(ROOT, "apps/web/vite.config.ts"),
-    root: join(ROOT, "apps/web"),
-    appType: "custom",
-    logLevel: "error",
-    server: { middlewareMode: true, hmr: false, watch: null, fs: { allow: [ROOT] } },
-  });
-  process.on("exit", () => {
-    void vite.close();
-  });
-  const web = (await vite.ssrLoadModule(join(ROOT, "apps/web/render.tsx"))) as { renderPage?: WebRender["renderPage"] };
-  const kit = (await vite.ssrLoadModule(join(ROOT, "shared/ui/showcase/Showcase.tsx"))) as {
-    Showcase?: (props: Record<string, never>) => PageBody;
+/** What both processes set: the browser origin is the TLS listener's, the server's own port is the plain one. */
+function frontedEnv(mode: "prod" | "test"): Record<string, string> {
+  return {
+    LISTEN_PORT: String(INNER[mode]),
+    PUBLIC_ORIGIN: mode === "prod" ? PROD_ORIGIN : TEST_ORIGIN,
+    HTTP_ALLOWED_HOSTS: HOST,
+    TRUSTED_PROXY_MODE: "header",
+    TRUSTED_PROXY_HEADER: "x-forwarded-for",
+    TRUSTED_PROXY_CIDRS: "127.0.0.0/8",
   };
-  if (web.renderPage === undefined || kit.Showcase === undefined) {
-    throw new Error("kit showcase did not load");
+}
+
+function report(mode: "prod" | "test", web: RunningWeb): void {
+  process.stderr.write(`e2e ${mode} listening ${mode === "prod" ? PROD_ORIGIN : TEST_ORIGIN}\n`);
+  let written = 0;
+  const flush = setInterval(() => {
+    const lines = web.logs();
+    for (const line of lines.slice(written)) process.stderr.write(`${JSON.stringify(line)}\n`);
+    written = lines.length;
+  }, 1000);
+  process.on("SIGTERM", () => {
+    clearInterval(flush);
+    void web.stop().then(() => process.exit(0));
+  });
+}
+
+/**
+ * Playwright's proxy (playwright.config.ts): it answers CONNECT for HOST at the two TLS listeners only, by opening the
+ * tunnel to 127.0.0.1, and refuses everything else, so a page that reached for any other host fails the run.
+ */
+function connectProxy(): Promise<void> {
+  const allowed = new Set([`${HOST}:${LISTEN.prod}`, `${HOST}:${LISTEN.test}`]);
+  const proxy = createHttpServer((_req, res) => {
+    res.writeHead(405);
+    res.end();
+  });
+  proxy.on("connect", (req: IncomingMessage, client: Duplex, head: Buffer) => {
+    const target = req.url ?? "";
+    if (!allowed.has(target)) {
+      client.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+      return;
+    }
+    const upstream = connect(Number(target.split(":")[1]), "127.0.0.1", () => {
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      upstream.write(head);
+      upstream.pipe(client);
+      client.pipe(upstream);
+    });
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+  });
+  return new Promise((done) => proxy.listen(Number(new URL(PROXY).port), "127.0.0.1", () => done()));
+}
+
+async function serveProd(): Promise<void> {
+  const pg = await database();
+  const dir = scratch();
+  const web = await startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false", ...frontedEnv("prod") });
+  await tlsFront(dir, LISTEN.prod, INNER.prod);
+  await connectProxy();
+  report("prod", web);
+}
+
+const didOf = (letter: string): Did => {
+  const did = parseDid(`did:plc:${letter.repeat(24)}`);
+  if (did === null) throw new Error("e2e DID did not parse");
+  return did;
+};
+
+/**
+ * Where each signed-in member stands: a step of onboarding, onboarded with an email not yet confirmed, or done with a
+ * confirmed one (ACCOUNT, whose repo the stand-in PDS holds).
+ */
+const MEMBERS: Record<MemberName, { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" }> = {
+  age: { did: didOf("b"), step: "age" },
+  terms: { did: didOf("c"), step: "terms" },
+  chat: { did: didOf("d"), step: "chat" },
+  verify: { did: didOf("e"), step: "verify" },
+  account: { did: ACCOUNT.did as Did, step: "done" },
+};
+
+/** Each member's grant (so the session's foreign key holds) and session, stepped to where MEMBERS puts them. */
+async function seedMembers(pg: Postgres, keyring: string): Promise<Record<MemberName, string>> {
+  const pool = createPool({ connection: { ...pg, ssl: false }, service: "e2e-seed", max: 2, connectTimeoutMs: 5000 });
+  const parsed = parseKeyring(keyring);
+  if (parsed === undefined) throw new Error("e2e keyring did not parse");
+  const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSealer(parsed), log: quiet });
+  const sessions = createSessionStore({
+    withDb: async () => {
+      throw new Error("the seed only writes through its own transactions");
+    },
+    limits: { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 },
+    log: quiet,
+  });
+  const accounts = createAccountRepository(pool, {
+    recordUnderageBlock: async () => {
+      throw new Error("the seed never blocks");
+    },
+  });
+  const issuer = `https://${PDS_HOST}`;
+  const cookies = {} as Record<MemberName, string>;
+  for (const [name, { did, step }] of Object.entries(MEMBERS) as [MemberName, (typeof MEMBERS)[MemberName]][]) {
+    const dpopJwk = { ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }) };
+    await tokenSets.set(did, {
+      dpopJwk: { ...dpopJwk, kid: "dpop", alg: "ES256" } as SavedSession["dpopJwk"],
+      authMethod: { method: "private_key_jwt", kid: "A" },
+      tokenSet: {
+        iss: issuer,
+        sub: did as SavedSession["tokenSet"]["sub"],
+        aud: issuer,
+        scope: "atproto",
+        access_token: "a",
+        token_type: "DPoP",
+      },
+    });
+    const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin: issuer }));
+    const deadline = AbortSignal.timeout(5000);
+    if (step === "terms" || step === "chat") await accounts.confirmAdult(did, deadline);
+    if (step === "chat") await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline);
+    if (step === "verify" || step === "done") await readyMember(pool, did, step === "done");
+    cookies[name] = `__Host-sid=${created.cookieValue}`;
   }
-  return { renderPage: web.renderPage, Showcase: kit.Showcase };
+  await pool.end();
+  return cookies;
 }
 
 async function serveTest(): Promise<void> {
-  const dir = secretsDir();
-  const cfg = loadConfig(config, harnessEnv(dir, TEST_ORIGIN));
-  const render = await loadWebRender();
-  const build = loadWebBuild(BUILD, render.islandName);
-  const kit = await loadKit();
-  const createElement = await loadReact();
-  // A literal import resolves to apps/web/render.tsx, which this project cannot parse
-  // without jsx. The string is the same package export the production render loader uses.
-  const serverBuild: string = "@unset/apps-web/server";
-  const web = (await import(serverBuild)) as { Island?: IslandComponent };
-  const Island = web.Island;
-  if (Island === undefined) throw new Error("web render build does not export Island");
-  const log = createLogger({ service: "e2e", commit: "c".repeat(40), env: "dev" });
-  const deps = {
-    build,
-    render: render.renderPage,
-    assetsOrigin: new URL(cfg.PUBLIC_ORIGIN).origin,
-    env: cfg.UNSET_ENV,
-    log,
-  };
-  const boot = build.manifest.boot;
-  const routes = [
-    ...assetsRoutes(build.files),
-    defineRoute({
-      method: "GET",
-      path: FIXTURES.app,
-      group: "app",
-      rateLimit: "default",
-      session: "none",
-      handler: ({ request }) =>
-        pageResponse(deps, {
-          group: "app",
-          request,
-          title: "Islands",
-          shell: {},
-          body: createElement(
-            "div",
-            { id: "notice" },
-            createElement("p", null, "A notice"),
-            createElement(Island, {
-              name: "toast",
-              props: { href: FIXTURES.app, label: "Dismiss notice", toast: "notice" },
-            }),
-          ),
-        }),
-    }),
-    defineRoute({
-      method: "GET",
-      path: FIXTURES.showcase,
-      group: "app",
-      rateLimit: "default",
-      session: "none",
-      handler: ({ request }) =>
-        pageResponse(
-          { ...deps, render: kit.renderPage },
-          { group: "app", request, title: "Kit", body: createElement(kit.Showcase) },
-        ),
-    }),
-    // P2.12a: the welcome screens as interfaces/http/routes/welcome.ts shows them, without the session they need there;
-    // P2.12j: signed in, as the route marks them, so the shell offers no Sign in.
-    ...[
-      { path: FIXTURES.welcomeAge, title: "When were you born?", body: () => render.screens.welcomeAge() },
-      {
-        path: FIXTURES.welcomeTerms,
-        title: "Terms and privacy",
-        body: () =>
-          render.screens.welcomeTerms({ countryRule: true, next: null, termsVersion: "1", privacyVersion: "1" }),
+  const pg = await database();
+  const dir = scratch();
+  const keyring = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } });
+  const keyringFile = join(dir, "seal_keyring");
+  writeFileSync(keyringFile, keyring);
+  const writesFile = join(dir, "pds-writes.jsonl");
+  writeFileSync(writesFile, "");
+  const web = await startWeb(
+    pg,
+    { SEAL_KEYRING_FILE: keyringFile, ...frontedEnv("test") },
+    {
+      pds: {
+        origin: `https://${PDS_HOST}`,
+        did: ACCOUNT.did,
+        // A profile, so the member page shows its card controls (cards.spec.ts adds and deletes its own cards).
+        records: {
+          "sh.unset.profile": {
+            self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: "2026-11-01T00:00:00.000Z" },
+          },
+        },
+        writesFile,
+        session: { emailConfirmed: true },
       },
-      { path: FIXTURES.welcomeChat, title: "Chat comes later", body: () => render.screens.welcomeChat() },
-    ].map(({ path, title, body }) =>
-      defineRoute({
-        method: "GET",
-        path,
-        group: "app",
-        rateLimit: "default",
-        session: "none",
-        handler: ({ request }) =>
-          pageResponse(deps, {
-            group: "app",
-            request,
-            title,
-            body: body(),
-            islands: "off",
-            shell: { noindex: true, signedIn: true },
-          }),
-      }),
-    ),
-    // P2.13c: the account page and the settings pages inside the core shell, as their routes render them.
-    ...[
-      {
-        path: FIXTURES.account,
-        title: "alice.pds.unset.test",
-        active: "account" as const,
-        body: () => render.screens.me(ACCOUNT),
-      },
-      {
-        path: FIXTURES.settingsProfile,
-        title: "Profile",
-        active: "settings" as const,
-        body: () => render.screens.settingsProfile({ privacyNotice: false }),
-      },
-      {
-        path: FIXTURES.settingsAccount,
-        title: "Account",
-        active: "settings" as const,
-        body: () => render.screens.settingsAccount({ ...ACCOUNT, privacyNotice: false }),
-      },
-    ].map(({ path, title, active, body }) =>
-      defineRoute({
-        method: "GET",
-        path,
-        group: "app",
-        rateLimit: "default",
-        session: "none",
-        handler: ({ request }) =>
-          pageResponse(deps, {
-            group: "app",
-            request,
-            title,
-            body: body(),
-            islands: "off",
-            shell: {
-              noindex: true,
-              navigation: { active, accountPath: `/${ACCOUNT.did}`, accountName: ACCOUNT.handle },
-            },
-          }),
-      }),
-    ),
-    htmlRoute(FIXTURES.unlabeled, "public", `<input name="name">`),
-    htmlRoute(FIXTURES.inline, "public", `<script>globalThis.__inline = 1</script>`),
-    htmlRoute(FIXTURES.script, "app", `<script type="module" src="/${boot}"></script>`),
-  ];
-  const server = createServer({ config: cfg, routes, policies, log });
-  const bound = await server.listen();
-  process.stderr.write(`e2e test listening ${bound}\n`);
+    },
+  );
+  writeFileSync(SESSIONS_FILE, JSON.stringify(await seedMembers(pg, keyring)));
+  process.on("exit", () => rmSync(SESSIONS_FILE, { force: true }));
+  await tlsFront(dir, LISTEN.test, INNER.test);
+  report("test", web);
 }
 
 async function once(url: string, deadline: number): Promise<boolean> {
@@ -344,8 +345,8 @@ function dumpLogs(): void {
 
 async function waitForServers(): Promise<void> {
   try {
-    await waitFor(`${PROD_ORIGIN}/health`);
-    await waitFor(`${TEST_ORIGIN}/health`);
+    await waitFor(`http://127.0.0.1:${INNER.prod}/health`);
+    await waitFor(`http://127.0.0.1:${INNER.test}/health`);
   } catch (error) {
     dumpLogs();
     throw error;
@@ -358,6 +359,8 @@ function assertMode(value: string | undefined): Mode {
 }
 
 const mode = assertMode(process.argv[2]);
+// One build for both processes: buildOnce takes the build lock, so the second waits for the first.
+if (mode !== "wait") buildOnce("e2e");
 if (mode === "prod") await serveProd();
 else if (mode === "test") await serveTest();
 else await waitForServers();

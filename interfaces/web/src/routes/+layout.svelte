@@ -1,0 +1,499 @@
+<!--
+  The shell of every page (P1.20d), as apps/web/src/shell/AppShell.tsx draws it today; src/lib/shell.ts says what a
+  page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
+  Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
+  (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.
+-->
+<script lang="ts">
+import "@unset/apps-web/app.css";
+import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
+import * as Alert from "@unset/apps-web/lib/components/ui/alert";
+import { Button } from "@unset/apps-web/lib/components/ui/button";
+import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
+import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
+import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
+import type { Snippet } from "svelte";
+import { enhance, type SubmitFunction } from "$app/forms";
+import { afterNavigate } from "$app/navigation";
+import { page } from "$app/state";
+import { accountLetter, type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
+import type { LayoutData } from "./$types";
+
+let { data, children }: { data: LayoutData; children: Snippet } = $props();
+
+const shell: ShellData = $derived((page.data as { shell?: ShellData }).shell ?? SITE_SHELL);
+// No Sign in for a member the gate found signed in (+layout.server.ts): on the welcome steps, the confirm-email page
+// and the error page, which pass no account.
+const signedIn = $derived(shell.signedIn === true || data.signedIn);
+// The theme form on every app page (+layout.server.ts), as the page passes it or the layout found it.
+const prefs = $derived(shell.prefs ?? data.prefs);
+const message = $derived(data.error === null ? undefined : ERROR_MESSAGES[data.error as keyof typeof ERROR_MESSAGES]);
+const LEGAL = [
+  { label: T.terms, href: "/legal/terms" },
+  { label: T.privacy, href: "/legal/privacy" },
+  { label: T.domains, href: "/legal/domains" },
+];
+const THEMES = [
+  { value: "dark", label: T.dark },
+  { value: "light", label: T.light },
+  { value: "system", label: T.system },
+] as const;
+const PICKER = [
+  { value: "dark", icon: "bulb-off", label: T.dark },
+  { value: "system", icon: "tv", label: T.system },
+  { value: "light", icon: "bulb-on", label: T.light },
+] as const;
+
+// The account menu's picker in the browser (P2.13e), as shared/ui/components/Navigation/ThemePicker.tsx did it: once the
+// client runs, a choice is saved in the background and applied to <html> in place, so the menu stays open (Alex,
+// 2026-10-23 02:15Z). The server renders a choice as data-theme and the color-scheme meta (lib/server/theme.ts
+// themeChunk); applyTheme sets the same two. The theme cookie is HttpOnly, so the tab keeps its last saved choice in
+// sessionStorage for a page the back-forward cache restores as it was left (https://web.dev/articles/bfcache).
+const SAVED_THEME = "unset.theme";
+const isThemeChoice = (value: unknown): value is ThemeChoice =>
+  value === "dark" || value === "light" || value === "system";
+
+function applyTheme(theme: ThemeChoice): void {
+  const root = document.documentElement;
+  if (theme === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", theme);
+  document
+    .querySelector('meta[name="color-scheme"]')
+    ?.setAttribute("content", theme === "system" ? "dark light" : theme);
+}
+
+function rememberTheme(theme: ThemeChoice): void {
+  try {
+    sessionStorage.setItem(SAVED_THEME, theme);
+  } catch {
+    // Storage can be off; the cookie still holds the choice for every page the server renders.
+  }
+}
+
+function rememberedTheme(): ThemeChoice | null {
+  try {
+    const value = sessionStorage.getItem(SAVED_THEME);
+    return isThemeChoice(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// The Appearance row's icon: the picker's for the current choice.
+const PICKER_ICON = Object.fromEntries(PICKER.map((choice) => [choice.value, choice.icon])) as Record<
+  ThemeChoice,
+  IconName
+>;
+
+// The picker's choice once saved in the background; until then the server's.
+let saved = $state<ThemeChoice | undefined>(undefined);
+const current = $derived(saved ?? prefs?.theme ?? "system");
+
+// A choice is saved in the background and applied in place, so the drawer stays open; a save that does not come back
+// as the route's 303 sends the plain form instead, which the server answers as with no script.
+const saveInPlace: SubmitFunction = ({ submitter, formElement }) => {
+  const choice = (submitter as HTMLButtonElement | null)?.value;
+  return async ({ result }) => {
+    if (result.type === "redirect" && isThemeChoice(choice)) {
+      applyTheme(choice);
+      rememberTheme(choice);
+      saved = choice;
+      return;
+    }
+    const field = Object.assign(document.createElement("input"), {
+      type: "hidden",
+      name: "theme",
+      value: choice ?? "",
+    });
+    formElement.append(field);
+    HTMLFormElement.prototype.submit.call(formElement);
+  };
+};
+
+// A page the back-forward cache restores keeps the theme it was left with; this tab's last save replaces it.
+function restoreSaved(event: PageTransitionEvent): void {
+  const last = event.persisted ? rememberedTheme() : null;
+  if (last === null) return;
+  applyTheme(last);
+  saved = last;
+}
+
+const MENU = "core-menu";
+const ACCOUNT = "account-menu";
+const ACTIONS = "actions-menu";
+const CREATE = "create-menu";
+const MESSAGES = "messages-menu";
+const NOTIFICATIONS = "notifications-menu";
+// The core header's main destinations (Clean tabs): those that run today are links.
+const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as const;
+// Coming soon (Alex, 2026-11-18: "still have them in a nav bar ... show them inactive, and then make a note somewhere
+// so we don't forget"). Each is drawn greyed and disabled: not a link, not focusable, its name read with "coming soon".
+// The list, and what each needs when its feature lands:
+// - Search (header field; an icon on narrow screens): a search page or palette, its route and policy (policy.ts),
+//   honest results (only what it really searches), then make the field a form and add it to the e2e and axe pages.
+// - The menu panel's Saved, Your communities and Help; the Create panel's New post, Share a link and Ask a question:
+//   each a real flow or page with its route and policy; then make its row a link and add tests for it.
+// - The Messages and Notifications panels: real lists with counts, loading and error states (never a hard-coded "all
+//   caught up"); until then they say the feature is coming, and their "open all" rows stay disabled.
+// - Community, Explore (tabs below): a page each with its route and policy; move the entry from SOON_TABS to TABS
+//   with its `active` value in ShellData, so aria-current and the underline follow, and add its denial and e2e tests.
+const SOON_MENU = [
+  { label: T.saved, icon: "saved" },
+  { label: T.yourCommunities, icon: "community" },
+  { label: T.help, icon: "help" },
+] as const;
+const SOON_CREATE = [
+  { label: T.newPost, icon: "edit" },
+  { label: T.shareLink, icon: "link" },
+  { label: T.askQuestion, icon: "help" },
+] as const;
+const PANEL_BUTTONS = [
+  { id: MESSAGES, label: T.messages, icon: "comment", empty: T.messagesSoon, all: T.openInbox },
+  {
+    id: NOTIFICATIONS,
+    label: T.notifications,
+    icon: "notifications",
+    empty: T.notificationsSoon,
+    all: T.allNotifications,
+  },
+] as const;
+const SOON_TABS = [
+  { label: T.community, icon: "community" },
+  { label: T.explore, icon: "explore" },
+] as const;
+// A coming-soon control: the stock disabled look (opacity) with no hover; disabled buttons are skipped by Tab.
+const soon = "disabled:opacity-60";
+// The header's icon controls: 34px on a mouse, a 44px target on touch (Clean tabs handoff).
+const control = "pointer-coarse:size-11";
+// Every header panel: a native popover under the header, the popover surface, a title row, then rows.
+const panel =
+  "fixed top-16 bottom-auto m-0 w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:w-auto";
+// The member the page passed (their own page and settings, with a name there) or the gate found (+layout.server.ts).
+const account = $derived(shell.account ?? data.account);
+const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
+// A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
+// Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
+afterNavigate(() => {
+  for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS]) {
+    const popover = document.getElementById(id);
+    if (popover?.matches(":popover-open")) popover.hidePopover();
+  }
+});
+// A footer link is a 24px target (WCAG 2.2 SC 2.5.8): its 20px line plus 2px above and below.
+const footerLink = "py-0.5";
+// A menu row: a link drawn as a row, not as text, so it keeps the foreground colour and no underline; muted marks hover
+// and the current page, since the menus' own surface is the accent colour.
+const row =
+  "flex items-center gap-3 rounded-md px-3 py-2 text-foreground no-underline hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium";
+</script>
+
+<svelte:window onpageshow={restoreSaved} />
+
+<svelte:head>
+  <!-- As the Hono head had them (apps/web/src/shell/head.tsx): both fonts preloaded, in anonymous CORS mode because a
+       font is fetched that way even from our own origin and a preload is reused only when its mode matches (MDN
+       rel="preload"); the icons as files under /_app/ (vite.config.ts inlines nothing). -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/SpaceGrotesk-Variable.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/JetBrainsMono-Variable.woff2" />
+  <link rel="icon" href={favicon} sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href={appleTouchIcon} />
+  {#if shell.noindex}<meta name="robots" content="noindex" />{/if}
+</svelte:head>
+
+{#snippet themeForm()}
+  <form method="post" action="/prefs/theme" class="flex flex-col gap-2">
+    <fieldset class="flex flex-col gap-1">
+      <legend class="mb-1 text-sm font-medium">{T.theme}</legend>
+      {#each THEMES as option (option.value)}
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="theme" value={option.value} checked={prefs?.theme === option.value} />
+          {option.label}
+        </label>
+      {/each}
+    </fieldset>
+    <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
+    <Button type="submit" variant="outline" size="sm">{T.saveTheme}</Button>
+  </form>
+{/snippet}
+
+{#snippet themePicker()}
+  <!-- The account menu's picker (P2.13e; Figma 151:939 option A): three buttons in one group that each POST their choice, so
+       it works with no script; the chosen one is pressed. -->
+  <form method="post" action="/prefs/theme" use:enhance={saveInPlace}>
+    <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
+    <fieldset class="inline-flex rounded-md border p-0.5">
+      <legend class="sr-only">{T.theme}</legend>
+      {#each PICKER as choice (choice.value)}
+        <Button
+          type="submit"
+          name="theme"
+          value={choice.value}
+          variant="ghost"
+          size="icon"
+          aria-pressed={choice.value === current}
+          title={choice.label}
+          class="aria-pressed:bg-accent aria-pressed:ring-1 aria-pressed:ring-border"
+        >
+          <Icon name={choice.icon} size={20} label={choice.label} />
+        </Button>
+      {/each}
+    </fieldset>
+  </form>
+{/snippet}
+
+{#snippet content()}
+  {#if message !== undefined}
+    <Alert.Root variant="destructive" class="mb-6"><Alert.Description>{message}</Alert.Description></Alert.Root>
+  {/if}
+  {#if shell.hiddenHeading !== undefined}<h1 class="sr-only">{shell.hiddenHeading}</h1>{/if}
+  {@render children()}
+{/snippet}
+
+{#if shell.kind === "bare"}
+  <main id="main" class="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center px-4 py-8">
+    {@render content()}
+  </main>
+{:else}
+<a
+  href="#main"
+  class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2"
+  >{T.skip}</a
+>
+
+{#if shell.kind === "core"}
+  <!-- The core shell's header (P1.20k; Alex, 2026-11-18, "Clean tabs", and the planned menus he sent at 05:04Z): the
+       menu button and wordmark, the action buttons and account menu at the right edge, and a row of main destinations
+       below. Every menu is a native popover with a title and a close button, so it opens with no script, closes on
+       Escape or a click outside, and gives focus back to its button. Only what runs today is a link; the rest is drawn
+       disabled, as SOON_ACTIONS, SOON_TABS and the panels list them. -->
+  <div class="flex min-h-svh flex-col">
+  <header class="border-b bg-secondary">
+    <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
+      <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
+        <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
+          <Icon name="menu" size={20} label={T.menu} />
+        </Button>
+        <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap max-sm:text-lg text-foreground no-underline" aria-label={T.homeLabel}
+          >{T.brandName}<span class="font-normal text-muted-foreground">{T.brandSuffix}</span></a
+        >
+      </div>
+      <button
+        type="button"
+        disabled
+        class="ml-auto flex h-8 w-70 max-w-85 min-w-38 shrink items-center gap-2 rounded-md border bg-background px-2.5 text-left text-sm text-muted-foreground opacity-60 pointer-coarse:h-11 max-md:w-58 max-sm:hidden"
+      >
+        <Icon name="search" size={16} /><span class="truncate" aria-hidden="true">{T.search}</span>
+        <span class="sr-only">{T.search}, {T.comingSoon}</span>
+      </button>
+      <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
+        <Button variant="outline" size="icon-sm" disabled class="{control} {soon} sm:hidden">
+          <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          popovertarget={CREATE}
+          popovertargetaction="toggle"
+          class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+        >
+          <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
+        </Button>
+        {#each PANEL_BUTTONS as button (button.id)}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={button.id}
+            popovertargetaction="toggle"
+            class="{control} max-sm:hidden"
+          >
+            <Icon name={button.icon} size={20} label={button.label} />
+          </Button>
+        {/each}
+        <Button
+          variant="outline"
+          size="icon-sm"
+          popovertarget={ACTIONS}
+          popovertargetaction="toggle"
+          class="{control} sm:hidden"
+        >
+          <Icon name="more" size={20} label={T.moreActions} />
+        </Button>
+        {#if account !== undefined}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={ACCOUNT}
+            popovertargetaction="toggle"
+            class="{control} rounded-full bg-muted font-semibold"
+          >
+            {#if letter !== undefined}<span aria-hidden="true">{letter}</span>{:else}<Icon name="profile" size={20} />{/if}
+            <span class="sr-only">{T.accountMenu}</span>
+          </Button>
+        {:else}
+          <!-- A visitor signs in here and comes back to this page (signInHref, +layout.server.ts). -->
+          <Button variant="outline" size="icon-sm" href={data.signInHref} class={control}>
+            <Icon name="profile" size={20} label={T.signIn} />
+          </Button>
+        {/if}
+      </div>
+    </div>
+    <nav aria-label={T.mainNav} class="flex min-h-11.5 items-stretch gap-2 px-5 max-md:px-3 max-sm:gap-1 max-sm:px-2">
+      {#each TABS as tab (tab.href)}
+        <a
+          href={tab.href}
+          aria-current={shell.active === tab.active ? "page" : undefined}
+          class="relative flex items-center gap-2 rounded-md px-3 text-sm whitespace-nowrap text-foreground no-underline transition-colors duration-120 hover:bg-muted motion-reduce:transition-none aria-[current=page]:font-semibold aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:-bottom-px aria-[current=page]:after:h-0.75 aria-[current=page]:after:rounded-sm aria-[current=page]:after:bg-primary"
+        >
+          <Icon name={tab.icon} size={16} class="text-muted-foreground" /><span>{tab.label}</span>
+        </a>
+      {/each}
+      {#each SOON_TABS as tab (tab.label)}
+        <!-- Muted text with no extra fading: unlike a disabled button, plain text is held to 4.5:1 (WCAG 1.4.3). The words
+             are one string for assistive technology, since a gap between two flex items reads as a space. -->
+        <span class="flex items-center gap-2 px-3 text-sm whitespace-nowrap text-muted-foreground max-sm:px-2.5"
+          ><Icon name={tab.icon} size={16} /><span aria-hidden="true">{tab.label}</span><span class="sr-only"
+            >{tab.label}, {T.comingSoon}</span
+          ></span
+        >
+      {/each}
+    </nav>
+  </header>
+  {#snippet soonRow(item: { label: string; icon: IconName })}
+    <li>
+      <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
+        <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
+        <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
+        <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
+          >{item.label}, {T.comingSoon}</span
+        >
+      </button>
+    </li>
+  {/snippet}
+  {#snippet panelTitle(id: string, title: string, focusClose: boolean)}
+    <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
+      <h2 id="{id}-title" class="font-semibold">{title}</h2>
+      {#if focusClose}
+        <!-- svelte-ignore a11y_autofocus -- nothing in this panel runs yet, so focus lands on its close button -->
+        <Button variant="ghost" size="icon-sm" autofocus popovertarget={id} popovertargetaction="hide" class={control}>
+          <Icon name="close" size={20} label="{T.close} {title}" />
+        </Button>
+      {:else}
+        <Button variant="ghost" size="icon-sm" popovertarget={id} popovertargetaction="hide" class={control}>
+          <Icon name="close" size={20} label="{T.close} {title}" />
+        </Button>
+      {/if}
+    </div>
+  {/snippet}
+  <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
+    {@render panelTitle(MENU, T.more, true)}
+    <ul class="flex flex-col gap-1">
+      {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
+    </ul>
+  </section>
+  <section id={CREATE} popover="auto" aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+    {@render panelTitle(CREATE, T.create, false)}
+    <ul class="flex flex-col gap-1">
+      {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
+    </ul>
+    <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
+      <li>
+        <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
+        <a href={account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`} class={row} autofocus>
+          <Icon name="apps" size={20} /><span>{T.addCard}</span>
+        </a>
+      </li>
+    </ul>
+  </section>
+  {#each PANEL_BUTTONS as button (button.id)}
+    <section id={button.id} popover="auto" aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(button.id, button.label, true)}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
+      <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+    </section>
+  {/each}
+  <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
+    {@render panelTitle(ACTIONS, T.moreActions, false)}
+    <ul class="flex flex-col gap-1">
+      <li>
+        <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens -->
+        <button type="button" popovertarget={CREATE} popovertargetaction="show" class="{row} w-full" autofocus>
+          <Icon name="add" size={20} /><span>{T.create}</span>
+        </button>
+      </li>
+      {#each PANEL_BUTTONS as button (button.id)}
+        <li>
+          <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
+            <Icon name={button.icon} size={20} /><span>{button.label}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </section>
+  {#if account !== undefined}
+    <section id={ACCOUNT} popover="auto" aria-labelledby="{ACCOUNT}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(ACCOUNT, T.account, false)}
+      {#if account.name}<p class="truncate px-3 pb-2 font-medium" title={account.name}>{account.name}</p>{/if}
+      <ul class="flex flex-col gap-1">
+        <li>
+          <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens, so Escape returns it to the avatar -->
+          <a href={account.path} class={row} autofocus aria-current={shell.active === "account" ? "page" : undefined}>
+            <Icon name="profile" size={20} /><span>{T.yourProfile}</span>
+          </a>
+        </li>
+        <li>
+          <a href="/settings/profile" class={row} aria-current={shell.active === "settings" ? "page" : undefined}>
+            <Icon name="settings" size={20} /><span>{T.settings}</span>
+          </a>
+        </li>
+      </ul>
+      {#if prefs !== undefined}
+        <div class="mt-1 flex items-center justify-between gap-3 border-t px-3 pt-2 pb-1">
+          <span class="flex items-center gap-3 text-sm"
+            ><Icon name={PICKER_ICON[current]} size={20} />{T.appearance}</span
+          >
+          {@render themePicker()}
+        </div>
+      {/if}
+      <form method="post" action="/logout" class="mt-1 border-t pt-1">
+        <Button type="submit" variant="ghost" class="h-auto w-full justify-start gap-3 px-3 py-2 font-normal">
+          <Icon name="signout" size={20} /><span>{T.signOut}</span>
+        </Button>
+      </form>
+    </section>
+  {/if}
+  <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
+  <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
+    <p>{T.note}</p>
+    <nav aria-label={T.legalColumn}>
+      <ul class="flex flex-wrap gap-x-5 gap-y-1">
+        {#each LEGAL as link (link.href)}
+          <li><a href={link.href} class="{footerLink} text-muted-foreground hover:text-foreground">{link.label}</a></li>
+        {/each}
+      </ul>
+    </nav>
+  </footer>
+  </div>
+{:else}
+  <div class="flex min-h-svh flex-col">
+    <header class="flex h-14 items-center justify-between border-b px-4">
+      <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
+      {#if !signedIn}<Button href={data.signInHref} size="sm">{T.signIn}</Button>{/if}
+    </header>
+    <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{@render content()}</main>
+  </div>
+  <footer class="flex flex-wrap gap-8 border-t px-4 py-8 text-sm">
+    <div class="flex flex-col gap-2">
+      <h2 class="font-medium">{T.siteColumn}</h2>
+      <a href="/" class={footerLink}>{T.home}</a>
+      {#if !signedIn}<a href={data.signInHref} class={footerLink}>{T.signIn}</a>{/if}
+    </div>
+    <div class="flex flex-col gap-2">
+      <h2 class="font-medium">{T.legalColumn}</h2>
+      {#each LEGAL as link (link.href)}<a href={link.href} class={footerLink}>{link.label}</a>{/each}
+    </div>
+    {#if prefs !== undefined}<div>{@render themeForm()}</div>{/if}
+    <p class="w-full text-muted-foreground">{T.note}</p>
+  </footer>
+{/if}
+{/if}

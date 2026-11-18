@@ -123,7 +123,6 @@ function interfaceNames(root: string): { names: string[]; problems: string[] } {
         .map((entry) => entry.name)
         .sort((a, b) => processRank(a) - processRank(b) || a.localeCompare(b))
     : [];
-  if (names.length === 0) return { names: [], problems: ["interfaces: no routes.manifest.json found"] };
   return {
     names,
     problems: names

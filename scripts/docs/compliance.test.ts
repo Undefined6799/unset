@@ -55,13 +55,16 @@ test("asvs_evidence_exists", () => {
   const lint = enabledLintRules(ROOT);
   expect(evidenceProblems(ROOT, asvsRows(doc), lint)).toEqual([]);
   const cases: [string, string][] = [
-    ["covered | `test:shared/http/server.test.ts#no_such_test`", "test shared/http/server.test.ts#no_such_test"],
+    [
+      "covered | `test:shared/http/returnPath.test.ts#no_such_test`",
+      "test shared/http/returnPath.test.ts#no_such_test",
+    ],
     ["covered | `test:shared/http/missing.test.ts#health_ok_with_commit`", "test shared/http/missing.test.ts"],
     ["covered | `lint:no-such-rule`", "lint rule no-such-rule"],
     ["covered | `guard:no-such-guard`", "guard scripts/guards/no-such-guard.ts"],
     ["covered | `doc:docs/human/no-such.md`", "doc docs/human/no-such.md"],
     ["covered | `step:P2.03`", "covered needs evidence that is not step:"],
-    ["open | `test:shared/http/server.test.ts#health_ok_with_commit`", "open allows step: evidence only"],
+    ["open | `test:shared/http/returnPath.test.ts#normalises_equivalent_paths`", "open allows step: evidence only"],
     ["partial | ", "partial needs evidence"],
     ["n/a | ", "n/a needs a reason"],
     ["open | `step:2.03`", "step 2.03 is not a step id"],
@@ -71,7 +74,7 @@ test("asvs_evidence_exists", () => {
     const found = evidenceProblems(ROOT, asvsRows(`| V1.1.1 | x | ${cells} | — |`), lint);
     expect(found, cells).toEqual([expect.stringContaining(`V1.1.1: ${problem}`)]);
   }
-  const good = "covered | `test:shared/http/server.test.ts#health_ok_with_commit`, `lint:computed-import`";
+  const good = "covered | `test:shared/http/returnPath.test.ts#normalises_equivalent_paths`, `lint:computed-import`";
   expect(evidenceProblems(ROOT, asvsRows(`| V1.1.1 | x | ${good} | — |`), lint)).toEqual([]);
   expect(lint).toEqual(expect.arrayContaining(["computed-import", "noExplicitAny", "no-style-prop"]));
 });

@@ -36,12 +36,15 @@ function runtimeClosure(from: string, folders: Map<string, string>): Set<string>
 
 test("web_image_copies_every_workspace_the_server_reaches", () => {
   const dockerfile = readFileSync(join(ROOT, "deployment/images/node-app.Dockerfile"), "utf8");
-  const copied = [...dockerfile.matchAll(/^COPY --from=deps \/app\/(\S+) \/app\/\1$/gm)].map((match) => match[1]);
-  const needed = runtimeClosure("interfaces/http", workspaceFolders());
+  const copied = [...dockerfile.matchAll(/^COPY --from=(?:deps|build) \/app\/(\S+) \/app\/\1$/gm)].map(
+    (match) => match[1],
+  );
+  const needed = runtimeClosure("interfaces/web", workspaceFolders());
   expect(copied.length).toBeGreaterThan(0);
   expect(needed.size).toBeGreaterThan(1);
   const missing = [...needed]
-    .filter((folder) => folder !== "apps/web") // the runtime stage copies its server build, not its source
+    .filter((folder) => folder !== "apps/web") // SvelteKit's build bundles its components; the source stays out
+    .filter((folder) => folder !== "interfaces/web") // copied file by file (images.test.ts prod_image_has_ssr_build_only)
     .filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
   expect(missing).toEqual([]);
 });

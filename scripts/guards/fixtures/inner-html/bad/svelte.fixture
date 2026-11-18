@@ -1,0 +1,4 @@
+/* fixture: apps/web/lib/components/profile/raw.svelte findings=2 */
+<script lang="ts">let { markup }: { markup: string } = $props();</script>
+<div>{@html markup}</div>
+<p>{@html `<b>${markup}</b>`}</p>

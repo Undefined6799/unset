@@ -1,7 +1,9 @@
 // The CSP of each route group (P1.08; plan §5.1, §5.2 media sandbox, §5.4 zero-JS profiles). The origins come only
 // from config; the sources can only be the shapes in sources.ts.
-import type { RouteGroup } from "../routes.ts";
 import type { ConfigOrigin, Directives, Source } from "./sources.ts";
+
+/** The route groups a policy is written for (P1.08). */
+export type RouteGroup = "app" | "public" | "profile" | "static" | "media" | "admin" | "api";
 
 /** The origins the policies name. `devVite` is set only when UNSET_ENV is dev (config.ts refuses it otherwise). */
 export type CspOrigins = Readonly<{ assets: ConfigOrigin; media: ConfigOrigin; devVite?: ConfigOrigin }>;

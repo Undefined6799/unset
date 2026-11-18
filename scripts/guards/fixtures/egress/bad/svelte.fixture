@@ -1,0 +1,4 @@
+/* fixture: interfaces/web/src/routes/x/+page.svelte findings=1 */
+<script lang="ts">
+const load = (url: string) => fetch(url);
+</script>

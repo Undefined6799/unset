@@ -1,0 +1,10 @@
+/* fixture: interfaces/web/src/routes/login/+page.svelte findings=0 */
+<script lang="ts">
+  import * as Card from "@unset/apps-web/lib/components/ui/card";
+  const classification = "kept";
+</script>
+
+<Card.Root>
+  <Card.Title>Sign in</Card.Title>
+</Card.Root>
+<p>{classification}</p>

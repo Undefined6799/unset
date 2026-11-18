@@ -16,6 +16,9 @@ const FUNCTIONS = "# trusted functions:";
  * change to one is a change to the judge, and it is named like any other trusted path. */
 const CHECKS = "# checks:";
 
+// The one wildcard form a trusted pattern may take: a folder, a double star, then a file name (P1.20k).
+const DEEP_NAME = /^\/([^*?[\]!\\]+\/)\*\*\/([^*?[\]!\\/]+)$/;
+
 /** The path patterns and the three `#` lists of the section's lines, or an error for a repeated list line. */
 function readSectionLines(section: readonly string[]): { patterns: string[]; lists: Map<string, string[]> } | string {
   const patterns: string[] = [];
@@ -27,8 +30,11 @@ function readSectionLines(section: readonly string[]): { patterns: string[]; lis
       lists.set(key, line.slice(key.length).trim().split(/\s+/).filter(Boolean));
     } else if (!line.startsWith("#")) {
       const pattern = line.trim().split(/\s+/)[0] as string;
-      // Only anchored, wildcard-free paths: their CODEOWNERS meaning is plain, so matching cannot under-match.
-      if (!/^\/[^*?[\]!\\]+$/.test(pattern)) return `pattern ${pattern} is not an anchored path`;
+      // Only anchored paths, with no wildcard but DEEP_NAME's: a file of one name at any depth below a folder (P1.20k,
+      // every route's policy.ts). Their CODEOWNERS meaning is plain, so matching cannot under-match.
+      if (!/^\/[^*?[\]!\\]+$/.test(pattern) && !DEEP_NAME.test(pattern)) {
+        return `pattern ${pattern} is not an anchored path`;
+      }
       patterns.push(pattern);
     }
   }
@@ -61,8 +67,15 @@ export function readTrustedBase(codeowners: string): TrustedBaseRead {
   return { ok: true, section: { patterns, parsedPaths, trustedFunctions, checks } };
 }
 
-/** An anchored CODEOWNERS path: `/dir/` covers the folder; `/name` covers that file, or that folder's contents. */
+// An anchored CODEOWNERS path: "/dir/" covers the folder; "/name" covers that file, or that folder's contents;
+// "/dir/" + "**" + "/name" covers every file called name at any depth below dir, as GitHub reads it (docs.github.com,
+// "About code owners", "CODEOWNERS syntax": a double star matches zero or more folders).
 export function matchesPattern(path: string, pattern: string): boolean {
+  const deep = DEEP_NAME.exec(pattern);
+  if (deep !== null) {
+    const [, folder = "", name = ""] = deep; // folder has no leading slash: "a/b/"
+    return path.startsWith(folder) && (path === `${folder}${name}` || path.endsWith(`/${name}`));
+  }
   const target = pattern.replace(/^\//, "");
   return target.endsWith("/") ? path.startsWith(target) : path === target || path.startsWith(`${target}/`);
 }

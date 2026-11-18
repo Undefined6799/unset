@@ -1,9 +1,8 @@
 // The security headers of each route group (P1.08; plan §2 rule 15, §6.1). They are built once at boot from config
 // and frozen; the server sets them on every response, error pages included.
 import type { HttpKitConfig } from "../config.ts";
-import type { RouteGroup } from "../routes.ts";
 import { buildCsp } from "./build.ts";
-import { type CspOrigins, policiesFor } from "./policies.ts";
+import { type CspOrigins, policiesFor, type RouteGroup } from "./policies.ts";
 import { configOrigin } from "./sources.ts";
 
 export type HeaderSet = Readonly<Record<string, string>>;

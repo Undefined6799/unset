@@ -13,6 +13,7 @@ const SINKS = [
   /\binsertAdjacentHTML\s*\(/,
   /\bdocument\.write(ln)?\s*\(/,
   /\b(setHTMLUnsafe|parseHTMLUnsafe)\s*\(/, // The Sanitizer API's explicitly unsafe variants (Alex, 2026-10-04).
+  /\{@html\b/, // Svelte's raw HTML tag (svelte.dev/docs/svelte/@html), P1.20k.
 ];
 
 export function scanInnerHtml(file: string, source: string): Finding[] {

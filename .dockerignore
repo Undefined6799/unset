@@ -6,6 +6,11 @@
 **/dist
 **/coverage
 .worktrees
+# interfaces/web's local builds (each image builds its own) and its test-only routes (P1.20j): those are served only
+# under the test profile, and leaving them out here keeps them out of the bundle and the route table server.ts reads.
+interfaces/web/build
+interfaces/web/.svelte-kit
+interfaces/web/src/routes/test-routes
 **/*.test.ts
 **/*.test.tsx
 tests

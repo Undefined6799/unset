@@ -72,22 +72,22 @@ schema and queue on `main` but does not yet run as its own process.
 
 ## How it is built
 
-TypeScript on Node: server-rendered React on [Hono](https://hono.dev) with a few small islands, Postgres for everything
+TypeScript on Node: [SvelteKit](https://svelte.dev/docs/kit) with Svelte 5 and shadcn-svelte, Postgres for everything
 the app decides, and the AT Protocol for everything the user owns. A request travels one way:
 
 ```text
-apps/web  →  interfaces/http  →  domains/identity  →  infrastructure/pds  →  your PDS
+apps/web  →  interfaces/web   →  domains/identity  →  infrastructure/pds  →  your PDS
   screens     the door: auth,      product rules        external systems
               CSRF, limits                              behind small contracts
 ```
 
 | Path | What lives there |
 | --- | --- |
-| `apps/` | Screens, islands and styles only. Today `web`; `admin` and `chat` come later |
-| `interfaces/` | Entry points, one process and container each. Today `http`, the web server and its scheduled jobs; `admin`, `api`, `indexer`, `media` and `review` come with their phase |
+| `apps/` | Screens and styles only. Today `web`; `admin` and `chat` come later |
+| `interfaces/` | Entry points, one process and container each. Today `web`, the SvelteKit server; `admin`, `api`, `indexer`, `media` and `review` come with their phase |
 | `domains/` | Product rules in product words. Today `identity` and `profile`; `content`, `social`, `feed`, `messaging`, `moderation` and `privacy` come with their phase |
 | `infrastructure/` | External systems behind small contracts: `postgres`, `pds`, `storage` (S3-compatible objects) and `session`, plus `net-guard` (the one egress check), `seal` and `audit` |
-| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `islands`, `http`, `config`, `errors`, `log`, `host-pin` |
+| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `http`, `config`, `errors`, `log`, `host-pin` |
 | `deployment/` | Compose files, the Caddy edge, container images, the PDS build, Postgres bootstrap and the preflight that checks a stack before it starts |
 | `tests/` | Integration and end-to-end tests; unit tests sit beside their file |
 | `docs/` | `human/` for guides, runbooks, decisions and the engineering guidelines; `ai/` for the plan and step book; `site/` for the Hugo docs site |

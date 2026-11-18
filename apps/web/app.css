@@ -1,0 +1,166 @@
+/* The app shell's stylesheet (P1.20c; ADR 0055): Tailwind 4 for the shadcn-svelte components in lib/components and the
+ * app shell, over the one theme file. The SvelteKit root layout imports it, and Tailwind's Vite plugin
+ * (interfaces/web) builds it into one file under /_app/. Mapping as shadcn-svelte 1.8.1's Tailwind 4 setup writes it
+ * (https://shadcn-svelte.com/docs/installation/manual, "Configure styles"), with our variables only. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./theme.css";
+
+/* Classes are read from the components and the shell only (lib/), never from the pages (scripts/guards/page-classes.ts). */
+@source "./lib";
+
+/* dark: follows the same choice as theme.css: an explicit <html data-theme>, otherwise the system setting. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Our two variable fonts, from the path the web process serves them on (ADR 0054 point 4: font-src /fonts/). */
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "Space Grotesk";
+  src: url("/fonts/SpaceGrotesk-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor gives the variable font's range. */
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor gives the variable font's range. */
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) / 2);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 2);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  /* Text inside a page's main, in both shells (the site shell's main had these as classes; the core shell's had none).
+   * Only an element with no class of its own: a list or heading a component or shell draws keeps its look. */
+  main :where(h1:not([class])) {
+    @apply mb-4 text-3xl font-semibold;
+  }
+  main :where(h2:not([class])) {
+    @apply mt-8 mb-3 text-xl font-semibold;
+  }
+  main :where(h3:not([class])) {
+    @apply mt-6 mb-2 font-semibold;
+  }
+  main :where(p, ul, ol, dl):not([class]) {
+    @apply my-3;
+  }
+  main :where(ul:not([class])) {
+    @apply list-disc pl-6;
+  }
+  main :where(ol:not([class])) {
+    @apply list-decimal pl-6;
+  }
+  main :where(dt:not([class])) {
+    @apply font-medium;
+  }
+  main :where(dd:not([class])) {
+    @apply mb-2 text-muted-foreground;
+  }
+  main :where(table:not([class])) {
+    @apply my-4 w-full;
+  }
+  main :where(td, th):not([class]) {
+    @apply border p-2;
+  }
+  main :where(th:not([class])) {
+    @apply text-left;
+  }
+  main :where(code:not([class])) {
+    @apply font-mono;
+  }
+  /* A link in text is underlined, so it never relies on colour alone (WCAG 1.4.1; axe link-in-text-block). A link
+   * drawn as a component (shadcn's Button with href sets data-slot) keeps that component's own colour and look. */
+  a:not([data-slot]) {
+    @apply text-info underline underline-offset-4;
+  }
+  /* A card's actions wrap on a narrow screen, and a long label wraps inside its button, so nothing scrolls sideways at
+   * 320px (WCAG 1.4.10 Reflow). shadcn's Card footer is one row and its Button never wraps; their own classes are
+   * utilities, which outrank this base layer, so these are marked important (an important base rule outranks a normal
+   * utility, CSS Cascade 5 "Cascade Layers"). */
+  [data-slot="card-footer"] {
+    @apply flex-wrap! gap-2!;
+  }
+  [data-slot="card-footer"] [data-slot="button"] {
+    @apply h-auto! min-h-9! max-w-full! shrink! whitespace-normal! text-left!;
+  }
+  /* A DID or other long unbroken value breaks anywhere rather than widen the page (WCAG 1.4.10 Reflow). */
+  code,
+  dd {
+    overflow-wrap: anywhere;
+  }
+  /* Native check boxes and radios at the 24px target size (WCAG 2.2 SC 2.5.8, as the React kit drew them). */
+  input:where([type="checkbox"], [type="radio"]) {
+    @apply size-6 shrink-0 accent-primary;
+  }
+}
+
+/* Reduced motion (WCAG 2.2 SC 2.3.3), for the stock dialog, sheet and popover animations without editing them. A
+   near-zero length, the common pattern: bits-ui 2.20.6 unmounts a closed dialog once getAnimations() have finished
+   (dist/internal/animations-complete.js), which a near-zero animation does at once. Outside any layer, so it beats
+   every Tailwind utility with no !important (CSS Cascade 5: unlayered normal styles win over layered ones). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+/* Forced colours (WCAG 2.2 SC 2.4.7): the stock Button draws focus with a box-shadow ring and outline-none, which
+   forced colours drop (Tailwind 4 outline-none is outline-style: none), so a focused button showed nothing. A system
+   colour outline instead (forced colours replace outline-color with a system colour, CSS Color Adjust 1 §3.1),
+   outside any layer like the rule above so it beats the stock classes. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}

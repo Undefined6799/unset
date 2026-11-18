@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
 import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
+import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
@@ -13,9 +14,11 @@ import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as pageClasses from "./page-classes.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as uiInventory from "./ui-inventory.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
+import * as webPrerender from "./web-prerender.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const RULES: [string, (root: string) => Finding[]][] = [
@@ -24,12 +27,15 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["inner-html", innerHtml.scanAll],
   ["css-layers", cssLayers.scanAll],
   ["web-no-moderator", webNoModerator.scanAll],
+  ["web-prerender", webPrerender.scanAll],
   ["ip-columns", ipColumns.scanAll],
   ["route-registration", routeRegistration.scanAll],
   ["composition-root", compositionRoot.scanAll],
   ["case-collision", caseCollision.scanAll],
   ["also-known-as", alsoKnownAs.scanAll],
   ["ui-inventory", uiInventory.scanAll],
+  ["page-classes", pageClasses.scanAll],
+  ["class-colours", classColours.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -54,6 +60,11 @@ test("ui_inventory_scans_files", () => {
   expect(uiInventory.scannedFiles(ROOT).length).toBeGreaterThan(0);
 });
 
+test("class_colours_scans_files", () => {
+  // AB-4: an empty scan would pass vacuously; the shell and the components exist from P1.20b.
+  expect(classColours.scannedFiles(ROOT).length).toBeGreaterThan(0);
+});
+
 test("report_format", () => {
   expect(report([{ file: "a.ts", line: 3, rule: "egress", text: "fetch(u)" }])).toBe("a.ts:3  [egress]  fetch(u)");
 });
@@ -66,6 +77,9 @@ test("unreadable_file_is_finding", () => {
     "css-layers": "apps/web/src/screens/Bad.module.css",
     // The inventory is the base the rest is checked against, so an unreadable one is the whole report.
     "ui-inventory": "shared/ui/inventory.json",
+    "page-classes": "interfaces/web/src/routes/+page.svelte",
+    "class-colours": "apps/web/lib/components/profile/bad.svelte",
+    "web-prerender": "interfaces/web/src/routes/+page.ts",
   };
   // case-collision reads only names from git, never file contents.
   for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {

@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { closureProblems, untypecheckedFiles, WORKSPACE_TOPS, workspaceProblems } from "./references.ts";
+import { closureProblems, mayReference, untypecheckedFiles, WORKSPACE_TOPS, workspaceProblems } from "./references.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const temps: string[] = [];
@@ -97,6 +97,15 @@ describe("workspace references", () => {
     for (const [from, to] of refused) {
       expect(reference(from, to), `${from} → ${to}`).toEqual([`${from}: may not reference ${to} (MATRIX)`]);
     }
+  });
+
+  test("a_subpath_the_package_exports_counts_as_its_entry", () => {
+    // interfaces/web imports apps/web's Svelte components by subpath (ADR 0056); apps/web has no index.ts row for it.
+    expect(mayReference("interfaces/web", "apps/web")).toBe(false);
+    const ui = { exports: { "./lib/components/ui/*": "./lib/components/ui/*/index.ts" } };
+    expect(mayReference("interfaces/web", "apps/web", ui)).toBe(true);
+    // An export the MATRIX does not open to the importer is still refused.
+    expect(mayReference("interfaces/web", "apps/web", { exports: { "./screens": "./src/screens/x.tsx" } })).toBe(false);
   });
 
   test("references_read_package_dependencies_too", () => {
@@ -276,6 +285,24 @@ describe("workspace references", () => {
     const root = typecheckTree({});
     for (const file of ["vitest.config.ts", "tests/integration/x.test.ts", "domains/stray/d.ts"]) put(root, file, "");
     expect(untypecheckedFiles(root)).toEqual(["domains/stray/d.ts", "tests/integration/x.test.ts"]);
+  }, 20_000);
+
+  // ADR 0054: svelte-check, not tsc -b, checks the Svelte UI. Its includes count as checked; a .ts or .svelte file in
+  // the web folders that neither covers is reported.
+  test("svelte_check_files_count_and_strays_fail", () => {
+    const root = typecheckTree({});
+    put(root, "apps/web/tsconfig.svelte.json", { include: ["lib/**/*.ts", "lib/**/*.svelte"] });
+    put(root, "interfaces/web/tsconfig.svelte.json", { include: ["src/routes", "*.ts"] });
+    put(root, "interfaces/web/src/routes/+page.svelte", "");
+    for (const file of ["apps/web/lib/a.ts", "apps/web/lib/ui/b/b.svelte", "apps/web/lib/ui/b/index.ts"])
+      put(root, file, "");
+    for (const file of ["apps/web/other/c.svelte", "apps/web/other/d.ts", "interfaces/web/src/e.svelte"])
+      put(root, file, "");
+    expect(untypecheckedFiles(root)).toEqual([
+      "apps/web/other/d.ts",
+      "apps/web/other/c.svelte",
+      "interfaces/web/src/e.svelte",
+    ]);
   }, 20_000);
 
   // P1.31d (architecture record 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1): the walk follows nested

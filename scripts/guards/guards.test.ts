@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
+import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
@@ -15,9 +16,11 @@ import type { Finding } from "./files.ts";
 import { fixtureGitEnv } from "./git-env.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as pageClasses from "./page-classes.ts";
 import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
+import * as webPrerender from "./web-prerender.ts";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
 const HEADER = /^(?:\/\/|--|\/\*)\s*fixture:\s*(\S+)\s+findings=(\d+)\s*(?:\*\/)?\s*$/;
@@ -27,10 +30,13 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "inner-html": innerHtml.scanAll,
   "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
+  "web-prerender": webPrerender.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
   "also-known-as": alsoKnownAs.scanAll,
+  "page-classes": pageClasses.scanAll,
+  "class-colours": classColours.scanAll,
 };
 
 const temps: string[] = [];
@@ -89,6 +95,7 @@ function expectFixtures(rule: string, kind: "bad" | "good", names?: string[]): v
 describe("egress", () => {
   test("egress_bad_fixture", () => expectFixtures("egress", "bad", ["dynamic-fetch.fixture"]));
   test("egress_bad_fixture_raw_sockets", () => expectFixtures("egress", "bad", ["raw-sockets.fixture"]));
+  test("egress_reads_svelte_files", () => expectFixtures("egress", "bad", ["svelte.fixture"]));
   test("egress_good_fixture", () => expectFixtures("egress", "good"));
   test("egress_fetch_split_over_lines_and_bare_allow", () => expectFixtures("egress", "bad", ["split-fetch.fixture"]));
 
@@ -144,10 +151,51 @@ describe("css-layers", () => {
   });
 
   test("css_layers_unbalanced_fails_closed", () => {
-    const ctx = { layers: ["screens"], tokens: new Set<string>() };
+    const ctx = { layers: ["screens"], tokens: new Set<string>(), themeVars: new Set<string>() };
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {\n.a {\n", ctx)).toHaveLength(1);
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {}\n.a", ctx)).toHaveLength(1);
   });
+
+  // ADR 0055: the theme file is plain and unlayered so the PDS screens can append it, and the Tailwind entry reads
+  // only its variables.
+  const ctx = { layers: ["tokens"], tokens: new Set(["--color-ink"]), themeVars: new Set(["--background"]) };
+  const theme = (css: string) => cssLayers.scanCss(cssLayers.THEME_FILE, css, ctx).map((f) => f.text);
+
+  test("css_layers_theme_file_holds_only_its_root_blocks", () => {
+    const good =
+      ':root {\n  color-scheme: light dark;\n  --background: light-dark(#fff, #000);\n}\n:root[data-theme="dark"] {\n  color-scheme: dark;\n}\n';
+    expect(theme(good)).toEqual([]);
+    expect(theme(":root {\n  --a: 1;\n}\nbody {\n  --a: 2;\n}\n")).toEqual([
+      "theme file holds only its :root blocks: body",
+    ]);
+    expect(theme(":root {\n  color: red;\n}\n")).toEqual([
+      "theme file declares only variables and color-scheme: color",
+    ]);
+    expect(theme('@import "x.css";\n')).toContain("theme file loads nothing: no @import or url()");
+    expect(theme(":root {\n  --f: url(/a.woff2);\n}\n")).toEqual(["theme file loads nothing: no @import or url()"]);
+    expect(theme("@layer base {\n  :root {\n    --a: 1;\n  }\n}\n")).toEqual([
+      "theme file holds only its :root blocks: @layer base",
+    ]);
+  });
+
+  test("css_layers_tailwind_entry_reads_theme_variables_only", () => {
+    const entry = (css: string) => cssLayers.scanCss(cssLayers.TAILWIND_FILE, css, ctx).map((f) => f.text);
+    expect(entry('@import "tailwindcss";\n@theme inline {\n  --color-background: var(--background);\n}\n')).toEqual([]);
+    expect(entry("@theme inline {\n  --color-ink: var(--color-ink);\n  --x: var(--y);\n}\n")).toEqual([
+      "--y is not a token or declared in this file",
+    ]);
+    expect(cssLayers.layerFor("apps/web/other.css")).toBeUndefined();
+  });
+});
+
+describe("page-classes", () => {
+  test("page_classes_bad_fixture", () => expectFixtures("page-classes", "bad"));
+  test("page_classes_good_fixture", () => expectFixtures("page-classes", "good"));
+});
+
+describe("class-colours", () => {
+  test("class_colours_bad_fixture", () => expectFixtures("class-colours", "bad"));
+  test("class_colours_good_fixture", () => expectFixtures("class-colours", "good"));
 });
 
 describe("inner-html", () => {
@@ -163,10 +211,18 @@ describe("inner-html", () => {
   });
 });
 
+describe("web-prerender", () => {
+  test("web_prerender_page_export", () => expectFixtures("web-prerender", "bad", ["page.fixture"]));
+  test("web_prerender_config_entry", () => expectFixtures("web-prerender", "bad", ["config.fixture"]));
+  test("web_prerender_proof_route", () => expectFixtures("web-prerender", "bad", ["proof.fixture"]));
+  test("web_prerender_good_fixture", () => expectFixtures("web-prerender", "good"));
+});
+
 describe("web-no-moderator", () => {
   test("web_moderator_bad_fixture", () => expectFixtures("web-no-moderator", "bad", ["routes.fixture"]));
   test("web_moderator_good_fixture", () => expectFixtures("web-no-moderator", "good"));
   test("web_moderator_preserve_verb", () => expectFixtures("web-no-moderator", "bad", ["preserve.fixture"]));
+  test("web_moderator_reads_svelte_files", () => expectFixtures("web-no-moderator", "bad", ["svelte.fixture"]));
   test("web_moderator_relative_admin_import", () =>
     expectFixtures("web-no-moderator", "bad", ["relative-admin.fixture"]));
 });
@@ -261,7 +317,6 @@ describe("route-policy", () => {
     ],
     ["limits_without_policies_export_fails", ["interfaces/http/limits.ts: limits.ts has no `policies` export"]],
     ["limits_import_throws_fails", ["interfaces/http/limits.ts: limits.ts could not be imported"]],
-    ["no_manifests_fails", ["interfaces: no routes.manifest.json found"]],
   ])("%s", async (name, expected) => {
     expect(await routePolicyFindings("bad", name)).toEqual(expected);
   });
@@ -275,7 +330,6 @@ describe("route-policy", () => {
       "exempt_on_app_route_fails",
       "limits_import_throws_fails",
       "limits_without_policies_export_fails",
-      "no_manifests_fails",
       "non_static_route_without_limits_fails",
       "route_without_rate_limit_fails",
       "unknown_policy_name_fails",

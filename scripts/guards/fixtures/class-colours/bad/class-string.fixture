@@ -1,0 +1,2 @@
+// fixture: apps/web/lib/components/ui/button/button.ts findings=1
+export const look = "inline-flex bg-[#0f0] px-2";

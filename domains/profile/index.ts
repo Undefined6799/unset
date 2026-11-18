@@ -21,6 +21,7 @@ export {
 } from "./cards.ts";
 export {
   APP_LIMITS,
+  type AvatarShape,
   EMPTY_PROFILE,
   type ParsedProfile,
   PROFILE_FIELDS,
@@ -29,8 +30,11 @@ export {
   type ProfileField,
   type ProfileFields,
   type ProfileRecord,
+  parseAvatarShape,
   parseProfileFields,
+  readAvatarShape,
   readProfileRecord,
   toProfileRecord,
+  withAvatarShape,
   withCardOrder,
 } from "./profile.ts";

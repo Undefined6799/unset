@@ -6,9 +6,12 @@ import type { CardKey } from "./cards.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
+  parseAvatarShape,
   parseProfileFields,
+  readAvatarShape,
   readProfileRecord,
   toProfileRecord,
+  withAvatarShape,
   withCardOrder,
 } from "./profile.ts";
 
@@ -195,5 +198,33 @@ describe("withCardOrder", () => {
   test("an order past the lexicon's count is too long", () => {
     const order = Array.from({ length: LIMITS.profile.cardsMax + 1 }, (_, i) => `k${i}`) as CardKey[];
     expect(withCardOrder(order, stored, T)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+});
+
+describe("avatar shape", () => {
+  const T = "2026-11-18T05:00:00.000Z";
+  const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1 };
+
+  test("reads round when absent or unknown, and the stored known value otherwise", () => {
+    expect(readAvatarShape(stored)).toBe("round");
+    expect(readAvatarShape({ ...stored, avatarShape: "hexagon" })).toBe("round");
+    expect(readAvatarShape({ ...stored, avatarShape: "roundedSquare" })).toBe("roundedSquare");
+    expect(readAvatarShape(null)).toBe("round");
+  });
+
+  test("parses only the known shapes", () => {
+    expect(parseAvatarShape("roundedSquare")).toBe("roundedSquare");
+    expect(parseAvatarShape("round")).toBe("round");
+    expect(parseAvatarShape("hexagon")).toBeNull();
+    expect(parseAvatarShape(["round"])).toBeNull();
+  });
+
+  test("sets the shape and keeps every other field", () => {
+    const built = withAvatarShape("roundedSquare", stored, "2027-01-01T00:00:00.000Z");
+    expect(built).toEqual({ ok: true, record: { ...stored, avatarShape: "roundedSquare" } });
+  });
+
+  test("there is no shape without a profile to hold it", () => {
+    expect(withAvatarShape("round", null, T)).toEqual({ ok: false, code: "profile.name_required" });
   });
 });

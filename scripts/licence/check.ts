@@ -32,6 +32,17 @@ export const ALLOWED: Record<string, readonly string[]> = {
   "AGPL-3.0-only": [...PERMISSIVE, "AGPL-3.0-only", "AGPL-3.0-or-later"],
 };
 
+/**
+ * Packages whose package.json has no licence field but whose own licence file names one, each pinned to one exact
+ * name@version so a new version asks again (P0.13 step 5, Alex). The value is the SPDX id the file states;
+ * check.test.ts holds the installed file to that text and hash.
+ * - svelte-toolbelt@0.10.7 (a bits-ui dependency, P1.20c): LICENSE is the MIT License text, Copyright (c) 2024 Hunter
+ *   Johnston and Thomas G. Lopes; the repository github.com/huntabyte/svelte-toolbelt is MIT.
+ */
+export const LICENCE_FILE_ONLY: Readonly<Record<string, string>> = {
+  "svelte-toolbelt@0.10.7": "MIT",
+};
+
 /** SPDX exceptions that only widen a licence; any other `WITH` (Commons-Clause restricts it) fails. */
 export const EXCEPTIONS = ["LLVM-exception"];
 
@@ -172,10 +183,11 @@ export function checkPackage(name: string, licence: unknown, dependencies: reado
   const conflicts: string[] = [];
   for (const dep of dependencies) {
     const id = `${dep.name}@${dep.version}`;
+    const license = dep.license === undefined ? LICENCE_FILE_ONLY[id] : dep.license;
     if (dep.missing) conflicts.push(`${name}: ${id} is not installed, so its licence is unknown`);
     else if (dep.unlisted) conflicts.push(`${name}: ${id} has children not listed by npm ls`);
-    else if (typeof dep.license !== "string") conflicts.push(`${name}: ${id} has no licence field`);
-    else if (!satisfies(dep.license, allowed)) conflicts.push(`${name} (${licence}): ${id} is ${dep.license}`);
+    else if (typeof license !== "string") conflicts.push(`${name}: ${id} has no licence field`);
+    else if (!satisfies(license, allowed)) conflicts.push(`${name} (${licence}): ${id} is ${license}`);
   }
   return conflicts;
 }

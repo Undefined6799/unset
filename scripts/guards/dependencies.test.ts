@@ -132,6 +132,39 @@ describe("lockfile sources", () => {
     expect(scanLockfile("package-lock.json", JSON.stringify({ lockfileVersion: 1 }), WORKSPACES)).toHaveLength(1);
   });
 
+  test("lock_allows_bundled_entry_only_inside_a_vetted_registry_parent", () => {
+    const parent = { resolved: "https://registry.npmjs.org/p/-/p-1.0.0.tgz", integrity: "sha512-x" };
+    const scan = (packages: Record<string, unknown>) =>
+      scanLockfile(
+        "package-lock.json",
+        JSON.stringify({ lockfileVersion: 3, packages: { "": {}, ...packages } }),
+        WORKSPACES,
+      );
+    const child = { inBundle: true };
+    expect(scan({ "node_modules/p": parent, "node_modules/p/node_modules/c": child })).toEqual([]);
+    // No parent, an unvetted parent, a bundled parent, a linked parent, or a child naming its own source: refused.
+    expect(scan({ "node_modules/p/node_modules/c": child })).toHaveLength(1);
+    expect(
+      scan({ "node_modules/p": { resolved: "https://evil.test/p.tgz" }, "node_modules/p/node_modules/c": child }),
+    ).toHaveLength(2);
+    expect(
+      scan({
+        "node_modules/p": parent,
+        "node_modules/p/node_modules/q": child,
+        "node_modules/p/node_modules/q/node_modules/c": child,
+      }),
+    ).toHaveLength(1);
+    expect(
+      scan({ "node_modules/p": { link: true, resolved: "p" }, "node_modules/p/node_modules/c": child }),
+    ).toHaveLength(2);
+    expect(
+      scan({
+        "node_modules/p": parent,
+        "node_modules/p/node_modules/c": { inBundle: true, resolved: "https://evil.test/c.tgz" },
+      }),
+    ).toHaveLength(1);
+  });
+
   test("lockfile_accepts_registry_and_links", () => {
     expect(lockfile({ resolved: "https://registry.npmjs.org/x/-/x-1.0.0.tgz", integrity })).toEqual([]);
     expect(lockfile({ resolved: "shared/core", link: true }, "node_modules/@unset/core")).toEqual([]);

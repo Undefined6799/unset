@@ -62,7 +62,14 @@ describe("ui-inventory", () => {
     expect(texts(root)).toEqual([]);
   });
 
-  test.each(["icon-package.fixture", "unknown-icon.fixture", "inline-svg.fixture"])("ui_inventory_bad_%s", (name) => {
+  test.each([
+    "icon-package.fixture",
+    "unknown-icon.fixture",
+    "inline-svg.fixture",
+    "svelte-icon-package.fixture",
+    "svelte-inline-svg.fixture",
+    "svelte-unknown-icon.fixture",
+  ])("ui_inventory_bad_%s", (name) => {
     const root = base();
     const { path, count } = plant(root, "bad", name);
     const findings = scanAll(root);
@@ -71,18 +78,6 @@ describe("ui-inventory", () => {
       report(findings),
     ).toBe(true);
     expect(findings).toHaveLength(count);
-  });
-
-  test("inventory_unknown_component_fails", () => {
-    const root = base();
-    write(root, "shared/ui/components/Fancy/Fancy.tsx", "export const Fancy = () => null;\n");
-    expect(texts(root)).toEqual(["shared/ui/components/Fancy: not in inventory.json"]);
-  });
-
-  test("inventory_built_without_folder_fails", () => {
-    const root = base();
-    rmSync(join(root, "shared/ui/components/Kbd"), { recursive: true });
-    expect(texts(root)).toEqual([`${INVENTORY}: Kbd is built but shared/ui/components/Kbd does not exist`]);
   });
 
   test("inventory_sheet_readme_changed_fails", () => {

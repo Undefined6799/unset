@@ -1,0 +1,9 @@
+/* fixture: interfaces/web/src/routes/settings/+page.svelte findings=3 */
+<script lang="ts">
+  import { Button } from "@unset/apps-web/lib/components/ui/button";
+</script>
+
+<div class="grid gap-4">
+  <Button class="w-full">Save</Button>
+  <p class:muted={true}>Saved</p>
+</div>

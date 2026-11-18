@@ -1,0 +1,42 @@
+/* The one theme file (P1.20c; ADR 0055 point 3): shadcn-svelte's own variables for light and dark, seeded from the
+ * design sheet (a reference, https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt; values as shared/ui/src/tokens.css
+ * and deployment/pds/ui/unset-theme.css hold them, which theme.test.ts checks). Later sheet changes reach it by pull
+ * request. Plain CSS with no Tailwind syntax, no @import and no url(), and unlayered, so the PDS screens (ADR 0027)
+ * can append the same file to upstream's stylesheet, as their recipe appends unset-theme.css today.
+ *
+ * Each colour is light-dark(light, dark) (CSS Color 5, https://www.w3.org/TR/css-color-5/#light-dark), chosen by
+ * color-scheme: the visitor's system setting by default, or the app's explicit choice in <html data-theme>, which
+ * interfaces/http/prefs/theme.ts writes today. One list, so light and dark cannot fall out of step. */
+:root {
+  color-scheme: light dark;
+  --radius: 4px;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --background: light-dark(#f0edee, #17161b);
+  --foreground: light-dark(#0a090c, #f0edee);
+  --card: light-dark(#fbfafa, #232227);
+  --card-foreground: light-dark(#0a090c, #f0edee);
+  --popover: light-dark(#f7f5f6, #201f24);
+  --popover-foreground: light-dark(#0a090c, #f0edee);
+  --secondary: light-dark(#f7f5f6, #201f24);
+  --secondary-foreground: light-dark(#0a090c, #f0edee);
+  --muted: light-dark(#e2dee0, #0f0e12);
+  --muted-foreground: light-dark(#5a575b, #a19ea2);
+  --accent: light-dark(#f7f5f6, #201f24);
+  --accent-foreground: light-dark(#0a090c, #f0edee);
+  --border: light-dark(#d6d2d4, #312f36);
+  --input: light-dark(#7e7b80, #757278);
+  --primary: light-dark(#0a090c, #f0edee);
+  --primary-foreground: light-dark(#f0edee, #0a090c);
+  --destructive: light-dark(#a4036f, #dc5ca7);
+  --ring: light-dark(#0a090c, #f0edee);
+  --info: light-dark(#006f8b, #1d97b1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
