@@ -25,12 +25,8 @@ import type { ShellData } from "../../lib/shell.ts";
 import { cardForm } from "./card-form.server.ts";
 import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
+import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
 
-/**
- * A form body's cap: a README card's 100,000-byte text, percent-encoded at three bytes a byte, its kind and width,
- * with room to spare (interfaces/http/routes/cards.ts). Past it the member is told to shorten the card.
- */
-const CARD_FORM_LIMIT_BYTES = 320 * 1024;
 /** The fields the order form may send: `order`, once per card. */
 const ORDER_FIELD = "order";
 
@@ -78,8 +74,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
   return {
     shell,
     account,
-    // P1.20f puts the onboarding answer on locals; until then no banner, as for a member already past it.
-    privacyNotice: false,
+    privacyNotice: locals.privacyNotice,
     name,
     letter: avatarLetter(name),
     profile:

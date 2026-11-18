@@ -56,7 +56,23 @@ const OWNER = parseDid(`did:plc:${"m".repeat(24)}`) as Did;
 const OTHER = parseDid(`did:plc:${"o".repeat(24)}`) as Did;
 const CARD_A = "3jzfcijpj2z2a";
 const CARD_B = "3jzfcijpj2z2b";
+/** A collection already holding 100 entries, past the editor's 30 for a new card: only an edit can save that many. */
+const CARD_C = "3jzfcijpj2z2c";
 const NOW = "2026-11-18T00:00:00.000Z";
+
+/** A stored collection of `entries` rows, built the way the editor builds an edit of a card that already has them. */
+function storedCollection(entries: number) {
+  const existing = { content: { $type: "sh.unset.section#collection", items: Array(entries).fill({}) } };
+  const items = Array(entries).fill({ title: "t", uri: "https://a.example/" });
+  const built = toCardRecord(
+    { kind: "collection", title: "Shelf", layout: "list", items } as never,
+    "full",
+    existing,
+    NOW,
+  );
+  if (!built.ok) throw new Error(`seed card did not build: ${built.code}`);
+  return built.record;
+}
 
 function readme(text: string) {
   const built = toCardRecord({ kind: "readme", text }, "full", null, NOW);
@@ -84,7 +100,11 @@ function fixture(writesFile: string, failing?: readonly string[]): StandInFixtur
       did: OWNER,
       records: {
         "sh.unset.profile": { self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW } },
-        "sh.unset.section": { [CARD_A]: readme("First card"), [CARD_B]: readme("Second card") },
+        "sh.unset.section": {
+          [CARD_A]: readme("First card"),
+          [CARD_B]: readme("Second card"),
+          [CARD_C]: storedCollection(100),
+        },
       },
       writesFile,
       ...(failing === undefined ? {} : { failing }),
@@ -165,6 +185,25 @@ const action = (name: string, body: string, headers: Record<string, string> = {}
       ...headers,
     },
   });
+/** The largest collection card the lexicon allows, as the editor's form posts it: 100 entries, each grapheme "a" and
+ * four combining accents (nine bytes, the most that fit the schema's byte limits), and a 2,000-byte uri. */
+function largestCollection(filler: string, entries = 100): string {
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const uri = `https://a.example/${filler.repeat(2_000 - 18)}`;
+  const form = new URLSearchParams([
+    ["kind", "collection"],
+    ["width", "full"],
+    ["title", heavy(100)],
+  ]);
+  for (let i = 0; i < entries; i += 1) {
+    form.append(`items.${i}.title`, heavy(120));
+    form.append(`items.${i}.tag`, heavy(40));
+    form.append(`items.${i}.description`, heavy(300));
+    form.append(`items.${i}.uri`, uri);
+  }
+  return form.toString();
+}
+
 /** Runs `step` and returns the PDS writes it made. */
 async function writesOf(step: () => Promise<unknown>): Promise<PdsWrite[]> {
   const before = member.writes().length;
@@ -240,7 +279,7 @@ describe("card writes", () => {
 
   test("a_reorder_writes_the_order_into_the_profile_record", async () => {
     const shown = member.writes().filter((w) => w.method === "createRecord");
-    const order = [CARD_B, CARD_A, ...shown.map((w) => w.rkey)];
+    const order = [CARD_C, CARD_B, CARD_A, ...shown.map((w) => w.rkey)];
     const writes = await writesOf(() => action("reorder", order.map((key) => `order=${key}`).join("&")));
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.profile", rkey: "self" });
@@ -285,14 +324,41 @@ describe("card writes", () => {
     expect(writes).toEqual([]);
   });
 
-  test("the_largest_readme_fits_and_a_form_past_the_card_cap_is_refused_with_a_message", async () => {
+  test("the_largest_readme_fits", async () => {
     const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(50_000) }).toString();
     const fits = await writesOf(async () => expect((await action("create", largest)).status).toBe(303));
     expect(fits).toHaveLength(1);
+  });
+
+  // The card save cap is 2 MiB (Alex, 2026-11-18 02:17:13Z) so the largest collection still saves as a plain form.
+  // A new card holds the editor's 30 entries (CARD_EDIT_LIMITS); a stored card with the lexicon's 100 can be edited at
+  // that size. interfaces/http/routes/cards.test.ts posted 100 as JSON past a store double, which never built the record.
+  test.each([
+    ["an_ascii_uri", "x"],
+    ["a_uri_the_form_percent_encodes", "/"],
+  ])("the_largest_collection_edit_fits_with_%s", async (_, filler) => {
+    const form = `key=${CARD_C}&${largestCollection(filler)}`;
+    expect(Buffer.byteLength(form)).toBeGreaterThan(1024 * 1024);
+    const writes = await writesOf(async () => expect((await action("save", form)).status).toBe(303));
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ method: "putRecord", rkey: CARD_C });
+    const items = (writes[0]?.record as { content?: { items?: { uri: string }[] } } | undefined)?.content?.items;
+    expect(items).toHaveLength(100);
+    expect(items?.[0]?.uri).toBe(`https://a.example/${filler.repeat(2_000 - 18)}`);
+  });
+
+  test("the_largest_new_collection_fits_and_one_entry_more_is_too_long", async () => {
     const writes = await writesOf(async () => {
-      const response = await action("create", `kind=readme&width=full&text=${"x".repeat(330 * 1024)}`);
+      expect((await action("create", largestCollection("/", 30))).status).toBe(303);
+      expect((await action("create", largestCollection("x", 31))).status).toBe(400);
+    });
+    expect(writes).toHaveLength(1);
+  });
+
+  test("a_body_past_2_mib_is_refused_with_no_write", async () => {
+    const writes = await writesOf(async () => {
+      const response = await action("create", `kind=readme&width=full&text=${"x".repeat(2 * 1024 * 1024)}`);
       expect(response.status).toBe(413);
-      expect(await response.text()).toContain("card.form_too_large");
     });
     expect(writes).toEqual([]);
   });
