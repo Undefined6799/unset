@@ -5,7 +5,7 @@
 // it reaches the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again
 // with its code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
-import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view";
+import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { CARD_EDIT_LIMITS, type CardKey, parseCardInput, parseCardKey } from "@unset/domains-profile";
 import {
@@ -78,7 +78,8 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
   return {
     shell,
     account,
-    privacyNotice: locals.privacyNotice === true,
+    // P1.20f puts the onboarding answer on locals; until then no banner, as for a member already past it.
+    privacyNotice: false,
     name,
     letter: avatarLetter(name),
     profile:

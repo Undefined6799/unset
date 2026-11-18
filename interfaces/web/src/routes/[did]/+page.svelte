@@ -12,7 +12,7 @@ import {
   COLLECTION_EDIT,
   LINKS_EDIT,
   OWN_PAGE,
-} from "@unset/apps-web/lib/components/profile/messages.ts";
+} from "@unset/apps-web/lib/profile/messages.ts";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import * as Avatar from "@unset/apps-web/lib/components/ui/avatar";

@@ -5,7 +5,7 @@
   an h2, so README headings start at h3.
 -->
 <script lang="ts">
-import type { Block, Inline } from "./types.ts";
+import type { Block, Inline } from "../../profile/types.ts";
 
 let { blocks }: { blocks: readonly Block[] } = $props();
 const HEADINGS = ["h3", "h4", "h5"] as const;

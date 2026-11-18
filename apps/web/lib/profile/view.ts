@@ -2,9 +2,9 @@
 // README read into blocks, a link row's text, and every address through safeHref, here too although the domain already
 // dropped unsafe ones (two layers for the output every visitor will see). Runs on the server; the components only
 // render what this returns.
-import { safeHref } from "@unset/shared-ui/safe-href";
-import { CARD_TEXT } from "../components/profile/messages.ts";
-import type { CardContent, CardShown, CardView, CardWidth, ShownButton } from "../components/profile/types.ts";
+import { safeHref } from "@unset/shared-safe-href";
+import { CARD_TEXT } from "./messages.ts";
+import type { CardContent, CardShown, CardView, CardWidth, ShownButton } from "./types.ts";
 import { parseReadme } from "./parse.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
