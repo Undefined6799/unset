@@ -182,6 +182,18 @@ describe("the member's page", () => {
   test("a_path_that_is_not_a_did_and_another_members_page_are_missing", async () => {
     expect((await page("/not-a-did", { cookie })).status).toBe(404);
     expect((await page(`/${OTHER}`, { cookie })).status).toBe(404);
+    // A did:web member is someone else too, and a DID is compared as written: another case is another DID.
+    expect((await page("/did:web:member.example", { cookie })).status).toBe(404);
+    expect((await page(`/${OWNER.toUpperCase()}`, { cookie })).status).toBe(404);
+    expect(
+      (
+        await member.web.fetch(`/did:web:member.example?/create`, {
+          method: "POST",
+          body: "kind=readme&text=x",
+          headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
+        })
+      ).status,
+    ).toBe(404);
   });
 
   test("the_owner_sees_their_profile_and_cards_privately", async () => {
@@ -235,6 +247,24 @@ describe("card writes", () => {
     expect(writes[0]?.record).toMatchObject({ cards: order });
   });
 
+  test("a_list_cards_form_rows_are_written_as_its_items", async () => {
+    const form = new URLSearchParams([
+      ["key", CARD_A],
+      ["kind", "links"],
+      ["title", "Elsewhere"],
+      ["items.0.uri", "a.example"],
+      ["items.0.label", "A"],
+      ["items.1.uri", ""],
+      ["items.2.uri", "b.example"],
+    ]).toString();
+    const writes = await writesOf(() => action("save", form));
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ method: "putRecord", rkey: CARD_A });
+    const content = (writes[0]?.record as { content?: { items?: { uri: string }[] } } | undefined)?.content;
+    expect(content).toMatchObject({ $type: "sh.unset.section#links", title: "Elsewhere" });
+    expect(content?.items?.map((item) => item.uri)).toEqual(["https://a.example", "https://b.example"]);
+  });
+
   test("a_remove_deletes_the_named_card", async () => {
     const writes = await writesOf(() => action("remove", `key=${CARD_B}`));
     expect(writes).toEqual([{ method: "deleteRecord", collection: "sh.unset.section", rkey: CARD_B }]);
@@ -248,6 +278,9 @@ describe("card writes", () => {
       expect(unknown.status).toBe(400);
       expect(await unknown.text()).toContain("card.kind_unknown");
       expect((await action("remove", `key=${CARD_A}&kind=readme`)).status).toBe(400);
+      expect((await action("create", "kind=readme&text=a&text=b")).status).toBe(400);
+      expect((await action("create", "kind=readme&text=a&title=x")).status).toBe(400);
+      expect((await action("reorder", `order=${CARD_A}&kind=readme`)).status).toBe(400);
     });
     expect(writes).toEqual([]);
   });
