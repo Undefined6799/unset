@@ -22,4 +22,7 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
   The imported 36-name sheet and its pins remain unchanged; `extensionProvenance` records the separate registration.
 - P2.13e adds `bulb-off` (regular `light-bulb`), `bulb-on` (`light-bulb-on`) and `tv` (`modern-tv`) for the menu's theme
   picker, approved by Alex on 2026-10-23 (Figma 151:939), from the same commit and pinned the same way: 41 names.
+- P1.20k adds `community` (regular `group`), `explore` (`compass`), `saved` (`bookmark`), `help` (`help-circle`) and
+  `link` (`link`) for the core header's tabs and menus, as Alex asked on 2026-11-18 (05:02:59Z, icons for Community and
+  Explore from the Iconoir set; 05:04:54Z, the planned navbar menus as the target), same commit and pins: 46 names.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.

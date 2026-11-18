@@ -152,7 +152,7 @@ function checkSource(io: IconsIo): string {
 const EXTENSION = "approved-extensions.json";
 // P2.24f: sha256 of the exact bytes of shared/ui/approved-extensions.json that Alex approved (ADR 0027 / Task 3). Any
 // byte change to that file, prose and key order included, needs a reviewed bump of this hash in the same PR.
-export const APPROVED_EXTENSION_SHA256 = "afa09948eed75ef78d20fdd09e5feb602d159c3af76df3e1a7e997930e9e06d4";
+export const APPROVED_EXTENSION_SHA256 = "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071";
 
 type RegisteredIcon = { iconoirName: string; sourceSha256: string; drawings: IconElement[] };
 type Registration = {

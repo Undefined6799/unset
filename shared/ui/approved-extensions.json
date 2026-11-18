@@ -292,6 +292,152 @@
           }
         ]
       ]
+    },
+    "community": {
+      "iconoirName": "group",
+      "approval": "Alex 2026-11-18 05:02:59Z (icons for Community and Explore from the Iconoir set) and 05:04:54Z (the planned navbar menus as the target)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/group.svg",
+      "sourceSha256": "de93e07123b01e68ba0e0557dc6f2edcec128d45a6f397507c2313c44f028610",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M1 20V19C1 15.134 4.13401 12 8 12V12C11.866 12 15 15.134 15 19V20",
+            "stroke": "currentColor",
+            "strokeLinecap": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M13 14V14C13 11.2386 15.2386 9 18 9V9C20.7614 9 23 11.2386 23 14V14.5",
+            "stroke": "currentColor",
+            "strokeLinecap": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M8 12C10.2091 12 12 10.2091 12 8C12 5.79086 10.2091 4 8 4C5.79086 4 4 5.79086 4 8C4 10.2091 5.79086 12 8 12Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M18 9C19.6569 9 21 7.65685 21 6C21 4.34315 19.6569 3 18 3C16.3431 3 15 4.34315 15 6C15 7.65685 16.3431 9 18 9Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "explore": {
+      "iconoirName": "compass",
+      "approval": "Alex 2026-11-18 05:02:59Z (icons for Community and Explore from the Iconoir set) and 05:04:54Z (the planned navbar menus as the target)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/compass.svg",
+      "sourceSha256": "51d65a1ceacf42183deaa35e9abd70ccecb612c2fae86c455087b30c2129525a",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M10.5857 10.5857L16.9496 7.0502L13.4141 13.4142L7.05012 16.9497L10.5857 10.5857Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "saved": {
+      "iconoirName": "bookmark",
+      "approval": "Alex 2026-11-18 05:02:59Z (icons for Community and Explore from the Iconoir set) and 05:04:54Z (the planned navbar menus as the target)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/bookmark.svg",
+      "sourceSha256": "e582657a5c6400dee89274301435c6be37e66c93c27ae6ef55c788c9caef2ac1",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21L13.0815 17.1953C12.4227 16.7717 11.5773 16.7717 10.9185 17.1953L5 21Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "help": {
+      "iconoirName": "help-circle",
+      "approval": "Alex 2026-11-18 05:02:59Z (icons for Community and Explore from the Iconoir set) and 05:04:54Z (the planned navbar menus as the target)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/help-circle.svg",
+      "sourceSha256": "3206fbecd152d26eb60d292d4a2ab3b1bad4da074f29d3d2879d076d1f30258b",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M9 9C9 5.49997 14.5 5.5 14.5 9C14.5 11.5 12 10.9999 12 13.9999",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M12 18.01L12.01 17.9989",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
+    },
+    "link": {
+      "iconoirName": "link",
+      "approval": "Alex 2026-11-18 05:02:59Z (icons for Community and Explore from the Iconoir set) and 05:04:54Z (the planned navbar menus as the target)",
+      "sourceUrl": "https://raw.githubusercontent.com/iconoir-icons/iconoir/d7dfa4d0341df0670bfed9fc24221c9d7ef2112e/icons/regular/link.svg",
+      "sourceSha256": "84a5b6ae115d7afff785889a88d98a4615951a30f15984fb7b4e1644b8e8faed",
+      "drawings": [
+        [
+          "path",
+          {
+            "d": "M14 11.9976C14 9.5059 11.683 7 8.85714 7C8.52241 7 7.41904 7.00001 7.14286 7.00001C4.30254 7.00001 2 9.23752 2 11.9976C2 14.376 3.70973 16.3664 6 16.8714C6.36756 16.9525 6.75006 16.9952 7.14286 16.9952",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ],
+        [
+          "path",
+          {
+            "d": "M10 11.9976C10 14.4893 12.317 16.9952 15.1429 16.9952C15.4776 16.9952 16.581 16.9952 16.8571 16.9952C19.6975 16.9952 22 14.7577 22 11.9976C22 9.6192 20.2903 7.62884 18 7.12383C17.6324 7.04278 17.2499 6.99999 16.8571 6.99999",
+            "stroke": "currentColor",
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      ]
     }
   }
 }
