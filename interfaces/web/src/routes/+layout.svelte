@@ -110,6 +110,8 @@ function restoreSaved(event: PageTransitionEvent): void {
 }
 
 const MENU = "core-menu";
+// A footer link is a 24px target (WCAG 2.2 SC 2.5.8): its 20px line plus 2px above and below.
+const footerLink = "py-0.5";
 const row =
   "flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium";
 </script>
@@ -260,12 +262,12 @@ const row =
   <footer class="flex flex-wrap gap-8 border-t px-4 py-8 text-sm">
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.siteColumn}</h2>
-      <a href="/">{T.home}</a>
-      {#if !signedIn}<a href="/login">{T.signIn}</a>{/if}
+      <a href="/" class={footerLink}>{T.home}</a>
+      {#if !signedIn}<a href="/login" class={footerLink}>{T.signIn}</a>{/if}
     </div>
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.legalColumn}</h2>
-      {#each LEGAL as link (link.href)}<a href={link.href}>{link.label}</a>{/each}
+      {#each LEGAL as link (link.href)}<a href={link.href} class={footerLink}>{link.label}</a>{/each}
     </div>
     {#if prefs !== undefined}<div>{@render themeForm()}</div>{/if}
     <p class="w-full text-muted-foreground">{T.note}</p>
