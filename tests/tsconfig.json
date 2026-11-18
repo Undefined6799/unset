@@ -5,6 +5,7 @@
   "exclude": ["dist"],
   "references": [
     { "path": "../interfaces/http" },
+    { "path": "../interfaces/web" },
     { "path": "../infrastructure/audit" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
