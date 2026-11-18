@@ -25,10 +25,14 @@ $effect(() => {
   measure();
   const resized = new ResizeObserver(measure);
   resized.observe(node);
+  // An edit in place can add entries without the region changing size; its scroll width then changes unseen.
+  const edited = new MutationObserver(measure);
+  edited.observe(node, { childList: true, subtree: true, characterData: true });
   node.addEventListener("scroll", measure, { passive: true });
   for (const kind of TAKE_OVER) node.addEventListener(kind, forget, { passive: true });
   return () => {
     resized.disconnect();
+    edited.disconnect();
     node.removeEventListener("scroll", measure);
     for (const kind of TAKE_OVER) node.removeEventListener(kind, forget);
   };
@@ -60,7 +64,9 @@ function step(direction: -1 | 1) {
   const from = Math.round((target ?? region.scrollLeft) / pitch);
   const end = region.scrollWidth - region.clientWidth;
   target = Math.min(Math.max((from + direction) * pitch, 0), end);
-  region.scrollTo({ left: target, behavior: "smooth" });
+  // An explicit smooth scroll overrides the reduced-motion rule in app.css, so honour the preference here too.
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  region.scrollTo({ left: target, behavior: still ? "instant" : "smooth" });
 }
 
 const regionId = $props.id();

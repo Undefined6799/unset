@@ -563,3 +563,56 @@ test("a_carousel_press_after_the_person_scrolls_steps_from_where_it_is", async (
     await deleteCard(page, "Shelf card");
   }
 });
+
+// Codex on #1718: the buttons honour reduced motion, which an explicit smooth scroll would otherwise override.
+test("a_carousel_button_jumps_when_motion_is_reduced", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const entries = Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`items.${i}.title`, `Entry ${i + 1}`]));
+  await addCard(page, { kind: "collection", width: "full", title: "Shelf", layout: "carousel", ...entries });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const shelf = page.getByRole("region", { name: "Shelf, scrolls sideways" });
+    await page.getByRole("button", { name: "Next in Shelf" }).click();
+    // Read in the same task as nothing else: a smooth scroll would still be at or near the start.
+    const [now, second] = await shelf.evaluate((node) => {
+      const region = node as unknown as {
+        scrollLeft: number;
+        querySelectorAll(s: string): ArrayLike<{ offsetLeft: number }>;
+      };
+      const tiles = region.querySelectorAll("li");
+      return [Math.round(region.scrollLeft), Math.round((tiles[1]?.offsetLeft ?? 0) - (tiles[0]?.offsetLeft ?? 0))];
+    });
+    expect(now).toBe(second);
+  } finally {
+    await deleteCard(page, "Shelf card");
+  }
+});
+
+// Codex on #1718: a carousel edited in place from one entry to several shows its buttons without a scroll or resize.
+test("a_carousel_edited_to_overflow_shows_its_buttons", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, { kind: "collection", width: "full", title: "Grow", layout: "carousel", "items.0.title": "A" });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const next = page.getByRole("button", { name: "Next in Grow" });
+    await expect(next).toHaveCount(0);
+    await page.getByRole("group", { name: "Grow card" }).getByRole("link", { name: "Edit" }).click();
+    const dialog = page.getByRole("dialog");
+    for (const n of [2, 3]) {
+      await dialog.getByRole("button", { name: "Add entry" }).click();
+      const row = dialog.getByRole("group", { name: `Entry ${n}`, exact: true });
+      await row.getByRole("textbox", { name: "Title" }).fill(String.fromCharCode(64 + n));
+    }
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "C", exact: true })).toHaveCount(1);
+    await expect(next).toBeEnabled();
+  } finally {
+    await deleteCard(page, "Grow card");
+  }
+});
