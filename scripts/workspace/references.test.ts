@@ -186,6 +186,35 @@ describe("workspace references", () => {
     expect(workspaceProblems(tree({ "shared/errors": { test: false } }))).toEqual(["shared/errors: has no *.test.ts"]);
   });
 
+  test("zero_dependency_tests_in_their_named_folder", () => {
+    // Coordinator ruling 2026-11-18 13:25Z: pds-admin and admin-envelope may keep their tests in
+    // tests/integration/pds-admin, and only there, and a test there must import the workspace it counts for.
+    const missing = tree({ "interfaces/pds-admin": { test: false }, "shared/admin-envelope": { test: false } });
+    expect(workspaceProblems(missing)).toEqual([
+      "interfaces/pds-admin: has no *.test.ts",
+      "shared/admin-envelope: has no *.test.ts",
+    ]);
+    put(missing, "tests/integration/pds-admin/other.test.ts", 'import { x } from "../../../shared/errors/index.ts";\n');
+    expect(workspaceProblems(missing)).toHaveLength(2);
+    put(
+      missing,
+      "tests/integration/pds-admin/a.test.ts",
+      'import { x } from "../../../interfaces/pds-admin/index.ts";\n',
+    );
+    put(missing, "tests/integration/pds-admin/b.test.ts", 'import { y } from "@unset/shared-admin-envelope";\n');
+    expect(workspaceProblems(missing)).toEqual([]);
+    const elsewhere = tree({ "shared/errors": { test: false } });
+    put(elsewhere, "tests/integration/pds-admin/c.test.ts", 'import { x } from "@unset/shared-errors";\n');
+    expect(workspaceProblems(elsewhere)).toEqual(["shared/errors: has no *.test.ts"]);
+    const otherFolder = tree({ "interfaces/pds-admin": { test: false } });
+    put(
+      otherFolder,
+      "tests/integration/other/a.test.ts",
+      'import { x } from "../../../interfaces/pds-admin/index.ts";\n',
+    );
+    expect(workspaceProblems(otherFolder)).toEqual(["interfaces/pds-admin: has no *.test.ts"]);
+  });
+
   test("root_tsconfig_references_every_workspace", () => {
     const root = tree({ "shared/errors": {} });
     writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ files: [], references: [] }));

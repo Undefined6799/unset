@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { atproto, localPlc, objectStore, type Policy, plc } from "./policies.ts";
+import { atproto, localPlc, objectStore, type Policy, pdsAdmin, plc } from "./policies.ts";
 import { fakeResolver, type Handler, httpServer, httpsServer, loopbackDial, testCertificate } from "./remote.fake.ts";
 import { createNetGuardWith, type EgressEvent } from "./request.ts";
 import { NetGuardError } from "./resolve.ts";
@@ -221,6 +221,32 @@ describe("guardedRequest", () => {
     expect(await codeOf(bad.guard.request(objectStore("http://objects:8333"), { url: "http://objects:8333/" }))).toBe(
       "egress.private_address",
     );
+  });
+
+  test("pds_admin_policy_exact_origin", async () => {
+    // P2.09k: web reaches pds-admin by the one origin its composition root passes in (PDS_ADMIN_URL), nothing wider.
+    handler = (_req, res) => res.end("ok");
+    const policy = pdsAdmin("http://pds-admin:8080");
+    expect(policy).toEqual({ name: "pds-admin", kind: "internal", origins: ["http://pds-admin:8080"] });
+    const ok = guardFor({ "pds-admin": ["172.20.0.11"] }, servers.http.port);
+    expect((await ok.guard.request(policy, { url: "http://pds-admin:8080/v1/invite.issue" })).status).toBe(200);
+    const other = guardFor({ "pds-admin": ["172.20.0.11"], pds: ["172.20.0.12"] }, servers.http.port);
+    for (const url of [
+      "http://pds-admin:8081/",
+      "http://pds:8080/",
+      "https://pds-admin:8080/",
+      "http://172.20.0.11:8080/",
+    ]) {
+      expect(await codeOf(other.guard.request(policy, { url })), url).toBe("egress.host_not_allowed");
+    }
+    expect(() => pdsAdmin("http://pds-admin:8080/v1")).toThrow(TypeError);
+    expect(() => pdsAdmin("")).toThrow(TypeError);
+  });
+
+  test("pds_admin_policy_private_only", async () => {
+    const bad = guardFor({ "pds-admin": [PUBLIC] }, servers.http.port);
+    const policy = pdsAdmin("http://pds-admin:8080");
+    expect(await codeOf(bad.guard.request(policy, { url: "http://pds-admin:8080/" }))).toBe("egress.private_address");
   });
 
   test("put_only_on_internal_policy", async () => {
