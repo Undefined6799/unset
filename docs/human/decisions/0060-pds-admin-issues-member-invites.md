@@ -73,6 +73,9 @@ service. This one does.
   the admin screens (P3.20a); until then codes are one use and do not expire.
 - A crash between the PDS call and the log append leaves a code without a log line; the nightly verifier (P3.22) is
   the detector. Accepted for Phase 2.
+- The service exits on purpose when a state file's contents can no longer be known: an append failed and cutting it
+  back failed too (as PostgreSQL stops on a failed fsync). A restart rereads the files as they are, so it must run
+  under a restart policy; P2.09d gives its compose service one, and the runbook says a crash loop is the alert.
 - The PDS itself keeps which account owns each code and which account used it; the app adds only the inviter's own
   list (P2.10). Invite-chain takedown (P5.08e) reads the PDS.
 
