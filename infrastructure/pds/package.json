@@ -16,7 +16,6 @@
     "@unset/infrastructure-net-guard": "*",
     "@unset/shared-admin-envelope": "*",
     "@unset/shared-config": "*",
-    "@unset/shared-errors": "*",
     "@unset/shared-lexicons": "*",
     "@unset/shared-log": "*"
   }

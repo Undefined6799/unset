@@ -6,7 +6,6 @@
     { "path": "../net-guard" },
     { "path": "../../shared/lexicons" },
     { "path": "../../shared/config" },
-    { "path": "../../shared/errors" },
     { "path": "../../shared/log" },
     { "path": "../../shared/admin-envelope" }
   ]

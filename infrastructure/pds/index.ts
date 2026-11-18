@@ -39,9 +39,7 @@ export {
   PDS_CALL_TIMEOUT_MS,
   type PdsCallDeps,
   type PdsContext,
-  type PdsFailure,
   type PdsResult,
-  respondToPdsFailure,
   type SessionInfo,
 } from "./pds-call.ts";
 export { isDpopNonceHandshake } from "./pds-errors.ts";
