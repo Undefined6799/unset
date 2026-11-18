@@ -35,6 +35,7 @@ let {
   title,
   submit,
   max,
+  textMax,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -59,6 +60,8 @@ let {
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
   max: number;
+  /** The README's maxlength (CardEditLimits text). */
+  textMax?: number;
   enhance?: Enhance;
 } = $props();
 
@@ -214,7 +217,7 @@ const buttonRows = $derived([
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
     {#if kind === "readme"}
-      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} required />
+      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
     {:else if kind === "links"}
       <Field label={LINKS_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", links?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", links?.layout ?? "list")} options={LAYOUTS} />
