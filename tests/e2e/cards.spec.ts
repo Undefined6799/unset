@@ -1,5 +1,5 @@
 // The card editor with SvelteKit's client running (P1.20k review gaps 15 and 16; outside review of f5cab2f, finding
-// 1). Opening an editor puts focus in its first text field; a list editor's hint is read with each row. A refused save
+// 1). A new card starts from the one Add card picker. Opening an editor puts focus in its first text field; a list editor's hint is read with each row. A refused save
 // keeps the editor open with what was typed and the reason inside it; a save closes it, returns focus to the button
 // that opened it, and cannot be sent twice while on its way; editing a stored card saves in place. A moved card keeps
 // focus on its move button. The cards added are deleted again, so the member page is as the other specs expect it.
@@ -23,10 +23,15 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
     if (r.method() === "POST" && r.url().endsWith("?/create")) creates.push(r.url());
   });
 
-  // Add README: focus in the text area; a save held back by the test cannot be sent twice.
-  const addReadme = page.getByRole("button", { name: "Add README" });
-  await addReadme.click();
+  // Add card, then README: the picker closes, focus is in the text area; a save held back by the test cannot be sent
+  // twice; focus goes back to Add card.
+  const addCard = page.getByRole("button", { name: "Add card" });
   const dialog = page.getByRole("dialog");
+  const pick = async (kind: RegExp) => {
+    await addCard.click();
+    await dialog.getByRole("button", { name: kind }).click();
+  };
+  await pick(/^README/);
   const readme = dialog.getByRole("textbox", { name: "README" });
   await expect(readme).toBeFocused();
   await readme.fill("# Hello");
@@ -47,12 +52,11 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
   await expect(dialog).toBeHidden();
   await page.unroute("**/*");
   expect(creates).toHaveLength(1);
-  await expect(addReadme).toBeFocused();
+  await expect(addCard).toBeFocused();
   await expect(page.getByRole("heading", { name: "Hello" })).toBeVisible();
 
   // Add links with no link: refused, so the editor stays open with the title kept and the reason inside it.
-  const addLinks = page.getByRole("button", { name: "Add links" });
-  await addLinks.click();
+  await pick(/^Links/);
   await expect(dialog.getByRole("textbox", { name: "Title" })).toBeFocused();
   await expect(dialog.getByRole("group", { name: "Link 1", exact: true })).toHaveAccessibleDescription(
     /^Up to \d+ links\./,
@@ -67,7 +71,7 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
   await first.getByRole("textbox", { name: "Label" }).fill("Example");
   await dialog.getByRole("button", { name: "Add" }).click();
   await expect(dialog).toBeHidden();
-  await expect(addLinks).toBeFocused();
+  await expect(addCard).toBeFocused();
 
   // Edit the stored README: saved in place, the editor closes and focus goes back to its Edit button.
   const readmeCard = page.getByRole("group", { name: "README card" });

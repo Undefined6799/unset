@@ -5,21 +5,15 @@
 -->
 <script lang="ts">
 import { Icon } from "@unset/apps-web/lib/components/icon";
+import AddCard from "@unset/apps-web/lib/components/profile/add-card.svelte";
 import CardControls from "@unset/apps-web/lib/components/profile/card-controls.svelte";
-import CardEditor from "@unset/apps-web/lib/components/profile/card-editor.svelte";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
 import ProfileLayout from "@unset/apps-web/lib/components/profile/profile-layout.svelte";
 import ProfileSide from "@unset/apps-web/lib/components/profile/profile-side.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
-import {
-  BUTTONS_EDIT,
-  CARD_EDIT,
-  COLLECTION_EDIT,
-  LINKS_EDIT,
-  OWN_PAGE,
-} from "@unset/apps-web/lib/profile/messages.ts";
+import { CARD_EDIT, OWN_PAGE } from "@unset/apps-web/lib/profile/messages.ts";
 import { enhance } from "$app/forms";
 
 let { data, form } = $props();
@@ -57,7 +51,8 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
       headline={data.profile?.headline}
       location={data.profile?.location}
       website={data.profile?.website}
-      edit={data.profile === null ? undefined : { href: "/settings/profile", label: OWN_PAGE.editProfile }}
+      shape={data.avatarShape}
+      edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
     >
       {#if data.account.handleUnavailable}<p>{OWN_PAGE.handleUnavailable}</p>{/if}
       {#if data.profileUnavailable}<p>{OWN_PAGE.profileUnavailable}</p>{/if}
@@ -85,42 +80,7 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
         <CardControls cards={data.cards} {index} limits={data.cardEditLimits} {enhance} />
       {/snippet}
       {#snippet add()}
-        <CardEditor
-          kind="readme"
-          width="full"
-          trigger={CARD_EDIT.addReadme}
-          title={CARD_EDIT.addReadme}
-          submit={CARD_EDIT.add}
-          max={0}
-          {enhance}
-        />
-        <CardEditor
-          kind="links"
-          width="full"
-          trigger={LINKS_EDIT.add}
-          title={LINKS_EDIT.add}
-          submit={CARD_EDIT.add}
-          max={data.cardEditLimits.links}
-          {enhance}
-        />
-        <CardEditor
-          kind="collection"
-          width="full"
-          trigger={COLLECTION_EDIT.add}
-          title={COLLECTION_EDIT.add}
-          submit={CARD_EDIT.add}
-          max={data.cardEditLimits.collection}
-          {enhance}
-        />
-        <CardEditor
-          kind="buttons"
-          width="half"
-          trigger={BUTTONS_EDIT.add}
-          title={BUTTONS_EDIT.add}
-          submit={CARD_EDIT.add}
-          max={data.cardEditLimits.buttons}
-          {enhance}
-        />
+        <AddCard limits={data.cardEditLimits} {enhance} />
       {/snippet}
     </ProfileCards>
     <noscript><p>{CARD_EDIT.noScript}</p></noscript>

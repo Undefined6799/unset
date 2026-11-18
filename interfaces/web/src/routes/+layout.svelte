@@ -382,7 +382,7 @@ const row =
       </form>
     </section>
   {/if}
-  <main id="main" tabindex="-1" class="mx-auto w-full px-4 py-8 {shell.wide ? 'max-w-6xl' : 'max-w-3xl'}">{@render content()}</main>
+  <main id="main" tabindex="-1" class="mx-auto w-full py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
 {:else}
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">

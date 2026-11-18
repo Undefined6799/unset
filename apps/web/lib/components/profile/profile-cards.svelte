@@ -5,7 +5,7 @@
   are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap and show
   only whole tiles, one to four by the card's own width (a container query), no script. Everything shown was built by
   apps/web/lib/profile/view.ts. On the owner's page `controls` puts each card's own at the top right of the card, and
-  `add` closes the grid with the add buttons. No cards and no `add` renders nothing.
+  `add` closes the grid, full width (the Add card button). No cards and no `add` renders nothing.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
@@ -131,13 +131,7 @@ const count = "font-mono text-xs text-muted-foreground";
       {/if}
     {/each}
     {#if add !== undefined}
-      <section
-        aria-labelledby="add-card"
-        class="flex flex-col items-center gap-3 rounded-sm border border-dashed border-input p-5 md:col-span-2"
-      >
-        <h2 id="add-card" class="font-mono text-xs tracking-wider text-muted-foreground uppercase">{CARD_TEXT.addCard}</h2>
-        <div class="flex flex-wrap justify-center gap-2.5">{@render add()}</div>
-      </section>
+      <div class="md:col-span-2">{@render add()}</div>
     {/if}
   </div>
 {/if}

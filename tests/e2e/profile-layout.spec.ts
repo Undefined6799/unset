@@ -44,7 +44,8 @@ test("the_side_column_sits_left_of_the_cards_and_controls_show_on_focus", async 
     const name = await page.getByRole("heading", { level: 1 }).boundingBox();
     const readme = await page.getByText("README.md", { exact: true }).boundingBox();
     expect(name !== null && readme !== null && name.x + name.width <= readme.x).toBe(true);
-    expect(await page.getByRole("heading", { name: "Add a card" }).isVisible()).toBe(true);
+    await expect(page.getByRole("button", { name: "Add card" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/settings/profile");
     const edit = card.getByRole("button", { name: "Edit" });
     await edit.focus();
     await expect(card).toHaveCSS("opacity", "1");
@@ -75,4 +76,33 @@ test.describe("phone", () => {
       await removeReadme(page);
     }
   });
+});
+
+// Alex, 2026-11-18 staging review: the side column sits at the left, under the header's menu button, not centred.
+test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const menu = await page.locator('header button[popovertarget="core-menu"]').boundingBox();
+  const avatar = await page.getByRole("button", { name: "Change profile picture" }).boundingBox();
+  expect(Math.abs((avatar?.x ?? -99) - (menu?.x ?? 99))).toBeLessThanOrEqual(2);
+});
+
+// The avatar's shape (sh.unset.profile avatarShape) is saved from the avatar's own dialog and shown on the page.
+test("the_owner_sets_the_avatar_shape_from_the_avatar", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const avatar = page.getByRole("button", { name: "Change profile picture" });
+  const dialog = page.getByRole("dialog");
+  const choose = async (shape: string) => {
+    await avatar.click();
+    await dialog.getByRole("radio", { name: shape, exact: true }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toBeHidden();
+  };
+  await choose("Rounded square");
+  await page.reload();
+  await avatar.click();
+  await expect(dialog.getByRole("radio", { name: "Rounded square" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await choose("Round");
 });

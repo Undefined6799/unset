@@ -26,7 +26,9 @@ export type ShellData = Readonly<{
   hiddenHeading?: string;
   /** Adds <meta name="robots" content="noindex">; the page sets the X-Robots-Tag header itself. */
   noindex?: true;
-  /** A wide main (core shell) for a page with its own columns: the member page's side column and cards. */
+  /** A full-width main (core shell) for a page with its own columns, the member page's side column and cards, with
+   * the header's own side padding, so the page lines up under the header's menu button (Alex, 2026-11-18). The page
+   * caps its own width. */
   wide?: true;
 }>;
 

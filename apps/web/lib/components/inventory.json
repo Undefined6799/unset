@@ -288,6 +288,14 @@
   },
   "ours": {
     "profile": {
+      "add-card.svelte": {
+        "origin": "ours",
+        "purpose": "The single Add card button: the stock Dialog choosing a card kind, then that kind's editor."
+      },
+      "avatar-editor.svelte": {
+        "origin": "ours",
+        "purpose": "The owner's avatar as a button opening the stock Dialog that saves its shape (round or rounded square)."
+      },
       "card-controls.svelte": {
         "origin": "ours",
         "purpose": "The owner's controls on each profile card, at its top right: edit, move up and down, delete behind a confirm."
@@ -314,7 +322,7 @@
       },
       "profile-side.svelte": {
         "origin": "ours",
-        "purpose": "The profile's side column: the letter avatar, name, handle, headline, details list and the owner's links."
+        "purpose": "The profile's side column: the avatar in its shape, name with the owner's edit pen, handle, headline and details."
       },
       "readme.svelte": {
         "origin": "ours",
