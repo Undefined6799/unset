@@ -1,0 +1,2 @@
+// fixture: apps/web/lib/components/ui/sheet/sheet-content.svelte findings=0
+<Icon name="close" size={16} class="size-4" />

@@ -15,11 +15,21 @@ const COMPONENTS = `${UI}/components`;
 const ICONS_JSON = `${UI}/icons/icons.json`;
 const ICON_SVGS = `${UI}/icons/svg`;
 const ICONOIR_VERSION = "7.12.1";
-/** The only files that draw an inline <svg>: the Icon component and the Mark, both from sheet geometry. */
-export const INLINE_SVG_FILES: readonly string[] = [`${COMPONENTS}/Icon/Icon.tsx`, `${COMPONENTS}/Mark/Mark.tsx`];
-/** Icon packages, by name or prefix, as the step lists them; the copied data under shared/ui/icons is files. */
+/**
+ * The only files that draw an inline <svg>: the Icon component and the Mark, both from sheet geometry, and the Svelte
+ * Icon (P1.20c), which draws the same icons.json data.
+ */
+export const INLINE_SVG_FILES: readonly string[] = [
+  `${COMPONENTS}/Icon/Icon.tsx`,
+  `${COMPONENTS}/Mark/Mark.tsx`,
+  "apps/web/lib/components/icon/icon.svelte",
+];
+/**
+ * Icon packages, by name or prefix, as the step lists them, plus the @lucide scope shadcn-svelte imports (P1.20c);
+ * the copied data under shared/ui/icons is files.
+ */
 const ICON_PACKAGE =
-  /^(?:iconoir|lucide|@heroicons\/|react-icons(?:\/|$)|@tabler\/icons|@phosphor-icons\/|@fortawesome\/)/;
+  /^(?:iconoir|lucide|@lucide\/|@heroicons\/|react-icons(?:\/|$)|@tabler\/icons|@phosphor-icons\/|@fortawesome\/)/;
 const UNSAFE_SVG = /<script|<style|<foreignobject|\son[a-z]+\s*=|href\s*=/i;
 const DEPENDENCY_LISTS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
 
@@ -90,7 +100,7 @@ function iconNames(line: string): string[] {
 
 type SourceContext = { readonly icons: Set<string>; readonly stop: readonly string[] };
 
-/** What is wrong with one source line, as reasons; `svgAllowed` is false only for product .tsx outside Icon and Mark. */
+/** What is wrong with one source line, as reasons; `svgAllowed` is false for product .tsx and .svelte outside the Icons and Mark. */
 function lineProblems(file: string, text: string, ctx: SourceContext, svgAllowed: boolean): string[] {
   const why = specifiersOn(text)
     .filter((spec) => ICON_PACKAGE.test(spec))
@@ -107,7 +117,7 @@ function lineProblems(file: string, text: string, ctx: SourceContext, svgAllowed
 
 /** Every source line: icon package imports, unknown Icon names, inline <svg>, and stop pieces used in apps/. */
 function scanSource(file: string, source: string, ctx: SourceContext): Finding[] {
-  const svgAllowed = isTestFile(file) || INLINE_SVG_FILES.includes(file) || !file.endsWith(".tsx");
+  const svgAllowed = isTestFile(file) || INLINE_SVG_FILES.includes(file) || !/\.(?:tsx|svelte)$/.test(file);
   return source
     .split("\n")
     .flatMap((text, i) =>
@@ -148,7 +158,8 @@ const strayIconFiles = (root: string): Finding[] =>
     .map((file) => finding(file, "SVG file outside shared/ui/icons/svg"));
 
 /** The source files the guard reads; the repository test checks there are some, so an empty scan cannot pass. */
-export const scannedFiles = (root: string): string[] => sourceFiles(root, [...PRODUCT_DIRS, "scripts"]);
+export const scannedFiles = (root: string): string[] =>
+  [...sourceFiles(root, [...PRODUCT_DIRS, "scripts"]), ...filesUnder(root, PRODUCT_DIRS, /\.svelte$/)].sort();
 
 export function scanAll(root: string): Finding[] {
   const inventory = readJson<Record<string, Entry>>(root, INVENTORY);
