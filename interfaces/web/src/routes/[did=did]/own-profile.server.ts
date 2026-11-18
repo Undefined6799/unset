@@ -1,25 +1,17 @@
-// Ported unchanged from interfaces/http/own-profile.ts (P1.20i); that copy went with P1.20k.
+// Ported from interfaces/http/own-profile.ts (P1.20i); that copy went with P1.20k.
 // The member's own profile and cards for their page (ADR 0051), read from their own PDS. Every record is checked by
 // domains/profile on the way in: a bad field reads as unset, a bad card is hidden, a key that is not a record key
-// is dropped. Visitors never reach this: public pages wait for the indexer (ADR 0052), so there is no live PDS
-// read for anyone but the owner.
+// is dropped, and `pageCards` sets the order. Visitors never reach this: public pages wait for the indexer
+// (ADR 0052), so there is no live PDS read for anyone but the owner.
 import {
   type AvatarShape,
   type Card,
-  orderCards,
   type ProfileFields,
-  parseCardKey,
+  pageCards,
   readAvatarShape,
-  readCard,
   readProfileRecord,
 } from "@unset/domains-profile";
-import {
-  type CardList,
-  type PdsResult,
-  respondToPdsFailure,
-  type StoredCard,
-  type StoredRecord,
-} from "@unset/infrastructure-pds";
+import { type CardList, type PdsResult, respondToPdsFailure, type StoredRecord } from "@unset/infrastructure-pds";
 
 export type OwnProfile =
   | {
@@ -54,25 +46,9 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
     avatarShape: readAvatarShape(record),
-    cards: orderCards(cardOrder(record), shownCards(cards.value.cards)),
+    cards: pageCards(record, cards.value.cards),
     cardsComplete: cards.value.complete,
   };
-}
-
-/** The cards the owner's page shows: a key that is not a record key, or a card that does not read, is left out. */
-export function shownCards(stored: readonly StoredCard[]): Card[] {
-  const cards: Card[] = [];
-  for (const item of stored) {
-    const key = parseCardKey(item.key);
-    const card = key === null ? null : readCard(key, item.value);
-    if (card !== null) cards.push(card);
-  }
-  return cards;
-}
-
-function cardOrder(record: unknown): unknown {
-  if (typeof record !== "object" || record === null) return undefined;
-  return (record as { readonly cards?: unknown }).cards;
 }
 
 function failure(result: Exclude<PdsResult<unknown>, { kind: "ok" }>, pdsHost: string): OwnProfile {

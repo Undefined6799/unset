@@ -11,6 +11,7 @@ import {
   type CardWidth,
   type ProfileError,
   reorderCards,
+  shownCards,
   toCardRecord,
   withAvatarShape,
   withCardOrder,
@@ -22,7 +23,6 @@ import {
   respondToPdsFailure,
   type SaveOutcome,
 } from "@unset/infrastructure-pds";
-import { shownCards } from "./own-profile.server.ts";
 
 /** The member's own card and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {
@@ -101,7 +101,7 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
       const removed = await store.remove(key);
       return removed.kind === "ok" ? SAVED : pdsFailure(removed);
     },
-    // The order names the cards the page shows (own-profile.ts reads them the same way), so a hidden card never
+    // The order names the cards the page shows (domains/profile `shownCards`, as the page reads them), so a hidden card never
     // makes a correct order look stale. A card added in another tab meanwhile fails the check; the editor reloads.
     // An incomplete list cannot check an order, so the move is refused.
     reorder: async (requested) => {
