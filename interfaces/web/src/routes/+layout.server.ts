@@ -5,8 +5,8 @@
 // on app pages and on pages rendered for a member, which the gate sends private and uncached; a visitor's public page
 // follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
-import { type Did, requireOnboarded } from "@unset/domains-identity";
 import { safeReturnPath } from "@unset/shared-http";
+import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
@@ -26,15 +26,9 @@ function signInHref(path: string): string {
   return next === null ? "/login" : `/login?next=${encodeURIComponent(next)}`;
 }
 
-/**
- * Whether the error page may offer the member the app's menus: not mid-onboarding, where each would only send them back
- * to their step (P1.20k). An app route's gate has already passed the member; an onboarding route is the step itself. A
- * path no route matches is the one case the gate decided nothing about, so only there is the account read (one query).
- */
-async function appOpen(did: Did, routeId: string | null, deadline: AbortSignal): Promise<boolean> {
-  if (routeId !== null) return policyOf(routeId)?.session !== "onboarding";
-  const { accounts, versions } = services();
-  return requireOnboarded(await accounts.get(did, deadline), versions).outcome === "pass";
+function appOpenDeps(): AppOpenDeps {
+  const { accounts, versions, log } = services();
+  return { readAccount: (did, deadline) => accounts.get(did, deadline), versions, log };
 }
 
 export const load: ServerLoad = async ({ locals, request, route, url }) => {
@@ -47,6 +41,15 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
         }
       : undefined;
   const account: ShellData["account"] = member ? { path: `/${locals.did}` } : undefined;
-  const open = locals.did === undefined ? false : await appOpen(locals.did, route.id, locals.deadline);
+  // Whether an error page may offer the app's menus (app-open.ts); a path no route matches has no policy row.
+  const open =
+    locals.did === undefined
+      ? false
+      : await appOpen(
+          appOpenDeps(),
+          locals.did,
+          route.id === null ? null : (policyOf(route.id) ?? null),
+          locals.deadline,
+        );
   return { signedIn: member, account, appOpen: open, prefs, signInHref: signInHref(url.pathname) };
 };
