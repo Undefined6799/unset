@@ -567,14 +567,14 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // only its oauth-provider-ui dist replaced, and the deploy lock names the published recipe as first-party.
     const pds = readLock().pds;
     expect(pds).toBeDefined();
-    const recipe = readFileSync(join(import.meta.dirname, "pds", "Dockerfile"), "utf8");
+    const recipe = readFileSync(join(import.meta.dirname, "pds", "pds.Dockerfile"), "utf8");
     expect(recipe.match(/^FROM \S+/gm)?.at(-1)).toBe(`FROM ${pds?.ref}:${pds?.tag}@${pds?.digest}`);
     const entry = readDeployLock().pds;
     expect(entry?.origin).toBe("first-party");
     expect(entry?.ref).toMatch(/^ghcr\.io\/undefined6799\/unset\/pds@sha256:[0-9a-f]{64}$/);
     expect(service(dev(), "pds").image).toBe(entry?.ref);
     expect(service(dev(), "pds").build).toBeNull();
-    expect(service(local(), "pds").build).toEqual({ context: "./pds", dockerfile: "Dockerfile" });
+    expect(service(local(), "pds").build).toEqual({ context: "..", dockerfile: "deployment/pds/pds.Dockerfile" });
   });
 
   test("pds_env_pinned", () => {

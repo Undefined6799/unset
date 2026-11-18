@@ -1,14 +1,12 @@
-// The one theme file (P1.20c; ADR 0055 point 3). Its colours are the design sheet's, as the PDS theme holds them
-// (deployment/pds/ui/theme.test.ts ties that file to shared/ui/src/tokens.css), so the app and the PDS screens show
-// the same values until the PDS recipe appends this file instead. Text pairs meet WCAG 2.2 AA contrast (1.4.3, 4.5:1)
-// and control edges the non-text bar (1.4.11, 3:1), in light and dark.
+// The one theme file (P1.20c; ADR 0055 point 3; P2.24z). Its values are checked here as outcomes: every colour is a
+// light and dark pair, text pairs meet WCAG 2.2 AA contrast (1.4.3, 4.5:1) and control edges the non-text bar
+// (1.4.11, 3:1), in light and dark. The web app and the PDS screens both read this file, so nothing else holds a copy.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 const read = (path: string): string => readFileSync(join(import.meta.dirname, path), "utf8");
 const theme = read("theme.css");
-const pds = read("../../deployment/pds/ui/unset-theme.css");
 
 /** The custom properties declared directly in the first block opened by `selector` in `css`. */
 function block(css: string, selector: string): Map<string, string> {
@@ -54,6 +52,10 @@ const TEXT: [string, string][] = [
   ["--destructive", "--card"],
   ["--info", "--background"],
   ["--info", "--card"],
+  ["--success", "--background"],
+  ["--success", "--card"],
+  ["--sidebar-foreground", "--sidebar"],
+  ["--sidebar-accent-foreground", "--sidebar-accent"],
 ];
 const EDGES: [string, string][] = [
   ["--input", "--background"],
@@ -66,15 +68,6 @@ describe("theme file", () => {
     const declared = [...root.keys()].filter((name) => !["--radius", "--font-sans", "--font-mono"].includes(name));
     expect([...colours.keys()]).toEqual(declared);
     expect(colours.size).toBeGreaterThan(0);
-  });
-
-  test.each(["light", "dark"] as const)("%s_colours_equal_the_pds_theme", (name) => {
-    const other =
-      name === "light"
-        ? block(pds, ":root")
-        : block(pds.slice(pds.indexOf("@media (prefers-color-scheme: dark)")), ":root");
-    for (const variable of colours.keys()) expect(scheme[name](variable), variable).toBe(other.get(variable));
-    expect(root.get("--radius")).toBe(block(pds, ":root").get("--radius"));
   });
 
   test.each(["light", "dark"] as const)("%s_text_and_edges_meet_wcag_aa", (name) => {

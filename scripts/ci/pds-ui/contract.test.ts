@@ -49,7 +49,7 @@ describe("derived PDS recipe contract", () => {
   test("is absent only before both exact product inputs exist", () => {
     const dir = root();
     expect(recipeContract(dir)).toBeNull();
-    writeFileSync(join(dir, "deployment/pds/Dockerfile"), recipe);
+    writeFileSync(join(dir, "deployment/pds/pds.Dockerfile"), recipe);
     expect(() => recipeContract(dir)).toThrow();
     writeFileSync(join(dir, "deployment/pds/source.lock.json"), JSON.stringify(locked));
     expect(recipeContract(dir)).toEqual(locked);
@@ -95,7 +95,7 @@ describe("derived PDS recipe contract", () => {
     ]) {
       const dir = root();
       writeFileSync(join(dir, "deployment/pds/source.lock.json"), JSON.stringify(locked));
-      writeFileSync(join(dir, "deployment/pds/Dockerfile"), text);
+      writeFileSync(join(dir, "deployment/pds/pds.Dockerfile"), text);
       expect(() => recipeContract(dir)).toThrow();
     }
   });

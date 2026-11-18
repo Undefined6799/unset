@@ -56,7 +56,7 @@ const pairedPds = JSON.parse(
 );
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
-  .filter((file) => file !== "pds/Dockerfile" || pairedPds === null)
+  .filter((file) => file !== "pds/pds.Dockerfile" || pairedPds === null)
   .sort();
 const built = new Map<string, string>();
 

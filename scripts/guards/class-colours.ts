@@ -1,4 +1,4 @@
-// Guard (P1.20k; ADR 0055 point 2): every colour in the Svelte UI comes from apps/web/theme.css through Tailwind's
+// Guard (P1.20k; ADR 0055 point 2): every colour in the Svelte UI comes from shared/ui/theme.css through Tailwind's
 // theme classes (bg-background, text-muted-foreground, ...). Biome's CSS rules (noHexColors, token-only.grit) read
 // .css files only, so a colour written into a class as an arbitrary value (`bg-[#fff]`, `text-[rgb(...)]`,
 // `[color:red]`) would pass them. This guard refuses one in the .svelte and .ts files of the web UI: the components

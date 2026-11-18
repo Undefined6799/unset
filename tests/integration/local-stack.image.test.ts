@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../support/docker.ts";
 import { composeNetworkName, PDS_UID, PROJECT, pdsVolumeVerdict } from "../support/local-stack.ts";
 
-// compose.local.yaml builds pds from deployment/pds/Dockerfile (P2.24y), whose last stage is the base lock's PDS with
+// compose.local.yaml builds pds from deployment/pds/pds.Dockerfile (P2.24y), whose last stage is the base lock's PDS with
 // only the oauth-provider-ui dist replaced and no USER line, so the uid and volume behaviour under test is the base's.
 type LockEntry = { ref: string; tag: string; digest: string };
 const bases = JSON.parse(

@@ -121,7 +121,7 @@ const OBJECTS_DOCKERFILE = "deployment/images/objects.Dockerfile";
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The Dockerfile a built PDS runs from (compose.local.yaml and compose.dev.source.yaml). */
-const PDS_DOCKERFILE = "deployment/pds/Dockerfile";
+const PDS_DOCKERFILE = "deployment/pds/pds.Dockerfile";
 
 /**
  * Under dev the PDS and web reach both staging names only through Pangolin, Newt and the edge (ADR 0031 Decision 3;
