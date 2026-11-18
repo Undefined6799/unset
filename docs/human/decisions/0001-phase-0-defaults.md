@@ -615,3 +615,14 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0057](0057-small-and-auditable-means-the-code.md)):** "small" means the code we own and "auditable" means easy
   to read and follow; a package meeting the written bar needs no ADR unless it touches auth, crypto, outbound
   requests or personal data. Rule DO-1 and CLAUDE.md D8 are amended.
+- **ADRs 0054, 0055 and 0056 proposed (P1.20a, 2026-11-18; own records:
+  [0054](0054-web-process-on-sveltekit.md), [0055](0055-shadcn-svelte-and-one-theme-file.md),
+  [0056](0056-web-boundary-by-file-kind.md)):** the web process moves to SvelteKit with Svelte 5 and shadcn-svelte,
+  and Hono is removed; the app CSP admits SvelteKit's startup script and two style attributes by hash and two named
+  Trusted Types policies; the UI/server boundary in the web process is by file kind; the request gate is `server.ts`
+  plus the hook. Supersede 0015 and 0016 once accepted. Proposed, awaiting Alex.
+- **ADRs 0054, 0055 and 0056 accepted (Alex, 2026-11-18 00:19:20Z, against 23b09e6; own records:
+  [0054](0054-web-process-on-sveltekit.md), [0055](0055-shadcn-svelte-and-one-theme-file.md),
+  [0056](0056-web-boundary-by-file-kind.md)):** the web process moves to SvelteKit and Hono is removed, with the app
+  CSP change written out in 0054; shadcn-svelte and one theme file replace the shared/ui approval rule; the boundary in
+  the web process is by file kind and the request gate is `server.ts` plus the hook. 0015 and 0016 are superseded.

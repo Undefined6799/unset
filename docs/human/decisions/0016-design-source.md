@@ -1,6 +1,6 @@
 # 0016 — The unset.sh design sheet is the design source
 
-Status: Proposed (awaiting Alex in the P1.21 pull request)
+Status: Superseded by 0055 (2026-11-18) before it was accepted. Was: Proposed (awaiting Alex in the P1.21 pull request)
 
 ## Context
 P1.21 turns design tokens into CSS. Two visual directions exist in the history: the 0x40 "v2e" direction (amber, a
