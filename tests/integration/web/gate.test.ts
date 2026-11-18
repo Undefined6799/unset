@@ -88,6 +88,8 @@ afterAll(async () => {
 });
 
 /** A form post from our own origin, from `from` (a client address the edge names). */
+/** A fresh client address, so a test never shares the unknown-address bucket (shared/http rateLimit.ts). */
+const from = (): Record<string, string> => ({ "x-forwarded-for": clientAddress() });
 const formPost = (path: string, body: string, from = clientAddress(), headers: Record<string, string> = {}) =>
   web.fetch(path, {
     method: "POST",
@@ -207,7 +209,43 @@ describe("session", () => {
   test("a_signed_in_page_sends_a_visitor_to_login", async () => {
     const response = await web.fetch("/test-routes/members");
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+  });
+
+  test("a_page_with_a_parameter_returns_to_its_fixed_path_never_the_request", async () => {
+    const response = await web.fetch("/test-routes/members/abc?next=//evil.test", { headers: from() });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+  });
+
+  test("a_page_members_write_is_read_by_visitors_and_written_only_with_a_session", async () => {
+    const read = await web.fetch("/test-routes/writes/abc", { headers: from() });
+    expect(read.status).toBe(200);
+    expect(await read.text()).toContain("visitor");
+    expect((await formPost("/test-routes/writes/abc?/save", "x=1")).status).toBe(401);
+    const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"e".repeat(24)}`))}`;
+    expect((await formPost("/test-routes/writes/abc?/save", "x=1", clientAddress(), { cookie })).status).toBe(200);
+  });
+
+  test("a_members_writes_count_against_the_write_limit", async () => {
+    const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"f".repeat(24)}`))}`;
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i += 1) {
+      statuses.push((await formPost("/test-routes/writes/abc?/save", "x=1", clientAddress(), { cookie })).status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    // Reading the page is not a write: the member's write limit does not hold it back.
+    expect((await web.fetch("/test-routes/writes/abc", { headers: { cookie, ...from() } })).status).toBe(200);
+  });
+
+  test("an_app_page_is_private_and_varies_on_cookie_a_public_one_is_not", async () => {
+    const app = await web.fetch("/test-routes/form-post", { headers: from() });
+    expect(app.headers.get("cache-control")).toBe("private, no-store");
+    expect(app.headers.get("vary")).toContain("Cookie");
+    const open = await web.fetch("/test-routes/plain-page", { headers: from() });
+    expect(open.headers.get("cache-control")).toBeNull();
+    expect(open.headers.get("vary") ?? "").not.toContain("Cookie");
   });
 
   test("a_signed_in_write_without_a_session_is_401", async () => {

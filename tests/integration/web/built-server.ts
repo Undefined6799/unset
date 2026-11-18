@@ -2,6 +2,7 @@
 // this folder: every security outcome is checked on the build, never under `vite dev` (ADR 0054 decision 5). Each
 // test file starts its own server against its own database, as the web role (TE-2), and stops it when done.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http"; // guard-allow: egress loopback requests to the test server only
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
@@ -11,6 +12,7 @@ import { join } from "node:path";
 const WEB = join(import.meta.dirname, "..", "..", "..", "interfaces", "web");
 export const ORIGIN = "https://unset.test";
 export const HOST = "unset.test";
+export const PDS_HOST = "pds.unset.test";
 
 /** Builds interfaces/web once per run; a file that finds a build made by an earlier file in this run reuses it. */
 export function buildOnce(): void {
@@ -71,8 +73,18 @@ export type RunningWeb = {
 /** Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. */
 export async function startWeb(pg: Postgres, env: Record<string, string> = {}): Promise<RunningWeb> {
   const secrets = mkdtempSync(join(tmpdir(), "web-kit-"));
-  const passwordFile = join(secrets, "pg_web");
-  writeFileSync(passwordFile, pg.password);
+  const secret = (name: string, text: string): string => {
+    const path = join(secrets, name);
+    writeFileSync(path, text);
+    return path;
+  };
+  // Made per run, as interfaces/http/test-env.ts makes them, so no key material sits in the repository.
+  const keyring = { active: "k1", keys: { k1: randomBytes(32).toString("base64") } };
+  const clientKey = {
+    ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
+    kid: "A",
+    alg: "ES256",
+  };
   const port = await freePort();
   const child: ChildProcess = spawn(process.execPath, ["server.ts"], {
     cwd: WEB,
@@ -93,9 +105,15 @@ export async function startWeb(pg: Postgres, env: Record<string, string> = {}): 
       PG_PORT: String(pg.port),
       PG_DATABASE: pg.database,
       PG_USER: pg.user,
-      PG_PASSWORD_FILE: passwordFile,
+      PG_PASSWORD_FILE: secret("pg_web", pg.password),
       PG_SSLMODE: "disable",
       PG_POOL_MAX: "4",
+      SEAL_KEYRING_FILE: secret("seal_keyring", JSON.stringify(keyring)),
+      PLC_URL: "https://plc.directory",
+      OAUTH_CLIENT_KEYS_FILE: secret("oauth_client_keys", JSON.stringify([clientKey])),
+      OAUTH_ACTIVE_KID: "A",
+      PDS_HOSTNAME: PDS_HOST,
+      HANDLE_SUFFIX: `.${PDS_HOST}`,
       TEST_ROUTES: "true",
       ...env,
     },

@@ -7,15 +7,16 @@
 // and last the group's CSP. Every check fails closed. Kit docs: https://svelte.dev/docs/kit/hooks (3.2.0).
 import { randomUUID } from "node:crypto";
 import { isRedirect, type RequestEvent, redirect } from "@sveltejs/kit";
-import type { Handle, HandleServerError } from "@sveltejs/kit/hooks";
+import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
 import { type ClientIp, createClientIpResolver } from "@unset/shared-http";
-import { dev } from "$app/env";
-import { services } from "./lib/server/compose.ts";
+import { building, dev } from "$app/env";
+import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
+import type { PolicyName } from "./lib/server/limits.ts";
 import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote } from "./lib/server/runtime.ts";
-import { sessionDidOf } from "./lib/server/session.ts";
+import { sessionIssuerOrigin, sessionOf } from "./lib/server/session.ts";
 
 /** Only these bodies are accepted. SvelteKit's Origin check covers exactly the form types, so refusing every other
  * type here puts every POST under that check. */
@@ -49,10 +50,44 @@ function requestProblem(request: Request, policy: RoutePolicy): Response | undef
   return undefined;
 }
 
-function limited(policy: RoutePolicy, subject: { ip: ClientIp | null } | { did: string }): Response | undefined {
-  if (policy.probe) return undefined;
-  const verdict = services().limiter.consume(policy.limit, subject);
+/** The policy this request counts against: a POST uses the route's write policy when it has one. */
+const limitOf = (request: Request, policy: RoutePolicy): PolicyName =>
+  request.method === "POST" && policy.writeLimit !== undefined ? policy.writeLimit : policy.limit;
+
+function limited(name: PolicyName, subject: { ip: ClientIp | null } | { did: string }): Response | undefined {
+  const verdict = services().limiter.consume(name, subject);
   return verdict.ok ? undefined : plain(429, "http.rate_limited", { "retry-after": String(verdict.retryAfterS) });
+}
+
+const isRead = (request: Request): boolean => request.method === "GET" || request.method === "HEAD";
+
+/**
+ * The path a signed-out GET of a `required` page returns to after sign-in: its own route id without layout groups
+ * when it has no parameter, else the policy's fixed `returnTo`; null when neither (the gate refuses). Never the
+ * request's own URL, so no request text reaches the query.
+ */
+function returnPathOf(routeId: string, policy: RoutePolicy): string | null {
+  const path = routeId.replace(/\/\([^/]+\)/g, "") || "/";
+  return policy.returnTo ?? (path.includes("[") ? null : path);
+}
+
+/** The session part of the gate: who is asking, what a signed-out request gets, and the member's own buckets. */
+async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline: AbortSignal) {
+  const session = await sessionOf(event, deadline);
+  const did = session?.did;
+  event.locals.issuerOrigin = sessionIssuerOrigin(session);
+  const needed = policy.session === "required" || (policy.session === "writes" && !isRead(event.request));
+  if (did === undefined) {
+    if (!needed) return { did };
+    if (!isRead(event.request)) return { did, refused: plain(401, "auth.required") };
+    const next = returnPathOf(event.route.id ?? "", policy);
+    if (next === null) throw new Error("gate: a required page with a parameter names no returnTo");
+    // SvelteKit's redirect keeps the cookie changes (a cleared stale cookie) and answers a client-side navigation
+    // (__data.json) in the form its client expects (kit respond.js).
+    redirect(303, next === "/" ? "/login" : `/login?${new URLSearchParams({ next })}`);
+  }
+  if (policy.session === undefined || policy.probe) return { did };
+  return { did, refused: limited(limitOf(event.request, policy), { did }) };
 }
 
 /** The gate, in order; a Response means the request stops there. */
@@ -67,20 +102,11 @@ const gate: Handle = async ({ event, resolve }) => {
   if (problem) return problem;
   const byIp = policy.probe
     ? undefined
-    : limited(policy, { ip: clientIpOf(event.request.headers, event.getClientAddress()) });
+    : limited(limitOf(event.request, policy), { ip: clientIpOf(event.request.headers, event.getClientAddress()) });
   if (byIp) return byIp;
   return withDeadline(event, policy, async (deadline) => {
-    const did = await sessionDidOf(event, deadline);
-    if (policy.session === "required") {
-      if (did === undefined) {
-        if (event.request.method !== "GET" && event.request.method !== "HEAD") return plain(401, "auth.required");
-        // SvelteKit's redirect keeps the cookie changes (a cleared stale cookie) and answers a client-side navigation
-        // (__data.json) in the form its client expects (kit respond.js).
-        redirect(303, "/login");
-      }
-      const byDid = limited(policy, { did });
-      if (byDid) return byDid;
-    }
+    const { did, refused } = await sessionProblem(event, policy, deadline);
+    if (refused) return refused;
     event.locals.did = did;
     return resolve(event);
   });
@@ -110,6 +136,15 @@ async function withDeadline(
   return plain(503, "http.deadline");
 }
 
+/**
+ * Builds every service before the first request: adapter-node awaits this while its handler is imported, so a bad
+ * database, key or connection budget stops the process before server.ts listens (kit 3.2.0
+ * src/runtime/server/instance.js `init`; https://svelte.dev/docs/kit/hooks#Shared-hooks-init). Not while building.
+ */
+export const init: ServerInit = async () => {
+  if (!building) await startServices();
+};
+
 /** The gate's outcome, an unexpected error as a code, and the group's CSP. server.ts writes the log line. */
 export const handle: Handle = async (input) => {
   const { event } = input;
@@ -124,12 +159,23 @@ export const handle: Handle = async (input) => {
     services().log.logError(error);
     response = plain(500, "internal.error");
   }
-  return withGroupCsp(response, policyOf(event.route.id)?.group ?? "static");
+  const group = policyOf(event.route.id)?.group ?? "static";
+  return withGroupHeaders(response, group, event.isDataRequest);
 };
 
-/** An `app` page keeps SvelteKit's CSP, narrowed to our paths; every other response gets its group's fixed one. */
-function withGroupCsp(response: Response, group: PageGroup): Response {
+/**
+ * An `app` page keeps SvelteKit's CSP, narrowed to our paths; every other response gets its group's fixed one. An
+ * `app` page, and the data its client loads (__data.json), may differ per member, so it is private, never stored and
+ * varies on Cookie, as interfaces/http/prefs/theme.ts has it; public pages get neither, so their bytes never depend on
+ * a cookie.
+ */
+function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean): Response {
   const out = new Response(response.body, response); // SvelteKit's own responses may have immutable headers
+  const html = out.headers.get("content-type")?.startsWith("text/html") === true;
+  if (group === "app" && (html || dataRequest)) {
+    out.headers.set("cache-control", "private, no-store");
+    out.headers.append("vary", "Cookie");
+  }
   const kit = out.headers.get("content-security-policy");
   if (group === "app" && kit !== null) {
     // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).

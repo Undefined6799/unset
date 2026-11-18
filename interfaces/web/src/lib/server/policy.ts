@@ -10,8 +10,22 @@ export type RoutePolicy = Readonly<{
   group: PageGroup;
   /** The rate-limit policy (a key of limits.ts `policies`). */
   limit: PolicyName;
-  /** Only a signed-in visitor gets through: GET and HEAD are sent to /login, anything else gets 401. */
-  session?: "required";
+  /** The policy a POST counts against instead of `limit`, address and member buckets both (a page whose writes cost
+   * more than its reads: the cards on /[did]). */
+  writeLimit?: PolicyName;
+  /**
+   * `required`: only a signed-in visitor gets through; GET and HEAD are sent to /login, anything else gets 401.
+   * `writes`: GET and HEAD pass as for a visitor; a POST needs a session (401 without one), so no action on the page
+   * runs without `locals.did`.
+   * Either way a signed-in request also counts against the member's buckets.
+   */
+  session?: "required" | "writes";
+  /**
+   * Where sign-in returns after a signed-out GET of a `required` page. A page whose route id has no parameter returns
+   * to itself; one with a parameter must name a fixed path here, or the gate refuses it (500), as interfaces/http's
+   * RETURN_TO table did. Never taken from the request.
+   */
+  returnTo?: `/${string}`;
   /** Largest POST body accepted, in bytes (Content-Length). Absent means the route takes no body. */
   maxBody?: number;
   /** This route's own deadline; otherwise REQUEST_DEADLINE_MS. */

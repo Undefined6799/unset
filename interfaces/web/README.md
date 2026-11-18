@@ -23,13 +23,22 @@ route group at a time (step book P1.20b to P1.20k); until the switch-over (P1.20
      `+page.ts`), `static` (JSON, files).
    - `limit`: a name from `src/lib/server/limits.ts`. A page that needs a new policy adds one there, copied from
      `interfaces/http/limits.ts`.
-   - `session: "required"` for a signed-in page: a visitor's GET goes to /login, a POST gets 401.
+   - `session: "required"` for a signed-in page: a visitor's GET goes to /login?next=<the page>, a POST gets 401.
+     A page whose route id has a parameter names where sign-in returns: `returnTo: "/me"`; without it the gate
+     refuses (500), never guessing from the request.
+   - `session: "writes"` for a page anyone reads and only members write (the cards on /[did]): GET and HEAD pass,
+     a POST without a session gets 401, so no action runs without `locals.did`.
+   - `writeLimit`: the policy a POST counts against instead of `limit`, per address and per member.
    - `maxBody`: the largest form body in bytes; without it the route takes no POST.
    A route with no `policy.ts` is refused, and `tests/integration/web/gate.test.ts` fails.
 3. Server code (`+page.server.ts`, `+server.ts`, `src/lib/server/`) may import domains and infrastructure; a `.svelte`
    file or a universal `+page.ts` may not (dependency-cruiser `svelte-screens-no-core`). Services come from
-   `services()` in `src/lib/server/compose.ts`; a new one is built there, once.
-4. Read `locals.did` (the signed-in DID or undefined), `locals.deadline` (pass it to every call) and `locals.reqId`.
+   `services()` in `src/lib/server/compose.ts` (built once by the `init` hook, before the server listens): `log`,
+   `pool`, `sessions`, `oauth` (`client`, `sessionStore`, `signInScope`, `lockDid`), `issuerOf`, `handles`, `pds`,
+   `pdsIssuer`, `network`, `resolveDid`, `nonces`. A new one is built there.
+4. Read `locals.did` (the signed-in DID or undefined), `locals.issuerOrigin` (see `src/app.d.ts`), `locals.deadline`
+   (pass it to every call) and `locals.reqId`. An `app` page and its data are sent `private, no-store` with
+   `Vary: Cookie` by the gate; a page sets no cache header itself.
 5. Writes are form actions (`+page.server.ts` `actions`), enhanced with `use:enhance`. No JSON bodies, no remote
    functions, no prerendering (`scripts/guards/web-prerender.ts`).
 6. Tests: one file per page group in `tests/integration/web/`, on the built server through `built-server.ts`, with
