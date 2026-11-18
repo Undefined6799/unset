@@ -731,6 +731,17 @@ describe("allowlist matrix", () => {
     await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
   });
 
+  test("web_process_takes_only_svelte_components", async () => {
+    // P1.20c (ADR 0055, 0056): interfaces/web composes apps/web's Svelte components, theme and Tailwind entry; the React
+    // render entry and the React UI stay out of reach.
+    await expectPass(
+      edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/card/index.ts"),
+      edge("interfaces/web/src/routes/b.ts", "../../../../apps/web/theme.css"),
+    );
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/render.tsx"));
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/src/b.tsx"));
+  });
+
   test("shared_host_pin_is_a_leaf", async () => {
     // P1.33o: host-pin joins LEAF_SHARED. dependency-cruiser 18.5.0 allows a dependency that satisfies any
     // allowed rule (doc/rules-reference.md, `allowed`). This row is only its own files and Node built-ins.

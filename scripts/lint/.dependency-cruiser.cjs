@@ -269,7 +269,7 @@ module.exports = {
       { path: "^apps/" },
     ),
     forbidden(
-      "app-render-entry-only",
+      "web-components-only",
       "interfaces/web imports only apps/web's Svelte components, theme and Tailwind entry (ADR 0056, P1.20c).",
       { path: "^interfaces/web/" },
       { path: "^apps/", pathNot: WEB_COMPONENTS },
