@@ -2,8 +2,10 @@
 // body the route does not take, a route with no policy. interfaces/http rendered its error page for every error
 // (shared/http/errors.ts errorPageHook); SvelteKit renders +error.svelte only for errors a route throws, so the gate
 // answers a request that asks for HTML with this page and every other request with the code as text, as before. The
-// page shows only the catalog's text and code: nothing from the request reaches it. It loads nothing, so the group's
-// fixed CSP (hooks.server.ts withGroupHeaders) holds.
+// page shows only the catalog's text and code: nothing from the request reaches it. On an app or public route it links
+// the build's stylesheet, whose path server.ts read once from the build manifest, so it looks like the error page;
+// those groups' CSP allows /_app/ styles. On any other route, or with no stylesheet, it loads nothing, so the static
+// group's `default-src 'none'` holds.
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -15,9 +17,10 @@ export function wantsPage(request: Request, dataRequest: boolean): boolean {
   return (request.headers.get("accept") ?? "").includes("text/html");
 }
 
-/** The refusal page for `code`, with the refusal's status and headers. */
-export function refusalPage(code: string, status: number, headers: Headers): Response {
+/** The refusal page for `code`, with the refusal's status and headers, styled when given the build's stylesheet. */
+export function refusalPage(code: string, status: number, headers: Headers, stylesheet?: string): Response {
   const text = ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] ?? code;
+  const style = stylesheet === undefined ? "" : `\n    <link rel="stylesheet" href="${escapeHtml(stylesheet)}" />`;
   const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -25,10 +28,10 @@ export function refusalPage(code: string, status: number, headers: Headers): Res
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="noindex" />
-    <title>${escapeHtml(text)}</title>
+    <title>${escapeHtml(text)}</title>${style}
   </head>
   <body>
-    <main id="main">
+    <main id="main" class="mx-auto w-full max-w-3xl px-4 py-8">
       <h1>${escapeHtml(text)}</h1>
       <p>Error code <code>${escapeHtml(code)}</code></p>
       <p><a href="/">Go to the home page</a></p>

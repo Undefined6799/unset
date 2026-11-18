@@ -235,7 +235,7 @@ describe("requests", () => {
   });
 
   // Gap 6 of the P1.20k review: a browser's document request gets a page with the catalog's words, as Hono's error
-  // page gave; any other request keeps the code as text.
+  // page gave, styled where the route's policy allows; any other request keeps the code as text.
   test("a_refusal_a_browser_asked_a_page_for_is_a_page", async () => {
     const page = await formPost("/test-routes/plain-page", "text=a");
     expect(page.status).toBe(405);
@@ -244,6 +244,12 @@ describe("requests", () => {
     expect(html).toContain(`<h1>${ERROR_MESSAGES["http.method_not_allowed"]}</h1>`);
     expect(html).toContain("<code>http.method_not_allowed</code>");
     expect(html).not.toContain("<script");
+    // A public route's policy allows the build's styles, so the page links the stylesheet server.ts found.
+    const href = /<link rel="stylesheet" href="([^"]+)"/.exec(html)?.[1];
+    expect(href).toMatch(/^\/_app\/immutable\/assets\/[\w.-]+\.css$/);
+    const sheet = await web.fetch(href as string, { headers: { "x-forwarded-for": clientAddress() } });
+    expect(sheet.status).toBe(200);
+    expect(sheet.headers.get("content-type")).toMatch(/^text\/css/);
     const text = await formPost("/test-routes/plain-page", "text=a", clientAddress(), { accept: "application/json" });
     expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   });

@@ -12,3 +12,5 @@ export const config: WebConfig = note?.config ?? (building ? ({} as WebConfig) :
 export const requestNote = (): RequestNote | undefined => note?.requests.getStore();
 /** Shutdown steps; under `vite dev` nobody runs them. */
 export const shutdown: Shutdown = note?.shutdown ?? { draining: [], close: [] };
+/** The build's stylesheet path for the gate's refusal page (server.ts reads it once); none under `vite dev`. */
+export const stylesheet: string | undefined = note?.stylesheet;

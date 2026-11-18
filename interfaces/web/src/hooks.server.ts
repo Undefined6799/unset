@@ -17,7 +17,7 @@ import type { PolicyName } from "./lib/server/limits.ts";
 import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
 import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
 import { policyOf } from "./lib/server/route-table.ts";
-import { config, requestNote } from "./lib/server/runtime.ts";
+import { config, requestNote, stylesheet } from "./lib/server/runtime.ts";
 import { sessionIssuerOrigin, sessionOf } from "./lib/server/session.ts";
 import { themeChunk } from "./lib/server/theme.ts";
 
@@ -190,10 +190,12 @@ export const handle: Handle = async (input) => {
     services().log.logError(error);
     response = plain(500, "internal.error");
   }
-  const refused = REFUSALS.get(response);
-  if (refused !== undefined && wantsPage(event.request, event.isDataRequest))
-    response = refusalPage(refused, response.status, response.headers);
   const group = policyOf(event.route.id)?.group ?? "static";
+  const refused = REFUSALS.get(response);
+  if (refused !== undefined && wantsPage(event.request, event.isDataRequest)) {
+    const styled = group === "app" || group === "public" ? stylesheet : undefined;
+    response = refusalPage(refused, response.status, response.headers, styled);
+  }
   return withGroupHeaders(response, group, event.isDataRequest);
 };
 
