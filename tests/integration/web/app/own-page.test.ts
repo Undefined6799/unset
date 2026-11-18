@@ -1,0 +1,174 @@
+// P1.20g: the theme form and the /me shortcut on the built web server, porting the outcomes
+// interfaces/http/routes/prefs.test.ts and me.test.ts check (ADR 0054 decision 5). Postgres as `web` (TE-2); a
+// signed-in browser is a stored grant and a session, as gate.test.ts makes one.
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { relative } from "node:path";
+import { type Did, parseDid } from "@unset/domains-identity";
+import type { SavedSession } from "@unset/infrastructure-pds";
+import { createOAuthSessionStore, createPool, withTransaction } from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { createSessionStore } from "@unset/infrastructure-session";
+import { createLogger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
+
+const REPO = new URL("../../../../", import.meta.url).pathname;
+const provided = inject("postgres");
+const database = provided.databases[relative(REPO, import.meta.filename)] ?? "";
+const pg = { host: provided.host, port: provided.port, database, ...provided.roles.web };
+const pool = createPool({
+  connection: { ...pg, ssl: false },
+  service: "web-own-page-test",
+  max: 2,
+  connectTimeoutMs: 5000,
+});
+const quiet = createLogger({ service: "web", commit: "c".repeat(40), env: "test", write: () => undefined });
+const sessions = createSessionStore({
+  withDb: async () => {
+    throw new Error("this file only creates sessions");
+  },
+  limits: { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 },
+  log: quiet,
+});
+const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
+if (keyring === undefined) throw new Error("test keyring did not parse");
+const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSealer(keyring), log: quiet });
+const ISSUER = "https://pds.unset.test";
+const OWNER = parseDid(`did:plc:${"a".repeat(24)}`) as Did;
+
+/** A signed-in browser for `owner`: a stored grant (the session's foreign key needs one), then a session. */
+async function signedIn(owner: Did): Promise<string> {
+  const dpopJwk = {
+    ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
+    kid: "dpop",
+    alg: "ES256",
+  };
+  await tokenSets.set(owner, {
+    dpopJwk: dpopJwk as SavedSession["dpopJwk"],
+    authMethod: { method: "private_key_jwt", kid: "A" },
+    tokenSet: {
+      iss: ISSUER,
+      sub: owner as SavedSession["tokenSet"]["sub"],
+      aud: ISSUER,
+      scope: "atproto",
+      access_token: "a",
+      token_type: "DPoP",
+    },
+  });
+  return (await withTransaction(pool, null, (tx) => sessions.create(tx, owner))).cookieValue;
+}
+
+let web: RunningWeb;
+beforeAll(async () => {
+  buildOnce();
+  web = await startWeb(pg);
+}, 120_000);
+afterAll(async () => {
+  await web?.stop();
+  await pool.end();
+});
+
+const FORM = "application/x-www-form-urlencoded";
+/** What a browser sends with a plain form post; without it SvelteKit answers an action as JSON for its own client. */
+const HTML = "text/html,application/xhtml+xml";
+const YEAR = "Max-Age=31536000; Path=/; HttpOnly; Secure; SameSite=Lax";
+const theme = (body: string, headers: Record<string, string> = {}) =>
+  web.fetch("/prefs/theme", {
+    method: "POST",
+    body,
+    headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), ...headers },
+  });
+const returnTo = async (target: string) =>
+  (await theme(`theme=dark&return=${encodeURIComponent(target)}`)).headers.get("location");
+
+describe("POST /prefs/theme", () => {
+  test("prefs_theme_sets_cookie", async () => {
+    const response = await theme("theme=light");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.get("set-cookie")).toBe(`__Host-theme=light; ${YEAR}`);
+  });
+
+  test("prefs_theme_system_deletes_cookie", async () => {
+    const response = await theme("theme=system");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("set-cookie")).toMatch(
+      /^__Host-theme=; Max-Age=0; Path=\/; .*HttpOnly; Secure; SameSite=Lax$/,
+    );
+  });
+
+  test("prefs_theme_invalid_value_400", async () => {
+    for (const body of ["theme=blue", "theme=%3Cscript%3E", "", "theme=light&theme=dark", "theme=Light"]) {
+      const response = await theme(body);
+      expect(response.status, body).toBe(400);
+      expect(response.headers.get("set-cookie"), body).toBeNull();
+      const html = await response.text();
+      expect(html, body).toContain("prefs.invalid");
+      expect(html, body).not.toContain("blue");
+    }
+  });
+
+  test("prefs_body_too_large_413", async () => {
+    const response = await theme(`theme=light&pad=${"x".repeat(4096)}`);
+    expect(response.status).toBe(413);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("prefs_return_path_kept_when_safe", async () => {
+    expect(await returnTo("/settings?tab=1")).toBe("/settings?tab=1");
+  });
+
+  test("prefs_return_path_rejects_offsite", async () => {
+    for (const target of ["//evil.example", "https://evil.example", "/\\evil.example", "/\t/evil.example", "/x\u0000"])
+      expect(await returnTo(target), target).toBe("/");
+  });
+
+  test("prefs_return_sign_in_keeps_next_and_handle", async () => {
+    expect(await returnTo("/login?next=%2Fme&handle=alice.example.com")).toBe(
+      "/login?next=%2Fme&handle=alice.example.com",
+    );
+    expect(await returnTo("/login?next=https%3A%2F%2Fevil.example&handle=alice.example.com")).toBe(
+      "/login?handle=alice.example.com",
+    );
+    expect(await returnTo("/login?next=%2Fme&handle=%3Cb%3E")).toBe("/login?next=%2Fme");
+    expect(await returnTo("/login?next=%2Fme&evil=1")).toBe("/login?next=%2Fme");
+    for (const target of ["/loginx", "/login/other", "/login#x", "/./login"])
+      expect(await returnTo(target), target).toBe("/");
+  });
+
+  test("prefs_csrf_denied", async () => {
+    const response = await theme("theme=light", { origin: "https://evil.example" });
+    expect(response.status).toBe(403);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("prefs_get_405_and_json_415", async () => {
+    expect((await web.fetch("/prefs/theme")).status).toBe(405);
+    const json = await theme('{"theme":"light"}', { "content-type": "application/json" });
+    expect(json.status).toBe(415);
+    expect(json.headers.get("set-cookie")).toBeNull();
+  });
+});
+
+describe("GET /me", () => {
+  test("me_sends_a_visitor_to_sign_in", async () => {
+    const response = await web.fetch("/me", { headers: { "x-forwarded-for": clientAddress() } });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toMatch(/^\/login(\?|$)/);
+  });
+
+  test("me_redirects_to_the_session_did", async () => {
+    const cookie = await signedIn(OWNER);
+    const response = await web.fetch("/me", {
+      headers: { cookie: `__Host-sid=${cookie}`, "x-forwarded-for": clientAddress() },
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`/${OWNER}`);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("vary")).toContain("Cookie");
+  });
+
+  test("did_shortcut_is_gone", async () => {
+    expect((await web.fetch("/did", { headers: { "x-forwarded-for": clientAddress() } })).status).toBe(404);
+  });
+});
