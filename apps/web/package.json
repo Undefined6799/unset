@@ -6,7 +6,6 @@
   "license": "AGPL-3.0-only",
   "exports": {
     "./app.css": "./app.css",
-    "./theme.css": "./theme.css",
     "./lib/utils": "./lib/utils.ts",
     "./lib/components/icon": "./lib/components/icon/index.ts",
     "./lib/components/ui/*": "./lib/components/ui/*/index.ts",

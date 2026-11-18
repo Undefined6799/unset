@@ -1,7 +1,7 @@
 # Paired PDS frontend checks
 
 P2.24b registers a build verification contract only. It does not admit a derived image to Compose, change vendor
-image rules, publish an image, or alter a running PDS. `deployment/pds/Dockerfile` and `source.lock.json` arrive in
+image rules, publish an image, or alter a running PDS. `deployment/pds/pds.Dockerfile` and `source.lock.json` arrive in
 P2.24c. Discovery and the images workflow fail if only one exists or either violates this contract. Both absent
 means explicitly no candidate; once present, verification cannot be skipped. `scan` requires the PDS job's success.
 

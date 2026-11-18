@@ -40,7 +40,7 @@ export const IGNOREFILES: Readonly<Record<string, string>> = {
  * its scan reads the findings he accepted for that image (P1.33c), and only while recipeContract accepts the pair.
  * A refused pair throws before any image is listed; no other Dockerfile, whatever its name, reads this file.
  */
-export const PDS_RECIPE = "deployment/pds/Dockerfile";
+export const PDS_RECIPE = "deployment/pds/pds.Dockerfile";
 export const PDS_IGNOREFILE = ".github/trivyignore.pds.yaml";
 
 export type ListedImage = { name: string; dockerfile: string; ignorefile: string };

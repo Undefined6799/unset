@@ -64,10 +64,10 @@ Every change:
   Exception: `scripts/guards/docs-only-paths.ts` paths, `kind/docs`, green CI: `docs-auto-merge.yml` squash-merges it, outside D4.
 
 ## UI
-- Svelte UI (ADR 0055): stock shadcn-svelte in `apps/web/lib/components/ui`, themed only by `apps/web/theme.css`, seeded
+- Svelte UI (ADR 0055): stock shadcn-svelte in `apps/web/lib/components/ui`, themed only by `shared/ui/theme.css`, seeded
   from the design sheet (a reference). A stock one needs no approval; changing one or adding a non-shadcn one is called
   out in the PR; `inventory.json` lists all. Tailwind classes only there and in the shell, never in pages.
-  `shared/ui` keeps only the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
+  `shared/ui` keeps only the theme, the sheet's tokens, fonts and icon data. The 0x40 "v2e" look is superseded.
 - **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list plus the icons Alex approved in
   `shared/ui/approved-extensions.json`, drawn from the copied, pinned data by our Svelte `Icon`. No icon npm
   package (`iconoir-react`, `@lucide/svelte` or any other), nothing fetched at runtime, never emoji or one-off SVG.

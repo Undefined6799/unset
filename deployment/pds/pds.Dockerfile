@@ -1,11 +1,14 @@
 # P2.24c / ADR 0027: build only the paired upstream frontend.
 # P1.27s keeps the existing pinned upstream builder pending mirror rollout.
 # P1.38h: atproto 0.5.49 (5d6febdd) and 0.5.51 (fb16c8e0) package.json devEngines require Node ^26.12.1; P1.38j pairs this builder.
+# P2.24z: built from the repository root, like every <name>.Dockerfile (the images workflows, compose and the pds-ui
+# check all take the root for one), so it can read the one theme, shared/ui/theme.css; the root .dockerignore applies.
 # hadolint ignore=DL3026
 FROM docker.io/library/node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS ui-build
-COPY source.lock.json /source.lock.json
-# P2.24x: the unset.sh theme, appended to upstream's stylesheet before the source is hashed.
-COPY ui/unset-theme.css /unset-theme.css
+COPY deployment/pds/source.lock.json /source.lock.json
+# P2.24x, P2.24z: the theme and the PDS's own additions, appended to upstream's stylesheet before the source is hashed.
+COPY shared/ui/theme.css /theme.css
+COPY deployment/pds/ui/unset-theme.css /unset-theme.css
 ADD --checksum=sha256:8ec64f48214236a37ffe739b17fe80bfd060c2cf438ff028484cb24ebcc4dc08 https://codeload.github.com/bluesky-social/atproto/tar.gz/fb16c8e0247fb5159fd23ce0e5301249532d1b4e /tmp/atproto.tar.gz
 # BuildKit tmpfs keeps source/dependencies out of layers; only /dist survives.
 # See https://docs.docker.com/reference/dockerfile/#run---mounttypetmpfs.
@@ -20,7 +23,7 @@ RUN --mount=type=tmpfs,target=/build,size=4294967296 \
     && tar -xzf /tmp/atproto.tar.gz -C /build \
     && cd /build/atproto-fb16c8e0247fb5159fd23ce0e5301249532d1b4e \
     && node -e 'const fs=require("node:fs"),c=require("node:crypto"),a=require("node:assert/strict"),l=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));a.equal(l.source.revision,"fb16c8e0247fb5159fd23ce0e5301249532d1b4e");a.equal(c.createHash("sha256").update(fs.readFileSync("pnpm-lock.yaml")).digest("hex"),l.source.lockSha256);a.equal(process.versions.node,l.builder.node);a.equal(require("./package.json").packageManager,"pnpm@"+l.builder.pnpm);for(const [p,n,v] of [["packages/pds","@atproto/pds","0.5.51"],["packages/oauth/oauth-provider","@atproto/oauth-provider","0.25.1"],["packages/oauth/oauth-provider-ui","@atproto/oauth-provider-ui","0.11.0"]]){const j=require("./"+p+"/package.json");a.equal(j.name,n);a.equal(j.version,v);}' /source.lock.json \
-    && cat /unset-theme.css >> packages/oauth/oauth-provider-ui/src/style.css \
+    && cat /theme.css /unset-theme.css >> packages/oauth/oauth-provider-ui/src/style.css \
     && find . -type f -exec sha256sum {} + > /build/source.sha256 \
     && (cd /build && npm pack --cache /build/npm-cache pnpm@11.11.0) \
     && node -e 'const c=require("node:crypto"),fs=require("node:fs"),a=require("node:assert/strict");a.equal("sha512-"+c.createHash("sha512").update(fs.readFileSync("/build/pnpm-11.11.0.tgz")).digest("base64"),process.argv[1]);' "$PNPM_INTEGRITY" \

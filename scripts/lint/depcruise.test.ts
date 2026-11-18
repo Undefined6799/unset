@@ -684,11 +684,11 @@ describe("allowlist matrix", () => {
   });
 
   test("web_process_takes_only_svelte_components_and_icon_data", async () => {
-    // P1.20c (ADR 0055, 0056): interfaces/web composes apps/web's Svelte components, theme and Tailwind entry, and the
+    // P1.20c (ADR 0055, 0056): interfaces/web composes apps/web's Svelte components and Tailwind entry, and the
     // Svelte code takes only icons.json from shared/ui. The React render entry and the React UI stay out of reach.
     await expectPass(
       edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/card/index.ts"),
-      edge("interfaces/web/src/routes/b.ts", "../../../../apps/web/theme.css"),
+      edge("interfaces/web/src/routes/b.ts", "../../../../apps/web/app.css"),
     );
     // icons.json itself is reached only as the @unset/shared-ui/icons.json export (infra-shared-via-index); the real
     // cruise over icon.svelte covers that edge.

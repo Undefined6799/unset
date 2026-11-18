@@ -13,7 +13,7 @@ export const LAYERS_FILE = "shared/ui/src/layers.css";
 const TOKENS_FILE = "shared/ui/src/tokens.css";
 const DECLARATION = "declaration";
 /** ADR 0055: the Svelte UI's one theme file and its Tailwind entry. Tailwind, not layers.css, orders their layers. */
-export const THEME_FILE = "apps/web/theme.css";
+export const THEME_FILE = "shared/ui/theme.css";
 export const TAILWIND_FILE = "apps/web/app.css";
 const THEME = "theme-file";
 const TAILWIND = "tailwind-entry";
