@@ -15,7 +15,7 @@ const NPMRC_REQUIRED: Record<string, string> = {
   "@unset:registry": "https://127.0.0.1:9/",
 };
 
-type LockEntry = { link?: boolean; resolved?: string; integrity?: string };
+type LockEntry = { link?: boolean; resolved?: string; integrity?: string; inBundle?: boolean };
 type Lock = { lockfileVersion?: number; packages?: Record<string, LockEntry | null> };
 type Manifest = Partial<Record<(typeof PINNED_FIELDS)[number], Record<string, string>>> & { overrides?: unknown };
 
@@ -71,9 +71,37 @@ export function scanManifest(
   return findings;
 }
 
+/**
+ * A bundled dependency (package.json bundleDependencies) ships inside its parent's tarball, so npm records it with
+ * `inBundle: true` and no resolved or integrity of its own (npm docs, package-lock.json "packages":
+ * https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json, npm 11). It is allowed only when the folder that
+ * holds it is a registry package whose own entry passes: its bytes are covered by that parent's sha512.
+ */
+function bundledInVettedParent(path: string, lock: Lock, workspaces: ReadonlyMap<string, string>): boolean {
+  const at = path.lastIndexOf("/node_modules/");
+  if (at < 0) return false;
+  const parentPath = path.slice(0, at);
+  const parent = lock.packages?.[parentPath] ?? null;
+  return (
+    parent?.inBundle !== true && parent?.link !== true && entryProblem(parentPath, parent, workspaces, lock) === null
+  );
+}
+
+/** Why a bundled entry is not allowed: it names no source of its own, and its parent passes as a registry package. */
+function bundledProblem(path: string, entry: LockEntry, workspaces: ReadonlyMap<string, string>, lock: Lock) {
+  if (entry.resolved !== undefined || entry.integrity !== undefined) return "bundled entry carries its own source";
+  return bundledInVettedParent(path, lock, workspaces) ? null : "bundled in no vetted registry parent";
+}
+
 /** Why one installed package's source is not allowed, or null when it is. */
-function entryProblem(path: string, entry: LockEntry | null, workspaces: ReadonlyMap<string, string>): string | null {
+function entryProblem(
+  path: string,
+  entry: LockEntry | null,
+  workspaces: ReadonlyMap<string, string>,
+  lock: Lock,
+): string | null {
   if (typeof entry !== "object" || entry === null) return "not an object";
+  if (entry.inBundle === true) return bundledProblem(path, entry, workspaces, lock);
   const name = path.split("node_modules/").at(-1) ?? "";
   if (entry.link === true) {
     // A link fetches nothing, so a hash on one means the entry was hand-edited; and a link must point a name at
@@ -96,7 +124,7 @@ export function scanLockfile(file: string, text: string, workspaces: ReadonlyMap
   const findings: Finding[] = [];
   for (const [path, entry] of Object.entries(lock.packages)) {
     if (!path.includes("node_modules/")) continue; // The root and workspace folders themselves.
-    const why = entryProblem(path, entry, workspaces);
+    const why = entryProblem(path, entry, workspaces, lock);
     if (why) findings.push({ file, line: lineOf(text, `"${path}"`), rule: RULE, text: `${path}: ${why}` });
   }
   return findings;
