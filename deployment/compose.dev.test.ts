@@ -852,6 +852,31 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const [file, text] of attributes) {
       expect(text.split("; "), `${file}: ${text}`).toEqual(expect.arrayContaining(["Secure", "HttpOnly"]));
     }
+    // The SvelteKit server (P1.20k) the same way: it reads no forwarded scheme or host, and every file that sets or
+    // clears a cookie through SvelteKit's `cookies` names its attributes once, path / with Secure and HttpOnly, and
+    // never a domain (kit 3.2.0 `Cookies.set` takes them as options; host-only is checked on the wire in
+    // tests/integration/web/sign-in.test.ts).
+    const webDir = join(DEPLOYMENT, "..", "interfaces", "web");
+    const kit = [
+      "server.ts",
+      ...readdirSync(join(webDir, "src"), { recursive: true, encoding: "utf8" }).map((f) => `src/${f}`),
+    ]
+      .filter((f) => /\.(ts|svelte)$/.test(f) && !f.endsWith(".test.ts") && !f.startsWith("src/routes/test-routes"))
+      .map((f) => [`interfaces/web/${f}`, readFileSync(join(webDir, f), "utf8")] as const);
+    expect(kit.length).toBeGreaterThan(10);
+    for (const [file, text] of kit) {
+      expect(text, file).not.toMatch(/x-forwarded-(?:proto|host|scheme)|["'`]forwarded["'`]|\.encrypted\b/i);
+      expect(text, file).not.toMatch(/\bdomain\s*:/);
+    }
+    const setters = kit.filter(([, text]) => /\bcookies\.(?:set|delete)\(/.test(text));
+    expect(setters.map(([file]) => file).sort()).toEqual([
+      "interfaces/web/src/lib/server/session.ts",
+      "interfaces/web/src/lib/server/sign-in-state.ts",
+      "interfaces/web/src/lib/server/theme.ts",
+    ]);
+    for (const [file, text] of setters) {
+      expect(text, file).toMatch(/\{\s*path:\s*"\/",\s*secure:\s*true,\s*httpOnly:\s*true,/);
+    }
     // The PDS half: @atproto/pds 0.5.37 makes its public URL `https://${hostname}` unless the hostname is localhost
     // (dist/config/config.js:10-13), and it trusts X-Forwarded-Proto from private addresses (dist/index.js:178), which
     // the edge sets to https itself. So its hostname comes from configuration, is never localhost, and nothing in its
