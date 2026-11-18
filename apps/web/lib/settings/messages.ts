@@ -6,10 +6,6 @@ export const SETTINGS = {
   nav: "Settings",
   profile: "Profile",
   account: "Account",
-  setUpEyebrow: "Not set up yet",
-  setUpTitle: "Set up your profile",
-  setUpBody:
-    "Your name, bio, picture and sections will be edited here. The editor is not ready yet, and your profile stays private until you publish it.",
   handle: "Handle",
   did: "DID",
   handleUnavailable: "We could not check your handle just now.",
@@ -22,6 +18,31 @@ export const SETTINGS = {
   privacyNotice: "The privacy notice has changed.",
   accountInterstitial: "You are going to {pdsHost}, our sign-in server; it is the only place you type your password.",
   accountOurs: "Your account on {pdsHost}",
-  accountForeign: "your sign-in server ({pdsHost})",
+  accountForeign: "Your sign-in server ({pdsHost})",
   newTab: "(opens in a new tab)",
+  accountTitle: "Your account",
+  accountServerTitle: "Password, email and deletion",
+  signOutTitle: "Sign out",
+} as const;
+
+/** Settings › Profile: the fields at the top of the member's page, saved by POST /profile. */
+export const PROFILE_SETTINGS = {
+  lead: "What people see at the top of your page.",
+  firstLead: "Add a name to start your page. You can change any of this later.",
+  displayName: "Name",
+  displayNameHint: (n: number) => `Required. Up to ${n} characters.`,
+  headline: "Headline",
+  headlineHint: (n: number) => `One line under your name, up to ${n} characters.`,
+  location: "Place",
+  locationHint: (n: number) => `Where you are, as you want to say it. Up to ${n} characters.`,
+  website: "Website",
+  websiteHint: "An http or https address.",
+  cardsNote: "Your README, links and other cards are edited on your page.",
+  viewPage: "View your page",
+  save: "Save profile",
+  saving: "Saving…",
+  saved: "Profile saved.",
+  refused: "Your profile could not be saved. Try again.",
+  unavailableTitle: "Your profile could not be loaded",
+  unavailable: "Your sign-in server did not answer just now. Reload the page to try again.",
 } as const;

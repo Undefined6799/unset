@@ -157,37 +157,28 @@ describe("GET /settings", () => {
 });
 
 describe("GET /settings/profile", () => {
-  test("settings_profile_in_the_side_list", async () => {
+  // The page reads the member's profile from their PDS; this file stands in none, so the grant cannot be restored and
+  // the member is sent to sign in again, as on their own page. profile-save.test.ts checks the page on a stand-in PDS.
+  test("settings_profile_with_a_dead_grant_goes_to_sign_in", async () => {
     const { cookie } = await signedIn();
     const response = await get("/settings/profile", cookie);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(response.headers.get("vary")).toBe("Cookie");
-    const html = await response.text();
-    expect(sideList(html)).toEqual([
-      { href: "/settings/profile", current: true },
-      { href: "/settings/account", current: false },
-    ]);
-    expect(html).toContain("Set up your profile");
-    expect(html).toContain('<meta name="robots" content="noindex"');
-    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?error=login.session_ended");
   });
 });
 
 describe("the privacy notice banner", () => {
-  test.each(["/settings/profile", "/settings/account"])(
-    "%s shows it once the notice changed, else not",
-    async (path) => {
-      const { did, cookie } = await signedIn();
-      expect(await (await get(path, cookie)).text()).not.toContain("The privacy notice has changed.");
-      // An acceptance of an older notice: the gate passes and sets privacyNotice (domains/identity auth/gates.ts).
-      await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
-      const html = await (await get(path, cookie)).text();
-      expect(PRIVACY_VERSION).not.toBe("2000-01-01");
-      expect(html).toContain("The privacy notice has changed.");
-      expect(html).toContain('href="/legal/privacy"');
-    },
-  );
+  // Settings › Profile shows the same banner; it needs a stand-in PDS, so profile-save.test.ts checks that page.
+  test.each(["/settings/account"])("%s shows it once the notice changed, else not", async (path) => {
+    const { did, cookie } = await signedIn();
+    expect(await (await get(path, cookie)).text()).not.toContain("The privacy notice has changed.");
+    // An acceptance of an older notice: the gate passes and sets privacyNotice (domains/identity auth/gates.ts).
+    await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
+    const html = await (await get(path, cookie)).text();
+    expect(PRIVACY_VERSION).not.toBe("2000-01-01");
+    expect(html).toContain("The privacy notice has changed.");
+    expect(html).toContain('href="/legal/privacy"');
+  });
 });
 
 describe("the settings theme picker", () => {

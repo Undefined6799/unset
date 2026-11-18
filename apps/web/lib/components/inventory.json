@@ -320,6 +320,16 @@
         "origin": "ours",
         "purpose": "The README card's parsed blocks as plain escaped elements, with the README text styles."
       }
+    },
+    "settings": {
+      "account-settings.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Account's cards: handle and DID, the sign-in server link, and the two sign-out forms."
+      },
+      "profile-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Profile's form: name, headline, place and website, posted to /profile, inline refusal with script."
+      }
     }
   }
 }
