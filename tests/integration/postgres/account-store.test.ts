@@ -195,6 +195,8 @@ describe("account store", () => {
     await index.apply({ kind: "account", seq: 3, did: Q, active: false, status: "takendown" });
     await accounts.confirmed(forR, { kind: "not_found" });
     await accounts.confirmed(forQ, { kind: "not_found" });
+    expect(erased(R)).toBe(false);
+    expect(erased(Q)).toBe(false);
     expect(state(Q)).toEqual(["f|takendown"]);
     expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did IN ('${R}', '${Q}')`)).toEqual(["0"]);
     expect(
