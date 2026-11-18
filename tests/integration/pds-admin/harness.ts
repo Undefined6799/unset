@@ -31,6 +31,10 @@ export type FakePds = {
   password: string | undefined;
   /** Called when getSubjectStatus arrives; it answers once what this returns has settled. */
   onStatus: () => void | Promise<void>;
+  /** When true, every call answers 503, as a PDS that is starting or failing does. */
+  down: boolean;
+  /** One admin method that answers 401 whatever the password: the PDS's password changed after the probe passed. */
+  refuse: "getSubjectStatus" | "createInviteCode" | undefined;
   close: () => Promise<void>;
 };
 
@@ -39,8 +43,8 @@ const json = (res: ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body));
 };
 
-/** A fake PDS on a local port; `port` 0 picks a free one. */
-export async function fakePds(port = 0): Promise<FakePds> {
+/** A fake PDS on a free local port. */
+export async function fakePds(): Promise<FakePds> {
   const fake: FakePds = {
     url: new URL("http://127.0.0.1"),
     seen: [],
@@ -49,6 +53,8 @@ export async function fakePds(port = 0): Promise<FakePds> {
     codes: 0,
     createStatus: 200,
     password: undefined,
+    down: false,
+    refuse: undefined,
     onStatus: () => {
       // Nothing by default.
     },
@@ -70,11 +76,18 @@ export async function fakePds(port = 0): Promise<FakePds> {
       // A wrong admin password is the PDS's AuthRequiredError, 401 (@atproto/pds 0.5.51 auth-verifier.ts adminToken).
       const admin = path.includes("com.atproto.admin.") || path.includes("createInviteCode");
       const expected = `Basic ${Buffer.from(`admin:${fake.password}`).toString("base64")}`;
-      if (admin && fake.password !== undefined && req.headers.authorization !== expected) {
+      if (fake.down) return json(res, 503, { error: "Unavailable" });
+      const wrong = admin && fake.password !== undefined && req.headers.authorization !== expected;
+      if (wrong || (fake.refuse !== undefined && path.includes(fake.refuse))) {
         return json(res, 401, { error: "AuthenticationRequired", message: "Authentication Required" });
       }
       if (path.startsWith("/xrpc/com.atproto.admin.getAccountInfo")) {
-        if (fake.account === "not_found") return json(res, 400, { error: "NotFound", message: "Account not found" });
+        // The one account this PDS holds; a DID other than its `did` is NotFound (getAccountInfo.ts), the password
+        // probe's included. An account written without a `did` answers every DID, for the handler-only tests.
+        const did = new URL(path, "http://pds").searchParams.get("did");
+        if (fake.account === "not_found" || (typeof fake.account.did === "string" && fake.account.did !== did)) {
+          return json(res, 400, { error: "NotFound", message: "Account not found" });
+        }
         return json(res, 200, fake.account);
       }
       if (path.startsWith("/xrpc/com.atproto.admin.getSubjectStatus")) {
@@ -99,7 +112,7 @@ export async function fakePds(port = 0): Promise<FakePds> {
       json(res, 404, {});
     });
   });
-  await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   fake.url = new URL(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
   fake.close = () => new Promise((resolve) => server.close(() => resolve()));
   return fake;
@@ -149,6 +162,7 @@ export async function startService(pds: FakePds, overrides: Partial<HandlerDeps>
     stop: () => {
       throw new Error("the service stopped");
     },
+    ready: () => true,
     ...overrides,
   };
   const server = createServer(createHandler(deps));

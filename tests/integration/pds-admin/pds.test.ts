@@ -57,8 +57,11 @@ describe("pds.dns_pinned: every connection's own DNS answers are checked, not on
   });
 
   test("the boot check reads the same rule", async () => {
-    expect(await resolvesInternal(new URL("http://pds.internal.test"), playDns(["10.1.2.3"]))).toBe(true);
-    expect(await resolvesInternal(new URL("http://pds.internal.test"), playDns(["10.1.2.3", "8.8.8.8"]))).toBe(false);
-    expect(await resolvesInternal(new URL("http://[::1]:2583"))).toBe(true);
+    expect(await resolvesInternal(new URL("http://pds.internal.test"), playDns(["10.1.2.3"]))).toBe("internal");
+    expect(await resolvesInternal(new URL("http://pds.internal.test"), playDns(["10.1.2.3", "8.8.8.8"]))).toBe(
+      "public",
+    );
+    expect(await resolvesInternal(new URL("http://pds.internal.test"), playDns([]))).toBe("unresolved");
+    expect(await resolvesInternal(new URL("http://[::1]:2583"))).toBe("internal");
   });
 });

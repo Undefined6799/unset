@@ -156,21 +156,70 @@ describe("boot", () => {
       );
     });
 
-    test("boot.pds_unreachable: it starts, and the first 401 later stops it", async () => {
-      const pdsPort = await freePort();
-      const key = webKey();
-      const environment = env(new URL(`http://127.0.0.1:${pdsPort}`), secrets(key), tempDir(), await freePort());
-      const child = run(environment);
-      const done = exited(child);
-      const base = await up(environment);
-      pds = await fakePds(pdsPort);
-      pds.password = "the-pds-has-another-password";
-      await fetch(`${base}/v1/invite.issue`, {
+    const issue = (base: string, key: ReturnType<typeof webKey>) =>
+      fetch(`${base}/v1/invite.issue`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(signed(key, payloadFor())),
-      }).catch(() => undefined);
+      });
+    const reasons = (environment: NodeJS.ProcessEnv) =>
+      readFileSync(join(environment.STATE_DIR as string, "log.jsonl"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => (JSON.parse(line) as { reason?: string }).reason);
+
+    test("boot.pds_unreachable: it starts, issues nothing until the probe passes, then issues", async () => {
+      pds = await fakePds();
+      pds.password = PASSWORD;
+      pds.down = true;
+      const key = webKey();
+      const environment = env(pds.url, secrets(key), tempDir(), await freePort());
+      const base = await start(environment);
+      // The replay guard is not reached: the same signed request is refused and may be sent again.
+      expect((await issue(base, key)).status).toBe(503);
+      expect(reasons(environment)).toEqual(["password_unproven"]);
+      pds.down = false;
+      let status = 503;
+      for (let i = 0; i < 100 && status === 503; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        status = (await issue(base, key)).status;
+      }
+      expect(status).toBe(200);
+    });
+
+    test("boot.pds_unreachable_then_refused: the first answer, a 401, stops it with a log line", async () => {
+      pds = await fakePds();
+      pds.password = "the-pds-has-another-password";
+      pds.down = true;
+      const environment = env(pds.url, secrets(webKey()), tempDir(), await freePort());
+      const child = run(environment);
+      const done = exited(child);
+      await up(environment);
+      pds.down = false;
       expect(await done).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}; stopping\n` });
+      expect(reasons(environment)).toEqual(["admin_password_refused"]);
+    });
+
+    test.each(["getSubjectStatus", "createInviteCode"] as const)(
+      "password.refused_later: a 401 on %s stops it with a log line",
+      async (method) => {
+        pds = await fakePds();
+        pds.password = PASSWORD;
+        const key = webKey();
+        const environment = env(pds.url, secrets(key), tempDir(), await freePort());
+        const child = run(environment);
+        const done = exited(child);
+        const base = await up(environment);
+        pds.refuse = method;
+        await issue(base, key).catch(() => undefined);
+        expect(await done).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}; stopping\n` });
+        expect(reasons(environment)).toContain("admin_password_refused");
+      },
+    );
+
+    test("boot.pds_name_unresolved: a PDS name that does not resolve yet is not a refusal; it starts", async () => {
+      const environment = env(new URL("http://pds.invalid"), secrets(webKey()), tempDir(), await freePort());
+      expect(await start(environment)).toMatch(/^http:/);
     });
   });
 });

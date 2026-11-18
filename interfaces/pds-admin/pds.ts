@@ -63,12 +63,21 @@ function vettedLookup(resolve: Resolve): LookupFunction {
   };
 }
 
-/** The boot check (P2.09 step 13): `origin`'s host must resolve only to internal addresses. */
-export function resolvesInternal(origin: URL, resolve: Resolve = systemResolve): Promise<boolean> {
+/** Where `origin`'s host resolves: only to internal addresses, to any public one, or (for now) nowhere. */
+export type Resolution = "internal" | "public" | "unresolved";
+
+/**
+ * The boot check (P2.09 step 13). A public answer stops the boot; a name that does not resolve yet (the PDS container
+ * not started) is not a refusal, because every later connection makes the same check (vettedLookup).
+ */
+export function resolvesInternal(origin: URL, resolve: Resolve = systemResolve): Promise<Resolution> {
   const host = origin.hostname.replace(/^\[|\]$/g, "");
   const family = isIP(host);
-  if (family !== 0) return Promise.resolve(allInternal([{ address: host, family }]));
-  return new Promise((done) => resolve(host, (error, answers) => done(error === null && allInternal(answers))));
+  const judge = (answers: readonly LookupAddress[]): Resolution => (allInternal(answers) ? "internal" : "public");
+  if (family !== 0) return Promise.resolve(judge([{ address: host, family }]));
+  return new Promise((done) =>
+    resolve(host, (error, answers) => done(error !== null || answers.length === 0 ? "unresolved" : judge(answers))),
+  );
 }
 
 /** A client for one origin. `password` builds only the Basic header (user `admin`, the PDS's admin token). */
@@ -123,24 +132,35 @@ export function createPds(origin: URL, password: string, resolve: Resolve = syst
 
 /**
  * A DID no account can have (a did:plc id is 24 base32 characters), asked about only to learn whether the PDS takes
- * our admin password (P2.09e). The pinned PDS checks the admin token before it looks the account up, and a wrong one
- * is its AuthRequiredError, 401 (@atproto/pds 0.5.51 auth-verifier.ts adminToken); the right one answers 400 NotFound.
+ * our admin password (P2.09e). It must be a well-formed DID: the PDS's XRPC server validates the query parameters
+ * first and authenticates second (@atproto/xrpc-server dist/server.js:220-223 in 0.13.6 and 0.13.13, the ends of the
+ * range @atproto/pds 0.5.51 accepts), so a malformed one would be a 400 whatever the password. The route's
+ * auth is `moderator`, which takes Basic auth to `adminToken`; a wrong password there is AuthRequiredError, 401
+ * (@atproto/pds 0.5.51 dist/auth-verifier.js:33-42 and :61-68, api/com/atproto/admin/getAccountInfo.js). The right
+ * password reaches the handler, which answers 400 NotFound for this DID.
  */
 export const PROBE_DID = "did:plc:pds-admin-password-probe";
 
-/** The boot probe: true only when the PDS answered 401. Unreachable is no answer; watchPassword covers later contact. */
-export async function passwordRefused(pds: Pds): Promise<boolean> {
+/** What the PDS said about our password: only a 401 refuses it and only NotFound accepts it; anything else is no answer. */
+export type PasswordAnswer = "accepted" | "refused" | "unknown";
+
+export async function probePassword(pds: Pds): Promise<PasswordAnswer> {
+  let answer: PdsAnswer;
   try {
-    return (await pds.getAccountInfo(PROBE_DID)).status === 401;
+    answer = await pds.getAccountInfo(PROBE_DID);
   } catch (error) {
-    if (error instanceof PdsUnavailable) return false;
+    if (error instanceof PdsUnavailable) return "unknown";
     throw error;
   }
+  if (answer.status === 401) return "refused";
+  const body = answer.body;
+  const notFound = typeof body === "object" && body !== null && Reflect.get(body, "error") === "NotFound";
+  return answer.status === 400 && notFound ? "accepted" : "unknown";
 }
 
 /**
- * The client, with every admin answer of 401 calling `refused` before the caller sees it, so a password that was
- * wrong at a boot the PDS did not answer still stops the service at its first contact.
+ * The client, with every admin answer of 401 calling `refused` before the caller sees it: the PDS's password changed
+ * after this service's probe passed (a one-copy rotation and a PDS restart), so the service stops.
  */
 export function watchPassword(pds: Pds, refused: () => void): Pds {
   const watched =
