@@ -2,7 +2,7 @@
 // security-txt.ts have them until P1.20k deletes that folder. RFC 9116, read 2026-10-17,
 // https://www.rfc-editor.org/rfc/rfc9116.html: Contact, Expires, Preferred-Languages, Canonical and Policy are
 // §§2.5.3, 2.5.5, 2.5.8, 2.5.2 and 2.5.7; Expires is an RFC 3339 instant; LF line endings are allowed (§2.2).
-import { HOSTNAME, str, withRule } from "@unset/shared-config";
+import { str, withRule } from "@unset/shared-config";
 
 /** security.txt Contact until a real mailto or https URI is set: the privacy notice on PUBLIC_ORIGIN. */
 export const SECURITY_CONTACT_PAGE = "privacy-page";
@@ -55,11 +55,10 @@ const PUBLIC_TEXT = new RegExp(
 );
 
 /**
- * The three text keys have no default: until Alex sets them they hold the placeholder tokens. PDS_HOSTNAME is the
- * legal pages' {{pdsHost}} (and sign-in's PDS, P1.20e).
+ * The three text keys have no default: until Alex sets them they hold the placeholder tokens. The legal pages'
+ * {{pdsHost}} is PDS_HOSTNAME (config.ts, P1.20e).
  */
 export const legalConfig = {
-  PDS_HOSTNAME: str({ pattern: HOSTNAME }),
   PRIVACY_OFFICER_TITLE: str({ pattern: PUBLIC_TEXT }),
   PRIVACY_OFFICER_CONTACT: str({ pattern: PUBLIC_TEXT }),
   SUPPORT_EMAIL: str({ pattern: PUBLIC_TEXT }),

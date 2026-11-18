@@ -74,13 +74,13 @@ export const schema = defineEntrypointConfig({
   ...sessionConfig,
   ...postgresFields,
   ...poolFields,
-  ...legalConfig,
   ...lockPoolFields,
   ...sealFields,
   ...netGuardFields,
   ...identityConfig,
   ...oauthFields,
   ...pdsConfig,
+  ...legalConfig,
   ...testRoutesConfig,
 });
 
