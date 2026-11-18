@@ -83,7 +83,6 @@ export type RunningWeb = {
 
 /** The legal settings (P1.20d), as deployment/compose.local.yaml has them: the placeholder tokens. */
 export const LEGAL_ENV = {
-  PDS_HOSTNAME: "pds.unset.test",
   PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]",
   PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]",
   SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]",
