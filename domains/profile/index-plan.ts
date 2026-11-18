@@ -114,10 +114,24 @@ const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
 function fitsCap(record: unknown): boolean {
   try {
-    return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES;
+    return new TextEncoder().encode(JSON.stringify(record)).byteLength <= MAX_RECORD_BYTES && storable(record);
   } catch {
     return false; // a value JSON cannot encode is not a record
   }
+}
+
+/**
+ * Postgres's jsonb refuses a NUL character and a lone surrogate in any string or key (postgresql.org/docs/current/
+ * datatype-json.html), and a record it refuses would fail its frame's transaction on every retry. Such a record passes
+ * the lexicon, so it is skipped here as invalid.
+ */
+function storable(value: unknown): boolean {
+  if (typeof value === "string") return value.isWellFormed() && !value.includes("\0");
+  if (Array.isArray(value)) return value.every(storable);
+  if (typeof value === "object" && value !== null) {
+    return Object.entries(value).every(([key, child]) => storable(key) && storable(child));
+  }
+  return true;
 }
 
 /** Every blob ref anywhere in the record, once each, so the media proxy serves only referenced blobs (P3.09). */
