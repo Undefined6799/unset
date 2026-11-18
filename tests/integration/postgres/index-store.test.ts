@@ -28,6 +28,7 @@ let seq = 0;
 const A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
 const E = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
+const C = "did:plc:cccccccccccccccccccccccc";
 const T = "2026-11-18T00:00:00.000Z";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
@@ -173,6 +174,46 @@ describe("index store", () => {
     await store.missedEvents();
     await store.missedEvents();
     expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'backfill'")).toEqual(["3"]);
+  });
+
+  test("index.record_jsonb_refuses_is_skipped_not_retried", async () => {
+    const before = stat("ingest_invalid");
+    await commit(A, rev(7), [profile({ displayName: "A\0da" })]);
+    expect(Number(stat("ingest_invalid"))).toBe(Number(before) + 1);
+    expect(await store.cursor()).toBe(seq);
+  });
+
+  test("index.dead_letter_moves_the_cursor_and_queues_a_backfill", async () => {
+    postgres.sql("unset", `DELETE FROM idx.account_job WHERE did = '${A}'`);
+    const firstSeen = new Date("2026-11-18T00:00:00Z");
+    await store.deadLetter({ kind: "repoCommit", seq: ++seq, did: A, rev: rev(8), changes: [] }, 5, firstSeen);
+    expect(await store.cursor()).toBe(seq);
+    expect(lines(`SELECT kind, reason_code, attempts FROM idx.dead_letter WHERE did = '${A}'`)).toEqual([
+      "event|apply_failed|5",
+    ]);
+    expect(lines(`SELECT kind FROM idx.account_job WHERE did = '${A}'`)).toEqual(["backfill"]);
+    const health = await store.health();
+    expect(health).toMatchObject({ cursor: seq, deadLetters: 1 });
+    expect(health.counters).toMatchObject({ ingest_dead_letter: 1, ingest_replayed: 2, ingest_erased: 2 });
+  });
+
+  test("index.active_status_is_only_queued_for_confirmation", async () => {
+    track(C, false);
+    await store.apply({ kind: "account", seq: ++seq, did: C, active: true, status: null });
+    expect(lines(`SELECT pds_active FROM idx.account WHERE did = '${C}'`)).toEqual(["f"]);
+    expect(lines(`SELECT kind FROM idx.account_job WHERE did = '${C}'`)).toEqual(["confirm_status"]);
+  });
+
+  test("index.inactive_status_applies_at_once", async () => {
+    await store.apply({ kind: "account", seq: ++seq, did: A, active: false, status: "takendown" });
+    expect(lines(`SELECT pds_active, pds_status FROM idx.account WHERE did = '${A}'`)).toEqual(["f|takendown"]);
+    expect(lines(`SELECT count(*) FROM idx.visible_account WHERE did = '${A}'`)).toEqual(["0"]);
+    await store.apply({ kind: "account", seq: ++seq, did: A, active: false, status: "deleted" });
+    expect(lines(`SELECT kind FROM idx.account_job WHERE did = '${A}' ORDER BY kind`)).toEqual([
+      "backfill",
+      "confirm_deletion",
+    ]);
+    expect(await store.cursor()).toBe(seq);
   });
 });
 

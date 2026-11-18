@@ -15,10 +15,11 @@ import {
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
 } from "@unset/domains-profile";
+import { AppError } from "@unset/shared-errors";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 
-/** The frames the index applies. Account frames wait for the account-state machine (book P3.06s). */
+/** The frames the index applies. */
 export type IndexFrame =
   | {
       readonly kind: "repoCommit";
@@ -28,7 +29,22 @@ export type IndexFrame =
       readonly changes: readonly IndexChange[];
     }
   | { readonly kind: "identity"; readonly seq: number; readonly did: string }
-  | { readonly kind: "sync"; readonly seq: number; readonly did: string };
+  | { readonly kind: "sync"; readonly seq: number; readonly did: string }
+  /** The PDS's own account status (https://atproto.com/specs/account, "Account Status"); null when it sent none. */
+  | {
+      readonly kind: "account";
+      readonly seq: number;
+      readonly did: string;
+      readonly active: boolean;
+      readonly status: string | null;
+    };
+
+/** What the health board shows of the index: counts only, never a DID, handle or record (rule SE-7). */
+export type IndexHealth = {
+  readonly cursor: number | null;
+  readonly counters: Readonly<Record<Counter, number>>;
+  readonly deadLetters: number;
+};
 
 export type IndexStore = {
   /** The last sequence number applied from this source, or null before the first. */
@@ -36,6 +52,12 @@ export type IndexStore = {
   readonly apply: (frame: IndexFrame) => Promise<void>;
   /** Events may have been missed: every tracked account is queued for a backfill. Repeating it changes nothing. */
   readonly missedEvents: () => Promise<void>;
+  /**
+   * Gives up on a frame that kept failing: records it in idx.dead_letter, queues its account for a backfill (which
+   * recovers whatever the frame held) and moves the cursor past it, in one transaction. Never for an account frame.
+   */
+  readonly deadLetter: (frame: IndexFrame, attempts: number, firstSeen: Date) => Promise<void>;
+  readonly health: () => Promise<IndexHealth>;
 };
 
 export type IndexStoreOptions = {
@@ -55,6 +77,9 @@ export const INGEST_COUNTERS = [
   "ingest_inactive",
   "ingest_invalid",
   "ingest_capped",
+  "ingest_account_inactive",
+  "ingest_account_confirm",
+  "ingest_dead_letter",
 ] as const;
 type Counter = (typeof INGEST_COUNTERS)[number];
 
@@ -76,6 +101,56 @@ export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexS
            ON CONFLICT (did, kind) DO NOTHING`,
         );
       }),
+    deadLetter: (frame, attempts, firstSeen) => {
+      if (frame.kind === "account") throw new TypeError("an account frame is never dead-lettered");
+      return inTx((tx) => deadLetterFrame(tx, options.source, frame, attempts, firstSeen));
+    },
+    health: () =>
+      withClient(pool, AbortSignal.timeout(options.timeoutMs), (client) => readHealth(client, options.source)),
+  };
+}
+
+/**
+ * Whether a failed apply says nothing about the frame: the database could not be reached or answered in time, or the
+ * transaction lost a race (book P3.05 error classes, `db_unavailable`). Such a failure is retried without counting
+ * it towards the dead letter. Anything else, a statement timeout on this frame included, counts.
+ * SQLSTATE classes: postgresql.org/docs/current/errcodes-appendix.html.
+ */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  if (error instanceof AppError) return error.code === "db.busy" || error.code === "http.deadline";
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  if (typeof code !== "string") return false;
+  if (code === "57014") return false; // query_canceled: this frame's own statement ran out of time
+  return /^(08|40|53|57)/.test(code) || /^E[A-Z]+$/.test(code); // connection, rollback, resources, shutdown; errno
+}
+
+async function deadLetterFrame(tx: PoolClient, source: string, frame: IndexFrame, attempts: number, firstSeen: Date) {
+  const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
+  if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return;
+  // The reason is a fixed code: the error itself may quote member content (rule SE-7).
+  await tx.query(
+    `INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
+     VALUES ('event', $1, 'apply_failed', $2, $3, now())`,
+    [frame.did, attempts, firstSeen],
+  );
+  const tracked = await tx.query("SELECT 1 FROM idx.account WHERE did = $1", [frame.did]);
+  if (tracked.rows.length > 0) await queueJob(tx, frame.did, "backfill");
+  await count(tx, "ingest_dead_letter");
+  await writeCursor(tx, source, frame.seq);
+}
+
+async function readHealth(client: PoolClient, source: string): Promise<IndexHealth> {
+  const cursor = await client.query("SELECT seq FROM idx.relay_cursor WHERE source = $1", [source]);
+  const stats = await client.query("SELECT name, value FROM idx.ingest_stat WHERE name = ANY($1::text[])", [
+    [...INGEST_COUNTERS],
+  ]);
+  const dead = await client.query("SELECT count(*) AS n FROM idx.dead_letter");
+  const counters = Object.fromEntries(INGEST_COUNTERS.map((name) => [name, 0])) as Record<Counter, number>;
+  for (const row of stats.rows) counters[row.name as Counter] = Number(row.value);
+  return {
+    cursor: cursor.rows[0] === undefined ? null : Number(cursor.rows[0].seq),
+    counters,
+    deadLetters: Number(dead.rows[0]?.n ?? 0),
   };
 }
 
@@ -90,11 +165,16 @@ async function applyFrame(tx: PoolClient, source: string, frame: IndexFrame): Pr
     if (account === null) await count(tx, "ingest_untracked");
     else await applyTo(tx, frame, account);
   }
+  await writeCursor(tx, source, frame.seq);
+}
+
+/** Moves the cursor forward only (a seq below it is refused above, so this never writes it backwards). */
+async function writeCursor(tx: PoolClient, source: string, seq: number): Promise<void> {
   await tx.query(
     `INSERT INTO idx.relay_cursor (source, seq, updated_at) VALUES ($1, $2, now())
      ON CONFLICT (source) DO UPDATE SET seq = excluded.seq, updated_at = excluded.updated_at
      WHERE idx.relay_cursor.seq < excluded.seq`,
-    [source, frame.seq],
+    [source, seq],
   );
 }
 
@@ -109,6 +189,7 @@ async function lockAccount(tx: PoolClient, did: string): Promise<IndexAccount | 
 async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount): Promise<void> {
   if (frame.kind === "identity") return queueJob(tx, frame.did, "handle_check");
   if (frame.kind === "sync") return queueJob(tx, frame.did, "backfill");
+  if (frame.kind === "account") return applyAccount(tx, frame);
   const plan = planCommit(account, frame.rev, frame.changes);
   if (plan.kind === "stale") return count(tx, "ingest_stale");
   if (plan.kind === "unsigned") return count(tx, "ingest_unsigned");
@@ -123,7 +204,28 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
   );
 }
 
-async function queueJob(tx: PoolClient, did: string, kind: "handle_check" | "backfill"): Promise<void> {
+/**
+ * The in-transaction part of the account-state rule (book P3.06): an inactive status applies at once, so the account
+ * leaves idx.visible_account with this frame; an active one is never taken from the stream alone but queued for
+ * confirmation with getRepoStatus (ADR 0052 decision 6), which the account-state machine runs (P3.06s). An
+ * unknown status with `active` false is inactive like any other.
+ */
+async function applyAccount(tx: PoolClient, frame: Extract<IndexFrame, { kind: "account" }>): Promise<void> {
+  if (frame.active) {
+    await queueJob(tx, frame.did, "confirm_status");
+    return count(tx, "ingest_account_confirm");
+  }
+  await tx.query("UPDATE idx.account SET pds_active = false, pds_status = $2, updated_at = now() WHERE did = $1", [
+    frame.did,
+    frame.status,
+  ]);
+  if (frame.status === "deleted") await queueJob(tx, frame.did, "confirm_deletion");
+  await count(tx, "ingest_account_inactive");
+}
+
+type JobKind = "handle_check" | "backfill" | "confirm_status" | "confirm_deletion";
+
+async function queueJob(tx: PoolClient, did: string, kind: JobKind): Promise<void> {
   await tx.query(
     `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES ($1, $2, now(), 0, now())
      ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,

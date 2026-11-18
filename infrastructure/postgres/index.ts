@@ -8,8 +8,10 @@ export {
   createIndexStore,
   INGEST_COUNTERS,
   type IndexFrame,
+  type IndexHealth,
   type IndexStore,
   type IndexStoreOptions,
+  isDatabaseUnavailable,
 } from "./indexStore.ts";
 export {
   createLockPool,
