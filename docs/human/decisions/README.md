@@ -65,3 +65,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0056](0056-web-boundary-by-file-kind.md) | In the web process the UI/server boundary is by file kind, checked; the request gate is server.ts plus the hook (P1.20a) | Accepted 2026-11-18 |
 | [0057](0057-small-and-auditable-means-the-code.md) | "Small and auditable" means our own code; a package meeting a written bar needs no ADR unless it touches auth, crypto, egress or personal data; amends DO-1 (P0.09) | Accepted 2026-11-17 |
 | [0058](0058-read-the-stream-without-the-firehose-class.md) | Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class; supersedes one phrase of 0052 (P3.05s) | Accepted 2026-11-17 |
+| [0060](0060-pds-admin-issues-member-invites.md) | `pds-admin`, the one holder of the PDS admin password, issues member invites (P2.09) | Proposed (awaiting Alex) |
