@@ -87,6 +87,9 @@ const EVENTS = [
   "handle.verify_failed",
   // P2.08b, the account page could not read the issuer recorded at sign-in, so it shows no account link. No DID.
   "auth.account_issuer_unknown",
+  // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
+  // menus, so it offers none. `kind` is the class name. No DID.
+  "shell.account_read_failed",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

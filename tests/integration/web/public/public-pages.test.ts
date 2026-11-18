@@ -241,6 +241,28 @@ describe("a signed-in member on public pages", () => {
     }
   });
 
+  // Second staging walkthrough (2026-11-18 12:20Z): the not-found page showed a member Sign in and the light theme.
+  test("the_not_found_page_shows_the_member_and_is_never_stored", async () => {
+    const { did, cookie } = await memberCookie();
+    const member = await get("/nowhere-at-all", { cookie: `${cookie}; __Host-theme=dark` });
+    expect(member.status).toBe(404);
+    expect(member.headers.get("cache-control")).toBe("private, no-store");
+    expect(member.headers.get("vary")).toContain("Cookie");
+    const html = await member.text();
+    expect(html).toContain('id="account-menu"');
+    expect(html).toContain(`href="/${did}"`);
+    expect(html).toContain('data-theme="dark"');
+    expect(html).not.toMatch(/href="\/login/);
+    expect(html).toContain("<footer");
+    const visitor = await get("/nowhere-at-all");
+    expect(visitor.status).toBe(404);
+    expect(visitor.headers.get("vary")).toBe("Cookie");
+    const plain = await visitor.text();
+    expect(plain).not.toContain(did);
+    expect(plain).not.toContain('id="account-menu"');
+    expect(plain).not.toContain("data-theme");
+  });
+
   test("a_member_mid_onboarding_reads_the_terms_signed_in", async () => {
     const { did, cookie } = await memberCookie(false);
     const response = await get("/legal/terms", { cookie });

@@ -113,6 +113,18 @@ test.describe("javascript disabled", () => {
     );
   });
 
+  // Alex, 2026-11-18 12:59Z: the footer sits below the first screen, seen only on scrolling, on short pages too. Home
+  // draws the core shell and the signed-out page the site shell.
+  for (const path of ["/", "/signed-out"]) {
+    test(`the_footer_starts_below_the_first_screen ${path}`, async ({ page }) => {
+      await page.goto(path);
+      const top = await page.locator("footer").evaluate((footer) => footer.getBoundingClientRect().top);
+      expect(top).toBeGreaterThanOrEqual(page.viewportSize()?.height ?? Number.POSITIVE_INFINITY);
+      await page.locator("footer").scrollIntoViewIfNeeded();
+      await expect(page.locator("footer")).toBeInViewport();
+    });
+  }
+
   // Clean tabs (Alex, 2026-11-18): features not built yet are shown greyed and disabled, never as links; the menus
   // open, but their rows for unbuilt features are disabled, and only Add a profile card is a link.
   test("coming_soon_items_are_disabled_not_links", async ({ page }) => {

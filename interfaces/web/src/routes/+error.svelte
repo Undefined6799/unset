@@ -1,6 +1,6 @@
 <!--
-  The page for every error answered with HTML (P1.25; P1.20d), in the site shell (signed in when the route's
-  gate read a live session, +layout.server.ts). It shows only the code
+  The page for every error answered with HTML (P1.25; P1.20d), in the core shell (P1.20k; signed in, in the member's
+  theme, when the gate read a live session, which it does for a path no route matches too: route-table.ts UNMATCHED). It shows only the code
   handleError (hooks.server.ts) returned and, for internal.error, the request id the log line carries: no path, query
   or header reaches it, so nothing the caller sent is echoed. A form post refused whole (too large to send, or a profile
   save with no script) also says how to get back to what was typed: the browser's Back button, which keeps a form's

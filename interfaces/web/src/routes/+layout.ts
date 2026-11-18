@@ -12,12 +12,14 @@ export const csr = false;
 export const load: Load = ({ url, data }) => {
   const server = data as {
     signedIn?: boolean;
+    appOpen?: boolean;
     account?: ShellData["account"];
     prefs?: ShellData["prefs"];
     signInHref?: string;
   } | null;
   return {
     signedIn: server?.signedIn === true,
+    appOpen: server?.appOpen === true,
     account: server?.account,
     prefs: server?.prefs,
     signInHref: server?.signInHref ?? "/login",

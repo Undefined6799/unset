@@ -22,7 +22,8 @@ import { member, stepPage } from "../welcome/onboarding.server.ts";
 
 type State = "confirmed" | "unconfirmed" | "needs_consent" | "unavailable";
 
-const SHELL = { kind: "site", signedIn: true, noindex: true } as const;
+// The core shell like every member page (P1.20k); the account menu comes from the session the gate read.
+const SHELL = { kind: "core", noindex: true } as const;
 
 /** Onboarding first: a member not past it goes to their step. */
 async function onboarded(session: Session, deadline: AbortSignal): Promise<void> {
