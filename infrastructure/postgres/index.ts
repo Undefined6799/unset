@@ -5,6 +5,15 @@ export { type AccountRepositoryOptions, type BlockTransaction, createAccountRepo
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export {
+  createIndexStore,
+  INGEST_COUNTERS,
+  type IndexFrame,
+  type IndexHealth,
+  type IndexStore,
+  type IndexStoreOptions,
+  isDatabaseUnavailable,
+} from "./indexStore.ts";
+export {
   createLockPool,
   createRequestLock,
   LockError,

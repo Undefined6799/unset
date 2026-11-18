@@ -4,6 +4,7 @@
   "include": ["**/*.ts", "sealed-columns.json"],
   "references": [
     { "path": "../../domains/identity" },
+    { "path": "../../domains/profile" },
     { "path": "../net-guard" },
     { "path": "../seal" },
     { "path": "../../shared/config" },
