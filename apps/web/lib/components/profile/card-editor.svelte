@@ -7,6 +7,7 @@
 <script lang="ts">
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import type { CardContent, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
+import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import Choice from "./choice.svelte";
@@ -39,15 +40,38 @@ let {
 } = $props();
 
 let open = $state(false);
-// With script, the editor closes once the action has answered and the page has updated, as the Hono page did when the
-// browser followed the action's answer: a saved card is on the page, and a refused save's message is the page's alert
-// (+page.svelte `form.message`), which the open dialog would hide.
-const closeWhenAnswered: SubmitHandler =
-  () =>
-  async ({ update }) => {
+/** A save is on its way: the submit button is disabled and a second press is cancelled. */
+let pending = $state(false);
+/** The catalog's words for a refused save, shown inside the editor. */
+let refused: string | undefined = $state();
+
+// With script (outside review of f5cab2f, finding 1): a save closes the editor once the page has the new card, and
+// focus goes back to the button that opened it (bits-ui's default on close). A refused save keeps the editor open
+// with what was typed and shows the action's catalog message in an alert inside it, not on the page behind the modal.
+// A press while a save is on its way is cancelled. The action's answer for a refusal is `fail(status, { code,
+// message })` with message from ERROR_MESSAGES (routes/[did=did]/+page.server.ts), so no request text reaches it.
+const saveCard: SubmitHandler = ({ cancel }) => {
+  if (pending) {
+    cancel();
+    return async () => undefined;
+  }
+  pending = true;
+  refused = undefined;
+  return async ({ result, update }) => {
+    pending = false;
+    if (result.type === "failure") {
+      const message = result.data?.message;
+      refused = typeof message === "string" ? message : CARD_EDIT.refused;
+      return;
+    }
     await update();
-    open = false;
+    if (result.type === "success" || result.type === "redirect") open = false;
   };
+};
+
+$effect(() => {
+  if (!open) refused = undefined;
+});
 
 /** Blank rows a list editor offers to add more. */
 const BLANK_ROWS = 10;
@@ -104,7 +128,10 @@ const buttonRows = $derived([
   <Dialog.Trigger class={buttonVariants({ variant: "outline" })}>{trigger}</Dialog.Trigger>
   <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText}>
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
-    <form id={formId} method="POST" action={cardKey === undefined ? "?/create" : "?/save"} class="grid gap-4" use:enhance={closeWhenAnswered}>
+    {#if refused !== undefined}
+      <Alert.Root variant="destructive"><Alert.Description>{refused}</Alert.Description></Alert.Root>
+    {/if}
+    <form id={formId} method="POST" action={cardKey === undefined ? "?/create" : "?/save"} class="grid gap-4" use:enhance={saveCard}>
       {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
       <input type="hidden" name="kind" value={kind} />
       <Choice label={CARD_EDIT.width} name="width" value={width} options={WIDTHS} />
@@ -170,7 +197,7 @@ const buttonRows = $derived([
     </form>
     <Dialog.Footer>
       <Dialog.Close class={buttonVariants({ variant: "outline" })}>{CARD_EDIT.cancel}</Dialog.Close>
-      <Button type="submit" form={formId}>{submit}</Button>
+      <Button type="submit" form={formId} disabled={pending}>{submit}</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

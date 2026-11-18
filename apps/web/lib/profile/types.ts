@@ -2,8 +2,6 @@
 // fills its fields from `content`), and beside it what the card shows, built on the server: the README's blocks and
 // every address already through safeHref, so a component never decides whether a link is safe.
 
-import type { Action } from "svelte/action";
-
 export type CardLayout = "list" | "carousel" | "grid";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
@@ -99,11 +97,20 @@ export type CardView = {
 export type CardEditLimits = { readonly links: number; readonly collection: number; readonly buttons: number };
 
 /**
- * The part of SvelteKit's SubmitFunction (kit 3.2.0 types/index.d.ts) a card editor uses: after the action answers,
- * `update` does what `enhance` does by default. apps/web imports nothing from the
+ * The part of SvelteKit's SubmitFunction (kit 3.2.0 types/index.d.ts) a card editor uses: `cancel` stops a submit
+ * before it is sent; after the action answers, `result` is its ActionResult and `update` does what `enhance` does by
+ * default. apps/web imports nothing from the
  * framework (ADR 0056), so the page passes kit's `enhance` in as an Enhance.
  */
-export type SubmitHandler = () => (outcome: { update: () => Promise<void> }) => Promise<void>;
+export type SubmitHandler = (input: {
+  cancel: () => void;
+}) => (outcome: {
+  result: { type: string; data?: Record<string, unknown> | undefined };
+  update: () => Promise<void>;
+}) => Promise<void>;
 
-/** The page's form enhancement, `use:enhance` or `use:enhance={handler}`; the default does nothing (no script). */
-export type Enhance = Action<HTMLFormElement, SubmitHandler | undefined>;
+/**
+ * The page's form enhancement as a Svelte action, `use:enhance` or `use:enhance={handler}`; the default does nothing
+ * (no script). Written out rather than as svelte/action's Action, which a .ts file here may not import (ADR 0056).
+ */
+export type Enhance = (form: HTMLFormElement, handler?: SubmitHandler) => { destroy?: () => void } | undefined;

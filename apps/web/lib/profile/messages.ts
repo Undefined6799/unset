@@ -29,6 +29,8 @@ export const CARD_EDIT = {
   full: "Full width",
   half: "Half width",
   noScript: "Adding, editing or deleting a card needs JavaScript. Moving one does not.",
+  /** A refused save whose answer carried no catalog message. */
+  refused: "That card could not be saved.",
 } as const;
 
 export const LINKS_EDIT = {
