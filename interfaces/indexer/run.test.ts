@@ -70,4 +70,22 @@ describe("indexer loop", () => {
     await runner.done; // resolves despite the 60 s interval
     expect(runner.health().ticks).toBe(1);
   });
+
+  test("run.totals_add_up_every_pass_since_start", async () => {
+    const stop = new AbortController();
+    let runs = 0;
+    const passes: Passes = {
+      track: counts(0),
+      backfill: counts(0),
+      confirm: async () => {
+        runs += 1;
+        if (runs === 3) stop.abort();
+        return { confirmed: 1, failed: runs === 2 ? 0 : 2 };
+      },
+    };
+    const runner = runIndexer({ stream: () => Promise.resolve(), passes, intervalMs: 1 }, stop.signal);
+    await runner.done;
+    // The last run failed 2, but 4 failed since start: a confirm pass that keeps failing shows in the total.
+    expect(runner.health().totals.confirm).toEqual({ confirmed: 3, failed: 4 });
+  });
 });

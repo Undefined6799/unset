@@ -115,6 +115,7 @@ export function compose(config: IndexerConfig, log: Logger, signal: AbortSignal)
       stream: { ...consumer.health(), lastStop, stops },
       loop: runner.health(),
       index: await index.health(),
+      accounts: await accounts.health(),
     }),
     done: runner.done.finally(() => pool.end()),
   };

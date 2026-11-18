@@ -26,6 +26,8 @@ export type RunHealth = {
   readonly passFailures: Readonly<Record<PassName, number>>;
   /** Each pass's counts from its last run that finished. */
   readonly lastPass: Readonly<Partial<Record<PassName, Readonly<Record<string, number>>>>>;
+  /** Each pass's counts added up over every run since start, so a count that keeps rising (confirm's failed) shows. */
+  readonly totals: Readonly<Record<PassName, Readonly<Record<string, number>>>>;
 };
 
 export type Runner = { readonly done: Promise<void>; readonly health: () => RunHealth };
@@ -34,12 +36,15 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
   let ticks = 0;
   const passFailures: Record<PassName, number> = { track: 0, backfill: 0, confirm: 0 };
   const lastPass: Partial<Record<PassName, Readonly<Record<string, number>>>> = {};
+  const totals: Record<PassName, Record<string, number>> = { track: {}, backfill: {}, confirm: {} };
 
   const tick = async (): Promise<void> => {
     for (const name of PASS_ORDER) {
       if (signal.aborted) return;
       try {
-        lastPass[name] = await deps.passes[name]();
+        const result = await deps.passes[name]();
+        lastPass[name] = result;
+        for (const [key, value] of Object.entries(result)) totals[name][key] = (totals[name][key] ?? 0) + value;
       } catch {
         passFailures[name] += 1;
       }
@@ -59,7 +64,12 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
   const done = Promise.all([stream, loop()]).then(() => undefined);
   return {
     done,
-    health: () => ({ ticks, passFailures: { ...passFailures }, lastPass: { ...lastPass } }),
+    health: () => ({
+      ticks,
+      passFailures: { ...passFailures },
+      lastPass: { ...lastPass },
+      totals: { track: { ...totals.track }, backfill: { ...totals.backfill }, confirm: { ...totals.confirm } },
+    }),
   };
 }
 

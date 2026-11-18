@@ -39,6 +39,16 @@ export type AccountStore = {
   readonly confirmed: (job: AccountJob, answer: ConfirmedStatus) => Promise<void>;
   /** Our PDS could not answer: backs the job off, or gives up after MAX_CONFIRM_DAYS with a dead letter. */
   readonly failed: (job: AccountJob) => Promise<void>;
+  /** Counts for the health board; no DID (rule SE-7). */
+  readonly health: () => Promise<AccountHealth>;
+};
+
+export type AccountHealth = {
+  /**
+   * Accounts held hidden as deleted with a confirm_deletion job still queued: waiting for our PDS to answer or, past
+   * P3.06e's hourly erase cap, for the next hour. A count that keeps growing means erasures fall behind.
+   */
+  readonly deletionsWaiting: number;
 };
 
 /** How long a claimed job is left alone; a pass that died is retried after it. Above the status read's deadline. */
@@ -71,6 +81,15 @@ export function createAccountStore(pool: Pool, options: { readonly timeoutMs: nu
       }),
     confirmed: (job, answer) => withTransaction(pool, deadline(), (tx) => applyConfirmation(tx, job, answer)),
     failed: (job) => withTransaction(pool, deadline(), (tx) => confirmFailed(tx, job)),
+    health: () =>
+      withClient(pool, deadline(), async (client) => {
+        const { rows } = await client.query(
+          `SELECT count(*) AS n FROM idx.account a
+           WHERE a.pds_status = 'deleted' AND NOT a.pds_active
+             AND EXISTS (SELECT 1 FROM idx.account_job j WHERE j.did = a.did AND j.kind = 'confirm_deletion')`,
+        );
+        return { deletionsWaiting: Number(rows[0]?.n ?? 0) };
+      }),
   };
 }
 

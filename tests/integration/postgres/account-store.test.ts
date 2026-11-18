@@ -197,4 +197,12 @@ describe("account store", () => {
       "confirm_deletion_unavailable",
     ]);
   });
+
+  test("account.health_counts_deletions_still_waiting", async () => {
+    const before = (await accounts.health()).deletionsWaiting;
+    account("did:plc:gggggggggggggggggggggggg", false, "deleted", "confirm_deletion"); // waiting: counted
+    account("did:plc:hhhhhhhhhhhhhhhhhhhhhhhh", false, "deleted"); // no job left: not waiting
+    account("did:plc:iiiiiiiiiiiiiiiiiiiiiiii", true, null, "confirm_deletion"); // shown again: not held
+    expect((await accounts.health()).deletionsWaiting).toBe(before + 1);
+  });
 });

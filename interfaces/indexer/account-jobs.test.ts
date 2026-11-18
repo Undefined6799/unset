@@ -13,7 +13,7 @@ function fakeStore(due: AccountJob[]) {
   const confirmed: [string, ConfirmedStatus][] = [];
   const failed: string[] = [];
   const asked: string[] = [];
-  const store: AccountStore = {
+  const store: Pick<AccountStore, "dueJobs" | "confirmed" | "failed"> = {
     dueJobs: async (kind) => {
       asked.push(kind);
       return due.filter((job) => job.kind === kind);

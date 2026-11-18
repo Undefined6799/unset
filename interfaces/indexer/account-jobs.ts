@@ -10,7 +10,7 @@ export const CONFIRM_BATCH = 20;
 const KINDS: readonly AccountJobKind[] = ["confirm_status", "confirm_deletion"];
 
 export type ConfirmDeps = {
-  readonly store: AccountStore;
+  readonly store: Pick<AccountStore, "dueJobs" | "confirmed" | "failed">;
   readonly readStatus: RepoStatusReader;
   readonly timeoutMs: number;
 };
