@@ -132,7 +132,6 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/admin/a.ts", "../../shared/http/index.ts"),
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
-  "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
   "interface-web-sveltekit": [{ from: "interfaces/web/src/hooks.server.ts", spec: "$app/env", unresolved: true }],
   "interface-web-components": [
     edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/button/index.ts"),
@@ -295,8 +294,9 @@ describe("boundary rules", () => {
 
   test("depcruise_app_render_entry", async () => {
     await expectFail("app-render-entry-only", edge("interfaces/api/a.ts", "../../apps/web/render.tsx"));
-    await expectPass(edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`));
-    await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/other.ts"));
+    await expectPass(edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`));
+    // P1.20k: interfaces/http and the React render entry are gone; the folder may import no app now.
+    await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx"));
     await expectFail("app-render-entry-only", edge("interfaces/admin/a.ts", "../../apps/admin/other.ts"));
   });
 

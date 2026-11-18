@@ -7,7 +7,7 @@
 const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
-const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
+const RENDER_ENTRIES = { admin: "apps/admin/render.tsx" };
 // What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file,
 // the Tailwind entry and the legal texts directly in apps/web/legal/ (read as `?raw` by the legal pages). Not the
 // React UI.
@@ -141,11 +141,6 @@ const MATRIX = [
     to: [{ path: oneOfFiles(WEB_SERVER_BUILD.modules), couldNotResolve: true }],
   },
   {
-    name: "interface-http-render",
-    from: { path: "^interfaces/http/" },
-    to: [{ path: oneOfFiles([RENDER_ENTRIES.http]) }],
-  },
-  {
     name: "interface-admin-render",
     from: { path: "^interfaces/admin/" },
     to: [{ path: oneOfFiles([RENDER_ENTRIES.admin]) }],
@@ -259,8 +254,8 @@ module.exports = {
     ),
     forbidden(
       "app-render-entry-only",
-      "From outside apps/, only interfaces/http, admin and web import an app, each only what its own rule allows (guideline §1).",
-      { pathNot: `^apps/|^interfaces/(http|admin|web)/|${TOOLING}` },
+      "From outside apps/, only interfaces/admin and web import an app, each only what its own rule allows (guideline §1).",
+      { pathNot: `^apps/|^interfaces/(admin|web)/|${TOOLING}` },
       { path: "^apps/" },
     ),
     forbidden(
@@ -280,12 +275,6 @@ module.exports = {
       "The web's font route takes only the two font files from shared/ui.",
       { path: FONT_READER },
       { path: "^shared/ui/", pathNot: FONT_DATA },
-    ),
-    forbidden(
-      "app-render-entry-only",
-      "interfaces/http imports only the web render entry (guideline §1).",
-      { path: "^interfaces/http/" },
-      { path: "^apps/", pathNot: oneOfFiles([RENDER_ENTRIES.http]) },
     ),
     forbidden(
       "app-render-entry-only",
