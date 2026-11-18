@@ -15,7 +15,6 @@
     "@unset/domains-identity": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/shared-config": "*",
-    "@unset/shared-errors": "*",
     "@unset/shared-lexicons": "*",
     "@unset/shared-log": "*"
   }

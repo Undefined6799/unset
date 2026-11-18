@@ -5,6 +5,8 @@ declare global {
     interface Error {
       message: string;
       reqId?: string;
+      /** The form field a refused save blames, by its form name (a fixed list, never what the caller sent). */
+      field?: string;
     }
   }
 }

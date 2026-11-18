@@ -35,6 +35,7 @@ let {
   title,
   submit,
   max,
+  textMax,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -59,6 +60,8 @@ let {
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
   max: number;
+  /** The README's maxlength (CardEditLimits text). */
+  textMax?: number;
   enhance?: Enhance;
 } = $props();
 
@@ -142,15 +145,16 @@ $effect(() => {
 const BLANK_ROWS = 10;
 const blanks = (stored: number) => Math.max(0, Math.min(BLANK_ROWS, max - stored));
 const formId = $props.id();
+// The width and layout choices are icons with their words (Alex 2026-11-18 12:24Z; the profile-card mockup).
 const WIDTHS = [
-  { value: "full", label: CARD_EDIT.full },
-  { value: "half", label: CARD_EDIT.half },
-];
+  { value: "full", label: CARD_EDIT.full, icon: "full" },
+  { value: "half", label: CARD_EDIT.half, icon: "half" },
+] as const;
 const LAYOUTS = [
-  { value: "list", label: LINKS_EDIT.list },
-  { value: "grid", label: LINKS_EDIT.grid },
-  { value: "carousel", label: LINKS_EDIT.carousel },
-];
+  { value: "list", label: LINKS_EDIT.list, icon: "list" },
+  { value: "grid", label: LINKS_EDIT.grid, icon: "apps" },
+  { value: "carousel", label: LINKS_EDIT.carousel, icon: "carousel" },
+] as const;
 const PRESETS = (["bookCall", "hire", "subscribe", "custom"] as const).map((p) => ({ value: p, label: CARD_TEXT[p] }));
 const KINDS = [
   { value: "email", label: BUTTONS_EDIT.email },
@@ -214,7 +218,7 @@ const buttonRows = $derived([
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
     {#if kind === "readme"}
-      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} required />
+      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
     {:else if kind === "links"}
       <Field label={LINKS_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", links?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", links?.layout ?? "list")} options={LAYOUTS} />
