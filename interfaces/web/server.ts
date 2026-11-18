@@ -111,6 +111,21 @@ function hideFramework(res: ServerResponse): void {
   res.setHeader = (name, value) => (name.toLowerCase() === "x-sveltekit-page" ? res : setHeader(name, value));
 }
 
+/**
+ * A 304 carries no CSP. SvelteKit builds its 304 after hooks.server.ts, from a fixed list of the 200's headers (kit
+ * 3.2.0 src/runtime/server/respond.js: etag, cache-control, content-location, date, expires, vary, set-cookie), so the
+ * page's own CSP is dropped and our static one would show through. A browser merges a 304's headers into the stored
+ * response (RFC 9111 §4.3.4), so the page would then run under the static CSP and its stylesheet and fonts be blocked.
+ * With none on the 304, the stored 200's CSP stays.
+ */
+function keepStoredCsp(res: ServerResponse): void {
+  const writeHead = res.writeHead.bind(res) as (...args: unknown[]) => ServerResponse;
+  res.writeHead = ((status: number, ...rest: unknown[]) => {
+    if (status === 304) res.removeHeader("content-security-policy");
+    return writeHead(status, ...rest);
+  }) as ServerResponse["writeHead"];
+}
+
 let inFlight = 0;
 
 function serve(req: IncomingMessage, res: ServerResponse): void {
@@ -130,6 +145,7 @@ function serve(req: IncomingMessage, res: ServerResponse): void {
   });
   for (const [name, value] of Object.entries(BASE_HEADERS)) res.setHeader(name, value);
   hideFramework(res);
+  keepStoredCsp(res);
   if (!isProbe(req)) {
     const host = hostOf(req);
     if (host === undefined || !hostAllowed(host, config.HTTP_ALLOWED_HOSTS)) {

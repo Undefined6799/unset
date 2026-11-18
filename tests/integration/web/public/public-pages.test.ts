@@ -111,6 +111,26 @@ describe("public pages", () => {
   });
 });
 
+// Staging, 2026-11-18: SvelteKit builds its 304 after the hooks from a fixed header list (kit 3.2.0
+// src/runtime/server/respond.js), so it lost the page's CSP and carried server.ts's static one; the browser merged that
+// into the stored page and blocked its stylesheet and fonts. A 304 now carries no CSP, so the stored 200's stays.
+describe("conditional requests", () => {
+  for (const path of ["/", "/legal/terms", "/login"]) {
+    test(`a_304_carries_no_csp ${path}`, async () => {
+      const first = await get(path);
+      const etag = first.headers.get("etag");
+      expect(etag, path).not.toBeNull();
+      expect(first.headers.get("content-security-policy"), path).not.toBeNull();
+      const again = await web.fetch(path, {
+        headers: { "x-forwarded-for": clientAddress(), "if-none-match": etag ?? "" },
+      });
+      expect(again.status, path).toBe(304);
+      expect(again.headers.get("content-security-policy"), path).toBeNull();
+      expect(again.headers.get("x-content-type-options"), path).toBe("nosniff");
+    });
+  }
+});
+
 describe("security.txt", () => {
   test("fields_and_static_policy", async () => {
     const response = await get("/.well-known/security.txt");
