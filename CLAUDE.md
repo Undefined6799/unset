@@ -50,8 +50,7 @@ an admin bypass, a forged membership, acting as another user, or a "lock down la
 design choice, **stop and ask**. Fail closed.
 
 Every change:
-- **AuthZ fail-closed.** Verified session plus the one CSRF gate on every non-GET. Scope every resource id to the
-  caller.
+- **AuthZ fail-closed.** Verified session plus the one CSRF gate on every non-GET. Scope every resource id to the caller.
 - **Identity.** Verify handle↔DID in both directions through `verifyHandle`; never trust self-asserted DID-doc fields.
   Validate OAuth state/nonce/PKCE.
 - **SQL.** Parameterised only, with a tenant/DID predicate.
