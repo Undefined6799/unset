@@ -9,6 +9,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // One tsconfig for every file the build transforms (Vite 8.3.5 UserConfig.tsconfig, passed to rolldown as a fixed
+  // path, dist/node/chunks/node.js). Without it a file outside this folder is matched against the root solution file,
+  // whose references name tests/, which the image's build context leaves out (P1.20j).
+  tsconfig: "tsconfig.json",
   plugins: [
     tailwindcss(),
     sveltekit({
