@@ -96,3 +96,24 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
     await expect(page.getByRole("group", { name })).toHaveCount(0);
   }
 });
+
+// The independent review, M2: a save the gate refuses before the action runs (here a body over the 2 MiB cap; a rate
+// limit or a deadline answers the same way) keeps the editor open with what was typed and the catalog's reason,
+// instead of the error page.
+test("a_save_the_gate_refuses_keeps_the_editor_and_what_was_typed", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Add card" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /^README/ }).click();
+  const readme = dialog.getByRole("textbox", { name: "README" });
+  const typed = `# Long\n\n${"a".repeat(2_200_000)}`;
+  await readme.fill(typed);
+  const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("?/create"));
+  await dialog.getByRole("button", { name: "Add" }).click();
+  expect((await posted).status()).toBe(413);
+  await expect(dialog.getByRole("alert")).toContainText("too large");
+  expect(await readme.inputValue()).toBe(typed);
+  await expect(dialog.getByRole("button", { name: "Add" })).toBeEnabled();
+  await expect(page).toHaveURL(/\/did:plc:/);
+});

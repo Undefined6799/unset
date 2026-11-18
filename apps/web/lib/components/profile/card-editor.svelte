@@ -76,6 +76,12 @@ const saveCard: SubmitHandler = ({ cancel }) => {
       refused = typeof message === "string" ? message : CARD_EDIT.refused;
       return;
     }
+    // A save the action never ran for and the gate could not answer as a failure (SvelteKit's own CSRF refusal, a
+    // dropped connection) keeps the editor too, rather than swapping the page for the error page.
+    if (result.type === "error") {
+      refused = CARD_EDIT.refused;
+      return;
+    }
     await update();
     if (result.type === "success" || result.type === "redirect") open = false;
   };

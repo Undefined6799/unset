@@ -269,6 +269,29 @@ test("an_app_route_refusal_page_may_load_its_stylesheet", async () => {
   expect(page.headers.get("cache-control")).toBe("private, no-store");
 });
 
+// The independent review, M2: an enhanced form post (`use:enhance` sends x-sveltekit-action) that the gate refused got
+// the code as text, which SvelteKit's client cannot read (kit 3.2.0 src/runtime/app/forms/client.js), so it showed
+// "internal error" and the page replaced the card editor and what was typed. The gate now answers it as an action
+// failure, which the client hands to the form's handler with the status, and the editor keeps the form.
+test("an_enhanced_post_the_gate_refuses_is_an_action_failure", async () => {
+  const response = await formPost("/test-routes/form-post", `text=${"a".repeat(2_000)}`, clientAddress(), {
+    accept: "application/json",
+    "x-sveltekit-action": "true",
+  });
+  expect(response.status).toBe(413);
+  expect(response.headers.get("content-type")).toBe("application/json");
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  const body = (await response.json()) as { type: string; status: number; data: string };
+  expect(body.type).toBe("failure");
+  expect(body.status).toBe(413);
+  // devalue's form (kit deserialize: forms/shared.js), a plain object of two strings.
+  expect(JSON.parse(body.data)).toEqual([
+    { code: 1, message: 2 },
+    "http.payload_too_large",
+    ERROR_MESSAGES["http.payload_too_large"],
+  ]);
+});
+
 describe("limits", () => {
   test("a_client_address_over_its_limit_gets_429", async () => {
     const from = clientAddress();

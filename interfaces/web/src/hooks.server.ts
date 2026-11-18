@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { isRedirect, type RequestEvent, redirect } from "@sveltejs/kit";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { type ClientIp, createClientIpResolver } from "@unset/shared-http";
 import { building, dev } from "$app/env";
 import { openApp } from "./lib/server/app-gate.ts";
@@ -45,6 +46,26 @@ function plain(status: number, code: string, headers: Record<string, string> = {
   });
   REFUSALS.set(response, code);
   return response;
+}
+
+/**
+ * A refusal of an enhanced form post (`use:enhance` sends x-sveltekit-action) as the action failure SvelteKit's client
+ * reads: JSON `{ type, status, data }` with `data` in devalue's form (kit 3.2.0 src/runtime/app/forms/shared.js
+ * `deserialize`; page/actions.js `action_json`). The client hands it to the form's handler with the status, so a
+ * card editor keeps what was typed and shows the catalog's words. `data` is a plain object of two strings, which
+ * devalue writes as `[{"code":1,"message":2},code,message]` (checked against devalue 5.9.4's stringify and parse). No
+ * request text reaches it; it is never stored.
+ */
+function actionFailure(code: string, refused: Response): Response {
+  const message = ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] ?? code;
+  const data = JSON.stringify([{ code: 1, message: 2 }, code, message]);
+  const headers = new Headers(refused.headers);
+  headers.set("content-type", "application/json");
+  headers.set("cache-control", "private, no-store");
+  return new Response(JSON.stringify({ type: "failure", status: refused.status, data }), {
+    status: refused.status,
+    headers,
+  });
 }
 
 /** Checks on the request itself, before anyone is identified: method, body type and declared size. */
@@ -192,6 +213,9 @@ export const handle: Handle = async (input) => {
   }
   const group = policyOf(event.route.id)?.group ?? "static";
   const refused = REFUSALS.get(response);
+  if (refused !== undefined && event.request.headers.has("x-sveltekit-action")) {
+    return withGroupHeaders(actionFailure(refused, response), group, event.isDataRequest);
+  }
   if (refused !== undefined && wantsPage(event.request, event.isDataRequest)) {
     const styled = group === "app" || group === "public";
     response = refusalPage(refused, response.status, response.headers, styled ? stylesheet : undefined);
