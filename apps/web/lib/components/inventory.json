@@ -320,6 +320,12 @@
         "origin": "ours",
         "purpose": "The README card's parsed blocks as plain escaped elements, with the README text styles."
       }
+    },
+    "settings": {
+      "settings-layout.svelte": {
+        "origin": "ours",
+        "purpose": "The settings pages' frame: the side list of settings pages beside the page, a row above it on phones."
+      }
     }
   }
 }

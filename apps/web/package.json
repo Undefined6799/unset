@@ -17,6 +17,7 @@
     "./lib/components/icon": "./lib/components/icon/index.ts",
     "./lib/components/ui/*": "./lib/components/ui/*/index.ts",
     "./lib/components/profile/*": "./lib/components/profile/*",
+    "./lib/components/settings/*": "./lib/components/settings/*",
     "./lib/profile/*": "./lib/profile/*",
     "./lib/fonts/*.woff2": "./lib/fonts/*.woff2",
     "./lib/icons/*.png": "./lib/icons/*.png"
