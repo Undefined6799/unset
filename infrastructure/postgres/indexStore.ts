@@ -83,8 +83,10 @@ export const INGEST_COUNTERS = [
   "track_added",
   "track_erased",
   "track_foreign",
+  "track_unresolved",
   "backfill_applied",
   "backfill_skipped",
+  "backfill_stale",
   "backfill_failed",
   "backfill_dead_letter",
 ] as const;

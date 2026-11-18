@@ -19,8 +19,10 @@ export type BackfillJob = { readonly did: string; readonly attempts: number };
 export type BackfillFailure = "gone" | "failed";
 
 export type TrackStore = {
-  /** The oldest track requests, at most `limit`. */
-  readonly pendingTracks: (limit: number) => Promise<string[]>;
+  /** The oldest track requests, at most `limit`, leaving out `skip` (DIDs waiting to be resolved again). */
+  readonly pendingTracks: (limit: number, skip: readonly string[]) => Promise<string[]>;
+  /** Deletes the request of a DID that could not be resolved after repeated attempts, and counts it. */
+  readonly dropUnresolved: (did: string) => Promise<void>;
   /**
    * Settles one request. A DID whose PDS is ours gets its account row (inactive until the account-state machine
    * confirms it, book P3.06s) and its confirm_status and backfill jobs; any other DID is dropped and counted, since
@@ -44,12 +46,20 @@ export function createTrackStore(pool: Pool, options: { readonly timeoutMs: numb
   const deadline = () => AbortSignal.timeout(options.timeoutMs);
   const inTx = <T>(fn: (tx: PoolClient) => Promise<T>) => withTransaction(pool, deadline(), fn);
   return {
-    pendingTracks: (limit) =>
+    pendingTracks: (limit, skip) =>
       withClient(pool, deadline(), async (client) => {
-        const { rows } = await client.query("SELECT did FROM idx.track_request ORDER BY requested_at, did LIMIT $1", [
-          limit,
-        ]);
+        const { rows } = await client.query(
+          `SELECT did FROM idx.track_request WHERE NOT (did::text = ANY($2::text[]))
+           ORDER BY requested_at, did LIMIT $1`,
+          [limit, skip],
+        );
         return rows.map((row) => String(row.did));
+      }),
+    dropUnresolved: (did) =>
+      inTx(async (tx) => {
+        await isErased(tx, did); // the erasure lock first, as on every path
+        await tx.query("DELETE FROM idx.track_request WHERE did = $1", [did]);
+        await count(tx, "track_unresolved");
       }),
     track: (did, hosted) => inTx((tx) => trackOne(tx, did, hosted)),
     dueBackfills: (limit) =>
@@ -93,9 +103,9 @@ async function trackOne(tx: PoolClient, did: string, hosted: boolean): Promise<T
 
 /**
  * Writes the account's records as its signed repo holds them at `rev`, then removes every indexed record the repo no
- * longer holds and that no later commit wrote (`rev` below the snapshot's). That second step undoes a delete the
- * stream missed or dead-lettered. The snapshot is judged by each row's rev, not the account watermark: the stream may
- * already have applied a later commit, whose rows the guards keep. An erased, untracked or inactive account gets no
+ * longer holds (`rev` below the snapshot's). That second step undoes a delete the stream missed or dead-lettered. A
+ * snapshot older than the account's watermark writes nothing and the backfill comes again: the stream's later commit
+ * may have deleted a row, and nothing would stop the snapshot restoring it. An erased, untracked or inactive account gets no
  * writes and its job ends; the account-state machine queues a new backfill when it confirms the account active.
  */
 async function applySnapshot(tx: PoolClient, did: string, rev: string, records: readonly IndexChange[]) {
@@ -103,6 +113,13 @@ async function applySnapshot(tx: PoolClient, did: string, rev: string, records: 
   if (account === null || !account.active) {
     await endJob(tx, did);
     return count(tx, "backfill_skipped");
+  }
+  // The stream has applied a later commit since the repo was read. A row that commit deleted is gone, so no rev guard
+  // is left to stop this older snapshot bringing it back: write nothing, and read the repo again on the next pass.
+  // Revs are TIDs and compare as strings (atproto.com/specs/tid); the account row is locked, so the stream waits.
+  if (account.lastRev !== null && account.lastRev > rev) {
+    await queueJob(tx, did, "backfill");
+    return count(tx, "backfill_stale");
   }
   const plan = planCommit({ lastRev: null, active: true }, rev, records);
   if (plan.kind !== "apply") throw new TypeError("a verified snapshot always has a signed rev");

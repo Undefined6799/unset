@@ -84,12 +84,23 @@ describe("track store", () => {
   test("track.hosted_did_gets_an_inactive_row_and_its_jobs", async () => {
     request(A);
     request(F);
-    expect(await tracks.pendingTracks(10)).toEqual([A, F]);
+    expect(await tracks.pendingTracks(10, [])).toEqual([A, F]);
     expect(await tracks.track(A, true)).toBe("tracked");
     expect(await tracks.track(F, false)).toBe("foreign");
     expect(lines("SELECT did, pds_active FROM idx.account")).toEqual([`${A}|f`]);
     expect(jobs(A)).toEqual(["backfill", "confirm_status"]);
-    expect(await tracks.pendingTracks(10)).toEqual([]);
+    expect(await tracks.pendingTracks(10, [])).toEqual([]);
+  });
+
+  test("track.unresolved_did_is_skipped_then_dropped", async () => {
+    const U = "did:plc:uuuuuuuuuuuuuuuuuuuuuuuu";
+    request(U);
+    request(F);
+    expect(await tracks.pendingTracks(10, [U])).toEqual([F]);
+    await tracks.dropUnresolved(U);
+    expect(await tracks.pendingTracks(10, [])).toEqual([F]);
+    expect(lines("SELECT value FROM idx.ingest_stat WHERE name = 'track_unresolved'")).toEqual(["1"]);
+    await tracks.track(F, false);
   });
 
   test("track.inactive_account_backfill_writes_nothing", async () => {
@@ -116,13 +127,24 @@ describe("track store", () => {
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}'`)).toEqual([CARD_1]);
   });
 
-  test("track.backfill_keeps_a_record_a_later_commit_wrote", async () => {
-    // The stream applied rev 6 before an older snapshot (rev 5) was written: the newer section stays.
+  test("track.backfill_older_than_the_index_writes_nothing_and_comes_again", async () => {
+    // The repo was read at rev 5; before the snapshot is applied the stream hard-deletes CARD_1 at rev 6. The older
+    // snapshot must not bring CARD_1 back: it writes nothing and the backfill runs again for a newer read.
     seq += 1;
-    await index.apply({ kind: "repoCommit", seq, did: A, rev: rev(6), changes: [section("3jzfcijpj2z2c")] });
+    await index.apply({
+      kind: "repoCommit",
+      seq,
+      did: A,
+      rev: rev(6),
+      changes: [section("3jzfcijpj2z2c"), { kind: "delete", collection: "sh.unset.section", rkey: CARD_1 }],
+    });
     await tracks.applySnapshot(A, rev(5), [profile("Old"), section(CARD_1)]);
-    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([CARD_1, "3jzfcijpj2z2c"]);
-    expect(lines(`SELECT last_rev FROM idx.account WHERE did = '${A}'`)).toEqual([rev(6)]);
+    expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual(["3jzfcijpj2z2c"]);
+    expect(lines(`SELECT display_name, last_rev FROM idx.profile JOIN idx.account USING (did)`)).toEqual([
+      `Ada|${rev(6)}`,
+    ]);
+    expect(lines(`SELECT kind FROM idx.account_job WHERE did = '${A}' AND due_at <= now()`)).toContain("backfill");
+    expect(lines("SELECT value FROM idx.ingest_stat WHERE name = 'backfill_stale'")).toEqual(["1"]);
   });
 
   test("track.backfill_drops_an_older_version_of_a_record_it_now_skips", async () => {

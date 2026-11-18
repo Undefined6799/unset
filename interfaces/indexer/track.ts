@@ -7,10 +7,18 @@
 import { INDEXED_COLLECTIONS } from "@unset/domains-profile";
 import type { RepoReader } from "@unset/infrastructure-firehose";
 import { RepoReadError } from "@unset/infrastructure-firehose";
-import type { TrackStore } from "@unset/infrastructure-postgres";
+import { backfillDelaySeconds, type TrackStore } from "@unset/infrastructure-postgres";
 
 export const TRACK_BATCH = 100;
 export const BACKFILL_BATCH = 10;
+/** Resolution attempts before a track request is dropped (about a day with the backfill's backoff). */
+export const MAX_TRACK_ATTEMPTS = 12;
+
+/**
+ * Unresolved DIDs and when each may be tried again (epoch ms). Kept in memory, as the stream's attempt counts are: a
+ * restart starts the count again, which only delays the drop.
+ */
+export type TrackRetries = Map<string, { readonly attempts: number; readonly dueAt: number }>;
 
 export type TrackDeps = {
   readonly store: TrackStore;
@@ -22,26 +30,44 @@ export type TrackDeps = {
   /** Our PDS's public origin, PDS_PUBLIC_URL: a DID is ours when its document names exactly this origin. */
   readonly ownPds: URL;
   readonly timeoutMs: number;
+  readonly retries: TrackRetries;
+  readonly now: () => number;
 };
 
 export type TrackPass = { readonly tracked: number; readonly dropped: number; readonly unresolved: number };
 
-/** Settles each queued track request whose DID resolves; one that does not stays for the next pass. */
+/**
+ * Settles each queued track request whose DID resolves. One that does not waits longer each time, so it never holds
+ * the oldest places in the queue, and is dropped and counted after MAX_TRACK_ATTEMPTS.
+ */
 export async function trackPass(deps: TrackDeps): Promise<TrackPass> {
   let tracked = 0;
   let dropped = 0;
   let unresolved = 0;
-  for (const did of await deps.store.pendingTracks(TRACK_BATCH)) {
+  const waiting = [...deps.retries].filter(([, retry]) => retry.dueAt > deps.now()).map(([did]) => did);
+  for (const did of await deps.store.pendingTracks(TRACK_BATCH, waiting)) {
     const pds = await deps.pdsOf(did, AbortSignal.timeout(deps.timeoutMs)).catch(() => undefined);
     if (pds === undefined) {
       unresolved += 1;
+      await unresolvedOnce(deps, did);
       continue;
     }
+    deps.retries.delete(did);
     const outcome = await deps.store.track(did, pds !== null && pds.origin === deps.ownPds.origin);
     if (outcome === "tracked") tracked += 1;
     else dropped += 1;
   }
   return { tracked, dropped, unresolved };
+}
+
+async function unresolvedOnce(deps: TrackDeps, did: string): Promise<void> {
+  const attempts = (deps.retries.get(did)?.attempts ?? 0) + 1;
+  if (attempts < MAX_TRACK_ATTEMPTS) {
+    deps.retries.set(did, { attempts, dueAt: deps.now() + backfillDelaySeconds(attempts) * 1000 });
+    return;
+  }
+  deps.retries.delete(did);
+  await deps.store.dropUnresolved(did);
 }
 
 export type BackfillDeps = {
