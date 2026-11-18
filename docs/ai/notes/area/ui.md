@@ -10,9 +10,16 @@ importance: normal
 related: ["[[web]]", "[[ui-build]]", "[[islands]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-23
+checked: 2026-11-18
 ---
 # ui
+
+**P1.20k (2026-11-18).** The React kit (`components/<Name>/` TSX, `islands/`, `presentation.ts`, `safe-href.ts`,
+the generated icon drawings) is deleted. shared/ui now holds only design data: the pinned `sheet/`, `tokens/` and
+`src/tokens.css`, `fonts/`, the Iconoir copy with `icons/icons.json` (read by the Svelte Icon through the
+`@unset/shared-ui/icons.json` export), `inventory.json`, `approved-extensions.json`, and an `index.ts` that exports
+only the font-metric types for [[ui-build]]. The link checker is `shared/safe-href`. The Svelte components are in
+`apps/web/lib/components` ([[web]]). The text below describes the React kit as it was.
 
 **What it owns.** Generic UI with no product meaning, MIT-licensed.
 

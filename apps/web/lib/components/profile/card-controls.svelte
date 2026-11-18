@@ -147,6 +147,7 @@ $effect(() => {
       title={EDIT_TITLE[card.content.kind]}
       submit={CARD_EDIT.save}
       max={maxOf(card.content.kind)}
+      textMax={limits.text}
       {enhance}
     />
     {#if index > 0}{@render move(index - 1, CARD_EDIT.up)}{/if}

@@ -1,0 +1,3 @@
+// fixture: interfaces/web/src/routes/x/+page.server.ts findings=0
+import type { Card } from "@unset/domains-profile";
+export const load = () => ({});

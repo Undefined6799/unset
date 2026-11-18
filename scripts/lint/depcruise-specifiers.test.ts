@@ -29,21 +29,12 @@ test("unresolved_imports_fail", async () => {
   );
 });
 
-test("render_build_import_is_the_only_unresolved_exception", async () => {
-  // The exception is the server-build specifier, read from the config, so there is no second copy to drift.
-  // The render loader and P1.26's harness are the only importers.
-  const { from, module } = config.RENDER_BUILD_IMPORT;
-  const harness = config.E2E_SERVER_BUILD;
-  expect(harness.module).toBe(module);
-  expect(await check([{ ...unresolved(from, module) }])).toEqual({ exitCode: 0, rules: [] });
-  expect(await check([{ ...unresolved(harness.from, harness.module) }])).toEqual({ exitCode: 0, rules: [] });
+test("no_unresolved_exception_remains", async () => {
+  // P1.20k deleted the React render build, the one exception this rule had; its two importers are refused like
+  // every other file now.
   await expectRefused(
-    unresolved("interfaces/http/web/page.ts", module),
-    unresolved("tests/e2e/pages.ts", module),
-    unresolved(from, "@unset/apps-web/other"),
-    unresolved(from, "./missing.ts"),
-    unresolved(harness.from, "@unset/apps-web/other"),
-    unresolved(harness.from, "./missing.ts"),
+    unresolved("interfaces/web/src/lib/server/a.ts", "@unset/apps-web/server"),
+    unresolved("tests/e2e/fixtures/servers.ts", "@unset/apps-web/server"),
   );
 });
 

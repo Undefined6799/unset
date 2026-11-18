@@ -63,7 +63,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(46);
+  expect(Object.keys(json.icons)).toHaveLength(50);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -177,6 +177,11 @@ const ADDITIONS: Record<string, string> = {
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21L13.0815 17.1953C12.4227 16.7717 11.5773 16.7717 10.9185 17.1953L5 21Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   help: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 9C9 5.49997 14.5 5.5 14.5 9C14.5 11.5 12 10.9999 12 13.9999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M12 18.01L12.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   link: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M14 11.9976C14 9.5059 11.683 7 8.85714 7C8.52241 7 7.41904 7.00001 7.14286 7.00001C4.30254 7.00001 2 9.23752 2 11.9976C2 14.376 3.70973 16.3664 6 16.8714C6.36756 16.9525 6.75006 16.9952 7.14286 16.9952" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 11.9976C10 14.4893 12.317 16.9952 15.1429 16.9952C15.4776 16.9952 16.581 16.9952 16.8571 16.9952C19.6975 16.9952 22 14.7577 22 11.9976C22 9.6192 20.2903 7.62884 18 7.12383C17.6324 7.04278 17.2499 6.99999 16.8571 6.99999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  list: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M8 6L20 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 6.01L4.01 5.99889" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 12.01L4.01 11.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M4 18.01L4.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M8 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M8 18L20 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  carousel:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M9 3H3.6C3.26863 3 3 3.26863 3 3.6V20.4C3 20.7314 3.26863 21 3.6 21H9M9 3V21M9 3H15M9 21H15M15 3H20.4C20.7314 3 21 3.26863 21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H15M15 3V21" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  half: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M12 3H20.4C20.7314 3 21 3.26863 21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H12M12 3H3.6C3.26863 3 3 3.26863 3 3.6V20.4C3 20.7314 3.26863 21 3.6 21H12M12 3V21" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  full: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H3.6C3.26863 21 3 20.7314 3 20.4V3.6C3 3.26863 3.26863 3 3.6 3H20.4C20.7314 3 21 3.26863 21 3.6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -184,7 +189,20 @@ const APPROVED_TEXT = readFileSync(join(UI, "approved-extensions.json"), "utf8")
 const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
   designApproval: unknown;
   icons: Record<
-    "devices" | "apps" | "bulb-off" | "bulb-on" | "tv" | "community" | "explore" | "saved" | "help" | "link",
+    | "devices"
+    | "apps"
+    | "bulb-off"
+    | "bulb-on"
+    | "tv"
+    | "community"
+    | "explore"
+    | "saved"
+    | "help"
+    | "link"
+    | "list"
+    | "carousel"
+    | "half"
+    | "full",
     { sourceSha256: string; drawings: [string, Record<string, string>][] }
   >;
 };
@@ -284,14 +302,14 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_46_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_50_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(46);
+  expect(Object.keys(json.icons)).toHaveLength(50);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
@@ -304,6 +322,10 @@ test("icon_approved_extension_generates_only_the_46_registered_icons", () => {
     saved: REGISTRATION.icons.saved.sourceSha256,
     help: REGISTRATION.icons.help.sourceSha256,
     link: REGISTRATION.icons.link.sourceSha256,
+    list: REGISTRATION.icons.list.sourceSha256,
+    carousel: REGISTRATION.icons.carousel.sourceSha256,
+    half: REGISTRATION.icons.half.sourceSha256,
+    full: REGISTRATION.icons.full.sourceSha256,
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
   expect(json.iconoir).toEqual({
@@ -318,6 +340,10 @@ test("icon_approved_extension_generates_only_the_46_registered_icons", () => {
     saved: "bookmark",
     help: "help-circle",
     link: "link",
+    list: "list",
+    carousel: "view-columns-3",
+    half: "view-columns-2",
+    full: "square",
   });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));

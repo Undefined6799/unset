@@ -76,11 +76,11 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
 test("the_avatar_shape_is_chosen_without_javascript", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   const panel = page.locator("#card-editor");
-  await page.getByRole("link", { name: "Change profile picture" }).click();
+  await page.getByRole("link", { name: "Change picture shape" }).click();
   await panel.getByRole("radio", { name: "Rounded square", exact: true }).check();
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(panel).toHaveCount(0);
-  await page.getByRole("link", { name: "Change profile picture" }).click();
+  await page.getByRole("link", { name: "Change picture shape" }).click();
   await expect(panel.getByRole("radio", { name: "Rounded square", exact: true })).toBeChecked();
   await panel.getByRole("radio", { name: "Round", exact: true }).check();
   await panel.getByRole("button", { name: "Save" }).click();

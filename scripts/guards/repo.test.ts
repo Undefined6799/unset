@@ -16,6 +16,7 @@ import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as pageClasses from "./page-classes.ts";
 import * as routeRegistration from "./route-registration.ts";
+import * as svelteImports from "./svelte-imports.ts";
 import * as uiInventory from "./ui-inventory.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 import * as webPrerender from "./web-prerender.ts";
@@ -27,6 +28,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["inner-html", innerHtml.scanAll],
   ["css-layers", cssLayers.scanAll],
   ["web-no-moderator", webNoModerator.scanAll],
+  ["svelte-imports", svelteImports.scanAll],
   ["web-prerender", webPrerender.scanAll],
   ["ip-columns", ipColumns.scanAll],
   ["route-registration", routeRegistration.scanAll],
@@ -80,6 +82,7 @@ test("unreadable_file_is_finding", () => {
     "page-classes": "interfaces/web/src/routes/+page.svelte",
     "class-colours": "apps/web/lib/components/profile/bad.svelte",
     "web-prerender": "interfaces/web/src/routes/+page.ts",
+    "svelte-imports": "apps/web/lib/components/profile/bad.svelte",
   };
   // case-collision reads only names from git, never file contents.
   for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {

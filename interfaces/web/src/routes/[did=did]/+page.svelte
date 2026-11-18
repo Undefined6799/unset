@@ -19,11 +19,15 @@ import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
 
 let { data, form } = $props();
 const setUp = $derived(data.profile === null && !data.profileUnavailable);
+// The tab names the member: their display name, else their verified handle. An unverified handle reads as
+// `handle.invalid` (the protocol's INVALID_HANDLE, @atproto/syntax 0.7.7
+// dist/handle.js), which is no name (walkthrough 2026-11-18, finding 6).
+const title = $derived(data.account.verified || data.name !== data.account.handle ? data.name : OWN_PAGE.title);
 const readmeHandle = $derived(data.account.verified ? data.account.handle : null);
 </script>
 
 <svelte:head>
-  <title>{data.account.handle}</title>
+  <title>{title}</title>
 </svelte:head>
 
 <ProfileLayout>
