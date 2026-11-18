@@ -1,10 +1,10 @@
 <!-- A legal page (P2.15; P1.20d): the placeholder banner, the version, then the document as its load filled it. Text
      is always escaped by Svelte; links are the ones the parser accepted. -->
 <script lang="ts">
-  import type { Run } from "../../../lib/legal.ts";
-  import type { PageData } from "./$types";
+import type { Run } from "../../../lib/legal.ts";
+import type { PageData } from "./$types";
 
-  let { data }: { data: PageData } = $props();
+let { data }: { data: PageData } = $props();
 </script>
 
 {#snippet runs(list: Run[])}{#each list as run, i (i)}{#if run.kind === "text"}{run.text}{:else if run.kind === "strong"}<strong
