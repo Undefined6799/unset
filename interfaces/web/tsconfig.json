@@ -38,6 +38,9 @@
     },
     {
       "path": "../../shared/log"
+    },
+    {
+      "path": "../../shared/safe-href"
     }
   ]
 }

@@ -21,7 +21,8 @@
     "@unset/shared-config": "*",
     "@unset/shared-errors": "*",
     "@unset/shared-http": "*",
-    "@unset/shared-log": "*"
+    "@unset/shared-log": "*",
+    "@unset/shared-safe-href": "*"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "6.0.2",

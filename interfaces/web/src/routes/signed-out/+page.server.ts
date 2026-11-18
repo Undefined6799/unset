@@ -4,7 +4,7 @@
 // marker, so the next sign-in no longer asks for the password.
 import { type Actions, redirect, type ServerLoad } from "@sveltejs/kit";
 import { services } from "../../lib/server/compose.ts";
-import { safeHref } from "../../lib/server/safe-href.ts";
+import { safeHref } from "@unset/shared-safe-href";
 import { cookieSent, dropCookie, issuerFromCookies } from "../../lib/server/sign-in-state.ts";
 
 /** The account link: the issuer's /account page for ours, its root for another; null unless it is https. */

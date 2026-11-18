@@ -13,7 +13,7 @@ import { type ErrorCode, withErrorParam } from "@unset/shared-errors";
 import { type SafePath, safeReturnPath } from "@unset/shared-http";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
-import { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
+import { type HrefScheme, type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { appStateOf, putCookie, signedOutFrom, targetFromCookies } from "./sign-in-state.ts";
 
 /** Where the authorization server is chosen from: a handle or DID, or our PDS's own sign-in page. */
