@@ -19,6 +19,7 @@ import * as ipColumns from "./ip-columns.ts";
 import * as pageClasses from "./page-classes.ts";
 import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
+import * as svelteImports from "./svelte-imports.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 import * as webPrerender from "./web-prerender.ts";
 
@@ -30,6 +31,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "inner-html": innerHtml.scanAll,
   "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
+  "svelte-imports": svelteImports.scanAll,
   "web-prerender": webPrerender.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
@@ -218,6 +220,16 @@ describe("web-prerender", () => {
   test("web_prerender_good_fixture", () => expectFixtures("web-prerender", "good"));
 });
 
+describe("svelte-imports", () => {
+  test("svelte_type_import_of_core_fails", () => expectFixtures("svelte-imports", "bad", ["type-domain.fixture"]));
+  test("svelte_app_names_no_interface", () => expectFixtures("svelte-imports", "bad", ["app-interface.fixture"]));
+  test("svelte_imports_good_fixture", () => expectFixtures("svelte-imports", "good"));
+  test("svelte_imports_scans_components", () => {
+    // AB-4: an empty scan would pass vacuously; apps/web and interfaces/web hold components from P1.20a.
+    expect(svelteImports.scannedFiles(join(import.meta.dirname, "..", "..")).length).toBeGreaterThan(0);
+  });
+});
+
 describe("web-no-moderator", () => {
   test("web_moderator_bad_fixture", () => expectFixtures("web-no-moderator", "bad", ["routes.fixture"]));
   test("web_moderator_good_fixture", () => expectFixtures("web-no-moderator", "good"));
@@ -342,9 +354,18 @@ describe("composition-root", () => {
   test("composition_root_split", () => expectFixtures("composition-root", "bad", ["infra-import.fixture"]));
   test("composition_root_compose_present", () => expectFixtures("composition-root", "bad", ["no-compose.fixture"]));
   test("composition_root_good_fixture", () => expectFixtures("composition-root", "good"));
+  test("composition_root_kit_hooks", () => expectFixtures("composition-root", "bad", ["kit-hooks.fixture"]));
+  test("composition_root_kit_server", () => expectFixtures("composition-root", "bad", ["kit-server.fixture"]));
   test("composition_root_empty_tree_passes", () => {
     expect(compositionRoot.scanAll(tempRepo({ "shared/x/index.ts": "export {};" }))).toEqual([]);
     expect(compositionRoot.scanAll(join(import.meta.dirname, "..", ".."))).toEqual([]);
+  });
+
+  test("composition_root_examines_the_web_entries", () => {
+    // AB-4: after the SvelteKit move the guard matched no file (P1.20k); the web's two entry files must be scanned.
+    expect(compositionRoot.entryFiles(join(import.meta.dirname, "..", ".."))).toEqual(
+      expect.arrayContaining(["interfaces/web/server.ts", "interfaces/web/src/hooks.server.ts"]),
+    );
   });
 
   test("composition_root_needs_one_compose_import", () => {

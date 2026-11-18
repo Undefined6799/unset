@@ -1,0 +1,5 @@
+/* fixture: interfaces/web/src/routes/x/+page.svelte findings=2 */
+<script lang="ts">
+  import type { Card } from "@unset/domains-profile";
+  import type { PdsResult } from "../../../../../infrastructure/pds/pds-call.ts";
+</script>
