@@ -106,10 +106,13 @@ describe("egress", () => {
   });
 
   test("egress_file_exemption_exact", () => {
-    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.mjs"]);
+    // guard.pds_admin_single_file (P2.09): pds-admin's one egress file, and no other file in that folder.
+    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.ts"]);
     const line = 'import http from "node:http";';
-    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.mjs": line }))).toEqual([]);
-    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/other.mjs": line }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.ts": line }))).toEqual([]);
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/other.ts": line }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.mjs": line }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/issue.ts": "await fetch(url);" }))).toHaveLength(1);
   });
 });
 
