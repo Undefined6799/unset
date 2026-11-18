@@ -273,11 +273,9 @@ describe("ip-columns", () => {
 describe("route-registration", () => {
   test("route_registration_guard", () => expectFixtures("route-registration", "bad", ["app-post.fixture"]));
   test("route_registration_own_hono", () => expectFixtures("route-registration", "bad", ["own-hono.fixture"]));
+  test("route_registration_old_kit_path_is_not_exempt", () =>
+    expectFixtures("route-registration", "bad", ["old-kit-path.fixture"]));
   test("route_registration_good_fixture", () => expectFixtures("route-registration", "good"));
-
-  test("route_registration_exemptions_exact", () => {
-    expect(routeRegistration.KIT_FILES).toEqual(["shared/http/server.ts", "shared/http/routes.ts"]);
-  });
 });
 
 describe("composition-root", () => {
