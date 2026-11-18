@@ -1,6 +1,6 @@
 // P2.09d: the built pds-admin image (ADR 0060). It runs as 65532, ships no node_modules entry but the one workspace
-// link the service imports, and with its settings but no secrets it loads every module and stops at the first secret,
-// naming it and exiting 1 (interfaces/pds-admin/main.ts), so it fails closed. package-manager.image.test.ts already
+// link the service imports, owns a private state directory, and with its settings but no secrets it loads every
+// module and stops at the first secret, naming it and exiting 1 (interfaces/pds-admin/main.ts), so it fails closed. package-manager.image.test.ts already
 // checks every kind for package managers and setuid files. It builds an image, so it lives in an *.image.test.ts file
 // (P1.28r): CI runs it after the unit tests, and a local run without Docker fails rather than skips.
 import { join } from "node:path";
@@ -38,6 +38,11 @@ describe("pds-admin image", () => {
           expect(user.out.trim().split("\n"), user.err).toEqual(["65532", "65532"]);
           const modules = shell("ls -A /app/node_modules; ls -A /app/node_modules/@unset");
           expect(modules.out.trim().split("\n"), modules.err).toEqual(["@unset", "shared-admin-envelope"]);
+          // STATE_DIR (P2.09e): a named volume mounted here takes this directory's owner and mode when fresh, so the
+          // service, and only it, can write its replay guard and log there.
+          // /app itself stays root's: the state directory arrives by copying a folder's contents into it.
+          const state = shell("stat -c '%u:%g %a' /app/state /app");
+          expect(state.out.trim().split("\n"), state.err).toEqual(["65532:65532 700", "0:0 755"]);
 
           const bare = docker(["run", "--rm", "--read-only", "--network", "none", image], { timeoutMs: CALL_MS });
           expect(bare.code, bare.err.slice(-2000)).toBe(1);
