@@ -12,6 +12,7 @@ import {
   renameSync,
   writeSync,
 } from "node:fs";
+import { dirname } from "node:path";
 
 /**
  * Writes all of `text`. writeSync may write fewer bytes than asked (a full disk, a file-size limit), so it loops, and
@@ -33,6 +34,7 @@ function writeAll(fd: number, text: string): void {
  * still propagates and the caller refuses the request.
  */
 export function appendLine(file: string, line: string): void {
+  const created = !existsSync(file);
   const fd = openSync(file, "a", 0o600);
   try {
     const before = fstatSync(fd).size;
@@ -47,6 +49,7 @@ export function appendLine(file: string, line: string): void {
   } finally {
     closeSync(fd);
   }
+  if (created) syncDirectory(file);
 }
 
 /** The file's lines, without the empty last one; none when the file does not exist yet (a state file's first boot). */
@@ -68,4 +71,18 @@ export function replaceLines(file: string, lines: readonly string[]): void {
     closeSync(fd);
   }
   renameSync(temporary, file);
+  syncDirectory(file);
+}
+
+/**
+ * fsyncs the folder holding `file`, so a new or renamed entry survives a crash: fsync on a file persists its data, not
+ * its directory entry (fsync(2), Linux man-pages 6.19, https://man7.org/linux/man-pages/man2/fsync.2.html).
+ */
+function syncDirectory(file: string): void {
+  const fd = openSync(dirname(file), "r");
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
