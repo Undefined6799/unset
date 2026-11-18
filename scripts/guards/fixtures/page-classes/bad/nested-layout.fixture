@@ -1,0 +1,2 @@
+/* fixture: interfaces/web/src/routes/settings/+layout.svelte findings=1 */
+<div class="grid gap-6">{@render children()}</div>

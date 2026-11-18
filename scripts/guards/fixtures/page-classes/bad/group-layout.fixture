@@ -1,2 +1,2 @@
-/* fixture: interfaces/web/src/routes/(app)/settings/+layout@.svelte findings=0 */
+/* fixture: interfaces/web/src/routes/(app)/settings/+layout@.svelte findings=1 */
 <nav class="flex gap-4"></nav>
