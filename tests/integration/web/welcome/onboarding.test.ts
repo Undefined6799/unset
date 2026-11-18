@@ -141,9 +141,13 @@ afterAll(async () => {
   await pool.end();
 });
 
-/** A signed-in browser for a new member with no onboarding yet; returns the DID and the cookie header. */
-async function signedIn(): Promise<{ did: Did; cookie: string }> {
-  const did = nextDid();
+/**
+ * A signed-in browser for a new member with no onboarding yet (or a new session for `did`); returns the DID and the
+ * cookie header. An `expired` grant has no refresh token left, so restoring it is a dead grant (pds-errors.ts
+ * restoreOutcome: TokenRefreshError).
+ */
+async function signedIn(options: { did?: Did; expired?: boolean } = {}): Promise<{ did: Did; cookie: string }> {
+  const did = options.did ?? nextDid();
   const dpopJwk = {
     ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
     kid: "dpop",
@@ -159,6 +163,7 @@ async function signedIn(): Promise<{ did: Did; cookie: string }> {
       scope: "atproto",
       access_token: "a",
       token_type: "DPoP",
+      ...(options.expired ? { expires_at: new Date(Date.now() - 60_000).toISOString() } : {}),
     },
   });
   const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin: PDS }));
@@ -267,6 +272,92 @@ describe("the app gate", () => {
     expect(web.standInCalls().slice(before)).not.toContain(GET_SESSION);
     expect(await sessionCount(did)).toBe(1);
   });
+
+  test("an_ended_grant_signs_the_member_out_with_the_cookie_cleared", async () => {
+    // Within the cache cap and past it alike: a dead grant is never served from the cache.
+    for (const ageS of [1000, 4000]) {
+      const { did, cookie } = await signedIn({ expired: true });
+      await staleConfirmation(did, ageS);
+      const response = await get("/test-routes/members", cookie);
+      expect(location(response), String(ageS)).toBe("/login?error=login.session_ended");
+      expect(
+        response.headers.getSetCookie().some((line) => line.startsWith("__Host-sid=;")),
+        String(ageS),
+      ).toBe(true);
+      expect(await sessionCount(did), String(ageS)).toBe(0);
+    }
+  });
+
+  test("a_fresh_check_passes_without_asking_the_pds", async () => {
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did);
+    const before = web.standInCalls().length;
+    expect((await get("/test-routes/members", cookie)).status).toBe(200);
+    expect(web.standInCalls().slice(before)).not.toContain(GET_SESSION);
+  });
+
+  test("a_session_never_checked_asks_the_pds", async () => {
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did);
+    await pool.query("UPDATE app.session SET email_checked_at = NULL WHERE did = $1", [did]);
+    const before = web.standInCalls().length;
+    expect((await get("/test-routes/members", cookie)).status).toBe(200);
+    expect(web.standInCalls().slice(before)).toContain(GET_SESSION);
+  });
+
+  test("a_confirmation_past_the_cap_that_the_pds_gives_again_restores_the_page", async () => {
+    const { did, cookie } = await signedIn();
+    await staleConfirmation(did, 4000);
+    expect((await get("/test-routes/members", cookie)).status).toBe(200);
+  });
+
+  test("the_hold_after_a_pds_that_does_not_answer_is_per_member", async () => {
+    web.setStandIns(pdsFixture({ status: 503 }));
+    const first = await signedIn();
+    const second = await signedIn();
+    await staleConfirmation(first.did, 1000);
+    await staleConfirmation(second.did, 1000);
+    const asked = () => web.standInCalls().filter((call) => call === GET_SESSION).length;
+    const start = asked();
+    expect((await get("/test-routes/members", first.cookie)).status).toBe(200);
+    const afterFirst = asked();
+    expect(afterFirst).toBeGreaterThan(start);
+    // The same member is on hold: the cached pass is served without asking again.
+    expect((await get("/test-routes/members", first.cookie)).status).toBe(200);
+    expect(asked()).toBe(afterFirst);
+    // Another member is asked.
+    expect((await get("/test-routes/members", second.cookie)).status).toBe(200);
+    expect(asked()).toBeGreaterThan(afterFirst);
+  });
+
+  test("a_blocked_member_who_signs_in_again_sees_only_the_blocked_page", async () => {
+    const { did, cookie } = await signedIn();
+    expect(location(await post("/welcome/age", `${bornYearsAgo(12)}&confirmed=yes`, cookie))).toBe("/welcome/blocked");
+    const again = await signedIn({ did });
+    await withTransaction(pool, null, (tx) => sessions.setEmailConfirmed(tx, { did }, true));
+    for (const path of ["/me", `/${did}`, "/settings/profile", "/test-routes/members", "/welcome", "/welcome/age"]) {
+      const response = await get(path, again.cookie);
+      expect(response.status, path).toBe(303);
+      expect(location(response), path).toBe("/welcome/blocked");
+    }
+  });
+
+  test("a_cross_site_post_to_an_onboarding_action_is_refused", async () => {
+    const { did, cookie } = await signedIn();
+    const response = await web.fetch("/welcome/age", {
+      method: "POST",
+      body: `${bornYearsAgo(30)}&confirmed=yes`,
+      headers: {
+        origin: "https://evil.example",
+        accept: HTML,
+        "content-type": "application/x-www-form-urlencoded",
+        "x-forwarded-for": clientAddress(),
+        cookie,
+      },
+    });
+    expect(response.status).toBe(403);
+    expect((await accounts.get(did, AbortSignal.timeout(5000)))?.onboarding ?? "age").toBe("age");
+  });
 });
 
 describe("the age step", () => {
@@ -291,6 +382,24 @@ describe("the age step", () => {
     const response = await post("/welcome/age", `${bornYearsAgo(30)}&confirmed=yes`, cookie);
     expect(location(response)).toBe("/welcome/terms");
     expect(location(await get("/welcome/age", cookie))).toBe("/welcome/terms");
+  });
+
+  test("the_sixteenth_birthday_counts_and_two_days_short_does_not", async () => {
+    // The zone rule (a birthday that has arrived anywhere on Earth counts) is domains/identity age.test.ts's.
+    const today = await signedIn();
+    expect(location(await post("/welcome/age", `${bornYearsAgo(16)}&confirmed=yes`, today.cookie))).toBe(
+      "/welcome/terms",
+    );
+    const short = await signedIn();
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + 2);
+    const birth = new URLSearchParams({
+      day: String(date.getUTCDate()),
+      month: String(date.getUTCMonth() + 1),
+      year: String(date.getUTCFullYear() - 16),
+      confirmed: "yes",
+    }).toString();
+    expect(location(await post("/welcome/age", birth, short.cookie))).toBe("/welcome/blocked");
   });
 
   test("a_confirmed_under_age_answer_blocks_the_account_and_ends_every_session", async () => {
@@ -358,7 +467,95 @@ describe("the terms step", () => {
   });
 });
 
+describe("leaving and finishing onboarding", () => {
+  test("a_privacy_only_change_shows_the_notice_and_asks_for_nothing", async () => {
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did);
+    await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
+    expect((await get("/test-routes/members", cookie)).status).toBe(200);
+    expect(location(await get("/welcome/terms", cookie))).toBe("/me");
+  });
+
+  test("the_chat_step_with_a_confirmed_email_goes_to_the_profile", async () => {
+    const { did, cookie } = await signedIn();
+    await accounts.confirmAdult(did, AbortSignal.timeout(5000));
+    await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, AbortSignal.timeout(5000));
+    await withTransaction(pool, null, (tx) => sessions.setEmailConfirmed(tx, { did }, true));
+    expect(location(await post("/welcome/chat", "", cookie))).toBe("/me");
+  });
+
+  test("a_finished_member_on_any_step_returns_to_the_profile", async () => {
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did);
+    for (const path of ["/welcome", "/welcome/age", "/welcome/terms", "/welcome/chat"]) {
+      const response = await get(path, cookie);
+      expect(response.status, path).toBe(303);
+      expect(location(response), path).toBe("/me");
+    }
+  });
+
+  test("every_held_step_offers_sign_out_and_no_sign_in", async () => {
+    const atAge = await signedIn();
+    const atTerms = await signedIn();
+    await accounts.confirmAdult(atTerms.did, AbortSignal.timeout(5000));
+    const atChat = await signedIn();
+    await accounts.confirmAdult(atChat.did, AbortSignal.timeout(5000));
+    await accounts.acceptTerms(atChat.did, TERMS_VERSION, PRIVACY_VERSION, AbortSignal.timeout(5000));
+    const atVerify = await signedIn();
+    await readyMember(pool, atVerify.did, false);
+    const pages: [string, Response][] = [
+      ["age", await get("/welcome/age", atAge.cookie)],
+      ["age confirm", await post("/welcome/age", bornYearsAgo(30), atAge.cookie)],
+      ["terms", await get("/welcome/terms", atTerms.cookie)],
+      ["chat", await get("/welcome/chat", atChat.cookie)],
+      ["verify email", await get("/verify-email", atVerify.cookie)],
+    ];
+    for (const [name, response] of pages) {
+      expect(response.status, name).toBe(200);
+      const html = await response.text();
+      const main = html.slice(html.indexOf('<main id="main"'), html.indexOf("</main>"));
+      expect(main.match(/<form method="POST" action="\/logout"/g), name).toHaveLength(1);
+      expect(html, name).not.toContain('action="/login"');
+      expect(html, name).not.toContain('href="/login');
+    }
+    // The blocked page has no session left, so it offers no sign-out.
+    expect(await (await get("/welcome/blocked")).text()).not.toContain('action="/logout"');
+  });
+});
+
 describe("verify email", () => {
+  test("the_query_never_picks_the_state", async () => {
+    web.setStandIns(pdsFixture({ emailConfirmed: false }));
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did, false);
+    const body = await (await get("/verify-email?state=confirmed&confirmed=true", cookie)).text();
+    expect(body).not.toContain("Your email is confirmed.");
+    expect(body).toContain(`href="${PDS}/account"`);
+  });
+
+  test("no_answer_on_the_email_asks_for_consent_and_a_get_sends_nothing", async () => {
+    web.setStandIns(pdsFixture({}));
+    const { did, cookie } = await signedIn();
+    await readyMember(pool, did, false);
+    const before = web.standInCalls().length;
+    const body = await (await get("/verify-email", cookie)).text();
+    expect(body).toContain('action="?/reconsent"');
+    expect(
+      web
+        .standInCalls()
+        .slice(before)
+        .filter((call) => call.startsWith("POST ")),
+    ).toEqual([]);
+  });
+
+  test("an_ended_grant_on_the_page_signs_the_member_out", async () => {
+    const { did, cookie } = await signedIn({ expired: true });
+    await readyMember(pool, did, false);
+    const response = await get("/verify-email", cookie);
+    expect(location(response)).toBe("/login?error=login.session_ended");
+    expect(response.headers.getSetCookie().some((line) => line.startsWith("__Host-sid=;"))).toBe(true);
+  });
+
   test("a_confirmed_email_is_read_fresh_and_cached", async () => {
     const { did, cookie } = await signedIn();
     await readyMember(pool, did, false);
