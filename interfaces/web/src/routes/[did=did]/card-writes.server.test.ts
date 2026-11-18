@@ -160,4 +160,24 @@ describe("cardWrites", () => {
       code: "card.pds_unavailable",
     });
   });
+
+  test("an avatar shape is written into the profile, and its refusals read as the profile's", async () => {
+    const { writes, calls } = store();
+    expect(await writes.avatarShape("roundedSquare")).toEqual({ kind: "saved" });
+    expect(calls.profile[0]).toMatchObject({ ok: true, record: { displayName: "A", avatarShape: "roundedSquare" } });
+    expect(await store({}, null).writes.avatarShape("round")).toEqual({
+      kind: "failed",
+      code: "profile.name_required",
+    });
+    const conflict = async () => ok({ kind: "conflict" } as const);
+    expect(await store({ saveProfile: conflict }).writes.avatarShape("round")).toEqual({
+      kind: "failed",
+      code: "profile.conflict",
+    });
+    const down = async () => ({ kind: "transient", code: "pds_unavailable" }) as const;
+    expect(await store({ saveProfile: down }).writes.avatarShape("round")).toEqual({
+      kind: "failed",
+      code: "profile.pds_unavailable",
+    });
+  });
 });

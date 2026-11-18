@@ -3,6 +3,7 @@
 // PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
 // the session's DID in the composition root, so no write here can reach another member's repo.
 import {
+  type AvatarShape,
   CARDS_MAX,
   type CardContent,
   type CardError,
@@ -11,6 +12,7 @@ import {
   type ProfileError,
   reorderCards,
   toCardRecord,
+  withAvatarShape,
   withCardOrder,
 } from "@unset/domains-profile";
 import {
@@ -43,7 +45,9 @@ export type CardFailure =
   | "card.too_many"
   | "card.list_incomplete"
   | "card.conflict"
-  | "card.pds_unavailable";
+  | "card.pds_unavailable"
+  | "profile.conflict"
+  | "profile.pds_unavailable";
 export type CardWrite =
   | { readonly kind: "saved" }
   | { readonly kind: "failed"; readonly code: CardFailure }
@@ -55,6 +59,8 @@ export type CardWrites = {
   readonly save: (key: CardKey, content: CardContent, width: CardWidth) => Promise<CardWrite>;
   readonly remove: (key: CardKey) => Promise<CardWrite>;
   readonly reorder: (requested: unknown) => Promise<CardWrite>;
+  /** The avatar's shape, written into the profile record (sh.unset.profile avatarShape). */
+  readonly avatarShape: (shape: AvatarShape) => Promise<CardWrite>;
 };
 
 const SAVED: CardWrite = { kind: "saved" };
@@ -107,6 +113,16 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
       );
       if (!order.ok) return failed(order.code);
       return outcome(await store.saveProfile((existing) => withCardOrder(order.order, existing, now())));
+    },
+    // A profile write, so a refusal reads as one: the profile changed elsewhere, or the PDS did not answer.
+    avatarShape: async (shape) => {
+      const saved = await store.saveProfile((existing) => withAvatarShape(shape, existing, now()));
+      if (saved.kind !== "ok") {
+        const failure = pdsFailure(saved);
+        return failure.kind === "redirect" ? failure : failed("profile.pds_unavailable");
+      }
+      if (saved.value.kind === "conflict") return failed("profile.conflict");
+      return saved.value.kind === "refused" ? failed(saved.value.code) : SAVED;
     },
   };
 }

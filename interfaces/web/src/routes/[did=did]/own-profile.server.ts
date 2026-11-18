@@ -4,10 +4,12 @@
 // is dropped. Visitors never reach this: public pages wait for the indexer (ADR 0052), so there is no live PDS
 // read for anyone but the owner.
 import {
+  type AvatarShape,
   type Card,
   orderCards,
   type ProfileFields,
   parseCardKey,
+  readAvatarShape,
   readCard,
   readProfileRecord,
 } from "@unset/domains-profile";
@@ -23,6 +25,8 @@ export type OwnProfile =
   | {
       readonly kind: "ok";
       readonly profile: ProfileFields | null;
+      /** The avatar's crop; round when unset or unknown. */
+      readonly avatarShape: AvatarShape;
       readonly cards: readonly Card[];
       /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
       readonly cardsComplete: boolean;
@@ -49,6 +53,7 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
   return {
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
+    avatarShape: readAvatarShape(record),
     cards: orderCards(cardOrder(record), shownCards(cards.value.cards)),
     cardsComplete: cards.value.complete,
   };
