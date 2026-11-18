@@ -1,5 +1,5 @@
 // The README card's text (ADR 0051): a small CommonMark subset (https://spec.commonmark.org/0.31.2/) parsed into
-// blocks that a renderer writes as escaped elements (readme.tsx today), so member text is always escaped and raw HTML
+// blocks that a renderer writes as escaped elements (readme.svelte), so member text is always escaped and raw HTML
 // is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
 // code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
 // code spans, strong, emphasis, links and autolinks. Images are not shown (there is no media proxy), so `![alt](url)`

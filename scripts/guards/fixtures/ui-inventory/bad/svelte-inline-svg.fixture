@@ -1,2 +1,2 @@
-// fixture: apps/web/lib/components/ui/checkbox/checkbox.svelte findings=1
+// fixture: apps/web/lib/components/ui/alert/alert.svelte findings=1
 <svg viewBox="0 0 24 24"><path d="M0 0" /></svg>

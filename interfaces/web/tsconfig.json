@@ -53,6 +53,9 @@
     },
     {
       "path": "../../shared/safe-href"
+    },
+    {
+      "path": "../../shared/ui"
     }
   ]
 }
