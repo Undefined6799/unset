@@ -23,6 +23,8 @@ let {
   trigger,
   icon,
   triggerClass = "",
+  open = $bindable(false),
+  returnFocus,
   title,
   submit,
   max,
@@ -34,10 +36,15 @@ let {
   width: CardWidth;
   /** The card being saved; absent, the form adds a card. */
   cardKey?: string;
-  trigger: string;
+  trigger: string | null;
   /** Draw the trigger as this icon alone, `trigger` its hidden name (the card's own controls). */
   icon?: IconName;
   triggerClass?: string;
+  /** Whether the editor is open. A caller that opens it itself (the add picker) binds this and passes no trigger:
+   * `trigger` is then null. */
+  open?: boolean;
+  /** Where focus goes when the editor closes, for an editor with no trigger of its own to return to. */
+  returnFocus?: () => HTMLElement | null;
   title: string;
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
@@ -45,7 +52,6 @@ let {
   enhance?: Enhance;
 } = $props();
 
-let open = $state(false);
 /** A save is on its way: the submit button is disabled and a second press is cancelled. */
 let pending = $state(false);
 /** The catalog's words for a refused save, shown inside the editor. */
@@ -124,6 +130,13 @@ function focusFirstText(event: Event) {
   field.focus();
 }
 const hintId = `${formId}-hint`;
+/** On close, focus goes to `returnFocus` when given (bits-ui 2.20.6 focus-scope onCloseAutoFocus), else to the trigger. */
+function focusBack(event: Event) {
+  const target = returnFocus?.();
+  if (target == null) return;
+  event.preventDefault();
+  target.focus();
+}
 const buttonRows = $derived([
   ...(buttons?.buttons ?? []),
   ...Array(blanks(buttons?.buttons.length ?? 0)).fill({ kind: "link", preset: "custom", uri: "", label: "" }),
@@ -131,14 +144,16 @@ const buttonRows = $derived([
 </script>
 
 <Dialog.Root bind:open>
-  {#if icon === undefined}
+  {#if trigger === null}
+    <!-- Opened by the caller. -->
+  {:else if icon === undefined}
     <Dialog.Trigger class="{buttonVariants({ variant: 'outline' })} {triggerClass}">{trigger}</Dialog.Trigger>
   {:else}
     <Dialog.Trigger class="{buttonVariants({ variant: 'ghost', size: 'icon-sm' })} {triggerClass}"
       ><Icon name={icon} size={20} label={trigger} /></Dialog.Trigger
     >
   {/if}
-  <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText}>
+  <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText} onCloseAutoFocus={focusBack}>
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
     {#if refused !== undefined}
       <Alert.Root variant="destructive"><Alert.Description>{refused}</Alert.Description></Alert.Root>

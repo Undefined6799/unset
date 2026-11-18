@@ -3,6 +3,8 @@
 // every address already through safeHref, so a component never decides whether a link is safe.
 
 export type CardLayout = "list" | "carousel" | "grid";
+/** How the avatar is cropped (sh.unset.profile avatarShape). */
+export type AvatarShape = "round" | "roundedSquare";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 

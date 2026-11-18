@@ -12,7 +12,35 @@ export const CARD_TEXT = {
   links: (n: number) => (n === 1 ? "1 link" : `${n} links`),
   entries: (n: number) => (n === 1 ? "1 entry" : `${n} entries`),
   scrollForMore: "scroll for more",
-  addCard: "Add a card",
+} as const;
+
+/** The single Add picker (the profile-card mockup). */
+export const ADD_CARD = {
+  trigger: "Add card",
+  title: "Add a card",
+  description: "Choose what the new card holds. You can change its width and order later.",
+  readme: "README",
+  readmeBlurb: "Your own text, with headings, lists, links, quotes and code.",
+  links: "Links",
+  linksBlurb: "Your sites and accounts elsewhere, as a list, grid or carousel.",
+  collection: "Collection",
+  collectionBlurb: "Projects, releases or anything else, each with a tag and a description.",
+  buttons: "Contact",
+  buttonsBlurb: (max: number) => `Up to ${max} buttons: email me, book a call, hire me, subscribe or your own.`,
+} as const;
+
+/** The avatar's editor (sh.unset.profile avatarShape). */
+export const AVATAR_EDIT = {
+  trigger: "Change profile picture",
+  change: "Change",
+  title: "Profile picture",
+  description: "Uploading a picture comes later. For now you can choose the shape it is shown in.",
+  shape: "Shape",
+  round: "Round",
+  roundedSquare: "Rounded square",
+  save: "Save",
+  cancel: "Cancel",
+  refused: "Your profile could not be saved.",
 } as const;
 
 /** The side column's labels (the profile-card mockup, Alex 2026-11-17). */
@@ -20,6 +48,7 @@ export const PROFILE_SIDE = {
   place: "Place",
   web: "Web",
   did: "DID",
+  edit: "Edit profile",
 } as const;
 
 /** The owner's card controls (ADR 0051). */

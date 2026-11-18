@@ -286,6 +286,21 @@ describe("card writes", () => {
     expect(writes[0]?.record).toMatchObject({ cards: order });
   });
 
+  test("the_avatar_shape_is_written_into_the_profile_and_anything_else_is_refused_first", async () => {
+    const writes = await writesOf(() => action("avatar", "avatarShape=roundedSquare"));
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ method: "putRecord", collection: "sh.unset.profile", rkey: "self" });
+    expect(writes[0]?.record).toMatchObject({ avatarShape: "roundedSquare", displayName: "Member One" });
+    for (const body of ["avatarShape=hexagon", "avatarShape=round&avatarShape=round", "avatarShape=round&key=x", ""]) {
+      let response: Response | undefined;
+      const refused = await writesOf(async () => {
+        response = await action("avatar", body);
+      });
+      expect(response?.status).toBe(400);
+      expect(refused).toHaveLength(0);
+    }
+  });
+
   test("a_list_cards_form_rows_are_written_as_its_items", async () => {
     const form = new URLSearchParams([
       ["key", CARD_A],

@@ -1,4 +1,4 @@
-// The member's own page at /<DID> (P2.13, ADR 0051; P1.20g, P1.20i). Owner-only until public profiles arrive with the
+// The member's own page at /<DID> (P2.13, ADR 0051; P1.20g, P1.20i; the avatar's shape, P1.20k). Owner-only until public profiles arrive with the
 // indexer (ADR 0052): a path that is no DID, or another member's DID, reads as missing (SE-2), and a visitor is sent to
 // sign in. The profile and cards come from the member's own PDS. The card writes are this page's form actions: each
 // writes only to the session's own repo (the DID is the session's, never the form's), and a card key is parsed before
@@ -7,7 +7,7 @@
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
 import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
-import { CARD_EDIT_LIMITS, type CardKey, parseCardInput, parseCardKey } from "@unset/domains-profile";
+import { CARD_EDIT_LIMITS, type CardKey, parseAvatarShape, parseCardInput, parseCardKey } from "@unset/domains-profile";
 import {
   createCardRecord,
   deleteCardRecord,
@@ -29,6 +29,8 @@ import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
 
 /** The fields the order form may send: `order`, once per card. */
 const ORDER_FIELD = "order";
+/** The avatar form's one field. */
+const SHAPE_FIELD = "avatarShape";
 
 /** The page's DID when it is the signed-in member's own; otherwise the request stops here. */
 function ownDid(raw: string | undefined, did: string | undefined, method: "GET" | "POST"): Did {
@@ -82,6 +84,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
       profile === null
         ? null
         : { headline: profile.headline, location: profile.location, website: websiteLink(profile.website) },
+    avatarShape: own.kind === "ok" ? own.avatarShape : "round",
     cards: own.kind === "ok" ? cardViews(own.cards) : [],
     cardEditLimits: CARD_EDIT_LIMITS,
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete,
@@ -190,5 +193,14 @@ export const actions: Actions = {
     write(event, (form, did) => {
       onlyFields(form, [ORDER_FIELD]);
       return writesFor(did, event.locals).reorder(form.has(ORDER_FIELD) ? form.getAll(ORDER_FIELD) : undefined);
+    }),
+  avatar: (event) =>
+    write(event, (form, did) => {
+      const shapes = form.getAll(SHAPE_FIELD);
+      const shape = shapes.length === 1 ? parseAvatarShape(shapes[0]) : null;
+      if (shape === null || [...form.keys()].some((name) => name !== SHAPE_FIELD)) {
+        throw new AppError("profile.invalid");
+      }
+      return writesFor(did, event.locals).avatarShape(shape);
     }),
 };
