@@ -144,9 +144,40 @@ describe("css-layers", () => {
   });
 
   test("css_layers_unbalanced_fails_closed", () => {
-    const ctx = { layers: ["screens"], tokens: new Set<string>() };
+    const ctx = { layers: ["screens"], tokens: new Set<string>(), themeVars: new Set<string>() };
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {\n.a {\n", ctx)).toHaveLength(1);
     expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {}\n.a", ctx)).toHaveLength(1);
+  });
+
+  // ADR 0055: the theme file is plain and unlayered so the PDS screens can append it, and the Tailwind entry reads
+  // only its variables.
+  const ctx = { layers: ["tokens"], tokens: new Set(["--color-ink"]), themeVars: new Set(["--background"]) };
+  const theme = (css: string) => cssLayers.scanCss(cssLayers.THEME_FILE, css, ctx).map((f) => f.text);
+
+  test("css_layers_theme_file_holds_only_its_root_blocks", () => {
+    const good =
+      ':root {\n  color-scheme: light dark;\n  --background: light-dark(#fff, #000);\n}\n:root[data-theme="dark"] {\n  color-scheme: dark;\n}\n';
+    expect(theme(good)).toEqual([]);
+    expect(theme(":root {\n  --a: 1;\n}\nbody {\n  --a: 2;\n}\n")).toEqual([
+      "theme file holds only its :root blocks: body",
+    ]);
+    expect(theme(":root {\n  color: red;\n}\n")).toEqual([
+      "theme file declares only variables and color-scheme: color",
+    ]);
+    expect(theme('@import "x.css";\n')).toContain("theme file loads nothing: no @import or url()");
+    expect(theme(":root {\n  --f: url(/a.woff2);\n}\n")).toEqual(["theme file loads nothing: no @import or url()"]);
+    expect(theme("@layer base {\n  :root {\n    --a: 1;\n  }\n}\n")).toEqual([
+      "theme file holds only its :root blocks: @layer base",
+    ]);
+  });
+
+  test("css_layers_tailwind_entry_reads_theme_variables_only", () => {
+    const entry = (css: string) => cssLayers.scanCss(cssLayers.TAILWIND_FILE, css, ctx).map((f) => f.text);
+    expect(entry('@import "tailwindcss";\n@theme inline {\n  --color-background: var(--background);\n}\n')).toEqual([]);
+    expect(entry("@theme inline {\n  --color-ink: var(--color-ink);\n  --x: var(--y);\n}\n")).toEqual([
+      "--y is not a token or declared in this file",
+    ]);
+    expect(cssLayers.layerFor("apps/web/other.css")).toBeUndefined();
   });
 });
 
