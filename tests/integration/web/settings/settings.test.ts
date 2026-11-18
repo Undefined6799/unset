@@ -91,7 +91,7 @@ const STAND_INS: StandInFixture = {
 
 let web: RunningWeb;
 beforeAll(async () => {
-  buildOnce();
+  buildOnce(provided.port);
   web = await startWeb(pg, {}, STAND_INS);
 }, 120_000);
 afterAll(async () => {
