@@ -29,7 +29,7 @@ let {
   rows?: number;
   type?: "text" | "email";
   required?: boolean;
-  inputmode?: "url";
+  inputmode?: "url" | "email";
   autocomplete?: "url" | "email";
   error?: string;
   /** Only where the limit is one maxlength can keep: see CardEditLimits text. */

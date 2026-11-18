@@ -27,15 +27,17 @@ async function withReadme(page: Page) {
   return page.getByRole("group", { name: "README card" });
 }
 
-/** Deletes the README added through its own Delete, so the member page is as the other specs expect it. */
+/** Deletes the README added through its menu's Delete, so the member page is as the other specs expect it. */
 async function removeReadme(page: Page) {
   const card = page.getByRole("group", { name: "README card" });
-  await card.getByRole("link", { name: "Delete" }).click();
+  await card.getByRole("button", { name: "More for README card" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(card).toHaveCount(0);
 }
 
-test("the_side_column_sits_left_of_the_cards_and_controls_show_on_focus", async ({ page }) => {
+// The card's controls are always shown, not only on hover (Alex 2026-11-18: phones have no hover).
+test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
@@ -47,8 +49,10 @@ test("the_side_column_sits_left_of_the_cards_and_controls_show_on_focus", async 
     await expect(page.getByRole("link", { name: "Add card" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/settings/profile");
     const edit = card.getByRole("link", { name: "Edit" });
-    await edit.focus();
+    await page.mouse.move(0, 0);
     await expect(card).toHaveCSS("opacity", "1");
+    await expect(edit).toBeVisible();
+    await expect(card.getByRole("button", { name: "More for README card" })).toBeVisible();
     const editBox = await edit.boundingBox();
     expect(editBox !== null && readme !== null && editBox.x > readme.x).toBe(true);
   } finally {

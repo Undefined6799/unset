@@ -62,10 +62,15 @@ export const CARD_EDIT = {
   addReadme: "Add README",
   readme: "README",
   readmeHint: "Markdown: headings, lists, links, code and quotes.",
+  write: "Write",
+  preview: "Preview",
+  previewEmpty: "Nothing to preview yet.",
   save: "Save",
   add: "Add",
   cancel: "Cancel",
   up: "Move up",
+  /** The three-dot menu on each card, named for the card. */
+  more: (name: string) => `More for ${name} card`,
   down: "Move down",
   remove: "Delete",
   removeTitle: "Delete this card?",
@@ -96,11 +101,11 @@ export const LINKS_EDIT = {
   grid: "Grid",
   carousel: "Carousel",
   row: (n: number) => `Link ${n}`,
+  addRow: "Add link",
   uri: "Address",
   label: "Label",
   description: "Description",
-  hint: (max: number) =>
-    `Up to ${max} links. Leave a link's fields empty to remove it; save and edit again for more rows.`,
+  hint: (max: number) => `Up to ${max} links. Leave a link's fields empty to remove it.`,
 } as const;
 
 export const COLLECTION_EDIT = {
@@ -108,12 +113,12 @@ export const COLLECTION_EDIT = {
   editTitle: "Edit collection",
   title: "Title",
   row: (n: number) => `Entry ${n}`,
+  addRow: "Add entry",
   entryTitle: "Title",
   tag: "Tag",
   description: "Description",
   uri: "Address",
-  hint: (max: number) =>
-    `Up to ${max} entries. Leave an entry's fields empty to remove it; save and edit again for more rows.`,
+  hint: (max: number) => `Up to ${max} entries. Leave an entry's fields empty to remove it.`,
 } as const;
 
 export const BUTTONS_EDIT = {
@@ -122,7 +127,8 @@ export const BUTTONS_EDIT = {
   heading: "Heading",
   text: "Text",
   row: (n: number) => `Button ${n}`,
-  kind: "Opens",
+  addRow: "Add button",
+  kind: "Button opens",
   email: "Email",
   link: "Web address",
   address: "Email address",
