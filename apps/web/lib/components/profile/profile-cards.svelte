@@ -2,10 +2,9 @@
   The profile's cards (ADR 0051; P1.20i; laid out as the profile-card mockup, Alex 2026-11-17): a two-column grid on
   wide screens where a half card takes one column, each card on the stock Card. The README reads like a GitHub README
   under a "handle / README.md" bar; links are rows split by rules (a long list scrolls inside its card); collections
-  are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap, no
-  script: one to four tiles by the card's own width (a container query), and when more are left a part of the next
-  one shows and the count says to scroll; the scrolling area is a named stop the keyboard reaches, so its arrow keys
-  scroll it (staging walkthrough 2026-11-18, finding 5). Everything shown was built by
+  are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap: one to
+  four tiles by the card's own width (a container query), and when more are left a part of the next one shows and
+  the count says to scroll; the scrolling area and its buttons are carousel.svelte. Everything shown was built by
   apps/web/lib/profile/view.ts. On the owner's page `controls` puts each card's own at the top right of the card, and
   `add` closes the grid, full width (the Add card button). No cards and no `add` renders nothing.
 -->
@@ -15,6 +14,7 @@ import { CARD_TEXT } from "../../profile/messages.ts";
 import type { CardLayout, CardView } from "../../profile/types.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
+import Carousel from "./carousel.svelte";
 import Readme from "./readme.svelte";
 
 let {
@@ -41,6 +41,9 @@ const LAYOUT: Record<CardLayout, string> = {
  * A carousel's tile width by its number of tiles (1, 2, 3, 4, more): whole tiles while they all fit at the card's
  * width, else a quarter of the next one shows. TAIL says at which widths some are left over, for the count line.
  */
+/** Three or more grid entries share the whole row (no empty column); one or two keep the tile width. */
+const GRID_FILLS_ROW_FROM = 3;
+const GRID_FILLED = "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3";
 const TILES = [
   "auto-cols-[100%]",
   "auto-cols-[85%] @sm:auto-cols-[calc((100%-0.75rem)/2)]",
@@ -78,18 +81,10 @@ const count = "font-mono text-xs text-muted-foreground";
 
 {#snippet scroller(layout: CardLayout, title: string, count: number, scrolls: boolean, list: Snippet<[string]>)}
   {#if layout === "carousel"}
-    <!-- A scrolling area is a keyboard stop (WCAG 2.1.1; axe scrollable-region-focusable). -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <div
-      role="region"
-      aria-label={CARD_TEXT.carousel(title)}
-      tabindex="0"
-      class="snap-x snap-mandatory overflow-x-auto rounded-sm pb-2.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      {@render list(`${LAYOUT.carousel} ${TILES[tierOf(count)]}`)}
-    </div>
+    {#snippet tiles()}{@render list(`${LAYOUT.carousel} ${TILES[tierOf(count)]}`)}{/snippet}
+    <Carousel {title} list={tiles} />
   {:else}
-    <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : ""}>{@render list(LAYOUT[layout])}</div>
+    <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : ""}>{@render list(layout === "grid" && count >= GRID_FILLS_ROW_FROM ? GRID_FILLED : LAYOUT[layout])}</div>
   {/if}
 {/snippet}
 
