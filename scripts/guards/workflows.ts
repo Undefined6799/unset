@@ -145,7 +145,7 @@ export const SIGNING_JOBS: Readonly<Record<string, string>> = {
   "mirror.yml": "copy-and-sign",
 };
 
-const CACHE = /\bactions\/cache@|^\s*(?:- )?cache(?:-dependency-path)?:|\bcache-(?:from|to)\b/;
+const CACHE = /\bactions\/cache(?:\/[\w.-]+)?@|^\s*(?:- )?cache(?:-dependency-path)?:|\bcache-(?:from|to)\b/;
 
 /** One job's signing problems: OIDC or package writes outside a signing job, and a signing job's required shape. */
 function jobSigningProblems(file: string, id: string, body: string[]): string[] {
