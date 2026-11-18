@@ -10,3 +10,9 @@ export {
   type RepoReaderOptions,
   type RepoSnapshot,
 } from "./repo.ts";
+export {
+  createRepoStatusReader,
+  type RepoStatus,
+  type RepoStatusReader,
+  type RepoStatusReaderOptions,
+} from "./repoStatus.ts";

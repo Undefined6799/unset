@@ -44,6 +44,8 @@ export type IndexHealth = {
   readonly cursor: number | null;
   readonly counters: Readonly<Record<Counter, number>>;
   readonly deadLetters: number;
+  /** Accounts whose deletion our PDS confirmed and that wait, hidden, for erasure (P3.06e). */
+  readonly deletionsNotErased: number;
 };
 
 export type IndexStore = {
@@ -89,6 +91,14 @@ export const INGEST_COUNTERS = [
   "backfill_stale",
   "backfill_failed",
   "backfill_dead_letter",
+  "account_confirmed_active",
+  "account_confirmed_inactive",
+  "account_deletion_confirmed",
+  "account_deletion_not_confirmed",
+  "account_job_skipped",
+  "account_job_superseded",
+  "account_job_failed",
+  "account_job_dead_letter",
 ] as const;
 export type Counter = (typeof INGEST_COUNTERS)[number];
 
@@ -160,13 +170,17 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
   const stats = await client.query("SELECT name, value FROM idx.ingest_stat WHERE name = ANY($1::text[])", [
     [...INGEST_COUNTERS],
   ]);
-  const dead = await client.query("SELECT count(*) AS n FROM idx.dead_letter");
+  const dead = await client.query(
+    `SELECT count(*) AS n, count(*) FILTER (WHERE reason_code = 'deletion_confirmed_not_erased') AS unerased
+     FROM idx.dead_letter`,
+  );
   const counters = Object.fromEntries(INGEST_COUNTERS.map((name) => [name, 0])) as Record<Counter, number>;
   for (const row of stats.rows) counters[row.name as Counter] = Number(row.value);
   return {
     cursor: cursor.rows[0] === undefined ? null : Number(cursor.rows[0].seq),
     counters,
     deadLetters: Number(dead.rows[0]?.n ?? 0),
+    deletionsNotErased: Number(dead.rows[0]?.unerased ?? 0),
   };
 }
 
@@ -252,14 +266,42 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
 async function applyAccount(tx: PoolClient, frame: Extract<IndexFrame, { kind: "account" }>): Promise<void> {
   if (frame.active) {
     await queueJob(tx, frame.did, "confirm_status");
+    await supersedeConfirmations(tx, frame.did);
     return count(tx, "ingest_account_confirm");
   }
-  await tx.query("UPDATE idx.account SET pds_active = false, pds_status = $2, updated_at = now() WHERE did = $1", [
-    frame.did,
-    frame.status,
-  ]);
+  await hideAccount(tx, frame.did, frame.status);
   if (frame.status === "deleted") await queueJob(tx, frame.did, "confirm_deletion");
   await count(tx, "ingest_account_inactive");
+}
+
+/** The reasons app.end_sessions_for_did accepts for a PDS status (migration 0014's closed list); others are unknown. */
+const SESSION_END_REASONS = new Set(["deactivated", "takendown", "suspended", "deleted"]);
+
+/**
+ * Applies an inactive status at once (book P3.06 step 2): the account leaves idx.visible_account and the member's
+ * sessions end in the same transaction, through the one function that deletes sessions (migration 0014; EXECUTE
+ * granted by migration 0027). A deactivated account keeps its token set, by that function's allow-list.
+ */
+export async function hideAccount(tx: PoolClient, did: string, status: string | null): Promise<void> {
+  await tx.query("UPDATE idx.account SET pds_active = false, pds_status = $2, updated_at = now() WHERE did = $1", [
+    did,
+    status,
+  ]);
+  const why = status !== null && SESSION_END_REASONS.has(status) ? status : "unknown";
+  await tx.query("SELECT app.end_sessions_for_did($1, $2)", [did, why]);
+  await supersedeConfirmations(tx, did);
+}
+
+/**
+ * A status newer than an answer our PDS gave before it must win: a confirm_status read must not reveal a hidden
+ * account, and a confirm_deletion read must not mark deleted an account that came back or changed status. Moving
+ * the jobs' due time breaks their claims (accountStore.ts), and they ask again.
+ */
+async function supersedeConfirmations(tx: PoolClient, did: string): Promise<void> {
+  await tx.query(
+    "UPDATE idx.account_job SET due_at = now() WHERE did = $1 AND kind IN ('confirm_status', 'confirm_deletion')",
+    [did],
+  );
 }
 
 export type JobKind = "handle_check" | "backfill" | "confirm_status" | "confirm_deletion";
