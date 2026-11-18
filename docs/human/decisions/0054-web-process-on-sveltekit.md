@@ -1,6 +1,6 @@
 # 0054 — The web process runs on SvelteKit with Svelte 5 screens; Hono is removed
 
-Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry and the superseded marks on 0015 and 0016. Supersedes ADR 0015.
+Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry, the superseded marks on 0015 and 0016, and one sentence in decision 3 (settings come from shared-config, not SvelteKit's `src/env.ts`), changed after 23b09e6 and awaiting Alex's confirmation. Supersedes ADR 0015.
 
 ## Context
 ADR 0015 chose Hono with server-rendered React and islands, with no inline script or style anywhere, and failed Astro
@@ -29,8 +29,9 @@ yet.
 2. Only what runs today is ported: the 39 routes in `interfaces/http/routes.manifest.json`. No screen or route for a
    feature that does not exist yet.
 3. SvelteKit's own mechanism is used where it has one: the Origin check on form posts, form actions with
-   `use:enhance`, the cookies API, `src/env.ts` settings checked at start, the server-only module guard, the body cap.
-   Writes are form actions, so the card writes that take JSON today become forms. Remote functions stay off
+   `use:enhance`, the cookies API, the server-only module guard, the body cap. Settings come from shared-config like
+   every other process, loaded by `server.ts` before the handler, because SvelteKit's `src/env.ts` cannot express
+   cross-field rules or our exit code. Writes are form actions, so the card writes that take JSON today become forms. Remote functions stay off
    (SvelteKit's default).
 4. CSP for the app group (a loosening). Today (`shared/http/csp/policies.ts`, production snapshot):
    `default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self'
