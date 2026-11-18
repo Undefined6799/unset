@@ -35,21 +35,24 @@ const SCROLL_AFTER = 4;
 const LAYOUT: Record<CardLayout, string> = {
   list: "grid",
   grid: "grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3",
-  carousel: "grid grid-flow-col gap-3",
+  carousel: "grid grid-flow-col gap-[round(0.75rem,1px)]",
 };
 /**
  * A carousel's tile width by its number of tiles (1, 2, 3, 4, more): whole tiles while they all fit at the card's
  * width, else a quarter of the next one shows. TAIL says at which widths some are left over, for the count line.
+ * Tile widths and the carousel's gap are rounded to whole pixels (https://developer.mozilla.org/en-US/docs/Web/CSS/round)
+ * so every snap point is a whole pixel. Otherwise Firefox rests a fraction of a pixel short of a tile's snap point, an
+ * arrow key snaps it back to that tile, and the keyboard cannot get past the second tile (profile-carousel.spec.ts).
  */
 /** Three or more grid entries share the whole row (no empty column); one or two keep the tile width. */
 const GRID_FILLS_ROW_FROM = 3;
 const GRID_FILLED = "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3";
 const TILES = [
   "auto-cols-[100%]",
-  "auto-cols-[85%] @sm:auto-cols-[calc((100%-0.75rem)/2)]",
-  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-1.5rem)/3)]",
-  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-2.25rem)/3.25)] @4xl:auto-cols-[calc((100%-2.25rem)/4)]",
-  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-2.25rem)/3.25)] @4xl:auto-cols-[calc((100%-3rem)/4.25)]",
+  "auto-cols-[round(down,85%,1px)] @sm:auto-cols-[round(down,(100%-0.75rem)/2,1px)]",
+  "auto-cols-[round(down,85%,1px)] @sm:auto-cols-[round(down,(100%-1.5rem)/2.25,1px)] @2xl:auto-cols-[round(down,(100%-1.5rem)/3,1px)]",
+  "auto-cols-[round(down,85%,1px)] @sm:auto-cols-[round(down,(100%-1.5rem)/2.25,1px)] @2xl:auto-cols-[round(down,(100%-2.25rem)/3.25,1px)] @4xl:auto-cols-[round(down,(100%-2.25rem)/4,1px)]",
+  "auto-cols-[round(down,85%,1px)] @sm:auto-cols-[round(down,(100%-1.5rem)/2.25,1px)] @2xl:auto-cols-[round(down,(100%-2.25rem)/3.25,1px)] @4xl:auto-cols-[round(down,(100%-3rem)/4.25,1px)]",
 ] as const;
 const TAIL = ["hidden", "@sm:hidden", "@2xl:hidden", "@4xl:hidden", ""] as const;
 const tierOf = (count: number) => Math.min(Math.max(count, 1), 5) - 1;

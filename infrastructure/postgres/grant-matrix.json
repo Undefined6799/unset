@@ -278,6 +278,9 @@
         "wholeTable": true
       }
     },
+    "idx.erase_deleted_account": {
+      "indexer": ["EXECUTE"]
+    },
     "idx.is_erased": {
       "indexer": ["EXECUTE"]
     },

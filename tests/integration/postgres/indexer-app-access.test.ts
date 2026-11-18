@@ -1,4 +1,5 @@
-// P3.06g (infrastructure/postgres/migrations/0027_indexer_end_sessions.sql) and P3.07s (0028, idx.is_erased): the
+// P3.06g (infrastructure/postgres/migrations/0027_indexer_end_sessions.sql), P3.07s (0028, idx.is_erased) and P3.06e
+// (0029, idx.erase_deleted_account, which reaches core.erase_did with no grant in core): the
 // indexer may end a DID's sessions
 // through app.end_sessions_for_did and do nothing else in schema `app`. USAGE on a schema reaches every function in it
 // that PUBLIC may execute, so the test lists what `indexer` can execute, read or write there, as the real role (TE-2).
@@ -53,14 +54,14 @@ describe("indexer in schema app", () => {
 });
 
 describe("indexer in schemas idx and core", () => {
-  test("indexer_executes_only_is_erased_in_idx", async () => {
+  test("indexer_executes_only_is_erased_and_erase_deleted_account_in_idx", async () => {
     // No function in idx is executable by PUBLIC (0003), so this list is exactly the grants made to indexer.
     expect(
       await names(
         "SELECT p.proname AS name FROM pg_catalog.pg_proc p WHERE p.pronamespace = 'idx'::regnamespace " +
           "AND has_function_privilege(p.oid, 'EXECUTE') ORDER BY 1",
       ),
-    ).toEqual(["is_erased"]);
+    ).toEqual(["erase_deleted_account", "is_erased"]);
   });
 
   test("indexer_reaches_nothing_in_core", async () => {
