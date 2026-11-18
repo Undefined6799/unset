@@ -10,7 +10,13 @@
   "exclude": ["build", ".svelte-kit", "dist"],
   "references": [
     {
+      "path": "../../apps/web"
+    },
+    {
       "path": "../../domains/identity"
+    },
+    {
+      "path": "../../domains/profile"
     },
     {
       "path": "../../infrastructure/net-guard"
@@ -35,6 +41,9 @@
     },
     {
       "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/lexicons"
     },
     {
       "path": "../../shared/log"
