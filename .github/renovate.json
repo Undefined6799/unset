@@ -94,6 +94,13 @@
       "pinDigests": true
     },
     {
+      "description": "P0.07n: Playwright's npm packages and its browser image move together, or the browser jobs refuse to start",
+      "matchPackageNames": ["@playwright/test", "playwright", "playwright-core", "mcr.microsoft.com/playwright"],
+      "minimumReleaseAge": "7 days",
+      "groupName": "playwright",
+      "schedule": ["* 0-5 * * 1"]
+    },
+    {
       "description": "Workspaces are local links, never registry packages (the @unset scope belongs to a third party)",
       "minimumReleaseAge": "7 days",
       "matchPackageNames": ["@unset/**"],

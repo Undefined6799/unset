@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-28
+checked: 2026-11-18
 ---
 # tests
 
@@ -45,6 +45,11 @@ Since P0.07h, both install jobs cache the browser and the packages apt fetched (
 the runner image, Playwright version and browser), because the mirror still crawled at about 50 KB/s. apt does
 not hash-check a file already in its archive directory, so a cached package reaches apt only when its SHA256
 matches the signed index.
+Since P0.07n, only `a11y` installs a browser on the runner. The `browser` jobs pull Playwright's own image
+(`mcr.microsoft.com/playwright`, pinned by digest, version equal to the lockfile's `playwright-core`), up to three
+attempts in the job, run the lockfile's `playwright-core` `run-server` in it, and connect the tests through
+`PW_TEST_CONNECT_WS_ENDPOINT`: on 2026-11-18 the apt mirror served 20 to 60 kB/s and the cache could not keep up.
+The server's log is the `e2e-browsers.log` artifact.
 Its three jobs pin `actions/setup-node` v7.1.0 (P0.08). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in
 the `a11y` job only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
