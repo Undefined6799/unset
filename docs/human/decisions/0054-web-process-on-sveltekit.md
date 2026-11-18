@@ -1,6 +1,6 @@
 # 0054 — The web process runs on SvelteKit with Svelte 5 screens; Hono is removed
 
-Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry, the superseded marks on 0015 and 0016, and one sentence in decision 3 (settings come from shared-config, not SvelteKit's `src/env.ts`), changed after 23b09e6 and awaiting Alex's confirmation. Supersedes ADR 0015.
+Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry, the superseded marks on 0015 and 0016, and one sentence in decision 3 (settings come from shared-config, not SvelteKit's `src/env.ts`), changed after 23b09e6 and confirmed by Alex at 8504fd2, 2026-11-18 00:22:56Z (his line "Confirm ADR 0054."). Supersedes ADR 0015.
 
 ## Context
 ADR 0015 chose Hono with server-rendered React and islands, with no inline script or style anywhere, and failed Astro
