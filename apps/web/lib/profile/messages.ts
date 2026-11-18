@@ -143,9 +143,4 @@ export const OWN_PAGE = {
   setUpTitle: "Set up your profile",
   setUpBody:
     "Your name, bio, picture and sections will be edited here. The editor is not ready yet, and your profile stays private until you publish it.",
-  accountInterstitial: "You are going to {pdsHost}, our sign-in server; it is the only place you type your password.",
-  accountOurs: "Your account on {pdsHost}",
-  accountForeign: "your sign-in server ({pdsHost})",
-  newTab: "(opens in a new tab)",
-  signOut: "Sign out",
 } as const;
