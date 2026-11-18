@@ -98,8 +98,8 @@ test("pds_theme_loads_only_edge_fonts", () => {
 });
 
 test("recipe_appends_the_theme_before_the_source_is_hashed", () => {
-  const recipe = readFileSync(join(import.meta.dirname, "../Dockerfile"), "utf8");
-  expect(recipe).toContain("COPY ui/unset-theme.css /unset-theme.css");
+  const recipe = readFileSync(join(import.meta.dirname, "../pds.Dockerfile"), "utf8");
+  expect(recipe).toContain("COPY deployment/pds/ui/unset-theme.css /unset-theme.css");
   const append = recipe.indexOf("cat /unset-theme.css >> packages/oauth/oauth-provider-ui/src/style.css");
   expect(append).toBeGreaterThan(0);
   expect(append).toBeLessThan(recipe.indexOf("find . -type f -exec sha256sum"));
