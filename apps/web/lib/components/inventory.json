@@ -190,5 +190,40 @@
       }
     }
   },
-  "ours": {}
+  "ours": {
+    "profile": {
+      "card-controls.svelte": {
+        "origin": "ours",
+        "purpose": "The owner's controls under each profile card: edit, move up and down, delete behind a confirm."
+      },
+      "card-editor.svelte": {
+        "origin": "ours",
+        "purpose": "A profile card's editor: the stock Dialog holding one form for the page's create or save action."
+      },
+      "choice.svelte": {
+        "origin": "ours",
+        "purpose": "A labelled choice in a card editor: the stock RadioGroup and Label, submitted by name."
+      },
+      "field.svelte": {
+        "origin": "ours",
+        "purpose": "A labelled text field in a card editor: the stock Label over the stock Input or Textarea."
+      },
+      "messages.ts": {
+        "origin": "ours",
+        "purpose": "The words the profile cards and their editors show that the member does not write."
+      },
+      "profile-cards.svelte": {
+        "origin": "ours",
+        "purpose": "The profile's cards in a two-column grid on the stock Card: README, links, collection, buttons."
+      },
+      "readme.svelte": {
+        "origin": "ours",
+        "purpose": "The README card's parsed blocks as plain escaped elements, with the README text styles."
+      },
+      "types.ts": {
+        "origin": "ours",
+        "purpose": "The card view types the owner's page hands the profile components, built on the server."
+      }
+    }
+  }
 }
