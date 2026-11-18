@@ -81,7 +81,7 @@ const fixture: StandInFixture = {
 
 let web: RunningWeb;
 beforeAll(async () => {
-  buildOnce();
+  buildOnce(provided.port);
   web = await startWeb(pg, {}, fixture);
 }, 120_000);
 afterAll(async () => {

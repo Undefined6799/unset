@@ -79,7 +79,7 @@ async function signedIn(owner: Did): Promise<string> {
 
 let web: RunningWeb;
 beforeAll(async () => {
-  buildOnce();
+  buildOnce(provided.port);
   web = await startWeb(pg);
 }, 120_000);
 afterAll(async () => {
