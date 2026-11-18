@@ -9,11 +9,35 @@
   "include": ["*.ts", "src/**/*.ts"],
   "exclude": ["build", ".svelte-kit", "dist"],
   "references": [
-    { "path": "../../infrastructure/postgres" },
-    { "path": "../../infrastructure/session" },
-    { "path": "../../shared/config" },
-    { "path": "../../shared/errors" },
-    { "path": "../../shared/http" },
-    { "path": "../../shared/log" }
+    {
+      "path": "../../domains/identity"
+    },
+    {
+      "path": "../../infrastructure/net-guard"
+    },
+    {
+      "path": "../../infrastructure/pds"
+    },
+    {
+      "path": "../../infrastructure/postgres"
+    },
+    {
+      "path": "../../infrastructure/seal"
+    },
+    {
+      "path": "../../infrastructure/session"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/errors"
+    },
+    {
+      "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/log"
+    }
   ]
 }

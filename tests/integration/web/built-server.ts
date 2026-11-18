@@ -2,6 +2,7 @@
 // this folder: every security outcome is checked on the build, never under `vite dev` (ADR 0054 decision 5). Each
 // test file starts its own server against its own database, as the web role (TE-2), and stops it when done.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http"; // guard-allow: egress loopback requests to the test server only
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
@@ -11,6 +12,7 @@ import { join } from "node:path";
 const WEB = join(import.meta.dirname, "..", "..", "..", "interfaces", "web");
 export const ORIGIN = "https://unset.test";
 export const HOST = "unset.test";
+export const PDS_HOST = "pds.unset.test";
 
 /** Builds interfaces/web once per run; a file that finds a build made by an earlier file in this run reuses it. */
 export function buildOnce(): void {
@@ -57,6 +59,17 @@ function send(port: number, path: string, init: WebRequest): Promise<Response> {
   });
 }
 
+/**
+ * What stand-in-server.ts answers in place of the network: `http` for identity GETs (PLC documents, did:web, handle
+ * domains) by URL, `txt` for DNS TXT lookups by name, `fetch` for the OAuth client's and the PDS calls' requests by
+ * "METHOD url". A server started without one reaches the real network through net-guard, as in production.
+ */
+export type StandInFixture = {
+  http?: Record<string, { status?: number; body: unknown }>;
+  txt?: Record<string, string[]>;
+  fetch?: Record<string, { status?: number; body: unknown }>;
+};
+
 export type Postgres = { host: string; port: number; database: string; user: string; password: string };
 
 export type RunningWeb = {
@@ -68,13 +81,33 @@ export type RunningWeb = {
   stop: () => Promise<number | null>;
 };
 
-/** Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. */
-export async function startWeb(pg: Postgres, env: Record<string, string> = {}): Promise<RunningWeb> {
+/**
+ * Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. With `standIns` it
+ * starts through stand-in-server.ts, which answers the network from that fixture.
+ */
+export async function startWeb(
+  pg: Postgres,
+  env: Record<string, string> = {},
+  standIns?: StandInFixture,
+): Promise<RunningWeb> {
   const secrets = mkdtempSync(join(tmpdir(), "web-kit-"));
-  const passwordFile = join(secrets, "pg_web");
-  writeFileSync(passwordFile, pg.password);
+  const secret = (name: string, text: string): string => {
+    const path = join(secrets, name);
+    writeFileSync(path, text);
+    return path;
+  };
+  // Made per run, as interfaces/http/test-env.ts makes them, so no key material sits in the repository.
+  const keyring = { active: "k1", keys: { k1: randomBytes(32).toString("base64") } };
+  const clientKey = {
+    ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
+    kid: "A",
+    alg: "ES256",
+  };
   const port = await freePort();
-  const child: ChildProcess = spawn(process.execPath, ["server.ts"], {
+  const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
+  const fixture =
+    standIns === undefined ? {} : { WEB_STAND_IN_FIXTURE: secret("stand-ins.json", JSON.stringify(standIns)) };
+  const child: ChildProcess = spawn(process.execPath, [entry], {
     cwd: WEB,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -93,10 +126,17 @@ export async function startWeb(pg: Postgres, env: Record<string, string> = {}): 
       PG_PORT: String(pg.port),
       PG_DATABASE: pg.database,
       PG_USER: pg.user,
-      PG_PASSWORD_FILE: passwordFile,
+      PG_PASSWORD_FILE: secret("pg_web", pg.password),
       PG_SSLMODE: "disable",
       PG_POOL_MAX: "4",
+      SEAL_KEYRING_FILE: secret("seal_keyring", JSON.stringify(keyring)),
+      PLC_URL: "https://plc.directory",
+      OAUTH_CLIENT_KEYS_FILE: secret("oauth_client_keys", JSON.stringify([clientKey])),
+      OAUTH_ACTIVE_KID: "A",
+      PDS_HOSTNAME: PDS_HOST,
+      HANDLE_SUFFIX: `.${PDS_HOST}`,
       TEST_ROUTES: "true",
+      ...fixture,
       ...env,
     },
   });
