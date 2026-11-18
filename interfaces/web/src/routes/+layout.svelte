@@ -11,6 +11,7 @@ import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
 import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
+import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import type { Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
@@ -398,7 +399,7 @@ const row =
     <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
       <li>
         <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
-        <a href={account === undefined ? "/me" : `${account.path}#add-card`} class={row} autofocus>
+        <a href={account === undefined ? "/me" : `${account.path}?add#${PANEL_ANCHOR}`} class={row} autofocus>
           <Icon name="apps" size={20} /><span>{T.addCard}</span>
         </a>
       </li>

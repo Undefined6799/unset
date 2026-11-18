@@ -46,8 +46,11 @@ test("the_create_menu_closes_after_a_client_navigation", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.locator('header button[popovertarget="create-menu"]').click();
   await page.locator("#create-menu").getByRole("link", { name: "Add a profile card" }).click();
-  await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}#add-card`);
+  // Codex review of f14b5ab: the item lands on the Add card picker in place (`?add`), which exists with or without
+  // script; the old `#add-card` fragment named no element.
+  await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}?add#card-editor`);
   await expect(page.locator("#create-menu")).toBeHidden();
+  await expect(page.locator("#card-editor")).toBeInViewport();
 });
 
 // Alex, 2026-11-18 05:02Z: a signed-in member reading a legal page sees the same header, signed in.
