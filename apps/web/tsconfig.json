@@ -20,5 +20,5 @@
       "path": "../../shared/ui"
     }
   ],
-  "exclude": ["dist", "vite.config.ts"]
+  "exclude": ["dist", "vite.config.ts", "lib"]
 }
