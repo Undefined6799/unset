@@ -1,0 +1,143 @@
+// The pds-admin request handler (P2.09 Algorithm; ADR 0060 decisions 2 to 5). Two routes; every other method and path
+// is 404. A request runs the checks below in order, and every outcome is one log line. Issuing runs in one chain, so
+// two requests can never read the same quota (step 7a).
+import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
+import { checkEnvelope, checkShape, type Expected, isRefusal, type ServiceKey } from "./envelope.ts";
+import { type IssueLimits, type IssueResult, issueInvite } from "./issue.ts";
+import type { JtiStore } from "./jti.ts";
+import type { LogFields, RequestLog } from "./log.ts";
+import type { Pds } from "./pds.ts";
+
+export type HandlerDeps = {
+  readonly keys: readonly ServiceKey[];
+  readonly expected: Expected;
+  readonly limits: IssueLimits;
+  readonly pds: Pds;
+  readonly jti: JtiStore;
+  readonly log: RequestLog;
+  readonly commit: string;
+  readonly now: () => number;
+};
+
+const ROUTE = "/v1/invite.issue";
+const BODY_CAP = 4096;
+
+type Answer = { status: number; body: Record<string, unknown> };
+const ERRORS: Record<number, string> = { 400: "bad_request", 403: "denied", 404: "not_found", 503: "unavailable" };
+const fail = (status: number): Answer => ({ status, body: { error: ERRORS[status] } });
+
+/** Step 2: the body, or null past the cap; the stream is not read further once the cap is passed. */
+async function readBody(req: IncomingMessage): Promise<Buffer | null> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    if (size > BODY_CAP) return null;
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+function answerFor(result: IssueResult): Answer {
+  const at = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+  switch (result.kind) {
+    case "issued":
+      return {
+        status: 200,
+        body: { code: result.code, remaining: result.remaining, availableAt: at(result.availableAt) },
+      };
+    case "closed":
+      return { status: 409, body: { error: "signups_closed" } };
+    case "denied":
+      return fail(403);
+    case "quota":
+      return { status: 429, body: { error: "quota", availableAt: at(result.availableAt) } };
+    case "unavailable":
+      return fail(503);
+  }
+}
+
+const OUTCOMES: Record<IssueResult["kind"], LogFields["outcome"]> = {
+  issued: "issued",
+  closed: "denied",
+  denied: "denied",
+  quota: "denied",
+  unavailable: "error",
+};
+
+export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: ServerResponse) => void {
+  let chain: Promise<unknown> = Promise.resolve();
+  const serialized = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = chain.then(work, work);
+    chain = run.catch(() => undefined);
+    return run;
+  };
+  const record = (fields: LogFields) => deps.log.append(fields, deps.now());
+
+  async function handle(req: IncomingMessage): Promise<Answer> {
+    // Step 1: the one route, by method and exact path, as JSON.
+    if (req.method === "GET" && req.url === "/health") return { status: 200, body: { ok: true, commit: deps.commit } };
+    if (req.method !== "POST" || req.url !== ROUTE) return fail(404);
+    if (req.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") return deny(400, "content_type");
+    // Steps 2 and 3: a capped body, parsed, of the exact shape.
+    const raw = await readBody(req);
+    if (raw === null) return deny(400, "body_cap");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw.toString("utf8"));
+    } catch {
+      return deny(400, "json");
+    }
+    const shaped = checkShape(parsed);
+    if (isRefusal(shaped)) return deny(shaped.status, shaped.reason);
+    // Steps 4 to 6: key, verb, signature, claims.
+    const payload = checkEnvelope(shaped, deps.keys, deps.expected, Math.floor(deps.now() / 1000));
+    const who = { kid: shaped.kid, jti: String(shaped.payload.jti), verb: String(shaped.payload.verb) };
+    if (isRefusal(payload)) return deny(payload.status, payload.reason, who);
+    // Step 7: once only, recorded on disk before anything else happens.
+    if (deps.jti.burn(payload.jti, payload.exp)) return deny(403, "replay", who);
+    // Steps 8 to 12, one at a time.
+    const dids = { actorDid: payload.actor_did, targetDid: payload.target };
+    return serialized(async () => {
+      const result = await issueInvite(
+        deps.pds,
+        deps.limits,
+        payload.target,
+        () => deps.log.issuedToday(deps.now()),
+        deps.now,
+      );
+      const reason =
+        result.kind === "issued" ? {} : { reason: result.kind === "closed" ? "signups_closed" : result.reason };
+      record({
+        outcome: OUTCOMES[result.kind],
+        ...who,
+        ...dids,
+        ...reason,
+        ...(result.kind === "issued" ? { code: result.code } : {}),
+      });
+      return answerFor(result);
+    });
+  }
+
+  function deny(status: 400 | 403, reason: string, who: Partial<LogFields> = {}): Answer {
+    record({ outcome: "denied", reason, ...who });
+    return fail(status);
+  }
+
+  return (req, res) => {
+    handle(req)
+      .catch((error: unknown) => {
+        // Step 14: never 200 on an unexpected failure, and only the class name reaches the log.
+        try {
+          record({ outcome: "error", reason: error instanceof Error ? error.constructor.name : "unknown" });
+        } catch {
+          // The log itself failed: the answer is still 503, never 200.
+        }
+        return fail(503);
+      })
+      .then((answer) => {
+        res.writeHead(answer.status, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(JSON.stringify(answer.body));
+      });
+  };
+}

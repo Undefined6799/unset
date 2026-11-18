@@ -5,10 +5,12 @@
   "exclude": ["dist"],
   "references": [
     { "path": "../interfaces/web" },
+    { "path": "../interfaces/pds-admin" },
     { "path": "../infrastructure/audit" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
     { "path": "../infrastructure/storage" },
+    { "path": "../shared/admin-envelope" },
     { "path": "../shared/host-pin" },
     { "path": "../shared/log" }
   ]
