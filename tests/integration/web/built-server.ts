@@ -2,25 +2,65 @@
 // this folder: every security outcome is checked on the build, never under `vite dev` (ADR 0054 decision 5). Each
 // test file starts its own server against its own database, as the web role (TE-2), and stops it when done.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { request as httpRequest } from "node:http"; // guard-allow: egress loopback requests to the test server only
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const WEB = join(import.meta.dirname, "..", "..", "..", "interfaces", "web");
+const REPO = join(import.meta.dirname, "..", "..", "..");
+const WEB = join(REPO, "interfaces", "web");
 export const ORIGIN = "https://unset.test";
 export const HOST = "unset.test";
 export const PDS_HOST = "pds.unset.test";
 
+/** The folders whose code goes into the web build: the app, its pages, and every workspace package it bundles. */
+const BUILD_INPUTS = ["interfaces/web", "apps/web", "shared", "domains", "infrastructure"].map((dir) =>
+  join(REPO, dir),
+);
+const NOT_INPUTS = new Set(["node_modules", "build", "dist", ".svelte-kit", ".build-lock", "test-results"]);
+
 /**
- * Builds interfaces/web once per run, however many files ask at once: the first takes a lock folder and builds; the
- * others wait for its marker. `run` names the run (the test Postgres's port, new each run), so a later file in the
- * same run never rebuilds under a server another file is still running.
+ * What the build is made from, as each file's path, size and modification time: an edit changes it, so a later run
+ * never reuses a build of older code (outside review of f5cab2f, finding 2: two local Playwright runs with an edit
+ * between them built once). Reading only file metadata keeps it to a few milliseconds.
+ */
+export function sourceFingerprint(inputs: readonly string[] = BUILD_INPUTS): string {
+  const hash = createHash("sha256");
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (NOT_INPUTS.has(entry.name) || entry.name.endsWith(".tsbuildinfo")) continue;
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) {
+        const { size, mtimeMs } = statSync(path);
+        hash.update(`${path}\0${size}\0${mtimeMs}\n`);
+      }
+    }
+  };
+  for (const input of inputs) walk(input);
+  return hash.digest("hex").slice(0, 16);
+}
+
+/**
+ * Builds interfaces/web once per run and source, however many processes ask at once: the first takes a lock folder
+ * and builds; the others wait for its marker. `run` names the run (the test Postgres's port, new each run; "e2e" for
+ * the browser harness's two servers), so a later file in the same run never rebuilds under a server another file is
+ * still running; the source fingerprint makes a run after an edit build again. The build empties build/, markers
+ * included.
  */
 export function buildOnce(run: string | number): void {
-  const marker = join(WEB, "build", `.built-${run}`);
+  const marker = join(WEB, "build", `.built-${run}-${sourceFingerprint()}`);
   if (existsSync(marker)) return;
   withBuildLock(() => {
     if (existsSync(marker)) return;
