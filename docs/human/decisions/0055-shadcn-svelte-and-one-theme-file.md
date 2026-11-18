@@ -26,8 +26,11 @@ pinned or hashed source. He also asked that the app and the PDS screens share on
 ## Consequences
 - Two stock components fail `exactOptionalPropertyTypes`; ADR 0056 records the web folder's exception.
 - The select placeholder fails colour contrast with the seeded theme; the theme file fixes it, not the component.
-- The `shared/ui` inventory test and its approval rule cover the new components in place of the old ones.
+- This replaces the `shared/ui` approval rule (a new component needed Alex's approval and a place on the design
+  sheet). The inventory test still lists every component, so none appears unnoticed. Adding a stock shadcn-svelte
+  component needs no approval; changing a stock component, or adding one that is not from shadcn-svelte, is called
+  out in the PR description. The matching lines in `CLAUDE.md`'s UI section change in P1.20c, with Alex's line.
 
 ## Compliance
-The `shared/ui` inventory test lists the components and fails on one that is not listed. The icon guard keeps
+The inventory test lists the components and fails on one that is not listed. The icon guard keeps
 icons to the Iconoir data; Biome's CSS rules and a lint rule added in P1.20c keep utility classes out of pages.

@@ -19,8 +19,8 @@ Decision 34 puts screens in `apps/web` and the server in `interfaces/http`. Svel
    refusals included): the host check, the base security headers, the one log line, listen and drain. `hooks.server.ts`
    owns the per-route checks: form-only bodies, body size, client address, rate limits, session, deadline and the page
    group's CSP. Every route has a row in the route table or is refused; a test checks the routes folder against it.
-6. No page is prerendered, because adapter-node serves a prerendered page before the hook. The proof test fails if
-   the build contains an `.html` file; a guard in `scripts/guards/` fails it, and fails if a proof-only route
+6. No page is prerendered, because adapter-node serves a prerendered page before the hook. A guard in
+   `scripts/guards/` fails the build if the output contains a prerendered `.html` file or if a proof-only route
    (`echo`, `slow`, `proof/`) exists.
 7. Rate limits, the request deadline and log redaction stay in the app, not at the edge (decided by Alex
    2026-11-17 23:26Z). The edge may add its own per-address limits, but the app never relies on them, so a

@@ -9,10 +9,15 @@ whether SvelteKit could replace Hono for the web process, and to do it "the Svel
 SvelteKit's own mechanisms, not a port. He also questioned the no-inline-script rule: a script allowed by its exact
 hash is as safe as an external one.
 
-A proof on the branch `claude/project-thread-hz9zrn` (SvelteKit 3.2.0, adapter-node 6.0.2, Svelte 5.57.3; kept as
-`/mnt/project-files/svelte-plan/sveltekit-proof-52304fe.bundle`, report in `svelte-plan/sveltekit-parity.md`)
-showed that every outcome the Hono web server keeps true also holds on the built SvelteKit server (35 checks), and
-that the real sign-in against a PDS and the Postgres session store work when called from SvelteKit files.
+A proof kept outside this repository (a git bundle of commit 52304fe on the branch `claude/project-thread-hz9zrn`;
+SvelteKit 3.2.0, adapter-node 6.0.2, Svelte 5.57.3) checked 35 outcomes on the built SvelteKit server: only our hosts
+are served, files included; a cross-site write is refused; only form bodies, GET, HEAD and POST are accepted, with
+body limits; the session cookie is host-only and hidden from script; signed-in pages need a session for reads and
+writes; rate limits by client address and by account; the client address comes only from the edge; every response,
+files and refusals included, carries the security headers and the group's CSP; errors show a code, never a message;
+every request has a deadline; logs carry no address, account or message; every route has a policy row; the process
+drains on shutdown. A browser also signed in through a real PDS and saved a form, with the session and token set in
+Postgres. P1.20b brings these checks into the repository as tests.
 
 Hono is imported in one file, `shared/http/server.ts`, and the web process is its only user; no other process exists
 yet.
@@ -33,19 +38,24 @@ yet.
    frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script';
    trusted-types 'none'`.
    New (measured on the proof's built server, plus the media origin):
-   `default-src 'none'; connect-src 'self'; font-src 'self'; img-src 'self' <media>; manifest-src 'self';
-   object-src 'none'; script-src 'self' 'sha256-<startup script>'; style-src 'self'; style-src-attr
-   'unsafe-hashes' 'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo='
-   'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; base-uri 'none'; form-action 'self';
-   frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types svelte-trusted-html
-   sveltekit-trusted-url`.
+   `default-src 'none'; connect-src 'self'; font-src https://unset.sh/fonts/; img-src 'self' <media>;
+   manifest-src 'self'; object-src 'none'; script-src https://unset.sh/_app/ 'sha256-<startup script>';
+   style-src https://unset.sh/_app/; style-src-attr 'unsafe-hashes'
+   'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo=';
+   base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script';
+   trusted-types svelte-trusted-html sveltekit-trusted-url`.
+   File sources stay limited to the paths files are served from, as today: SvelteKit's build files under `/_app/`,
+   our fonts under `/fonts/`. SvelteKit's policy config is fixed at build time and names `'self'`, while the origin
+   is runtime config, so the hook replaces `'self'` in those three directives with the path sources from `ORIGIN`
+   on the built server (checked in a browser on the proof: styled, hydrated, enhanced form saved, no CSP report).
    What loosens: SvelteKit's inline startup script runs, allowed by its hash, which SvelteKit computes at each build;
    two fixed style attributes run, allowed by exact hash (SvelteKit's route announcer, Bits UI's hidden input); two
    named Trusted Types policies exist instead of none, because Svelte 5 and SvelteKit create them when they load.
-   What holds: no `'unsafe-inline'`, no eval, no other inline script or style. The public and profile groups keep
-   their policies and send no script (`csr = false`).
+   What holds: no `'unsafe-inline'`, no eval, no other inline script or style, file sources limited by path. The
+   public and profile groups keep their policies and send no script (`csr = false`).
 5. Under `vite dev` SvelteKit adds `'unsafe-inline'` to the style directives so it can inject styles
-   (kit `src/runtime/server/page/csp.js`); the built server never does, and every security test runs on the build.
+   (kit `src/runtime/server/page/csp.js`), and the hook leaves `'self'` in place because Vite serves files from other
+   paths; the built server never does either, and every security test runs on the build.
 
 ## Alternatives
 - **Svelte drawn by Hono.** Keeps one server we know, but we would rebuild routing, forms, client navigation and
