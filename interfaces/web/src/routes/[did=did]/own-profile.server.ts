@@ -11,7 +11,8 @@ import {
   readAvatarShape,
   readProfileRecord,
 } from "@unset/domains-profile";
-import { type CardList, type PdsResult, respondToPdsFailure, type StoredRecord } from "@unset/infrastructure-pds";
+import type { CardList, PdsResult, StoredRecord } from "@unset/infrastructure-pds";
+import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
 
 export type OwnProfile =
   | {

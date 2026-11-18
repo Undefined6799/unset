@@ -16,13 +16,8 @@ import {
   withAvatarShape,
   withCardOrder,
 } from "@unset/domains-profile";
-import {
-  type BuiltRecord,
-  type CardList,
-  type PdsResult,
-  respondToPdsFailure,
-  type SaveOutcome,
-} from "@unset/infrastructure-pds";
+import type { BuiltRecord, CardList, PdsResult, SaveOutcome } from "@unset/infrastructure-pds";
+import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
 
 /** The member's own card and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {

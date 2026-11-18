@@ -4,7 +4,7 @@ import { TokenRefreshError } from "@atproto/oauth-client-node";
 import type { Did } from "@unset/domains-identity";
 import type { LogEvent, Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { createPdsCall, type PdsContext, respondToPdsFailure } from "./pds-call.ts";
+import { createPdsCall, type PdsContext } from "./pds-call.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
 
@@ -336,31 +336,5 @@ describe("pdsCall", () => {
     expect(b).toEqual(a);
     expect(c).toEqual(a);
     expect(calls).toBe(1);
-  });
-});
-
-test("respondToPdsFailure maps the book's pages", () => {
-  expect(respondToPdsFailure("POST", { kind: "transient", code: "pds_unavailable" }, "pds.test")).toEqual({
-    action: "notice",
-    status: 503,
-    text: "pds.test is not answering; your session is kept",
-  });
-  expect(respondToPdsFailure("GET", { kind: "transient", code: "pds_rate_limited" }, "pds.test")).toMatchObject({
-    status: 200,
-  });
-  expect(respondToPdsFailure("GET", { kind: "scope_missing" }, "pds.test")).toEqual({
-    action: "redirect",
-    location: "/verify-email?error=login.scope_insufficient",
-  });
-  expect(respondToPdsFailure("GET", { kind: "auth_dead" }, "pds.test")).toMatchObject({
-    action: "redirect",
-    location: "/login?error=login.session_ended",
-  });
-  expect(
-    respondToPdsFailure("POST", { kind: "rejected", xrpcError: "InvalidRequest", status: 400 }, "pds.test"),
-  ).toEqual({
-    action: "rejected",
-    xrpcError: "InvalidRequest",
-    status: 400,
   });
 });
