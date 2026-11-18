@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!docs/ai/PLAN.md", "!LICENSE", "!apps/web/lib/components/ui", "!apps/web/lib/utils.ts"]
+    "includes": ["**", "!docs/ai/PLAN.md", "!LICENSE"]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "linter": {

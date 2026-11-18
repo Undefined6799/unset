@@ -49,6 +49,9 @@ describe("component inventory", () => {
   test("inventory_pins_the_registry_version", () => {
     expect(inventory.registry).toBe("shadcn-svelte@1.8.1");
     expect(sha256(join(import.meta.dirname, "..", "utils.ts"))).toBe(inventory.utils.sha256);
+    // A changed utils.ts names the registry's bytes and says why, like any changed component file.
+    const utils = inventory.utils as FileEntry;
+    if (utils.registrySha256 !== undefined) expect(utils.change?.length ?? 0, "utils.ts change").toBeGreaterThan(20);
   });
 
   test.each(Object.entries(components))("component_%s_files_are_listed_and_pinned", (name, files) => {
