@@ -4,6 +4,29 @@ import { type Passes, runIndexer } from "./run.ts";
 const counts = (n: number) => async () => ({ n });
 
 describe("indexer loop", () => {
+  test("run.sigterm_during_a_pass_reaches_the_pass_and_ends_the_loop", async () => {
+    // The pass in hand gets the process's stop, so it can end after its current item; the loop runs no further pass.
+    const stop = new AbortController();
+    const ran: string[] = [];
+    const passes: Passes = {
+      track: (signal) =>
+        new Promise((resolve) => {
+          ran.push("track");
+          signal.addEventListener("abort", () => resolve({ cut: 1 }), { once: true });
+          stop.abort();
+        }),
+      backfill: async () => {
+        ran.push("backfill");
+        return {};
+      },
+      confirm: counts(0),
+    };
+    const runner = runIndexer({ stream: async () => undefined, passes, intervalMs: 60_000 }, stop.signal);
+    await runner.done;
+    expect(ran).toEqual(["track"]);
+    expect(runner.health().lastPass).toEqual({ track: { cut: 1 } });
+  });
+
   test("run.stream_starts_before_the_first_backfill_pass", async () => {
     const order: string[] = [];
     const stop = new AbortController();

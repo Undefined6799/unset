@@ -6,8 +6,11 @@
 // health and the loop goes on. Nothing here logs a DID, handle or record (SE-7): passes return counts, and failures are
 // counted by pass name only.
 
-/** What a tick runs, in order. Each returns the pass's own counts, which health keeps as the last result. */
-export type Passes = Readonly<Record<PassName, () => Promise<Readonly<Record<string, number>>>>>;
+/**
+ * What a tick runs, in order. Each returns the pass's own counts, which health keeps as the last result, and takes the
+ * process's stop, so a stop ends the pass after the item in hand instead of after its whole batch.
+ */
+export type Passes = Readonly<Record<PassName, (signal: AbortSignal) => Promise<Readonly<Record<string, number>>>>>;
 export type PassName = "track" | "backfill" | "confirm";
 const PASS_ORDER: readonly PassName[] = ["track", "backfill", "confirm"];
 
@@ -42,7 +45,7 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
     for (const name of PASS_ORDER) {
       if (signal.aborted) return;
       try {
-        const result = await deps.passes[name]();
+        const result = await deps.passes[name](signal);
         lastPass[name] = result;
         for (const [key, value] of Object.entries(result)) totals[name][key] = (totals[name][key] ?? 0) + value;
       } catch {

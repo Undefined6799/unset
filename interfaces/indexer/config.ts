@@ -9,9 +9,13 @@ const indexerConfig = {
   INDEXER_ENABLED: bool({ default: false }),
   /**
    * Our PDS's internal origin (the compose service, plain http on 3000 in the dev stack): the stream, getRepo and
-   * getRepoStatus go here and nowhere else (ADR 0052 decision 2). Never a URL from the network.
+   * getRepoStatus go here and nowhere else (ADR 0052 decision 2). Never a URL from the network. Plain http only to a
+   * one-label name (a compose service, which public DNS cannot answer), so a typo cannot send the stream in clear text
+   * across the internet; the stream's websocket does not pass net-guard, which checks only getRepo and getRepoStatus.
    */
-  INDEXER_PDS_URL: url({ protocols: ["http:", "https:"] }),
+  INDEXER_PDS_URL: withRule(url({ protocols: ["http:", "https:"] }), (config) =>
+    isInStackOrHttps(String(config.INDEXER_PDS_URL)),
+  ),
   /** Our PDS's public origin: a DID is ours when its document names exactly this origin (track.ts). */
   PDS_PUBLIC_URL: url({ protocols: ["https:"] }),
   /** Milliseconds between the end of one round of passes and the start of the next (book P3.06: every 10 s). */
@@ -30,7 +34,20 @@ const indexerConfig = {
   INDEXER_MAX_RESTART_DELAY_MS: int({ min: 1000, max: 600_000, default: 60_000 }),
   /** The health endpoint's port, on the process's internal network only. */
   HEALTH_PORT: int({ min: 1024, max: 65535, default: 8081 }),
+  /** How long the stream may keep stopping with no frame applied before health says unhealthy (stream-watch.ts). */
+  INDEXER_STREAM_UNHEALTHY_MS: int({ min: 60_000, max: 3_600_000, default: 300_000 }),
+  /**
+   * How long SIGTERM waits for the stream and the pass in hand to stop and the pool to end. Below Docker's default
+   * 10 s stop grace, so the process exits on its own rather than being killed.
+   */
+  INDEXER_SHUTDOWN_GRACE_MS: int({ min: 1000, max: 9000, default: 8000 }),
 };
+
+/** https anywhere, or plain http to a name with no dot: a compose service on the stack's own network. */
+function isInStackOrHttps(raw: string): boolean {
+  const parsed = new URL(raw);
+  return parsed.protocol === "https:" || /^[a-z0-9-]+$/i.test(parsed.hostname);
+}
 
 /** The identity lookups the passes and the stream need: the PLC directory, its timeouts and the DID document cache. */
 const identityConfig = {
@@ -41,12 +58,17 @@ const identityConfig = {
   DID_DOC_CACHE_MAX: int({ min: 1, max: 100_000, default: 10_000 }),
 };
 
-export const schema = defineEntrypointConfig({
-  ...postgresFields,
-  ...poolFields,
-  ...netGuardFields,
-  ...identityConfig,
-  ...indexerConfig,
-});
+export const schema = defineEntrypointConfig(
+  {
+    ...postgresFields,
+    ...poolFields,
+    ...netGuardFields,
+    ...identityConfig,
+    ...indexerConfig,
+  },
+  // The process connects as its own role and no other (plan §5.5), so its grants are the least it needs; any other
+  // user is refused at boot rather than left to the compose file.
+  { rules: [{ key: "PG_USER", holds: (config) => config.PG_USER === "indexer" }] },
+);
 
 export type IndexerConfig = Config<(typeof schema)["fields"]>;
