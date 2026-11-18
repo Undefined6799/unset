@@ -22,10 +22,9 @@
 # waited for, and dpkg is left configured. SIGKILL cannot be ignored; if it lands mid-install, dpkg keeps running
 # and `dpkg --configure -a` finishes what it began.
 # P0.07h: the mirror still crawled (about 50 KB/s on 2026-10-22, both 4-minute attempts cut), so the browser and the
-# .deb files apt fetched for it are cached (actions/cache v6.1.0, action.yml and README at that tag). The key names the
-# runner image (its ImageVersion variable), the Playwright version and the browser, so a new image or Playwright starts a
-# fresh entry. The default branch's entries are readable from every PR; a PR's own entries only from that PR (README,
-# "Cache scopes"). A hit skips the browser download. apt installs whatever file sits in /var/cache/apt/archives under
+# .deb files apt fetched for it are cached (actions/cache v6.1.0, action.yml and README at that tag). The browser's key
+# names the Playwright version and the browser. The default branch's entries are readable from every PR; a PR's own
+# entries only from that PR (README, "Cache scopes"). A hit skips the browser download. apt installs whatever file sits in /var/cache/apt/archives under
 # the expected name and size without checking its hash (tried on Ubuntu 24.04: a flipped byte reached dpkg), so a cached
 # package is handed over only when its SHA256 equals the one in the signed index for that name, architecture and
 # version, and under the name apt looks for, built from those fields (NAME_VERSION_ARCH.deb, the version's ":" as
@@ -35,6 +34,16 @@
 # coreutils timeout run as root so the kill reaches apt-get itself rather than sudo; a refresh that fails or is cut
 # leaves an empty or old index, so nothing is handed over. A failed restore is a miss, so the worst case is today's
 # mirror path.
+# P0.07m: the WebKit install still timed out on 2026-11-18 (run 44343503120): the apt cache was keyed by runner image,
+# and that run's runner (image 20261116.133.1, us-east-2.ec2 mirror) had no entry, while main's (20261111.370.1) did:
+# GitHub runs several images at once. The miss fetched 125 MB at a crawl, and a failed install saved nothing, so every
+# run on that image started cold. The apt packages now have their own cache: restore takes the newest entry whose key
+# starts with the browser's prefix (actions/cache restore/README.md at v6.1.0; docs.github.com dependency-caching,
+# "Matching a cache key": the most recently created partial match wins), and after the install, even a failed one, the
+# packages apt holds are added to the set, versions they replace are dropped, and the set is saved
+# (actions/cache/save) under a key naming its contents when that differs from the one restored. What one slow run
+# fetched is kept for the next, and a set from any image is safe to restore, since the hand-over above checks every
+# file against this runner's signed index.
 
 name: e2e
 
@@ -76,17 +85,18 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Name the browser cache (P0.07h)
         id: cache-name
-        run: |
-          echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
-          echo "image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
-      - name: Restore the browser and its apt packages (P0.07h)
-        id: browser-cache
+        run: echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
+      - name: Restore the browser (P0.07h)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/apt-archives
-          key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-${{ env.PROJECT }}
+          path: ~/.cache/ms-playwright
+          key: e2e-${{ runner.os }}-playwright-${{ steps.cache-name.outputs.playwright }}-${{ env.PROJECT }}
+      - name: Restore the newest apt packages kept for this browser (P0.07m)
+        id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: e2e-apt-${{ runner.os }}-${{ env.PROJECT }}-
       - name: Hand apt the cached packages that match its signed index (P0.07h)
         timeout-minutes: 3
         run: |
@@ -113,11 +123,29 @@ jobs:
             sudo dpkg --configure -a
             attempt
           }
-      - name: Keep the packages apt fetched, for the cache (P0.07h)
-        if: steps.browser-cache.outputs.cache-hit != 'true'
+      - name: Add the packages apt has now to the kept set, even after a failed install (P0.07m)
+        id: apt-keep
+        if: ${{ !cancelled() }}
+        env:
+          PREFIX: ${{ steps.apt-cache.outputs.cache-primary-key }}
         run: |
-          mkdir -p "$HOME/apt-archives"
-          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
+          kept="$HOME/apt-archives"
+          mkdir -p "$kept"
+          for deb in "$kept"/*.deb; do
+            file=${deb##*/}
+            [ -f "$deb" ] && [ ! -e "/var/cache/apt/archives/$file" ] || continue
+            if compgen -G "/var/cache/apt/archives/${file%%_*}_*_${file##*_}" > /dev/null; then rm "$deb"; fi
+          done
+          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$kept" {} +
+          if [ -n "$PREFIX" ] && compgen -G "$kept/*.deb" > /dev/null; then
+            echo "key=$PREFIX$(cd "$kept" && LC_ALL=C && sha256sum -- *.deb | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the kept set if it changed (P0.07m)
+        if: ${{ !cancelled() && steps.apt-keep.outputs.key != '' && steps.apt-keep.outputs.key != steps.apt-cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-keep.outputs.key }}
       - name: Run Playwright
         run: |
           node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
@@ -159,17 +187,18 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Name the browser cache (P0.07h)
         id: cache-name
-        run: |
-          echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
-          echo "image=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
-      - name: Restore the browser and its apt packages (P0.07h)
-        id: browser-cache
+        run: echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
+      - name: Restore the browser (P0.07h)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/apt-archives
-          key: e2e-${{ runner.os }}-${{ steps.cache-name.outputs.image }}-playwright-${{ steps.cache-name.outputs.playwright }}-chromium
+          path: ~/.cache/ms-playwright
+          key: e2e-${{ runner.os }}-playwright-${{ steps.cache-name.outputs.playwright }}-chromium
+      - name: Restore the newest apt packages kept for this browser (P0.07m)
+        id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: e2e-apt-${{ runner.os }}-chromium-
       - name: Hand apt the cached packages that match its signed index (P0.07h)
         timeout-minutes: 3
         run: |
@@ -196,11 +225,29 @@ jobs:
             sudo dpkg --configure -a
             attempt
           }
-      - name: Keep the packages apt fetched, for the cache (P0.07h)
-        if: steps.browser-cache.outputs.cache-hit != 'true'
+      - name: Add the packages apt has now to the kept set, even after a failed install (P0.07m)
+        id: apt-keep
+        if: ${{ !cancelled() }}
+        env:
+          PREFIX: ${{ steps.apt-cache.outputs.cache-primary-key }}
         run: |
-          mkdir -p "$HOME/apt-archives"
-          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
+          kept="$HOME/apt-archives"
+          mkdir -p "$kept"
+          for deb in "$kept"/*.deb; do
+            file=${deb##*/}
+            [ -f "$deb" ] && [ ! -e "/var/cache/apt/archives/$file" ] || continue
+            if compgen -G "/var/cache/apt/archives/${file%%_*}_*_${file##*_}" > /dev/null; then rm "$deb"; fi
+          done
+          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$kept" {} +
+          if [ -n "$PREFIX" ] && compgen -G "$kept/*.deb" > /dev/null; then
+            echo "key=$PREFIX$(cd "$kept" && LC_ALL=C && sha256sum -- *.deb | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the kept set if it changed (P0.07m)
+        if: ${{ !cancelled() && steps.apt-keep.outputs.key != '' && steps.apt-keep.outputs.key != steps.apt-cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-keep.outputs.key }}
       - name: Install pa11y and Lighthouse outside the lockfile
         run: npm install --ignore-scripts --prefix /tmp/a11y-tools pa11y-ci@5.0.0 @lhci/cli@0.15.1
       - name: Point pa11y and Lighthouse at Playwright's Chromium
