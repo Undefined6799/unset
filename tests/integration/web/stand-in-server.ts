@@ -34,6 +34,20 @@ const pds =
     ? undefined
     : standInPds(started, (write) => appendFileSync(started.writesFile, `${JSON.stringify(write)}\n`));
 /** Every request the OAuth client and the PDS calls make: the stand-in PDS, else the fixture's answer, else 404. */
+/** Waits `ms`, or rejects as fetch does when `signal` aborts first. */
+const held = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((done, fail) => {
+    const timer = setTimeout(done, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        fail(signal.reason);
+      },
+      { once: true },
+    );
+  });
+
 const fetchStandIn: typeof fetch = async (input, init) => {
   const request = new Request(input, init);
   const key = `${request.method} ${request.url}`;
@@ -42,6 +56,7 @@ const fetchStandIn: typeof fetch = async (input, init) => {
   if (fromPds !== undefined) return fromPds;
   const found = fixture().fetch?.[key];
   if (found === undefined) return new Response("not in the fixture", { status: 404 });
+  if (found.delayMs !== undefined) await held(found.delayMs, request.signal);
   return new Response(JSON.stringify(found.body), {
     status: found.status ?? 200,
     headers: { "content-type": "application/json" },
