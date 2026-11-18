@@ -3,6 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#kit/handler": {
+      "types": "./kit-handler.d.ts",
+      "default": "./build/handler.js"
+    },
+    "#kit/manifest": {
+      "types": "./kit-manifest.d.ts",
+      "default": "./build/server/manifest.js"
+    }
+  },
   "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "vite dev",

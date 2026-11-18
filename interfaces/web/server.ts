@@ -8,11 +8,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"; // guard-allow: egress inbound listener only, sends nothing out
-import { join } from "node:path";
 import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
 import { drain, exitOnSignals, headerSets, hostAllowed } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
-import { largestMaxBody, routePolicies } from "./src/lib/server/body-cap.ts";
+import { BODY_CAP } from "./src/lib/server/body-cap.ts";
 import { schema } from "./src/lib/server/config.ts";
 import { NOTE_KEY, type ProcessNote, type RequestNote, STAND_INS_KEY, type StandIns } from "./src/lib/server/note.ts";
 
@@ -33,15 +32,14 @@ process.on("uncaughtException", (error: unknown) => {
 const BUILD_STYLESHEET = /^_app\/immutable\/assets\/[\w.-]+\.css$/;
 
 /**
- * The app's stylesheet, read once from SvelteKit's build manifest (kit 3.2.0 writes `manifest.client.stylesheets` into
- * build/server/manifest.js, whose top level only declares data; its nodes load lazily), for the gate's refusal page.
+ * The app's stylesheet, read once from SvelteKit's build manifest (`#kit/manifest`, package.json "imports"; kit 3.2.0
+ * writes `manifest.client.stylesheets` into build/server/manifest.js, whose top level only declares data; its nodes
+ * load lazily), for the gate's refusal page.
  * Without it that page is plain, which is all a missing or odd entry costs; gate.test.ts checks the built server has
  * it.
  */
 async function buildStylesheet(): Promise<string | undefined> {
-  const loaded = (await import(new URL("./build/server/manifest.js", import.meta.url).href).catch(() => undefined)) as
-    | { manifest?: { client?: { stylesheets?: unknown } } }
-    | undefined;
+  const loaded = await import("#kit/manifest").catch(() => undefined);
   const sheets = loaded?.manifest?.client?.stylesheets;
   const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
   return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
@@ -62,22 +60,22 @@ const note: ProcessNote = {
 // SvelteKit's Origin check, and the cap on any request body, the largest route's maxBody (body-cap.ts says why).
 // Ours come from config and the route table, never from the environment raw.
 process.env.ORIGIN = config.PUBLIC_ORIGIN;
-process.env.BODY_SIZE_LIMIT = String(largestMaxBody(await routePolicies(join(import.meta.dirname, "src", "routes"))));
+process.env.BODY_SIZE_LIMIT = String(BODY_CAP);
 
-type NodeHandler = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
 /**
- * Loaded by URL after the note is published, so the type checker does not walk the build output. Loading it runs the
- * `init` hook, which builds the services: a connection budget the role cannot hold is a ConfigError (exit 78, as
- * interfaces/http/main.ts), and any other failure is logged by class only (SE-7) and exits 1 before we listen.
+ * Loaded after the note is published; `#kit/handler` is the build's handler.js (package.json "imports", typed by
+ * kit-handler.d.ts so the type checker does not walk the build output). Loading it runs the `init` hook, which builds
+ * the services: a connection budget the role cannot hold is a ConfigError (exit 78), and any other failure is logged
+ * by class only (SE-7) and exits 1 before we listen.
  */
-const { handler } = (await import(new URL("./build/handler.js", import.meta.url).href).catch((error: unknown) => {
+const { handler } = await import("#kit/handler").catch((error: unknown): never => {
   try {
     exitOnConfigError(error);
   } catch {
     log.logError(error);
-    process.exit(1);
   }
-})) as { handler: NodeHandler };
+  process.exit(1);
+});
 
 /** Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). */
 const BASE_HEADERS = headerSets(config).static;
