@@ -3,7 +3,8 @@
 // keeps the editor open with what was typed and the reason inside it; a save closes it, returns focus to the button
 // that opened it, and cannot be sent twice while on its way; editing a stored card saves in place. A moved card keeps
 // focus on its move button. The cards added are deleted again, so the member page is as the other specs expect it.
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 
@@ -25,7 +26,7 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
 
   // Add card, then README: the picker closes, focus is in the text area; a save held back by the test cannot be sent
   // twice; focus goes back to Add card.
-  const addCard = page.getByRole("button", { name: "Add card" });
+  const addCard = page.getByRole("link", { name: "Add card" });
   const dialog = page.getByRole("dialog");
   const pick = async (kind: RegExp) => {
     await addCard.click();
@@ -75,13 +76,13 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
 
   // Edit the stored README: saved in place, the editor closes and focus goes back to its Edit button.
   const readmeCard = page.getByRole("group", { name: "README card" });
-  await readmeCard.getByRole("button", { name: "Edit" }).click();
+  await readmeCard.getByRole("link", { name: "Edit" }).click();
   await expect(dialog.getByRole("textbox", { name: "README" })).toHaveValue("# Hello");
   await dialog.getByRole("textbox", { name: "README" }).fill("# Hello again");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: "Hello again" })).toBeVisible();
-  await expect(readmeCard.getByRole("button", { name: "Edit" })).toBeFocused();
+  await expect(readmeCard.getByRole("link", { name: "Edit" })).toBeFocused();
 
   // Move the README down: at the bottom now, so its other move button takes focus.
   await readmeCard.getByRole("button", { name: "Move down" }).click();
@@ -91,29 +92,153 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
   ).toBeVisible();
 
   for (const name of ["README card", "Elsewhere card"]) {
-    await page.getByRole("group", { name }).getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("group", { name }).getByRole("link", { name: "Delete" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
     await expect(page.getByRole("group", { name })).toHaveCount(0);
   }
 });
 
-// The independent review, M2: a save the gate refuses before the action runs (here a body over the 2 MiB cap; a rate
-// limit or a deadline answers the same way) keeps the editor open with what was typed and the catalog's reason,
-// instead of the error page.
+// The independent review, M2: a save the gate refuses before the action runs (a body over the 2 MiB cap, a rate limit
+// or a deadline) keeps the editor open with what was typed and the catalog's reason, instead of the error page. The
+// gate's answer here is the one gate.test.ts pins for the built server (an action failure, devalue-encoded). It is
+// played by the test because the harness's TLS listener (Node's http client) loses a 413 the server sends with
+// Connection: close before reading a 2.2 MB body: the write fails with EPIPE first and the listener answers 502.
+// Whether the edge passes that 413 on is unverified here; checked on staging.
 test("a_save_the_gate_refuses_keeps_the_editor_and_what_was_typed", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "Add card" }).click();
+  await page.getByRole("link", { name: "Add card" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /^README/ }).click();
   const readme = dialog.getByRole("textbox", { name: "README" });
-  const typed = `# Long\n\n${"a".repeat(2_200_000)}`;
+  const typed = `# Long\n\n${"a".repeat(2_000)}`;
   await readme.fill(typed);
-  const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("?/create"));
+  const code = "http.payload_too_large";
+  await page.route(
+    (url) => url.search === "?/create",
+    (route) =>
+      route.fulfill({
+        status: 413,
+        headers: { "content-type": "application/json", "cache-control": "private, no-store" },
+        body: JSON.stringify({
+          type: "failure",
+          status: 413,
+          data: JSON.stringify([{ code: 1, message: 2 }, code, ERROR_MESSAGES[code]]),
+        }),
+      }),
+  );
   await dialog.getByRole("button", { name: "Add" }).click();
-  expect((await posted).status()).toBe(413);
   await expect(dialog.getByRole("alert")).toContainText("too large");
   expect(await readme.inputValue()).toBe(typed);
   await expect(dialog.getByRole("button", { name: "Add" })).toBeEnabled();
   await expect(page).toHaveURL(/\/did:plc:/);
+});
+
+/** Adds a card as a plain form post (the fields as the editor names them), then reloads the page. */
+async function addCard(page: Page, fields: Record<string, string>) {
+  const status = await page.evaluate(async (body) => {
+    const init = {
+      method: "POST",
+      body: new URLSearchParams(body),
+      headers: { accept: "text/html" },
+      redirect: "manual",
+    } as const;
+    const answer = await fetch("?/create", init);
+    return answer.type === "opaqueredirect" ? 303 : answer.status;
+  }, fields);
+  expect(status).toBe(303);
+}
+const scrolled = () => (globalThis as unknown as { scrollY: number }).scrollY;
+const linksCard = (title: string) => ({
+  kind: "links",
+  width: "full",
+  title,
+  "items.0.uri": `${title.toLowerCase()}.example`,
+});
+async function deleteCard(page: Page, name: string) {
+  await page.getByRole("group", { name }).getByRole("link", { name: "Delete" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("group", { name })).toHaveCount(0);
+}
+
+// Staging walkthrough 2026-11-18, finding 4: a refusal that blames one field is shown under it, the field is marked
+// invalid and takes focus, scrolled into view, however long the editor is.
+test("a_refused_save_is_shown_beside_the_field_it_blames_and_focuses_it", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("link", { name: "Add card" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /^Links/ }).click();
+  const second = dialog.getByRole("group", { name: "Link 2", exact: true });
+  await second.getByRole("textbox", { name: "Address" }).fill("not a url");
+  await dialog.getByRole("button", { name: "Add" }).click();
+  const address = second.getByRole("textbox", { name: "Address" });
+  await expect(address).toBeFocused();
+  await expect(address).toHaveAttribute("aria-invalid", "true");
+  await expect(address).toHaveAccessibleDescription(/http or https address/);
+  await expect(address).toBeInViewport();
+  await expect(address).toHaveValue("not a url");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "Links card" })).toHaveCount(0);
+});
+
+// Finding 6: moving or deleting a card leaves the page where it was, and focus on the moved card or on the card that
+// took the deleted one's place.
+test("moving_or_deleting_a_card_keeps_the_place_and_focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 400 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  for (const title of ["Alpha", "Beta", "Gamma"]) await addCard(page, linksCard(title));
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const gamma = page.getByRole("group", { name: "Gamma card" });
+    await gamma.getByRole("button", { name: "Move up" }).focus();
+    await page.mouse.wheel(0, 2_000);
+    await expect.poll(() => page.evaluate(scrolled)).toBeGreaterThan(0);
+    const before = await page.evaluate(scrolled);
+    expect(before).toBeGreaterThan(0);
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta|Gamma)$/ })).toHaveText([
+      "Alpha",
+      "Gamma",
+      "Beta",
+    ]);
+    await expect(gamma.getByRole("button", { name: "Move up" })).toBeFocused();
+    expect(await page.evaluate(scrolled)).toBeGreaterThan(0);
+
+    await gamma.getByRole("link", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+    await expect(gamma).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Beta card" }).getByRole("link", { name: "Edit" })).toBeFocused();
+    expect(await page.evaluate(scrolled)).toBeGreaterThan(0);
+  } finally {
+    for (const name of ["Alpha card", "Beta card", "Gamma card"]) {
+      if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
+    }
+  }
+});
+
+// Finding 5: a carousel with more entries than fit is a named stop the keyboard reaches and scrolls, and says so.
+test("a_carousel_is_reached_and_scrolled_by_keyboard", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const entries = Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`items.${i}.title`, `Entry ${i + 1}`]));
+  await addCard(page, { kind: "collection", width: "full", title: "Shelf", layout: "carousel", ...entries });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const shelf = page.getByRole("region", { name: "Shelf, scrolls sideways" });
+    await expect(page.getByText("scroll sideways for more")).toBeVisible();
+    await shelf.focus();
+    await expect(shelf).toBeFocused();
+    // Each arrow press scrolls a step and the snap settles before the next, so press until the last entry shows.
+    const last = page.getByRole("heading", { name: "Entry 6" });
+    await expect(async () => {
+      await page.keyboard.press("ArrowRight");
+      await expect(last).toBeInViewport({ ratio: 0.9, timeout: 300 });
+    }).toPass({ timeout: 10_000 });
+    expect(await shelf.evaluate((node) => (node as unknown as { scrollLeft: number }).scrollLeft)).toBeGreaterThan(0);
+  } finally {
+    await deleteCard(page, "Shelf card");
+  }
 });

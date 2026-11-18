@@ -2,8 +2,10 @@
   The profile's cards (ADR 0051; P1.20i; laid out as the profile-card mockup, Alex 2026-11-17): a two-column grid on
   wide screens where a half card takes one column, each card on the stock Card. The README reads like a GitHub README
   under a "handle / README.md" bar; links are rows split by rules (a long list scrolls inside its card); collections
-  are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap and show
-  only whole tiles, one to four by the card's own width (a container query), no script. Everything shown was built by
+  are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap, no
+  script: one to four tiles by the card's own width (a container query), and when more are left a part of the next
+  one shows and the count says to scroll; the scrolling area is a named stop the keyboard reaches, so its arrow keys
+  scroll it (staging walkthrough 2026-11-18, finding 5). Everything shown was built by
   apps/web/lib/profile/view.ts. On the owner's page `controls` puts each card's own at the top right of the card, and
   `add` closes the grid, full width (the Add card button). No cards and no `add` renders nothing.
 -->
@@ -33,25 +35,60 @@ const SCROLL_AFTER = 4;
 const LAYOUT: Record<CardLayout, string> = {
   list: "grid",
   grid: "grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3",
-  carousel:
-    "grid grid-flow-col auto-cols-[100%] gap-3 overflow-x-auto snap-x snap-mandatory pb-2.5 @sm:auto-cols-[calc((100%-0.75rem)/2)] @2xl:auto-cols-[calc((100%-1.5rem)/3)] @4xl:auto-cols-[calc((100%-2.25rem)/4)]",
+  carousel: "grid grid-flow-col gap-3",
 };
+/**
+ * A carousel's tile width by its number of tiles (1, 2, 3, 4, more): whole tiles while they all fit at the card's
+ * width, else a quarter of the next one shows. TAIL says at which widths some are left over, for the count line.
+ */
+const TILES = [
+  "auto-cols-[100%]",
+  "auto-cols-[85%] @sm:auto-cols-[calc((100%-0.75rem)/2)]",
+  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-1.5rem)/3)]",
+  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-2.25rem)/3.25)] @4xl:auto-cols-[calc((100%-2.25rem)/4)]",
+  "auto-cols-[85%] @sm:auto-cols-[calc((100%-1.5rem)/2.25)] @2xl:auto-cols-[calc((100%-2.25rem)/3.25)] @4xl:auto-cols-[calc((100%-3rem)/4.25)]",
+] as const;
+const TAIL = ["hidden", "@sm:hidden", "@2xl:hidden", "@4xl:hidden", ""] as const;
+const tierOf = (count: number) => Math.min(Math.max(count, 1), 5) - 1;
 const tile = "flex min-w-0 snap-start flex-col gap-1 rounded-sm border bg-secondary p-3.5";
 const row = "flex min-w-0 justify-between gap-3 border-t py-2.5 first:border-t-0 first:pt-0";
-const site = "shrink-0 max-sm:hidden font-mono text-xs leading-6 tracking-wider text-muted-foreground uppercase";
+const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-foreground uppercase";
+/** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
+const site = `${label} max-sm:hidden`;
 const card = "min-w-0 gap-0 rounded-sm border-0 py-0 shadow-md [overflow-wrap:anywhere]";
 const head = "flex items-start justify-between gap-3";
 const count = "font-mono text-xs text-muted-foreground";
 </script>
 
-{#snippet listHead(title: string, counted: string, scrolls: boolean, index: number)}
+{#snippet listHead(title: string, counted: string, scrolls: boolean, index: number, sideways = -1)}
   <div class={head}>
     <div class="min-w-0">
       {#if title !== ""}<h2 class="text-xl font-semibold">{title}</h2>{/if}
-      <p class={count}>{counted}{#if scrolls}{" · "}{CARD_TEXT.scrollForMore}{/if}</p>
+      <p class={count}>
+        {counted}{#if scrolls}{" · "}{CARD_TEXT.scrollForMore}{/if}{#if sideways >= 0}<span class={TAIL[sideways]}
+            >{" · "}{CARD_TEXT.scrollSideways}</span
+          >{/if}
+      </p>
     </div>
     {@render controls?.(index)}
   </div>
+{/snippet}
+
+{#snippet scroller(layout: CardLayout, title: string, count: number, scrolls: boolean, list: Snippet<[string]>)}
+  {#if layout === "carousel"}
+    <!-- A scrolling area is a keyboard stop (WCAG 2.1.1; axe scrollable-region-focusable). -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div
+      role="region"
+      aria-label={CARD_TEXT.carousel(title)}
+      tabindex="0"
+      class="snap-x snap-mandatory overflow-x-auto rounded-sm pb-2.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      {@render list(`${LAYOUT.carousel} ${TILES[tierOf(count)]}`)}
+    </div>
+  {:else}
+    <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : ""}>{@render list(LAYOUT[layout])}</div>
+  {/if}
 {/snippet}
 
 {#if cards.length > 0 || add !== undefined}
@@ -72,42 +109,46 @@ const count = "font-mono text-xs text-muted-foreground";
       {:else if shown.shown.kind === "links"}
         {@const links = shown.shown}
         {@const scrolls = links.layout === "list" && links.items.length > SCROLL_AFTER}
-        <Card.Root class="group/card {card} {span} flex flex-col gap-3 p-5">
-          {@render listHead(links.title, CARD_TEXT.links(links.items.length), scrolls, index)}
-          <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : "@container"}>
-            <ul class={LAYOUT[links.layout]}>
-              {#each links.items as link, i (i)}
-                <li class={links.layout === "list" ? row : tile}>
-                  <div class="min-w-0">
-                    <a class="font-medium" href={link.href} rel="me noopener noreferrer">{link.text}</a>
-                    {#if link.description !== ""}<p class="text-sm text-muted-foreground">{link.description}</p>{/if}
-                  </div>
-                  {#if link.site !== ""}<span class={site}>{link.site}</span>{/if}
-                </li>
-              {/each}
-            </ul>
-          </div>
+        {@const sideways = links.layout === "carousel" ? tierOf(links.items.length) : -1}
+        {#snippet linkList(layout: string)}
+          <ul class={layout}>
+            {#each links.items as link, i (i)}
+              <li class={links.layout === "list" ? row : tile}>
+                <div class="min-w-0">
+                  <a class="font-medium" href={link.href} rel="me noopener noreferrer">{link.text}</a>
+                  {#if link.description !== ""}<p class="text-sm text-muted-foreground">{link.description}</p>{/if}
+                </div>
+                {#if link.site !== ""}<span class={site}>{link.site}</span>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/snippet}
+        <Card.Root class="group/card {card} {span} @container flex flex-col gap-3 p-5">
+          {@render listHead(links.title, CARD_TEXT.links(links.items.length), scrolls, index, sideways)}
+          {@render scroller(links.layout, links.title, links.items.length, scrolls, linkList)}
         </Card.Root>
       {:else if shown.shown.kind === "collection"}
         {@const entries = shown.shown}
         {@const scrolls = entries.layout === "list" && entries.items.length > SCROLL_AFTER}
-        <Card.Root class="group/card {card} {span} flex flex-col gap-3 p-5">
-          {@render listHead(entries.title, CARD_TEXT.entries(entries.items.length), scrolls, index)}
-          <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : "@container"}>
-            <ul class={LAYOUT[entries.layout]}>
-              {#each entries.items as entry, i (i)}
-                <li class={entries.layout === "list" ? `${row} flex-col gap-1` : tile}>
-                  {#if entry.tag !== ""}<span class={site}>{entry.tag}</span>{/if}
-                  <h3 class="font-semibold">
-                    {#if entry.href === null}{entry.title}{:else}<a href={entry.href} rel="noopener noreferrer"
-                        >{entry.title}</a
-                      >{/if}
-                  </h3>
-                  {#if entry.description !== ""}<p class="text-sm text-muted-foreground">{entry.description}</p>{/if}
-                </li>
-              {/each}
-            </ul>
-          </div>
+        {@const sideways = entries.layout === "carousel" ? tierOf(entries.items.length) : -1}
+        {#snippet entryList(layout: string)}
+          <ul class={layout}>
+            {#each entries.items as entry, i (i)}
+              <li class={entries.layout === "list" ? `${row} flex-col gap-1` : tile}>
+                {#if entry.tag !== ""}<span class={label}>{entry.tag}</span>{/if}
+                <h3 class="font-semibold">
+                  {#if entry.href === null}{entry.title}{:else}<a href={entry.href} rel="noopener noreferrer"
+                      >{entry.title}</a
+                    >{/if}
+                </h3>
+                {#if entry.description !== ""}<p class="text-sm text-muted-foreground">{entry.description}</p>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/snippet}
+        <Card.Root class="group/card {card} {span} @container flex flex-col gap-3 p-5">
+          {@render listHead(entries.title, CARD_TEXT.entries(entries.items.length), scrolls, index, sideways)}
+          {@render scroller(entries.layout, entries.title, entries.items.length, scrolls, entryList)}
         </Card.Root>
       {:else}
         {@const contact = shown.shown}

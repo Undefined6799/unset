@@ -48,14 +48,16 @@ export type Inline =
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
-  | {
-      readonly kind: "list";
-      readonly ordered: boolean;
-      readonly start?: number;
-      readonly items: readonly (readonly Inline[])[];
-    }
+  | ListBlock
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
+
+export type ListBlock = {
+  readonly kind: "list";
+  readonly ordered: boolean;
+  readonly start?: number;
+  readonly items: readonly { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] }[];
+};
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
 /** `site` is the address's host when the member gave the link a label of their own, else "" (the text is the host). */
@@ -122,4 +124,25 @@ export type SubmitHandler = (input: {
  * The page's form enhancement as a Svelte action, `use:enhance` or `use:enhance={handler}`; the default does nothing
  * (no script). Written out rather than as svelte/action's Action, which a .ts file here may not import (ADR 0056).
  */
+/** Which editor the page was opened with in place (no script; lib/profile/panel.ts), as its load read the query. */
+export type CardPanelRequest =
+  | { readonly kind: "edit" | "remove"; readonly key: string }
+  | { readonly kind: "add"; readonly card: CardContent["kind"] | null }
+  | { readonly kind: "avatar" };
+
+/** A refused write as the page's action answers it: the catalog code and words, and the form field to blame. */
+export type Refusal = { readonly code: string; readonly message: string; readonly field?: string };
+
+/**
+ * An editor drawn in place on the page (no script; the page opened with `?edit=`, `?add=` or `?remove=`): where it
+ * sits, the link back, the query its form keeps, and, after a refused save, the refusal and what was typed.
+ */
+export type CardPanelState = {
+  readonly anchor: string;
+  readonly cancel: string;
+  readonly stay: string;
+  readonly refusal?: Refusal;
+  readonly values?: Readonly<Record<string, string>>;
+};
+
 export type Enhance = (form: HTMLFormElement, handler?: SubmitHandler) => { destroy?: () => void } | undefined;

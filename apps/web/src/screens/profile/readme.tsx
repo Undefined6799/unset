@@ -1,7 +1,7 @@
 // The README card's renderer (ADR 0051): the blocks parse.ts reads from the member's text, written as React children
 // (escaped). The parser lives in apps/web/lib/profile/ so the Svelte pages read the same one (P1.20i).
 import { Children, type ReactNode } from "react";
-import { type Block, type Inline, parseReadme } from "../../../lib/profile/parse.ts";
+import { type Block, type Inline, type ListBlock, type ListItem, parseReadme } from "../../../lib/profile/parse.ts";
 
 export { type Block, type Inline, parseInline, parseReadme } from "../../../lib/profile/parse.ts";
 
@@ -31,7 +31,17 @@ function inlineNode(node: Inline): ReactNode {
 
 const renderInline = (nodes: readonly Inline[]) => keyed(nodes.map(inlineNode));
 
-const listItem = (item: readonly Inline[]) => <li>{renderInline(item)}</li>;
+const listItem = (item: ListItem) => (
+  <li>
+    {renderInline(item.text)}
+    {keyed(item.lists.map(listNode))}
+  </li>
+);
+
+function listNode(list: ListBlock): ReactNode {
+  const List = list.ordered ? "ol" : "ul";
+  return <List start={list.start}>{keyed(list.items.map(listItem))}</List>;
+}
 
 function blockNode(block: Block): ReactNode {
   switch (block.kind) {
@@ -48,10 +58,8 @@ function blockNode(block: Block): ReactNode {
           <p>{renderInline(block.children)}</p>
         </blockquote>
       );
-    case "list": {
-      const List = block.ordered ? "ol" : "ul";
-      return <List start={block.start}>{keyed(block.items.map(listItem))}</List>;
-    }
+    case "list":
+      return listNode(block);
     case "code":
       return (
         <pre>

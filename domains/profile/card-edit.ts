@@ -42,7 +42,11 @@ export const CARD_EDIT_LIMITS = {
 } as const satisfies Partial<Record<CardKind, number>>;
 
 type Field<T> = { readonly ok: true; readonly value: T } | Failed;
-const fail = (code: CardError): Failed => ({ ok: false, code });
+const fail = (code: CardError, field?: string): Failed =>
+  field === undefined ? { ok: false, code } : { ok: false, code, field };
+/** The refusal with `name` in front of its field path, or as its field when it has none. */
+const under = (name: string, failed: Failed): Failed =>
+  fail(failed.code, failed.field === undefined ? name : `${name}.${failed.field}`);
 
 /** A string field: absent reads as "", anything else that is not a string is refused. One-line unless `multiline`. */
 function field(raw: unknown, multiline = false): Field<string> {
@@ -67,21 +71,22 @@ function list(raw: unknown, max: number): Field<readonly Obj[]> {
   return raw.length > max ? fail("card.too_long") : { ok: true, value: raw };
 }
 
-/** Reads each field in turn; the first refusal is the answer. */
+/** Reads each field in turn; the first refusal is the answer, naming its field. */
 function fields<K extends string>(reads: Record<K, Field<string>>): Field<Record<K, string>> {
   const out = {} as Record<K, string>;
   for (const [name, read] of Object.entries(reads) as [K, Field<string>][]) {
-    if (!read.ok) return read;
+    if (!read.ok) return under(name, read);
     out[name] = read.value;
   }
   return { ok: true, value: out };
 }
 
-function all<T>(items: readonly Obj[], read: (item: Obj) => Field<T>): Field<T[]> {
+/** Reads each row of the list `name`; a refusal names the row, as `name.N.field`. */
+function all<T>(name: string, items: readonly Obj[], read: (item: Obj) => Field<T>): Field<T[]> {
   const out: T[] = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     const one = read(item);
-    if (!one.ok) return one;
+    if (!one.ok) return under(`${name}.${index}`, one);
     out.push(one.value);
   }
   return { ok: true, value: out };
@@ -102,16 +107,16 @@ function readEntry(item: Obj): Field<CardEntry> {
     description: field(item.description),
     uri: address(item.uri, false),
   });
-  return read.ok && read.value.title === "" ? fail("card.required") : read;
+  return read.ok && read.value.title === "" ? fail("card.required", "title") : read;
 }
 
 function readButtonInput(item: Obj): Field<CardButton> {
   if (item.kind === "email") {
     const read = field(item.address);
-    if (!read.ok) return read;
+    if (!read.ok) return under("address", read);
     return isEmailAddress(read.value)
       ? { ok: true, value: { kind: "email", address: read.value } }
-      : fail("card.email_invalid");
+      : fail("card.email_invalid", "address");
   }
   if (item.kind !== "link" || !oneOf(PRESETS, item.preset)) return fail("card.invalid");
   const read = fields({ uri: address(item.uri, true), label: field(item.label) });
@@ -125,8 +130,8 @@ function layoutOf(raw: unknown, kind: "links" | "collection"): Field<CardLayout>
 
 function readReadme(input: Obj): Field<CardContent> {
   const read = field(input.text, true);
-  if (!read.ok) return read;
-  return read.value === "" ? fail("card.required") : { ok: true, value: { kind: "readme", text: read.value } };
+  if (!read.ok) return under("text", read);
+  return read.value === "" ? fail("card.required", "text") : { ok: true, value: { kind: "readme", text: read.value } };
 }
 
 function readLinks(input: Obj): Field<CardContent> {
@@ -136,7 +141,7 @@ function readLinks(input: Obj): Field<CardContent> {
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
-  const items = filled(all(raw.value, readLink));
+  const items = filled(all("items", raw.value, readLink));
   return items.ok
     ? { ok: true, value: { kind: "links", ...head.value, layout: layout.value, items: items.value } }
     : items;
@@ -149,7 +154,7 @@ function readCollection(input: Obj): Field<CardContent> {
   if (!head.ok) return head;
   if (!layout.ok) return layout;
   if (!raw.ok) return raw;
-  const items = filled(all(raw.value, readEntry));
+  const items = filled(all("items", raw.value, readEntry));
   const value = {
     kind: "collection",
     ...head.value,
@@ -162,10 +167,10 @@ function readCollection(input: Obj): Field<CardContent> {
 function readButtons(input: Obj): Field<CardContent> {
   const head = fields({ heading: field(input.heading), text: field(input.text, true) });
   if (!head.ok) return head;
-  if (head.value.heading === "") return fail("card.required");
+  if (head.value.heading === "") return fail("card.required", "heading");
   const raw = list(input.buttons, LIMITS.section.buttonsMax);
   if (!raw.ok) return raw;
-  const buttons = filled(all(raw.value, readButtonInput));
+  const buttons = filled(all("buttons", raw.value, readButtonInput));
   return buttons.ok ? { ok: true, value: { kind: "buttons", ...head.value, buttons: buttons.value } } : buttons;
 }
 
@@ -185,7 +190,21 @@ export function parseCardInput(
   if (reader === undefined) return fail("card.kind_unknown");
   const content = reader(input);
   if (!content.ok) return content;
+  const sized = validateRecord(NSID, { $type: NSID, content: toLexicon(content.value), createdAt: EPOCH }, "write");
+  if (!sized.ok) return fail("card.too_long", tooLongField(sized.errors));
   return { ok: true, content: content.value, width: oneOf(WIDTHS, input.width) ? input.width : "full" };
+}
+
+const EPOCH = "1970-01-01T00:00:00.000Z";
+/**
+ * The input field a size refusal names, read from the validator's path: @atproto/lex-schema 0.2.8 ends each message
+ * with "at $.content.items[1].label" (card-edit.test.ts pins it). A message in any other form names no field.
+ */
+function tooLongField(errors: readonly string[]): string | undefined {
+  const path = / at \$\.content\.([a-z]+)(?:\[(\d+)\]\.([a-z]+))?$/i.exec(errors[0] ?? "");
+  if (path === null) return undefined;
+  const [, name = "", index, inner] = path;
+  return index === undefined ? name : `${name}.${index}.${inner}`;
 }
 
 /** An object with the fields that are set; "" means unset and is not written. */

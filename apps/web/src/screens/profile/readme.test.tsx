@@ -40,8 +40,22 @@ describe("parseReadme", () => {
           { kind: "text", text: " about them. Second line." },
         ],
       },
-      { kind: "list", ordered: false, items: [[{ kind: "text", text: "one" }], [{ kind: "text", text: "two" }]] },
-      { kind: "list", ordered: true, items: [[{ kind: "text", text: "first" }], [{ kind: "text", text: "second" }]] },
+      {
+        kind: "list",
+        ordered: false,
+        items: [
+          { text: [{ kind: "text", text: "one" }], lists: [] },
+          { text: [{ kind: "text", text: "two" }], lists: [] },
+        ],
+      },
+      {
+        kind: "list",
+        ordered: true,
+        items: [
+          { text: [{ kind: "text", text: "first" }], lists: [] },
+          { text: [{ kind: "text", text: "second" }], lists: [] },
+        ],
+      },
       { kind: "quote", children: [{ kind: "text", text: "quoted" }] },
       { kind: "code", text: "<b>raw</b>" },
       { kind: "rule" },
