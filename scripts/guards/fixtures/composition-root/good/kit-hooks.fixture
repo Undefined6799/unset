@@ -1,0 +1,4 @@
+// fixture: interfaces/web/src/hooks.server.ts findings=0
+import { services, startServices } from "./lib/server/compose.ts";
+import { sessionOf } from "./lib/server/session.ts";
+export const init = async () => startServices();

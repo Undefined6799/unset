@@ -1,0 +1,3 @@
+// fixture: interfaces/web/src/lib/server/compose.ts findings=0
+import { createPool } from "@unset/infrastructure-postgres";
+export async function startServices() { return { pool: createPool(config) }; }
