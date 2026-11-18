@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@internationalized/date": "3.12.4",
-    "@unset/shared-errors": "*",
     "@unset/shared-safe-href": "*",
     "@unset/shared-ui": "*",
     "bits-ui": "2.20.6",
