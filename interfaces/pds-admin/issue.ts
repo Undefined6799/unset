@@ -51,6 +51,9 @@ async function standing(pds: Pds, did: string): Promise<Standing> {
 /** How issuing reads and spends the daily cap: the count so far, and a durable reservation made before the PDS call. */
 export type DailyCap = { readonly reservedToday: () => number; readonly reserve: () => void };
 
+/** Why the request should no longer issue (its envelope expired, its caller hung up), or null while it still should. */
+export type Abandoned = () => string | null;
+
 /** Steps 8 to 11 for one inviter. The daily slot is reserved before the PDS call and stays spent even if it fails. */
 export async function issueInvite(
   pds: Pds,
@@ -58,6 +61,7 @@ export async function issueInvite(
   did: string,
   daily: DailyCap,
   now: () => number,
+  abandoned: Abandoned,
 ): Promise<IssueResult> {
   if (!limits.signupsOpen) return { kind: "closed" };
   try {
@@ -67,6 +71,9 @@ export async function issueInvite(
     if (!account.ok) return { kind: "quota", reason: "account", availableAt: account.availableAt };
     const global = globalQuota(daily.reservedToday(), now(), limits.maxPerDayGlobal);
     if (!global.ok) return { kind: "quota", reason: "global", availableAt: global.availableAt };
+    // The standing checks awaited the PDS: a request abandoned meanwhile spends no slot and creates no code (RE-1).
+    const gone = abandoned();
+    if (gone !== null) return { kind: "denied", reason: gone };
     daily.reserve();
     const created = await pds.createInviteCode(did);
     const code = isRecord(created.body) ? created.body.code : undefined;

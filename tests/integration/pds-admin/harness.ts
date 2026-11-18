@@ -27,6 +27,8 @@ export type FakePds = {
   createStatus: number;
   /** Called when createInviteCode arrives; it answers once what this returns has settled. */
   onCreate: () => void | Promise<void>;
+  /** Called when getSubjectStatus arrives; it answers once what this returns has settled. */
+  onStatus: () => void | Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -43,6 +45,9 @@ export async function fakePds(): Promise<FakePds> {
     takedown: false,
     codes: 0,
     createStatus: 200,
+    onStatus: () => {
+      // Nothing by default.
+    },
     onCreate: () => {
       // Nothing by default.
     },
@@ -63,7 +68,10 @@ export async function fakePds(): Promise<FakePds> {
         return json(res, 200, fake.account);
       }
       if (path.startsWith("/xrpc/com.atproto.admin.getSubjectStatus")) {
-        return json(res, 200, { subject: { did: ALICE }, takedown: { applied: fake.takedown } });
+        void Promise.resolve(fake.onStatus()).then(() =>
+          json(res, 200, { subject: { did: ALICE }, takedown: { applied: fake.takedown } }),
+        );
+        return;
       }
       if (path === "/xrpc/com.atproto.server.createInviteCode") {
         void Promise.resolve(fake.onCreate()).then(() => {

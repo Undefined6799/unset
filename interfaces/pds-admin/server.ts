@@ -107,16 +107,20 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
 
   /** Steps 8 to 12 for one authenticated request, run inside the issuing chain. */
   async function issueQueued(payload: AdminPayload, who: Partial<LogFields>, clientGone: () => boolean) {
-    // Time spent waiting in the chain counts: an envelope that expired there, or a caller that hung up, issues
-    // nothing, so no abandoned request creates a code or spends a quota slot (SE-5, RE-1).
-    if (Math.floor(deps.now() / 1000) > payload.exp) return deny(403, "time", who);
-    if (clientGone()) return deny(403, "client_gone", who);
+    // Time spent waiting counts: an envelope that expired, or a caller that hung up, in the chain or during the standing
+    // checks, issues nothing, so no abandoned request creates a code or spends a quota slot (SE-5, RE-1).
+    const abandoned = () => {
+      if (Math.floor(deps.now() / 1000) > payload.exp) return "time";
+      return clientGone() ? "client_gone" : null;
+    };
+    const gone = abandoned();
+    if (gone !== null) return deny(403, gone, who);
     const dids = { actorDid: payload.actor_did, targetDid: payload.target };
     const daily = {
       reservedToday: () => deps.log.reservedToday(deps.now()),
       reserve: () => record({ outcome: "reserved", ...who, ...dids }),
     };
-    const result = await issueInvite(deps.pds, deps.limits, payload.target, daily, deps.now);
+    const result = await issueInvite(deps.pds, deps.limits, payload.target, daily, deps.now, abandoned);
     const reason =
       result.kind === "issued" ? {} : { reason: result.kind === "closed" ? "signups_closed" : result.reason };
     record({

@@ -221,6 +221,42 @@ describe("queued work", () => {
   });
 });
 
+describe("running work", () => {
+  test("issue.running_client_gone: a caller that hangs up during the standing checks gets no code or slot", async () => {
+    let release = () => {
+      // Replaced by the promise's resolver below.
+    };
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reached = () => {
+      // Replaced by the promise's resolver below.
+    };
+    const atStatus = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    pds.onStatus = () => {
+      reached();
+      return held;
+    };
+    const abort = new AbortController();
+    const call = fetch(`${service.base}/v1/invite.issue`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(signed(service.key, payloadFor())),
+      signal: abort.signal,
+    }).catch(() => "aborted"); // guard-allow: egress test, local service only
+    await atStatus;
+    abort.abort();
+    expect(await call).toBe("aborted");
+    await vi.waitFor(async () => expect(await service.connections()).toBe(0));
+    release();
+    await vi.waitFor(() => expect(lastLog()).toMatchObject({ outcome: "denied", reason: "client_gone" }));
+    expect(logLines().some((line) => line.includes('"reserved"'))).toBe(false);
+    expect(pds.codes).toBe(0);
+  });
+});
+
 describe("durability", () => {
   test("state.durability_lost_stops: a state file in an unknown state stops the service, never 200", async () => {
     await service.close();
