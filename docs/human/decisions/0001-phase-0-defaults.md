@@ -638,3 +638,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   "weekly test and lint tools" group. Drafts run `ci.yml`'s `code` job and `pr-shape`. The required checks are the list
   in `.github/required-checks.json`, and a merge is tested on main's current tip. Amends ADR 0019 and one sentence of
   ADR 0044. Proposed, awaiting Alex.
+- **ADR 0059 accepted (Alex, 2026-11-18 12:10:51Z, against 6486744; own record:
+  [0059](0059-narrow-typed-lines-and-group-updates.md)):** Alex's typed line is needed only for a loosening of a
+  security control and for ADRs; dead checks and other non-security loosenings merge on the verifier's recorded review.
+  Renovate groups non-major updates weekly and the verifier may merge the test and lint tools group; drafts run the
+  cheap checks; the required checks are the file's list; a merge is tested on main's current tip. ADR 0019 and one
+  sentence of ADR 0044 are amended.

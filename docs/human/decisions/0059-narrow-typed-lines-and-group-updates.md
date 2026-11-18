@@ -1,10 +1,11 @@
 # 0059 — Alex's typed line only for security loosenings and ADRs; grouped dependency updates; drafts get the cheap checks
 
-Status: Proposed (awaiting Alex). Alex asked for it on 2026-11-18 11:38:01Z in the project chat ("Go 2to6"), answering
-the pull request process review (items 2 to 6). That message is his line for the workflow change in decision 4; this
-record still needs his acceptance line naming the head. It amends ADR 0019 (the first bullet of "What stays with
-Alex", the Renovate clause of "Which pull requests", and condition 2) and the matching sentence of ADR 0044 decision 3.
-No accepted record is edited.
+Status: Accepted by Alex, 2026-11-18 12:10:51Z, against 6486744 (his line "Accept ADR 0059", typed in the project
+chat after the coordinator had reviewed that head and CI was green). The only changes since that head are this status
+paragraph, the index row and the ADR 0001 acceptance line. Alex asked for it on 2026-11-18 11:38:01Z ("Go 2to6"),
+answering the pull request process review (items 2 to 6); that message was also his line for the workflow change in
+decision 4. It amends ADR 0019 (the first bullet of "What stays with Alex", the Renovate clause of "Which pull
+requests", and condition 2) and the matching sentence of ADR 0044 decision 3. No accepted record is edited.
 
 ## Context
 The review of 2026-11-18 (236 merges to main from 2026-10-28 to 2026-11-18) found:
