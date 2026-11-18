@@ -7,7 +7,7 @@
 const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
-const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
+const RENDER_ENTRIES = { admin: "apps/admin/render.tsx" };
 // What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file,
 // the Tailwind entry and the legal texts directly in apps/web/legal/ (read as `?raw` by the legal pages). Not the
 // React UI.
@@ -31,10 +31,6 @@ const SDK_ADAPTERS = [
   { sdk: "age-encryption", adapter: "infrastructure/seal/" },
   { sdk: "@atproto/lex[^/]*", adapter: "shared/lexicons/" },
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
-  // The owner's README editor (ADR 0037 point 5): BlockNote and the ProseMirror it runs on, in the browser only.
-  { sdk: "@blocknote/[^/]+", adapter: "apps/web/src/editor/" },
-  { sdk: "prosemirror-[^/]+", adapter: "apps/web/src/editor/" },
-  { sdk: "@tiptap/[^/]+", adapter: "apps/web/src/editor/" },
 ];
 
 /** Node built-ins a domain may not import: I/O arrives as a passed-in dependency (README rule 1). */
@@ -70,17 +66,6 @@ const DOMAIN_ENTRY_FILES = domainEntryFiles();
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 /**
- * The unresolvable edge allowed (P1.23w; architecture Amendment 2026-10-06 21:45Z; Alex 21:49Z): apps/web's server
- * build is the package export `@unset/apps-web/server`. dependency-cruiser does not follow that exports subpath into
- * the excluded dist/, so it reports the edge as unresolved. The render loader is the product importer. P1.26's
- * harness loads the same build for `Island`, which has to be that module so it shares IslandRunContext with the
- * production render. Only these files, only this specifier.
- */
-const RENDER_BUILD_MODULE = "@unset/apps-web/server";
-const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: RENDER_BUILD_MODULE };
-const E2E_SERVER_BUILD = { from: "tests/e2e/fixtures/servers.ts", module: RENDER_BUILD_MODULE };
-const UNRESOLVED_BUILD_IMPORTERS = [RENDER_BUILD_IMPORT.from, E2E_SERVER_BUILD.from];
-/**
  * The web process's own build (P1.20k): server.ts loads SvelteKit's adapter-node handler and the client manifest
  * through the package "imports" #kit/handler and #kit/manifest (interfaces/web/package.json), literal so semgrep's
  * computed-import rule passes. Their targets are under build/, which does not exist when lint runs, so the edges are
@@ -103,7 +88,7 @@ const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|t
 const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin|safe-href)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope|host-pin|safe-href)/";
 // The lexicon build scripts and the Node built-ins they may import, each named exactly (P1.31d). Adding one loosens a
 // guard: a check-path PR with an architecture ruling and Alex's typed word.
 const LEXICON_SCRIPTS = "^shared/lexicons/scripts/";
@@ -111,16 +96,6 @@ const LEXICON_SCRIPT_BUILTINS = ["fs", "path", "os", "url", "child_process"];
 // A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
 const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
 const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
-// A browser island (P1.23): one component per *.island.tsx under apps/web/src/islands/ or shared/ui/islands/. It may
-// import the kit and the island runtime, shared/islands (P1.25o, for P1.25i's move).
-const ISLAND = "\\.island\\.tsx$";
-// The npm modules an island may import, each named exactly (architecture ruling 2026-10-06, P1.23q): today only
-// React's JSX runtime (ADR 0015). Adding an entry loosens a guard: a check-path PR naming the module and why the
-// island needs it, with an architecture ruling and Alex's typed word. A vendor SDK never goes here; it gets its own
-// adapter folder (SDK_ADAPTERS).
-const ISLAND_NPM_MODULES = ["react/jsx-runtime"];
-// A bare specifier resolved to exactly that module (a file, or a folder's index), never another subpath.
-const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\\.js)?$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
 // P1.20c (ADR 0055 point 4): the Svelte Icon draws the pinned Iconoir data, read through @unset/shared-ui's
@@ -164,16 +139,6 @@ const MATRIX = [
     name: "interface-web-build",
     from: { path: oneOfFiles([WEB_SERVER_BUILD.from]) },
     to: [{ path: oneOfFiles(WEB_SERVER_BUILD.modules), couldNotResolve: true }],
-  },
-  {
-    name: "interface-http-render",
-    from: { path: "^interfaces/http/" },
-    to: [{ path: oneOfFiles([RENDER_ENTRIES.http]) }],
-  },
-  {
-    name: "interface-http-render-build",
-    from: { path: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
-    to: [{ path: oneOfFiles([RENDER_BUILD_IMPORT.module]), couldNotResolve: true }],
   },
   {
     name: "interface-admin-render",
@@ -221,11 +186,6 @@ const MATRIX = [
   // React kit. shared/ui reaches it only through its index and re-exports safeHref, so no React caller changes.
   { name: "shared-ui-safe-href", from: { path: "^shared/ui/" }, to: [{ path: "^shared/safe-href/index\\.ts$" }] },
   { name: "shared-safe-href", from: { path: "^(shared/safe-href/)" }, to: [{ path: "^$1" }] },
-  // The island runtime (define, props, readProps, slot), its own workspace from P1.25i (P1.25o; book edit
-  // 2026-10-07-p125l-islands-lazy-chunks): it ships to the browser, so no Node built-in, and it never imports the
-  // kit, which reaches it only through its index.
-  { name: "shared-ui-islands", from: { path: "^shared/ui/" }, to: [{ path: "^shared/islands/index\\.ts$" }] },
-  { name: "shared-islands", from: { path: "^shared/islands/" }, to: [{ path: "^shared/islands/" }, NPM] },
   // The UI build runners (P1.25h moved them; P1.25w, architecture ruling 2026-10-07-p125h-follow-ups N2): pure by
   // design, IO injected by scripts/ui, so no Node built-in, and shared/ui only as types through its index.
   {
@@ -294,8 +254,8 @@ module.exports = {
     ),
     forbidden(
       "app-render-entry-only",
-      "From outside apps/, only interfaces/http, admin and web import an app, each only what its own rule allows (guideline §1).",
-      { pathNot: `^apps/|^interfaces/(http|admin|web)/|${TOOLING}` },
+      "From outside apps/, only interfaces/admin and web import an app, each only what its own rule allows (guideline §1).",
+      { pathNot: `^apps/|^interfaces/(admin|web)/|${TOOLING}` },
       { path: "^apps/" },
     ),
     forbidden(
@@ -315,12 +275,6 @@ module.exports = {
       "The web's font route takes only the two font files from shared/ui.",
       { path: FONT_READER },
       { path: "^shared/ui/", pathNot: FONT_DATA },
-    ),
-    forbidden(
-      "app-render-entry-only",
-      "interfaces/http imports only the web render entry (guideline §1).",
-      { path: "^interfaces/http/" },
-      { path: "^apps/", pathNot: oneOfFiles([RENDER_ENTRIES.http]) },
     ),
     forbidden(
       "app-render-entry-only",
@@ -456,17 +410,8 @@ module.exports = {
     forbidden(
       "web-not-admin",
       "The public web surface imports nothing admin (§5.7).",
-      { path: "^(apps/web|interfaces/http)/" },
+      { path: "^(apps/web|interfaces/web)/" },
       { path: "(^|/)admin/" },
-    ),
-    forbidden(
-      "island-import-boundary",
-      "An island ships to the browser: a *.island.tsx imports only shared/ui, shared/islands, the npm modules in ISLAND_NPM_MODULES and type-only modules, never server code (P1.23q, P1.25o; plan §5.1).",
-      { path: ISLAND },
-      {
-        pathNot: ["^shared/ui/", "^shared/islands/", ...ISLAND_NPM_MODULES.map(npmModule)],
-        dependencyTypesNot: ["type-only"],
-      },
     ),
     forbidden(
       "lexicon-scripts-not-imported",
@@ -481,21 +426,15 @@ module.exports = {
       { path: "^deployment/preflight/" },
     ),
     // P1.28k (architecture amendment 8, second note, 2026-10-08 01:10Z): an import nothing here can follow escapes every
-    // path rule above, so our own relative and @unset/* specifiers must resolve. UNRESOLVED_BUILD_IMPORTERS are the
-    // exception, and only for RENDER_BUILD_MODULE. How a specifier may be spelled (no root-absolute path, URL scheme
-    // or undeclared package) is the raw-specifier allowlist in scripts/lint/specifiers.ts, because these rules see
-    // only where it resolved.
+    // path rule above, so our own relative and @unset/* specifiers must resolve, with no exception since P1.20k
+    // deleted the React render build. How a specifier may be spelled (no root-absolute path, URL scheme or undeclared
+    // package) is the raw-specifier allowlist in scripts/lint/specifiers.ts, because these rules see only where it
+    // resolved.
     forbidden(
       "specifier-must-resolve",
       "A relative or @unset/* specifier must resolve (P1.28k).",
-      { pathNot: oneOfFiles(UNRESOLVED_BUILD_IMPORTERS) },
+      {},
       { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)" },
-    ),
-    forbidden(
-      "specifier-must-resolve",
-      "These files' only unresolved import is the web server build (P1.28k, P1.23w, P1.26).",
-      { path: oneOfFiles(UNRESOLVED_BUILD_IMPORTERS) },
-      { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)", pathNot: oneOfFiles([RENDER_BUILD_MODULE]) },
     ),
     forbidden(
       "fake-only-in-composition-root",
@@ -595,8 +534,6 @@ module.exports = {
 Object.defineProperties(module.exports, {
   ZERO_DEP_ALLOWLIST: { value: ZERO_DEP_ALLOWLIST },
   RENDER_ENTRIES: { value: RENDER_ENTRIES },
-  RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
-  E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
   WEB_SERVER_BUILD: { value: WEB_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },

@@ -45,32 +45,22 @@ async function importGraph(root: string): Promise<Map<string, IDependency[]>> {
   return new Map((output as ICruiseResult).modules.map((module) => [module.source, module.dependencies]));
 }
 
-/** The one unresolvable edge the boundary rules already allow (Alex, 2026-10-06 21:49Z): the web render loader's
- * import of apps/web's built server bundle, generated code. It is read from the boundary config, never copied, and
- * matches only that importer with that specifier (architecture amendment 3, 2026-10-07). */
-const ALLOWED_UNRESOLVED = config.RENDER_BUILD_IMPORT;
-const isAllowedUnresolved = (file: string, dependency: IDependency): boolean =>
-  file === ALLOWED_UNRESOLVED.from && dependency.module === ALLOWED_UNRESOLVED.module;
 /** An import that must resolve: a relative path or a workspace package. A bare third-party package is not followed. */
 const ours = (dependency: IDependency): boolean =>
   dependency.module.startsWith(".") || dependency.module.startsWith("@unset/");
 const followed = (dependency: IDependency): boolean =>
   !dependency.couldNotResolve && !dependency.coreModule && !dependency.resolved.split("/").includes("node_modules");
 
-type Walk = { graph: Map<string, IDependency[]>; allowed: Set<string>; injected: readonly string[] };
+type Walk = { graph: Map<string, IDependency[]>; injected: readonly string[] };
 
-/** Why an unresolved import of ours fails the guard; the one allowed edge is recorded instead. */
-function unresolvedProblem(walk: Walk, file: string, dependency: IDependency): string | null {
+/** Why an unresolved import of ours fails the guard. Since P1.20k deleted the React render build, no unresolved edge
+ * of ours is allowed. */
+function unresolvedProblem(file: string, dependency: IDependency): string | null {
   if (!dependency.couldNotResolve) return null;
-  if (isAllowedUnresolved(file, dependency)) {
-    walk.allowed.add(`${file} -> ${dependency.module}`);
-    return null;
-  }
   return ours(dependency) ? `${file} imports ${dependency.module}, which does not resolve` : null;
 }
 
-/** Why `test` breaks the rule: it, or a module it reaches, builds an image, or an import on the way does not resolve.
- * The allowed unresolved edge is recorded, not followed. */
+/** Why `test` breaks the rule: it, or a module it reaches, builds an image, or an import on the way does not resolve. */
 function buildProblem(root: string, walk: Walk, test: string): string | null {
   const seen = new Set<string>();
   const pending = [test];
@@ -114,24 +104,23 @@ function moduleProblem(root: string, walk: Walk, test: string, file: string): st
     return `${test} ${by}, so it must be named *.image.test.ts`;
   }
   for (const dependency of walk.graph.get(file) ?? []) {
-    const unresolved = unresolvedProblem(walk, file, dependency);
+    const unresolved = unresolvedProblem(file, dependency);
     if (unresolved !== null) return `${test}: ${unresolved}`;
   }
   return null;
 }
 
-/** Every unit test that builds an image itself or through a module it reaches, and the allowed unresolved edges the
- * walk met. */
+/** Every unit test that builds an image itself or through a module it reaches. */
 async function imageBuildProblems(
   root: string,
   injected: readonly string[] = INJECTED_BUILDS,
-): Promise<{ problems: string[]; allowed: string[] }> {
-  const walk: Walk = { graph: await importGraph(root), allowed: new Set(), injected };
+): Promise<{ problems: string[] }> {
+  const walk: Walk = { graph: await importGraph(root), injected };
   const problems = [...walk.graph.keys()]
     .filter((file) => TEST.test(file) && !IMAGE_TEST.test(file))
     .flatMap((file) => buildProblem(root, walk, file) ?? [])
     .sort();
-  return { problems, allowed: [...walk.allowed] };
+  return { problems };
 }
 
 /** Every image test that can skip itself. */
@@ -158,7 +147,6 @@ const DOCKER_RUN = `docker(${JSON.stringify(["run", "--rm", "x"])});\n`;
 const MAKE = `export function make() {\n  return ${DOCKER_BUILD}}\n`;
 const using = (spec: string) => `import { make } from "${spec}";\nmake();\n`;
 const named = (file: string, by: string) => `${file} ${by}, so it must be named *.image.test.ts`;
-const RENDER_EDGE = `${ALLOWED_UNRESOLVED.from} -> ${ALLOWED_UNRESOLVED.module}`;
 
 /** A fixture tree with a package.json and one workspace package, @unset/shared-pkg, whose index builds an image. */
 function tree(files: Record<string, string>): string {
@@ -176,14 +164,7 @@ afterAll(removeFixtures);
 
 describe("image tests", () => {
   test("image_builds_only_in_image_tests", async () => {
-    const repository = await imageBuildProblems(ROOT);
-    // The allowed edge is printed once, from the repository walk only, so it is visible in the check log.
-    for (const edge of repository.allowed) console.log(`unresolved, allowed: ${edge}`);
-    expect(repository.problems).toEqual([]);
-    // The render loader's edge is unresolved until apps/web's server build exists. render-entry.test.ts writes that
-    // build while this file runs, and then the edge resolves into apps/web/dist/, which the boundary config excludes,
-    // so the cruise drops it (P1.31d). Either way the walk follows nothing past it, and no other edge may appear.
-    expect([[], [RENDER_EDGE]]).toContainEqual(repository.allowed);
+    expect((await imageBuildProblems(ROOT)).problems).toEqual([]);
     const root = tree({
       "a/spawn.test.ts": `spawnSync("docker", ${JSON.stringify(["buildx", BUILD_WORD, "."])});\n`,
       "a/shell.test.ts": `run("${["docker", BUILD_WORD].join(" ")} -t x .");\n`,
@@ -258,48 +239,17 @@ describe("image tests", () => {
     ]);
   });
 
-  test("render_build_specifier_from_other_importer_fails", async () => {
-    const other = "interfaces/http/web/other.ts";
+  test("former_render_build_import_fails_like_any_other", async () => {
+    // P1.20k: the React render build and its one allowed unresolved edge are gone, so its old importer is refused too.
     const root = tree({
-      [ALLOWED_UNRESOLVED.from]: using(ALLOWED_UNRESOLVED.module),
-      [other]: using(ALLOWED_UNRESOLVED.module),
-      "interfaces/http/web/entry.test.ts": using("./render-entry.ts"),
-      "interfaces/http/web/other.test.ts": using("./other.ts"),
-    });
-    expect(await imageBuildProblems(root)).toEqual({
-      problems: [
-        `interfaces/http/web/other.test.ts: ${other} imports ${ALLOWED_UNRESOLVED.module}, which does not resolve`,
-      ],
-      allowed: [RENDER_EDGE],
-    });
-  });
-
-  test("other_unresolved_specifier_from_render_entry_fails", async () => {
-    const root = tree({
-      [ALLOWED_UNRESOLVED.from]: using("@unset/apps-web/client"),
+      "interfaces/http/web/render-entry.ts": using("@unset/apps-web/server"),
       "interfaces/http/web/entry.test.ts": using("./render-entry.ts"),
     });
     expect(await imageBuildProblems(root)).toEqual({
       problems: [
-        `interfaces/http/web/entry.test.ts: ${ALLOWED_UNRESOLVED.from} imports @unset/apps-web/client, which does not resolve`,
+        "interfaces/http/web/entry.test.ts: interfaces/http/web/render-entry.ts imports @unset/apps-web/server, which does not resolve",
       ],
-      allowed: [],
     });
-  });
-
-  test("render_build_import_exemption_matches_boundary_config", () => {
-    // The guard reads the boundary config's own pair; the boundary rule that allows the edge uses the same pair.
-    expect(ALLOWED_UNRESOLVED).toEqual({
-      from: "interfaces/http/web/render-entry.ts",
-      module: "@unset/apps-web/server",
-    });
-    type Target = { path: string; couldNotResolve?: boolean };
-    const row = config.MATRIX.find((r) => r.name === "interface-http-render-build");
-    const to = row?.to as Target[] | undefined;
-    expect(to).toHaveLength(1);
-    expect(new RegExp((row?.from as Target | undefined)?.path ?? "$^").test(ALLOWED_UNRESOLVED.from)).toBe(true);
-    expect(new RegExp(to?.[0]?.path ?? "$^").test(ALLOWED_UNRESOLVED.module)).toBe(true);
-    expect(to?.[0]?.couldNotResolve).toBe(true);
   });
 
   test("image_tests_have_no_conditional_skip", () => {
