@@ -70,8 +70,8 @@ test("unreadable_file_is_finding", () => {
     "css-layers": "apps/web/src/screens/Bad.module.css",
     // The inventory is the base the rest is checked against, so an unreadable one is the whole report.
     "ui-inventory": "shared/ui/inventory.json",
-    "web-prerender": "interfaces/web/src/routes/+page.ts",
     "page-classes": "interfaces/web/src/routes/+page.svelte",
+    "web-prerender": "interfaces/web/src/routes/+page.ts",
   };
   // case-collision reads only names from git, never file contents.
   for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {

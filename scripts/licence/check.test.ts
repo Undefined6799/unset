@@ -1,4 +1,5 @@
 // P0.13: the licence files agree with ADR 0012, and the compatibility check finds what it must.
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -8,6 +9,7 @@ import {
   checkRepository,
   flatten,
   indexByPath,
+  LICENCE_FILE_ONLY,
   type LsNode,
   PERMISSIVE,
   productionTree,
@@ -66,6 +68,38 @@ describe("licence", () => {
     expect(flatten(one("MIT")).map((d) => d.name)).toEqual(["dep", "inner"]);
     expect(checkPackage("p", "GPL-3.0-only", [])).toHaveLength(1);
     expect(checkPackage("p", undefined, [])).toHaveLength(1);
+  });
+
+  // A licence-file-only package passes only at its pinned version, and only when the field is truly missing.
+  test("licence_file_only_is_pinned_to_one_version", () => {
+    const dep = (version: string, license: unknown): LsNode => ({
+      dependencies: { "svelte-toolbelt": { version, license } },
+    });
+    expect(checkPackage("p", "MIT", flatten(dep("0.10.7", undefined)))).toEqual([]);
+    expect(checkPackage("p", "MIT", flatten(dep("0.10.8", undefined)))).toEqual([
+      "p: svelte-toolbelt@0.10.8 has no licence field",
+    ]);
+    expect(checkPackage("p", "MIT", flatten(dep("0.10.7", "GPL-3.0-only")))).toHaveLength(1);
+    expect(Object.keys(LICENCE_FILE_ONLY)).toEqual(["svelte-toolbelt@0.10.7"]);
+  });
+
+  // The evidence for each entry: the installed licence file is the text that was read (P1.20c).
+  test("licence_file_only_evidence_is_the_installed_file", () => {
+    const evidence: Record<string, { file: string; sha256: string; starts: string }> = {
+      "svelte-toolbelt@0.10.7": {
+        file: "node_modules/svelte-toolbelt/LICENSE",
+        sha256: "8914f144af4333312a07b30438dc6b75dd8da7a665c3ae9fa751f229eb615e8b",
+        starts: "MIT License",
+      },
+    };
+    expect(Object.keys(evidence)).toEqual(Object.keys(LICENCE_FILE_ONLY));
+    for (const [id, { file, sha256, starts }] of Object.entries(evidence)) {
+      const bytes = readFileSync(join(ROOT, file));
+      expect(createHash("sha256").update(bytes).digest("hex"), id).toBe(sha256);
+      expect(bytes.toString("utf8").startsWith(starts), id).toBe(true);
+      const manifest = JSON.parse(readFileSync(join(ROOT, file, "..", "package.json"), "utf8")) as { version: string };
+      expect(`${id.slice(0, id.lastIndexOf("@"))}@${manifest.version}`).toBe(id);
+    }
   });
 
   test("spdx_expressions", () => {
