@@ -7,6 +7,7 @@
 <script lang="ts">
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import type { CardContent, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
+import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
@@ -20,6 +21,8 @@ let {
   width,
   cardKey,
   trigger,
+  icon,
+  triggerClass = "",
   title,
   submit,
   max,
@@ -32,6 +35,9 @@ let {
   /** The card being saved; absent, the form adds a card. */
   cardKey?: string;
   trigger: string;
+  /** Draw the trigger as this icon alone, `trigger` its hidden name (the card's own controls). */
+  icon?: IconName;
+  triggerClass?: string;
   title: string;
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
@@ -125,7 +131,13 @@ const buttonRows = $derived([
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Trigger class={buttonVariants({ variant: "outline" })}>{trigger}</Dialog.Trigger>
+  {#if icon === undefined}
+    <Dialog.Trigger class="{buttonVariants({ variant: 'outline' })} {triggerClass}">{trigger}</Dialog.Trigger>
+  {:else}
+    <Dialog.Trigger class="{buttonVariants({ variant: 'ghost', size: 'icon-sm' })} {triggerClass}"
+      ><Icon name={icon} size={20} label={trigger} /></Dialog.Trigger
+    >
+  {/if}
   <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText}>
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
     {#if refused !== undefined}

@@ -7,6 +7,19 @@ export const CARD_TEXT = {
   hire: "Hire me",
   subscribe: "Subscribe",
   custom: "Open link",
+  /** The buttons card's eyebrow (the mockup's Contact card). */
+  contact: "Contact",
+  links: (n: number) => (n === 1 ? "1 link" : `${n} links`),
+  entries: (n: number) => (n === 1 ? "1 entry" : `${n} entries`),
+  scrollForMore: "scroll for more",
+  addCard: "Add a card",
+} as const;
+
+/** The side column's labels (the profile-card mockup, Alex 2026-11-17). */
+export const PROFILE_SIDE = {
+  place: "Place",
+  web: "Web",
+  did: "DID",
 } as const;
 
 /** The owner's card controls (ADR 0051). */

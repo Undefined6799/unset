@@ -290,7 +290,7 @@
     "profile": {
       "card-controls.svelte": {
         "origin": "ours",
-        "purpose": "The owner's controls under each profile card: edit, move up and down, delete behind a confirm."
+        "purpose": "The owner's controls on each profile card, at its top right: edit, move up and down, delete behind a confirm."
       },
       "card-editor.svelte": {
         "origin": "ours",
@@ -307,6 +307,14 @@
       "profile-cards.svelte": {
         "origin": "ours",
         "purpose": "The profile's cards in a two-column grid on the stock Card: README, links, collection, buttons."
+      },
+      "profile-layout.svelte": {
+        "origin": "ours",
+        "purpose": "The member page's frame: notices on top, then the side column and the cards, two columns on wide screens."
+      },
+      "profile-side.svelte": {
+        "origin": "ours",
+        "purpose": "The profile's side column: the letter avatar, name, handle, headline, details list and the owner's links."
       },
       "readme.svelte": {
         "origin": "ours",

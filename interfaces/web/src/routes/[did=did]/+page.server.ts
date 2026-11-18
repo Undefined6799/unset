@@ -70,6 +70,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
     account: account.verified ? { path, name: account.handle } : { path },
     prefs: { theme: themeFromCookies(request.headers.get("cookie")), returnTo: themeReturnTo(path) },
     noindex: true,
+    wide: true,
   };
   return {
     shell,

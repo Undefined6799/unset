@@ -56,14 +56,21 @@ export type Block =
   | { readonly kind: "rule" };
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
-export type ShownLink = { readonly href: string; readonly text: string; readonly description: string };
+/** `site` is the address's host when the member gave the link a label of their own, else "" (the text is the host). */
+export type ShownLink = {
+  readonly href: string;
+  readonly text: string;
+  readonly description: string;
+  readonly site: string;
+};
 export type ShownEntry = {
   readonly href: string | null;
   readonly title: string;
   readonly tag: string;
   readonly description: string;
 };
-export type ShownButton = { readonly href: string; readonly label: string };
+/** `address` is an email button's address, shown under the buttons for a visitor with no mail app. */
+export type ShownButton = { readonly href: string; readonly label: string; readonly address?: string };
 
 export type CardShown =
   | { readonly kind: "readme"; readonly blocks: readonly Block[] }

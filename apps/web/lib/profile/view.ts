@@ -20,6 +20,15 @@ export function linkText(uri: string): string {
   }
 }
 
+/** The address's host without www, or "" when it does not parse. */
+export function linkHost(uri: string): string {
+  try {
+    return new URL(uri).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 type Buttons = Extract<CardContent, { kind: "buttons" }>["buttons"];
 
 function shownButtons(buttons: Buttons): ShownButton[] {
@@ -28,7 +37,7 @@ function shownButtons(buttons: Buttons): ShownButton[] {
     if (button.kind === "email") {
       // Percent-encoded (RFC 6068 section 2): the address can only ever be the recipient, never add headers.
       const href = safeHref(`mailto:${encodeURIComponent(button.address)}`, ["mailto:"]);
-      if (href !== null) shown.push({ href, label: CARD_TEXT.email });
+      if (href !== null) shown.push({ href, label: CARD_TEXT.email, address: button.address });
       continue;
     }
     const href = web(button.uri);
@@ -50,7 +59,15 @@ function shownOf(content: CardContent): CardShown {
         items: content.items.flatMap((link) => {
           const href = web(link.uri);
           if (href === null) return [];
-          return [{ href, text: link.label === "" ? linkText(link.uri) : link.label, description: link.description }];
+          const labelled = link.label !== "";
+          return [
+            {
+              href,
+              text: labelled ? link.label : linkText(link.uri),
+              description: link.description,
+              site: labelled ? linkHost(link.uri) : "",
+            },
+          ];
         }),
       };
     case "collection":
