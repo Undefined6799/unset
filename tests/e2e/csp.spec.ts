@@ -1,60 +1,54 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+// The CSP and Trusted Types policy in the browser (P1.26; on the SvelteKit server since P1.20k, ADR 0054): every page
+// loads, and every app page starts SvelteKit's client, with no violation; the watcher sees one when there is one; and
+// an app page whose script fails to load is still the server's working page.
 import { expect, test } from "@playwright/test";
-import { expectHeaderMenuCloses, pageNoise, watch } from "./observe.ts";
-import { FIXTURES, PAGES, TEST_ORIGIN } from "./pages.ts";
+import { openPage, pageNoise, watch } from "./observe.ts";
+import { ALL_PAGES, PAGES } from "./pages.ts";
 
-function toastChunk(): string {
-  const manifestPath = join(import.meta.dirname, "../../apps/web/dist/client/.vite/manifest.json");
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, { file?: string }>;
-  const entry = Object.entries(manifest).find(([key]) => key.endsWith("/toast.island.tsx"));
-  const file = entry?.[1].file;
-  if (file === undefined || !file.startsWith("assets/")) throw new Error("toast island chunk is not in the web build");
-  return file;
-}
-
-for (const fixture of PAGES.filter((page) => page.group === "public")) {
-  test(`public_pages_no_csp_violations ${fixture.path}`, async ({ page }) => {
+for (const fixture of ALL_PAGES) {
+  test(`pages_no_csp_violations ${fixture.path}`, async ({ page }) => {
     const watched = watch(page);
-    const response = await page.goto(fixture.path);
+    const response = await openPage(page, fixture);
     expect(response?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
     const noise = await pageNoise(page, watched);
     expect(noise.csp).toEqual([]);
     expect(watched.pageErrors).toEqual([]);
+    if (fixture.expectJs) expect(watched.scripts.length).toBeGreaterThan(0);
   });
 }
 
+// The watcher's own check: a style element the policy refuses (style-src lists the build's files only) is reported.
 test("csp_violation_detected", async ({ page }) => {
   const watched = watch(page);
-  const response = await page.goto(`${TEST_ORIGIN}${FIXTURES.inline}`);
-  expect(response?.status()).toBe(200);
-  const noise = await pageNoise(page, watched);
-  expect(noise.csp.length).toBeGreaterThan(0);
+  const login = PAGES.find((entry) => entry.path === "/login");
+  if (login === undefined) throw new Error("/login is not in PAGES");
+  expect((await openPage(page, login))?.status()).toBe(200);
+  await page.evaluate(() => {
+    const doc = (globalThis as unknown as { document: DocumentLike }).document;
+    const style = doc.createElement("style");
+    style.textContent = "main { color: red; }";
+    doc.head.append(style);
+  });
+  await expect.poll(() => watched.csp.length).toBeGreaterThan(0);
 });
 
-test("csp_no_violations", async ({ page }) => {
+// With its script refused, an app page is the server's page: the sign-in form is there, and the only error is
+// SvelteKit's startup script reporting the import that failed.
+test("app_page_works_without_its_script", async ({ page }) => {
+  await page.route("**/_app/**/*.js", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
   const watched = watch(page);
-  const response = await page.goto(`${TEST_ORIGIN}${FIXTURES.app}`);
-  expect(response?.status()).toBe(200);
-  const close = page.locator("[data-island='toast'] a");
-  await close.focus();
-  await close.click();
-  await expect(page.locator("#notice")).toBeHidden();
-  const noise = await pageNoise(page, watched);
-  expect(noise.csp).toEqual([]);
-  expect(watched.pageErrors).toEqual([]);
-});
-
-test("bootstrap_isolates_failure", async ({ page }) => {
-  const file = toastChunk();
-  await page.route(`**/${file}`, (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "missing" }));
-  const watched = watch(page);
-  const response = await page.goto(`${TEST_ORIGIN}${FIXTURES.app}`);
-  expect(response?.status()).toBe(200);
-  await expectHeaderMenuCloses(page);
-  expect(watched.pageErrors).toEqual([]);
-  expect(watched.consoleErrors.some((text) => text.startsWith("island.static"))).toBe(true);
+  const login = PAGES.find((entry) => entry.path === "/login");
+  if (login === undefined) throw new Error("/login is not in PAGES");
+  expect((await openPage(page, login))?.status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+  expect(watched.pageErrors).toHaveLength(1);
+  expect(watched.pageErrors[0]).toMatch(/^Failed to fetch dynamically imported module: .*\/_app\/immutable\//);
   const noise = await pageNoise(page, watched);
   expect(noise.csp).toEqual([]);
 });
+
+type DocumentLike = {
+  createElement: (tag: string) => { textContent: string };
+  head: { append: (node: object) => void };
+};

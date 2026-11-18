@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+// pages_cover_routes (P1.26; on interfaces/web's route folders since P1.20k): every document route is a page under
+// test or named in NOT_DOCUMENTS with a reason.
 import { describe, expect, test } from "vitest";
-import { FIXTURES, type ManifestRoute, missingFromRouter, NOT_DOCUMENTS, PAGES, uncovered } from "./pages.ts";
+import { ALL_PAGES, kitRoutes, missingFromRouter, NOT_DOCUMENTS, uncovered } from "./pages.ts";
 
-const manifest = join(import.meta.dirname, "../../interfaces/http/routes.manifest.json");
-const routes = JSON.parse(readFileSync(manifest, "utf8")) as ManifestRoute[];
+const routes = kitRoutes();
 
 describe("pages_cover_routes", () => {
   test("every document route is listed", () => {
@@ -12,23 +11,29 @@ describe("pages_cover_routes", () => {
     expect(missingFromRouter(routes)).toEqual([]);
   });
 
-  test("a new GET HTML route fails and is named", () => {
-    expect(uncovered([...routes, { method: "GET", path: "/new-page" }])).toEqual(["/new-page"]);
+  test("the route folders are read as routes", () => {
+    const documents = routes.filter((entry) => entry.document).map((entry) => entry.route);
+    expect(documents).toContain("/:did");
+    expect(documents).toContain("/legal/:document");
+    expect(routes.some((entry) => entry.route === "/.well-known/security.txt" && !entry.document)).toBe(true);
   });
 
-  test("a POST is not a page", () => {
-    expect(uncovered([...routes, { method: "POST", path: "/new-page" }])).toEqual([]);
+  test("a new document route fails and is named", () => {
+    expect(uncovered([...routes, { route: "/new-page", document: true }])).toEqual(["/new-page"]);
   });
 
-  test("exclusions are real routes and fixtures are not", () => {
-    const gets = new Set(routes.filter((route) => route.method === "GET").map((route) => route.path));
-    for (const entry of NOT_DOCUMENTS) expect(gets.has(entry.path), entry.path).toBe(true);
-    for (const path of Object.values(FIXTURES)) expect(gets.has(path), path).toBe(false);
+  test("an endpoint is not a page", () => {
+    expect(uncovered([...routes, { route: "/new-endpoint", document: false }])).toEqual([]);
   });
 
-  test("fixture groups match the manifest", () => {
-    for (const page of PAGES) {
-      const route = routes.find((entry) => entry.method === "GET" && entry.path === page.path);
+  test("exclusions are real document routes", () => {
+    const documents = new Set(routes.filter((entry) => entry.document).map((entry) => entry.route));
+    for (const entry of NOT_DOCUMENTS) expect(documents.has(entry.route), entry.route).toBe(true);
+  });
+
+  test("page groups match the route policies", () => {
+    for (const page of ALL_PAGES) {
+      const route = routes.find((entry) => entry.document && entry.route === page.route);
       expect(route?.group, page.path).toBe(page.group);
     }
   });

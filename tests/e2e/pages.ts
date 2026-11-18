@@ -1,98 +1,106 @@
-// The pages the browser harness visits (P1.26). English only: no `?lang` and no locale cookie.
-// P1.22b adds French. A GET in the web route manifest must be listed here or in NOT_DOCUMENTS.
-
-/** Where Playwright, pa11y and Lighthouse open the production process. */
-export const PROD_ORIGIN = "http://127.0.0.1:8080";
-export const TEST_ORIGIN = "http://127.0.0.1:8081";
-/**
- * `PUBLIC_ORIGIN` for that process. @atproto/oauth-client 0.8.9
- * (`dist/types.js`, `oauthClientIdDiscoverableSchema`) rejects a client id that is
- * `http:` or an IP, and the product id is `${PUBLIC_ORIGIN}/oauth-client-metadata.json`
- * (`infrastructure/pds/oauth/oauth-client.ts`). The port matches `PROD_ORIGIN` so the host
- * check strips `:8080` (`shared/http/server.ts` `requestHost`).
- */
-export const PROD_PUBLIC_ORIGIN = "https://unset.test:8080";
+// The pages the browser harness visits (P1.26; on the SvelteKit server since P1.20k). English only: no `?lang` and no
+// locale cookie (P1.22b adds French). A document route of interfaces/web must be listed here or in NOT_DOCUMENTS
+// (pages.test.ts walks the route folders).
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
- * Fixture paths on the test server only. The kit's path template rejects a leading underscore
- * (shared/http/routes.ts SEGMENT), and P1.25 did not ship TEST_ROUTES, so these are not `__test`.
+ * Where browsers, pa11y and Lighthouse open the two processes (fixtures/servers.ts): a TLS listener in front of each
+ * server, at a name that is neither an IP nor loopback, which is what the OAuth client accepts in its metadata
+ * (@atproto/oauth-client 0.8.9 dist/types.js clientMetadataSchema: "https: URL must not use a loopback host"), and
+ * where every browser stores a Secure __Host- cookie. Nothing resolves HOST: Playwright reaches it through PROXY, a
+ * CONNECT proxy that sends every tunnel to 127.0.0.1, and pa11y and Lighthouse map it with Chromium's
+ * --host-resolver-rules.
  */
-export const FIXTURES = {
-  app: "/fixture/app",
-  showcase: "/fixture/showcase",
-  unlabeled: "/fixture/unlabeled",
-  inline: "/fixture/inline",
-  script: "/fixture/script",
-  welcomeAge: "/fixture/welcome-age",
-  welcomeTerms: "/fixture/welcome-terms",
-  welcomeChat: "/fixture/welcome-chat",
-  account: "/fixture/account",
-  settingsProfile: "/fixture/settings-profile",
-  settingsAccount: "/fixture/settings-account",
-} as const;
+export const HOST = "unset.test";
+export const LISTEN = { prod: 8443, test: 8444 } as const;
+export const PROXY = "http://127.0.0.1:8440";
+/** The servers' own plain listeners, which only the TLS listener and the health probe reach. */
+export const INNER = { prod: 8080, test: 8081 } as const;
+export const PROD_ORIGIN = `https://${HOST}:${LISTEN.prod}`;
+export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
+
+/** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
+export type MemberName = "age" | "terms" | "chat" | "verify" | "account";
+/** The finished member, whose repo the stand-in PDS holds. */
+export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
+/**
+ * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
+ * which Playwright empties when a run starts (outputDir).
+ */
+export const SESSIONS_FILE = join(tmpdir(), "unset-e2e-sessions.json");
+
+/** `__Host-sid=…` for `member`, read when a test runs (the file exists only once the test server is up). */
+export function memberCookie(member: MemberName): string {
+  const cookies = JSON.parse(readFileSync(SESSIONS_FILE, "utf8")) as Record<MemberName, string>;
+  return cookies[member];
+}
 
 export type PageGroup = "app" | "public";
 
 export type PageFixture = {
+  /** The path the browser opens. */
   readonly path: string;
+  /** The route it matches, as pages.test.ts names route folders. */
+  readonly route: string;
   readonly group: PageGroup;
-  /** The page is written to run without script. */
-  readonly zeroJs: boolean;
-  /** The browser must observe no script request. */
+  /** An app page runs SvelteKit's client (csr, +page.ts); a public page asks for no script. */
   readonly expectJs: boolean;
+  /** Opened on the test server signed in as this member; without one, on the production server signed out. */
+  readonly member?: MemberName;
 };
 
-/** Documents the production server renders. Redirects and protocol routes stay in NOT_DOCUMENTS. */
+const signedOut = (path: string, group: PageGroup, route = path): PageFixture => ({
+  path,
+  route,
+  group,
+  expectJs: group === "app",
+});
+const signedIn = (path: string, member: MemberName, route = path): PageFixture => ({
+  path,
+  route,
+  group: "app",
+  expectJs: true,
+  member,
+});
+
+/** Documents the production server renders to a visitor with no session. */
 export const PAGES: readonly PageFixture[] = [
-  { path: "/", group: "public", zeroJs: true, expectJs: false },
-  { path: "/legal/terms", group: "public", zeroJs: true, expectJs: false },
-  { path: "/legal/privacy", group: "public", zeroJs: true, expectJs: false },
-  { path: "/legal/domains", group: "public", zeroJs: true, expectJs: false },
-  // P2.05m: the sign-in dialog alone, with no shell and islands off, so no script is requested.
-  { path: "/login", group: "app", zeroJs: true, expectJs: false },
-  // P2.13 renders this inside the app shell. The header island is a script; the page still works without it.
-  { path: "/signed-out", group: "app", zeroJs: false, expectJs: true },
-  // P2.12 renders this with islands off and no session. The header stays static, so no script is requested.
-  { path: "/welcome/blocked", group: "app", zeroJs: true, expectJs: false },
+  signedOut("/", "public"),
+  signedOut("/legal/terms", "public", "/legal/:document"),
+  signedOut("/legal/privacy", "public", "/legal/:document"),
+  signedOut("/legal/domains", "public", "/legal/:document"),
+  signedOut("/login", "app"),
+  signedOut("/signed-out", "app"),
+  signedOut("/welcome/blocked", "app"),
 ];
 
-/**
- * The welcome screens that need a signed-in account at their real paths (P2.12a), rendered on the test server as the
- * routes render them: islands off, the app shell, noindex. `/welcome/blocked` needs no session and is in PAGES.
- */
-export const WELCOME_FIXTURES: readonly PageFixture[] = [
-  { path: FIXTURES.welcomeAge, group: "app", zeroJs: true, expectJs: false },
-  { path: FIXTURES.welcomeTerms, group: "app", zeroJs: true, expectJs: false },
-  { path: FIXTURES.welcomeChat, group: "app", zeroJs: true, expectJs: false },
-  // P2.13c: the account page and the settings pages, as their routes render them with a session.
-  { path: FIXTURES.account, group: "app", zeroJs: true, expectJs: false },
-  { path: FIXTURES.settingsProfile, group: "app", zeroJs: true, expectJs: false },
-  { path: FIXTURES.settingsAccount, group: "app", zeroJs: true, expectJs: false },
+/** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
+export const MEMBER_PAGES: readonly PageFixture[] = [
+  signedIn("/welcome/age", "age"),
+  signedIn("/welcome/terms", "terms"),
+  signedIn("/welcome/chat", "chat"),
+  signedIn("/verify-email", "verify"),
+  signedIn(`/${ACCOUNT.did}`, "account", "/:did"),
+  signedIn("/settings/profile", "account"),
+  signedIn("/settings/account", "account"),
 ];
 
+/** Every page under test, each once. */
+export const ALL_PAGES: readonly PageFixture[] = [...PAGES, ...MEMBER_PAGES];
+
+/** The origin a page is opened on. */
+export const originOf = (page: PageFixture): string => (page.member === undefined ? PROD_ORIGIN : TEST_ORIGIN);
+
 /**
- * GET routes that are not documents under test. A new GET that is in neither list fails
- * pages_cover_routes. `/login/continue` is the sign-in handoff (P2.13a), not this harness.
+ * Document routes that are not pages under test. A new document route in neither list fails pages_cover_routes.
+ * Non-document routes (+server.ts) are never pages and need no entry.
  */
-export const NOT_DOCUMENTS: readonly { readonly path: string; readonly reason: string }[] = [
-  { path: "/health", reason: "readiness probe" },
-  { path: "/.well-known/security.txt", reason: "RFC 9116 text, not a document" },
-  { path: "/assets/:file", reason: "built file, not a document" },
-  { path: "/oauth-client-metadata.json", reason: "OAuth metadata JSON" },
-  { path: "/oauth/jwks.json", reason: "OAuth key set JSON" },
-  { path: "/oauth/callback", reason: "protocol callback; a browser visit would call the PDS" },
-  { path: "/login/continue", reason: "sign-in handoff, covered by P2.13a, not this harness" },
-  { path: "/verify-email", reason: "redirects to sign-in without a session" },
-  { path: "/did", reason: "resolves the signed-in account; redirects to sign-in without a session" },
-  { path: "/:did", reason: "owner-only account; a valid DID redirects to sign-in without a session" },
-  { path: "/me", reason: "redirects to sign-in without a session" },
-  { path: "/welcome", reason: "always redirects to the current onboarding step" },
-  { path: "/welcome/age", reason: "redirects to sign-in without a session" },
-  { path: "/welcome/terms", reason: "redirects to sign-in without a session" },
-  { path: "/welcome/chat", reason: "redirects to sign-in without a session" },
-  { path: "/settings", reason: "always redirects to /settings/profile" },
-  { path: "/settings/profile", reason: "redirects to sign-in without a session" },
-  { path: "/settings/account", reason: "redirects to sign-in without a session" },
+export const NOT_DOCUMENTS: readonly { readonly route: string; readonly reason: string }[] = [
+  { route: "/login/continue", reason: "sign-in handoff, covered by the web integration tests" },
+  { route: "/prefs/theme", reason: "the no-script theme form's answer; the footer form is tested in nojs.spec.ts" },
+  { route: "/welcome", reason: "always redirects to the current onboarding step" },
 ];
 
 export type ThemeCell =
@@ -120,13 +128,15 @@ export function cellName(cell: ThemeCell): string {
 }
 
 /**
- * The opposite system scheme on a cookie cell, so a page that ignored the cookie would render the
- * other theme. Locale is English only: Accept-Language en, never a locale cookie.
+ * English, the theme cookie on a cookie cell, and the member's session on a signed-in page. A cookie cell sets the
+ * opposite system scheme (colorSchemeOf), so a page that ignored the cookie would render the other theme.
  */
-export function requestHeaders(cell: ThemeCell): Record<string, string> {
-  const headers: Record<string, string> = { "accept-language": "en" };
-  if (cell.kind === "cookie") headers.cookie = `__Host-theme=${cell.theme}`;
-  return headers;
+export function requestHeaders(cell: ThemeCell, page?: PageFixture): Record<string, string> {
+  const cookies = [
+    ...(page?.member === undefined ? [] : [memberCookie(page.member)]),
+    ...(cell.kind === "cookie" ? [`__Host-theme=${cell.theme}`] : []),
+  ];
+  return { "accept-language": "en", ...(cookies.length === 0 ? {} : { cookie: cookies.join("; ") }) };
 }
 
 export function colorSchemeOf(cell: ThemeCell): "dark" | "light" {
@@ -134,19 +144,43 @@ export function colorSchemeOf(cell: ThemeCell): "dark" | "light" {
   return cell.theme === "dark" ? "light" : "dark";
 }
 
-export type ManifestRoute = { readonly method: string; readonly path: string; readonly group?: string };
+export type KitRoute = { readonly route: string; readonly document: boolean; readonly group?: string };
 
-/** GET routes in the manifest that this harness neither visits nor explains. */
-export function uncovered(routes: readonly ManifestRoute[]): string[] {
-  const pages = new Set(PAGES.map((page) => page.path));
-  const skipped = new Set(NOT_DOCUMENTS.map((entry) => entry.path));
-  return routes
-    .filter((route) => route.method === "GET" && !pages.has(route.path) && !skipped.has(route.path))
-    .map((route) => route.path);
+const ROUTES = join(import.meta.dirname, "../../interfaces/web/src/routes");
+
+/** A route folder name as a path segment: `[did]` → `:did`, `[document=legal]` → `:document`, `[x+2e]` → `.`. */
+function segment(name: string): string {
+  const decoded = name.replace(/\[x\+([0-9a-f]{2})\]/g, (_, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+  return decoded.replace(/^\[([a-z]+)(=[a-z]+)?\]$/, ":$1");
 }
 
-/** Fixture paths that the production manifest does not serve. */
-export function missingFromRouter(routes: readonly ManifestRoute[]): string[] {
-  const gets = new Set(routes.filter((route) => route.method === "GET").map((route) => route.path));
-  return PAGES.filter((page) => !gets.has(page.path)).map((page) => page.path);
+/** interfaces/web's routes, read from its route folders: a +page.svelte is a document, a +server.ts is not. */
+export function kitRoutes(dir = ROUTES, prefix = ""): KitRoute[] {
+  const routes: KitRoute[] = [];
+  const document = existsSync(join(dir, "+page.svelte"));
+  if (document || existsSync(join(dir, "+server.ts"))) {
+    const policy = join(dir, "policy.ts");
+    const group = existsSync(policy) ? /group: "([a-z]+)"/.exec(readFileSync(policy, "utf8"))?.[1] : undefined;
+    routes.push({ route: prefix === "" ? "/" : prefix, document, ...(group === undefined ? {} : { group }) });
+  }
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) routes.push(...kitRoutes(join(dir, entry.name), `${prefix}/${segment(entry.name)}`));
+  }
+  return routes;
+}
+
+/** Document routes the harness neither visits nor explains. The test-only routes are never documents under test. */
+export function uncovered(routes: readonly KitRoute[]): string[] {
+  const listed = new Set([...ALL_PAGES.map((page) => page.route), ...NOT_DOCUMENTS.map((entry) => entry.route)]);
+  return routes
+    .filter((entry) => entry.document && !entry.route.startsWith("/test-routes") && !listed.has(entry.route))
+    .map((entry) => entry.route);
+}
+
+/** Pages whose route is not a document route of the server. */
+export function missingFromRouter(routes: readonly KitRoute[]): string[] {
+  const documents = new Set(routes.filter((entry) => entry.document).map((entry) => entry.route));
+  return ALL_PAGES.filter((page) => !documents.has(page.route)).map((page) => page.path);
 }

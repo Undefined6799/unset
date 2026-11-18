@@ -3,13 +3,13 @@
     "collect": {
       "numberOfRuns": 3,
       "url": [
-        "http://127.0.0.1:8080/",
-        "http://127.0.0.1:8080/legal/terms",
-        "http://127.0.0.1:8080/legal/privacy",
-        "http://127.0.0.1:8080/legal/domains",
-        "http://127.0.0.1:8080/login",
-        "http://127.0.0.1:8080/signed-out",
-        "http://127.0.0.1:8080/welcome/blocked"
+        "https://unset.test:8443/",
+        "https://unset.test:8443/legal/terms",
+        "https://unset.test:8443/legal/privacy",
+        "https://unset.test:8443/legal/domains",
+        "https://unset.test:8443/login",
+        "https://unset.test:8443/signed-out",
+        "https://unset.test:8443/welcome/blocked"
       ],
       "settings": {
         "formFactor": "mobile",
@@ -20,13 +20,13 @@
           "deviceScaleFactor": 1.75,
           "disabled": false
         },
-        "chromeFlags": "--no-sandbox --disable-dev-shm-usage --disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,CertificateTransparencyComponentUpdater,AutofillServerCommunication,PrivacySandboxSettings4,RenderDocument,SpareRendererForSitePerProcess"
+        "chromeFlags": "--no-sandbox --disable-dev-shm-usage --host-resolver-rules=\"MAP unset.test 127.0.0.1\" --ignore-certificate-errors --disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,CertificateTransparencyComponentUpdater,AutofillServerCommunication,PrivacySandboxSettings4,RenderDocument,SpareRendererForSitePerProcess"
       }
     },
     "assert": {
       "assertMatrix": [
         {
-          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/(legal/[a-z]+|login|welcome/blocked)?$",
+          "matchingUrlPattern": "^https://unset\\.test:8443/(legal/[a-z]+)?$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],
@@ -37,7 +37,7 @@
           }
         },
         {
-          "matchingUrlPattern": "^http://127\\.0\\.0\\.1:8080/signed-out$",
+          "matchingUrlPattern": "^https://unset\\.test:8443/(login|signed-out|welcome/blocked)$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],

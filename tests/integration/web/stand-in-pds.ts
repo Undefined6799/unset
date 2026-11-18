@@ -58,6 +58,15 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
     if (url.pathname === "/.well-known/oauth-authorization-server") return json(200, metadata(fixture.origin));
     if (url.pathname === "/.well-known/oauth-protected-resource")
       return json(200, { resource: fixture.origin, authorization_servers: [fixture.origin] });
+    // com.atproto.server.getSession, when the fixture names an email state: the account the token is for, which here is
+    // always `fixture.did` (https://github.com/bluesky-social/atproto/blob/main/lexicons/com/atproto/server/getSession.json).
+    if (url.pathname === "/xrpc/com.atproto.server.getSession" && fixture.session !== undefined)
+      return json(200, {
+        did: fixture.did,
+        handle: `alice.${new URL(fixture.origin).hostname}`,
+        email: "alice@example.test",
+        emailConfirmed: fixture.session.emailConfirmed,
+      });
     const method = url.pathname.replace(/^\/xrpc\/com\.atproto\.repo\./, "");
     if (fixture.failing?.includes(method)) return json(503, { error: "Unavailable" });
     if (request.method === "GET") {

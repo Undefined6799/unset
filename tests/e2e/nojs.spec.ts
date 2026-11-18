@@ -1,30 +1,39 @@
+// Every page with JavaScript off (P1.26; on the SvelteKit shell since P1.20k): it renders, its links and plain forms
+// work, and the menu drawer is a native popover. axe runs on the server markup with scripts refused.
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
-import { AXE_TAGS, pageNoise, watch } from "./observe.ts";
-import { FIXTURES, PAGES, TEST_ORIGIN } from "./pages.ts";
+import { AXE_TAGS, openPage, pageNoise, watch } from "./observe.ts";
+import { ALL_PAGES, type PageFixture } from "./pages.ts";
 
 const today = new Date().toISOString().slice(0, 10);
+const SETTINGS: PageFixture = {
+  path: "/settings/profile",
+  route: "/settings/profile",
+  group: "app",
+  expectJs: true,
+  member: "account",
+};
 
 test.describe("javascript disabled", () => {
   test.use({ javaScriptEnabled: false });
 
-  for (const fixture of PAGES) {
+  for (const fixture of ALL_PAGES) {
     test(`nojs ${fixture.path}`, async ({ page }) => {
-      const response = await page.goto(fixture.path);
+      const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);
       await expect(page.locator("main")).toBeVisible();
     });
   }
 
-  // P2.05m: the sign-in page is one box over the scrim, with nothing behind it to tab into; with no Referer, Close goes home.
+  // P2.05m: the sign-in page is one box; with no Referer, Close goes home.
   test("login_box_without_js", async ({ page }) => {
-    await page.goto("/login?next=/did");
-    const dialog = page.getByRole("region", { name: "Sign in" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
-    await expect(page.locator("header, footer")).toHaveCount(0);
+    await page.goto("/login?next=/me");
+    const box = page.getByRole("region", { name: "Sign in" });
+    await expect(box).toBeVisible();
+    await expect(box.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+    await expect(box.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
+    await expect(box.locator('input[name="next"]')).toHaveValue("/me");
   });
 
   // P2.05n: the browser's own Referer (Referrer-Policy same-origin) brings Close back to the page the visitor left.
@@ -38,76 +47,30 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
-  // P2.05p: the Header's Sign in opens the box over the page as a modal dialog with no script (invoker commands).
-  // Close and Escape each leave the visitor on the page they were on; a click on the scrim reaches nothing behind it,
-  // and Tab never reaches the page behind, which a modal dialog makes inert.
-  test("sign_in_opens_over_the_page", async ({ page }) => {
-    await page.goto("/legal/terms");
-    const box = page.getByRole("dialog", { name: "Sign in" });
-    const open = page.locator('header button[commandfor="sign-in"]:visible');
-    await expect(box).toBeHidden();
-    await open.click();
-    await expect(box).toBeVisible();
-    await expect(box.locator('input[name="next"]')).toHaveValue("/legal/terms");
-    for (let i = 0; i < 4; i += 1) {
-      await page.keyboard.press("Tab");
-      await expect(page.locator("header :focus, main :focus, footer :focus")).toHaveCount(0);
-    }
-    await box.getByRole("button", { name: "Close" }).click();
-    await expect(box).toBeHidden();
-    await open.click();
-    await page.keyboard.press("Escape");
-    await expect(box).toBeHidden();
-    await open.click();
-    await page.mouse.click(5, 5);
-    await expect(box).toBeVisible();
-    await expect(page).toHaveURL(/\/legal\/terms$/);
-  });
-
-  // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
+  // P1.25f, P2.13e: on a phone the bottom bar's menu button opens the drawer. The native popover closes on Escape and
+  // gives focus back to the button that opened it (HTML "hide popover algorithm", focusPreviousElement).
   test.describe("phone", () => {
     test.use({ viewport: { width: 375, height: 800 } });
 
-    // The native popover closes on Escape and gives focus back to the button that opened it (HTML "hide popover
-    // algorithm", focusPreviousElement for a close request).
     test("navigation_popover_without_js", async ({ page }) => {
       await page.goto("/");
-      // P2.13e: the floating bar's menu button opens the drawer, and the bar hides while it is open.
-      const bar = page.locator('nav:has(> button[popovertargetaction="toggle"])');
-      const toggle = bar.locator('button[popovertargetaction="toggle"]');
+      const toggle = page.locator('nav:not([popover]) button[popovertargetaction="toggle"]');
       const panel = page.locator("[popover]");
       await expect(panel).toBeHidden();
       await toggle.press("Enter");
       await expect(panel).toBeVisible();
-      await expect(bar).toBeHidden();
       await expect(panel.getByRole("link", { name: "Settings" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
-      await expect(bar).toBeVisible();
       await expect(toggle).toBeFocused();
-    });
-
-    test("default_shell_details_menu_without_js", async ({ page }) => {
-      await page.goto("/signed-out");
-      const menu = page.locator("header details");
-      const summary = menu.locator("summary");
-      await expect(summary).toBeVisible();
-      // P2.05p: the action is the button that opens the sign-in box in place.
-      await expect(menu.getByRole("button", { name: "Sign in" })).toBeHidden();
-      await summary.press("Enter");
-      await expect(menu).toHaveAttribute("open", "");
-      await expect(menu.getByRole("button", { name: "Sign in" })).toBeVisible();
-      await summary.press("Enter");
-      await expect(menu).not.toHaveAttribute("open");
     });
   });
 
   // P2.13e: on desktop the header's menu button opens the drawer and its X closes it, with no script.
   test("navigation_drawer_without_js", async ({ page }) => {
     await page.goto("/");
-    const toggle = page.locator('header button[popovertargetaction="toggle"]');
     const panel = page.locator("[popover]");
-    await toggle.click();
+    await page.locator('header button[popovertargetaction="toggle"]').click();
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("link", { name: "Home", exact: true })).toBeVisible();
     await panel.getByRole("button", { name: "Close menu" }).click();
@@ -124,7 +87,7 @@ test.describe("javascript disabled", () => {
   });
 
   // P1.22's test, its theme half (the French half is P1.22b's): the footer form on an app page sets the theme.
-  test("prefs_forms_work_without_js", async ({ page, browserName }) => {
+  test("prefs_forms_work_without_js", async ({ page }) => {
     await page.goto("/signed-out");
     const form = page.locator('footer form[action="/prefs/theme"]');
     await form.getByLabel("Light").check();
@@ -135,17 +98,31 @@ test.describe("javascript disabled", () => {
     expect(response.status()).toBe(303);
     expect(response.request().postData()).toBe("theme=light&return=%2Fsigned-out");
     await expect(page).toHaveURL(/\/signed-out$/);
-    // WebKit will not store a Secure __Host- cookie on http (a11y.spec.ts), so it keeps the system theme.
-    const expected = browserName === "webkit" ? null : "light";
-    expect(await page.locator("html").getAttribute("data-theme")).toBe(expected);
-    await expect(form.getByLabel(browserName === "webkit" ? "System" : "Light")).toBeChecked();
+    expect(await page.locator("html").getAttribute("data-theme")).toBe("light");
+    await expect(form.getByLabel("Light")).toBeChecked();
+  });
+
+  // P2.13e: the drawer's picker is three buttons that each post their choice, so it works with no script.
+  test("drawer_theme_picker_without_js", async ({ page }) => {
+    await openPage(page, SETTINGS);
+    await page.locator('header button[popovertargetaction="toggle"]').click();
+    const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
+    await page.locator("#core-menu").getByRole("button", { name: "Dark" }).click();
+    expect((await posted).status()).toBe(303);
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.locator('header button[popovertargetaction="toggle"]').click();
+    await expect(page.locator("#core-menu").getByRole("button", { name: "Dark" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });
 
-// axe-core's injection uses page.evaluate, which does not finish when JavaScript is disabled.
-// Aborting script requests keeps the server markup (these pages ship no island) and lets axe run.
+// axe-core's injection uses page.evaluate, which does not finish when JavaScript is disabled. Refusing script requests
+// keeps the server markup and lets axe run.
 test.describe("server markup", () => {
-  for (const fixture of PAGES) {
+  for (const fixture of ALL_PAGES) {
     test(`nojs_axe ${fixture.path}`, async ({ page }) => {
       expect(expiredAllowances(AXE_ALLOWANCE, today)).toEqual([]);
       await page.route("**/*", (route) => {
@@ -153,21 +130,22 @@ test.describe("server markup", () => {
         return route.continue();
       });
       const watched = watch(page);
-      const response = await page.goto(fixture.path);
+      const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);
       await expect(page.locator("main")).toBeVisible();
       const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
       expect(unallowedViolations(results.violations, AXE_ALLOWANCE, today)).toEqual([]);
       const noise = await pageNoise(page, watched);
       expect(noise.csp).toEqual([]);
-      expect(watched.pageErrors).toEqual([]);
     });
   }
 });
 
+// The watcher's own check: a page that asks for a script is seen asking.
 test("zero_js_detected", async ({ page }) => {
   const watched = watch(page);
-  const response = await page.goto(`${TEST_ORIGIN}${FIXTURES.script}`);
-  expect(response?.status()).toBe(200);
+  const login = ALL_PAGES.find((entry) => entry.path === "/login");
+  if (login === undefined) throw new Error("/login is not in PAGES");
+  expect((await openPage(page, login))?.status()).toBe(200);
   expect(watched.scripts.length).toBeGreaterThan(0);
 });

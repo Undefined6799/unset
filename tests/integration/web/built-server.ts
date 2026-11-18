@@ -116,6 +116,8 @@ export type PdsFixture = {
   readonly writesFile: string;
   /** XRPC methods that answer 503, to play an unavailable PDS. */
   readonly failing?: readonly string[];
+  /** With it the stand-in answers com.atproto.server.getSession for `did` with this email state. */
+  readonly session?: { readonly emailConfirmed: boolean };
 };
 
 export type Postgres = { host: string; port: number; database: string; user: string; password: string };
@@ -166,7 +168,8 @@ export async function startWeb(
     kid: "A",
     alg: "ES256",
   };
-  const port = await freePort();
+  // A caller may pin the port (the browser harness, tests/e2e/fixtures/servers.ts); otherwise any free one.
+  const port = env.LISTEN_PORT === undefined ? await freePort() : Number(env.LISTEN_PORT);
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
   const fixture =
     standIns === undefined

@@ -1,5 +1,6 @@
 // What a browser page is allowed to do while the harness watches it (P1.26).
-import { expect, type Page } from "@playwright/test";
+import type { BrowserContext, Page, Response } from "@playwright/test";
+import { memberCookie, originOf, type PageFixture, type ThemeCell } from "./pages.ts";
 
 /** @axe-core/playwright 4.13.0 tags for WCAG 2.2 AA. https://github.com/dequelabs/axe-core/blob/v4.13.0/doc/rule-descriptions.md */
 export const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"] as const;
@@ -31,7 +32,7 @@ export function watch(page: Page): Watched {
 
 /**
  * Chromium asks for `/favicon.ico` on its own. The head leaves favicons out
- * (apps/web/src/shell/head.tsx), so that probe is not a page violation. A linked icon is never ignored.
+ * (interfaces/web/src/app.html), so that probe is not a page violation. A linked icon is never ignored.
  */
 export function withoutFaviconProbe(messages: readonly string[], html: string): string[] {
   if (/rel=["'][^"']*icon["']/i.test(html)) return [...messages];
@@ -57,7 +58,7 @@ type ShownStyle = { display: string; visibility: string; clipPath: string };
 
 /**
  * Interactive controls under 24 CSS px (WCAG 2.2 SC 2.5.8). Skips undisplayed subtrees, inline
- * targets in text, and a clipped 1px input whose label is the visible target (the kit Switch).
+ * targets in text, and a clipped 1px input whose label is the visible target (a visually hidden control).
  * The helper stays inside this function: Playwright serialises `page.evaluate`'s source only.
  * Passed to `page.evaluate` (no DOM lib in this project).
  */
@@ -88,14 +89,23 @@ export function undersizedTargets(): string[] {
   });
 }
 
-/** The header menu is hydrated when Escape closes it and focus returns to the summary. */
-export async function expectHeaderMenuCloses(page: Page): Promise<void> {
-  await page.waitForLoadState("networkidle");
-  // The menu is display:none until the header's container is 440px or narrower.
-  await page.setViewportSize({ width: 400, height: 700 });
-  const menu = page.locator("[data-island='header-menu'] details");
-  await menu.locator("summary").click();
-  await expect(menu).toHaveJSProperty("open", true);
-  await menu.locator("summary").press("Escape");
-  await expect(menu).toHaveJSProperty("open", false);
+/**
+ * The browser cookies a page is opened with: the member's session on a signed-in page, and the theme on a cookie cell,
+ * each as the server sets it (host-only, Secure, path /), so a cookie the page sets later joins them.
+ */
+export async function addPageCookies(context: BrowserContext, fixture: PageFixture, cell?: ThemeCell): Promise<void> {
+  const url = originOf(fixture);
+  const cookies = [
+    ...(fixture.member === undefined
+      ? []
+      : [{ name: "__Host-sid", value: memberCookie(fixture.member).replace(/^__Host-sid=/, ""), httpOnly: true }]),
+    ...(cell?.kind === "cookie" ? [{ name: "__Host-theme", value: cell.theme, httpOnly: false }] : []),
+  ];
+  await context.addCookies(cookies.map((cookie) => ({ ...cookie, url, secure: true, sameSite: "Strict" as const })));
+}
+
+/** Opens `fixture` on its server with its cookies. */
+export async function openPage(page: Page, fixture: PageFixture, cell?: ThemeCell): Promise<Response | null> {
+  await addPageCookies(page.context(), fixture, cell);
+  return page.goto(`${originOf(fixture)}${fixture.path}`);
 }
