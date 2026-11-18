@@ -4,7 +4,7 @@ import { sh } from "./generated/index.generated.ts";
 
 export { IMAGE_ACCEPT, LIMITS } from "./src/limits.ts";
 export { scopeString, scopeStringFallback } from "./src/scope.ts";
-export { type Mode, type RecordNsid, type ValidationResult, validateRecord } from "./src/validate.ts";
+export { type Mode, type RecordNsid, recordToJson, type ValidationResult, validateRecord } from "./src/validate.ts";
 
 /**
  * Our NSIDs. The permission set's is permanent (P1.32, ADR 0020). shared/lexicons may not import shared/config, so
