@@ -19,8 +19,8 @@ route group at a time (step book P1.20b to P1.20k); until the switch-over (P1.20
 2. Put a `policy.ts` beside the `+page` or `+server` file:
    `export const policy = definePolicy({ group: "app", limit: "default" });`, imported by relative path from
    `src/lib/server/policy.ts` (no `$lib` or `#lib` alias: the repo allows only relative and package specifiers).
-   - `group`: `app` (runs SvelteKit's client), `public` or `profile` (no script: add `export const csr = false` in
-     `+page.ts`), `static` (JSON, files).
+   - `group`: `app` (runs SvelteKit's client: add `export const csr = true` in `+page.ts`), `public` or `profile`
+     (no script: the root layout's `csr = false` covers them), `static` (JSON, files).
    - `limit`: a name from `src/lib/server/limits.ts`. A page that needs a new policy adds one there, copied from
      `interfaces/http/limits.ts`.
    - `session: "required"` for a signed-in page: a visitor goes to /login?next=<the page> (an enhanced
