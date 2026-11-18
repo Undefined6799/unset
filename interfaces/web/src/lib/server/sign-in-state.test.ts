@@ -60,6 +60,10 @@ describe("the recorded issuer", () => {
   test("a_bare_https_dns_origin_is_kept", () => {
     expect(issuerOrigin("https://pds.example")).toBe("https://pds.example");
     expect(issuerOrigin("https://pds.example/")).toBe("https://pds.example");
+    // A name that merely contains the letters of localhost is still a DNS name, and so is one label (from the Hono
+    // carrier's signed_out.carrier_keeps_a_dns_name, P1.20k).
+    for (const issuer of ["https://notlocalhost", "https://localhost.example", "https://notlocalhost.example"])
+      expect(issuerOrigin(issuer), issuer).toBe(issuer);
   });
 
   test.each([
@@ -67,7 +71,10 @@ describe("the recorded issuer", () => {
     "https://pds.example:8443",
     "https://user:pass@pds.example",
     "https://127.0.0.1",
+    "https://198.51.100.1",
+    "https://[2001:db8::1]",
     "https://localhost",
+    "https://app.localhost",
     "https://pds.example.",
     "not a url",
   ])("anything_else_is_no_issuer: %s", (issuer) => {

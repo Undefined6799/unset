@@ -149,6 +149,49 @@ describe("cardForm", () => {
     expect(code([["kind", "video"]])).toBe("card.kind_unknown");
   });
 
+  test("an inherited name is no kind, no field and no row, and nothing reaches the prototype", () => {
+    // Moved here with P1.20k from the island props tests (proto_key_roundtrip, escaped_keys_are_refused): the form's
+    // names only ever select from fixed lists (Object.hasOwn for the kind), so a prototype name is refused, not set.
+    for (const kind of ["__proto__", "constructor", "toString", "hasOwnProperty"])
+      expect(code([["kind", kind]]), kind).toBe("card.kind_unknown");
+    expect(
+      code([
+        ["kind", "readme"],
+        ["__proto__", "x"],
+      ]),
+    ).toBe("card.invalid");
+    expect(
+      code([
+        ["kind", "readme"],
+        ["constructor", "x"],
+      ]),
+    ).toBe("card.invalid");
+    expect(
+      code([
+        ["kind", "links"],
+        ["items.0.__proto__", "x"],
+      ]),
+    ).toBe("card.invalid");
+    expect(
+      code([
+        ["kind", "links"],
+        ["items.__proto__.uri", "x"],
+      ]),
+    ).toBe("card.invalid");
+    expect(
+      code([
+        ["kind", "links"],
+        ["__proto__.0.uri", "x"],
+      ]),
+    ).toBe("card.invalid");
+    const body = read([
+      ["kind", "links"],
+      ["items.0.uri", "https://a.example"],
+    ]);
+    expect(Object.getPrototypeOf(body)).toBe(Object.prototype);
+    expect(({} as Record<string, unknown>).uri).toBeUndefined();
+  });
+
   test("the number of fields is capped before any row is built", () => {
     const pairs: [string, string][] = [["kind", "links"]];
     for (let n = 0; pairs.length <= CARD_FORM_MAX_FIELDS; n++) pairs.push([`items.${n % 100}.uri`, "x"]);

@@ -432,3 +432,31 @@ describe("an unavailable PDS", () => {
     expect(down.writes()).toEqual([]);
   });
 });
+
+// Moved from the React cards' test with P1.20k (ProfileCards.test.tsx): what the Svelte page makes of stored text.
+describe("what the page makes of member text", () => {
+  test("member_text_is_escaped_and_an_email_button_opens_an_encoded_mailto_link", async () => {
+    const collection = new URLSearchParams([
+      ["kind", "collection"],
+      ["width", "full"],
+      ["title", "<script>x</script>"],
+      ["layout", "list"],
+      ["items.0.title", "<b>"],
+    ]);
+    const buttons = new URLSearchParams([
+      ["kind", "buttons"],
+      ["width", "full"],
+      ["heading", "Work with me"],
+      ["text", "Open to contracts."],
+      ["buttons.0.kind", "email"],
+      ["buttons.0.address", "a.b+c@x.example"],
+    ]);
+    for (const form of [collection, buttons]) expect((await action("create", form.toString())).status).toBe(303);
+    const html = await (await page(`/${OWNER}`, { cookie })).text();
+    expect(html).not.toContain("<script>x");
+    expect(html).toContain("&lt;script>x&lt;/script>");
+    expect(html).not.toContain("<b>");
+    expect(html).toContain("&lt;b>");
+    expect(html).toContain('href="mailto:a.b%2Bc%40x.example"');
+  });
+});
