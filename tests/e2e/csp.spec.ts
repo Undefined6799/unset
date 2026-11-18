@@ -33,15 +33,15 @@ test("csp_violation_detected", async ({ page }) => {
   await expect.poll(() => watched.csp.length).toBeGreaterThan(0);
 });
 
-// With its script refused, an app page is the server's page: the sign-in form is there, and the only error is
-// SvelteKit's startup script reporting the import that failed.
+// With its script refused, an app page is the server's page: the signed-out page's form is there, and the only error
+// is SvelteKit's startup script reporting the import that failed.
 test("app_page_works_without_its_script", async ({ page }) => {
   await page.route("**/_app/**/*.js", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
   const watched = watch(page);
-  const login = PAGES.find((entry) => entry.path === "/login");
-  if (login === undefined) throw new Error("/login is not in PAGES");
-  expect((await openPage(page, login))?.status()).toBe(200);
-  await expect(page.getByRole("button", { name: "Sign in with AtProto" })).toBeVisible();
+  const signedOut = PAGES.find((entry) => entry.path === "/signed-out");
+  if (signedOut === undefined) throw new Error("/signed-out is not in PAGES");
+  expect((await openPage(page, signedOut))?.status()).toBe(200);
+  await expect(page.getByRole("button", { name: "No thanks" })).toBeVisible();
   expect(watched.pageErrors).toHaveLength(1);
   expect(watched.pageErrors[0]).toMatch(/^Failed to fetch dynamically imported module: .*\/_app\/immutable\//);
   const noise = await pageNoise(page, watched);

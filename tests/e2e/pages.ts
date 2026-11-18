@@ -45,17 +45,17 @@ export type PageFixture = {
   /** The route it matches, as pages.test.ts names route folders. */
   readonly route: string;
   readonly group: PageGroup;
-  /** An app page runs SvelteKit's client (csr, +page.ts); a public page asks for no script. */
+  /** The page runs SvelteKit's client (csr, +page.ts): most app pages; never a public page. */
   readonly expectJs: boolean;
   /** Opened on the test server signed in as this member; without one, on the production server signed out. */
   readonly member?: MemberName;
 };
 
-const signedOut = (path: string, group: PageGroup, route = path): PageFixture => ({
+const signedOut = (path: string, group: PageGroup, route = path, expectJs = group === "app"): PageFixture => ({
   path,
   route,
   group,
-  expectJs: group === "app",
+  expectJs,
 });
 const signedIn = (path: string, member: MemberName, route = path): PageFixture => ({
   path,
@@ -71,9 +71,11 @@ export const PAGES: readonly PageFixture[] = [
   signedOut("/legal/terms", "public", "/legal/:document"),
   signedOut("/legal/privacy", "public", "/legal/:document"),
   signedOut("/legal/domains", "public", "/legal/:document"),
-  signedOut("/login", "app"),
+  // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
+  // zero-script row).
+  signedOut("/login", "app", "/login", false),
   signedOut("/signed-out", "app"),
-  signedOut("/welcome/blocked", "app"),
+  signedOut("/welcome/blocked", "app", "/welcome/blocked", false),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
