@@ -5,7 +5,7 @@
   an h2, so README headings start at h3.
 -->
 <script lang="ts">
-import type { Block, Inline } from "../../profile/types.ts";
+import type { Block, Inline, ListBlock } from "../../profile/types.ts";
 
 let { blocks }: { blocks: readonly Block[] } = $props();
 const HEADINGS = ["h3", "h4", "h5"] as const;
@@ -28,6 +28,18 @@ const HEADING_LOOK = [
   {/each}
 {/snippet}
 
+{#snippet list(block: ListBlock)}
+  {#if block.ordered}
+    <ol class="list-decimal space-y-0.5 ps-6" start={block.start}>
+      {#each block.items as item, j (j)}<li>{@render inline(item.text)}{#each item.lists as sub, k (k)}{@render list(sub)}{/each}</li>{/each}
+    </ol>
+  {:else}
+    <ul class="list-disc space-y-0.5 ps-6 [&_ul]:list-[circle]">
+      {#each block.items as item, j (j)}<li>{@render inline(item.text)}{#each item.lists as sub, k (k)}{@render list(sub)}{/each}</li>{/each}
+    </ul>
+  {/if}
+{/snippet}
+
 <div class="flex flex-col gap-3">
   {#each blocks as block, i (i)}
     {#if block.kind === "heading"}
@@ -39,15 +51,7 @@ const HEADING_LOOK = [
     {:else if block.kind === "quote"}
       <blockquote class="border-s-3 border-input ps-3.5 text-muted-foreground"><p>{@render inline(block.children)}</p></blockquote>
     {:else if block.kind === "list"}
-      {#if block.ordered}
-        <ol class="list-decimal space-y-0.5 ps-6" start={block.start}>
-          {#each block.items as item, j (j)}<li>{@render inline(item)}</li>{/each}
-        </ol>
-      {:else}
-        <ul class="list-disc space-y-0.5 ps-6">
-          {#each block.items as item, j (j)}<li>{@render inline(item)}</li>{/each}
-        </ul>
-      {/if}
+      {@render list(block)}
     {:else if block.kind === "code"}
       <pre class="overflow-x-auto rounded-sm bg-muted px-4 py-3.5 font-mono text-[13px] leading-5"><code>{block.text}</code></pre>
     {:else}

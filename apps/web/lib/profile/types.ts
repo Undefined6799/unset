@@ -48,14 +48,16 @@ export type Inline =
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
-  | {
-      readonly kind: "list";
-      readonly ordered: boolean;
-      readonly start?: number;
-      readonly items: readonly (readonly Inline[])[];
-    }
+  | ListBlock
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
+
+export type ListBlock = {
+  readonly kind: "list";
+  readonly ordered: boolean;
+  readonly start?: number;
+  readonly items: readonly { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] }[];
+};
 
 /** A link, entry or button as the card shows it; a row with no safe address is left out. */
 /** `site` is the address's host when the member gave the link a label of their own, else "" (the text is the host). */

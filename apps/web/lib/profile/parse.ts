@@ -1,9 +1,10 @@
 // The README card's text (ADR 0051): a small CommonMark subset (https://spec.commonmark.org/0.31.2/) parsed into
 // blocks that a renderer writes as escaped elements (readme.tsx today), so member text is always escaped and raw HTML
 // is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
-// code and thematic breaks. Inline: code spans, strong, emphasis, links and autolinks. A link is kept only when
-// safeHref accepts it as http or https (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here
-// throws: any input renders.
+// code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
+// code spans, strong, emphasis, links and autolinks. Images are not shown (there is no media proxy), so `![alt](url)`
+// is a link to the image with its alt text. A link is kept only when safeHref accepts it as http or https
+// (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here throws: any input renders.
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 import {
   codeCloser,
@@ -25,20 +26,26 @@ export type Inline =
 export type Block =
   | { readonly kind: "heading"; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
   | { readonly kind: "paragraph" | "quote"; readonly children: readonly Inline[] }
-  | {
-      readonly kind: "list";
-      readonly ordered: boolean;
-      /** An ordered list's first number, when it is not 1. */
-      readonly start?: number;
-      readonly items: readonly (readonly Inline[])[];
-    }
+  | ListBlock
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "rule" };
+
+export type ListBlock = {
+  readonly kind: "list";
+  readonly ordered: boolean;
+  /** An ordered list's first number, when it is not 1. */
+  readonly start?: number;
+  readonly items: readonly ListItem[];
+};
+/** A list item's text, and the lists indented under it. */
+export type ListItem = { readonly text: readonly Inline[]; readonly lists: readonly ListBlock[] };
 
 /** Guards, not limits: the lexicon caps the text at 100,000 bytes. */
 const MAX_CHARS = 100_000;
 const MAX_BLOCKS = 2_000;
 const MAX_DEPTH = 3;
+/** Lists nest this deep; an item indented further is a sibling of the deepest. */
+const MAX_LIST_DEPTH = 3;
 
 const WEB = ["http:", "https:"] as const;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
@@ -47,6 +54,8 @@ const HEADING_START = /^ {0,3}(#{1,6})(?=[ \t]|$)/;
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 const BULLET = /^\s{0,3}[-*+]\s+(.*)$/;
 const ORDERED = /^\s{0,3}\d{1,9}[.)]\s+(.*)$/;
+/** Any list item line at any indent: its indent, its marker, the spaces after it and its text. */
+const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 
 /** Removes C0 controls except tab and line feed, and DEL; CRLF and CR become LF. */
@@ -106,6 +115,14 @@ function takeLink(text: string, i: number, depth: number, find: Finders): Taken 
   return { node: { kind: "link", href, children }, next: urlEnd + 1 };
 }
 
+/**
+ * An image, `![alt](url)`: not shown, since there is no media proxy, so it is a link to the image with the alt text,
+ * and without the "!". One whose address safeHref refuses stays text, as a link does.
+ */
+function takeImage(text: string, i: number, depth: number, find: Finders): Taken | null {
+  return text[i] === "!" && text[i + 1] === "[" ? takeLink(text, i + 1, depth, find) : null;
+}
+
 function takeEmphasis(text: string, i: number, depth: number, links: boolean, find: Finders): Taken | null {
   const strong = text.startsWith("**", i) || text.startsWith("__", i);
   const ch = text[i];
@@ -135,7 +152,9 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
       depth >= MAX_DEPTH
         ? null
         : (takeCode(text, i, find) ??
-          (links ? (takeAutolink(text, i) ?? takeLink(text, i, depth, find)) : null) ??
+          (links
+            ? (takeAutolink(text, i) ?? takeImage(text, i, depth, find) ?? takeLink(text, i, depth, find))
+            : null) ??
           takeEmphasis(text, i, depth, links, find));
     if (taken === null) {
       buffer += text[i];
@@ -208,14 +227,70 @@ function headingText(rest: string): string {
   return before === " " || before === "\t" ? text.slice(0, end).trim() : text;
 }
 
-/** A bullet or ordered list; an ordered list keeps its first number when it is not 1 (CommonMark 0.31.2, "Lists"). */
-function takeList(lines: readonly string[], i: number): { block: Block; next: number } {
-  const line = lines[i] ?? "";
-  const ordered = !BULLET.test(line);
-  const { items, next } = run(lines, i, ordered ? ORDERED : BULLET);
-  const start = ordered ? Number(/\d+/.exec(line)?.[0] ?? 1) : 1;
-  const list = { kind: "list", ordered, items: items.map((item) => parseInline(item)) } as const;
-  return { block: start === 1 ? list : { ...list, start }, next };
+/** Columns of leading space, a tab counting as four (CommonMark 0.31.2, "Tabs", simplified). */
+const columns = (space: string) => [...space].reduce((n, ch) => n + (ch === "\t" ? 4 : 1), 0);
+
+type ItemLine = {
+  readonly indent: number;
+  readonly content: number;
+  readonly ordered: boolean;
+  readonly start: number;
+  readonly text: string;
+};
+
+function itemLine(line: string): ItemLine | null {
+  const match = ITEM.exec(line);
+  if (match === null) return null;
+  const [, space = "", mark = "", gap = "", text = ""] = match;
+  const indent = columns(space);
+  const ordered = !"-*+".includes(mark);
+  return {
+    indent,
+    content: indent + mark.length + columns(gap),
+    ordered,
+    start: ordered ? Number(mark.slice(0, -1)) : 1,
+    text: text.trim(),
+  };
+}
+
+/** Removes `width` columns of leading space, or all of it when there is less. */
+function dedent(line: string, width: number): string {
+  let i = 0;
+  for (let taken = 0; i < line.length && taken < width && (line[i] === " " || line[i] === "\t"); i += 1) {
+    taken += line[i] === "\t" ? 4 : 1;
+  }
+  return line.slice(i);
+}
+
+/**
+ * A bullet or ordered list from its first item line; an ordered list keeps its first number when it is not 1
+ * (CommonMark 0.31.2, "Lists"). The item lines after an item that are indented at least to its text are its own
+ * lists, read the same way with that indent removed; past MAX_LIST_DEPTH they are siblings instead. A line that is no
+ * item, or an item of the other kind, ends the list. Each line is read once per level, so the parse stays linear.
+ */
+function takeList(lines: readonly string[], i: number, depth = 1): { block: ListBlock; next: number } {
+  const first = itemLine(lines[i] ?? "");
+  const ordered = first?.ordered ?? false;
+  const items: ListItem[] = [];
+  let at = i;
+  for (let item = first; item !== null && item.ordered === ordered; item = itemLine(lines[at] ?? "")) {
+    at += 1;
+    const nested = depth < MAX_LIST_DEPTH ? item.content : Number.POSITIVE_INFINITY;
+    let end = at;
+    while (end < lines.length && (itemLine(lines[end] ?? "")?.indent ?? -1) >= nested) end += 1;
+    const inner = lines.slice(at, end).map((line) => dedent(line, item.content));
+    const lists: ListBlock[] = [];
+    for (let j = 0; j < inner.length; ) {
+      const sub = takeList(inner, j, depth + 1);
+      lists.push(sub.block);
+      j = Math.max(sub.next, j + 1);
+    }
+    items.push({ text: parseInline(item.text), lists });
+    at = end;
+  }
+  const start = first?.start ?? 1;
+  const list: ListBlock = { kind: "list", ordered, items };
+  return { block: start === 1 ? list : { ...list, start }, next: at };
 }
 
 function takeBlock(lines: readonly string[], i: number): { block: Block | null; next: number } {
