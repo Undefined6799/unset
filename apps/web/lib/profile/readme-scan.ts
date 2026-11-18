@@ -1,4 +1,4 @@
-// Forward-only searches for the README parser (readme.tsx). parseInline reads its text left to right, so each search
+// Forward-only searches for the README parser (parse.ts). parseInline reads its text left to right, so each search
 // remembers where it last looked and what it found: every opener that fails costs no new scan, and no member-written
 // text can make a parse quadratic. readme.test.tsx sweeps repeated tokens at the lexicon's 100,000 characters.
 
