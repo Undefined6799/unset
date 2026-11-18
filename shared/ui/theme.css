@@ -1,12 +1,14 @@
-/* The one theme file (P1.20c; ADR 0055 point 3): shadcn-svelte's own variables for light and dark, seeded from the
- * design sheet (a reference, https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt; values as shared/ui/src/tokens.css
- * and deployment/pds/ui/unset-theme.css hold them, which theme.test.ts checks). Later sheet changes reach it by pull
- * request. Plain CSS with no Tailwind syntax, no @import and no url(), and unlayered, so the PDS screens (ADR 0027)
- * can append the same file to upstream's stylesheet, as their recipe appends unset-theme.css today.
+/* The one theme file (P1.20c; ADR 0055 point 3; moved to shared/ui at P2.24z): shadcn's own variables for light and
+ * dark, seeded from the design sheet (a reference, https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt). Later sheet
+ * changes reach it by pull request. Two places read it: the web app (apps/web/app.css imports it) and the PDS
+ * screens (ADR 0027), whose recipe (deployment/pds/pds.Dockerfile) appends this same file to upstream's stylesheet.
+ * Both are shadcn on Tailwind 4 with the same variable names, so a change here reaches both. Plain CSS with no
+ * Tailwind syntax, no @import and no url(), and unlayered, so it wins over upstream's own unlayered tokens by coming
+ * later.
  *
  * Each colour is light-dark(light, dark) (CSS Color 5, https://www.w3.org/TR/css-color-5/#light-dark), chosen by
- * color-scheme: the visitor's system setting by default, or the app's explicit choice in <html data-theme>, which
- * interfaces/http/prefs/theme.ts writes today. One list, so light and dark cannot fall out of step. */
+ * color-scheme: the visitor's system setting by default, or the app's explicit choice in <html data-theme>. The PDS
+ * screens have no choice, so they follow the system setting. One list, so light and dark cannot fall out of step. */
 :root {
   color-scheme: light dark;
   --radius: 4px;

@@ -71,7 +71,7 @@
       "linter": { "rules": { "nursery": { "useLayeredStyles": "off" } } }
     },
     {
-      "includes": ["apps/web/theme.css"],
+      "includes": ["shared/ui/theme.css"],
       "linter": { "rules": { "style": { "noHexColors": "off" }, "nursery": { "useLayeredStyles": "off" } } }
     },
     {
