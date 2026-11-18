@@ -355,13 +355,18 @@ export function untypecheckedFiles(root: string): string[] {
  * The svelte-check projects (ADR 0054 Consequences: svelte-check runs on TypeScript 6, beside tsc -b on 7). Their
  * files count as checked; a .svelte file in the web folders that none of them includes is reported.
  */
-export const SVELTE_CHECK_CONFIGS: readonly string[] = ["apps/web/tsconfig.svelte.json"];
+export const SVELTE_CHECK_CONFIGS: readonly string[] = [
+  "apps/web/tsconfig.svelte.json",
+  "interfaces/web/tsconfig.svelte.json",
+];
 const SVELTE_FOLDERS = ["apps/web", "interfaces/web"];
 
 /** A tsconfig include pattern as a regex over repo-relative paths: `**\/` is any folders, `*` any name part. */
 function includePattern(dir: string, pattern: string): RegExp {
+  // A pattern with no wildcard and no file extension names a folder, which tsc reads as everything under it.
+  const folder = !pattern.includes("*") && !/\.[A-Za-z]+$/.test(pattern);
   const body = posix
-    .join(dir, pattern)
+    .join(dir, folder ? `${pattern}/**/*` : pattern)
     .split(/(\*\*\/|\*)/)
     .map((part) =>
       part === "**/" ? "(?:[^/]+/)*" : part === "*" ? "[^/]*" : part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"),
