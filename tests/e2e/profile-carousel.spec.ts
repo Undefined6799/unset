@@ -92,6 +92,35 @@ test("a_carousel_has_previous_and_next_buttons", async ({ browser, page }) => {
   }
 });
 
+// Review of #1718: in Firefox CI, Left from a carousel's very end did not move it. Someone on the keyboard must be able
+// to go back from the end as well as reach it, with script and without (WCAG 2.1.1).
+test("a_carousel_scrolls_back_from_its_end_by_keyboard", async ({ browser, page }) => {
+  await withCollection(page, 390, "Shelf", "carousel", ["Entry 1", "Entry 2", "Entry 3", "Entry 4"]);
+  const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
+  try {
+    const noScript = await plain.newPage();
+    expect((await openPage(noScript, OWN_PAGE))?.status()).toBe(200);
+    for (const view of [page, noScript]) {
+      const shelf = view.getByRole("region", { name: "Shelf, scrolls sideways" });
+      const end = await shelf.evaluate((node) => {
+        const region = node as unknown as { scrollWidth: number; clientWidth: number };
+        return region.scrollWidth - region.clientWidth;
+      });
+      await shelf.focus();
+      await expect(async () => {
+        await view.keyboard.press("ArrowRight");
+        expect(await scrollLeft(shelf)).toBeGreaterThanOrEqual(end - 1);
+      }).toPass({ timeout: 10_000 });
+      await view.keyboard.press("ArrowLeft");
+      await expect.poll(() => scrollLeft(shelf)).toBeLessThan(end - 1);
+      await backToStart(view, shelf);
+    }
+  } finally {
+    await plain.close();
+    await deleteCard(page, "Shelf card");
+  }
+});
+
 test("a_carousel_that_fits_shows_no_buttons", async ({ page }) => {
   await withCollection(page, 1280, "Pair", "carousel", ["One", "Two"]);
   try {
