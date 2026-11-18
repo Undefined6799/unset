@@ -195,8 +195,17 @@ describe("the settings theme picker", () => {
     const { cookie } = await signedIn();
     const html = await (await get("/settings/account", `${cookie}; __Host-theme=dark`)).text();
     const form = elements(parse(html), "form", { method: "post", action: "/prefs/theme" })[0];
-    const checked = elements(form, "input").filter((input) => (input.attrs ?? []).some((a) => a.name === "checked"));
-    expect(checked.map((input) => input.attrs?.find((a) => a.name === "value")?.value)).toEqual(["dark"]);
+    // The drawer's picker (P2.13e): one submit button per choice, the member's pressed.
+    const attr = (
+      node: { readonly attrs?: readonly { name: string; value: string }[] | undefined } | undefined,
+      name: string,
+    ) => node?.attrs?.find((a) => a.name === name)?.value;
+    const buttons = elements(form, "button", { name: "theme" });
+    expect(buttons.map((button) => [attr(button, "value"), attr(button, "aria-pressed")])).toEqual([
+      ["dark", "true"],
+      ["system", "false"],
+      ["light", "false"],
+    ]);
     const back = elements(form, "input", { name: "return" })[0];
     expect(back?.attrs?.find((a) => a.name === "value")?.value).toBe("/settings/account");
   });

@@ -175,3 +175,60 @@ describe("GET /me", () => {
     expect((await web.fetch("/did", { headers: { "x-forwarded-for": clientAddress() } })).status).toBe(404);
   });
 });
+
+// P1.20k, from staging (2026-11-18): the member page's route matches only a DID-shaped segment, so SvelteKit's client
+// never takes a fixed path such as /me for it; a member's not-found page offers no Sign in; and every app page, not
+// only the member page and Settings, carries the theme form, as interfaces/http/web/page.ts gave every app page.
+describe("the shell around the member page", () => {
+  const get = (path: string, cookie?: string) =>
+    web.fetch(path, {
+      headers: {
+        accept: HTML,
+        "x-forwarded-for": clientAddress(),
+        ...(cookie === undefined ? {} : { cookie: `__Host-sid=${cookie}` }),
+      },
+    });
+
+  test("a_path_that_is_no_did_is_no_member_page", async () => {
+    const response = await get("/nobody");
+    expect(response.status).toBe(404);
+    // The unmatched page is public: no theme form, no session read.
+    expect(await response.text()).not.toContain('action="/prefs/theme"');
+  });
+
+  test("another_members_page_is_missing_and_offers_a_member_no_sign_in", async () => {
+    const cookie = await signedIn(OWNER);
+    const response = await get(`/did:plc:${"z".repeat(24)}`, cookie);
+    expect(response.status).toBe(404);
+    const html = await response.text();
+    expect(html).toContain("That page does not exist.");
+    expect(html).not.toContain('href="/login"');
+  });
+
+  test("a_visitor_on_a_missing_page_is_offered_sign_in", async () => {
+    const html = await (await get("/nobody")).text();
+    expect(html).toContain('href="/login"');
+  });
+
+  test("every_app_page_carries_the_theme_form_and_public_pages_none", async () => {
+    for (const path of ["/login", "/signed-out", "/welcome/blocked"]) {
+      const html = await (await get(path)).text();
+      expect(html, path).toContain('action="/prefs/theme"');
+      expect(html, path).toContain(`name="return" value="${path}"`);
+    }
+    for (const path of ["/", "/legal/terms"]) {
+      expect(await (await get(path)).text(), path).not.toContain('action="/prefs/theme"');
+    }
+  });
+
+  test("the_drawer_picker_presses_the_saved_theme", async () => {
+    const cookie = await signedIn(OWNER);
+    const response = await web.fetch("/settings/account", {
+      headers: { accept: HTML, "x-forwarded-for": clientAddress(), cookie: `__Host-sid=${cookie}; __Host-theme=light` },
+    });
+    const html = await response.text();
+    const drawer = html.slice(html.indexOf('id="core-menu"'));
+    expect(drawer).toMatch(/name="theme" value="light"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*value="light"/);
+    expect(drawer).toMatch(/value="dark"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*value="dark"/);
+  });
+});

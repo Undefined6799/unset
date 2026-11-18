@@ -1,7 +1,7 @@
 <!--
   The shell of every page (P1.20d), as apps/web/src/shell/AppShell.tsx draws it today; src/lib/shell.ts says what a
-  page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the signed-out
-  site shell. Everything here works with no script: links, plain forms, and a native popover for the menu drawer
+  page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
+  Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
   (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.
 -->
 <script lang="ts">
@@ -11,13 +11,19 @@ import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import type { Snippet } from "svelte";
+import { enhance, type SubmitFunction } from "$app/forms";
 import { page } from "$app/state";
-import { type ShellData, SITE_SHELL, SHELL_TEXT as T } from "../lib/shell.ts";
+import { type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
 import type { LayoutData } from "./$types";
 
 let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
 const shell: ShellData = $derived((page.data as { shell?: ShellData }).shell ?? SITE_SHELL);
+// No Sign in for a member the gate found signed in (+layout.server.ts): on the welcome steps, the confirm-email page
+// and the error page, which pass no account.
+const signedIn = $derived(shell.signedIn === true || data.signedIn);
+// The theme form on every app page (+layout.server.ts), as the page passes it or the layout found it.
+const prefs = $derived(shell.prefs ?? data.prefs);
 const message = $derived(data.error === null ? undefined : ERROR_MESSAGES[data.error as keyof typeof ERROR_MESSAGES]);
 const LEGAL = [
   { label: T.terms, href: "/legal/terms" },
@@ -29,10 +35,86 @@ const THEMES = [
   { value: "light", label: T.light },
   { value: "system", label: T.system },
 ] as const;
+const PICKER = [
+  { value: "dark", icon: "bulb-off", label: T.dark },
+  { value: "system", icon: "tv", label: T.system },
+  { value: "light", icon: "bulb-on", label: T.light },
+] as const;
+
+// The drawer's picker in the browser (P2.13e), as shared/ui/components/Navigation/ThemePicker.tsx did it: once the
+// client runs, a choice is saved in the background and applied to <html> in place, so the drawer stays open (Alex,
+// 2026-10-23 02:15Z). The server renders a choice as data-theme and the color-scheme meta (lib/server/theme.ts
+// themeChunk); applyTheme sets the same two. The theme cookie is HttpOnly, so the tab keeps its last saved choice in
+// sessionStorage for a page the back-forward cache restores as it was left (https://web.dev/articles/bfcache).
+const SAVED_THEME = "unset.theme";
+const isThemeChoice = (value: unknown): value is ThemeChoice =>
+  value === "dark" || value === "light" || value === "system";
+
+function applyTheme(theme: ThemeChoice): void {
+  const root = document.documentElement;
+  if (theme === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", theme);
+  document
+    .querySelector('meta[name="color-scheme"]')
+    ?.setAttribute("content", theme === "system" ? "dark light" : theme);
+}
+
+function rememberTheme(theme: ThemeChoice): void {
+  try {
+    sessionStorage.setItem(SAVED_THEME, theme);
+  } catch {
+    // Storage can be off; the cookie still holds the choice for every page the server renders.
+  }
+}
+
+function rememberedTheme(): ThemeChoice | null {
+  try {
+    const value = sessionStorage.getItem(SAVED_THEME);
+    return isThemeChoice(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// The picker's choice once saved in the background; until then the server's.
+let saved = $state<ThemeChoice | undefined>(undefined);
+const current = $derived(saved ?? prefs?.theme ?? "system");
+
+// A choice is saved in the background and applied in place, so the drawer stays open; a save that does not come back
+// as the route's 303 sends the plain form instead, which the server answers as with no script.
+const saveInPlace: SubmitFunction = ({ submitter, formElement }) => {
+  const choice = (submitter as HTMLButtonElement | null)?.value;
+  return async ({ result }) => {
+    if (result.type === "redirect" && isThemeChoice(choice)) {
+      applyTheme(choice);
+      rememberTheme(choice);
+      saved = choice;
+      return;
+    }
+    const field = Object.assign(document.createElement("input"), {
+      type: "hidden",
+      name: "theme",
+      value: choice ?? "",
+    });
+    formElement.append(field);
+    HTMLFormElement.prototype.submit.call(formElement);
+  };
+};
+
+// A page the back-forward cache restores keeps the theme it was left with; this tab's last save replaces it.
+function restoreSaved(event: PageTransitionEvent): void {
+  const last = event.persisted ? rememberedTheme() : null;
+  if (last === null) return;
+  applyTheme(last);
+  saved = last;
+}
+
 const MENU = "core-menu";
 const row =
   "flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium";
 </script>
+
+<svelte:window onpageshow={restoreSaved} />
 
 <svelte:head>
   {#if shell.noindex}<meta name="robots" content="noindex" />{/if}
@@ -44,13 +126,38 @@ const row =
       <legend class="mb-1 text-sm font-medium">{T.theme}</legend>
       {#each THEMES as option (option.value)}
         <label class="flex items-center gap-2 text-sm">
-          <input type="radio" name="theme" value={option.value} checked={shell.prefs?.theme === option.value} />
+          <input type="radio" name="theme" value={option.value} checked={prefs?.theme === option.value} />
           {option.label}
         </label>
       {/each}
     </fieldset>
-    <input type="hidden" name="return" value={shell.prefs?.returnTo ?? "/"} />
+    <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
     <Button type="submit" variant="outline" size="sm">{T.saveTheme}</Button>
+  </form>
+{/snippet}
+
+{#snippet themePicker()}
+  <!-- The drawer's picker (P2.13e; Figma 151:939 option A): three buttons in one group that each POST their choice, so
+       it works with no script; the chosen one is pressed. -->
+  <form method="post" action="/prefs/theme" use:enhance={saveInPlace}>
+    <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
+    <fieldset class="inline-flex rounded-md border p-0.5">
+      <legend class="sr-only">{T.theme}</legend>
+      {#each PICKER as choice (choice.value)}
+        <Button
+          type="submit"
+          name="theme"
+          value={choice.value}
+          variant="ghost"
+          size="icon"
+          aria-pressed={choice.value === current}
+          title={choice.label}
+          class="aria-pressed:bg-accent aria-pressed:ring-1 aria-pressed:ring-border"
+        >
+          <Icon name={choice.icon} size={20} label={choice.label} />
+        </Button>
+      {/each}
+    </fieldset>
   </form>
 {/snippet}
 
@@ -113,8 +220,8 @@ const row =
         </Button>
       </form>
     {/if}
-    {#if shell.prefs !== undefined}
-      <div class="mt-auto border-t pt-4">{@render themeForm()}</div>
+    {#if prefs !== undefined}
+      <div class="mt-auto border-t pt-4">{@render themePicker()}</div>
     {/if}
   </nav>
   <nav
@@ -141,7 +248,7 @@ const row =
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">
       <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
-      {#if !shell.signedIn}<Button href="/login" size="sm">{T.signIn}</Button>{/if}
+      {#if !signedIn}<Button href="/login" size="sm">{T.signIn}</Button>{/if}
     </header>
     <main
       id="main"
@@ -154,13 +261,13 @@ const row =
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.siteColumn}</h2>
       <a href="/">{T.home}</a>
-      {#if !shell.signedIn}<a href="/login">{T.signIn}</a>{/if}
+      {#if !signedIn}<a href="/login">{T.signIn}</a>{/if}
     </div>
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.legalColumn}</h2>
       {#each LEGAL as link (link.href)}<a href={link.href}>{link.label}</a>{/each}
     </div>
-    {#if shell.prefs !== undefined}<div>{@render themeForm()}</div>{/if}
+    {#if prefs !== undefined}<div>{@render themeForm()}</div>{/if}
     <p class="w-full text-muted-foreground">{T.note}</p>
   </footer>
 {/if}

@@ -1,5 +1,6 @@
 <!--
-  The page for every error answered with HTML (P1.25; P1.20d), in the signed-out site shell. It shows only the code
+  The page for every error answered with HTML (P1.25; P1.20d), in the site shell (signed in when the route's
+  gate read a live session, +layout.server.ts). It shows only the code
   handleError (hooks.server.ts) returned and, for internal.error, the request id the log line carries: no path, query
   or header reaches it, so nothing the caller sent is echoed.
 -->
