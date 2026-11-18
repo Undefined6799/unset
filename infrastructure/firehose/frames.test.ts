@@ -19,7 +19,7 @@ const commit = (overrides: Record<string, unknown> = {}) => ({
 describe("parseMessage", () => {
   test("frames.commit_keeps_the_body_for_verification", () => {
     const body = commit();
-    expect(parseMessage(body)).toEqual({ kind: "commit", body });
+    expect(parseMessage(body)).toEqual({ kind: "repoCommit", body });
   });
 
   test("frames.refuses_shapes_the_parser_cannot_use", () => {

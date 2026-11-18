@@ -156,8 +156,8 @@ describe("readFirehose", () => {
     );
     await until(() => run.applied.length === 1);
     const [applied] = run.applied;
-    expect(applied).toMatchObject({ kind: "commit", seq: 1, did: DID });
-    expect(applied?.kind === "commit" && applied.changes).toEqual([
+    expect(applied).toMatchObject({ kind: "repoCommit", seq: 1, did: DID });
+    expect(applied?.kind === "repoCommit" && applied.changes).toEqual([
       expect.objectContaining({
         kind: "put",
         collection: PROFILE,
@@ -216,7 +216,7 @@ describe("readFirehose", () => {
       () => key.did(),
     );
     await until(() => run.applied.length === 1);
-    expect(run.applied[0]).toEqual({ kind: "commit", seq: 1, did: DID, rev: null, changes: [] });
+    expect(run.applied[0]).toEqual({ kind: "repoCommit", seq: 1, did: DID, rev: null, changes: [] });
   });
 
   test("reader.ends_promptly_when_on_stop_aborts", async () => {

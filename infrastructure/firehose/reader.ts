@@ -97,7 +97,7 @@ async function handle(options: FirehoseReaderOptions, value: unknown): Promise<v
     if (message.name === "OutdatedCursor") await run("apply_failed", options.consumer.missedEvents);
     return;
   }
-  const frame = message.kind === "commit" ? await verifiedCommit(options, message.body) : message.frame;
+  const frame = message.kind === "repoCommit" ? await verifiedCommit(options, message.body) : message.frame;
   await run("apply_failed", () => options.consumer.apply(frame));
 }
 

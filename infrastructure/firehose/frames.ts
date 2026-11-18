@@ -30,7 +30,7 @@ export type AccountStatus = (typeof ACCOUNT_STATUSES)[number] | "unknown";
  */
 export type RepoFrame =
   | {
-      readonly kind: "commit";
+      readonly kind: "repoCommit";
       readonly seq: number;
       readonly did: string;
       /**
@@ -55,7 +55,7 @@ export type RepoFrame =
 
 /** What the stream sent, after the structural check. `commit` keeps the body for verifyProofs. */
 export type StreamMessage =
-  | { readonly kind: "commit"; readonly body: CommitBody }
+  | { readonly kind: "repoCommit"; readonly body: CommitBody }
   | { readonly kind: "frame"; readonly frame: RepoFrame }
   /** `#info` carries no sequence number; `OutdatedCursor` is the one name the lexicon defines. */
   | { readonly kind: "info"; readonly name: string };
@@ -94,8 +94,8 @@ function isOp(value: unknown): boolean {
 function commitOf(body: Entry): StreamMessage | null {
   const { seq, repo, rev, time, blocks, ops } = body;
   if (!isSeq(seq) || !isDid(repo) || !isText(rev) || !isText(time) || !(blocks instanceof Uint8Array)) return null;
-  if (!Array.isArray(ops) || ops.length > MAX_OPS || !ops.every(isOp) || !("commit" in body)) return null;
-  return { kind: "commit", body: body as CommitBody };
+  if (!Array.isArray(ops) || ops.length > MAX_OPS || !ops.every(isOp) || body.commit === undefined) return null;
+  return { kind: "repoCommit", body: body as CommitBody };
 }
 
 function accountOf(body: Entry): StreamMessage | null {
@@ -166,5 +166,5 @@ export function commitFrame(body: CommitBody, writes: readonly CommitEvt[]): Rep
           },
   );
   const rev = changes.length === 0 ? null : body.rev;
-  return { kind: "commit", seq: body.seq, did: body.repo, rev, changes };
+  return { kind: "repoCommit", seq: body.seq, did: body.repo, rev, changes };
 }
