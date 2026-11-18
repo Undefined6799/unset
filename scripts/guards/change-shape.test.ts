@@ -6,7 +6,7 @@ import { checkCommitMessage, checkPrTitle } from "./commit-msg.ts";
 import { checkPerfEvidence } from "./perf-evidence.ts";
 import { measurePrSize } from "./pr-size.ts";
 import { checkPrTemplate } from "./pr-template.ts";
-import { readTrustedBase, trustedPathsChanged, unionTrustedBase } from "./trusted-base.ts";
+import { matchesPattern, readTrustedBase, trustedPathsChanged, unionTrustedBase } from "./trusted-base.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
@@ -257,6 +257,27 @@ describe("trusted base (SE-6)", () => {
       ".github/workflows/ci.yml",
     ]);
     expect(trustedPathsChanged(["domains/content/x.ts"], base.section)).toEqual([]);
+  });
+
+  test("a_double_star_pattern_matches_any_depth", () => {
+    // P1.20k: every route's policy.ts is trusted, wherever the route sits (GitHub CODEOWNERS syntax: `**/` is zero or
+    // more folders). It is the one wildcard form a trusted pattern may take.
+    const pattern = "/interfaces/web/src/routes/**/policy.ts";
+    expect(matchesPattern("interfaces/web/src/routes/policy.ts", pattern)).toBe(true);
+    expect(matchesPattern("interfaces/web/src/routes/settings/profile/policy.ts", pattern)).toBe(true);
+    expect(matchesPattern("interfaces/web/src/routes/[did=did]/policy.ts", pattern)).toBe(true);
+    expect(matchesPattern("interfaces/web/src/routes/settings/+page.svelte", pattern)).toBe(false);
+    expect(matchesPattern("interfaces/web/src/routes/settings/policy.ts.bak", pattern)).toBe(false);
+    expect(matchesPattern("interfaces/web/src/lib/policy.ts", pattern)).toBe(false);
+  });
+
+  test("only_the_deep_name_wildcard_is_accepted", () => {
+    for (const pattern of ["/a/*.ts", "/a/**", "/a/**/b/c.ts", "/a/**/*.ts", "a/**/policy.ts"]) {
+      const section = readTrustedBase(
+        CODEOWNERS.replace("/shared/http/ @Undefined6799\n", `${pattern} @Undefined6799\n`),
+      );
+      expect(section.ok, pattern).toBe(false);
+    }
   });
 
   test("list_is_union_of_base_and_head", () => {

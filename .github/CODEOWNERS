@@ -26,6 +26,11 @@
 
 # Request security: server kit (CSRF gate, CSP, limits, client IP, return path)
 /shared/http/ @Undefined6799
+# The SvelteKit web gate (P1.20k): host check and headers, the hook's checks, sessions, sign-in, CSP, each route's policy
+/interfaces/web/server.ts @Undefined6799
+/interfaces/web/src/hooks.server.ts @Undefined6799
+/interfaces/web/src/lib/server/ @Undefined6799
+/interfaces/web/src/routes/**/policy.ts @Undefined6799
 
 # Admin envelope
 /shared/admin-envelope/ @Undefined6799
@@ -112,6 +117,11 @@
 /shared/http/ @Undefined6799
 /infrastructure/session/ @Undefined6799
 /interfaces/http/session-cookie.ts @Undefined6799
+# The SvelteKit web gate (P1.20k): server.ts, the hook, its server modules and each route's policy.ts
+/interfaces/web/server.ts @Undefined6799
+/interfaces/web/src/hooks.server.ts @Undefined6799
+/interfaces/web/src/lib/server/ @Undefined6799
+/interfaces/web/src/routes/**/policy.ts @Undefined6799
 # verifyHandle
 /domains/identity/verify-handle.ts @Undefined6799
 # net-guard
