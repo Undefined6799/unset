@@ -64,7 +64,7 @@ const SVELTEKIT_MODULE = /^\$app\/(env|forms|navigation|paths|server|state|types
 const WEB_PROCESS = "interfaces/web/";
 /**
  * The web server's own build (P1.20k): server.ts loads SvelteKit's handler and client manifest through these package
- * "imports" (interfaces/web/package.json), literal for the computed-import rule; .dependency-cruiser.cjs
+ * "imports" (interfaces/web/package.json), literal for the computed-import rule; scripts/lint/.dependency-cruiser.cjs
  * WEB_SERVER_BUILD allows the same two edges. Only this file, only these specifiers.
  */
 const WEB_SERVER = "interfaces/web/server.ts";
