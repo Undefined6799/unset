@@ -1,0 +1,219 @@
+// The index's writer for the reader of our PDS's stream (book P3.05s; ADRs 0052, 0058). Each frame is applied in one
+// transaction as `indexer`, with no network I/O inside it (rule DA-4), and the stream's cursor is written in that same
+// transaction, so a frame is applied exactly when the cursor moves past it (ADR 0052 decision 4). Concurrency: one
+// reader writes, and the cursor row and the account row are both taken FOR UPDATE, so a second reader started by
+// mistake waits rather than interleaving.
+//
+// What a commit does is decided by domains/profile's planCommit; this file only runs the plan. Every statement is
+// parameterised and names the DID of the frame it applies, except missedEvents, which queues every tracked account.
+// Nothing here logs: the counters in idx.ingest_stat carry no DID (rule SE-7).
+import {
+  type BlobRef,
+  type IndexAccount,
+  type IndexChange,
+  type IndexWrite,
+  MAX_SECTIONS_PER_ACCOUNT,
+  planCommit,
+} from "@unset/domains-profile";
+import { type Pool, type PoolClient, withClient } from "./pool.ts";
+import { withTransaction } from "./tx.ts";
+
+/** The frames the index applies. Account frames wait for the account-state machine (book P3.06s). */
+export type IndexFrame =
+  | {
+      readonly kind: "repoCommit";
+      readonly seq: number;
+      readonly did: string;
+      readonly rev: string | null;
+      readonly changes: readonly IndexChange[];
+    }
+  | { readonly kind: "identity"; readonly seq: number; readonly did: string }
+  | { readonly kind: "sync"; readonly seq: number; readonly did: string };
+
+export type IndexStore = {
+  /** The last sequence number applied from this source, or null before the first. */
+  readonly cursor: () => Promise<number | null>;
+  readonly apply: (frame: IndexFrame) => Promise<void>;
+  /** Events may have been missed: every tracked account is queued for a backfill. Repeating it changes nothing. */
+  readonly missedEvents: () => Promise<void>;
+};
+
+export type IndexStoreOptions = {
+  /** The stream's name in idx.relay_cursor, such as "pds". */
+  readonly source: string;
+  /** Each transaction's deadline (rule RE-1). */
+  readonly timeoutMs: number;
+};
+
+/** The counters this writer keeps in idx.ingest_stat, for the health board. */
+export const INGEST_COUNTERS = [
+  "ingest_replayed",
+  "ingest_erased",
+  "ingest_untracked",
+  "ingest_stale",
+  "ingest_unsigned",
+  "ingest_inactive",
+  "ingest_invalid",
+  "ingest_capped",
+] as const;
+type Counter = (typeof INGEST_COUNTERS)[number];
+
+export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexStore {
+  const inTx = <T>(fn: (tx: PoolClient) => Promise<T>) =>
+    withTransaction(pool, AbortSignal.timeout(options.timeoutMs), fn);
+  return {
+    cursor: () =>
+      withClient(pool, AbortSignal.timeout(options.timeoutMs), async (client) => {
+        const { rows } = await client.query("SELECT seq FROM idx.relay_cursor WHERE source = $1", [options.source]);
+        return rows[0] === undefined ? null : Number(rows[0].seq);
+      }),
+    apply: (frame) => inTx((tx) => applyFrame(tx, options.source, frame)),
+    missedEvents: () =>
+      inTx(async (tx) => {
+        await tx.query(
+          `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
+           SELECT did, 'backfill', now(), 0, now() FROM idx.account
+           ON CONFLICT (did, kind) DO NOTHING`,
+        );
+      }),
+  };
+}
+
+/** The checks in the book's order: replay, tombstone, account row; then the frame; then the cursor. */
+async function applyFrame(tx: PoolClient, source: string, frame: IndexFrame): Promise<void> {
+  const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
+  if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return count(tx, "ingest_replayed");
+  const erased = await tx.query("SELECT idx.is_erased($1) AS erased", [frame.did]);
+  if (erased.rows[0]?.erased === true) await count(tx, "ingest_erased");
+  else {
+    const account = await lockAccount(tx, frame.did);
+    if (account === null) await count(tx, "ingest_untracked");
+    else await applyTo(tx, frame, account);
+  }
+  await tx.query(
+    `INSERT INTO idx.relay_cursor (source, seq, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (source) DO UPDATE SET seq = excluded.seq, updated_at = excluded.updated_at
+     WHERE idx.relay_cursor.seq < excluded.seq`,
+    [source, frame.seq],
+  );
+}
+
+/** The account row, locked for this frame; ingest never creates one (the track loop does, book P3.02s). */
+async function lockAccount(tx: PoolClient, did: string): Promise<IndexAccount | null> {
+  const { rows } = await tx.query("SELECT last_rev, pds_active FROM idx.account WHERE did = $1 FOR UPDATE", [did]);
+  const row = rows[0];
+  if (row === undefined) return null;
+  return { lastRev: typeof row.last_rev === "string" ? row.last_rev : null, active: row.pds_active === true };
+}
+
+async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount): Promise<void> {
+  if (frame.kind === "identity") return queueJob(tx, frame.did, "handle_check");
+  if (frame.kind === "sync") return queueJob(tx, frame.did, "backfill");
+  const plan = planCommit(account, frame.rev, frame.changes);
+  if (plan.kind === "stale") return count(tx, "ingest_stale");
+  if (plan.kind === "unsigned") return count(tx, "ingest_unsigned");
+  if (plan.kind === "inactive") await count(tx, "ingest_inactive");
+  else {
+    for (const write of plan.writes) await applyWrite(tx, frame.did, plan.rev, write);
+    if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
+  }
+  await tx.query(
+    `UPDATE idx.account SET last_rev = GREATEST(last_rev, $2 COLLATE "C"), updated_at = now() WHERE did = $1`,
+    [frame.did, plan.rev],
+  );
+}
+
+async function queueJob(tx: PoolClient, did: string, kind: "handle_check" | "backfill"): Promise<void> {
+  await tx.query(
+    `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES ($1, $2, now(), 0, now())
+     ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
+    [did, kind],
+  );
+}
+
+async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {
+  if (write.kind === "profile") return putProfile(tx, did, rev, write);
+  if (write.kind === "section") return putSection(tx, did, rev, write);
+  const uri = `at://${did}/${write.collection}/${write.rkey}`;
+  // A delete older than the row it would remove leaves the row: the row came from a later commit.
+  const table = write.collection === "sh.unset.profile" ? "idx.profile" : "idx.section";
+  const { rowCount } = await tx.query(`DELETE FROM ${table} WHERE did = $1 AND uri = $2 AND rev <= $3`, [
+    did,
+    uri,
+    rev,
+  ]);
+  if (rowCount === 0) return;
+  await replaceBlobs(tx, did, uri, []);
+  if (table === "idx.profile") await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
+}
+
+async function putProfile(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "profile" }>) {
+  const uri = `at://${did}/sh.unset.profile/self`;
+  const { rowCount } = await tx.query(
+    `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, avatar_cid, indexed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+     ON CONFLICT (did) DO UPDATE SET uri = excluded.uri, cid = excluded.cid, rev = excluded.rev,
+       record = excluded.record, display_name = excluded.display_name, discoverable = excluded.discoverable,
+       avatar_cid = excluded.avatar_cid, indexed_at = excluded.indexed_at
+     WHERE excluded.rev >= idx.profile.rev`,
+    [did, uri, write.cid, rev, write.record, write.displayName, write.discoverable, write.avatarCid],
+  );
+  if (rowCount === 0) return;
+  await replaceBlobs(tx, did, uri, write.blobs);
+  // Each section's place in the profile's `cards` list (ADR 0051), or null when the profile does not list it.
+  await tx.query(
+    `UPDATE idx.section s SET position = (
+       SELECT (o.ord - 1)::integer FROM jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
+        WHERE o.rkey = s.rkey ORDER BY o.ord LIMIT 1)
+       FROM idx.profile p WHERE p.did = s.did AND s.did = $1`,
+    [did],
+  );
+}
+
+async function putSection(tx: PoolClient, did: string, rev: string, write: Extract<IndexWrite, { kind: "section" }>) {
+  const uri = `at://${did}/sh.unset.section/${write.rkey}`;
+  if (!(await sectionFits(tx, did, uri))) return count(tx, "ingest_capped");
+  const { rowCount } = await tx.query(
+    `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+     VALUES ($1, $2::types.did, $3, $4, $5, $6, (
+       SELECT (o.ord - 1)::integer FROM idx.profile p,
+              jsonb_array_elements_text(p.record -> 'cards') WITH ORDINALITY AS o(rkey, ord)
+        WHERE p.did = $2::types.did AND o.rkey = $3 ORDER BY o.ord LIMIT 1), now())
+     ON CONFLICT (uri) DO UPDATE SET cid = excluded.cid, rev = excluded.rev, record = excluded.record,
+       position = excluded.position, indexed_at = excluded.indexed_at
+     WHERE excluded.rev >= idx.section.rev AND idx.section.did = excluded.did`,
+    [uri, did, write.rkey, write.cid, rev, write.record],
+  );
+  if (rowCount !== 0) await replaceBlobs(tx, did, uri, write.blobs);
+}
+
+/** A section already indexed may change; a new one fits while the account holds fewer than the cap. */
+async function sectionFits(tx: PoolClient, did: string, uri: string): Promise<boolean> {
+  const { rows } = await tx.query(
+    `SELECT EXISTS (SELECT 1 FROM idx.section WHERE did = $1 AND uri = $2) AS known,
+            (SELECT count(*) FROM idx.section WHERE did = $1) AS held`,
+    [did, uri],
+  );
+  return rows[0]?.known === true || Number(rows[0]?.held) < MAX_SECTIONS_PER_ACCOUNT;
+}
+
+async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: readonly BlobRef[]): Promise<void> {
+  await tx.query("DELETE FROM idx.record_blob WHERE did = $1 AND uri = $2", [did, uri]);
+  for (const blob of blobs) {
+    await tx.query("INSERT INTO idx.record_blob (uri, cid, did, mime, size) VALUES ($1, $2, $3, $4, $5)", [
+      uri,
+      blob.cid,
+      did,
+      blob.mime,
+      blob.size,
+    ]);
+  }
+}
+
+async function count(tx: PoolClient, name: Counter, by = 1): Promise<void> {
+  await tx.query(
+    `INSERT INTO idx.ingest_stat (name, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (name) DO UPDATE SET value = idx.ingest_stat.value + excluded.value, updated_at = excluded.updated_at`,
+    [name, by],
+  );
+}
