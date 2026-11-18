@@ -281,6 +281,37 @@ describe("index store", () => {
   });
 });
 
+describe("account state (P3.06s)", () => {
+  const S = "did:plc:ssssssssssssssssssssssss";
+  const sessions = (status: string | null) => {
+    // The fixture's one session is removed by its id: only migration 0014 deletes a DID's sessions (session store test).
+    sql(`DELETE FROM app.session WHERE id_hash = decode('${"ab".repeat(32)}', 'hex');
+      DELETE FROM app.oauth_session WHERE did = '${S}';
+      INSERT INTO app.account (did, first_seen_at) VALUES ('${S}', now()) ON CONFLICT DO NOTHING;
+      INSERT INTO app.oauth_session (did, sealed, client_kid, updated_at) VALUES ('${S}', 's1.k1.x', 'kid', now());
+      INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at)
+        VALUES (decode('${"ab".repeat(32)}', 'hex'), '${S}', now(), now(), now() + interval '1 day')`);
+    return store.apply({ kind: "account", seq: ++seq, did: S, active: false, status });
+  };
+  const left = () =>
+    lines(`SELECT (SELECT count(*) FROM app.session WHERE did = '${S}') || '|' ||
+      (SELECT count(*) FROM app.oauth_session WHERE did = '${S}')`);
+
+  test("index.inactive_status_ends_the_members_sessions", async () => {
+    track(S, true);
+    await sessions("takendown");
+    expect(left()).toEqual(["0|0"]);
+    // A deactivated account keeps its token set, so the member can reactivate (migration 0014's allow-list).
+    await sessions("deactivated");
+    expect(left()).toEqual(["0|1"]);
+    // A status outside the function's closed list ends sessions as 'unknown'.
+    await sessions("desynchronized");
+    expect(left()).toEqual(["0|0"]);
+    await sessions(null);
+    expect(left()).toEqual(["0|0"]);
+  });
+});
+
 function blob() {
   return { $type: "blob", ref: { $link: BLOB }, mimeType: "image/png", size: 10 };
 }

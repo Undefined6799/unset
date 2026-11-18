@@ -25,7 +25,7 @@ function recordingStore(fail: (frame: IndexFrame) => Error | null = () => null) 
     deadLetter: async (frame, attempts, firstSeen) => {
       dead.push({ frame, attempts, firstSeen });
     },
-    health: async () => ({ cursor: 4, counters: {} as never, deadLetters: dead.length }),
+    health: async () => ({ cursor: 4, counters: {} as never, deadLetters: dead.length, deletionsNotErased: 0 }),
   };
   return { store, applied, dead };
 }
