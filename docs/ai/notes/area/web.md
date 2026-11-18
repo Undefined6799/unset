@@ -110,4 +110,11 @@ that opens `#sign-in`, a modal `<dialog>` (invoker commands, no script) holding 
 passes clicks through and Tab leaves it. `next` is the page's path only. The footer's Sign in
 and protected pages' redirects still use /login.
 
+**Card editing with script (P1.20k, 2026-11-18).** A component that behaves differently with script sets a
+`hydrated` flag in its first `$effect`, so the server markup and the first client render match and the no-script path
+(plain buttons, ten blank rows, the in-place panel) is the server's. bits-ui 2.20.6 menus lock page scroll by default;
+a menu that opens a Dialog must pass `preventScroll={false}`, or the two locks overlap and the page jumps to the top.
+A buttons row hides the other kind's fields with `group-has-[[value=link]:checked]` on native radios, so it holds
+with no script.
+
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].
