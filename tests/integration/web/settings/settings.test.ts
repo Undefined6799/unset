@@ -3,9 +3,14 @@
 // files). Postgres as `web` (TE-2). A session is planted as gate.test.ts plants one; P1.20e's tests sign in for real.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { join, relative } from "node:path";
-import { type Did, parseDid } from "@unset/domains-identity";
+import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
 import type { SavedSession } from "@unset/infrastructure-pds";
-import { createOAuthSessionStore, createPool, withTransaction } from "@unset/infrastructure-postgres";
+import {
+  createAccountRepository,
+  createOAuthSessionStore,
+  createPool,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
@@ -35,6 +40,11 @@ const sessions = createSessionStore({
   log: quiet,
 });
 const ISSUER = "https://pds.unset.test";
+const accounts = createAccountRepository(pool, {
+  recordUnderageBlock: async () => {
+    throw new Error("this file never blocks");
+  },
+});
 const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } }));
 if (keyring === undefined) throw new Error("test keyring did not parse");
 const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSealer(keyring), log: quiet });
@@ -162,6 +172,22 @@ describe("GET /settings/profile", () => {
     expect(html).toContain('<meta name="robots" content="noindex"');
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
   });
+});
+
+describe("the privacy notice banner", () => {
+  test.each(["/settings/profile", "/settings/account"])(
+    "%s shows it once the notice changed, else not",
+    async (path) => {
+      const { did, cookie } = await signedIn();
+      expect(await (await get(path, cookie)).text()).not.toContain("The privacy notice has changed.");
+      // An acceptance of an older notice: the gate passes and sets privacyNotice (domains/identity auth/gates.ts).
+      await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
+      const html = await (await get(path, cookie)).text();
+      expect(PRIVACY_VERSION).not.toBe("2000-01-01");
+      expect(html).toContain("The privacy notice has changed.");
+      expect(html).toContain('href="/legal/privacy"');
+    },
+  );
 });
 
 describe("the settings theme picker", () => {

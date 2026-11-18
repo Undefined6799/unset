@@ -12,7 +12,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   return {
     ...view,
     shell: settingsShell(locals, request, "/settings/account"),
-    // FALLBACK until locals carry the gate's privacyNotice (P1.20f): no notice is shown.
-    privacyNotice: false,
+    // The one-time banner after a privacy notice change (P2.12), as the gate decided it.
+    privacyNotice: locals.privacyNotice,
   };
 };
