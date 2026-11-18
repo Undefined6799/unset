@@ -82,7 +82,8 @@ export type SessionStore = {
  * origin, already checked by the caller (interfaces/http `issuerOrigin`); it is written once and never updated.
  */
 export type CreateOptions = { readonly replacingCookie?: string; readonly issuerOrigin?: string | null };
-export type CreatedSession = { readonly cookieValue: string; readonly expiresAt: Date };
+/** `idHash` names the new row for a later write on it (the callback's email answer, P2.06 step 11); never logged. */
+export type CreatedSession = { readonly cookieValue: string; readonly idHash: Buffer; readonly expiresAt: Date };
 
 const ID_BYTES = 32;
 /** Canonical unpadded base64url of 32 bytes. */
@@ -132,13 +133,15 @@ export function createSessionStore(options: {
     if (previous !== null) await destroy(db, previous);
     // A repeated id (2^-256) violates the primary key, and the caller's transaction fails closed (P2.03 step 1c).
     const id = randomBytes(ID_BYTES);
+    const idHash = sha256(id);
     const { rows } = await db.query<{ expires_at: Date }>(
       "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at, issuer_origin) " +
         "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3), $4) " +
         "RETURNING absolute_expires_at AS expires_at",
-      [sha256(id), did, limits.absoluteS, storableOrigin(issuerOrigin)],
+      [idHash, did, limits.absoluteS, storableOrigin(issuerOrigin)],
     );
-    return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
+    const expiresAt = (rows[0] as { expires_at: Date }).expires_at;
+    return { cookieValue: id.toString("base64url"), idHash, expiresAt };
   }
 
   /**

@@ -2,6 +2,7 @@
 // routes give today, with the same cookies (names, SameSite, Max-Age, host-only). Postgres as `web` (TE-2). The only
 // stand-ins are the network the server may not reach in a test (TE-1): PLC, and our PDS's authorization server, both
 // answered by stand-in-server.ts from the fixture below. Everything else, the OAuth client included, is real.
+import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
 import { createPool } from "@unset/infrastructure-postgres";
 import { scopeString } from "@unset/shared-lexicons";
@@ -283,6 +284,83 @@ describe("the callback", () => {
     expect(form.headers.get("location")).toBe("/me");
     const again = await post("/login", "intent=chooser", { cookie });
     expect(again.headers.get("location")).toBe("/me");
+  });
+});
+
+// P2.06 step 11: one best-effort read of the member's email state at sign-in, cached on the new session for the P2.11
+// gate. A PDS that is slow, failing or silent never stops the sign-in and never marks the email confirmed.
+describe("the email answer at sign-in", () => {
+  const GET_SESSION = `GET ${PDS}/xrpc/com.atproto.server.getSession`;
+  const HANDLE = "alice.example.com";
+  const EMAIL = "alice@example.com";
+  const ACCESS_TOKEN = "access-token-for-the-log-check-0123456789";
+  /** The token endpoint issues a recognisable token, and getSession answers `answer`. */
+  const withSession = (answer: { status?: number; body: unknown; delayMs?: number }): StandInFixture => ({
+    ...fixture,
+    fetch: {
+      ...fixture.fetch,
+      [`POST ${PDS}/oauth/token`]: {
+        body: {
+          access_token: ACCESS_TOKEN,
+          refresh_token: "refresh-token-for-the-log-check-0123456789",
+          token_type: "DPoP",
+          sub: DID,
+          expires_in: 3600,
+          scope: scopeString(),
+        },
+      },
+      [GET_SESSION]: answer,
+    },
+  });
+  const sessionBody = (emailConfirmed: boolean) => ({ did: DID, handle: HANDLE, email: EMAIL, emailConfirmed });
+
+  /** The new session's cached answer, found by the hash of its cookie as the store keys it. */
+  async function cachedAnswer(sid: string) {
+    const idHash = createHash("sha256").update(Buffer.from(sid, "base64url")).digest();
+    const { rows } = await pool.query<{ email_confirmed: boolean | null; checked: boolean }>(
+      "SELECT email_confirmed, email_checked_at IS NOT NULL AS checked FROM app.session WHERE id_hash = $1",
+      [idHash],
+    );
+    return rows[0];
+  }
+
+  test("a_confirmed_email_is_cached_on_the_new_session", async () => {
+    web.setStandIns(withSession({ body: sessionBody(true) }));
+    const sid = await signIn();
+    expect(web.standInCalls()).toContain(GET_SESSION);
+    expect(await cachedAnswer(sid)).toEqual({ email_confirmed: true, checked: true });
+  });
+
+  test("an_unconfirmed_email_is_cached_as_not_confirmed", async () => {
+    web.setStandIns(withSession({ body: sessionBody(false) }));
+    const sid = await signIn();
+    expect(await cachedAnswer(sid)).toEqual({ email_confirmed: false, checked: true });
+  });
+
+  test("a_failing_pds_still_signs_in_and_leaves_the_answer_unknown", async () => {
+    web.setStandIns(withSession({ status: 503, body: { error: "InternalServerError" } }));
+    const sid = await signIn();
+    expect(await signedIn(sid)).toBe(true);
+    expect(await cachedAnswer(sid)).toEqual({ email_confirmed: null, checked: false });
+  });
+
+  test("a_slow_pds_still_signs_in_within_the_deadline_and_leaves_the_answer_unknown", async () => {
+    web.setStandIns(withSession({ body: sessionBody(true), delayMs: 60_000 }));
+    const started = performance.now();
+    const sid = await signIn();
+    // The request deadline here is 5 s: the read gives up before it, so the browser gets its session, not a 503.
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(await signedIn(sid)).toBe(true);
+    expect(await cachedAnswer(sid)).toEqual({ email_confirmed: null, checked: false });
+  }, 15_000);
+
+  test("no_did_handle_email_or_token_reaches_the_log", async () => {
+    web.setStandIns(withSession({ body: sessionBody(true) }));
+    await signIn();
+    web.setStandIns(withSession({ status: 503, body: {} }));
+    await signIn();
+    const logs = JSON.stringify(web.logs());
+    for (const secret of [DID, HANDLE, EMAIL, ACCESS_TOKEN]) expect(logs).not.toContain(secret);
   });
 });
 

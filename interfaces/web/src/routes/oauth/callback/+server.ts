@@ -3,4 +3,4 @@ import type { RequestHandler } from "@sveltejs/kit";
 import { completeSignIn } from "../../../lib/server/oauth-callback.ts";
 
 export const GET: RequestHandler = ({ request, cookies, locals }) =>
-  completeSignIn({ request, cookies, deadline: locals.deadline });
+  completeSignIn({ request, cookies, deadline: locals.deadline, deadlineAt: locals.deadlineAt });

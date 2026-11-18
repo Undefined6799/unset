@@ -6,10 +6,12 @@
 //
 // A GET that changes state, protected by the state ↔ nonce binding, not by the CSRF gate. No audit row and no DID in
 // any log line (plan §6 "no user sign-in records"): only the counts `auth.login_succeeded` and `auth.login_denied`.
+// P2.06 step 11: once the session exists, one best-effort read of the member's email state (`emailAnswerAtSignIn`).
 // P2.05s: a sign-in is tried silently first (prompt=none). When the server cannot answer without a page, the callback
 // sends the same browser straight back to it once, with the page; `auth.login_silent_refused` counts that.
 import { timingSafeEqual } from "node:crypto";
 import { type Cookies, redirect } from "@sveltejs/kit";
+import type { Did } from "@unset/domains-identity";
 import { type CallbackResult, completeAuthorization, grantCovers } from "@unset/infrastructure-pds";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { ErrorCode } from "@unset/shared-errors";
@@ -57,7 +59,46 @@ async function askWithPage(request: Request, appState: string, deadline: AbortSi
   redirect(303, sent.target, { external: [services().pdsIssuer] });
 }
 
-/** The book's steps 3 to 9, after the library has completed (or refused) the authorization. Always throws a 303. */
+/** Step 11's budget: the book's 5 s, within what the request's own deadline leaves. */
+const EMAIL_READ_MS = 5000;
+/** Kept for the redirect after the read, so a slow PDS never turns the sign-in into the deadline's 503. */
+const EMAIL_READ_RESERVE_MS = 500;
+
+/** Resolves with null once `signal` aborts: the race below stops waiting on work that does not watch the signal. */
+const abandoned = (signal: AbortSignal): Promise<null> =>
+  new Promise((done) => {
+    if (signal.aborted) done(null);
+    else signal.addEventListener("abort", () => done(null), { once: true });
+  });
+
+/**
+ * P2.06 step 11: ask the PDS once whether the email is confirmed and cache an answer on the new session, so the P2.11
+ * gate (unchanged) passes a confirmed member straight on. Best effort: a PDS that is slow, failing or gives no answer
+ * leaves the cache null, which the gate reads as "not confirmed" and sends to /verify-email. Never throws, so it never
+ * stops the sign-in. Logs the error class only. Runs inside the sign-in scope, so the library's lock calls for this
+ * account reuse the lock the scope already holds (sign-in-lock.ts).
+ */
+async function emailAnswerAtSignIn(event: CallbackEvent, did: Did, idHash: Buffer): Promise<void> {
+  const { pds, setEmailConfirmed, log } = services();
+  // Whole milliseconds: AbortSignal.timeout throws a RangeError on a fraction.
+  const budget = Math.floor(Math.min(EMAIL_READ_MS, event.deadlineAt - performance.now() - EMAIL_READ_RESERVE_MS));
+  if (budget <= 0) return;
+  const deadline = AbortSignal.any([event.deadline, AbortSignal.timeout(budget)]);
+  const deadlineAt = performance.now() + budget;
+  try {
+    // The token restore inside pdsSessionInfo does not take the signal, hence the race.
+    const info = await Promise.race([
+      pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
+      abandoned(deadline),
+    ]);
+    if (info?.kind !== "ok" || info.value.emailConfirmed === undefined) return;
+    await setEmailConfirmed(idHash, info.value.emailConfirmed, deadline);
+  } catch (error) {
+    log.warn("oauth.callback_failed", { kind: className(error) });
+  }
+}
+
+/** The book's steps 3 to 9 and 11, after the library has completed (or refused) the authorization. Always throws a 303. */
 async function finish(event: CallbackEvent, completed: CallbackResult): Promise<never> {
   const { request, cookies, deadline } = event;
   if (!completed.ok) {
@@ -89,7 +130,7 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
 
   const replacing = sessionCookieValue(request.headers.get("cookie"));
   const origin = issuerOrigin(completed.issuer);
-  let created: { cookieValue: string };
+  let created: { cookieValue: string; idHash: Buffer };
   try {
     created = await withTransaction(pool, deadline, (tx) =>
       sessions.create(
@@ -103,6 +144,7 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
     deny("login.failed");
   }
   log.info("auth.login_succeeded");
+  await emailAnswerAtSignIn(event, completed.did, created.idHash);
   // A sign-in ends the signed-out state, so the previous account's carried issuer goes with it.
   dropCookie(cookies, "signedOut");
   dropCookie(cookies, "issuer");
@@ -110,7 +152,13 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
   redirect(303, state.next ?? "/me");
 }
 
-export type CallbackEvent = { readonly request: Request; readonly cookies: Cookies; readonly deadline: AbortSignal };
+export type CallbackEvent = {
+  readonly request: Request;
+  readonly cookies: Cookies;
+  readonly deadline: AbortSignal;
+  /** The request deadline on the monotonic clock (`performance.now`), as hooks.server.ts sets it. */
+  readonly deadlineAt: number;
+};
 
 /**
  * The whole callback under the sign-in scope (P1.36y): from the library storing the token set until the session row
