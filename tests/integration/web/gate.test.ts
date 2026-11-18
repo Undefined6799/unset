@@ -11,6 +11,7 @@ import type { SavedSession } from "@unset/infrastructure-pds";
 import { createOAuthSessionStore, createPool, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
+import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "./built-server.ts";
@@ -231,6 +232,20 @@ describe("requests", () => {
 
   test("a_route_that_takes_no_body_refuses_a_post", async () => {
     expect((await formPost("/test-routes/plain-page", "text=a")).status).toBe(405);
+  });
+
+  // Gap 6 of the P1.20k review: a browser's document request gets a page with the catalog's words, as Hono's error
+  // page gave; any other request keeps the code as text.
+  test("a_refusal_a_browser_asked_a_page_for_is_a_page", async () => {
+    const page = await formPost("/test-routes/plain-page", "text=a");
+    expect(page.status).toBe(405);
+    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    const html = await page.text();
+    expect(html).toContain(`<h1>${ERROR_MESSAGES["http.method_not_allowed"]}</h1>`);
+    expect(html).toContain("<code>http.method_not_allowed</code>");
+    expect(html).not.toContain("<script");
+    const text = await formPost("/test-routes/plain-page", "text=a", clientAddress(), { accept: "application/json" });
+    expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   });
 });
 

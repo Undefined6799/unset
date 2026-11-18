@@ -15,6 +15,7 @@ import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
 import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
+import { refusalPage, wantsPage } from "./lib/server/refusal-page.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote } from "./lib/server/runtime.ts";
 import { sessionIssuerOrigin, sessionOf } from "./lib/server/session.ts";
@@ -34,8 +35,16 @@ const clientIpOf = createClientIpResolver(config, () => {
   services().log.warn("proxy.untrusted_peer", {});
 });
 
+/** The gate's refusals and their codes, so `handle` can answer a browser's document request with the page. */
+const REFUSALS = new WeakMap<Response, string>();
+
 function plain(status: number, code: string, headers: Record<string, string> = {}): Response {
-  return new Response(`${code}\n`, { status, headers: { "content-type": "text/plain; charset=utf-8", ...headers } });
+  const response = new Response(`${code}\n`, {
+    status,
+    headers: { "content-type": "text/plain; charset=utf-8", ...headers },
+  });
+  REFUSALS.set(response, code);
+  return response;
 }
 
 /** Checks on the request itself, before anyone is identified: method, body type and declared size. */
@@ -181,6 +190,9 @@ export const handle: Handle = async (input) => {
     services().log.logError(error);
     response = plain(500, "internal.error");
   }
+  const refused = REFUSALS.get(response);
+  if (refused !== undefined && wantsPage(event.request, event.isDataRequest))
+    response = refusalPage(refused, response.status, response.headers);
   const group = policyOf(event.route.id)?.group ?? "static";
   return withGroupHeaders(response, group, event.isDataRequest);
 };
