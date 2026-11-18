@@ -5,7 +5,9 @@
 // on app pages and on pages rendered for a member, which the gate sends private and uncached; a visitor's public page
 // follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
+import { type Did, requireOnboarded } from "@unset/domains-identity";
 import { safeReturnPath } from "@unset/shared-http";
+import { services } from "../lib/server/compose.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
 import type { ShellData } from "../lib/shell.ts";
@@ -24,7 +26,18 @@ function signInHref(path: string): string {
   return next === null ? "/login" : `/login?next=${encodeURIComponent(next)}`;
 }
 
-export const load: ServerLoad = ({ locals, request, route, url }) => {
+/**
+ * Whether the error page may offer the member the app's menus: not mid-onboarding, where each would only send them back
+ * to their step (P1.20k). An app route's gate has already passed the member; an onboarding route is the step itself. A
+ * path no route matches is the one case the gate decided nothing about, so only there is the account read (one query).
+ */
+async function appOpen(did: Did, routeId: string | null, deadline: AbortSignal): Promise<boolean> {
+  if (routeId !== null) return policyOf(routeId)?.session !== "onboarding";
+  const { accounts, versions } = services();
+  return requireOnboarded(await accounts.get(did, deadline), versions).outcome === "pass";
+}
+
+export const load: ServerLoad = async ({ locals, request, route, url }) => {
   const member = locals.did !== undefined;
   const prefs: ShellData["prefs"] =
     policyOf(route.id)?.group === "app" || member
@@ -34,5 +47,6 @@ export const load: ServerLoad = ({ locals, request, route, url }) => {
         }
       : undefined;
   const account: ShellData["account"] = member ? { path: `/${locals.did}` } : undefined;
-  return { signedIn: member, account, prefs, signInHref: signInHref(url.pathname) };
+  const open = locals.did === undefined ? false : await appOpen(locals.did, route.id, locals.deadline);
+  return { signedIn: member, account, appOpen: open, prefs, signInHref: signInHref(url.pathname) };
 };

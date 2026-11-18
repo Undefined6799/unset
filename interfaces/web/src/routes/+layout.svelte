@@ -22,6 +22,7 @@ import {
   ERROR_SHELL,
   type ShellData,
   SITE_SHELL,
+  STEP_ERROR_SHELL,
   SHELL_TEXT as T,
   type ThemeChoice,
 } from "../lib/shell.ts";
@@ -29,10 +30,10 @@ import type { LayoutData } from "./$types";
 
 let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-// An error page (+error.svelte) gets no page data, so it gets the core shell, with the member the gate read.
-const shell: ShellData = $derived(
-  page.error ? ERROR_SHELL : ((page.data as { shell?: ShellData }).shell ?? SITE_SHELL),
-);
+// An error page (+error.svelte) gets no page data, so it gets the core shell, with the member the gate read; a member
+// mid-onboarding gets the site shell, signed in, with none of the app's menus (+layout.server.ts appOpen).
+const errorShell = $derived(data.signedIn && !data.appOpen ? STEP_ERROR_SHELL : ERROR_SHELL);
+const shell: ShellData = $derived(page.error ? errorShell : ((page.data as { shell?: ShellData }).shell ?? SITE_SHELL));
 // No Sign in for a member the gate found signed in (+layout.server.ts): on the welcome steps, the confirm-email page
 // and the error page, which pass no account.
 const signedIn = $derived(shell.signedIn === true || data.signedIn);
