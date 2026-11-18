@@ -283,6 +283,14 @@ describe("session", () => {
     expect(response.status).toBe(303);
   });
 
+  test("a_page_with_no_script_reads_no_session", async () => {
+    const response = await web.fetch("/test-routes/plain-page", {
+      headers: { cookie: `__Host-sid=${"x".repeat(43)}`, ...from() },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
   test("an_unknown_cookie_is_cleared_host_only", async () => {
     const response = await web.fetch("/test-routes/members", { headers: { cookie: `__Host-sid=${"x".repeat(43)}` } });
     const cleared = response.headers.get("set-cookie") ?? "";

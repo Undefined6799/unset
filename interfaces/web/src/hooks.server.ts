@@ -73,7 +73,10 @@ function returnPathOf(routeId: string, policy: RoutePolicy): string | null {
 
 /** The session part of the gate: who is asking, what a signed-out request gets, and the member's own buckets. */
 async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline: AbortSignal) {
-  const session = await sessionOf(event, deadline);
+  // A page that runs no script and needs no member reads no session: its bytes never depend on a cookie, and a stale
+  // cookie is not cleared there (interfaces/http's public group reads none either).
+  const reads = policy.session !== undefined || policy.group === "app";
+  const session = reads ? await sessionOf(event, deadline) : undefined;
   const did = session?.did;
   event.locals.issuerOrigin = sessionIssuerOrigin(session);
   const needed = policy.session === "required" || (policy.session === "writes" && !isRead(event.request));
