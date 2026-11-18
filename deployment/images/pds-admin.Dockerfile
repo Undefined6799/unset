@@ -13,8 +13,10 @@ RUN npm ci --ignore-scripts --omit=dev
 RUN find node_modules -mindepth 1 -maxdepth 1 ! -name @unset -exec rm -r {} + \
   && find node_modules/@unset -mindepth 1 -maxdepth 1 ! -name shared-admin-envelope -exec rm -r {} +
 # The service's STATE_DIR (replay guard and request log, ADR 0060), empty here: compose mounts a named volume over it,
-# and a fresh volume takes the owner and mode of the directory it covers, so only 65532 can read or write it.
-RUN mkdir /app/state
+# and a fresh volume takes the owner and mode of the directory it covers, so only 65532 can read or write it. The mode
+# is set here as well as by the runtime COPY's --chmod: with a plain mkdir, CI's image-tests build shipped 0755 in
+# spite of --chmod (#1720), though a local BuildKit 0.34.2 build gave 0700. The source mode holds in both.
+RUN mkdir -m 0700 /app/state
 
 FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
