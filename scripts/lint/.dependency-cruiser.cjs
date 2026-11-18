@@ -8,6 +8,9 @@ const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
 const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
+// What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file
+// and the Tailwind entry. Not the React UI.
+const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$)";
 
 /** Each vendor SDK is imported in exactly one adapter folder per runtime (guideline §1, O-7). */
 const SDK_ADAPTERS = [
@@ -128,6 +131,13 @@ const MATRIX = [
     name: "interface-web-sveltekit",
     from: { path: "^interfaces/web/" },
     to: [{ path: "^\\$app/[a-z-]+$", couldNotResolve: true }],
+  },
+  {
+    // ADR 0056 Consequences: the web process composes the Svelte components, the theme and the Tailwind entry that
+    // live in apps/web (P1.20c). Only those; never apps/web's React UI, and apps/web never imports interfaces/.
+    name: "interface-web-components",
+    from: { path: "^interfaces/web/" },
+    to: [{ path: WEB_COMPONENTS }],
   },
   {
     name: "interface-http-render",
@@ -254,9 +264,15 @@ module.exports = {
     ),
     forbidden(
       "app-render-entry-only",
-      "From outside apps/, only interfaces/http and interfaces/admin import an app, and only its render entry (guideline §1).",
-      { pathNot: `^apps/|^interfaces/(http|admin)/|${TOOLING}` },
+      "From outside apps/, only interfaces/http, admin and web import an app, each only what its own rule allows (guideline §1).",
+      { pathNot: `^apps/|^interfaces/(http|admin|web)/|${TOOLING}` },
       { path: "^apps/" },
+    ),
+    forbidden(
+      "app-render-entry-only",
+      "interfaces/web imports only apps/web's Svelte components, theme and Tailwind entry (ADR 0056, P1.20c).",
+      { path: "^interfaces/web/" },
+      { path: "^apps/", pathNot: WEB_COMPONENTS },
     ),
     forbidden(
       "app-render-entry-only",
@@ -481,8 +497,12 @@ module.exports = {
     forbidden(
       "no-orphans",
       "A module nothing imports is usually dead code.",
-      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054).
-      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$", SVELTE_CHECK_CONFIG, "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)"] },
+      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054); svelte-check reads
+      // apps/web's svelte.config.js (P1.20c).
+      {
+        orphan: true,
+        pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)", SVELTE_CHECK_CONFIG],
+      },
       {},
       "warn",
     ),

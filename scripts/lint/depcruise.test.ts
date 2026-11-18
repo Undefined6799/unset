@@ -134,6 +134,10 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
   "interface-web-sveltekit": [{ from: "interfaces/web/src/hooks.server.ts", spec: "$app/env", unresolved: true }],
+  "interface-web-components": [
+    edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/button/index.ts"),
+    edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/app.css"),
+  ],
   "interface-http-render-build": [
     {
       from: config.RENDER_BUILD_IMPORT.from,
