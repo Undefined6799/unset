@@ -138,6 +138,8 @@ async function showRefusal(data: Record<string, unknown> | undefined) {
   const target = field === undefined || !(form instanceof HTMLFormElement) ? null : form.elements.namedItem(field);
   const text = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
   refused = text === null ? { message } : { message, field, fieldText: fieldText(code, message) };
+  // A refusal that blames the README text shows it on the Write tab, where the field can take focus.
+  if (text !== null) tab = "write";
   await tick();
   const shown = text ?? summary;
   shown?.focus();
@@ -319,7 +321,7 @@ const buttonRows = $derived([
             label={BUTTONS_EDIT.address}
             name="buttons.{i}.address" error={errorFor(`buttons.${i}.address`)}
             value={typedOr(`buttons.${i}.address`, button.kind === "email" ? button.address : "")}
-            type="email"
+            inputmode="email"
             autocomplete="email"
           />
           </div>

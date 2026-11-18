@@ -306,6 +306,43 @@ test("the_readme_editor_previews_the_text", async ({ page }) => {
   await page.keyboard.press("Escape");
 });
 
+// Review of #1702: a hidden field of the button kind not chosen never blocks the save.
+test("a_button_saves_after_its_kind_changes_from_a_bad_email", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const dialog = page.getByRole("dialog");
+  await page.getByRole("link", { name: "Add card" }).click();
+  await dialog.getByRole("button", { name: /^Contact/ }).click();
+  await dialog.getByRole("textbox", { name: "Heading" }).fill("Reach me");
+  const button = dialog.getByRole("group", { name: "Button 1", exact: true });
+  await button.getByRole("radio", { name: "Email", exact: true }).check();
+  await button.getByRole("textbox", { name: "Email address" }).fill("not an email");
+  await button.getByRole("radio", { name: "Web address" }).check();
+  await button.getByRole("textbox", { name: "Web address" }).fill("reach.example");
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("group", { name: "Reach me card" })).toHaveCount(1);
+  await deleteCard(page, "Reach me card");
+});
+
+// Review of #1702: a refusal the server gives for the README text is shown on the Write tab, even when sent from
+// Preview. Text of spaces only passes the browser's required check and is refused by the server.
+test("a_readme_refusal_sent_from_preview_shows_on_write", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const dialog = page.getByRole("dialog");
+  await page.getByRole("link", { name: "Add card" }).click();
+  await dialog.getByRole("button", { name: /^README/ }).click();
+  const text = dialog.getByRole("textbox", { name: "README" });
+  await text.fill("   ");
+  await dialog.getByRole("tab", { name: "Preview" }).click();
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(text).toBeVisible();
+  await expect(text).toBeFocused();
+  await expect(text).toHaveAttribute("aria-invalid", "true");
+  await page.keyboard.press("Escape");
+});
+
 // Alex 2026-11-18: card actions sit behind three dots. The menu is reached, opened and used by keyboard alone, and the
 // moved card's menu button keeps focus.
 test("the_card_menu_works_by_keyboard", async ({ page }) => {
