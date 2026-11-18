@@ -480,6 +480,8 @@ const row =
     </section>
   {/if}
   <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
+  </div>
+  <!-- Below the first screen on every page, short ones too: the header and main fill the viewport (Alex, 2026-11-18). -->
   <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
     <p>{T.note}</p>
     <nav aria-label={T.legalColumn}>
@@ -490,7 +492,6 @@ const row =
       </ul>
     </nav>
   </footer>
-  </div>
 {:else}
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">
@@ -499,6 +500,7 @@ const row =
     </header>
     <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{@render content()}</main>
   </div>
+  <!-- As in the core shell: the footer starts below the first screen. -->
   <footer class="flex flex-wrap gap-8 border-t px-4 py-8 text-sm">
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.siteColumn}</h2>
