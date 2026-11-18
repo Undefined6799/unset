@@ -1,8 +1,8 @@
 // P1.11t: the statement count behind query_budget_per_route (README invariant 14; plan §6.1 Data access). Every
 // statement a checked-out client sends counts, inside withTransaction too, except transaction control (BEGIN, COMMIT,
 // ROLLBACK, SAVEPOINT, RELEASE): the budget is about data round trips, and tx.ts adds those on its own (architecture
-// ruling 2026-10-06 (c)). The per-route half walked interfaces/http's route manifest through its Hono server and went
-// with it (P1.20k); the SvelteKit server has no manifest yet, so its routes are not counted until that port lands.
+// ruling 2026-10-06 (c)). The per-route half is tests/integration/web/query-budget.test.ts (P1.20k), which counts on
+// the wire because the built server runs in its own process.
 import { relative } from "node:path";
 import { createPool, type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { afterAll, describe, expect, inject, test } from "vitest";
