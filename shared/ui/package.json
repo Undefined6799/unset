@@ -8,8 +8,7 @@
     ".": "./index.ts",
     "./presentation": "./presentation.ts",
     "./brand-header": "./components/Header/BrandHeader.tsx",
-    "./icons.json": "./icons/icons.json",
-    "./safe-href": "./safe-href.ts"
+    "./icons.json": "./icons/icons.json"
   },
   "dependencies": {
     "@unset/shared-islands": "*",

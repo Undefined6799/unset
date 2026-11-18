@@ -1,7 +1,7 @@
 // The legal documents' markdown (P2.15). Parsed once, when the module loads, into blocks the request only fills.
 // There is no HTML pass-through: text stays text (React escapes it) and a link is kept only when safeHref accepts
 // it (shared/ui/safe-href.ts, P1.24h). A hole is {{name}} and is substituted later, never concatenated into HTML.
-import { type SafeHref, safeHref } from "@unset/shared-ui/safe-href";
+import { type SafeHref, safeHref } from "@unset/shared-ui";
 
 const LEGAL_HOLES = ["privacyOfficerTitle", "privacyOfficerContact", "supportEmail", "pdsHost"] as const;
 export type LegalHole = (typeof LEGAL_HOLES)[number];
