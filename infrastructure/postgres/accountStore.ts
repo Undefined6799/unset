@@ -6,10 +6,9 @@
 // below for that DID. Then a confirmation locks the account row and then its job row, and a failure locks the job row
 // and then the account row. An erased DID is never revealed and gets no writes.
 //
-// Deletion is confirmed but not yet erased: the indexer has no EXECUTE on core.erase_did until P3.06e (a trusted-base
-// grant, Alex's line). Until then a member who deleted their account at the PDS keeps rows here, hidden from every
-// reader (idx.visible_account) but not erased; each such account is a `deletion_confirmed_not_erased` dead letter,
-// keeping the DID so P3.06e can erase it, and is counted on health. P3.06e is required before production.
+// A confirmed deletion is erased through idx.erase_deleted_account (P3.06e, migration 0029): reason fixed to
+// account_deleted, only for an account held hidden as deleted, and at most 20 an hour. Past the cap the account stays
+// hidden and the job asks again an hour later; an operator can erase sooner through the owner's path.
 import { count, hideAccount, isErased, lockAccount, queueJob } from "./indexStore.ts";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
@@ -125,14 +124,7 @@ async function confirmDeletion(tx: PoolClient, did: string, answer: ConfirmedSta
   const gone = answer.kind === "not_found" || (answer.kind === "inactive" && answer.status === "deleted");
   if (gone) {
     await hideAccount(tx, did, "deleted");
-    await tx.query(
-      `INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
-       SELECT 'track', $1::types.did, 'deletion_confirmed_not_erased', 1, now(), now()
-       WHERE NOT EXISTS (
-         SELECT 1 FROM idx.dead_letter WHERE did = $1 AND reason_code = 'deletion_confirmed_not_erased')`,
-      [did],
-    );
-    return count(tx, "account_deletion_confirmed");
+    return eraseDeleted(tx, did);
   }
   // The repo exists and is not deleted: the `deleted` status is cleared, and the account stays hidden until
   // confirm_status confirms it active.
@@ -142,6 +134,22 @@ async function confirmDeletion(tx: PoolClient, did: string, answer: ConfirmedSta
     await queueJob(tx, did, "confirm_status");
   }
   await count(tx, "account_deletion_not_confirmed");
+}
+
+/**
+ * Erases the account, or, past the hourly cap (the function returns NULL and erases nothing), leaves it hidden and asks
+ * again in an hour. core.erase_did deletes the account row and its jobs; the tombstone keeps it erased.
+ */
+async function eraseDeleted(tx: PoolClient, did: string): Promise<void> {
+  const { rows } = await tx.query("SELECT idx.erase_deleted_account($1) AS result", [did]);
+  if (rows[0]?.result != null) return count(tx, "account_deletion_erased");
+  await tx.query(
+    `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
+     VALUES ($1, 'confirm_deletion', now() + interval '1 hour', 0, now())
+     ON CONFLICT (did, kind) DO UPDATE SET due_at = excluded.due_at`,
+    [did],
+  );
+  await count(tx, "account_erase_capped");
 }
 
 /** Never hides, reveals or erases on an error: the account stays as it is while the job backs off. */
