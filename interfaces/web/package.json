@@ -10,6 +10,10 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.svelte.json --threshold error"
   },
   "dependencies": {
+    "@unset/apps-web": "*",
+    "@unset/domains-identity": "*",
+    "@unset/domains-profile": "*",
+    "@unset/infrastructure-pds": "*",
     "@unset/infrastructure-postgres": "*",
     "@unset/infrastructure-session": "*",
     "@unset/shared-config": "*",
