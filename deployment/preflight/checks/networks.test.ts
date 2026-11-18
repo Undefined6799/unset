@@ -114,6 +114,49 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
   });
 });
 
+describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
+  // pds-admin calls the PDS's internal URL with the admin password, so it may share one internal network with the PDS,
+  // pds_admin_pds, which holds exactly the two, in every environment. It is known by its name and the lock's image.
+  const LOCK = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, "pds-admin": { ref: "a" } });
+  const check = (yaml: string, env: Inputs["env"] = "prod", lock = LOCK) =>
+    pdsNeighbours({
+      env,
+      source: false,
+      root: "/repo",
+      lockPath: "/repo/lock",
+      compose: compose(yaml),
+      readText: (path: string) => (path === "/repo/lock" ? lock : null),
+    } as Inputs);
+  const stack = (admin: string, extra = "", pds = "[edge, pds_admin_pds]") =>
+    `services:\n  edge:\n    image: e\n    networks: [edge]\n  pds:\n    image: p\n    networks: ${pds}\n${admin}${extra}` +
+    "networks:\n  edge: {}\n  pds_admin:\n    internal: true\n  pds_admin_pds:\n    internal: true\n";
+  const ADMIN = "  pds-admin:\n    image: a\n    networks: [pds_admin, pds_admin_pds]\n";
+  const refused = ["pds-admin shares a network with the pds"];
+
+  test("pds_admin_network_admits_only_the_locked_pds_admin", () => {
+    for (const env of ["prod", "dev"] as const) expect(check(stack(ADMIN), env), env).toEqual([]);
+    // Another image under its name, or its image under another name.
+    expect(check(stack("  pds-admin:\n    image: x\n    networks: [pds_admin_pds]\n"))).toEqual(refused);
+    expect(check(stack("  admin:\n    image: a\n    networks: [pds_admin_pds]\n"))).toEqual([
+      "admin shares a network with the pds",
+    ]);
+    // pds-admin on another PDS network, the edge's included.
+    expect(check(stack("  pds-admin:\n    image: a\n    networks: [edge, pds_admin_pds]\n"))).toEqual(refused);
+    // A lock with no pds-admin entry admits none.
+    expect(check(stack(ADMIN), "prod", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(refused);
+  });
+
+  test("pds_admin_network_holds_only_the_pds_and_pds_admin", () => {
+    const third = "pds_admin_pds holds a service other than the pds and pds-admin";
+    expect(check(stack(ADMIN, "  web:\n    image: w\n    networks: [pds_admin_pds]\n"))).toEqual([
+      "web shares a network with the pds",
+      third,
+    ]);
+    // Without the PDS on it, the network still holds no one else.
+    expect(check(stack(ADMIN, "  web:\n    image: w\n    networks: [pds_admin_pds]\n", "[edge]"))).toEqual([third]);
+  });
+});
+
 describe("the dev edge's tunnel (P1.36i; ADR 0031 Decision 3)", () => {
   // Under dev both staging names resolve through public DNS to Pangolin, so the edge answers to no name inside the
   // stack, and net-guard keeps no internal-host exception.

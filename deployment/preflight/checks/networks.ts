@@ -85,6 +85,12 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * 0.5.51 hard-codes the private ranges in `trust proxy` and listens on every interface (packages/pds/src/index.ts at
  * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
  * address.
+ *
+ * A second, in every environment (P2.09e; ADR 0060 Decision 1): the service named pds-admin that runs the lock's
+ * pds-admin image (or, under local, builds deployment/images/pds-admin.Dockerfile) may share pds_admin_pds, and that
+ * network alone, with the PDS, so it reaches the PDS's internal URL. pds_admin_pds holds exactly those two. The PDS
+ * trusts it as a proxy too, but pds-admin already holds the admin password, which is more than a forged client
+ * address could give it.
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
   const { services } = inputs.compose;
@@ -103,17 +109,31 @@ export function pdsNeighbours(inputs: Inputs): string[] {
     inputs.env !== "prod" &&
     s.name === "objects" &&
     runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
+  const isAdmin = (s: Service) =>
+    s.name === "pds-admin" && runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
+  const exempt = new Map([
+    [STORE_NETWORK, isStore],
+    [ADMIN_NETWORK, isAdmin],
+  ]);
   const allowed = (s: Service, network: string) =>
-    !pds.networks.includes(network) || (network === STORE_NETWORK ? isStore(s) : isEdge(s));
+    !pds.networks.includes(network) || (exempt.get(network) ?? isEdge)(s);
   const problems = services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
-  const onStoreNetwork = services.filter((s) => s.networks.includes(STORE_NETWORK));
-  if (onStoreNetwork.length > 0 && !(onStoreNetwork.length === 2 && onStoreNetwork.includes(pds))) {
-    problems.push(`${STORE_NETWORK} holds a service other than the pds and the store`);
-  }
+  const pairOnly = (network: string, other: string) => {
+    const on = services.filter((s) => s.networks.includes(network));
+    if (on.length > 0 && !(on.length === 2 && on.includes(pds))) {
+      problems.push(`${network} holds a service other than the pds and ${other}`);
+    }
+  };
+  pairOnly(STORE_NETWORK, "the store");
+  pairOnly(ADMIN_NETWORK, "pds-admin");
   return problems;
 }
+
+/** The one PDS network pds-admin may join, and the Dockerfile it is built from (P2.09e). */
+const ADMIN_NETWORK = "pds_admin_pds";
+const PDS_ADMIN_DOCKERFILE = "deployment/images/pds-admin.Dockerfile";
 
 /** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */
 const STORE_NETWORK = "objects_pds";
