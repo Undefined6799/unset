@@ -78,7 +78,8 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
  *
  * One exemption, as narrow as it can be (P2.18p, ADR 0041 Decision 5): under local and dev only, the service named
- * objects that runs the lock's objects image (or, under local, builds deployment/images/objects.Dockerfile) may share
+ * objects that runs the lock's objects image (or, under local and dev --source, builds
+ * deployment/images/objects.Dockerfile) may share
  * objects_pds, and that network alone, with the PDS, so the PDS reaches the store's S3 port. Prod has no exemption,
  * as C33 pins no S3 setting there until P5.01 picks the production store. objects_pds holds exactly those two; the edge, a third
  * member, or the store on any other PDS network fails. The PDS still trusts the store as a proxy, because @atproto/pds
@@ -86,13 +87,32 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
  * address.
  *
- * A second, in every environment (P2.09e; ADR 0060 Decision 1): the service named pds-admin that runs the lock's
- * pds-admin image (or, under local, builds deployment/images/pds-admin.Dockerfile) may share pds_admin_pds, and that
- * network alone, with the PDS, so it reaches the PDS's internal URL. pds_admin_pds holds exactly those two. The PDS
- * trusts it as a proxy too, but pds-admin already holds the admin password, which is more than a forged client
- * address could give it.
+ * A second, in every environment, prod included (P2.09e; ADR 0060 Decision 1; staging is production's shape): the
+ * service named pds-admin that runs the lock's pds-admin image (or, under local and dev --source, builds
+ * deployment/images/pds-admin.Dockerfile) may share pds_admin_pds, and that network alone, with the PDS, so it reaches
+ * the PDS's internal URL. pds_admin_pds is internal and holds exactly those two, and pds-admin joins no network but it
+ * and pds_admin, web's way in; both are pinned here as well as in the table (adminNetworkProblems). The PDS trusts it
+ * as a proxy too, but pds-admin already holds the admin password, which is more than a forged client address could
+ * give it.
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
+  return [...adminNetworkProblems(inputs.compose), ...neighbourProblems(inputs)];
+}
+
+/** pds_admin_pds is internal, and the service named pds-admin joins only it and pds_admin (P2.09e). */
+function adminNetworkProblems({ services, networks }: Inputs["compose"]): string[] {
+  const problems: string[] = [];
+  if (networks.some((network) => network.name === ADMIN_NETWORK && !network.internal)) {
+    problems.push(`${ADMIN_NETWORK} is not internal`);
+  }
+  const admin = services.find((s) => s.name === "pds-admin");
+  if (admin !== undefined && !admin.networks.every((network) => ADMIN_JOINS.includes(network))) {
+    problems.push(`pds-admin joins a network other than ${ADMIN_JOINS.join(" and ")}`);
+  }
+  return problems;
+}
+
+function neighbourProblems(inputs: Inputs): string[] {
   const { services } = inputs.compose;
   const bases = readBases(inputs) ?? {};
   const lock = inputs.env === "local" ? {} : (readLock(inputs) ?? {});
@@ -131,8 +151,9 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   return problems;
 }
 
-/** The one PDS network pds-admin may join, and the Dockerfile it is built from (P2.09e). */
+/** The one PDS network pds-admin may join, every network it may join, and the Dockerfile it is built from (P2.09e). */
 const ADMIN_NETWORK = "pds_admin_pds";
+const ADMIN_JOINS = ["pds_admin", ADMIN_NETWORK];
 const PDS_ADMIN_DOCKERFILE = "deployment/images/pds-admin.Dockerfile";
 
 /** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */

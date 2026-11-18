@@ -141,13 +141,40 @@ describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
       "admin shares a network with the pds",
     ]);
     // pds-admin on another PDS network, the edge's included.
-    expect(check(stack("  pds-admin:\n    image: a\n    networks: [edge, pds_admin_pds]\n"))).toEqual(refused);
+    expect(check(stack("  pds-admin:\n    image: a\n    networks: [edge, pds_admin_pds]\n"))).toEqual([
+      "pds-admin joins a network other than pds_admin and pds_admin_pds",
+      ...refused,
+    ]);
     // A lock with no pds-admin entry admits none.
     expect(check(stack(ADMIN), "prod", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(refused);
   });
 
+  test("pds_admin_network_is_internal_and_pds_admin_joins_only_its_two", () => {
+    const open = stack(ADMIN).replace("pds_admin_pds:\n    internal: true\n", "pds_admin_pds: {}\n");
+    expect(check(open)).toEqual(["pds_admin_pds is not internal"]);
+    const joins = "pds-admin joins a network other than pds_admin and pds_admin_pds";
+    for (const extra of ["web_egress", "db"]) {
+      const wider = stack(`  pds-admin:\n    image: a\n    networks: [pds_admin, pds_admin_pds, ${extra}]\n`).replace(
+        "networks:\n  edge: {}\n",
+        `networks:\n  edge: {}\n  ${extra}: {}\n`,
+      );
+      expect(check(wider), extra).toEqual([joins]);
+    }
+  });
+
+  test("pds_admin_exemption_needs_the_locked_image_at_its_digest", () => {
+    const digest = (d: string) => `ghcr.io/x/pds-admin@sha256:${d.repeat(64)}`;
+    const pinned = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, "pds-admin": { ref: digest("a") } });
+    const at = (ref: string) => stack(`  pds-admin:\n    image: ${ref}\n    networks: [pds_admin, pds_admin_pds]\n`);
+    expect(check(at(digest("a")), "prod", pinned)).toEqual([]);
+    expect(check(at(digest("b")), "prod", pinned)).toEqual(refused);
+    expect(check(at("ghcr.io/x/pds-admin:latest"), "prod", pinned)).toEqual(refused);
+  });
+
   test("pds_admin_network_holds_only_the_pds_and_pds_admin", () => {
     const third = "pds_admin_pds holds a service other than the pds and pds-admin";
+    const edgeJoins = stack(ADMIN).replace("networks: [edge]\n  pds", "networks: [edge, pds_admin_pds]\n  pds");
+    expect(check(edgeJoins)).toEqual(["edge shares a network with the pds", third]);
     expect(check(stack(ADMIN, "  web:\n    image: w\n    networks: [pds_admin_pds]\n"))).toEqual([
       "web shares a network with the pds",
       third,
