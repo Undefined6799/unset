@@ -17,12 +17,23 @@ import type { Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
-import { accountLetter, type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
+import {
+  accountLetter,
+  ERROR_SHELL,
+  type ShellData,
+  SITE_SHELL,
+  STEP_ERROR_SHELL,
+  SHELL_TEXT as T,
+  type ThemeChoice,
+} from "../lib/shell.ts";
 import type { LayoutData } from "./$types";
 
 let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-const shell: ShellData = $derived((page.data as { shell?: ShellData }).shell ?? SITE_SHELL);
+// An error page (+error.svelte) gets no page data, so it gets the core shell, with the member the gate read; a member
+// mid-onboarding gets the site shell, signed in, with none of the app's menus (+layout.server.ts appOpen).
+const errorShell = $derived(data.signedIn && !data.appOpen ? STEP_ERROR_SHELL : ERROR_SHELL);
+const shell: ShellData = $derived(page.error ? errorShell : ((page.data as { shell?: ShellData }).shell ?? SITE_SHELL));
 // No Sign in for a member the gate found signed in (+layout.server.ts): on the welcome steps, the confirm-email page
 // and the error page, which pass no account.
 const signedIn = $derived(shell.signedIn === true || data.signedIn);
@@ -80,7 +91,11 @@ function rememberedTheme(): ThemeChoice | null {
   }
 }
 
-// The Appearance row's icon: the picker's for the current choice.
+// The Appearance row's icon and words: the picker's for the current choice.
+const PICKER_LABEL = Object.fromEntries(PICKER.map((choice) => [choice.value, choice.label])) as Record<
+  ThemeChoice,
+  string
+>;
 const PICKER_ICON = Object.fromEntries(PICKER.map((choice) => [choice.value, choice.icon])) as Record<
   ThemeChoice,
   IconName
@@ -222,7 +237,7 @@ const row =
        it works with no script; the chosen one is pressed. -->
   <form method="post" action="/prefs/theme" use:enhance={saveInPlace}>
     <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
-    <fieldset class="inline-flex rounded-md border p-0.5">
+    <fieldset class="grid grid-cols-3 gap-0.5 rounded-md border p-0.5">
       <legend class="sr-only">{T.theme}</legend>
       {#each PICKER as choice (choice.value)}
         <Button
@@ -230,12 +245,11 @@ const row =
           name="theme"
           value={choice.value}
           variant="ghost"
-          size="icon"
+          size="sm"
           aria-pressed={choice.value === current}
-          title={choice.label}
-          class="aria-pressed:bg-accent aria-pressed:ring-1 aria-pressed:ring-border"
+          class="gap-1.5 px-2 font-normal pointer-coarse:h-11 aria-pressed:bg-accent aria-pressed:font-medium aria-pressed:ring-1 aria-pressed:ring-border"
         >
-          <Icon name={choice.icon} size={20} label={choice.label} />
+          <Icon name={choice.icon} size={16} /><span>{choice.label}</span>
         </Button>
       {/each}
     </fieldset>
@@ -448,10 +462,13 @@ const row =
         </li>
       </ul>
       {#if prefs !== undefined}
-        <div class="mt-1 flex items-center justify-between gap-3 border-t px-3 pt-2 pb-1">
-          <span class="flex items-center gap-3 text-sm"
-            ><Icon name={PICKER_ICON[current]} size={20} />{T.appearance}</span
-          >
+        <!-- As the planned menu draws it (Alex, 2026-11-18 05:04Z): Appearance with the current choice in words, then
+             the three choices, each with its name beside its icon. -->
+        <div class="mt-1 flex flex-col gap-2 border-t px-3 pt-2 pb-1">
+          <p class="flex items-center gap-3 text-sm">
+            <Icon name={PICKER_ICON[current]} size={20} /><span>{T.appearance}</span>
+            <span class="ml-auto text-muted-foreground">{PICKER_LABEL[current]}</span>
+          </p>
           {@render themePicker()}
         </div>
       {/if}
@@ -463,6 +480,8 @@ const row =
     </section>
   {/if}
   <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
+  </div>
+  <!-- Below the first screen on every page, short ones too: the header and main fill the viewport (Alex, 2026-11-18). -->
   <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
     <p>{T.note}</p>
     <nav aria-label={T.legalColumn}>
@@ -473,7 +492,6 @@ const row =
       </ul>
     </nav>
   </footer>
-  </div>
 {:else}
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">
@@ -482,6 +500,7 @@ const row =
     </header>
     <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{@render content()}</main>
   </div>
+  <!-- As in the core shell: the footer starts below the first screen. -->
   <footer class="flex flex-wrap gap-8 border-t px-4 py-8 text-sm">
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.siteColumn}</h2>
