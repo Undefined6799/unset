@@ -331,6 +331,10 @@
         "origin": "ours",
         "purpose": "The owner's editor in place on the stock Card when the page is opened with one (no script): edit, delete, add or the avatar's shape."
       },
+      "carousel.svelte": {
+        "origin": "ours",
+        "purpose": "A carousel card's sideways scrolling area, a keyboard stop, with the stock Button as Previous and Next once script runs."
+      },
       "choice.svelte": {
         "origin": "ours",
         "purpose": "A labelled choice in a card editor: native radio inputs and the stock Label, so it works with no script."

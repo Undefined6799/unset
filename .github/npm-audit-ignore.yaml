@@ -21,13 +21,3 @@ advisories:
       documents our identity domain rebuilt, and gets callback params as strings. Removed when @atproto moves to
       zod >= 4.6.6, or at expiry.
     expired_at: 2026-12-13
-  - id: GHSA-fc5q-39xc-vjpf
-    package: picomatch
-    versions: ["4.0.7"]
-    statement: >-
-      No fixed release: the advisory covers picomatch through 4.0.7, the newest on npm, and lists no patched version.
-      picomatch is a dev dependency only (vite, vitest, tinyglobby, fdir, dependency-cruiser); the images install
-      with --omit=dev and copy only the built app, so it ships in no image. It matches only glob patterns written in
-      this repository's config and tooling, never a pattern from a request. Removed when picomatch ships a fix, or
-      at expiry.
-    expired_at: 2026-12-01

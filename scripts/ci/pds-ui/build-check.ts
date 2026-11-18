@@ -89,7 +89,7 @@ async function main(): Promise<void> {
       `https://codeload.github.com/bluesky-social/atproto/tar.gz/${lock.source.revision}`,
     ]);
     await verifySource(readBounded(source), lock.source, pairOf(lock));
-    const common = ["--platform", lock.base.platform, "--file", "deployment/pds/Dockerfile"];
+    const common = ["--platform", lock.base.platform, "--file", "deployment/pds/pds.Dockerfile"];
     run("docker", [
       "buildx",
       "build",
@@ -98,9 +98,9 @@ async function main(): Promise<void> {
       "ui-artifact",
       "--output",
       `type=local,dest=${join(scratch, "artifact")}`,
-      "deployment/pds",
+      ".",
     ]);
-    run("docker", ["buildx", "build", ...common, "--load", "--iidfile", join(scratch, "iid"), "deployment/pds"]);
+    run("docker", ["buildx", "build", ...common, "--load", "--iidfile", join(scratch, "iid"), "."]);
     const iid = readFileSync(join(scratch, "iid"), "utf8").trim();
     requireThat(/^sha256:[0-9a-f]{64}$/.test(iid), "invalid candidate content id");
     run("docker", ["image", "save", "--output", join(scratch, "candidate.tar"), iid]);

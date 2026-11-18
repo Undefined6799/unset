@@ -73,8 +73,8 @@ services:
   # As in compose.dev.yaml, but with no mail settings at all.
   pds:
     build:
-      context: ./pds
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deployment/pds/pds.Dockerfile
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]

@@ -28,6 +28,16 @@ describe("workflows", () => {
   test("all_actions_sha_pinned", () => {
     expect(problems(withJob(job("    steps:\n      - uses: actions/checkout@v7\n")))).toHaveLength(1);
     expect(problems(withJob(job(`    steps:\n      - uses: someone/action@${"a".repeat(40)}\n`)))).toHaveLength(1);
+    // P0.07m: actions/cache's restore and save folders pass at a SHA; no other sub-path, and not at a tag.
+    for (const sub of ["cache/restore", "cache/save"]) {
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@${"a".repeat(40)}\n`)))).toEqual([]);
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@v6\n`)))).toHaveLength(1);
+    }
+    for (const sub of ["cache/other", "checkout/restore", "cache/../evil", "cache/restore/x"]) {
+      expect(problems(withJob(job(`    steps:\n      - uses: actions/${sub}@${"a".repeat(40)}\n`))), sub).toHaveLength(
+        1,
+      );
+    }
     expect(problems(withJob(job("    container: node:26\n")))).toHaveLength(1);
     expect(problems(withJob(job("    env:\n      X_IMAGE: alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
@@ -437,6 +447,9 @@ describe("signing jobs (P1.27s)", () => {
     for (const cache of [
       `${setupNode}          cache: npm\n`,
       `${setupNode}      - uses: actions/cache@${"a".repeat(40)}\n`,
+      // P0.07m (Codex on #1715): the sub-actions the pin rule now accepts are caches too.
+      `${setupNode}      - uses: actions/cache/restore@${"a".repeat(40)}\n`,
+      `${setupNode}      - uses: actions/cache/save@${"a".repeat(40)}\n`,
     ]) {
       const found = problems(publish.replace(setupNode, cache), "publish-images.yml");
       expect(found).toContain("job publish: a cache in a signing job");
@@ -444,6 +457,21 @@ describe("signing jobs (P1.27s)", () => {
     }
     const from = publish.replace("--metadata-file", "--cache-from type=gha --metadata-file");
     expect(problems(from, "publish-images.yml")).toContain("job publish: a cache in a signing job");
+  });
+
+  // P0.07m (Codex on #1715): every form of actions/cache is refused in both signing jobs.
+  test("signing_job_cache_action_fails_in_every_form", () => {
+    const off = "          package-manager-cache: false\n";
+    for (const [file, text, id] of [
+      ["publish-images.yml", publish, "publish"],
+      ["mirror.yml", mirror, "copy-and-sign"],
+    ] as const) {
+      for (const action of ["cache", "cache/restore", "cache/save"]) {
+        const changed = text.replace(off, `${off}      - uses: actions/${action}@${"a".repeat(40)}\n`);
+        expect(changed, `${file} ${action}`).not.toBe(text);
+        expect(problems(changed, file), `${file} ${action}`).toContain(`job ${id}: a cache in a signing job`);
+      }
+    }
   });
 
   test("signing_job_setup_node_cache_off", () => {

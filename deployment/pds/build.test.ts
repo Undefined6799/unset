@@ -47,7 +47,7 @@ function finalize(files: Record<string, string>, manifest: unknown) {
     for (const [name, data] of Object.entries(files)) writeFileSync(join(dir, name), data);
     const path = join(dir, "bundle-manifest.json");
     writeFileSync(path, JSON.stringify(manifest));
-    const recipe = readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8");
+    const recipe = readFileSync(join(import.meta.dirname, "pds.Dockerfile"), "utf8");
     const program = /node -e '([^']+)' "\$dist"/.exec(recipe)?.[1];
     expect(program, "Dockerfile finalizer program").toBeDefined();
     const result = spawnSync(process.execPath, ["-e", program as string, dir], { encoding: "utf8" });
@@ -102,7 +102,10 @@ test.each([
     const fixture = join(dir, "deployment/pds");
     mkdirSync(fixture, { recursive: true });
     writeFileSync(join(fixture, "source.lock.json"), readFileSync(join(import.meta.dirname, "source.lock.json")));
-    writeFileSync(join(fixture, "Dockerfile"), mutate(readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8")));
+    writeFileSync(
+      join(fixture, "pds.Dockerfile"),
+      mutate(readFileSync(join(import.meta.dirname, "pds.Dockerfile"), "utf8")),
+    );
     expect(() => recipeContract(dir)).toThrow();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -140,7 +143,7 @@ test.each(["none", "package version", "lockfile", "package manager", "source rev
           JSON.stringify({ name, version: drift === "package version" ? "0.0.0" : version }),
         );
       }
-      const recipe = readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8");
+      const recipe = readFileSync(join(import.meta.dirname, "pds.Dockerfile"), "utf8");
       const program = /node -e '([^']+)' \/source.lock.json/.exec(recipe)?.[1];
       expect(program).toBeDefined();
       const result = spawnSync(process.execPath, ["-e", program as string, lockPath], { cwd: dir });
@@ -153,7 +156,7 @@ test.each(["none", "package version", "lockfile", "package manager", "source rev
 
 // Run the pnpm tarball check embedded in the Dockerfile, against a stand-in file at its fixed path.
 test("pnpm_tarball_must_match_the_pinned_integrity", () => {
-  const recipe = readFileSync(join(import.meta.dirname, "Dockerfile"), "utf8");
+  const recipe = readFileSync(join(import.meta.dirname, "pds.Dockerfile"), "utf8");
   const pinned = /^ENV PNPM_INTEGRITY=(sha512-[A-Za-z0-9+/]+=*)$/m.exec(recipe)?.[1];
   expect(pinned, "pinned pnpm integrity").toBeDefined();
   expect(recipe).toContain("--offline --ignore-scripts --no-audit --no-fund /build/pnpm-11.11.0.tgz");

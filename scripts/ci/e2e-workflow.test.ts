@@ -3,7 +3,7 @@
 // a skipped required check reads as passing (expressions, "Status check functions"), hence always() and the result
 // check, run here as Actions runs a step with no shell key: `bash -e` (workflow syntax, jobs.<job_id>.steps[*].shell).
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -21,6 +21,7 @@ type Step = {
   "timeout-minutes"?: number;
 };
 type Job = {
+  env?: Record<string, string>;
   needs?: string[];
   if?: string;
   strategy?: { "fail-fast"?: boolean; matrix?: { project?: string[] } };
@@ -101,7 +102,8 @@ describe("browser install (P0.07f, P0.07g)", () => {
   }
 
   test("every_browser_install_is_bounded_and_retried_once", () => {
-    expect(installs.map(([id]) => id)).toEqual(["browser", "a11y"]);
+    // P0.07n: only a11y still installs a browser on the runner; the browser jobs use Playwright's image.
+    expect(installs.map(([id]) => id)).toEqual(["a11y"]);
     for (const [id, step] of installs) {
       expect(step["timeout-minutes"], id).toBe(9);
       const run = step.run ?? "";
@@ -160,31 +162,88 @@ describe("browser install (P0.07f, P0.07g)", () => {
 // fetched for it are cached. apt does not check the hash of a file already in its archive directory (a flipped byte
 // reached dpkg on Ubuntu 24.04), so a cached package is handed over only when it matches the signed index.
 describe("browser cache (P0.07h)", () => {
-  const jobs = ["browser", "a11y"].map((id) => [id, wf.jobs[id]?.steps ?? []] as const);
+  const jobs = ["a11y"].map((id) => [id, wf.jobs[id]?.steps ?? []] as const);
   const at = (steps: readonly Step[], match: (step: Step) => boolean) => steps.findIndex(match);
 
   test("each_install_restores_the_cache_before_it_and_keeps_the_packages_after_it", () => {
     for (const [id, steps] of jobs) {
-      const restore = at(steps, (step) => step.uses?.startsWith("actions/cache@") === true);
+      const browser = at(steps, (step) => step.uses?.startsWith("actions/cache@") === true);
+      const restore = at(steps, (step) => step.uses?.startsWith("actions/cache/restore@") === true);
       const handOver = at(steps, (step) => step.run?.includes("apt-cache show") === true);
       const install = at(steps, (step) => step.run?.includes("playwright install") === true);
       const keep = at(steps, (step) => step.run?.includes("/var/cache/apt/archives -maxdepth 1") === true);
+      const save = at(steps, (step) => step.uses?.startsWith("actions/cache/save@") === true);
+      expect(browser, id).toBeGreaterThan(-1);
       expect(restore, id).toBeGreaterThan(-1);
-      expect(handOver, id).toBeGreaterThan(restore);
+      expect(handOver, id).toBeGreaterThan(Math.max(browser, restore));
       expect(install, id).toBeGreaterThan(handOver);
       expect(keep, id).toBeGreaterThan(install);
-      const cache = steps[restore];
-      expect(cache?.with?.path?.trim().split("\n"), id).toEqual(["~/.cache/ms-playwright", "~/apt-archives"]);
-      for (const part of ["runner.os", "steps.cache-name.outputs.image", "steps.cache-name.outputs.playwright"]) {
-        expect(cache?.with?.key, id).toContain(part);
+      expect(save, id).toBe(keep + 1);
+      // P0.07m: no runner image in either key, so a runner on another image still finds them.
+      expect(steps[browser]?.with?.path, id).toBe("~/.cache/ms-playwright");
+      for (const part of ["runner.os", "steps.cache-name.outputs.playwright"]) {
+        expect(steps[browser]?.with?.key, id).toContain(part);
       }
-      expect(steps[keep]?.if, id).toBe(`steps.${cache?.id}.outputs.cache-hit != 'true'`);
+      const apt = steps[restore];
+      expect(apt?.with?.path, id).toBe("~/apt-archives");
+      expect(apt?.with?.key, id).toMatch(/^e2e-apt-\$\{\{ runner\.os \}\}-.+-$/);
+      for (const step of [steps[browser], apt]) expect(step?.with?.key, id).not.toContain("image");
+      // A failed install still keeps what apt fetched; a cancelled run does not.
+      expect(steps[keep]?.if, id).toBe(`$${"{{"} !cancelled() }}`);
+      expect(steps[keep]?.env?.PREFIX, id).toBe(`$${"{{"} steps.${apt?.id}.outputs.cache-primary-key }}`);
+      expect(steps[save]?.with?.key, id).toBe(`$${"{{"} steps.${steps[keep]?.id}.outputs.key }}`);
+      expect(steps[save]?.if, id).toContain("!cancelled()");
+      expect(steps[save]?.if, id).toContain(`steps.${apt?.id}.outputs.cache-matched-key`);
       expect(steps[install]?.run, id).toContain(`APT::Keep-Downloaded-Packages "true";`);
       // Codex on #1292: the index refresh before the hand-over must not wait on a stalled mirror past the step.
       expect(steps[handOver]?.["timeout-minutes"], id).toBe(3);
       expect(steps[handOver]?.run, id).toContain(
         "sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3",
       );
+    }
+  });
+
+  // Runs the keep step as Actions does (`bash -e`) over a kept directory and apt's archive directory, and returns the
+  // kept files and the key it wrote.
+  function keep(script: string, kept: Record<string, string>, archives: Record<string, string>, prefix = "p-") {
+    const root = mkdtempSync(join(tmpdir(), "e2e-keep-"));
+    const home = join(root, "home");
+    const apt = join(root, "archives");
+    const output = join(root, "output");
+    for (const [dir, files] of [
+      [join(home, "apt-archives"), kept],
+      [apt, archives],
+    ] as const) {
+      mkdirSync(dir, { recursive: true });
+      for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, file), text);
+    }
+    writeFileSync(output, "");
+    const status = spawnSync("bash", ["-e", "-c", script.replaceAll("/var/cache/apt/archives", apt)], {
+      env: { PATH: process.env.PATH, HOME: home, PREFIX: prefix, GITHUB_OUTPUT: output },
+      stdio: "ignore",
+    }).status;
+    const files = readdirSync(join(home, "apt-archives")).sort();
+    const key = readFileSync(output, "utf8").trim();
+    rmSync(root, { recursive: true });
+    expect(status).toBe(0);
+    return { files, key };
+  }
+
+  test("the_kept_set_gains_new_packages_and_drops_replaced_versions", () => {
+    for (const [id, steps] of jobs) {
+      const script = steps.find((step) => step.run?.includes("/var/cache/apt/archives -maxdepth 1"))?.run ?? "";
+      const first = keep(script, { "a_1_amd64.deb": "a1", "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a2" });
+      expect(first.files, id).toEqual(["a_2_amd64.deb", "b_1_all.deb"]);
+      expect(first.key, id).toMatch(/^key=p-[0-9a-f]{16}$/);
+      // The same set gives the same key, so it is not saved twice; different contents give another.
+      const again = keep(script, { "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a2" });
+      expect(again.key, id).toBe(first.key);
+      expect(keep(script, { "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a3" }).key, id).not.toBe(first.key);
+      // A failed install that fetched nothing keeps the restored set as it was.
+      expect(keep(script, { "b_1_all.deb": "b1" }, {}).files, id).toEqual(["b_1_all.deb"]);
+      // Nothing to keep, or a cache service that never answered: no key, so no save.
+      expect(keep(script, {}, {}).key, id).toBe("");
+      expect(keep(script, { "b_1_all.deb": "b1" }, {}, "").key, id).toBe("");
     }
   });
 
@@ -243,5 +302,90 @@ describe("browser cache (P0.07h)", () => {
       expect(handOver(script, { "libnss3_9_amd64.deb": "good 1 amd64" }), id).toEqual(["good_1_amd64.deb"]);
       expect(handOver(script, { "good_1%3a2_amd64.deb": "good 1:2 amd64" }), id).toEqual(["good_1%3a2_amd64.deb"]);
     }
+  });
+});
+
+// P0.07n: the apt mirror served 20 to 60 kB/s on 2026-11-18 and the browser jobs timed out installing system packages
+// before any test ran, cache or not. The browser jobs now take the browsers and their libraries prebuilt from
+// Playwright's own image (playwright.dev/docs/docker, "Remote Connection"), run its server from the lockfile's
+// playwright-core, and connect the tests to it through PW_TEST_CONNECT_WS_ENDPOINT
+// (node_modules/playwright/lib/index.js connectOptionsFromEnv, 1.64.1).
+describe("browser server image (P0.07n)", () => {
+  const job = wf.jobs.browser;
+  const steps = job?.steps ?? [];
+  const lock = JSON.parse(readFileSync(join(ROOT, "package-lock.json"), "utf8")) as {
+    packages: Record<string, { version?: string }>;
+  };
+  const playwright = lock.packages["node_modules/playwright-core"]?.version;
+
+  test("the_image_is_playwrights_own_at_the_lockfile_version_pinned_by_digest", () => {
+    const image = job?.env?.PLAYWRIGHT_IMAGE ?? "";
+    expect(playwright).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(image).toMatch(new RegExp(`^mcr\\.microsoft\\.com/playwright:v${playwright}-noble@sha256:[0-9a-f]{64}$`));
+  });
+
+  test("the_browser_jobs_install_nothing_on_the_runner", () => {
+    const run = steps.map((step) => step.run ?? "").join("\n");
+    expect(run).not.toMatch(/apt-get|playwright install|dpkg/);
+    expect(steps.some((step) => step.uses?.startsWith("actions/cache"))).toBe(false);
+  });
+
+  test("the_server_runs_the_lockfiles_playwright_core_and_the_tests_connect_to_it", () => {
+    const start = steps.find((step) => step.run?.includes("run-server"));
+    const tests = steps.find((step) => step.run?.includes("npx playwright test"));
+    if (start?.run === undefined || tests?.run === undefined) throw new Error("no server or test step");
+    expect(steps.indexOf(start)).toBeLessThan(steps.indexOf(tests));
+    // No npx download inside the image: the server is node_modules/playwright-core, mounted read-only.
+    expect(start.run).toContain(
+      '--volume "$PWD/node_modules:/opt/pw/node_modules:ro" "$PLAYWRIGHT_IMAGE" node /opt/pw/node_modules/playwright-core/cli.js run-server',
+    );
+    expect(start.run).not.toContain("npx");
+    expect(start.run).toContain("--user pwuser");
+    expect(start.run).toContain("--host 127.0.0.1");
+    expect(tests.run).toContain('PW_TEST_CONNECT_WS_ENDPOINT="ws://127.0.0.1:$BROWSER_PORT/" npx playwright test');
+  });
+
+  // Nobody re-runs a failed job by hand (agents cannot): a pull that fails or stalls is tried again in the job, up to
+  // three times, before the server starts. docker keeps the layers a cut attempt finished, so each retry resumes.
+  test("the_image_pull_retries_in_the_job_up_to_three_times", () => {
+    const pull = steps.find((step) => step.run?.includes("docker pull"));
+    const start = steps.find((step) => step.run?.includes("run-server"));
+    if (pull?.run === undefined || start === undefined) throw new Error("no pull or start step");
+    expect(steps.indexOf(pull)).toBeLessThan(steps.indexOf(start));
+    expect(pull["timeout-minutes"]).toBeGreaterThanOrEqual(16);
+    const bin = mkdtempSync(join(tmpdir(), "e2e-pull-"));
+    const log = join(bin, "calls");
+    const fake = (name: string, body: string) => {
+      writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+      chmodSync(join(bin, name), 0o755);
+    };
+    fake("sleep", "exit 0");
+    const run = (failures: number) => {
+      writeFileSync(log, "");
+      fake("docker", `echo x >> "${log}"; [ "$(wc -l < "${log}")" -gt ${failures} ]`);
+      const status = spawnSync("bash", ["-e", "-c", pull.run ?? ""], {
+        env: { PATH: `${bin}:${process.env.PATH}`, PLAYWRIGHT_IMAGE: "img" },
+        stdio: "ignore",
+      }).status;
+      return { status, calls: readFileSync(log, "utf8").split("\n").filter(Boolean).length };
+    };
+    expect(run(0)).toEqual({ status: 0, calls: 1 });
+    expect(run(2)).toEqual({ status: 0, calls: 3 });
+    expect(run(3)).toEqual({ status: 1, calls: 3 });
+  });
+
+  // The start step's first line refuses an image whose tag names another Playwright version than node_modules.
+  test("a_version_mismatch_stops_the_job", () => {
+    const start = steps.find((step) => step.run?.includes("run-server"))?.run ?? "";
+    const check = start.split("\n")[0] ?? "";
+    const run = (image: string) =>
+      spawnSync("bash", ["-e", "-c", check], {
+        cwd: ROOT,
+        env: { PATH: process.env.PATH, PLAYWRIGHT_IMAGE: image },
+        stdio: "ignore",
+      }).status;
+    expect(run(`mcr.microsoft.com/playwright:v${playwright}-noble@sha256:${"a".repeat(64)}`)).toBe(0);
+    expect(run(`mcr.microsoft.com/playwright:v1.0.0-noble@sha256:${"a".repeat(64)}`)).not.toBe(0);
+    expect(run("")).not.toBe(0);
   });
 });

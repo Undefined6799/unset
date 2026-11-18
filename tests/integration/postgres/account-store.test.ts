@@ -1,6 +1,6 @@
-// P3.06s (infrastructure/postgres/accountStore.ts): what our PDS's answer to getRepoStatus does to an account, against
-// real Postgres as the real `indexer` role (TE-2). Revealing waits for this confirmation; hiding never does. Until
-// P3.06e grants the indexer core.erase_did, a confirmed deletion hides the account and leaves a visible dead letter.
+// P3.06s and P3.06e (infrastructure/postgres/accountStore.ts, migration 0029): what our PDS's answer to getRepoStatus
+// does to an account, against real Postgres as the real `indexer` role (TE-2). Revealing waits for this confirmation;
+// hiding never does. A confirmed deletion is erased through idx.erase_deleted_account, within its hourly cap.
 import { join } from "node:path";
 import {
   type AccountStore,
@@ -27,6 +27,7 @@ const migratorPassword = randomPassword();
 const pools = testPools("account-store-test");
 let postgres: PostgresContainer;
 let migrator: Pool;
+let indexer: Pool;
 let accounts: AccountStore;
 let index: IndexStore;
 
@@ -35,6 +36,8 @@ const D = "did:plc:dddddddddddddddddddddddd";
 const E = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
 const N = "did:plc:nnnnnnnnnnnnnnnnnnnnnnnn";
 const sql = (query: string) => postgres.sql("unset", query);
+const erased = (did: string) => lines(`SELECT idx.is_erased('${did}')`)[0] === "t";
+const asIndexer = (query: string, did: string) => withClient(indexer, null, (c) => c.query(query, [did]));
 const lines = (query: string) => sql(query).split("\n").filter(Boolean);
 const state = (did: string) =>
   lines(`SELECT pds_active, coalesce(pds_status, '-') FROM idx.account WHERE did = '${did}'`);
@@ -59,7 +62,7 @@ beforeAll(async () => {
   });
   await migrateAsMigrator(postgres, migratorPassword);
   postgres.sql("postgres", `ALTER ROLE indexer PASSWORD '${indexerPassword}'`);
-  const indexer = pools.open(postgres, "unset", "indexer", indexerPassword);
+  indexer = pools.open(postgres, "unset", "indexer", indexerPassword);
   migrator = pools.open(postgres, "unset", "migrator", migratorPassword);
   accounts = createAccountStore(indexer, { timeoutMs: 5_000 });
   index = createIndexStore(indexer, { source: "pds", timeoutMs: 5_000 });
@@ -118,18 +121,57 @@ describe("account store", () => {
     expect(jobs(N)).toEqual(["confirm_deletion"]);
   });
 
-  test("account.confirmed_deletion_hides_and_leaves_a_visible_dead_letter", async () => {
+  test("account.confirmed_deletion_erases_the_account", async () => {
     await accounts.confirmed(job(D, "confirm_deletion"), { kind: "not_found" });
     await accounts.confirmed(job(N, "confirm_deletion"), { kind: "inactive", status: "deleted" });
-    expect(state(D)).toEqual(["f|deleted"]);
-    expect(jobs(D)).toEqual([]);
-    expect(lines("SELECT did, reason_code FROM idx.dead_letter ORDER BY did")).toEqual([
-      `${D}|deletion_confirmed_not_erased`,
-      `${N}|deletion_confirmed_not_erased`,
-    ]);
-    // Confirmed twice, recorded once.
-    await accounts.confirmed(job(D, "confirm_deletion"), { kind: "not_found" });
-    expect((await index.health()).deletionsNotErased).toBe(2);
+    expect([erased(D), erased(N)]).toEqual([true, true]);
+    expect(lines(`SELECT count(*) FROM idx.account WHERE did IN ('${D}', '${N}')`)).toEqual(["0"]);
+    expect(lines("SELECT value FROM idx.ingest_stat WHERE name = 'account_deletion_erased'")).toEqual(["2"]);
+    // The erasure is recorded by the indexer's session, without the person (core.erase_did step 8).
+    expect(
+      lines(
+        "SELECT c.action || ' ' || c.writer || ' ' || (b.subject IS NULL) FROM audit.chain c " +
+          "JOIN audit.event_body b USING (lane, seq) WHERE c.lane = 'sec' ORDER BY c.seq DESC LIMIT 1",
+      ),
+    ).toEqual(["account.erased indexer true"]);
+    expect((await index.health()).deletionsNotErased).toBe(0);
+  });
+
+  test("account.erasure_refuses_an_account_not_confirmed_deleted", async () => {
+    const X = "did:plc:xxxxxxxxxxxxxxxxxxxxxxxx";
+    const U = "did:plc:uuuuuuuuuuuuuuuuuuuuuuuu";
+    account(X, true, null);
+    const refuse = (did: string) =>
+      expect(asIndexer("SELECT idx.erase_deleted_account($1)", did)).rejects.toThrow("erase_not_confirmed_deleted");
+    await refuse(X); // active
+    sql(`UPDATE idx.account SET pds_active = false, pds_status = 'takendown' WHERE did = '${X}'`);
+    await refuse(X); // hidden for another reason
+    sql(`UPDATE idx.account SET pds_active = true, pds_status = 'deleted' WHERE did = '${X}'`);
+    await refuse(X); // deleted but still shown: not the state confirm_deletion writes
+    await refuse(U); // not tracked
+    expect(erased(X)).toBe(false);
+    // And the indexer still cannot reach core.erase_did itself, with any reason.
+    await expect(asIndexer("SELECT core.erase_did($1, 'user_request')", X)).rejects.toThrow("permission denied");
+  });
+
+  test("account.erasure_stops_at_its_hourly_cap", async () => {
+    const C = "did:plc:cccccccccccccccccccccccc";
+    account(C, false, "deleted", "confirm_deletion");
+    // With D and N above, twenty account_deleted erasures in the last hour (the cap), as a runaway indexer would leave.
+    sql(`INSERT INTO core.erased_did (did_hmac, erased_at, why, outcome)
+      SELECT public.gen_random_bytes(32), now(), 'account_deleted', 'erased' FROM generate_series(1, 18)`);
+    await accounts.confirmed(job(C, "confirm_deletion"), { kind: "not_found" });
+    expect(erased(C)).toBe(false);
+    expect(state(C)).toEqual(["f|deleted"]);
+    expect(
+      lines(`SELECT due_at > now() + interval '50 minutes' FROM idx.account_job WHERE did = '${C}'
+        AND kind = 'confirm_deletion'`),
+    ).toEqual(["t"]);
+    expect(lines("SELECT value FROM idx.ingest_stat WHERE name = 'account_erase_capped'")).toEqual(["1"]);
+    // An erasure an hour old no longer counts.
+    sql("UPDATE core.erased_did SET erased_at = now() - interval '61 minutes' WHERE why = 'account_deleted'");
+    await accounts.confirmed(job(C, "confirm_deletion"), { kind: "not_found" });
+    expect(erased(C)).toBe(true);
   });
 
   test("account.unconfirmed_deletion_clears_the_status_but_stays_hidden", async () => {
@@ -153,6 +195,8 @@ describe("account store", () => {
     await index.apply({ kind: "account", seq: 3, did: Q, active: false, status: "takendown" });
     await accounts.confirmed(forR, { kind: "not_found" });
     await accounts.confirmed(forQ, { kind: "not_found" });
+    expect(erased(R)).toBe(false);
+    expect(erased(Q)).toBe(false);
     expect(state(Q)).toEqual(["f|takendown"]);
     expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did IN ('${R}', '${Q}')`)).toEqual(["0"]);
     expect(
@@ -171,6 +215,18 @@ describe("account store", () => {
     await accounts.confirmed(job(B, "confirm_deletion"), { kind: "active" });
     expect(state(B)).toEqual(["f|-"]);
     expect(jobs(B)).toEqual(["confirm_status"]);
+  });
+
+  test("account.a_deletion_found_not_deleted_leaves_the_unerased_count", async () => {
+    // A P3.06s dead letter for W, whose deletion our PDS now denies: W is no longer waiting for erasure, so health
+    // stops counting it (the dead letter itself is append-only for indexer).
+    const W = "did:plc:wwwwwwwwwwwwwwwwwwwwwwww";
+    account(W, false, "deleted");
+    sql(`INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
+      VALUES ('track', '${W}', 'deletion_confirmed_not_erased', 1, now(), now())`);
+    expect((await index.health()).deletionsNotErased).toBe(1);
+    await accounts.confirmed(job(W, "confirm_deletion"), { kind: "active" });
+    expect((await index.health()).deletionsNotErased).toBe(0);
   });
 
   test("account.erased_did_is_never_revealed", async () => {

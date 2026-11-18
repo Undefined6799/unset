@@ -78,7 +78,7 @@ export function parseLock(text: string): Lock {
 }
 export function recipeContract(root: string): Lock | null {
   const dir = join(root, "deployment/pds");
-  const recipePath = join(dir, "Dockerfile");
+  const recipePath = join(dir, "pds.Dockerfile");
   const lockPath = join(dir, "source.lock.json");
   const recipeStat = lstatSync(recipePath, { throwIfNoEntry: false });
   const lockStat = lstatSync(lockPath, { throwIfNoEntry: false });
