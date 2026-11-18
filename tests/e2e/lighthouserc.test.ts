@@ -56,8 +56,9 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.settings).not.toHaveProperty("chromeIgnoreDefaultFlags");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
-    // expectJs false (public pages) stays at 0 scripts. An app page runs SvelteKit's client (ADR 0054): the one
-    // bundle of output.bundleStrategy "single" was 99214 bytes as served (brotli) at P1.20k, under 256 KiB.
+    // expectJs false (public pages) stays at 0 scripts, an error. An app page runs SvelteKit's client (ADR 0054): the
+    // one bundle of output.bundleStrategy "single" was 99214 bytes as served (brotli) at P1.20k. Its 120 KiB is a
+    // warning, never a failure (Alex, 2026-11-18T04:18:09Z; scripts/budgets/app-js.ts measures it in gzip).
     const matrix = config.ci.assert.assertMatrix;
     for (const row of matrix) {
       expect(row.assertions["categories:accessibility"]).toEqual(["error", { minScore: 1 }]);
@@ -66,8 +67,10 @@ describe("lhci_no_public_upload", () => {
       const url = `${PROD_ORIGIN}${page.path}`;
       const rows = matrix.filter((row) => new RegExp(row.matchingUrlPattern).test(url));
       expect(rows, page.path).toHaveLength(1);
-      const script = rows[0]?.assertions["resource-summary:script:size"]?.[1].maxNumericValue;
-      expect(script).toBe(page.expectJs ? 262144 : 0);
+      const script = rows[0]?.assertions["resource-summary:script:size"];
+      expect(script, page.path).toEqual(
+        page.expectJs ? ["warn", { maxNumericValue: 122880 }] : ["error", { maxNumericValue: 0 }],
+      );
     }
   });
 
