@@ -13,10 +13,10 @@ RUN npm ci --ignore-scripts --omit=dev
 RUN find node_modules -mindepth 1 -maxdepth 1 ! -name @unset -exec rm -r {} + \
   && find node_modules/@unset -mindepth 1 -maxdepth 1 ! -name shared-admin-envelope -exec rm -r {} +
 # The service's STATE_DIR (replay guard and request log, ADR 0060), empty here: compose mounts a named volume over it,
-# and a fresh volume takes the owner and mode of the directory it covers, so only 65532 can read or write it. The mode
-# is set here as well as by the runtime COPY's --chmod: with a plain mkdir, CI's image-tests build shipped 0755 in
-# spite of --chmod (#1720), though a local BuildKit 0.34.2 build gave 0700. The source mode holds in both.
-RUN mkdir -m 0700 /app/state
+# and a fresh volume takes the owner and mode of the directory it covers, so only 65532 can read or write it. It is made
+# inside /stage and the runtime copies /stage's contents: CI's image-tests build gave a directory copied as the COPY
+# source 0755 whatever its source mode or --chmod said (#1720), while an entry inside the source takes --chmod.
+RUN mkdir -p -m 0700 /stage/state
 
 FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
@@ -26,7 +26,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/shared/admin-envelope /app/shared/admin-envelope
 COPY --from=deps /app/interfaces/pds-admin /app/interfaces/pds-admin
-COPY --from=deps --chown=65532:65532 --chmod=0700 /app/state /app/state
+COPY --from=deps --chown=65532:65532 --chmod=0700 /stage/ /app/
 # Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
 # base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
 # no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.

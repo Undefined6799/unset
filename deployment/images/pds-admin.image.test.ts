@@ -40,8 +40,9 @@ describe("pds-admin image", () => {
           expect(modules.out.trim().split("\n"), modules.err).toEqual(["@unset", "shared-admin-envelope"]);
           // STATE_DIR (P2.09e): a named volume mounted here takes this directory's owner and mode when fresh, so the
           // service, and only it, can write its replay guard and log there.
-          const state = shell("stat -c '%u:%g %a' /app/state");
-          expect(state.out.trim(), state.err).toBe("65532:65532 700");
+          // /app itself stays root's: the state directory arrives by copying a folder's contents into it.
+          const state = shell("stat -c '%u:%g %a' /app/state /app");
+          expect(state.out.trim().split("\n"), state.err).toEqual(["65532:65532 700", "0:0 755"]);
 
           const bare = docker(["run", "--rm", "--read-only", "--network", "none", image], { timeoutMs: CALL_MS });
           expect(bare.code, bare.err.slice(-2000)).toBe(1);
