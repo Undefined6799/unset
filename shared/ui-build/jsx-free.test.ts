@@ -3,7 +3,7 @@
 // components, so this workspace has no .tsx file, no react import, and reaches @unset/shared-ui only through a
 // whole-statement `import type { ... }`, which Node erases entirely. `import { type X }` is refused: under
 // verbatimModuleSyntax it leaves `import {} from` behind, which still loads the module.
-// Each file is parsed (oxc through vite 8.3.1's parseSync, as scripts/budgets/count-glue-lines.ts does), so comments,
+// Each file is parsed (oxc through vite 8.3.1's parseSync), so comments,
 // quotes and line breaks cannot hide an import (P1.25r, P1.25s; architecture's N4 amendment and its two notes,
 // 2026-10-07-p125h-follow-ups.md). No string may contain the kit's name except the specifier of an
 // `import type { ... }` of its index; require, createRequire, eval, Function, vm and import() of anything but a literal
@@ -281,8 +281,8 @@ test("ui_build_jsx_free_check_pins_each_check", () => {
   const pinned: [string, string, string[]][] = [
     [
       "realpath",
-      'import { safeHref } from "./kit/safe-href.ts";\n',
-      ['a.ts: "./kit/safe-href.ts" resolves outside the workspace'],
+      'import { safeHref } from "./kit/index.ts";\n',
+      ['a.ts: "./kit/index.ts" resolves outside the workspace'],
     ],
     [
       "node_modules segment",

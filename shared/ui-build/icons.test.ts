@@ -69,23 +69,6 @@ test("icon_allowlist_matches_sheet", () => {
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
 });
 
-test("icon_drawing_module_missing_or_extra_fails", () => {
-  const missing = copy();
-  rmSync(join(missing, "icons/drawings/close.generated.ts"));
-  expect(code(run(missing, ["--check"]))).toEqual(["icons.stale"]);
-  expect(run(missing, []).code).toBe(0);
-  expect(run(missing, ["--check"]).code).toBe(0);
-
-  const edited = copy();
-  writeFileSync(join(edited, "icons/drawings/close.generated.ts"), "export default [];\n");
-  expect(code(run(edited, ["--check"]))).toEqual(["icons.stale"]);
-
-  const extra = copy();
-  writeFileSync(join(extra, "icons/drawings/arrow.generated.ts"), "export default [];\n");
-  expect(code(run(extra, ["--check"]))).toEqual(["icons.stale"]);
-  expect(code(run(extra, []))).toEqual(["icons.stale"]);
-});
-
 test("icon_check_detects_stale_output", () => {
   const root = copy();
   writeFileSync(join(root, "icons/icons.json"), "{}\n");
@@ -207,7 +190,6 @@ const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
 };
 // Recorded from the last absent-pointer commit, 18291e6; never derived with the generator under test.
 const LEGACY_JSON_SHA256 = "3fe0bffbccf8fee5630e762fea71aa5391be5b494c74b70a089e0bbf8db2bbee";
-const LEGACY_MODULES_SHA256 = "419a9455e85d2135b72ab5ed1c1bb765761ecd33bef5602e385a6de839278476";
 
 /** Explicit imported-sheet fixture: remove the two additions from today's product snapshot, never from the sheet. */
 function baseFiles(): Map<string, string> {
@@ -217,7 +199,7 @@ function baseFiles(): Map<string, string> {
     "sheet/bundle.js.txt",
     "inventory.json",
     "icons/icons.json",
-    ...["icons/svg", "icons/drawings"].flatMap((dir) => readdirSync(join(UI, dir)).map((name) => `${dir}/${name}`)),
+    ...readdirSync(join(UI, "icons/svg")).map((name) => `icons/svg/${name}`),
   ];
   const files = new Map(paths.map((path) => [path, readFileSync(join(UI, path), "utf8")]));
   const inventory = JSON.parse(files.get("inventory.json") as string);
@@ -227,7 +209,6 @@ function baseFiles(): Map<string, string> {
   delete json.extensionProvenance;
   for (const alias of Object.keys(ADDITIONS)) {
     files.delete(`icons/svg/${alias}.svg.txt`);
-    files.delete(`icons/drawings/${alias}.generated.ts`);
     for (const field of ["icons", "iconoir", "drawings"]) delete json[field][alias];
   }
   files.set("icons/icons.json", `${JSON.stringify(json, null, 2)}\n`);
@@ -291,16 +272,11 @@ function editRecord(path: string, value: unknown): unknown {
 test("icon_absent_extension_preserves_every_output_byte", () => {
   const fixture = virtual(baseFiles());
   const json = fixture.io.readText("icons/icons.json");
-  const modules = [...fixture.files]
-    .filter(([path]) => path.startsWith("icons/drawings/"))
-    .sort(([a], [b]) => a.localeCompare(b));
   expect(sha256(json)).toBe(LEGACY_JSON_SHA256);
-  expect(sha256(JSON.stringify(modules))).toBe(LEGACY_MODULES_SHA256);
   expect(Object.keys(JSON.parse(json).icons)).toHaveLength(36);
   expect(JSON.parse(json)).not.toHaveProperty("extensionProvenance");
   expect(JSON.parse(fixture.io.readText("inventory.json")).Icon).not.toHaveProperty("extensions");
   expect(fixture.io.list("icons/svg")).toHaveLength(36);
-  expect(modules).toHaveLength(36);
   const writes: string[] = [];
   fixture.io.writeText = (path) => writes.push(path);
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
@@ -353,11 +329,6 @@ test("icon_approved_extension_generates_only_the_46_registered_icons", () => {
     iconoirCommit: "d7dfa4d0341df0670bfed9fc24221c9d7ef2112e",
   });
   for (const [name, drawings] of Object.entries(base.drawings)) expect(json.drawings[name]).toEqual(drawings);
-  for (const alias of ["devices", "apps"]) {
-    const module = fixture.files.get(`icons/drawings/${alias}.generated.ts`);
-    expect(module).toContain("Object.freeze([");
-    expect(module).toContain('strokeWidth: "1.5"');
-  }
   expect(fixture.run(["--check"])).toEqual({ code: 0, lines: [] });
 });
 

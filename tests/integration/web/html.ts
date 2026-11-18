@@ -1,3 +1,5 @@
+// Walks a parse5 tree so a response test can ignore attribute order and styling classes (moved from
+// interfaces/http/web/fixtures with P1.20k).
 type Node = Readonly<{
   nodeName: string;
   tagName?: string;

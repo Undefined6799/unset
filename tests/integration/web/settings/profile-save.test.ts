@@ -15,8 +15,8 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
-import { elements, textContent } from "../../../../interfaces/http/web/fixtures/html.ts";
 import { buildOnce, clientAddress, ORIGIN, PDS_HOST, type RunningWeb, startWeb } from "../built-server.ts";
+import { elements, textContent } from "../html.ts";
 import { readyMember } from "../members.ts";
 import type { PdsWrite } from "../stand-in-pds.ts";
 

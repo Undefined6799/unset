@@ -6,18 +6,6 @@
   "license": "MIT",
   "exports": {
     ".": "./index.ts",
-    "./presentation": "./presentation.ts",
-    "./brand-header": "./components/Header/BrandHeader.tsx",
     "./icons.json": "./icons/icons.json"
-  },
-  "dependencies": {
-    "@unset/shared-islands": "*",
-    "@unset/shared-safe-href": "*",
-    "react": "19.3.1"
-  },
-  "devDependencies": {
-    "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
-    "react-dom": "19.3.1"
   }
 }

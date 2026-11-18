@@ -827,32 +827,14 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     const example = read("env/dev-public.example.env");
     for (const key of ["WEB_PUBLIC_ORIGIN", "WEB_MEDIA_ORIGIN"])
       expect(example).toMatch(new RegExp(`^${key}=https://`, "m"));
-    const sources = ["shared/http", "interfaces/http"].flatMap((dir) =>
-      readdirSync(join(DEPLOYMENT, "..", dir), { recursive: true, encoding: "utf8" })
-        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.endsWith("test-env.ts"))
-        .map((f) => [`${dir}/${f}`, readFileSync(join(DEPLOYMENT, "..", dir, f), "utf8")] as const),
-    );
+    const sources = readdirSync(join(DEPLOYMENT, "..", "shared/http"), { recursive: true, encoding: "utf8" })
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.startsWith("dist/"))
+      .map((f) => [`shared/http/${f}`, readFileSync(join(DEPLOYMENT, "..", "shared/http", f), "utf8")] as const);
     expect(sources.length).toBeGreaterThan(10);
     for (const [file, text] of sources) {
       expect(text, file).not.toMatch(/x-forwarded-(?:proto|host|scheme)|["'`]forwarded["'`]|\.encrypted\b/i);
     }
-    // Every cookie attribute string web writes, wherever it lives (the session, the theme, and sign-in-state.ts's
-    // nonce, signed-out, target and issuer cookies), is Secure and HttpOnly.
-    const attributes = sources.flatMap(([file, text]) =>
-      [...text.matchAll(/"(Path=[^"]*)"/g)].map((match) => [file, match[1] as string] as const),
-    );
-    expect(attributes.map(([file]) => file)).toEqual(
-      expect.arrayContaining([
-        "interfaces/http/session-cookie.ts",
-        "interfaces/http/prefs/theme.ts",
-        "interfaces/http/routes/sign-in-state.ts",
-      ]),
-    );
-    expect(attributes.length).toBeGreaterThanOrEqual(5);
-    for (const [file, text] of attributes) {
-      expect(text.split("; "), `${file}: ${text}`).toEqual(expect.arrayContaining(["Secure", "HttpOnly"]));
-    }
-    // The SvelteKit server (P1.20k) the same way: it reads no forwarded scheme or host, and every file that sets or
+    // The SvelteKit server (P1.20k): it reads no forwarded scheme or host, and every file that sets or
     // clears a cookie through SvelteKit's `cookies` names its attributes once, path / with Secure and HttpOnly, and
     // never a domain (kit 3.2.0 `Cookies.set` takes them as options; host-only is checked on the wire in
     // tests/integration/web/sign-in.test.ts).

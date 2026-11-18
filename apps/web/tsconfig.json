@@ -5,16 +5,11 @@
     "rootDir": ".",
     "outDir": "dist",
     "lib": ["es2025", "dom", "dom.iterable"],
-    "types": ["vite/client", "node"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "types": ["node"]
   },
   "references": [
     {
       "path": "../../shared/errors"
-    },
-    {
-      "path": "../../shared/islands"
     },
     {
       "path": "../../shared/safe-href"
@@ -23,5 +18,5 @@
       "path": "../../shared/ui"
     }
   ],
-  "exclude": ["dist", "vite.config.ts", "lib/components", "lib/utils.ts"]
+  "exclude": ["dist", "lib/components", "lib/utils.ts"]
 }

@@ -16,8 +16,8 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
-import { elements, textContent } from "../../../../interfaces/http/web/fixtures/html.ts";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, type StandInFixture, startWeb } from "../built-server.ts";
+import { elements, textContent } from "../html.ts";
 import { readyMember } from "../members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");

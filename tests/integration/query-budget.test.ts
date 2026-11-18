@@ -1,37 +1,13 @@
-// P1.11t: query_budget_per_route (README invariant 14; plan §6.1 Data access). Every route in every
-// interfaces/*/routes.manifest.json has a request fixture in query-budget/fixtures/<interface>.json, and serving it runs
-// at most BUDGET statements, counted by a pool's onStatement hook. Every statement a checked-out client sends counts,
-// inside withTransaction too, except transaction control (BEGIN, COMMIT, ROLLBACK, SAVEPOINT, RELEASE): the budget is
-// about data round trips, and tx.ts adds those on its own (architecture ruling 2026-10-06 (c)). Requests run one at a time, so the count between two
-// requests is that request's. P2.04c gives the web server its pools. P2.05's POST /login runs one statement, the nonce
-// INSERT, and only for a same-origin form, which a fixture request (no body, no Origin) never is; a route whose
-// statements a fixture can reach passes this test's counting pool into compose(). The web server's config needs secret files
-// (P2.04c), which a JSON fixture cannot hold, so its env gets them from interfaces/http/test-env.ts at run time.
-// `/health` runs its one readiness statement on the server's own pool (P1.04w), which this test points at the test
-// database; that pool is not the counting one, so the probe is outside the count.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+// P1.11t: the statement count behind query_budget_per_route (README invariant 14; plan §6.1 Data access). Every
+// statement a checked-out client sends counts, inside withTransaction too, except transaction control (BEGIN, COMMIT,
+// ROLLBACK, SAVEPOINT, RELEASE): the budget is about data round trips, and tx.ts adds those on its own (architecture
+// ruling 2026-10-06 (c)). The per-route half walked interfaces/http's route manifest through its Hono server and went
+// with it (P1.20k); the SvelteKit server has no manifest yet, so its routes are not counted until that port lands.
+import { relative } from "node:path";
 import { createPool, type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
-import { loadConfig } from "@unset/shared-config";
-import { createServer, defineRoute } from "@unset/shared-http";
-import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, inject, test } from "vitest";
 
-const BUDGET = 5;
-/** The allowed host and a client behind the trusted proxy, for interfaces in header mode; socket-mode ones ignore it. */
-const CLIENT = { host: "unset.test", "x-forwarded-for": "203.0.113.9" };
-const REPOSITORY = join(import.meta.dirname, "..", "..");
-const INTERFACES = join(REPOSITORY, "interfaces");
-const FIXTURES = join(import.meta.dirname, "query-budget", "fixtures");
-
-type Route = { readonly method: string; readonly path: string };
-type Fixture = {
-  readonly env: Record<string, string>;
-  readonly requests: readonly (Route & { readonly requestPath?: string; readonly status: number })[];
-};
-type Server = { request(request: Request, peer?: string): Promise<Response> };
-
+const REPOSITORY = new URL("../../", import.meta.url).pathname;
 const provided = inject("postgres");
 const database = provided.databases[relative(REPOSITORY, import.meta.filename)] ?? "";
 let statements = 0;
@@ -52,108 +28,7 @@ function countingPool(): Pool {
   return pool;
 }
 
-/** The statements one request runs, and its status. */
-async function measure(server: Server, route: Route): Promise<{ status: number; statements: number }> {
-  statements = 0;
-  const response = await server.request(
-    new Request(`https://unset.test${route.path}`, { method: route.method, headers: CLIENT }),
-    "10.0.0.1",
-  );
-  await response.arrayBuffer();
-  return { status: response.status, statements };
-}
-
-const interfacesWithManifest = (): string[] =>
-  existsSync(INTERFACES)
-    ? readdirSync(INTERFACES).filter((name) => existsSync(join(INTERFACES, name, "routes.manifest.json")))
-    : [];
-const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
-const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
-afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
-/** A fixture's env, with the web server's secret files added (P2.04c); loaded like compose.ts, by path. */
-async function envOf(name: string, fixture: Fixture): Promise<Record<string, string>> {
-  if (name !== "http") return fixture.env;
-  const { legalTestEnv, webSecretEnv } = (await import(join(INTERFACES, "http", "test-env.ts"))) as {
-    legalTestEnv: () => Record<string, string>;
-    webSecretEnv: (dir: string) => Record<string, string>;
-  };
-  return { ...fixture.env, ...legalTestEnv(), ...webSecretEnv(SECRETS), ...webDatabaseEnv() };
-}
-/** Points the web server's own pool at this file's database as `web` (P1.04w): `/health` asks Postgres before 200. */
-function webDatabaseEnv(): Record<string, string> {
-  const passwordFile = join(SECRETS, "pg_web_password");
-  writeFileSync(passwordFile, provided.roles.web.password);
-  return {
-    PG_HOST: provided.host,
-    PG_PORT: String(provided.port),
-    PG_DATABASE: database,
-    PG_USER: provided.roles.web.user,
-    PG_PASSWORD_FILE: passwordFile,
-  };
-}
-
 describe("query budget", () => {
-  test("query_budget_per_route", async () => {
-    const names = interfacesWithManifest();
-    if (existsSync(join(INTERFACES, "http"))) expect(names).toContain("http");
-    for (const name of names) {
-      const manifest = readJson<Route[]>(join(INTERFACES, name, "routes.manifest.json"));
-      const fixturePath = join(FIXTURES, `${name}.json`);
-      expect(existsSync(fixturePath), `no query budget fixture for interfaces/${name}`).toBe(true);
-      const fixture = readJson<Fixture>(fixturePath);
-      const covered = new Set(fixture.requests.map((r) => `${r.method} ${r.path}`));
-      expect(manifest.map((r) => `${r.method} ${r.path}`).filter((key) => !covered.has(key))).toEqual([]);
-
-      const { compose } = (await import(join(INTERFACES, name, "compose.ts"))) as {
-        compose: (cfg: unknown, ...wiring: unknown[]) => Promise<{ server: Server }>;
-      };
-      const { config } = (await import(join(INTERFACES, name, "config.ts"))) as {
-        config: Parameters<typeof loadConfig>[0];
-      };
-      // The web server's composition takes apps/web's render; tests pass the source (P1.23c), never the build.
-      const wiring = name === "http" ? [await import(join(REPOSITORY, "apps", "web", "render.tsx"))] : [];
-      const { server } = await compose(loadConfig(config, await envOf(name, fixture)), ...wiring);
-      for (const request of fixture.requests) {
-        const route = `${name} ${request.method} ${request.path}`;
-        // Keep the manifest's route template for coverage, but send concrete parameters when the handler needs them.
-        const result = await measure(server, { ...request, path: request.requestPath ?? request.path });
-        expect(result.status, route).toBe(request.status);
-        expect(result.statements, route).toBeLessThanOrEqual(BUDGET);
-      }
-    }
-  });
-
-  test("query_budget_counts_statements", async () => {
-    const pool = countingPool();
-    const route = (path: string, count: number) =>
-      defineRoute({
-        method: "GET",
-        path,
-        group: "static",
-        rateLimit: "exempt",
-        session: "none",
-        handler: async () => {
-          await withClient(pool, null, async (client) => {
-            for (let i = 0; i < count; i += 1) await client.query("SELECT 1");
-          });
-          return new Response("ok");
-        },
-      });
-    const fixture = readJson<Fixture>(join(FIXTURES, "http.json"));
-    const { config } = (await import(join(INTERFACES, "http", "config.ts"))) as {
-      config: Parameters<typeof loadConfig>[0];
-    };
-    const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
-    const server = createServer({
-      config: loadConfig(config, await envOf("http", fixture)) as never,
-      routes: [route("/five", BUDGET), route("/six", BUDGET + 1)],
-      policies: {},
-      log,
-    });
-    expect(await measure(server, { method: "GET", path: "/five" })).toEqual({ status: 200, statements: BUDGET });
-    expect((await measure(server, { method: "GET", path: "/six" })).statements).toBeGreaterThan(BUDGET);
-  });
-
   test("query_budget_counts_tx_statements", async () => {
     const pool = countingPool();
     statements = 0;
