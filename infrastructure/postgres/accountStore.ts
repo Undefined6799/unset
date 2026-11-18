@@ -2,8 +2,9 @@
 // at once, a change to active or `deleted` is only a trigger, confirmed against the account's PDS). The getRepoStatus
 // call happens before these calls; each call is one short transaction as `indexer` (rule DA-4).
 //
-// Lock order, as on every path that writes for a DID: the erasure lock (isErased), then the account row FOR UPDATE.
-// An erased DID is never revealed and gets no writes.
+// Lock order: the erasure lock (isErased) first, as on every path that writes for a DID; it serialises everything
+// below for that DID. Then a confirmation locks the account row and then its job row, and a failure locks the job row
+// and then the account row. An erased DID is never revealed and gets no writes.
 //
 // Deletion is confirmed but not yet erased: the indexer has no EXECUTE on core.erase_did until P3.06e (a trusted-base
 // grant, Alex's line). Until then a member who deleted their account at the PDS keeps rows here, hidden from every
@@ -98,7 +99,17 @@ async function confirmStatus(tx: PoolClient, did: string, answer: ConfirmedStatu
      WHERE did = $1 AND NOT pds_active AND pds_status IS DISTINCT FROM 'deleted'`,
     [did],
   );
-  if (rowCount === 0) return count(tx, "account_job_skipped");
+  if (rowCount === 0) {
+    // Held as deleted, yet active now: the deletion is asked about again rather than kept hidden for good, and a
+    // "not deleted" answer clears it (confirmDeletion). Already shown: nothing to do.
+    await tx.query(
+      `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
+       SELECT did, 'confirm_deletion', now(), 0, now() FROM idx.account WHERE did = $1 AND pds_status = 'deleted'
+       ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
+      [did],
+    );
+    return count(tx, "account_job_skipped");
+  }
   await queueJob(tx, did, "backfill");
   await count(tx, "account_confirmed_active");
 }

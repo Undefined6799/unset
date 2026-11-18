@@ -140,6 +140,39 @@ describe("account store", () => {
     expect(lines("SELECT value FROM idx.ingest_stat WHERE name = 'account_deletion_not_confirmed'")).toEqual(["1"]);
   });
 
+  test("account.a_newer_status_during_the_deletion_read_wins", async () => {
+    // The pass reads "gone" for R and Q; before it applies, the stream says R is active again and Q is taken down. The
+    // older answers change nothing: no dead letter, the newer statuses stand, and each job asks afresh.
+    const R = "did:plc:rrrrrrrrrrrrrrrrrrrrrrrr";
+    const Q = "did:plc:qqqqqqqqqqqqqqqqqqqqqqqq";
+    account(R, false, "deleted");
+    account(Q, false, "deleted");
+    const forR = job(R, "confirm_deletion");
+    const forQ = job(Q, "confirm_deletion");
+    await index.apply({ kind: "account", seq: 2, did: R, active: true, status: null });
+    await index.apply({ kind: "account", seq: 3, did: Q, active: false, status: "takendown" });
+    await accounts.confirmed(forR, { kind: "not_found" });
+    await accounts.confirmed(forQ, { kind: "not_found" });
+    expect(state(Q)).toEqual(["f|takendown"]);
+    expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did IN ('${R}', '${Q}')`)).toEqual(["0"]);
+    expect(
+      lines(`SELECT did, due_at <= now() FROM idx.account_job WHERE did IN ('${R}', '${Q}')
+        AND kind = 'confirm_deletion' ORDER BY did`),
+    ).toEqual([`${Q}|t`, `${R}|t`]);
+  });
+
+  test("account.active_after_a_deletion_asks_about_the_deletion_again", async () => {
+    // An account held as deleted that our PDS now calls active is not left hidden for good: the deletion is asked
+    // about again, and a "not deleted" answer clears it.
+    const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
+    account(B, false, "deleted", "confirm_status");
+    await accounts.confirmed(job(B, "confirm_status"), { kind: "active" });
+    expect(jobs(B)).toEqual(["confirm_deletion"]);
+    await accounts.confirmed(job(B, "confirm_deletion"), { kind: "active" });
+    expect(state(B)).toEqual(["f|-"]);
+    expect(jobs(B)).toEqual(["confirm_status"]);
+  });
+
   test("account.erased_did_is_never_revealed", async () => {
     account(E, false, null, "confirm_status");
     await withClient(migrator, null, (c) => c.query("SELECT core.erase_did($1, 'user_request')", [E]));

@@ -266,6 +266,7 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
 async function applyAccount(tx: PoolClient, frame: Extract<IndexFrame, { kind: "account" }>): Promise<void> {
   if (frame.active) {
     await queueJob(tx, frame.did, "confirm_status");
+    await supersedeConfirmations(tx, frame.did);
     return count(tx, "ingest_account_confirm");
   }
   await hideAccount(tx, frame.did, frame.status);
@@ -288,9 +289,19 @@ export async function hideAccount(tx: PoolClient, did: string, status: string | 
   ]);
   const why = status !== null && SESSION_END_REASONS.has(status) ? status : "unknown";
   await tx.query("SELECT app.end_sessions_for_did($1, $2)", [did, why]);
-  // A confirm_status answer read before this hide must not reveal the account: moving its due time breaks the claim
-  // (accountStore.ts), and the job asks again.
-  await tx.query("UPDATE idx.account_job SET due_at = now() WHERE did = $1 AND kind = 'confirm_status'", [did]);
+  await supersedeConfirmations(tx, did);
+}
+
+/**
+ * A status newer than an answer our PDS gave before it must win: a confirm_status read must not reveal a hidden
+ * account, and a confirm_deletion read must not mark deleted an account that came back or changed status. Moving
+ * the jobs' due time breaks their claims (accountStore.ts), and they ask again.
+ */
+async function supersedeConfirmations(tx: PoolClient, did: string): Promise<void> {
+  await tx.query(
+    "UPDATE idx.account_job SET due_at = now() WHERE did = $1 AND kind IN ('confirm_status', 'confirm_deletion')",
+    [did],
+  );
 }
 
 export type JobKind = "handle_check" | "backfill" | "confirm_status" | "confirm_deletion";
