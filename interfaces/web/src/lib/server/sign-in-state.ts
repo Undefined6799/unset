@@ -1,9 +1,12 @@
-// Copied from interfaces/http/routes/sign-in-state.ts for the web process (P1.20e); that copy goes at P1.20k.
+// Ported from interfaces/http/routes/sign-in-state.ts (P1.20e): the same state and cookies, written through SvelteKit's
+// cookies API instead of Set-Cookie strings. The Hono copy goes at P1.20k.
 // The browser state of signing in (plan §2 rule 2; §5.3). What binds a sign-in to the browser that started it: the
 // appState POST /login writes (P2.05) and the callback reads back (P2.06), and the `__Host-oauth_nonce` cookie holding
 // the same P1.16 nonce. The library keeps the appState sealed and single-use in app.oauth_state; the authorization
 // server never sees it. P2.08: the `__Host-signed_out` marker, set at sign-out and cleared at the next sign-in, which
 // makes that sign-in ask the server for its password again (`prompt=login`) rather than reuse its own session.
+
+import type { Cookies } from "@sveltejs/kit";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { type SafePath, safeReturnPath } from "@unset/shared-http";
 
@@ -21,24 +24,29 @@ export type AppState = {
 };
 
 const NONCE = /^[A-Za-z0-9_-]{43}$/;
-const NONCE_COOKIE = "__Host-oauth_nonce";
-/** Lax, so the authorization server's redirect back (a top-level GET from another site) carries the nonce. */
-const NONCE_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Lax";
-const NONCE_TTL_S = 600;
-const SIGNED_OUT_COOKIE = "__Host-signed_out";
-/** The authorization URL waiting for /login/continue (P2.05): Strict, because only our own 303 leads there. */
-const TARGET_COOKIE = "__Host-login_target";
-const TARGET_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
-const TARGET_TTL_S = 120;
-const SIGNED_OUT_TTL_S = 2_592_000;
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+
 /**
- * P2.08b: the issuer origin recorded at sign-in, for the signed-out page's account link. The last browser's sign-out
- * deletes the token set that records it, so POST /logout carries it in this cookie: Strict, because only our own 303
- * leads to /signed-out, and short-lived. Never a query parameter, which any site could link with another origin.
+ * The sign-in cookies, each host-only by its `__Host-` prefix (Secure, Path=/, no Domain; RFC 6265bis §4.1.3.2),
+ * HttpOnly, with the SameSite and Max-Age interfaces/http gives it. Written through SvelteKit's `cookies` API (kit
+ * 3.2.0 src/runtime/server/cookie.js), which serializes these options; values are base64url or "1", which its
+ * encoder leaves unchanged. Read from the raw header (`cookieValue`), because `cookies.get` silently takes the first
+ * of two.
  */
-const ISSUER_COOKIE = "__Host-signed_out_issuer";
-const ISSUER_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
-const ISSUER_TTL_S = 600;
+const COOKIES = {
+  /** The P1.16 nonce. Lax, so the authorization server's redirect back (a top-level GET from another site) carries it. */
+  nonce: { name: "__Host-oauth_nonce", sameSite: "lax", maxAge: 600 },
+  /** P2.08: set at sign-out, cleared at the next sign-in or "No thanks"; makes that sign-in ask for the password. */
+  signedOut: { name: "__Host-signed_out", sameSite: "lax", maxAge: 2_592_000 },
+  /** The authorization URL waiting for /login/continue (P2.05): Strict, because only our own 303 leads there. */
+  target: { name: "__Host-login_target", sameSite: "strict", maxAge: 120 },
+  /**
+   * P2.08b: the issuer origin recorded at sign-in, for the signed-out page's account link. The last browser's sign-out
+   * deletes the token set that records it, so POST /logout carries it here: Strict, because only our own 303 leads to
+   * /signed-out, and short-lived. Never a query parameter, which any site could link with another origin.
+   */
+  issuer: { name: "__Host-signed_out_issuer", sameSite: "strict", maxAge: 600 },
+} as const;
 
 export function appStateOf(state: AppState): string {
   const { nonce, expectedDid, next, silent } = state;
@@ -63,39 +71,46 @@ export function parseAppState(text: string): AppState | null {
   return { nonce, expectedDid: did, next: safeReturnPath(next), silent: silent === true };
 }
 
-export const nonceCookie = (nonce: string): string =>
-  `${NONCE_COOKIE}=${nonce}; ${NONCE_ATTRIBUTES}; Max-Age=${NONCE_TTL_S}`;
-export const clearNonceCookie = (): string => `${NONCE_COOKIE}=; ${NONCE_ATTRIBUTES}; Max-Age=0`;
-export const nonceFromCookies = (header: string | null): string | null => cookieValue(header, NONCE_COOKIE);
+export type SignInCookie = keyof typeof COOKIES;
 
-export const signedOutCookie = (): string => `${SIGNED_OUT_COOKIE}=1; ${NONCE_ATTRIBUTES}; Max-Age=${SIGNED_OUT_TTL_S}`;
-export const clearSignedOutCookie = (): string => `${SIGNED_OUT_COOKIE}=; ${NONCE_ATTRIBUTES}; Max-Age=0`;
+const attributes = (cookie: SignInCookie) =>
+  ({ path: "/", secure: true, httpOnly: true, sameSite: COOKIES[cookie].sameSite }) as const;
 
-export const targetCookie = (target: string): string =>
-  `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; ${TARGET_ATTRIBUTES}; Max-Age=${TARGET_TTL_S}`;
-export const clearTargetCookie = (): string => `${TARGET_COOKIE}=; ${TARGET_ATTRIBUTES}; Max-Age=0`;
+/** Sets `cookie` to `value` (base64url or "1", checked by the caller's own type) for its Max-Age. */
+export function putCookie(cookies: Cookies, cookie: SignInCookie, value: string): void {
+  if (!BASE64URL.test(value)) throw new RangeError(`${COOKIES[cookie].name}: value is not base64url`);
+  cookies.set(COOKIES[cookie].name, value, { ...attributes(cookie), maxAge: COOKIES[cookie].maxAge });
+}
+
+/** Removes `cookie` (Max-Age=0, same attributes). */
+export function dropCookie(cookies: Cookies, cookie: SignInCookie): void {
+  cookies.delete(COOKIES[cookie].name, attributes(cookie));
+}
+
+/** True when the request sent `cookie` at all, valid or not: the page that reads it clears it (single use). */
+export const cookieSent = (header: string | null, cookie: SignInCookie): boolean =>
+  (header ?? "").split(";").some((pair) => pair.trim().startsWith(`${COOKIES[cookie].name}=`));
+
+export const nonceFromCookies = (header: string | null): string | null => cookieValue(header, COOKIES.nonce.name);
+export const signedOutFrom = (header: string | null): boolean => cookieValue(header, COOKIES.signedOut.name) === "1";
+
+export const encodeTarget = (target: string): string => Buffer.from(target).toString("base64url");
 /** The stored target as text, or null when the cookie is missing, doubled or not base64url. */
 export function targetFromCookies(header: string | null): string | null {
-  const encoded = cookieValue(header, TARGET_COOKIE);
-  if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
+  const encoded = cookieValue(header, COOKIES.target.name);
+  if (encoded === null || !BASE64URL.test(encoded)) return null;
   return Buffer.from(encoded, "base64url").toString("utf8");
 }
-export const signedOutFrom = (header: string | null): boolean => cookieValue(header, SIGNED_OUT_COOKIE) === "1";
 
-/** The cookie carrying `origin`, which the caller has already checked with `issuerOrigin`. */
-export const issuerCookie = (origin: string): string =>
-  `${ISSUER_COOKIE}=${Buffer.from(origin).toString("base64url")}; ${ISSUER_ATTRIBUTES}; Max-Age=${ISSUER_TTL_S}`;
-export const clearIssuerCookie = (): string => `${ISSUER_COOKIE}=; ${ISSUER_ATTRIBUTES}; Max-Age=0`;
-/** True when the request sent the issuer cookie at all, valid or not: the page that reads it clears it (single use). */
-export const issuerCookieSent = (header: string | null): boolean =>
-  (header ?? "").split(";").some((pair) => pair.trim().startsWith(`${ISSUER_COOKIE}=`));
+/** `origin`, already checked with `issuerOrigin`, as the issuer cookie carries it. */
+export const encodeIssuer = (origin: string): string => Buffer.from(origin).toString("base64url");
 /**
  * The carried issuer origin, or null when the cookie is missing, doubled, not base64url or not a bare https origin.
  * A refusal is not logged: the value names the user's PDS (architecture 2026-10-19 04:15Z item 3, SE-7).
  */
 export function issuerFromCookies(header: string | null): string | null {
-  const encoded = cookieValue(header, ISSUER_COOKIE);
-  if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
+  const encoded = cookieValue(header, COOKIES.issuer.name);
+  if (encoded === null || !BASE64URL.test(encoded)) return null;
   const carried = Buffer.from(encoded, "base64url").toString("utf8");
   // We only ever write a bare origin, so anything else was not written by us.
   return issuerOrigin(carried) === carried ? carried : null;
