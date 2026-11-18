@@ -8,7 +8,7 @@
 import { type Cookies, error, redirect } from "@sveltejs/kit";
 import type { Did } from "@unset/domains-identity";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
-import type { Session, SessionDb } from "@unset/infrastructure-session";
+import type { Session } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
 import { dropSessionCookie } from "./session.ts";
 import { remainingSessions } from "./session-count.ts";
