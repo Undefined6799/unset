@@ -8,7 +8,7 @@ export const load: ServerLoad = ({ locals, request, setHeaders }) => {
   setHeaders({ "x-robots-tag": "noindex" });
   return {
     shell: settingsShell(locals, request, "/settings/profile"),
-    // FALLBACK until locals carry the gate's privacyNotice (P1.20f): no notice is shown.
-    privacyNotice: false,
+    // The one-time banner after a privacy notice change (P2.12), as the gate decided it.
+    privacyNotice: locals.privacyNotice,
   };
 };
