@@ -68,6 +68,17 @@ test("allowed_forms_pass", () => {
   expect(refusal(PACKAGES, "scripts/a.ts", "hono")).toBe("a package the root package.json does not declare");
 });
 
+test("web_server_takes_only_its_two_build_subpaths", () => {
+  // P1.20k: interfaces/web/server.ts loads its own build through #kit/handler and #kit/manifest (package "imports");
+  // no other file and no other # specifier passes.
+  const server = "interfaces/web/server.ts";
+  expect(refusal(PACKAGES, server, "#kit/handler")).toBeUndefined();
+  expect(refusal(PACKAGES, server, "#kit/manifest")).toBeUndefined();
+  for (const spec of ["#kit/other", "#kit/handler/x", "#kit", "#preflight"])
+    expect(refusal(PACKAGES, server, spec), spec).toBe("a # subpath import");
+  expect(refusal(PACKAGES, "interfaces/web/src/hooks.server.ts", "#kit/handler")).toBe("a # subpath import");
+});
+
 test("root_only_packages_only_in_test_files", () => {
   // P1.28m: a workspace file may use a root-only package only when Vitest would run it as a test.
   expect(TEST_GLOBS).toContain("shared/**/*.test.{ts,tsx,mts,cts}");
@@ -165,4 +176,13 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
   expect(packages.testFile("shared/http/main.test.ts")).toBe(true);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
+});
+
+test("sveltekit_modules_only_in_the_web_process", () => {
+  // ADR 0054: SvelteKit's $app modules are allowed in interfaces/web, by name, and nowhere else.
+  expect(refusal(PACKAGES, "interfaces/web/src/hooks.server.ts", "$app/env")).toBeUndefined();
+  expect(refusal(PACKAGES, "interfaces/web/src/routes/a/+page.svelte", "$app/forms")).toBeUndefined();
+  expect(refusal(PACKAGES, "interfaces/http/a.ts", "$app/env")).toBe("a SvelteKit module outside the web process");
+  expect(refusal(PACKAGES, "interfaces/web/a.ts", "$app/other")).toBe("a malformed package name");
+  expect(refusal(PACKAGES, "interfaces/web/a.ts", "$env/static/private")).toBe("a malformed package name");
 });

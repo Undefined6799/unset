@@ -1,9 +1,8 @@
 // The CSP builder (P1.08): one policy per route group, built from the typed allowlist in sources.ts.
 import { describe, expect, test } from "vitest";
-import type { RouteGroup } from "../routes.ts";
 import { buildCsp } from "./build.ts";
 import { cspOrigins, securityHeaders } from "./headers.ts";
-import { policiesFor } from "./policies.ts";
+import { policiesFor, type RouteGroup } from "./policies.ts";
 import { configOrigin, type Source } from "./sources.ts";
 
 const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "static", "media", "admin", "api"];

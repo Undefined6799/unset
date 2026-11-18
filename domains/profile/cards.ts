@@ -56,7 +56,11 @@ export type CardError =
   | "card.email_invalid"
   | "card.empty"
   | "card.order_invalid";
-export type Failed = { readonly ok: false; readonly code: CardError };
+/**
+ * A refusal; `field`, when one field is to blame, is its path in the editor's input: "text", "title", "heading", or
+ * a row's field such as "items.1.uri" (the row's place in the list as read, blank rows left out).
+ */
+export type Failed = { readonly ok: false; readonly code: CardError; readonly field?: string };
 
 export const NSID = "sh.unset.section";
 /** The most cards a member keeps: the profile's `cards` order holds this many, and the page reads this many. */

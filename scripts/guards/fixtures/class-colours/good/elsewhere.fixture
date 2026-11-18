@@ -1,0 +1,2 @@
+// fixture: shared/http/csp/build.ts findings=0
+export const sample = "bg-[#fff]";

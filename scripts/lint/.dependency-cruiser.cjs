@@ -8,6 +8,12 @@ const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
 const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
+// What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file,
+// the Tailwind entry and the legal texts directly in apps/web/legal/ (read as `?raw` by the legal pages). Not the
+// React UI.
+const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$|legal/[^/]+\\.md$)";
+// Svelte code: the web process and the components it composes. Neither reaches the React UI in shared/ui.
+const SVELTE_UI_FROM = "^(interfaces/web/|apps/web/lib/)";
 
 /** Each vendor SDK is imported in exactly one adapter folder per runtime (guideline §1, O-7). */
 const SDK_ADAPTERS = [
@@ -74,6 +80,13 @@ const RENDER_BUILD_MODULE = "@unset/apps-web/server";
 const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: RENDER_BUILD_MODULE };
 const E2E_SERVER_BUILD = { from: "tests/e2e/fixtures/servers.ts", module: RENDER_BUILD_MODULE };
 const UNRESOLVED_BUILD_IMPORTERS = [RENDER_BUILD_IMPORT.from, E2E_SERVER_BUILD.from];
+/**
+ * The web process's own build (P1.20k): server.ts loads SvelteKit's adapter-node handler and the client manifest
+ * through the package "imports" #kit/handler and #kit/manifest (interfaces/web/package.json), literal so semgrep's
+ * computed-import rule passes. Their targets are under build/, which does not exist when lint runs, so the edges are
+ * unresolved. Only this file, only these two specifiers.
+ */
+const WEB_SERVER_BUILD = { from: "interfaces/web/server.ts", modules: ["#kit/handler", "#kit/manifest"] };
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
@@ -90,7 +103,7 @@ const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|t
 const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin|safe-href)/";
 // The lexicon build scripts and the Node built-ins they may import, each named exactly (P1.31d). Adding one loosens a
 // guard: a check-path PR with an architecture ruling and Alex's typed word.
 const LEXICON_SCRIPTS = "^shared/lexicons/scripts/";
@@ -110,6 +123,15 @@ const ISLAND_NPM_MODULES = ["react/jsx-runtime"];
 const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\\.js)?$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
+// P1.20c (ADR 0055 point 4): the Svelte Icon draws the pinned Iconoir data, read through @unset/shared-ui's
+// "./icons.json" export, because shared/ui's index.ts brings React. It is the only file that may, and only that file.
+const SVELTE_ICON = "^apps/web/lib/components/icon/icon\\.svelte$";
+const ICON_DATA = "^shared/ui/icons/icons\\.json$";
+// P1.20c: stock shadcn-svelte dialog-content.svelte imports its own folder's index.ts, which re-exports it. The only
+// cycle allowed, and only inside that folder.
+const STOCK_DIALOG = "^apps/web/lib/components/ui/dialog/";
+// P1.20c: svelte.config.js exists only for svelte-check to read (nothing imports it), like a vite.config.ts.
+const SVELTE_CHECK_CONFIG = "^apps/web/svelte\\.config\\.js$";
 
 /** The allowlist matrix. Each row: a name, the importing folder, and what it may reach. */
 const MATRIX = [
@@ -118,6 +140,25 @@ const MATRIX = [
     name: "interface",
     from: { path: "^interfaces/([^/]+)/", pathNot: ADMIN_SERVICES },
     to: [{ path: "^interfaces/$1/" }, { path: "^(domains|infrastructure|shared)/" }, CORE, NPM],
+  },
+  {
+    // SvelteKit's own modules ($app/env, $app/forms, ...), which only SvelteKit's Vite plugin resolves (kit 3.2.0
+    // types/index.d.ts declares them, `declare module '$app/env'`).
+    name: "interface-web-sveltekit",
+    from: { path: "^interfaces/web/" },
+    to: [{ path: "^\\$app/[a-z-]+$", couldNotResolve: true }],
+  },
+  {
+    // ADR 0056 Consequences: the web process composes the Svelte components, the theme and the Tailwind entry that
+    // live in apps/web (P1.20c). Only those; never apps/web's React UI, and apps/web never imports interfaces/.
+    name: "interface-web-components",
+    from: { path: "^interfaces/web/" },
+    to: [{ path: WEB_COMPONENTS }],
+  },
+  {
+    name: "interface-web-build",
+    from: { path: oneOfFiles([WEB_SERVER_BUILD.from]) },
+    to: [{ path: oneOfFiles(WEB_SERVER_BUILD.modules), couldNotResolve: true }],
   },
   {
     name: "interface-http-render",
@@ -171,6 +212,10 @@ const MATRIX = [
     to: [{ path: "^shared/lexicons/" }, { ...CORE, path: `^(${LEXICON_SCRIPT_BUILTINS.join("|")})$` }, NPM],
   },
   { name: "shared-ui-lexicons", from: { path: "^(shared/(ui|lexicons)/)" }, to: [{ path: "^$1" }, NPM] },
+  // The link checker (P1.20i; Alex 2026-11-18): a leaf with no dependencies, so the Svelte UI can use it without the
+  // React kit. shared/ui reaches it only through its index and re-exports safeHref, so no React caller changes.
+  { name: "shared-ui-safe-href", from: { path: "^shared/ui/" }, to: [{ path: "^shared/safe-href/index\\.ts$" }] },
+  { name: "shared-safe-href", from: { path: "^(shared/safe-href/)" }, to: [{ path: "^$1" }] },
   // The island runtime (define, props, readProps, slot), its own workspace from P1.25i (P1.25o; book edit
   // 2026-10-07-p125l-islands-lazy-chunks): it ships to the browser, so no Node built-in, and it never imports the
   // kit, which reaches it only through its index.
@@ -214,6 +259,16 @@ const MATRIX = [
   { name: "tooling", from: { path: TOOLING }, to: [{}] },
 ];
 
+// The web process's server-side files (ADR 0056 decision 2): only these may reach a domain or infrastructure.
+const WEB_SERVER_FILES = [
+  "^interfaces/web/server\\.ts$",
+  "^interfaces/web/check\\.ts$",
+  "^interfaces/web/vite\\.config\\.ts$",
+  "^interfaces/web/src/hooks\\.server\\.ts$",
+  "^interfaces/web/src/lib/server/",
+  "^interfaces/web/src/routes/.*\\.server\\.ts$",
+  "^interfaces/web/src/routes/.*\\+server\\.ts$",
+];
 const forbidden = (name, comment, from, to, severity = "error") => ({ name, comment, severity, from, to });
 
 module.exports = {
@@ -234,9 +289,21 @@ module.exports = {
     ),
     forbidden(
       "app-render-entry-only",
-      "From outside apps/, only interfaces/http and interfaces/admin import an app, and only its render entry (guideline §1).",
-      { pathNot: `^apps/|^interfaces/(http|admin)/|${TOOLING}` },
+      "From outside apps/, only interfaces/http, admin and web import an app, each only what its own rule allows (guideline §1).",
+      { pathNot: `^apps/|^interfaces/(http|admin|web)/|${TOOLING}` },
       { path: "^apps/" },
+    ),
+    forbidden(
+      "web-components-only",
+      "interfaces/web imports only apps/web's Svelte components, theme and Tailwind entry (ADR 0056, P1.20c).",
+      { path: "^interfaces/web/" },
+      { path: "^apps/", pathNot: WEB_COMPONENTS },
+    ),
+    forbidden(
+      "svelte-no-react-ui",
+      "The web process and the Svelte components take only icons.json from shared/ui, never its React UI (ADR 0055, P1.20c).",
+      { path: SVELTE_UI_FROM },
+      { path: "^shared/ui/", pathNot: ICON_DATA },
     ),
     forbidden(
       "app-render-entry-only",
@@ -277,8 +344,20 @@ module.exports = {
     forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
-      { pathNot: `^${WORKSPACE_WITH_INDEX}` },
+      { pathNot: [`^${WORKSPACE_WITH_INDEX}`, SVELTE_ICON] },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "The Svelte Icon reaches shared/ only through an index.ts, and shared/ui's icons.json through its package export.",
+      { path: SVELTE_ICON },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET, ICON_DATA] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "Outside shared/ui, icons.json is read through the @unset/shared-ui/icons.json export, never by a path (P1.20c).",
+      { pathNot: "^shared/ui/" },
+      { path: ICON_DATA, dependencyTypes: ["local"] },
     ),
     forbidden(
       "infra-shared-via-index",
@@ -422,11 +501,39 @@ module.exports = {
       {},
       { path: APP_BUILD_CONFIG },
     ),
-    forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
+    forbidden(
+      "svelte-screens-no-core",
+      "In the web process only server files (*.server.ts, hooks.server.ts, server.ts, lib/server/) reach a domain or infrastructure; a screen or universal load never does (ADR 0056 decision 2).",
+      { path: "^interfaces/web/", pathNot: WEB_SERVER_FILES },
+      { path: "^(domains|infrastructure)/" },
+    ),
+    forbidden(
+      "sveltekit-web-only",
+      "Only the web process and its screens import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
+      { pathNot: "^(interfaces/web|apps/web)/" },
+      { path: "^(node_modules/)?(svelte|@sveltejs/[^/]+)(/|$)" },
+    ),
+    forbidden(
+      "no-circular",
+      "No dependency cycles; stock shadcn-svelte's dialog barrel is the one exception (P1.20c).",
+      { pathNot: STOCK_DIALOG },
+      { circular: true },
+    ),
+    forbidden(
+      "no-circular",
+      "A cycle that starts in the stock dialog folder must stay inside it.",
+      { path: STOCK_DIALOG },
+      { circular: true, pathNot: STOCK_DIALOG },
+    ),
     forbidden(
       "no-orphans",
       "A module nothing imports is usually dead code.",
-      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$"] },
+      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054); svelte-check reads
+      // apps/web's svelte.config.js (P1.20c).
+      {
+        orphan: true,
+        pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)", SVELTE_CHECK_CONFIG],
+      },
       {},
       "warn",
     ),
@@ -450,6 +557,8 @@ module.exports = {
         "^(apps|interfaces|domains|infrastructure|shared|deployment|scripts|tests)/.+/((dist|coverage)/)",
         "^scripts/guards/fixtures/",
         "^scripts/lint/semgrep/fixtures/",
+        // SvelteKit's build output and generated types (interfaces/web/.gitignore).
+        "^interfaces/web/(build|\\.svelte-kit)/",
         // The docs site is not product code. Its vendored FlexSearch bundle (and Hugo's
         // public/ and resources/ output) is browser JavaScript; the bundle contains a
         // Node require("worker_threads") that is not an import the matrix governs (P0.09).
@@ -465,6 +574,7 @@ Object.defineProperties(module.exports, {
   RENDER_ENTRIES: { value: RENDER_ENTRIES },
   RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
   E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
+  WEB_SERVER_BUILD: { value: WEB_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
   DOMAIN_ENTRY_FILES: { value: DOMAIN_ENTRY_FILES },

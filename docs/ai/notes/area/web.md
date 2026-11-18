@@ -3,16 +3,21 @@ id: web
 type: area
 status: current
 areas: ["[[web]]"]
-summary: "Hub for apps/web: the public site's pages, page shell and island runtime, rendered by interfaces/http."
-code: [apps/web/render.tsx]
+summary: "Hub for apps/web (Svelte components, theme, profile parsing) and the SvelteKit server in interfaces/web."
+code: [apps/web/lib/profile/parse.ts, interfaces/web/server.ts, interfaces/web/src/hooks.server.ts]
 sources: []
 importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-11-15
+checked: 2026-11-18
 ---
 # web
+
+**P1.20k (2026-11-18).** The React screens, `render.tsx` and the island runtime are deleted. `apps/web/lib` holds
+the Svelte components (stock shadcn-svelte in `lib/components/ui`, ours beside it), `theme.css` and the profile
+parsing; `interfaces/web` is the SvelteKit server that renders them (ADRs 0054 to 0056). The text below describes the
+React UI as it was.
 
 **What it owns.** The screens of unset.sh: the document (`src/document.tsx`) with its head (`src/shell/head.tsx`),
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under

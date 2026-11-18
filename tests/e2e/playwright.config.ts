@@ -5,7 +5,7 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { PROD_ORIGIN, TEST_ORIGIN } from "./pages.ts";
+import { INNER, PROD_ORIGIN, PROXY } from "./pages.ts";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const chrome = { ...devices["Desktop Chrome"] };
@@ -19,7 +19,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
-  // interfaces/http/limits.ts allows 60 requests per IP on the default bucket. One worker stays inside it.
+  // One worker. fixtures/servers.ts names each TLS connection its own client address, so the rate limit
+  // (interfaces/web/src/lib/server/limits.ts) sees each test as its own visitor.
   workers: 1,
   timeout: 60_000,
   reporter: [
@@ -30,6 +31,11 @@ export default defineConfig({
   use: {
     baseURL: PROD_ORIGIN,
     extraHTTPHeaders: { "accept-language": "en" },
+    // Both origins are https://unset.test (pages.ts): the CONNECT proxy reaches them, and their certificate is the
+    // run's own self-signed one (https://playwright.dev/docs/api/class-testoptions#test-options-proxy and
+    // #test-options-ignore-https-errors, 1.64.1).
+    proxy: { server: PROXY },
+    ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
   },
   projects: [
@@ -42,7 +48,7 @@ export default defineConfig({
     {
       command: "node tests/e2e/fixtures/servers.ts prod",
       cwd: root,
-      url: `${PROD_ORIGIN}/health`,
+      url: `http://127.0.0.1:${INNER.prod}/health`,
       // tests/support/postgres.ts waits up to 90s for init. The book's 30s health timeout is shorter than that.
       timeout: 180_000,
       reuseExistingServer: true,
@@ -50,9 +56,8 @@ export default defineConfig({
     {
       command: "node tests/e2e/fixtures/servers.ts test",
       cwd: root,
-      url: `${TEST_ORIGIN}/health`,
-      // The fixture server loads the kit showcase through Vite before it listens.
-      timeout: 120_000,
+      url: `http://127.0.0.1:${INNER.test}/health`,
+      timeout: 180_000,
       reuseExistingServer: true,
     },
   ],

@@ -59,15 +59,11 @@ jobs:
       # Every listed test file outside the images project; image-tests runs the rest (scripts/test/run.ts).
       - run: npm test -- --units
       - run: npm run budgets
-      # P1.23r: the island gates read the production build, so CI builds the web app first.
-      - name: Build the web app
-        run: npm run build -w @unset/apps-web
-      - name: Check the island JS budget
-        run: node scripts/budgets/island.ts apps/web/dist/client
-      - name: Report the island runtime's glue lines (warns above ADR 0015)
-        run: >-
-          node scripts/budgets/count-glue-lines.ts apps/web/src/islands/runtime --config apps/web/vite.config.ts
-          --warn-above docs/human/evidence/0015-web-framework-glue/hono/MEASUREMENTS.json
+      - name: Build the SvelteKit web server
+        run: npm run build -w @unset/interfaces-web
+      # Alex, 2026-11-18T04:18:09Z: 120 KB gzip is a target that warns, never a gate.
+      - name: Report the app page JS (warns above 120 KB gzip)
+        run: node scripts/budgets/app-js.ts interfaces/web/build/client
       - name: Validate .github/renovate.json
         run: >-
           docker run --rm -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator "$RENOVATE_IMAGE"

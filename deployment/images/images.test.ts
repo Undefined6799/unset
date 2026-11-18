@@ -2208,11 +2208,16 @@ describe("runtime stage", () => {
   });
 
   test("prod_image_has_ssr_build_only", () => {
-    expect(dockerfile).toMatch(/^RUN npm run build -w @unset\/apps-web$/m);
-    const web = runtime.filter((line) => line.includes("apps/web"));
-    expect(web).toEqual([
-      "COPY --from=build /app/apps/web/package.json /app/apps/web/package.json",
-      "COPY --from=build /app/apps/web/dist /app/apps/web/dist",
+    // The test-only routes never reach the context, so neither the bundle nor the copied sources hold them.
+    expect(dockerfile).toMatch(/^RUN npm run build -w @unset\/interfaces-web$/m);
+    expect(read("../.dockerignore").split("\n")).toContain("interfaces/web/src/routes/test-routes");
+    expect(runtime.filter((line) => line.includes("apps/web"))).toEqual([]);
+    expect(runtime.filter((line) => line.includes("interfaces/"))).toEqual([
+      "COPY --from=build /app/interfaces/web/package.json /app/interfaces/web/package.json",
+      "COPY --from=build /app/interfaces/web/server.ts /app/interfaces/web/server.ts",
+      "COPY --from=build /app/interfaces/web/src /app/interfaces/web/src",
+      "COPY --from=build /app/interfaces/web/build /app/interfaces/web/build",
+      'ENTRYPOINT ["node", "interfaces/web/server.ts"]',
     ]);
   });
 
@@ -2277,7 +2282,7 @@ describe("runtime stage", () => {
   });
 
   test("runtime_entry_is_the_web_server", () => {
-    expect(runtime).toContain('ENTRYPOINT ["node", "interfaces/http/main.ts"]');
+    expect(runtime).toContain('ENTRYPOINT ["node", "interfaces/web/server.ts"]');
     expect(runtime.some((line) => line.startsWith("HEALTHCHECK ") && line.includes("/health"))).toBe(true);
   });
 });

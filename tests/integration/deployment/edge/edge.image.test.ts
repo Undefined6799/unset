@@ -3,6 +3,7 @@
 // upstream records what got through.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
 import { EDGE } from "./edge-container.ts";
@@ -262,7 +263,7 @@ describe("edge", () => {
     expect(validate.out).toContain("Valid configuration");
   });
 
-  test("edge_timeout_above_every_deadline", { timeout: CONTAINER_MS }, () => {
+  test("edge_timeout_above_every_deadline", { timeout: CONTAINER_MS }, async () => {
     const adapted = edge.exec(["caddy", "adapt", "--config", "/etc/caddy/Caddyfile"]);
     expect(adapted.code, adapted.out).toBe(0);
     // exec returns stdout then stderr: the adapted config is stdout's one line, and stderr holds only the warning
@@ -278,19 +279,26 @@ describe("edge", () => {
       });
     }
     const limits = JSON.parse(readFileSync(join(EDGE, "limits.json"), "utf8"));
-    const manifests = readdirSync(join(REPOSITORY, "interfaces"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => join(REPOSITORY, "interfaces", entry.name, "routes.manifest.json"))
-      .filter((file) => {
-        try {
-          readFileSync(file);
-          return true;
-        } catch {
-          return false;
-        }
-      })
-      .map((file) => ({ file, routes: JSON.parse(readFileSync(file, "utf8")) }));
-    expect(manifests.map((m) => m.file)).toContain(join(REPOSITORY, "interfaces", "http", "routes.manifest.json"));
+    // The web server's routes carry their deadline in the policy.ts beside each route (P1.20k; the Hono server's
+    // routes.manifest.json went with interfaces/http). Read every one, as the build's route table globs them.
+    const routesDir = join(REPOSITORY, "interfaces", "web", "src", "routes");
+    const policyFiles = readdirSync(routesDir, { recursive: true, encoding: "utf8" }).filter(
+      (file) => file === "policy.ts" || file.endsWith("/policy.ts"),
+    );
+    const routes = await Promise.all(
+      policyFiles.map(async (file) => {
+        const { policy } = (await import(pathToFileURL(join(routesDir, file)).href)) as {
+          policy: { deadlineMs?: number };
+        };
+        return {
+          path: `/${file.slice(0, -"policy.ts".length)}`,
+          ...(policy.deadlineMs === undefined ? {} : { deadlineMs: policy.deadlineMs }),
+        };
+      }),
+    );
+    expect(routes.length).toBeGreaterThan(20);
+    expect(routes.some((route) => route.deadlineMs !== undefined)).toBe(true);
+    const manifests = [{ file: "interfaces/web/src/routes", routes }];
     const configTs = readFileSync(join(REPOSITORY, "shared", "http", "config.ts"), "utf8");
     const maxDeadline = Number(
       /REQUEST_DEADLINE_MS: int\(\{[^}]*max: ([\d_]+)/.exec(configTs)?.[1]?.replaceAll("_", ""),

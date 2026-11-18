@@ -97,9 +97,6 @@ test("inventory_registers_the_approved_navigation_extension", () => {
       },
     ],
   });
-  expect(readFileSync(join(UI, "components/Navigation/Navigation.tsx"), "utf8")).toContain(
-    "export type NavigationProps =",
-  );
 });
 
 test("stop_items_doc_exists", () => {

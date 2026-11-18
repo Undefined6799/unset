@@ -9,15 +9,22 @@
       "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.A.NoContent",
       "WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Fail"
     ],
-    "chromeLaunchConfig": { "args": ["--no-sandbox", "--disable-dev-shm-usage"] }
+    "chromeLaunchConfig": {
+      "args": [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--host-resolver-rules=MAP unset.test 127.0.0.1",
+        "--ignore-certificate-errors"
+      ]
+    }
   },
   "urls": [
-    "http://127.0.0.1:8080/",
-    "http://127.0.0.1:8080/legal/terms",
-    "http://127.0.0.1:8080/legal/privacy",
-    "http://127.0.0.1:8080/legal/domains",
-    "http://127.0.0.1:8080/login",
-    "http://127.0.0.1:8080/signed-out",
-    "http://127.0.0.1:8080/welcome/blocked"
+    "https://unset.test:8443/",
+    "https://unset.test:8443/legal/terms",
+    "https://unset.test:8443/legal/privacy",
+    "https://unset.test:8443/legal/domains",
+    "https://unset.test:8443/login",
+    "https://unset.test:8443/signed-out",
+    "https://unset.test:8443/welcome/blocked"
   ]
 }

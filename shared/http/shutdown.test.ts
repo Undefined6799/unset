@@ -4,9 +4,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { connect, createServer as createNetServer } from "node:net";
 import { describe, expect, test } from "vitest";
 
-const SERVER = new URL("./server.ts", import.meta.url).href;
-const ROUTES = new URL("./routes.ts", import.meta.url).href;
-const LOG = new URL("./capture-logger.ts", import.meta.url).href;
+const SHUTDOWN = new URL("./shutdown.ts", import.meta.url).href;
 
 /** A port nothing listens on, so the child's public origin can name it (the host check strips only that port). */
 const freePort = () =>
@@ -22,27 +20,19 @@ async function serve(
   graceMs: number,
 ): Promise<{ child: ChildProcess; port: Promise<number>; exit: Promise<number | null> }> {
   const free = await freePort();
+  // The child wires drain and exitOnSignals around a plain node:http server, as interfaces/web/server.ts does (the
+  // Hono server that used to stand here went with P1.20k).
   const code = `
-    import { createServer } from ${JSON.stringify(SERVER)};
-    import { defineRoute } from ${JSON.stringify(ROUTES)};
-    import { captureLogger } from ${JSON.stringify(LOG)};
-    const route = (path, handler) => defineRoute({ method: "GET", path, group: "app", rateLimit: "p", session: "none", handler });
-    const server = createServer({
-      config: { UNSET_ENV: "test", UNSET_SERVICE: "http", UNSET_COMMIT: "${"c".repeat(40)}", LISTEN_PORT: ${free},
-        PUBLIC_ORIGIN: "http://127.0.0.1:${free}", HTTP_ALLOWED_HOSTS: ["127.0.0.1"], SHUTDOWN_GRACE_MS: ${graceMs},
-        REQUEST_DEADLINE_MS: 30000, TRUSTED_PROXY_MODE: "socket", TRUSTED_PROXY_HEADER: "",
-        TRUSTED_PROXY_CIDRS: [], TRUSTED_PROXY_HOPS: 1,
-        HTTP_BODY_LIMIT_BYTES: 65536, RATE_LIMIT_MAX_KEYS: 100000,
-        MEDIA_ORIGIN: "https://unset-media.test", ASSETS_BASE: "", DEV_VITE_ORIGIN: "" },
-      routes: [
-        route("/slow", () => new Promise((resolve) => setTimeout(() => resolve(new Response("done")), 300))),
-        route("/never", () => new Promise(() => {})),
-      ],
-      policies: { default: [{ capacity: 100, refillPerSec: 10, scope: "ip" }], p: [{ capacity: 100, refillPerSec: 10, scope: "ip" }] },
-      log: captureLogger(),
+    import { createServer } from "node:http";
+    import { drain, exitOnSignals } from ${JSON.stringify(SHUTDOWN)};
+    let inFlight = 0;
+    const server = createServer((request, response) => {
+      inFlight += 1;
+      response.once("close", () => { inFlight -= 1; });
+      if (request.url === "/slow") setTimeout(() => response.end("done"), 300);
     });
-    const port = await server.listen();
-    process.stdout.write(port + "\\n");
+    exitOnSignals(() => drain(server, { graceMs: ${graceMs}, inFlight: () => inFlight, hooks: [] }), (c) => process.exit(c));
+    server.listen(${free}, "127.0.0.1", () => process.stdout.write(${free} + "\\n"));
   `;
   const child = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: ["ignore", "pipe", "inherit"] });
   const port = new Promise<number>((resolve, reject) => {

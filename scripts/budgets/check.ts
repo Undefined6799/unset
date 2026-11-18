@@ -12,21 +12,22 @@ export type Budget = number | { max: number; reason: string };
 /** Plan §4's numbers. A budgets.json entry above its default needs a reason; it only warns without one. */
 const PLAN_DEFAULTS: Readonly<Record<string, number>> = {
   "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/config + shared/errors + shared/i18n + shared/log + shared/http + shared/admin-envelope": 9000,
-  "apps/web + interfaces/http": 7000,
+  // P1.20k: the Svelte UI and the SvelteKit server, .svelte files counted; the stock shadcn-svelte copies in
+  // lib/components/ui are not code we wrote (ADR 0055), as generated code is not.
+  "apps/web + interfaces/web + !apps/web/lib/components/ui": 7000,
   "interfaces/api": 1200,
   "interfaces/indexer": 1500,
   "interfaces/media": 600,
   "interfaces/review": 2500,
   "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
   "infrastructure/net-guard": 400,
-  "shared/ui": 2500,
+  // P1.20k: the design data the apps share (icons, tokens, fonts); its only code is the font-metric types.
+  "shared/ui": 100,
   // The UI build runners, moved out of shared/ui by P1.25h; measured on their own (P1.25w).
   "shared/ui-build": 800,
-  // The island runtime P1.25i moves out of shared/ui: 147 lines today, rounded up and at least 300 (P1.25o).
-  "shared/islands": 300,
 };
 
-const COUNTED = /\.(ts|tsx)$/;
+const COUNTED = /\.(ts|tsx|svelte)$/;
 // Tests, fakes (test doubles; architecture ruling 2026-10-04 23:53Z) and generated code are not module code.
 const NOT_COUNTED = /\.(test|generated)\.[^/]+$|\.fake\.ts$/;
 const NOTICE_SHARE = 0.9;

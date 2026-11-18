@@ -153,3 +153,30 @@ export function withCardOrder(
   if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
   return { ok: true, record };
 }
+
+/** How the avatar is cropped (ADR 0051; the lexicon's avatarShape known values). */
+export type AvatarShape = "round" | "roundedSquare";
+const AVATAR_SHAPES: readonly AvatarShape[] = ["round", "roundedSquare"];
+
+/** A form's shape, or null when it is not one we know (DM-1). */
+export function parseAvatarShape(input: unknown): AvatarShape | null {
+  return AVATAR_SHAPES.find((shape) => shape === input) ?? null;
+}
+
+/** The stored shape: absent or unknown means round (the lexicon's description). */
+export function readAvatarShape(value: unknown): AvatarShape {
+  return parseAvatarShape(storedObject(value).avatarShape) ?? "round";
+}
+
+/** The profile record with its avatar shape set; every other field is kept, as toProfileRecord keeps it. */
+export function withAvatarShape(
+  shape: AvatarShape,
+  existing: unknown,
+  now: string,
+): { readonly ok: true; readonly record: ProfileRecord } | { readonly ok: false; readonly code: ProfileError } {
+  const built = toProfileRecord({}, existing, now);
+  if (!built.ok) return built;
+  const record: ProfileRecord = { ...built.record, avatarShape: shape };
+  if (!validateRecord("sh.unset.profile", record, "read").ok) return { ok: false, code: "profile.invalid" };
+  return { ok: true, record };
+}

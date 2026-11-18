@@ -1,0 +1,12 @@
+{
+  "extends": "$app/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "*.ts", ".svelte-kit/types/**/*.d.ts"],
+  "exclude": ["build", "dist", ".svelte-kit/output"]
+}

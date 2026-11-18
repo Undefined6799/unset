@@ -96,10 +96,14 @@ async function scanInterface(root: string, name: string, out: RoutePolicyScan): 
   }
 }
 
-/** Every interface with a manifest; none at all fails (AB-4). Findings fail the guard; warnings do not (P1.06p). */
+/**
+ * Every interface with a manifest. Findings fail the guard; warnings do not (P1.06p). Until P1.20k none at all failed
+ * (AB-4); the SvelteKit web server has no manifest, and each of its routes names its policy in a policy.ts whose
+ * `limit` is typed as a key of its limits.ts (interfaces/web/src/lib/server/policy.ts), with
+ * tests/integration/web/gate.test.ts every_route_has_a_policy checking that every route folder has one.
+ */
 export async function scanRoutePolicy(root: string): Promise<RoutePolicyScan> {
   const names = interfacesWithManifest(root);
-  if (names.length === 0) return { findings: [finding("interfaces", `no ${MANIFEST} found`)], warnings: [] };
   const out: RoutePolicyScan = { findings: [], warnings: [] };
   for (const name of names) await scanInterface(root, name, out);
   return out;

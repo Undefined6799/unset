@@ -1,0 +1,2 @@
+/* fixture: interfaces/web/src/routes/me/CardList.svelte findings=1 */
+<ul {...rest} class={cn("flex", extra)}></ul>

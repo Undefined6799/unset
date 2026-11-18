@@ -3,16 +3,21 @@ id: http
 type: area
 status: current
 areas: ["[[http]]"]
-summary: "Hub for the web server process (interfaces/http) and the server kit in shared/http that every server uses."
-code: [interfaces/http/compose.ts, shared/http/index.ts]
+summary: "Hub for the server kit in shared/http; the Hono web server in interfaces/http was deleted in P1.20k."
+code: [shared/http/index.ts]
 sources: []
 importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]", "[[profile]]", "[[session]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-11-16
+checked: 2026-11-18
 ---
 # http
+
+**P1.20k (2026-11-18).** `interfaces/http`, its Hono server in `shared/http/server.ts` and the CSRF gate in
+`shared/http/csrf/` are deleted; SvelteKit in `interfaces/web` is the web server (see [[web]]). What `shared/http`
+still gives it: the config fragment, the security header sets, the rate limiter, the return-path check, the trusted
+proxy resolver, `/health` and the drain. The text below describes the Hono server as it was.
 
 Two folders share this hub: `interfaces/http`, the web server for unset.sh, and `shared/http`, the server kit that
 all six servers are built from.

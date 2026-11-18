@@ -1,0 +1,4 @@
+/* fixture: apps/web/lib/components/profile/good.svelte findings=0 */
+<div class="bg-background text-foreground/80 border-border ring-ring/50 aria-[current=page]:text-foreground"></div>
+<div class="grid md:grid-cols-[200px_minmax(0,560px)] [&>h1]:mt-0 w-[calc(100%-2rem)] bg-(--sidebar)"></div>
+<a href="/x#top" class="underline">#top</a>

@@ -1,0 +1,5 @@
+// fixture: apps/web/lib/components/ui/dialog/dialog-content.svelte findings=1
+<script lang="ts">
+  import XIcon from "@lucide/svelte/icons/x";
+</script>
+<XIcon />

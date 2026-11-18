@@ -3,11 +3,7 @@
   "compilerOptions": {
     "composite": true,
     "rootDir": ".",
-    "outDir": "dist",
-    "lib": ["es2025", "dom"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "outDir": "dist"
   },
-  "references": [{ "path": "../islands" }],
-  "include": ["**/*.ts", "**/*.tsx", "icons/icons.json"]
+  "include": ["**/*.ts", "icons/icons.json"]
 }

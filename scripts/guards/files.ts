@@ -10,10 +10,14 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
   "coverage",
   ".worktrees",
   "graphify-out",
+  // SvelteKit's build output and generated files (interfaces/web/.gitignore).
+  "interfaces/web/build",
+  "interfaces/web/.svelte-kit",
   "scripts/guards/fixtures",
   "scripts/lint/semgrep/fixtures",
 ]);
-const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
+// .svelte too (P1.20k; independent review H2): the web UI is written in it, so every source guard reads it.
+const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|svelte)$/;
 
 /** The decision-34 folders that hold code a guard reads. */
 export const PRODUCT_DIRS = [
