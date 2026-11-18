@@ -22,7 +22,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -91,7 +91,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -104,7 +104,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -159,7 +159,7 @@
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
