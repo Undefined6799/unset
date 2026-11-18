@@ -4620,6 +4620,28 @@ route.
 
 ---
 
+### P1.20a–P1.20k — Move the web process to SvelteKit (added steps, 2026-11-18)
+
+**Tags:** [SEC] · **Depends on:** ADRs 0054, 0055, 0056 accepted (P1.20a) · **Plan:** §5.1, §6.1
+
+Alex chose on 2026-11-17 and 2026-11-18 to move the web process from Hono and React to SvelteKit with Svelte 5 and
+shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/routes.manifest.json`). Proof:
+`/mnt/project-files/svelte-plan/sveltekit-parity.md`. One PR per step, in this order:
+- P1.20a ADRs 0054, 0055, 0056 and these steps.
+- P1.20b `interfaces/web` scaffold: `server.ts`, `hooks.server.ts`, route table, config from the compose config,
+  parity tests on the build, dependency-matrix row, guard against prerendered pages and proof-only routes.
+- P1.20c Theme file and the shadcn-svelte components today's screens need, with Iconoir icons.
+- P1.20d Public pages: home, legal, security.txt, health, assets.
+- P1.20e Sign-in and sign-out, cookies matching today's on the wire (Max-Age, the two SameSite=Strict cookies).
+- P1.20f Welcome steps, verify-email and reconsent.
+- P1.20g /me, /:did, /did and the theme preference.
+- P1.20h Settings pages and the profile save.
+- P1.20i Profile cards as form actions, and the README editor.
+- P1.20j Switch-over: image, compose, edge and the scheduled sweeps; staging on Alex's word.
+- P1.20k Delete the React UI, `interfaces/http`, Hono and their packages.
+
+---
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS

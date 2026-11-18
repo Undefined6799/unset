@@ -1,0 +1,2 @@
+// fixture: interfaces/web/src/routes/about/+page.ts findings=0
+export const csr = false;

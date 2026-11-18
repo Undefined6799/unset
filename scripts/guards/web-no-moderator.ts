@@ -6,7 +6,7 @@ import { type Finding, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from
 
 const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "web-no-moderator";
-const WEB_PREFIXES = ["apps/web/", "interfaces/http/"];
+const WEB_PREFIXES = ["apps/web/", "interfaces/http/", "interfaces/web/"];
 
 const MODERATOR_PATH = /^\/(admin|mod|moderat\w*|staff|ops|internal)(\/|$)/;
 const ADMIN_MODULE = /^@unset\/admin(\/|$)|^@simplewebauthn\/|(^|\/)(apps|interfaces)\/admin(\/|$)/;

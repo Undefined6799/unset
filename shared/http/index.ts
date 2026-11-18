@@ -1,8 +1,11 @@
 // The server kit (plan §5.1). P1.04k: the server, routes, config fragment and errors. P1.09: the return-path
 // validator, the only way a redirect target is chosen from input. P1.06: body limits and the rate-limit primitive.
+
+export type { ClientIp } from "./clientIp.ts";
 export { type HttpKitConfig, hostAllowed, httpKitConfig } from "./config.ts";
+export { type HeaderSet, headerSets } from "./csp/headers.ts";
 export { type ErrorPage, errorResponse, groupForPath, type PageGroup } from "./errors.ts";
-export type { Readiness } from "./health.ts";
+export { createHealth, type HealthState, type Readiness } from "./health.ts";
 export { definePolicies, type Policy, type PolicyEntry, type PolicyName, type PolicyTable } from "./limits/policy.ts";
 export { createRateLimiter, type RateLimiter } from "./limits/rateLimit.ts";
 export { DENIED_TARGETS, type SafePath, safeReturnPath } from "./returnPath.ts";
@@ -25,4 +28,5 @@ export {
   type ServerOptions,
   type SessionGate,
 } from "./server.ts";
-export type { CloseHook } from "./shutdown.ts";
+export { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
+export { createClientIpResolver, type ProxySettings } from "./trustedProxy.ts";

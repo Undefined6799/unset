@@ -133,6 +133,7 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
+  "interface-web-sveltekit": [{ from: "interfaces/web/src/hooks.server.ts", spec: "$app/env", unresolved: true }],
   "interface-http-render-build": [
     {
       from: config.RENDER_BUILD_IMPORT.from,

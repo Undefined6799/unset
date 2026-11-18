@@ -19,6 +19,7 @@ import * as pageClasses from "./page-classes.ts";
 import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
+import * as webPrerender from "./web-prerender.ts";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
 const HEADER = /^(?:\/\/|--|\/\*)\s*fixture:\s*(\S+)\s+findings=(\d+)\s*(?:\*\/)?\s*$/;
@@ -28,6 +29,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "inner-html": innerHtml.scanAll,
   "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
+  "web-prerender": webPrerender.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
@@ -199,6 +201,13 @@ describe("inner-html", () => {
       1,
     );
   });
+});
+
+describe("web-prerender", () => {
+  test("web_prerender_page_export", () => expectFixtures("web-prerender", "bad", ["page.fixture"]));
+  test("web_prerender_config_entry", () => expectFixtures("web-prerender", "bad", ["config.fixture"]));
+  test("web_prerender_proof_route", () => expectFixtures("web-prerender", "bad", ["proof.fixture"]));
+  test("web_prerender_good_fixture", () => expectFixtures("web-prerender", "good"));
 });
 
 describe("web-no-moderator", () => {

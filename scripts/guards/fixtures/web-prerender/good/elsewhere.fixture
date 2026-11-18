@@ -1,0 +1,2 @@
+// fixture: apps/web/src/x.ts findings=0
+export const prerender = true;

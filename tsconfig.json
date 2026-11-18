@@ -15,6 +15,7 @@
     { "path": "infrastructure/session" },
     { "path": "infrastructure/storage" },
     { "path": "interfaces/http" },
+    { "path": "interfaces/web" },
     { "path": "shared/config" },
     { "path": "shared/errors" },
     { "path": "shared/host-pin" },
