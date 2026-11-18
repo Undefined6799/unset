@@ -59,7 +59,7 @@ function nextDid(): Did {
 }
 
 /** A signed-in browser for a new member, its session carrying our PDS's origin; returns the DID and the cookie. */
-async function signedIn(did: Did = nextDid()): Promise<{ did: Did; cookie: string }> {
+async function signedIn(did: Did = nextDid(), issuerOrigin: string = ISSUER): Promise<{ did: Did; cookie: string }> {
   const dpopJwk = {
     ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
     kid: "dpop",
@@ -77,7 +77,7 @@ async function signedIn(did: Did = nextDid()): Promise<{ did: Did; cookie: strin
       token_type: "DPoP",
     },
   });
-  const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin: ISSUER }));
+  const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin }));
   return { did, cookie: `__Host-sid=${created.cookieValue}` };
 }
 
@@ -191,6 +191,18 @@ describe("GET /settings/account", () => {
     const html = await (await get("/settings/account", cookie)).text();
     expect(elements(parse(html), "dd").map(textContent)).toEqual(["handle.invalid", UNREACHABLE]);
     expect(html).toContain("We could not check your handle just now");
+  });
+
+  test("a_stored_origin_the_gate_refuses_hides_the_link_and_is_never_replaced", async () => {
+    // The column's CHECK admits an address literal; the gate's re-check (sessionIssuerOrigin) does not, and the page
+    // then shows no link rather than reading the token set, whose issuer is our PDS.
+    for (const stored of ["https://127.0.0.1", "https://localhost"]) {
+      const { cookie } = await signedIn(nextDid(), stored);
+      const html = await (await get("/settings/account", cookie)).text();
+      expect(html).not.toContain("pds.unset.test/account");
+      expect(html).not.toContain(stored);
+      expect(html).toContain("/logout");
+    }
   });
 
   test("settings_account_offers_sign_out_everywhere", async () => {
