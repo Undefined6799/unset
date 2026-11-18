@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@atproto/sync": "0.4.24",
-    "@atproto/xrpc-server": "0.13.10"
+    "@atproto/xrpc-server": "0.13.10",
+    "@unset/shared-lexicons": "*"
   },
   "devDependencies": {
     "@atproto/crypto": "0.5.7",
