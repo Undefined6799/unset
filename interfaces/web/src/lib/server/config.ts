@@ -13,6 +13,7 @@ import {
   HOSTNAME,
   int,
   netGuardFields,
+  oneOf,
   str,
   url,
   withRule,
@@ -57,6 +58,17 @@ const pdsConfig = {
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
 };
 
+/** Onboarding and the email gate (interfaces/http/config.ts `loginConfig`, P2.11, P2.12; ranges and reasons there). */
+const onboardingConfig = {
+  /** How long a confirmed-email cache is trusted before the PDS is asked again; past 4 × it a transient recheck shows
+   * the PDS-unavailable page (P2.11d). At most 900, because it also bounds the revoked-grant window. */
+  EMAIL_RECHECK_S: int({ min: 60, max: 900, default: 900 }),
+  /** Full years before an account may continue (plan §6). Never below 16. */
+  MIN_AGE: int({ min: 16, max: 120, default: 16 }),
+  /** When on, the terms step requires the invite-country checkbox (plan §6). */
+  INVITE_COUNTRY_RULE: oneOf(["on", "off"], { default: "on" }),
+};
+
 /** Our PDS's issuer, from PDS_HOSTNAME, with no switch to widen it (interfaces/http/config.ts `pdsIssuerOf`). */
 export const pdsIssuerOf = (cfg: { PDS_HOSTNAME: string; OAUTH_ALLOW_HTTP: boolean }): string =>
   `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
@@ -80,6 +92,7 @@ export const schema = defineEntrypointConfig({
   ...identityConfig,
   ...oauthFields,
   ...pdsConfig,
+  ...onboardingConfig,
   ...legalConfig,
   ...testRoutesConfig,
 });

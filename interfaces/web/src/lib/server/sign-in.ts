@@ -11,9 +11,9 @@ import { authorize } from "@unset/infrastructure-pds";
 import { PURPOSES, withClient } from "@unset/infrastructure-postgres";
 import { type ErrorCode, withErrorParam } from "@unset/shared-errors";
 import { type SafePath, safeReturnPath } from "@unset/shared-http";
+import { type HrefScheme, type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
-import { type HrefScheme, type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { appStateOf, putCookie, signedOutFrom, targetFromCookies } from "./sign-in-state.ts";
 
 /** Where the authorization server is chosen from: a handle or DID, or our PDS's own sign-in page. */
@@ -40,7 +40,7 @@ export function back(code: ErrorCode, next: SafePath | null): never {
 /** The authorization URL for `input`, as a link of an allowed kind, or the code the sign-in form shows. */
 export async function authorizationTarget(
   input: string,
-  options: { appState: string; prompt?: "login" | "none"; deadline: AbortSignal },
+  options: { appState: string; prompt?: "login" | "none" | "consent"; deadline: AbortSignal },
 ): Promise<AuthorizationTarget> {
   const { oauth, pdsIssuer, log } = services();
   const result = await authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log });

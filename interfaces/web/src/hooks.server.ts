@@ -10,6 +10,7 @@ import { isRedirect, type RequestEvent, redirect } from "@sveltejs/kit";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
 import { type ClientIp, createClientIpResolver } from "@unset/shared-http";
 import { building, dev } from "$app/env";
+import { openApp } from "./lib/server/app-gate.ts";
 import { services, startServices } from "./lib/server/compose.ts";
 import { narrowed, zeroScriptCsp } from "./lib/server/csp.ts";
 import type { PolicyName } from "./lib/server/limits.ts";
@@ -72,7 +73,7 @@ function returnPathOf(routeId: string, policy: RoutePolicy): string | null {
   return policy.returnTo ?? (path.includes("[") ? null : path);
 }
 
-/** The session part of the gate: who is asking, what a signed-out request gets, and the member's own buckets. */
+/** The session part of the gate: who is asking, what a signed-out request gets, the app gate, the member's buckets. */
 async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline: AbortSignal) {
   // A page that runs no script and needs no member reads no session: its bytes never depend on a cookie, and a stale
   // cookie is not cleared there (interfaces/http's public group reads none either).
@@ -80,19 +81,33 @@ async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline
   const session = reads ? await sessionOf(event, deadline) : undefined;
   const did = session?.did;
   event.locals.issuerOrigin = sessionIssuerOrigin(session);
-  const needed = policy.session === "required" || (policy.session === "writes" && !isRead(event.request));
-  if (did === undefined) {
+  event.locals.privacyNotice = false;
+  const needed =
+    policy.session === "required" ||
+    policy.session === "onboarding" ||
+    (policy.session === "writes" && !isRead(event.request));
+  // The page sign-in returns to: its own route id with no parameter, else the policy's fixed returnTo.
+  const next = () => {
+    const path = returnPathOf(event.route.id ?? "", policy);
+    if (path === null) throw new Error("gate: a session route with a parameter names no returnTo");
+    return path;
+  };
+  if (session === undefined) {
     if (!needed) return { did };
     // A visitor, or a member whose session ended mid-edit, goes to sign-in and back, as interfaces/http does; a form
     // action enhanced by the client gets the same redirect as JSON (kit respond.js `action_json_redirect`).
-    const next = returnPathOf(event.route.id ?? "", policy);
-    if (next === null) throw new Error("gate: a session route with a parameter names no returnTo");
     // SvelteKit's redirect keeps the cookie changes (a cleared stale cookie) and answers a client-side navigation
     // (__data.json) in the form its client expects (kit respond.js).
-    redirect(303, next === "/" ? "/login" : `/login?${new URLSearchParams({ next })}`);
+    const back = next();
+    redirect(303, back === "/" ? "/login" : `/login?${new URLSearchParams({ next: back })}`);
   }
   if (policy.session === undefined || policy.probe) return { did };
-  return { did, refused: limited(limitOf(event.request, policy), { did }) };
+  // The member's bucket first, so a refused request costs no account read and no PDS call.
+  const refused = limited(limitOf(event.request, policy), { did: session.did });
+  if (refused || policy.session === "onboarding") return { did, refused };
+  const gate = { cookies: event.cookies, deadline, deadlineAt: event.locals.deadlineAt };
+  event.locals.privacyNotice = (await openApp(gate, session, next())).privacyNotice;
+  return { did };
 }
 
 /** The gate, in order; a Response means the request stops there. */

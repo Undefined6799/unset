@@ -13,6 +13,7 @@
     "@unset/apps-web": "*",
     "@unset/domains-identity": "*",
     "@unset/domains-profile": "*",
+    "@unset/infrastructure-audit": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/infrastructure-pds": "*",
     "@unset/infrastructure-postgres": "*",

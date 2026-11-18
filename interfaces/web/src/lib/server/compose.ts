@@ -5,12 +5,22 @@
 // P1.20e: the OAuth client and what stands on it, as interfaces/http/compose.ts `composeOAuth` builds them (P2.04c,
 // P1.36y, P2.13): the lock pool, the sealer, net-guard, the identity network, the handle check, the PDS call, the
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
-import { createDidResolver, createHandleVerifier, type Did, type IdentityNetwork } from "@unset/domains-identity";
+import {
+  type AccountRepository,
+  createDidResolver,
+  createHandleVerifier,
+  type Did,
+  type IdentityNetwork,
+  type OnboardingVersions,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import { createIdentityNetwork, createOAuthClient, createPdsCall, type SavedSession } from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
+  createAccountRepository,
   createLockPool,
   createOAuthSessionStore,
   createOAuthStateStore,
@@ -27,7 +37,9 @@ import { createSealer } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionLimits, type SessionStore } from "@unset/infrastructure-session";
 import { createHealth, createRateLimiter, type RateLimiter } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
+import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
+import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
@@ -81,6 +93,14 @@ export type Services = {
   readonly pds: ReturnType<typeof createPdsCall>;
   /** Our PDS's issuer: the only one whose accounts sign in (P1.36v). */
   readonly pdsIssuer: string;
+  /** Onboarding state per account (P2.12): age, terms, chat, and the under-age block with its audit row. */
+  readonly accounts: AccountRepository;
+  /** The terms and privacy versions this build shows (domains/identity legal/versions.ts). */
+  readonly versions: OnboardingVersions;
+  /** The email gate's PDS recheck and its hold (email-refresh.ts). */
+  readonly email: EmailRefresher;
+  /** Caches the member's email answer on this browser's session row. */
+  readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
 };
 
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
@@ -184,6 +204,15 @@ async function build(): Promise<Services> {
     log,
   });
   const nonces = createSingleUseStore({ log });
+  const accounts = createAccountRepository(pool, { recordUnderageBlock });
+  const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
+    withTransaction(pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
+  // `deadlineAt` is the request's own, on the monotonic clock: pdsCall retries a read only while it fits (P2.07a).
+  const email = emailRefresher({
+    sessionInfo: (did, deadline, deadlineAt) => pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
+    setEmailConfirmed,
+    now: () => performance.now(),
+  });
   // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
   const stopSweeps = startSweeps({
     sweeps: [
@@ -230,6 +259,10 @@ async function build(): Promise<Services> {
     nonces,
     pds,
     pdsIssuer,
+    accounts,
+    versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
+    email,
+    setEmailConfirmed,
   };
 }
 

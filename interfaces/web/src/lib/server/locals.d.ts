@@ -13,6 +13,11 @@ declare global {
        * undefined for a visitor or a session made before the column (then `services().issuerOf` reads the token set).
        */
       issuerOrigin: string | null | undefined;
+      /**
+       * The one-time privacy banner (P2.12): true when the app gate let a member through whose accepted privacy
+       * version is older than this build's. False for a visitor and on pages the gate does not run.
+       */
+      privacyNotice: boolean;
       reqId: string;
       /** The request's deadline; every load and action passes it to each call it makes (rule RE-1). */
       deadline: AbortSignal;
