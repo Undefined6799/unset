@@ -87,7 +87,7 @@ test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page
   await page.setViewportSize({ width: 1600, height: 900 });
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   const menu = await page.locator('header button[popovertarget="core-menu"]').boundingBox();
-  const avatar = await page.getByRole("link", { name: "Change profile picture" }).boundingBox();
+  const avatar = await page.getByRole("link", { name: "Change picture shape" }).boundingBox();
   expect(Math.abs((avatar?.x ?? -99) - (menu?.x ?? 99))).toBeLessThanOrEqual(2);
 });
 
@@ -95,7 +95,7 @@ test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page
 test("the_owner_sets_the_avatar_shape_from_the_avatar", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  const avatar = page.getByRole("link", { name: "Change profile picture" });
+  const avatar = page.getByRole("link", { name: "Change picture shape" });
   const dialog = page.getByRole("dialog");
   const choose = async (shape: string) => {
     await avatar.click();

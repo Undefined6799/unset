@@ -47,7 +47,11 @@
     "explore": "compass",
     "saved": "bookmark",
     "help": "help-circle",
-    "link": "link"
+    "link": "link",
+    "list": "list",
+    "carousel": "view-columns-3",
+    "half": "view-columns-2",
+    "full": "square"
   },
   "icons": {
     "next": "cf13159505df944c66c9d36838508dcd58106fe0d776702aeaf08dd91553eb3f",
@@ -95,7 +99,11 @@
     "explore": "51d65a1ceacf42183deaa35e9abd70ccecb612c2fae86c455087b30c2129525a",
     "saved": "e582657a5c6400dee89274301435c6be37e66c93c27ae6ef55c788c9caef2ac1",
     "help": "3206fbecd152d26eb60d292d4a2ab3b1bad4da074f29d3d2879d076d1f30258b",
-    "link": "84a5b6ae115d7afff785889a88d98a4615951a30f15984fb7b4e1644b8e8faed"
+    "link": "84a5b6ae115d7afff785889a88d98a4615951a30f15984fb7b4e1644b8e8faed",
+    "list": "503708f73587ae9feba442c9f041f2b76698be15dcd5a70dce3c92ab46740a8a",
+    "carousel": "539283b1a0e38496bedb622f2712bde11cb762dca766681e0f28b25716cf3aa5",
+    "half": "c5e5ba9e8e23370cf7b75409284daa4f8f787c63bad87decd7aeda558415a6ec",
+    "full": "a0b8935e8da87d0a92a6f8f45303163de0f39773662dc3da20dc10ca2e8ddff8"
   },
   "drawings": {
     "next": [
@@ -773,11 +781,71 @@
         "strokeLinecap": "round",
         "strokeLinejoin": "round"
       }
+    ],
+    "list": [
+      {
+        "d": "M8 6L20 6",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 6.01L4.01 5.99889",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 12.01L4.01 11.9989",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M4 18.01L4.01 17.9989",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M8 12L20 12",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      },
+      {
+        "d": "M8 18L20 18",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
+    ],
+    "carousel": [
+      {
+        "d": "M9 3H3.6C3.26863 3 3 3.26863 3 3.6V20.4C3 20.7314 3.26863 21 3.6 21H9M9 3V21M9 3H15M9 21H15M15 3H20.4C20.7314 3 21 3.26863 21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H15M15 3V21",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      }
+    ],
+    "half": [
+      {
+        "d": "M12 3H20.4C20.7314 3 21 3.26863 21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H12M12 3H3.6C3.26863 3 3 3.26863 3 3.6V20.4C3 20.7314 3.26863 21 3.6 21H12M12 3V21",
+        "stroke": "currentColor",
+        "strokeWidth": "1.5"
+      }
+    ],
+    "full": [
+      {
+        "d": "M21 3.6V20.4C21 20.7314 20.7314 21 20.4 21H3.6C3.26863 21 3 20.7314 3 20.4V3.6C3 3.26863 3.26863 3 3.6 3H20.4C20.7314 3 21 3.26863 21 3.6Z",
+        "stroke": "currentColor",
+        "strokeLinecap": "round",
+        "strokeLinejoin": "round"
+      }
     ]
   },
   "extensionProvenance": {
     "path": "approved-extensions.json",
-    "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071",
+    "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6",
     "designApproval": {
       "by": "Alex",
       "date": "2026-10-18",

@@ -198,10 +198,22 @@ describe("workflows", () => {
   // marking a PR ready fires `ready_for_review`, which runs only when listed in `types` (events-that-trigger-workflows.md).
   const prWorkflows = workflowFiles.filter((f) => /^ {2}pull_request:/m.test(readFileSync(join(WORKFLOWS, f), "utf8")));
 
+  // P0.07l (Alex 2026-11-18 11:38Z): only the cheap checks also run on drafts: ci.yml's `code` job (typecheck,
+  // lint, guards, unit tests) and pr-shape. Every other job still waits for ready.
+  const DRAFT_JOBS = new Set(["ci.yml code", "pr-shape.yml pr-shape"]);
+
   test.each(prWorkflows)("draft_pr_skips_jobs %s", (file) => {
     for (const [id, lines] of jobs(code(readFileSync(join(WORKFLOWS, file), "utf8")))) {
+      if (DRAFT_JOBS.has(`${file} ${id}`)) continue;
       const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
       expect(condition, `${file} job ${id}`).toContain("github.event.pull_request.draft == false");
+    }
+  });
+
+  test("draft_jobs_listed_exist", () => {
+    for (const entry of DRAFT_JOBS) {
+      const [file = "", id = ""] = entry.split(" ");
+      expect(jobs(code(readFileSync(join(WORKFLOWS, file), "utf8"))).has(id), entry).toBe(true);
     }
   });
 
@@ -213,9 +225,14 @@ describe("workflows", () => {
   test("main_push_unchanged", () => {
     expect(ci).toMatch(/^ {2}push:\n {4}branches: \[main\]$/m);
     // Every ci.yml job runs on any event that is not a pull request, so a push to main still runs everything. The
-    // check gate (P0.07d) adds always() in front, so it also runs when a need failed.
+    // check gate (P0.07d) adds always() in front, so it also runs when a need failed. The code job has no if at all
+    // (P0.07l), so it runs on every event.
     for (const [id, lines] of jobs(code(ci))) {
       const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
+      if (id === "code") {
+        expect(condition, "ci.yml job code").toBe("");
+        continue;
+      }
       const gate =
         id === "check" ? /^ {4}if: always\(\) && \(github\.event_name != 'pull_request' \|\| [^)]*\)$/ : null;
       expect(condition, `ci.yml job ${id}`).toMatch(gate ?? /^ {4}if: github\.event_name != 'pull_request' \|\| /);

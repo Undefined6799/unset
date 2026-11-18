@@ -1,7 +1,7 @@
 <!--
   Icon (P1.20c; decision 33, ADR 0055 point 4): one of our Iconoir 7.12.1 icons, drawn inline from the copied, pinned
-  data in shared/ui/icons/icons.json, as the React Icon in shared/ui/components/Icon/Icon.tsx draws it. The drawing is
-  always aria-hidden; meaning comes from a word beside it or from `label`, a visually hidden span (never role="img").
+  data in shared/ui/icons/icons.json, as the React Icon (gone at P1.20k) drew it. The drawing is always aria-hidden;
+  meaning comes from a word beside it or from `label`, a visually hidden span (never role="img").
   `class` passes through so a shadcn-svelte component's own size and colour classes still apply.
 -->
 <script lang="ts" module>

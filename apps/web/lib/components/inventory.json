@@ -106,18 +106,6 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
-    "checkbox": {
-      "checkbox.svelte": {
-        "sha256": "00d655082458f50290c893f06db89af8dfc9610b09bd8a71fe75af4da5452e08",
-        "registrySha256": "583f00017e06117e4478eb1fcd0b2c5a149eb77ec028f382c78a74101a24fbe2",
-        "change": "Lucide check and minus swapped for our Icon done and remove (ADR 0055 point 4). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "index.ts": {
-        "sha256": "6ebbd361c8c128576a8c6a8ef75b898a7dfe841e45ada987df0be0ea9d469de3",
-        "registrySha256": "39b322ab4a26c63f60c64588ff4b18552c8b596e8472b9261fb68429b8cff1d6",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      }
-    },
     "dialog": {
       "dialog-close.svelte": {
         "sha256": "1b0540073bd954b20c3d2f4623747721d2f7b3123cee8f3751f6d5412b74ed2f",
@@ -278,80 +266,6 @@
       "label.svelte": {
         "sha256": "255f78b565fc865f4d31cf670bb57e57db072cf29e209f4af882bcebb6301fd4",
         "registrySha256": "3faed5716cbb15965080d262ff5a85b7aa0fda8eef6fb65089a12111a60ff3c9",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      }
-    },
-    "radio-group": {
-      "index.ts": {
-        "sha256": "d74b32e931543759acc82a0bd078d77bca985f2c7ab7212621edb67e162e963f",
-        "registrySha256": "650cb4c85b75995eca37ef7eda67b2d0d7044c5d7ff848c6e908725e729910a4",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "radio-group-item.svelte": {
-        "sha256": "88dca1ce3147bcac03ef1ebf4836178a6386022dc5d5c304d88d7ee65af8860f",
-        "registrySha256": "32648864f4053b73376f205a7f4fe173c013d5aab55c865a2dc6ace5bba3ef54",
-        "change": "Lucide circle replaced by a round span of the same size and colour: no circle icon is on our Icon list (decision 33). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "radio-group.svelte": {
-        "sha256": "d8020e4d6bea1caf1c7f0d1f472cc34b4c13486679193c61f9268de22e6fd89b",
-        "registrySha256": "6b2dafe6f2ddbe3cf406126c01fd2194c3433daac9f85844eef855b6263085d5",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      }
-    },
-    "sheet": {
-      "index.ts": {
-        "sha256": "670d0950d166488a158ba02dbf200b797f9ca622076e0c97cd518983250841ec",
-        "registrySha256": "14661116f3618deeffe854f3393ed32e7e25a4ad99ffb9b7eafb47896f7137d5",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-close.svelte": {
-        "sha256": "b6f15a7ef822a5a7a6c7353a70353f0221c1b71ffec81ba6fdb4470d6552d898",
-        "registrySha256": "5513573158c75ade2db6b5a07b59cf40f60f26e456cd811cd1f492057608216d",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-content.svelte": {
-        "sha256": "7e53f5f95dfb016e66fa01f3588af56e379a795130cfad16add195afec84b587",
-        "registrySha256": "f8b782d871ecb6a0634e2692e9e7256212b911afc7e06069e70e4740d53f31d9",
-        "change": "Lucide x swapped for our Icon close (ADR 0055 point 4). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-description.svelte": {
-        "sha256": "3f84cfb6a734c93738375ca8bab16241ca90fc9d24716f1d48b84ea8955066cb",
-        "registrySha256": "d0eff103eef9039421abe13af48ff402733df5358cbd27b25a36d5f37ae95450",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-footer.svelte": {
-        "sha256": "5b2392e63022be36caa90200fe360bcee4aa9a6a0463adb831abe835c688e163",
-        "registrySha256": "1a92709ff0e6cc7ecd134a4e897925b579399bb912a0e10f07d27c756359039b",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-header.svelte": {
-        "sha256": "46f8c37fc800aec651aa6524651397c90ae56e1e8c3423427bdc50a84caaf892",
-        "registrySha256": "3eb18a74f853437ac72c3ac8d3c8d9e9838b7f86ccedb518dac88b47364a7268",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-overlay.svelte": {
-        "sha256": "39d1fc47da410c02880436cc92239df45b85fc45278e4c699eb6ac64958f9f43",
-        "registrySha256": "3399647136a4b911150d8ee5d9973a8c889e5e87f6856efb85e42243ae4e74c9",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-portal.svelte": {
-        "sha256": "80afa3edf7b1f3e106b849f01196da6e88ebbf84114416c4bd977c7e517f23a9",
-        "registrySha256": "9391a12d66727280eadc465b8edfa04134f92a28468218683140624feebe5c94",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-title.svelte": {
-        "sha256": "51933ba3bcc2942bbee5e5e759888c2e62e92b72798295de270d3e2cd28cb4e0",
-        "registrySha256": "d81a78c5eca5ee9e5d9a9e8d53de5aa234a3f9e94ea3d89470c316c0a1ee75be",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet-trigger.svelte": {
-        "sha256": "efdbbd5a9243dfa80668ae3acdfbfd4f23fe24f76c1101cf2978b62a98f3827e",
-        "registrySha256": "5e22ce7c04bbe478db7c37a43128902563c90d53febe6aa5684a706c959ca05b",
-        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
-      },
-      "sheet.svelte": {
-        "sha256": "e5a28d9c97f4ce713d81c2c86863492566c8195a90f5f0f7891bc937ffb06d1b",
-        "registrySha256": "eed2a698206fc1fb24ca85f7ff351c8520a8fcc3f8fd489c04b974738088f00e",
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },

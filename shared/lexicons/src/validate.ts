@@ -1,7 +1,7 @@
 // The one record validator (P1.31): the generated @atproto/lex-schema validators, plus a refusal of unknown fields
 // when we write our own records. Lexicon objects are open, so the generated validators accept unknown fields
 // (@atproto/lex-schema 0.2.8, dist/schema/object.js); reading keeps that rule for forward compatibility.
-import { jsonToLex } from "@atproto/lex-json";
+import { jsonToLex, lexToJson } from "@atproto/lex-json";
 import { app, sh } from "../generated/index.generated.ts";
 import follow from "../schemas/sh.unset.follow.json" with { type: "json" };
 import profile from "../schemas/sh.unset.profile.json" with { type: "json" };
@@ -37,6 +37,14 @@ export function validateRecord(nsid: RecordNsid, value: unknown, mode: Mode): Va
   if (!checked.success) return { ok: false, errors: [checked.reason.message] };
   const unknown = mode === "write" && entry.strict ? unknownFields(nsid, entry.defs as Defs, "main", value, "$") : [];
   return unknown.length > 0 ? { ok: false, errors: unknown } : { ok: true, value };
+}
+
+/**
+ * A record decoded from CBOR in its JSON form, the form validateRecord reads and the index stores
+ * (https://atproto.com/specs/data-model, "JSON Representation": a CID as `{ $link }`, bytes as `{ $bytes }`).
+ */
+export function recordToJson(value: Parameters<typeof lexToJson>[0]): unknown {
+  return lexToJson(value);
 }
 
 function toLex(value: Record<string, unknown>): unknown {

@@ -1,4 +1,4 @@
-// Copied from apps/web/src/screens/profile/messages.ts for the Svelte page (P1.20i); that copy goes with P1.20k.
+// Copied from apps/web/src/screens/profile/messages.ts for the Svelte page (P1.20i); that copy went with P1.20k.
 // The words a profile card shows that the member does not write (ADR 0051 decision 4: button text comes from the
 // preset). English first (plan: English, then French).
 export const CARD_TEXT = {
@@ -34,9 +34,9 @@ export const ADD_CARD = {
 
 /** The avatar's editor (sh.unset.profile avatarShape). */
 export const AVATAR_EDIT = {
-  trigger: "Change profile picture",
-  change: "Change",
-  title: "Profile picture",
+  trigger: "Change picture shape",
+  change: "Shape",
+  title: "Picture shape",
   description: "Uploading a picture comes later. For now you can choose the shape it is shown in.",
   shape: "Shape",
   round: "Round",
@@ -141,6 +141,8 @@ export const BUTTONS_EDIT = {
 
 /** The owner's page around the cards (from apps/web/src/screens/Me.tsx and its message files). */
 export const OWN_PAGE = {
+  /** The tab's title when the page has no name to show (no display name, and a handle that did not verify). */
+  title: "Your page",
   privacyNoticeTitle: "Privacy notice",
   privacyNotice: "The privacy notice has changed.",
   handleUnavailable: "We could not check your handle just now.",

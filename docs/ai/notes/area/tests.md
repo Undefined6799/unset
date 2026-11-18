@@ -96,9 +96,9 @@ flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins i
   provided under its own key `postgresAuditor`, so a test can count `audit.chain`; it is never handed to a server
   under test.
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
-- `integration/query-budget.test.ts`: every route in every `routes.manifest.json` needs a fixture in
-  `query-budget/fixtures/<interface>.json`, and stays under the statement budget. Keep `path` equal to the manifest
-  template; set `requestPath` to exercise concrete parameters (for example a valid DID for `/:did`).
+- `integration/web/query-budget.test.ts`: every page and handler under `interfaces/web/src/routes` (test routes
+  aside), asked once as a signed-out browser asks it, stays under the statement budget, counted on the wire through a
+  loopback relay to Postgres. The Hono manifests and their fixtures went with interfaces/http (P1.20k).
 
 **Rules worth knowing.** No module mocks; only unmanaged dependencies get doubles (TE-1). Vitest fails if a
 discovered test did not run. Re-checked at P1.01a: integration tests import postgres and audit by package name;

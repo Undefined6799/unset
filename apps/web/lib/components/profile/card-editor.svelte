@@ -42,6 +42,7 @@ let {
   title,
   submit,
   max,
+  textMax,
   enhance = () => undefined,
 }: {
   kind: Kind;
@@ -66,6 +67,8 @@ let {
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
   max: number;
+  /** The README's maxlength (CardEditLimits text). */
+  textMax?: number;
   enhance?: Enhance;
 } = $props();
 
@@ -182,15 +185,16 @@ function showTab(value: string) {
 }
 const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
 const formId = $props.id();
+// The width and layout choices are icons with their words (Alex 2026-11-18 12:24Z; the profile-card mockup).
 const WIDTHS = [
-  { value: "full", label: CARD_EDIT.full },
-  { value: "half", label: CARD_EDIT.half },
-];
+  { value: "full", label: CARD_EDIT.full, icon: "full" },
+  { value: "half", label: CARD_EDIT.half, icon: "half" },
+] as const;
 const LAYOUTS = [
-  { value: "list", label: LINKS_EDIT.list },
-  { value: "grid", label: LINKS_EDIT.grid },
-  { value: "carousel", label: LINKS_EDIT.carousel },
-];
+  { value: "list", label: LINKS_EDIT.list, icon: "list" },
+  { value: "grid", label: LINKS_EDIT.grid, icon: "apps" },
+  { value: "carousel", label: LINKS_EDIT.carousel, icon: "carousel" },
+] as const;
 const PRESETS = (["bookCall", "hire", "subscribe", "custom"] as const).map((p) => ({ value: p, label: CARD_TEXT[p] }));
 const KINDS = [
   { value: "email", label: BUTTONS_EDIT.email },
@@ -267,14 +271,14 @@ const buttonRows = $derived([
         </Tabs.List>
         <!-- An inactive tab's panel stays in the page, hidden (bits-ui 2.20.6 tabs-content.svelte), so the text still posts. -->
         <Tabs.Content value="write">
-          <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} required />
+          <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
           {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
         </Tabs.Content>
       </Tabs.Root>
     {:else if kind === "readme"}
-      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} required />
+      <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
     {:else if kind === "links"}
       <Field label={LINKS_EDIT.title} name="title" error={errorFor("title")} value={typedOr("title", links?.title ?? "")} />
       <Choice label={LINKS_EDIT.layout} name="layout" value={typedOr("layout", links?.layout ?? "list")} options={LAYOUTS} />

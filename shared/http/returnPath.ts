@@ -1,5 +1,8 @@
 // The one return-path validator (P1.09; plan §2 rule 5). It turns an untrusted "where to go next" value into a
-// same-origin relative path or nothing, so no redirect in the product can be pointed off-site.
+// same-origin relative path or nothing, so no redirect in the product can be pointed off-site. Characters browsers
+// strip from URLs (tab, CR and LF turn `/\t/x` into `//x`) are refused by safe-href's hasForbiddenCharacter, the one
+// copy of that check.
+import { hasForbiddenCharacter } from "@unset/shared-safe-href";
 
 declare const safePathBrand: unique symbol;
 /** A path on our own origin, minted only by `safeReturnPath`. */
@@ -10,17 +13,6 @@ export const DENIED_TARGETS = ["/login", "/logout", "/oauth"] as const;
 
 const MAX_LENGTH = 512;
 const PROBE_ORIGIN = "https://return.invalid";
-
-/** C0, DEL, C1, U+2028, U+2029 and U+FEFF. Browsers strip tab, CR and LF from URLs, turning `/\t/x` into `//x`. */
-function hasForbiddenCharacter(text: string): boolean {
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0;
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029 || code === 0xfeff) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
  * The text a router might match `path` as: percent-escapes decoded, lowercased. Comparing this, not the raw text,
