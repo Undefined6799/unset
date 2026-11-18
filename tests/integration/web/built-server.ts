@@ -68,6 +68,16 @@ export type RunningWeb = {
   stop: () => Promise<number | null>;
 };
 
+/** The legal settings (P1.20d), as deployment/compose.local.yaml has them: the placeholder tokens. */
+export const LEGAL_ENV = {
+  PDS_HOSTNAME: "pds.unset.test",
+  PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]",
+  PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]",
+  SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]",
+  SECURITY_CONTACT: "privacy-page",
+  SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z",
+};
+
 /** Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. */
 export async function startWeb(pg: Postgres, env: Record<string, string> = {}): Promise<RunningWeb> {
   const secrets = mkdtempSync(join(tmpdir(), "web-kit-"));
@@ -97,6 +107,7 @@ export async function startWeb(pg: Postgres, env: Record<string, string> = {}): 
       PG_SSLMODE: "disable",
       PG_POOL_MAX: "4",
       TEST_ROUTES: "true",
+      ...LEGAL_ENV,
       ...env,
     },
   });

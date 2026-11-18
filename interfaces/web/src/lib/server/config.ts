@@ -4,6 +4,7 @@
 import { poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { bool, type Config, defineEntrypointConfig, int, withRule } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
+import { legalConfig } from "./legal.ts";
 
 /** Browser session timeouts (plan section 5.3), as interfaces/http/config.ts defines them. */
 const sessionConfig = {
@@ -31,6 +32,7 @@ export const schema = defineEntrypointConfig({
   ...sessionConfig,
   ...postgresFields,
   ...poolFields,
+  ...legalConfig,
   ...testRoutesConfig,
 });
 
