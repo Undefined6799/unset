@@ -36,6 +36,10 @@ export async function compose(config: Config): Promise<Composed> {
     log: openRequestLog(join(config.stateDir, "log.jsonl"), config.logKey),
     commit: config.commit,
     now,
+    stop: () => {
+      process.stderr.write("pds-admin: a state file is in an unknown state; stopping\n");
+      process.exit(1);
+    },
   });
   return { handler, compactDaily: () => jti.compact(Math.floor(now() / 1000)) };
 }

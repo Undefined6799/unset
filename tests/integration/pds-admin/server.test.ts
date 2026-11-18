@@ -1,7 +1,20 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { verifyLog } from "../../../interfaces/pds-admin/log.ts";
-import { ALICE, type FakePds, fakePds, PASSWORD, payloadFor, signed, startService, webKey } from "./harness.ts";
+import { openRequestLog, verifyLog } from "../../../interfaces/pds-admin/log.ts";
+import { DurabilityLost } from "../../../interfaces/pds-admin/state-file.ts";
+import {
+  ALICE,
+  type FakePds,
+  fakePds,
+  PASSWORD,
+  payloadFor,
+  signed,
+  startService,
+  tempDir,
+  webKey,
+} from "./harness.ts";
 
 let pds: FakePds;
 let service: Awaited<ReturnType<typeof startService>>;
@@ -205,6 +218,28 @@ describe("queued work", () => {
     expect((await first).status).toBe(200);
     await vi.waitFor(() => expect(lastLog()).toMatchObject({ outcome: "denied", reason: "client_gone" }));
     expect(pds.codes).toBe(1);
+  });
+});
+
+describe("durability", () => {
+  test("state.durability_lost_stops: a state file in an unknown state stops the service, never 200", async () => {
+    await service.close();
+    const real = openRequestLog(join(tempDir(), "log.jsonl"), randomBytes(32));
+    let stops = 0;
+    service = await startService(pds, {
+      log: {
+        ...real,
+        append: (fields, now) => {
+          if (fields.outcome === "issued") throw new DurabilityLost("append");
+          real.append(fields, now);
+        },
+      },
+      stop: () => {
+        stops += 1;
+      },
+    });
+    expect((await issue()).status).toBe(503);
+    expect(stops).toBe(1);
   });
 });
 

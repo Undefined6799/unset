@@ -128,6 +128,9 @@ export async function startService(pds: FakePds, overrides: Partial<HandlerDeps>
     log: openRequestLog(join(stateDir, "log.jsonl"), logKey),
     commit: "c".repeat(40),
     now: () => Date.now(),
+    stop: () => {
+      throw new Error("the service stopped");
+    },
     ...overrides,
   };
   const server = createServer(createHandler(deps));

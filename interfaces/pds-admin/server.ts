@@ -8,6 +8,7 @@ import { type IssueLimits, type IssueResult, issueInvite } from "./issue.ts";
 import type { JtiStore } from "./jti.ts";
 import type { LogFields, RequestLog } from "./log.ts";
 import type { Pds } from "./pds.ts";
+import { DurabilityLost } from "./state-file.ts";
 
 export type HandlerDeps = {
   readonly keys: readonly ServiceKey[];
@@ -18,6 +19,8 @@ export type HandlerDeps = {
   readonly log: RequestLog;
   readonly commit: string;
   readonly now: () => number;
+  /** Stops the process: called when a state file's on-disk state is unknown, so a restart rereads it. */
+  readonly stop: () => void;
 };
 
 const ROUTE = "/v1/invite.issue";
@@ -131,6 +134,21 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     return fail(status);
   }
 
+  /** Logs an unexpected failure; a state file left in an unknown state stops the process instead, so nothing more is
+   * written to it and a restart rereads it as it really is. */
+  function recordFailure(error: unknown): void {
+    if (error instanceof DurabilityLost) {
+      deps.stop();
+      return;
+    }
+    try {
+      record({ outcome: "error", reason: error instanceof Error ? error.constructor.name : "unknown" });
+    } catch (logError) {
+      // The log itself failed: the answer is still 503, never 200.
+      if (logError instanceof DurabilityLost) deps.stop();
+    }
+  }
+
   async function respond(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let answer: Answer;
     // 'close' before the answer is written means the caller hung up.
@@ -142,12 +160,8 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
       answer = await handle(req, () => gone);
     } catch (error) {
       // Step 14: never 200 on an unexpected failure, and only the class name reaches the log.
-      try {
-        record({ outcome: "error", reason: error instanceof Error ? error.constructor.name : "unknown" });
-      } catch {
-        // The log itself failed: the answer is still 503, never 200.
-      }
       answer = fail(503);
+      recordFailure(error);
     }
     res.writeHead(answer.status, { "content-type": "application/json", "cache-control": "no-store" });
     res.end(JSON.stringify(answer.body));
