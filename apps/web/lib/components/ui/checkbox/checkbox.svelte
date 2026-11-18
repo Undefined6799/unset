@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { Checkbox as CheckboxPrimitive } from "bits-ui";
-	import { Icon } from "../../icon/index.js";
-	import { cn, type WithoutChildrenOrChild } from "../../../utils.js";
+import { Checkbox as CheckboxPrimitive } from "bits-ui";
+import { cn, type WithoutChildrenOrChild } from "../../../utils.js";
+import { Icon } from "../../icon/index.js";
 
-	let {
-		ref = $bindable(null),
-		checked = $bindable(false),
-		indeterminate = $bindable(false),
-		class: className,
-		...restProps
-	}: WithoutChildrenOrChild<CheckboxPrimitive.RootProps> = $props();
+let {
+  ref = $bindable(null),
+  checked = $bindable(false),
+  indeterminate = $bindable(false),
+  class: className,
+  ...restProps
+}: WithoutChildrenOrChild<CheckboxPrimitive.RootProps> = $props();
 </script>
 
 <CheckboxPrimitive.Root

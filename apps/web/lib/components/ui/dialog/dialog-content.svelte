@@ -1,24 +1,23 @@
 <script lang="ts">
-	import { Dialog as DialogPrimitive } from "bits-ui";
-	import DialogPortal from "./dialog-portal.svelte";
-	import { Icon } from "../../icon/index.js";
-	import type { Snippet } from "svelte";
-	import * as Dialog from "./index.js";
-	import { cn, type WithoutChildrenOrChild } from "../../../utils.js";
-	import type { ComponentProps } from "svelte";
+import { Dialog as DialogPrimitive } from "bits-ui";
+import type { ComponentProps, Snippet } from "svelte";
+import { cn, type WithoutChildrenOrChild } from "../../../utils.js";
+import { Icon } from "../../icon/index.js";
+import DialogPortal from "./dialog-portal.svelte";
+import * as Dialog from "./index.js";
 
-	let {
-		ref = $bindable(null),
-		class: className,
-		portalProps,
-		children,
-		showCloseButton = true,
-		...restProps
-	}: WithoutChildrenOrChild<DialogPrimitive.ContentProps> & {
-		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DialogPortal>>;
-		children: Snippet;
-		showCloseButton?: boolean;
-	} = $props();
+let {
+  ref = $bindable(null),
+  class: className,
+  portalProps,
+  children,
+  showCloseButton = true,
+  ...restProps
+}: WithoutChildrenOrChild<DialogPrimitive.ContentProps> & {
+  portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DialogPortal>>;
+  children: Snippet;
+  showCloseButton?: boolean;
+} = $props();
 </script>
 
 <DialogPortal {...portalProps}>
