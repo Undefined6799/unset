@@ -25,4 +25,7 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
 - P1.20k adds `community` (regular `group`), `explore` (`compass`), `saved` (`bookmark`), `help` (`help-circle`) and
   `link` (`link`) for the core header's tabs and menus, as Alex asked on 2026-11-18 (05:02:59Z, icons for Community and
   Explore from the Iconoir set; 05:04:54Z, the planned navbar menus as the target), same commit and pins: 46 names.
+- P1.20k adds `list` (regular `list`), `carousel` (`view-columns-3`), `half` (`view-columns-2`) and `full` (`square`)
+  for the card editor's layout and width choices, as Alex asked on 2026-11-18 (12:24:57Z, the layout shown as icons
+  rather than words; 12:42:26Z, these four by name), same commit and pins: 50 names.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.

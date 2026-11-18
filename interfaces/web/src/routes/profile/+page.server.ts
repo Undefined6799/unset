@@ -34,6 +34,7 @@ export const actions: Actions = {
     const result = await saveProfileForm(await request.formData(), did, saveToPds(locals.deadline, locals.deadlineAt));
     setHeaders({ "cache-control": "no-store" });
     if ("location" in result) redirect(303, result.location);
-    error(ERROR_CODES[result.code].status, { message: result.code });
+    const blame = "field" in result && result.field !== undefined ? { field: result.field } : {};
+    error(ERROR_CODES[result.code].status, { message: result.code, ...blame });
   },
 };

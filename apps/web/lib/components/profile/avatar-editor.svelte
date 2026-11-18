@@ -1,8 +1,9 @@
 <!--
-  The owner's avatar as a button (the profile-card mockup, Alex 2026-11-17): hovering or focusing it shows "Change"
+  The owner's avatar as a button (the profile-card mockup, Alex 2026-11-17): hovering or focusing it shows "Shape"
   over it, on touch a small pen sits on its corner, and pressing it opens the stock Dialog with the shape choice
   (sh.unset.profile avatarShape: round or rounded square), posted to the page's `avatar` action. There is no upload:
-  showing a picture needs the media proxy (CLAUDE.md, Blobs), so the dialog says it comes later. As with the card
+  showing a picture needs the media proxy (CLAUDE.md, Blobs), so the link and dialog are named for the shape and say
+  uploads come later (staging walkthrough 2026-11-18 round two, finding 4); no-underline keeps the letter clean (finding 3). As with the card
   editors, a refused save keeps the dialog open with the reason inside, and with no script the avatar is a link to the
   page with the choice in place (`?avatar`, drawn by card-panel.svelte with `panel`).
 -->
@@ -101,7 +102,7 @@ const rounded = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
     <a
       href="?avatar#{PANEL_ANCHOR}"
       aria-haspopup="dialog"
-      class="group/avatar relative block {rounded} outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 {className}"
+      class="group/avatar relative block {rounded} no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 {className}"
       onclick={(event) => {
         if (opensHere(event)) open = true;
       }}

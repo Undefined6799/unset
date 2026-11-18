@@ -104,8 +104,18 @@ export type CardView = {
   readonly shown: CardShown;
 };
 
-/** How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS). */
-export type CardEditLimits = { readonly links: number; readonly collection: number; readonly buttons: number };
+/**
+ * How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS), and `text`, the README's maxlength:
+ * the lexicon's limit in UTF-8 bytes (shared/lexicons LIMITS.section.textBytes). maxlength counts UTF-16 code units,
+ * never more than a text's UTF-8 bytes, so it never stops a README the lexicon accepts, and it keeps a no-script save
+ * far under the form's body cap (staging walkthrough 2026-11-18 round two: 2.2 MiB pasted, the text lost).
+ */
+export type CardEditLimits = {
+  readonly links: number;
+  readonly collection: number;
+  readonly buttons: number;
+  readonly text: number;
+};
 
 /**
  * The part of SvelteKit's SubmitFunction (kit 3.2.0 types/index.d.ts) a card editor uses: `cancel` stops a submit

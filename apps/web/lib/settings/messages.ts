@@ -43,6 +43,13 @@ export const PROFILE_SETTINGS = {
   saving: "Saving…",
   saved: "Profile saved.",
   refused: "Your profile could not be saved. Try again.",
+  /** A refusal shown under the field it blames; the limit is the one the hint gives. */
+  tooLong: (n: number) => `This is too long: up to ${n} characters. Shorten it and save again.`,
+  fieldError: {
+    "profile.url_invalid": "Use an http or https address, such as https://example.com.",
+    "profile.name_required": "Add a name before you save.",
+    "profile.invalid": "This could not be read. Use one line and save again.",
+  } as Readonly<Record<string, string>>,
   unavailableTitle: "Your profile could not be loaded",
   unavailable: "Your sign-in server did not answer just now. Reload the page to try again.",
 } as const;
