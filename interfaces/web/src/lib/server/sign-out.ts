@@ -11,6 +11,7 @@ import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { Session, SessionDb } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
 import { dropSessionCookie } from "./session.ts";
+import { remainingSessions } from "./session-count.ts";
 import { dropCookie, encodeIssuer, issuerOrigin, putCookie } from "./sign-in-state.ts";
 
 /** The issuer read's own deadline (P2.08h): well below PG_CONNECT_TIMEOUT_MS's 2000, so a hung store cannot hold us. */
@@ -29,23 +30,6 @@ const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(do
 const className = (cause: unknown): string => (cause instanceof Error && cause.name !== "" ? cause.name : "Error");
 /** A retryable 503 with the catalog's code (shared/errors catalog.ts `logout.failed`); the cookie stays for the retry. */
 const failed = (): never => error(503, { message: "logout.failed" });
-
-/**
- * How many of `did`'s sessions can still sign a browser in (P2.08c): not a row past its idle or absolute expiry, nor
- * one whose DID has no stored token set, as the session store reads both as signed out (infrastructure/session
- * store.ts `lookup`). The conditions repeat the store's because that folder is trusted base.
- */
-async function remainingSessions(db: SessionDb, did: Did, idleS: number): Promise<number> {
-  const { rows } = await db.query<{ n: number }>(
-    "SELECT count(*)::int AS n FROM app.session s WHERE s.did = $1 " +
-      "AND now() <= s.absolute_expires_at AND now() <= s.last_seen_at + make_interval(secs => $2) " +
-      "AND EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did)",
-    [did, idleS],
-  );
-  const n = rows[0]?.n;
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) throw new Error("session count missing");
-  return n;
-}
 
 /** `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. */
 function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
