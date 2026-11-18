@@ -1,0 +1,2 @@
+/* fixture: apps/web/lib/components/ui/button/button.svelte findings=0 */
+<button class="inline-flex"></button>

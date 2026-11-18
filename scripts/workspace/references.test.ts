@@ -278,6 +278,24 @@ describe("workspace references", () => {
     expect(untypecheckedFiles(root)).toEqual(["domains/stray/d.ts", "tests/integration/x.test.ts"]);
   }, 20_000);
 
+  // ADR 0054: svelte-check, not tsc -b, checks the Svelte UI. Its includes count as checked; a .ts or .svelte file in
+  // the web folders that neither covers is reported.
+  test("svelte_check_files_count_and_strays_fail", () => {
+    const root = typecheckTree({});
+    put(root, "apps/web/tsconfig.svelte.json", { include: ["lib/**/*.ts", "lib/**/*.svelte"] });
+    put(root, "interfaces/web/tsconfig.svelte.json", { include: ["src/routes", "*.ts"] });
+    put(root, "interfaces/web/src/routes/+page.svelte", "");
+    for (const file of ["apps/web/lib/a.ts", "apps/web/lib/ui/b/b.svelte", "apps/web/lib/ui/b/index.ts"])
+      put(root, file, "");
+    for (const file of ["apps/web/other/c.svelte", "apps/web/other/d.ts", "interfaces/web/src/e.svelte"])
+      put(root, file, "");
+    expect(untypecheckedFiles(root)).toEqual([
+      "apps/web/other/d.ts",
+      "apps/web/other/c.svelte",
+      "interfaces/web/src/e.svelte",
+    ]);
+  }, 20_000);
+
   // P1.31d (architecture record 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1): the walk follows nested
   // references as tsc -b does, and a nested project counts only inside its parent, composite, without noCheck.
   test("nested_project_red_fixtures", () => {

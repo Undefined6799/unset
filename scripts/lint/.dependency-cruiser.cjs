@@ -8,6 +8,9 @@ const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
 const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
+// What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file
+// and the Tailwind entry. Not the React UI.
+const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$)";
 
 /** Each vendor SDK is imported in exactly one adapter folder per runtime (guideline §1, O-7). */
 const SDK_ADAPTERS = [
@@ -104,6 +107,15 @@ const ISLAND_NPM_MODULES = ["react/jsx-runtime"];
 const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\\.js)?$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
+// P1.20c (ADR 0055 point 4): the Svelte Icon draws the pinned Iconoir data, read through @unset/shared-ui's
+// "./icons.json" export, because shared/ui's index.ts brings React. It is the only file that may, and only that file.
+const SVELTE_ICON = "^apps/web/lib/components/icon/icon\\.svelte$";
+const ICON_DATA = "^shared/ui/icons/icons\\.json$";
+// P1.20c: stock shadcn-svelte dialog-content.svelte imports its own folder's index.ts, which re-exports it. The only
+// cycle allowed, and only inside that folder.
+const STOCK_DIALOG = "^apps/web/lib/components/ui/dialog/";
+// P1.20c: svelte.config.js exists only for svelte-check to read (nothing imports it), like a vite.config.ts.
+const SVELTE_CHECK_CONFIG = "^apps/web/svelte\\.config\\.js$";
 
 /** The allowlist matrix. Each row: a name, the importing folder, and what it may reach. */
 const MATRIX = [
@@ -119,6 +131,13 @@ const MATRIX = [
     name: "interface-web-sveltekit",
     from: { path: "^interfaces/web/" },
     to: [{ path: "^\\$app/[a-z-]+$", couldNotResolve: true }],
+  },
+  {
+    // ADR 0056 Consequences: the web process composes the Svelte components, the theme and the Tailwind entry that
+    // live in apps/web (P1.20c). Only those; never apps/web's React UI, and apps/web never imports interfaces/.
+    name: "interface-web-components",
+    from: { path: "^interfaces/web/" },
+    to: [{ path: WEB_COMPONENTS }],
   },
   {
     name: "interface-http-render",
@@ -245,9 +264,15 @@ module.exports = {
     ),
     forbidden(
       "app-render-entry-only",
-      "From outside apps/, only interfaces/http and interfaces/admin import an app, and only its render entry (guideline §1).",
-      { pathNot: `^apps/|^interfaces/(http|admin)/|${TOOLING}` },
+      "From outside apps/, only interfaces/http, admin and web import an app, each only what its own rule allows (guideline §1).",
+      { pathNot: `^apps/|^interfaces/(http|admin|web)/|${TOOLING}` },
       { path: "^apps/" },
+    ),
+    forbidden(
+      "app-render-entry-only",
+      "interfaces/web imports only apps/web's Svelte components, theme and Tailwind entry (ADR 0056, P1.20c).",
+      { path: "^interfaces/web/" },
+      { path: "^apps/", pathNot: WEB_COMPONENTS },
     ),
     forbidden(
       "app-render-entry-only",
@@ -288,8 +313,20 @@ module.exports = {
     forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
-      { pathNot: `^${WORKSPACE_WITH_INDEX}` },
+      { pathNot: [`^${WORKSPACE_WITH_INDEX}`, SVELTE_ICON] },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "The Svelte Icon reaches shared/ only through an index.ts, and shared/ui's icons.json through its package export.",
+      { path: SVELTE_ICON },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET, ICON_DATA] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "Outside shared/ui, icons.json is read through the @unset/shared-ui/icons.json export, never by a path (P1.20c).",
+      { pathNot: "^shared/ui/" },
+      { path: ICON_DATA, dependencyTypes: ["local"] },
     ),
     forbidden(
       "infra-shared-via-index",
@@ -445,12 +482,27 @@ module.exports = {
       { pathNot: "^(interfaces/web|apps/web)/" },
       { path: "^(node_modules/)?(svelte|@sveltejs/[^/]+)(/|$)" },
     ),
-    forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
+    forbidden(
+      "no-circular",
+      "No dependency cycles; stock shadcn-svelte's dialog barrel is the one exception (P1.20c).",
+      { pathNot: STOCK_DIALOG },
+      { circular: true },
+    ),
+    forbidden(
+      "no-circular",
+      "A cycle that starts in the stock dialog folder must stay inside it.",
+      { path: STOCK_DIALOG },
+      { circular: true, pathNot: STOCK_DIALOG },
+    ),
     forbidden(
       "no-orphans",
       "A module nothing imports is usually dead code.",
-      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054).
-      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)"] },
+      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054); svelte-check reads
+      // apps/web's svelte.config.js (P1.20c).
+      {
+        orphan: true,
+        pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)", SVELTE_CHECK_CONFIG],
+      },
       {},
       "warn",
     ),

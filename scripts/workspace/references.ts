@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, posix, relative, sep } from "node:path";
-import { sourceFiles } from "../guards/files.ts";
+import { filesUnder, sourceFiles } from "../guards/files.ts";
 
 type PathRule = { path?: string; pathNot?: string | string[] };
 type Row = { name: string; from: PathRule; to: (PathRule & { dependencyTypes?: string[] })[] };
@@ -343,6 +343,47 @@ function followReference(walk: Walk, path: Step[], ref: string): void {
  */
 export function untypecheckedFiles(root: string): string[] {
   const { covered, problems } = typecheckWalk(root);
-  const files = sourceFiles(root, ["."]).filter((f) => TS_SOURCE.test(f) && !f.endsWith(".d.ts") && !covered.has(f));
-  return [...problems.sort(), ...files];
+  const svelte = svelteCheckedFiles(root);
+  const files = sourceFiles(root, ["."]).filter(
+    (f) => TS_SOURCE.test(f) && !f.endsWith(".d.ts") && !covered.has(f) && !svelte.has(f),
+  );
+  const screens = filesUnder(root, SVELTE_FOLDERS, /\.svelte$/).filter((f) => !svelte.has(f));
+  return [...problems.sort(), ...files, ...screens];
+}
+
+/**
+ * The svelte-check projects (ADR 0054 Consequences: svelte-check runs on TypeScript 6, beside tsc -b on 7). Their
+ * files count as checked; a .svelte file in the web folders that none of them includes is reported.
+ */
+export const SVELTE_CHECK_CONFIGS: readonly string[] = [
+  "apps/web/tsconfig.svelte.json",
+  "interfaces/web/tsconfig.svelte.json",
+];
+const SVELTE_FOLDERS = ["apps/web", "interfaces/web"];
+
+/** A tsconfig include pattern as a regex over repo-relative paths: `**\/` is any folders, `*` any name part. */
+function includePattern(dir: string, pattern: string): RegExp {
+  // A pattern with no wildcard and no file extension names a folder, which tsc reads as everything under it.
+  const folder = !pattern.includes("*") && !/\.[A-Za-z]+$/.test(pattern);
+  const body = posix
+    .join(dir, folder ? `${pattern}/**/*` : pattern)
+    .split(/(\*\*\/|\*)/)
+    .map((part) =>
+      part === "**/" ? "(?:[^/]+/)*" : part === "*" ? "[^/]*" : part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"),
+    )
+    .join("");
+  return new RegExp(`^${body}$`);
+}
+
+/** The .ts and .svelte files the svelte-check projects include. */
+function svelteCheckedFiles(root: string): Set<string> {
+  const covered = new Set<string>();
+  for (const config of SVELTE_CHECK_CONFIGS.filter((c) => existsSync(join(root, c)))) {
+    const dir = posix.dirname(config);
+    const include = (readJson(root, config) as { include?: string[] }).include ?? [];
+    const patterns = include.map((pattern) => includePattern(dir, pattern));
+    for (const file of filesUnder(root, [dir], /\.(?:ts|svelte)$/))
+      if (patterns.some((p) => p.test(file))) covered.add(file);
+  }
+  return covered;
 }

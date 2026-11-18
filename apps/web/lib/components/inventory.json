@@ -1,0 +1,194 @@
+{
+  "registry": "shadcn-svelte@1.8.1",
+  "source": "https://github.com/huntabyte/shadcn-svelte/tree/shadcn-svelte%401.8.1/docs/static/registry",
+  "importRewrite": "\"$UTILS$.js\" -> \"../../../utils.js\"",
+  "utils": {
+    "sha256": "d56c48595cabedfe55b5233e04383a388eec79bd43a595bdbd36081a8342fd8c"
+  },
+  "components": {
+    "alert": {
+      "alert-description.svelte": {
+        "sha256": "68fcc2129ae150dc8bd370a3cb8ee346c40f72c0a457925c25d7051e20564365"
+      },
+      "alert-title.svelte": {
+        "sha256": "9e3f696fac7c8c183717fe4b8db677adc907ae19b2e0934e7ac1b15574aa7380"
+      },
+      "alert.svelte": {
+        "sha256": "955c7e3c5e17873da8482128784d4207789d5a6c5aa7bc8651fd425c0c8acd6f"
+      },
+      "index.ts": {
+        "sha256": "9fb1d6355ffb746701b3cc3b4f2f4c9232a6b5c31258978dfeb543da3a0a78ef"
+      }
+    },
+    "avatar": {
+      "avatar-fallback.svelte": {
+        "sha256": "445d1e9dc92c6b7f5dd57b1179ed05da6afc515a5253fa8663aa413536e16acb"
+      },
+      "avatar-image.svelte": {
+        "sha256": "68bb5be9e8c228fdb541f1dea61826e28edb342f3a622ef780e96cb292133e35"
+      },
+      "avatar.svelte": {
+        "sha256": "3d2ae73deac055a552224bab5bdb7d7031fb002f6913e063f081d8bd4708abe1"
+      },
+      "index.ts": {
+        "sha256": "33f959a7207d965647239cfdbabc9ed7f6e90f9ad616686f977c87360bdaafbe"
+      }
+    },
+    "button": {
+      "button.svelte": {
+        "sha256": "e369f24e1c1ea0c0d82beae58454aa1d465c5ce8d3855bfd814ece1b3982379d"
+      },
+      "index.ts": {
+        "sha256": "0f6b6f040d92b4153821d3f9b4d6b9cbc567247e4fda913e64c1d0fcc4a2f386"
+      }
+    },
+    "card": {
+      "card-action.svelte": {
+        "sha256": "0e1718fcc3908014163a20ce8c8114c482e3f9d5e323540085c82863aafa411f"
+      },
+      "card-content.svelte": {
+        "sha256": "eb53c98fb679eb0ca3d251c79a7e28a0a40b0189129e88dcbac1ba0193b31363"
+      },
+      "card-description.svelte": {
+        "sha256": "fec632a578411b84193f259037f94f55a494e73e340724ff63ade35d52a33d83"
+      },
+      "card-footer.svelte": {
+        "sha256": "1a425a02b5d727a8481b6e64f7bb3e3cf18feca7c6da441d4aa61b535b5d9d8d"
+      },
+      "card-header.svelte": {
+        "sha256": "26844d977ebf3459c63f50d8df06cc7b9e5892e37f2cf77e1ab6c7e7c703d25a"
+      },
+      "card-title.svelte": {
+        "sha256": "46bdb98057ea56d3cb5a02598a85d3c66ef302a512ba6a08efd150d0d6d93e8a"
+      },
+      "card.svelte": {
+        "sha256": "e04b70b801596e7c84da8a91b95210dea7fa3b881413d88820828bee7d5f64f0"
+      },
+      "index.ts": {
+        "sha256": "218019c78c8be52b5add8267a758f2d2c685e036e35d6bbcee147333e6534db8"
+      }
+    },
+    "checkbox": {
+      "checkbox.svelte": {
+        "sha256": "7497c021b39e4deeaa52ddd34272008b441087542915f7d6b7223961a3ae8211",
+        "registrySha256": "583f00017e06117e4478eb1fcd0b2c5a149eb77ec028f382c78a74101a24fbe2",
+        "change": "Lucide check and minus swapped for our Icon done and remove (ADR 0055 point 4)."
+      },
+      "index.ts": {
+        "sha256": "39b322ab4a26c63f60c64588ff4b18552c8b596e8472b9261fb68429b8cff1d6"
+      }
+    },
+    "dialog": {
+      "dialog-close.svelte": {
+        "sha256": "98ab26760ad57170737cc6aad8d378c8d96b3dbd8a7db4067d80c199cc364de2"
+      },
+      "dialog-content.svelte": {
+        "sha256": "6c5f0b564e78b329ed1446cd070f1d1e4c014875214df7bf9c6062b2a403c331",
+        "registrySha256": "2684e07fe2c90f28f644cba1dee54d2a8683d47245e0fe01349c3ac4e53ffe33",
+        "change": "Lucide x swapped for our Icon close (ADR 0055 point 4)."
+      },
+      "dialog-description.svelte": {
+        "sha256": "3d39109daf072fe90a918349b7180f52335238b0694a59bab16db9b8fe4dc3fe"
+      },
+      "dialog-footer.svelte": {
+        "sha256": "7d52860c172631880334a72d222c5c6896c2e9461513c155aae4da155e7fd81e"
+      },
+      "dialog-header.svelte": {
+        "sha256": "bfc9adbfcf1bc85b06e5c933affdb9672f18da3945af9a2c1f5159fcb53b37d5"
+      },
+      "dialog-overlay.svelte": {
+        "sha256": "e2903a955f6160e0e47ba01b378574b7c00bcb49f55b05f39b9ee2c7f057c1cc"
+      },
+      "dialog-portal.svelte": {
+        "sha256": "718c0b6672a2911d7f9398e4ef14813cceabcf0be02b7920f10028d213a674b6"
+      },
+      "dialog-title.svelte": {
+        "sha256": "20593f9cb85c7da67046d3ac1a2e7a9367f7fe25292d102241d7b71b120406c8"
+      },
+      "dialog-trigger.svelte": {
+        "sha256": "e8caaa81a4c31e5467accae7a5df9e9f7efa6760015ea7cff9c477fff5e848b7"
+      },
+      "dialog.svelte": {
+        "sha256": "cc60100e895410b9b5f17b6071c933dfc950e5dbf4d00b261edec1e443008a27"
+      },
+      "index.ts": {
+        "sha256": "9f5e95e83b0752b0795a21237de3fe2eed0f25c7d4d9eef528c7b321c84b7a0e"
+      }
+    },
+    "input": {
+      "index.ts": {
+        "sha256": "4e0ad69d49a27194c7f3dfd0cdd5933ee13fc40cc13a77138b547d300701d390"
+      },
+      "input.svelte": {
+        "sha256": "c36228eff2e7876e48b6fe84d8443417a4e6a91590c268020b6627c1069a40d1"
+      }
+    },
+    "label": {
+      "index.ts": {
+        "sha256": "ea17621b03066fc6c0ab811ec97aac0cb2de4b504c0a1fc3f480c8fc4bef12f1"
+      },
+      "label.svelte": {
+        "sha256": "3faed5716cbb15965080d262ff5a85b7aa0fda8eef6fb65089a12111a60ff3c9"
+      }
+    },
+    "radio-group": {
+      "index.ts": {
+        "sha256": "650cb4c85b75995eca37ef7eda67b2d0d7044c5d7ff848c6e908725e729910a4"
+      },
+      "radio-group-item.svelte": {
+        "sha256": "0336fbcabb2a3d79257a90f68accf5b9a79181fbc8dc1a30b1e94116a8cb4cc9",
+        "registrySha256": "32648864f4053b73376f205a7f4fe173c013d5aab55c865a2dc6ace5bba3ef54",
+        "change": "Lucide circle replaced by a round span of the same size and colour: no circle icon is on our Icon list (decision 33)."
+      },
+      "radio-group.svelte": {
+        "sha256": "6b2dafe6f2ddbe3cf406126c01fd2194c3433daac9f85844eef855b6263085d5"
+      }
+    },
+    "sheet": {
+      "index.ts": {
+        "sha256": "14661116f3618deeffe854f3393ed32e7e25a4ad99ffb9b7eafb47896f7137d5"
+      },
+      "sheet-close.svelte": {
+        "sha256": "5513573158c75ade2db6b5a07b59cf40f60f26e456cd811cd1f492057608216d"
+      },
+      "sheet-content.svelte": {
+        "sha256": "d5c268399853138f56aec9edc61eef0a7714cf10aa3386993dff07fc665b3c00",
+        "registrySha256": "f8b782d871ecb6a0634e2692e9e7256212b911afc7e06069e70e4740d53f31d9",
+        "change": "Lucide x swapped for our Icon close (ADR 0055 point 4)."
+      },
+      "sheet-description.svelte": {
+        "sha256": "d0eff103eef9039421abe13af48ff402733df5358cbd27b25a36d5f37ae95450"
+      },
+      "sheet-footer.svelte": {
+        "sha256": "1a92709ff0e6cc7ecd134a4e897925b579399bb912a0e10f07d27c756359039b"
+      },
+      "sheet-header.svelte": {
+        "sha256": "3eb18a74f853437ac72c3ac8d3c8d9e9838b7f86ccedb518dac88b47364a7268"
+      },
+      "sheet-overlay.svelte": {
+        "sha256": "3399647136a4b911150d8ee5d9973a8c889e5e87f6856efb85e42243ae4e74c9"
+      },
+      "sheet-portal.svelte": {
+        "sha256": "9391a12d66727280eadc465b8edfa04134f92a28468218683140624feebe5c94"
+      },
+      "sheet-title.svelte": {
+        "sha256": "d81a78c5eca5ee9e5d9a9e8d53de5aa234a3f9e94ea3d89470c316c0a1ee75be"
+      },
+      "sheet-trigger.svelte": {
+        "sha256": "5e22ce7c04bbe478db7c37a43128902563c90d53febe6aa5684a706c959ca05b"
+      },
+      "sheet.svelte": {
+        "sha256": "eed2a698206fc1fb24ca85f7ff351c8520a8fcc3f8fd489c04b974738088f00e"
+      }
+    },
+    "textarea": {
+      "index.ts": {
+        "sha256": "3b5f25dfd5d1d9b5305f613f7544a7e39362cd4b0a9c3250414cd5ff02e45398"
+      },
+      "textarea.svelte": {
+        "sha256": "ebff7a9f42b2d088a1c38566da6b5d9a589ca7dbd18a7dbc34ad69f1976f0e6c"
+      }
+    }
+  },
+  "ours": {}
+}

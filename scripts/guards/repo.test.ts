@@ -13,6 +13,7 @@ import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as pageClasses from "./page-classes.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as uiInventory from "./ui-inventory.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
@@ -32,6 +33,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["case-collision", caseCollision.scanAll],
   ["also-known-as", alsoKnownAs.scanAll],
   ["ui-inventory", uiInventory.scanAll],
+  ["page-classes", pageClasses.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -68,6 +70,7 @@ test("unreadable_file_is_finding", () => {
     "css-layers": "apps/web/src/screens/Bad.module.css",
     // The inventory is the base the rest is checked against, so an unreadable one is the whole report.
     "ui-inventory": "shared/ui/inventory.json",
+    "page-classes": "interfaces/web/src/routes/+page.svelte",
     "web-prerender": "interfaces/web/src/routes/+page.ts",
   };
   // case-collision reads only names from git, never file contents.

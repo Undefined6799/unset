@@ -332,16 +332,22 @@ describe("repository settings", () => {
     const ls = spawnSync("npm", ["ls", "typescript", "--all", "--json"], { cwd: REPO, encoding: "utf8" });
     expect(ls.status).toBe(0);
     type Node = { version?: string; dependencies?: Record<string, Node> };
-    const versions: (string | undefined)[] = [];
-    const walk = (node: Node): void => {
+    const found: { path: string; version: string | undefined }[] = [];
+    const walk = (node: Node, path: string[]): void => {
       for (const [name, dep] of Object.entries(node.dependencies ?? {})) {
-        if (name === "typescript") versions.push(dep.version);
-        walk(dep);
+        if (name === "typescript") found.push({ path: [...path, name].join(" > "), version: dep.version });
+        walk(dep, [...path, name]);
       }
     };
-    walk(JSON.parse(ls.stdout) as Node);
-    expect(versions.length).toBeGreaterThan(0);
-    for (const v of versions) expect(v).toMatch(/^7\.0\./);
+    walk(JSON.parse(ls.stdout) as Node, []);
+    expect(found.length).toBeGreaterThan(0);
+    // ADR 0054 Consequences: svelte-check 4.7.8 accepts typescript ^5 || ^6, so the two Svelte workspaces carry
+    // exactly 6.0.3 for it, directly and as svelte-check's and SvelteKit's peer. Everything else, the repo's tsc -b
+    // included, is 7.0.
+    const SVELTE_CHECK = /^@unset\/(?:apps-web|interfaces-web)(?: > (?:svelte-check|@sveltejs\/kit))? > typescript$/;
+    for (const { path, version } of found)
+      expect(version, path).toMatch(SVELTE_CHECK.test(path) ? /^6\.0\.3$/ : /^7\.0\./);
+    expect(found.filter(({ path }) => !SVELTE_CHECK.test(path)).length, "the repo's own typescript").toBeGreaterThan(0);
   });
 });
 
