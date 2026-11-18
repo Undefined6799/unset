@@ -28,7 +28,6 @@ const setUp = $derived(data.profile === null && !data.profileUnavailable);
 
 <svelte:head>
   <title>{data.account.handle}</title>
-  <meta name="robots" content="noindex" />
 </svelte:head>
 
 {#if data.privacyNotice}

@@ -19,6 +19,8 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
+import type { ShellData } from "../../lib/shell.ts";
+import { themeFromCookies, themeReturnTo } from "../prefs/theme/theme.server.ts";
 import { accountView } from "./account.server.ts";
 import { cardForm } from "./card-form.server.ts";
 import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
@@ -31,14 +33,13 @@ import { loadOwnProfile } from "./own-profile.server.ts";
 const CARD_FORM_LIMIT_BYTES = 320 * 1024;
 /** The fields the order form may send: `order`, once per card. */
 const ORDER_FIELD = "order";
-const NO_STORE = { "cache-control": "private, no-store", vary: "Cookie" };
 
 /** The page's DID when it is the signed-in member's own; otherwise the request stops here. */
 function ownDid(raw: string | undefined, did: string | undefined, method: "GET" | "POST"): Did {
   const page = parseDid(raw ?? "");
   if (page === null) error(404, "http.not_found");
   if (did === undefined) {
-    if (method === "POST") error(401, "auth.required"); // the gate refuses it first; kept so no write runs unsigned
+    if (method === "POST") error(401, "auth.required"); // the gate sends it to sign in first; kept so no write runs unsigned
     redirect(303, `/login?${new URLSearchParams({ next: `/${page}` })}`);
   }
   if (page !== did) error(404, "http.not_found");
@@ -52,9 +53,8 @@ const pdsContext = (locals: App.Locals) => ({
   deadlineAt: locals.deadlineAt,
 });
 
-export const load: ServerLoad = async ({ params, locals, setHeaders }) => {
+export const load: ServerLoad = async ({ params, locals, request }) => {
   const did = ownDid(params.did, locals.did, "GET");
-  setHeaders(NO_STORE);
   const { pdsCall } = services().pds;
   const ctx = pdsContext(locals);
   const [account, own] = await Promise.all([
@@ -67,7 +67,16 @@ export const load: ServerLoad = async ({ params, locals, setHeaders }) => {
   if (own.kind === "redirect") redirect(303, own.location);
   const profile = own.kind === "ok" ? own.profile : null;
   const name = profile?.displayName ?? account.handle;
+  const path = `/${did}`;
+  const shell: ShellData = {
+    kind: "core",
+    active: "account",
+    account: account.verified ? { path, name: account.handle } : { path },
+    prefs: { theme: themeFromCookies(request.headers.get("cookie")), returnTo: themeReturnTo(path) },
+    noindex: true,
+  };
   return {
+    shell,
     account,
     privacyNotice: locals.privacyNotice === true,
     name,

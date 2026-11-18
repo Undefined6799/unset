@@ -63,3 +63,14 @@ export function themeReturnTo(target: string | null): string {
   const safe = safeReturnPath(target);
   return safe === null || safe.toLowerCase().startsWith("/login") ? HOME : safe;
 }
+
+/** The theme cookie's value when exactly one is sent and it is dark or light; otherwise "system" (no error, no echo). */
+export function themeFromCookies(header: string | null): ThemePref {
+  const values = (header ?? "")
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter((pair) => pair.startsWith(`${THEME_COOKIE}=`))
+    .map((pair) => pair.slice(THEME_COOKIE.length + 1));
+  const [only] = values;
+  return values.length === 1 && (only === "dark" || only === "light") ? only : "system";
+}
