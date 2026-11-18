@@ -121,8 +121,8 @@ function start(service: URL, keyFor: () => string, consumer: Partial<FirehoseCon
   return run;
 }
 
-async function until(check: () => boolean): Promise<void> {
-  const deadline = Date.now() + 2000;
+async function until(check: () => boolean, ms = 2000): Promise<void> {
+  const deadline = Date.now() + ms;
   while (!check()) {
     if (Date.now() > deadline) throw new Error("timed out");
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -346,6 +346,32 @@ describe("readFirehose", () => {
     expect(run.stops[0]).toBe("stream_failed");
     expect(run.applied).toEqual([]);
     await until(() => run.missed >= 1); // no frame to resume from: the consumer must backfill
+  });
+
+  test("reader.transport_redial_without_a_cursor_reports_missed_events", async () => {
+    // Subscription redials a dropped socket itself (@atproto/ws-client 0.2.1 dist/websocket.js, the reconnect
+    // branch), asking getParams again. With no cursor and no frame seen, that redial would go to the live tip.
+    const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+    await new Promise((resolve) => server.once("listening", resolve));
+    const dials: (string | null)[] = [];
+    server.on("connection", (socket, request) => {
+      dials.push(new URL(request.url ?? "/", "http://x").searchParams.get("cursor"));
+      if (dials.length === 1) socket.close(1001, "going away"); // a reconnectable close, before any frame
+    });
+    const { port } = server.address() as { port: number };
+    const dialsAtMissed: number[] = [];
+    const run = start(new URL(`http://127.0.0.1:${port}`), () => "unset", {
+      missedEvents: async () => {
+        dialsAtMissed.push(dials.length);
+      },
+    });
+    cleanups.push(() => {
+      run.stop();
+      server.close();
+    });
+    await until(() => dials.length === 2, 4000); // the library's first reconnect waits about a second
+    expect(dialsAtMissed).toEqual([1]);
+    expect(dials).toEqual([null, null]);
   });
 
   test("reader.retries_a_failed_missed_events_before_redial", async () => {
