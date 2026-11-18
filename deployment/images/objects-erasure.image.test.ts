@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
-import { regularFilesHolding } from "../../tests/support/files.ts";
+import { makeReadableScript, regularFilesHolding } from "../../tests/support/files.ts";
 import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const IMAGES = import.meta.dirname;
@@ -62,17 +62,14 @@ function waitFor(container: string, probe: () => boolean): boolean {
   return false;
 }
 
-/** chmod each path; one that fails and no longer exists was renamed away, any other failure exits 1. */
-const CHMOD_UNLESS_GONE = 'for f; do chmod a+rX "$f" || [ ! -e "$f" ] || exit 1; done';
-
 /**
  * Every regular file under the store's /data, at `dir` on the host, that holds `needle`. The store writes its files as
  * its own uid (1000), some of them 0600, and CI's runner is another uid, so the store first makes them readable. The
- * store keeps writing while we look, so a file gone between the listing and the chmod or the read is skipped (main CI
- * on a25d62a: max_volume_id.tmp); any other failure still fails the test.
+ * store keeps writing while we look, so a file gone during find's walk, the chmod or the read is skipped (main CI on
+ * a25d62a and #1706); any other failure still fails the test.
  */
 function filesHolding({ container, data: dir }: { container: string; data: string }, needle: Buffer): string[] {
-  const readable = inStore(container, `find /data -mindepth 1 -exec sh -c '${CHMOD_UNLESS_GONE}' sh {} +`);
+  const readable = inStore(container, makeReadableScript("/data"));
   expect(readable.code, readable.err).toBe(0);
   return regularFilesHolding(dir, needle);
 }
