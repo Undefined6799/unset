@@ -47,21 +47,44 @@ test.describe("javascript disabled", () => {
     await expect(page).toHaveURL(/\/legal\/terms$/);
   });
 
-  // P1.25f, P2.13e: on a phone the bottom bar's menu button opens the drawer. The native popover closes on Escape and
-  // gives focus back to the button that opened it (HTML "hide popover algorithm", focusPreviousElement).
+  // P1.25f, P2.13e, Clean tabs: on a 320px phone the header's menu button opens the drawer and the account button its
+  // menu, with no script, and nothing scrolls sideways. A native popover closes on Escape and gives focus back to the
+  // button that opened it (HTML "hide popover algorithm", focusPreviousElement).
   test.describe("phone", () => {
-    test.use({ viewport: { width: 375, height: 800 } });
+    test.use({ viewport: { width: 320, height: 800 } });
 
     test("navigation_popover_without_js", async ({ page }) => {
       await page.goto("/");
-      const toggle = page.locator('nav:not([popover]) button[popovertargetaction="toggle"]');
-      const panel = page.locator("[popover]");
+      const toggle = page.locator('header button[popovertarget="core-menu"]');
+      const panel = page.locator("#core-menu");
       await expect(panel).toBeHidden();
       await toggle.press("Enter");
       await expect(panel).toBeVisible();
-      await expect(panel.getByRole("link", { name: "Settings" })).toBeVisible();
+      await expect(panel.getByRole("link", { name: "Terms" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
+      await expect(toggle).toBeFocused();
+      await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    });
+
+    test("account_menu_fits_without_js", async ({ page }) => {
+      await openPage(page, SETTINGS);
+      const toggle = page.locator('header button[popovertarget="account-menu"]');
+      const menu = page.locator("#account-menu");
+      await toggle.press("Enter");
+      await expect(menu.getByRole("link", { name: "Your profile" })).toBeFocused();
+      await expect(menu.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+      await expect(menu.getByRole("button", { name: "Sign out" })).toBeVisible();
+      const width = await page.evaluate(() => {
+        const root = (globalThis as unknown as { document: { documentElement: { scrollWidth: number } } }).document;
+        return root.documentElement.scrollWidth;
+      });
+      expect(width).toBeLessThanOrEqual(320);
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
       await expect(toggle).toBeFocused();
     });
   });
@@ -69,10 +92,10 @@ test.describe("javascript disabled", () => {
   // P2.13e: on desktop the header's menu button opens the drawer and its X closes it, with no script.
   test("navigation_drawer_without_js", async ({ page }) => {
     await page.goto("/");
-    const panel = page.locator("[popover]");
-    await page.locator('header button[popovertargetaction="toggle"]').click();
+    const panel = page.locator("#core-menu");
+    await page.locator('header button[popovertarget="core-menu"]').click();
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+    await expect(panel.getByRole("link", { name: "Privacy" })).toBeVisible();
     await panel.getByRole("button", { name: "Close menu" }).click();
     await expect(panel).toBeHidden();
   });
@@ -102,17 +125,17 @@ test.describe("javascript disabled", () => {
     await expect(form.getByLabel("Light")).toBeChecked();
   });
 
-  // P2.13e: the drawer's picker is three buttons that each post their choice, so it works with no script.
-  test("drawer_theme_picker_without_js", async ({ page }) => {
+  // P2.13e: the account menu's picker is three buttons that each post their choice, so it works with no script.
+  test("account_menu_theme_picker_without_js", async ({ page }) => {
     await openPage(page, SETTINGS);
-    await page.locator('header button[popovertargetaction="toggle"]').click();
+    await page.locator('header button[popovertarget="account-menu"]').click();
     const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
-    await page.locator("#core-menu").getByRole("button", { name: "Dark" }).click();
+    await page.locator("#account-menu").getByRole("button", { name: "Dark" }).click();
     expect((await posted).status()).toBe(303);
     await expect(page).toHaveURL(/\/settings\/profile$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await page.locator('header button[popovertargetaction="toggle"]').click();
-    await expect(page.locator("#core-menu").getByRole("button", { name: "Dark" })).toHaveAttribute(
+    await page.locator('header button[popovertarget="account-menu"]').click();
+    await expect(page.locator("#account-menu").getByRole("button", { name: "Dark" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

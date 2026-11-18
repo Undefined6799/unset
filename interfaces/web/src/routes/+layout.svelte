@@ -16,7 +16,7 @@ import type { Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
 import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
-import { type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
+import { accountLetter, type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
 import type { LayoutData } from "./$types";
 
 let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -44,8 +44,8 @@ const PICKER = [
   { value: "light", icon: "bulb-on", label: T.light },
 ] as const;
 
-// The drawer's picker in the browser (P2.13e), as shared/ui/components/Navigation/ThemePicker.tsx did it: once the
-// client runs, a choice is saved in the background and applied to <html> in place, so the drawer stays open (Alex,
+// The account menu's picker in the browser (P2.13e), as shared/ui/components/Navigation/ThemePicker.tsx did it: once the
+// client runs, a choice is saved in the background and applied to <html> in place, so the menu stays open (Alex,
 // 2026-10-23 02:15Z). The server renders a choice as data-theme and the color-scheme meta (lib/server/theme.ts
 // themeChunk); applyTheme sets the same two. The theme cookie is HttpOnly, so the tab keeps its last saved choice in
 // sessionStorage for a page the back-forward cache restores as it was left (https://web.dev/articles/bfcache).
@@ -113,16 +113,26 @@ function restoreSaved(event: PageTransitionEvent): void {
 }
 
 const MENU = "core-menu";
+const ACCOUNT = "account-menu";
+// The core header's main destinations (Clean tabs): only those that run today.
+const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as const;
+// The header's icon controls: 34px on a mouse, a 44px target on touch (Clean tabs handoff).
+const control = "pointer-coarse:size-11";
+const letter = $derived(shell.account?.name === undefined ? undefined : accountLetter(shell.account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
-  const drawer = document.getElementById(MENU);
-  if (drawer?.matches(":popover-open")) drawer.hidePopover();
+  for (const id of [MENU, ACCOUNT]) {
+    const popover = document.getElementById(id);
+    if (popover?.matches(":popover-open")) popover.hidePopover();
+  }
 });
 // A footer link is a 24px target (WCAG 2.2 SC 2.5.8): its 20px line plus 2px above and below.
 const footerLink = "py-0.5";
+// A menu row: a link drawn as a row, not as text, so it keeps the foreground colour and no underline; muted marks hover
+// and the current page, since the menus' own surface is the accent colour.
 const row =
-  "flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent aria-[current=page]:bg-accent aria-[current=page]:font-medium";
+  "flex items-center gap-3 rounded-md px-3 py-2 text-foreground no-underline hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium";
 </script>
 
 <svelte:window onpageshow={restoreSaved} />
@@ -155,7 +165,7 @@ const row =
 {/snippet}
 
 {#snippet themePicker()}
-  <!-- The drawer's picker (P2.13e; Figma 151:939 option A): three buttons in one group that each POST their choice, so
+  <!-- The account menu's picker (P2.13e; Figma 151:939 option A): three buttons in one group that each POST their choice, so
        it works with no script; the chosen one is pressed. -->
   <form method="post" action="/prefs/theme" use:enhance={saveInPlace}>
     <input type="hidden" name="return" value={prefs?.returnTo ?? "/"} />
@@ -199,74 +209,111 @@ const row =
 >
 
 {#if shell.kind === "core"}
-  <header class="flex h-14 items-center gap-2 border-b px-4">
-    <Button variant="ghost" size="icon" popovertarget={MENU} popovertargetaction="toggle" class="max-sm:hidden">
-      <Icon name="menu" size={24} label={T.menu} />
-    </Button>
-    <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
+  <!-- The core shell's header (P1.20k; Alex, 2026-11-18, "Clean tabs"): the menu button and wordmark, the account menu
+       at the right edge, and a row of main destinations below. Both menus are native popovers, so they open with no
+       script, close on Escape or a click outside, and give focus back to their button. Only destinations that run
+       today are linked: search, create, messages, notifications, Community and Explore come with their features. -->
+  <header class="border-b bg-secondary">
+    <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:px-4 max-sm:gap-2 max-sm:px-3">
+      <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-2">
+        <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
+          <Icon name="menu" size={20} label={T.menu} />
+        </Button>
+        <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap text-foreground no-underline" aria-label={T.homeLabel}
+          >{T.brandName}<span class="font-normal text-muted-foreground">{T.brandSuffix}</span></a
+        >
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        {#if shell.account !== undefined}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={ACCOUNT}
+            popovertargetaction="toggle"
+            class="{control} rounded-full bg-muted font-semibold"
+          >
+            {#if letter !== undefined}<span aria-hidden="true">{letter}</span>{:else}<Icon name="profile" size={20} />{/if}
+            <span class="sr-only">{T.accountMenu}</span>
+          </Button>
+        {:else}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            href="/me"
+            class={control}
+            aria-current={shell.active === "account" ? "page" : undefined}
+          >
+            <Icon name="profile" size={20} label={T.profile} />
+          </Button>
+        {/if}
+      </div>
+    </div>
+    <nav aria-label={T.mainNav} class="flex min-h-11.5 items-stretch gap-2 px-5 max-md:px-3 max-sm:gap-1 max-sm:px-2">
+      {#each TABS as tab (tab.href)}
+        <a
+          href={tab.href}
+          aria-current={shell.active === tab.active ? "page" : undefined}
+          class="relative flex items-center gap-2 rounded-md px-3 text-sm whitespace-nowrap text-foreground no-underline transition-colors duration-120 hover:bg-muted motion-reduce:transition-none aria-[current=page]:font-semibold aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:-bottom-px aria-[current=page]:after:h-0.75 aria-[current=page]:after:rounded-sm aria-[current=page]:after:bg-primary"
+        >
+          <Icon name={tab.icon} size={16} class="text-muted-foreground" /><span>{tab.label}</span>
+        </a>
+      {/each}
+    </nav>
   </header>
   <nav
     id={MENU}
     popover="auto"
-    aria-label={T.menu}
+    aria-label={T.more}
     class="fixed inset-y-0 left-0 m-0 h-full w-72 max-w-[85vw] flex-col gap-4 border-r bg-background p-4 text-foreground open:flex"
   >
     <div class="flex items-center justify-between">
-      <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
+      <a href="/" class="font-mono font-semibold text-foreground no-underline" aria-label={T.homeLabel}>{T.brand}</a>
       <!-- svelte-ignore a11y_autofocus -- focus belongs inside the drawer it opens, so Escape returns it to the menu button -->
       <Button variant="ghost" size="icon" autofocus popovertarget={MENU} popovertargetaction="hide">
         <Icon name="close" size={24} label={T.closeMenu} />
       </Button>
     </div>
     <ul class="flex flex-col gap-1">
-      <li>
-        <a href="/" class={row} aria-current={shell.active === "home" ? "page" : undefined}>
-          <Icon name="home" size={24} /><span>{T.home}</span>
-        </a>
-      </li>
-      <li>
-        <a href={shell.account?.path ?? "/me"} class={row} aria-current={shell.active === "account" ? "page" : undefined}>
-          <Icon name="profile" size={24} /><span>{T.profile}</span>
-          {#if shell.account?.name}<span class="truncate text-muted-foreground">{shell.account.name}</span>{/if}
-        </a>
-      </li>
-      <li>
-        <a href="/settings/profile" class={row} aria-current={shell.active === "settings" ? "page" : undefined}>
-          <Icon name="settings" size={24} /><span>{T.settings}</span>
-        </a>
-      </li>
+      {#each LEGAL as link (link.href)}
+        <li><a href={link.href} class={row}><span>{link.label}</span></a></li>
+      {/each}
     </ul>
-    {#if shell.account !== undefined}
-      <form method="post" action="/logout" class="border-t pt-4">
-        <Button type="submit" variant="ghost" class="w-full justify-start">
-          <Icon name="signout" size={24} /><span>{T.signOut}</span>
+  </nav>
+  {#if shell.account !== undefined}
+    <section
+      id={ACCOUNT}
+      popover="auto"
+      aria-label={T.account}
+      class="fixed top-16 right-3 bottom-auto left-auto m-0 w-72 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:right-2 max-sm:w-auto max-sm:left-2"
+    >
+      {#if shell.account.name}<p class="truncate px-3 pt-1 pb-2 font-medium" title={shell.account.name}>{shell.account.name}</p>{/if}
+      <ul class="flex flex-col gap-1">
+        <li>
+          <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens, so Escape returns it to the avatar -->
+          <a href={shell.account.path} class={row} autofocus aria-current={shell.active === "account" ? "page" : undefined}>
+            <Icon name="profile" size={20} /><span>{T.yourProfile}</span>
+          </a>
+        </li>
+        <li>
+          <a href="/settings/profile" class={row} aria-current={shell.active === "settings" ? "page" : undefined}>
+            <Icon name="settings" size={20} /><span>{T.settings}</span>
+          </a>
+        </li>
+      </ul>
+      {#if prefs !== undefined}
+        <div class="flex items-center justify-between gap-3 border-t px-3 pt-2 pb-1">
+          <span class="text-sm">{T.appearance}</span>
+          {@render themePicker()}
+        </div>
+      {/if}
+      <form method="post" action="/logout" class="border-t pt-1">
+        <Button type="submit" variant="ghost" class="w-full justify-start px-3">
+          <Icon name="signout" size={20} /><span>{T.signOut}</span>
         </Button>
       </form>
-    {/if}
-    {#if prefs !== undefined}
-      <div class="mt-auto border-t pt-4">{@render themePicker()}</div>
-    {/if}
-  </nav>
-  <nav
-    aria-label={T.menu}
-    class="fixed inset-x-0 bottom-0 flex h-14 items-center justify-around border-t bg-background sm:hidden"
-  >
-    <Button variant="ghost" size="icon" popovertarget={MENU} popovertargetaction="toggle">
-      <Icon name="menu" size={24} label={T.menu} />
-    </Button>
-    <Button variant="ghost" size="icon" href="/" aria-current={shell.active === "home" ? "page" : undefined}>
-      <Icon name="home" size={24} label={T.home} />
-    </Button>
-    <Button
-      variant="ghost"
-      size="icon"
-      href={shell.account?.path ?? "/me"}
-      aria-current={shell.active === "account" ? "page" : undefined}
-    >
-      <Icon name="profile" size={24} label={T.profile} />
-    </Button>
-  </nav>
-  <main id="main" tabindex="-1" class="mx-auto w-full max-w-3xl px-4 py-8 max-sm:pb-20">{@render content()}</main>
+    </section>
+  {/if}
+  <main id="main" tabindex="-1" class="mx-auto w-full max-w-3xl px-4 py-8">{@render content()}</main>
 {:else}
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">

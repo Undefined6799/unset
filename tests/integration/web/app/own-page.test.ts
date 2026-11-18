@@ -242,13 +242,13 @@ describe("the shell around the member page", () => {
     }
   });
 
-  test("the_drawer_picker_presses_the_saved_theme", async () => {
+  test("the_account_menu_picker_presses_the_saved_theme", async () => {
     const cookie = await signedIn(OWNER);
     const response = await web.fetch("/settings/account", {
       headers: { accept: HTML, "x-forwarded-for": clientAddress(), cookie: `__Host-sid=${cookie}; __Host-theme=light` },
     });
     const html = await response.text();
-    const drawer = html.slice(html.indexOf('id="core-menu"'));
+    const drawer = html.slice(html.indexOf('id="account-menu"'));
     expect(drawer).toMatch(/name="theme" value="light"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*value="light"/);
     expect(drawer).toMatch(/value="dark"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*value="dark"/);
   });

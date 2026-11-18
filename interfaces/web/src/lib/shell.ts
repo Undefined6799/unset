@@ -4,9 +4,10 @@
 // Two shells, as apps/web/src/shell/AppShell.tsx draws them today:
 // - "site": skip link, a header with Sign in (none when `signedIn`), main, and a footer of links, plus the theme form
 //   when `prefs` is given (app pages only).
-// - "core": skip link, a header with the menu button, the menu drawer (a native popover, so it opens with no script),
-//   a bottom bar on phones, and main. `account` is the signed-in member's profile link; with it the drawer also offers
-//   Sign out, and with `prefs` the theme picker.
+// - "core": skip link, the two-row header (Alex, 2026-11-18, "Clean tabs"): the menu button, wordmark and account
+//   control above, the main destinations below; the menu drawer of secondary links; and main. Both menus are native
+//   popovers, so they open with no script. `account` is the signed-in member: with it the header shows their account
+//   menu (profile, settings, the theme picker with `prefs`, Sign out); without it, a link to /me.
 // - "bare": main alone, centred (the sign-in page, which Hono drew with no shell).
 
 export type ThemeChoice = "dark" | "light" | "system";
@@ -33,14 +34,29 @@ export const PUBLIC_PAGE_CACHE = "public, max-age=300";
 
 export const SITE_SHELL: ShellData = { kind: "site" };
 
+/** The account button's letter, as shared/ui/components/Avatar/Avatar.tsx avatarLetter draws it: the first character
+ * of the name without a leading "@", uppercased; "?" for an empty name. */
+export function accountLetter(name: string): string {
+  const first = [...name.replace(/^@/, "").trim()][0];
+  return first === undefined ? "?" : first.toUpperCase();
+}
+
 export const SHELL_TEXT = {
   skip: "Skip to content",
   brand: "unset.sh",
+  brandName: "unset",
+  brandSuffix: ".sh",
   homeLabel: "unset.sh home",
   signIn: "Sign in",
   home: "Home",
   profile: "Profile",
   settings: "Settings",
+  yourProfile: "Your profile",
+  account: "Your account",
+  accountMenu: "Account menu",
+  appearance: "Appearance",
+  mainNav: "Main",
+  more: "More on unset.sh",
   menu: "Menu",
   closeMenu: "Close menu",
   signOut: "Sign out",

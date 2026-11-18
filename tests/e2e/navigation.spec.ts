@@ -31,27 +31,29 @@ test("continue_after_a_confirmed_email_reaches_the_member_page", async ({ page }
   await expect(page.locator("h1")).not.toContainText("does not exist");
 });
 
-// Gap 4 of the P1.20k review: a client navigation keeps the layout, so the drawer closes itself, as Hono's did.
-test("the_drawer_profile_link_reaches_the_member_page_and_closes", async ({ page }) => {
+// Gap 4 of the P1.20k review: a client navigation keeps the layout, so a menu closes itself, as Hono's drawer did.
+test("the_account_menu_profile_link_reaches_the_member_page_and_closes", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertargetaction="toggle"]').click();
-  await page
-    .locator("#core-menu")
-    .getByRole("link", { name: /Profile/ })
-    .click();
+  await page.locator('header button[popovertarget="account-menu"]').click();
+  await page.locator("#account-menu").getByRole("link", { name: "Your profile" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
+  await expect(page.locator("#account-menu")).toBeHidden();
+});
+
+test("the_drawer_closes_after_a_client_navigation", async ({ page }) => {
+  expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  await page.locator('header button[popovertarget="core-menu"]').click();
+  await page.locator("#core-menu").getByRole("link", { name: "Terms" }).click();
+  await expect(page).toHaveURL(`${TEST_ORIGIN}/legal/terms`);
   await expect(page.locator("#core-menu")).toBeHidden();
 });
 
 test("me_from_the_home_page_reaches_the_member_page", async ({ page }) => {
   const watched = watch(page);
   expect((await openPage(page, HOME_SIGNED_IN))?.status()).toBe(200);
-  await page.locator('header button[popovertargetaction="toggle"]').click();
-  await page
-    .locator("#core-menu")
-    .getByRole("link", { name: /Profile/ })
-    .click();
+  await page.locator("header").getByRole("link", { name: "Profile" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
   expect(watched.pageErrors).toEqual([]);
 });
@@ -78,13 +80,13 @@ type DocumentLike = {
   body: { append: (node: object) => void };
 };
 
-// The drawer's theme picker (P2.13e, Alex 2026-10-23 02:15Z): with the client running a choice is saved in the
-// background and applied in place, so the drawer stays open; the next page the server renders has it from the cookie.
-test("the_drawer_theme_picker_saves_in_place", async ({ page }) => {
+// The account menu's theme picker (P2.13e, Alex 2026-10-23 02:15Z): with the client running a choice is saved in the
+// background and applied in place, so the menu stays open; the next page the server renders has it from the cookie.
+test("the_account_menu_theme_picker_saves_in_place", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertargetaction="toggle"]').click();
-  const drawer = page.locator("#core-menu");
+  await page.locator('header button[popovertarget="account-menu"]').click();
+  const drawer = page.locator("#account-menu");
   const light = drawer.getByRole("button", { name: "Light" });
   await expect(light).toHaveAttribute("aria-pressed", "false");
   const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
@@ -95,7 +97,7 @@ test("the_drawer_theme_picker_saves_in_place", async ({ page }) => {
   await expect(drawer).toBeVisible();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.locator('header button[popovertargetaction="toggle"]').click();
+  await page.locator('header button[popovertarget="account-menu"]').click();
   await drawer.getByRole("button", { name: "System" }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /./);
 });
