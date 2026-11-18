@@ -4,6 +4,7 @@
   server and sign-out. Everything shown was built by +page.server.ts; card forms post to this page's actions.
 -->
 <script lang="ts">
+import { Icon } from "@unset/apps-web/lib/components/icon";
 import CardControls from "@unset/apps-web/lib/components/profile/card-controls.svelte";
 import CardEditor from "@unset/apps-web/lib/components/profile/card-editor.svelte";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
@@ -120,7 +121,7 @@ const setUp = $derived(data.profile === null && !data.profileUnavailable);
   <p>
     <a href={link.href} target="_blank" rel="noopener noreferrer"
       >{withHost(link.ours ? OWN_PAGE.accountOurs : OWN_PAGE.accountForeign, link.host)}
-      <span>{OWN_PAGE.newTab}</span></a
+      <Icon name="external" size={16} label={` ${OWN_PAGE.newTab}`} /></a
     >
   </p>
 {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
 // Confirming the account email (P2.11). The server already read the PDS; this page never sends mail, the member
 // confirms it on the sign-in server. P2.11h: every state ends in this browser's sign-out.
+import { Icon } from "@unset/apps-web/lib/components/icon";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { VERIFY_EMAIL as T } from "../welcome/messages.ts";
@@ -24,7 +25,7 @@ let { data } = $props();
     <Card.Footer>
       {#if data.account !== null}
         <Button href={data.account} target="_blank" rel="noopener noreferrer">
-          Your account on {data.pdsHost} (opens in a new tab)
+          Your account on {data.pdsHost}<Icon name="external" size={16} label=" (opens in a new tab)" />
         </Button>
       {/if}
       <Button href="/verify-email" variant="outline">{T.checkAgain}</Button>
