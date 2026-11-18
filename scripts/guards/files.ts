@@ -10,6 +10,9 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
   "coverage",
   ".worktrees",
   "graphify-out",
+  // SvelteKit's build output and generated files (interfaces/web/.gitignore).
+  "interfaces/web/build",
+  "interfaces/web/.svelte-kit",
   "scripts/guards/fixtures",
   "scripts/lint/semgrep/fixtures",
 ]);

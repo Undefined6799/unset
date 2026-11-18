@@ -114,6 +114,13 @@ const MATRIX = [
     to: [{ path: "^interfaces/$1/" }, { path: "^(domains|infrastructure|shared)/" }, CORE, NPM],
   },
   {
+    // SvelteKit's own modules ($app/env, $app/forms, ...), which only SvelteKit's Vite plugin resolves (kit 3.2.0
+    // types/index.d.ts declares them, `declare module '$app/env'`).
+    name: "interface-web-sveltekit",
+    from: { path: "^interfaces/web/" },
+    to: [{ path: "^\\$app/[a-z-]+$", couldNotResolve: true }],
+  },
+  {
     name: "interface-http-render",
     from: { path: "^interfaces/http/" },
     to: [{ path: oneOfFiles([RENDER_ENTRIES.http]) }],
@@ -208,6 +215,16 @@ const MATRIX = [
   { name: "tooling", from: { path: TOOLING }, to: [{}] },
 ];
 
+// The web process's server-side files (ADR 0056 decision 2): only these may reach a domain or infrastructure.
+const WEB_SERVER_FILES = [
+  "^interfaces/web/server\\.ts$",
+  "^interfaces/web/check\\.ts$",
+  "^interfaces/web/vite\\.config\\.ts$",
+  "^interfaces/web/src/hooks\\.server\\.ts$",
+  "^interfaces/web/src/lib/server/",
+  "^interfaces/web/src/routes/.*\\.server\\.ts$",
+  "^interfaces/web/src/routes/.*\\+server\\.ts$",
+];
 const forbidden = (name, comment, from, to, severity = "error") => ({ name, comment, severity, from, to });
 
 module.exports = {
@@ -416,11 +433,24 @@ module.exports = {
       {},
       { path: APP_BUILD_CONFIG },
     ),
+    forbidden(
+      "svelte-screens-no-core",
+      "In the web process only server files (*.server.ts, hooks.server.ts, server.ts, lib/server/) reach a domain or infrastructure; a screen or universal load never does (ADR 0056 decision 2).",
+      { path: "^interfaces/web/", pathNot: WEB_SERVER_FILES },
+      { path: "^(domains|infrastructure)/" },
+    ),
+    forbidden(
+      "sveltekit-web-only",
+      "Only the web process and its screens import Svelte or SvelteKit; domains, infrastructure and shared stay framework-free (ADR 0056 decision 3).",
+      { pathNot: "^(interfaces/web|apps/web)/" },
+      { path: "^(node_modules/)?(svelte|@sveltejs/[^/]+)(/|$)" },
+    ),
     forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
     forbidden(
       "no-orphans",
       "A module nothing imports is usually dead code.",
-      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$"] },
+      // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054).
+      { orphan: true, pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)"] },
       {},
       "warn",
     ),
@@ -444,6 +474,8 @@ module.exports = {
         "^(apps|interfaces|domains|infrastructure|shared|deployment|scripts|tests)/.+/((dist|coverage)/)",
         "^scripts/guards/fixtures/",
         "^scripts/lint/semgrep/fixtures/",
+        // SvelteKit's build output and generated types (interfaces/web/.gitignore).
+        "^interfaces/web/(build|\\.svelte-kit)/",
         // The docs site is not product code. Its vendored FlexSearch bundle (and Hugo's
         // public/ and resources/ output) is browser JavaScript; the bundle contains a
         // Node require("worker_threads") that is not an import the matrix governs (P0.09).

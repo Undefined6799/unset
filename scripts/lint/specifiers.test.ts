@@ -166,3 +166,12 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
 });
+
+test("sveltekit_modules_only_in_the_web_process", () => {
+  // ADR 0054: SvelteKit's $app modules are allowed in interfaces/web, by name, and nowhere else.
+  expect(refusal(PACKAGES, "interfaces/web/src/hooks.server.ts", "$app/env")).toBeUndefined();
+  expect(refusal(PACKAGES, "interfaces/web/src/routes/a/+page.svelte", "$app/forms")).toBeUndefined();
+  expect(refusal(PACKAGES, "interfaces/http/a.ts", "$app/env")).toBe("a SvelteKit module outside the web process");
+  expect(refusal(PACKAGES, "interfaces/web/a.ts", "$app/other")).toBe("a malformed package name");
+  expect(refusal(PACKAGES, "interfaces/web/a.ts", "$env/static/private")).toBe("a malformed package name");
+});
