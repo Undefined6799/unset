@@ -19,8 +19,8 @@ import {
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
+import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
-import { themeFromCookies, themeReturnTo } from "../prefs/theme/theme.server.ts";
 import { accountView } from "./account.server.ts";
 import { cardForm } from "./card-form.server.ts";
 import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";

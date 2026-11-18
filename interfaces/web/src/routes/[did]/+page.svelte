@@ -6,6 +6,11 @@
 <script lang="ts">
 import CardControls from "@unset/apps-web/lib/components/profile/card-controls.svelte";
 import CardEditor from "@unset/apps-web/lib/components/profile/card-editor.svelte";
+import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
+import * as Alert from "@unset/apps-web/lib/components/ui/alert";
+import * as Avatar from "@unset/apps-web/lib/components/ui/avatar";
+import { Button } from "@unset/apps-web/lib/components/ui/button";
+import * as Card from "@unset/apps-web/lib/components/ui/card";
 import {
   BUTTONS_EDIT,
   CARD_EDIT,
@@ -13,11 +18,6 @@ import {
   LINKS_EDIT,
   OWN_PAGE,
 } from "@unset/apps-web/lib/profile/messages.ts";
-import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
-import * as Alert from "@unset/apps-web/lib/components/ui/alert";
-import * as Avatar from "@unset/apps-web/lib/components/ui/avatar";
-import { Button } from "@unset/apps-web/lib/components/ui/button";
-import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { enhance } from "$app/forms";
 
 let { data, form } = $props();

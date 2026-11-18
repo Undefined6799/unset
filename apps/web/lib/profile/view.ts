@@ -4,8 +4,8 @@
 // render what this returns.
 import { safeHref } from "@unset/shared-safe-href";
 import { CARD_TEXT } from "./messages.ts";
-import type { CardContent, CardShown, CardView, CardWidth, ShownButton } from "./types.ts";
 import { parseReadme } from "./parse.ts";
+import type { CardContent, CardShown, CardView, CardWidth, ShownButton } from "./types.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 

@@ -6,11 +6,11 @@
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
+import type { CardLayout, CardView } from "../../profile/types.ts";
 import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import Readme from "./readme.svelte";
-import type { CardLayout, CardView } from "../../profile/types.ts";
 
 let { cards, controls }: { cards: readonly CardView[]; controls?: Snippet<[number]> } = $props();
 

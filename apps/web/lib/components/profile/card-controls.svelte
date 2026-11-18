@@ -6,11 +6,11 @@
 -->
 <script lang="ts">
 import type { Action } from "svelte/action";
+import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
+import type { CardContent, CardEditLimits, CardView } from "../../profile/types.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import CardEditor from "./card-editor.svelte";
-import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
-import type { CardContent, CardEditLimits, CardView } from "../../profile/types.ts";
 
 let {
   cards,
