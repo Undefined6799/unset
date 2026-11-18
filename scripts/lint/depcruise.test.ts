@@ -742,6 +742,16 @@ describe("allowlist matrix", () => {
     // cruise over icon.svelte covers that edge.
     await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/render.tsx"));
     await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/src/b.tsx"));
+    // The legal texts: a .md file directly in apps/web/legal/, nothing else there and nothing nested.
+    // The pages import them with Vite's `?raw` suffix; dependency-cruiser 18 resolves that to the .md file itself
+    // (checked on the real tree), while a fixture would write a file named with the suffix, so the fixture omits it.
+    await expectPass(edge("interfaces/web/src/routes/c.ts", "../../../../apps/web/legal/terms.en.md"));
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal/x.ts"));
+    await expectFail(
+      "web-components-only",
+      edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal/a/b.md"),
+    );
+    await expectFail("web-components-only", edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/legal.md"));
     await expectFail("svelte-no-react-ui", edge("interfaces/web/src/routes/a.ts", "../../../../shared/ui/index.ts"));
     await expectFail("svelte-no-react-ui", edge("apps/web/lib/components/a.ts", "../../../../shared/ui/index.ts"));
   });

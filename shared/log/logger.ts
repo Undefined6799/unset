@@ -322,7 +322,8 @@ export function createLogger(options: LoggerOptions): Logger {
       log("error", "error", () => {
         const code = error instanceof AppError ? error.code : "internal.error";
         const kind = error instanceof Error ? String(error.name) : typeof error;
-        const stack = options.env !== "prod" && error instanceof Error ? { stack: stackFrames(error) } : {};
+        const stack: Record<string, string> =
+          options.env !== "prod" && error instanceof Error ? { stack: stackFrames(error) } : {};
         return [{ code, kind }, stack];
       }),
   };

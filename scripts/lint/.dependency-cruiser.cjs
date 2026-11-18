@@ -8,9 +8,10 @@ const ZERO_DEP_ALLOWLIST = ["shared/admin-envelope/"];
 
 /** Server-side render entries an interface may import from its app (guideline §1). P1.20 fixes the paths. */
 const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.tsx" };
-// What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file
-// and the Tailwind entry. Not the React UI.
-const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$)";
+// What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file,
+// the Tailwind entry and the legal texts directly in apps/web/legal/ (read as `?raw` by the legal pages). Not the
+// React UI.
+const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$|legal/[^/]+\\.md$)";
 // Svelte code: the web process and the components it composes. Neither reaches the React UI in shared/ui.
 const SVELTE_UI_FROM = "^(interfaces/web/|apps/web/lib/)";
 
