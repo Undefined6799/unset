@@ -95,13 +95,13 @@ async function emailAnswerAtSignIn(event: CallbackEvent, did: Did, idHash: Buffe
   };
   // Neither the token restore inside pdsSessionInfo nor a running query watches the signal, so the read and the write
   // race the budget together: the sign-in never waits past it. Work left behind ends on its own; a failure is logged.
-  const work = readAndCache().catch((error: unknown) => {
+  const failed = (error: unknown): "done" => {
     log.warn("auth.email_read_failed", { kind: className(error) });
-    return "done" as const;
-  });
-  if ((await Promise.race([work, abandoned(deadline)])) === null) {
-    log.warn("auth.email_read_failed", { kind: "timeout" });
-  }
+    return "done";
+  };
+  const work = readAndCache();
+  const outcome = await Promise.race([work.catch(failed), abandoned(deadline)]);
+  if (outcome === null) log.warn("auth.email_read_failed", { kind: "timeout" });
 }
 
 /** The book's steps 3 to 9 and 11, after the library has completed (or refused) the authorization. Always throws a 303. */
