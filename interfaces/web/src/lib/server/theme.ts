@@ -1,14 +1,18 @@
-// The theme preference (P1.22; plan section 5.1): applied by the server, never by a pre-paint script. Only enum values
-// ever reach the HTML or the cookie. Ported from interfaces/http/prefs/theme.ts and prefs/return-to.ts (P1.20g); the
-// return target keeps its rules: safeReturnPath for any page, and the two sign-in pages with only a checked `next` and
+// The theme preference on the page (P1.22; plan §5.1, §5.4), as interfaces/http/prefs/theme.ts applies it: by the
+// server, never by a pre-paint script. Only `app` pages read the `__Host-theme` cookie (they are private and vary on
+// Cookie, hooks.server.ts); public pages never read it, so a shared cache stays valid. Only enum values reach the
+// HTML: a cookie that is absent, repeated or not dark or light means "system", with no error, no echo and no log.
+// The placeholders sit in src/app.html; SvelteKit's transformPageChunk fills them (https://svelte.dev/docs/kit/hooks,
+// `resolve` options, kit 3.2.0).
+// The theme form's write path is here too (P1.20g, from interfaces/http/prefs/theme.ts and prefs/return-to.ts): its
+// return target keeps its rules, safeReturnPath for any page and the two sign-in pages with only a checked `next` and
 // `handle` rebuilt, never copied.
 import type { Cookies } from "@sveltejs/kit";
 import { parseDid, parseHandle } from "@unset/domains-identity";
 import { safeReturnPath } from "@unset/shared-http";
+import type { PageGroup } from "./policy.ts";
+import { cookieValue } from "./sign-in-state.ts";
 
-export type ThemePref = "dark" | "light" | "system";
-
-/** Host-only by the `__Host-` prefix: Secure, Path=/ and no Domain (RFC 6265bis section 4.1.3.2). */
 export const THEME_COOKIE = "__Host-theme";
 const ONE_YEAR_S = 31_536_000;
 const ATTRIBUTES = { path: "/", secure: true, httpOnly: true, sameSite: "lax" } as const;
@@ -64,13 +68,21 @@ export function themeReturnTo(target: string | null): string {
   return safe === null || safe.toLowerCase().startsWith("/login") ? HOME : safe;
 }
 
-/** The theme cookie's value when exactly one is sent and it is dark or light; otherwise "system" (no error, no echo). */
-export function themeFromCookies(header: string | null): ThemePref {
-  const values = (header ?? "")
-    .split(";")
-    .map((pair) => pair.trim())
-    .filter((pair) => pair.startsWith(`${THEME_COOKIE}=`))
-    .map((pair) => pair.slice(THEME_COOKIE.length + 1));
-  const [only] = values;
-  return values.length === 1 && (only === "dark" || only === "light") ? only : "system";
+export type ThemePref = "dark" | "light" | "system";
+
+function themeOf(group: PageGroup, header: string | null): ThemePref {
+  if (group !== "app") return "system";
+  const value = cookieValue(header, THEME_COOKIE);
+  return value === "dark" || value === "light" ? value : "system";
 }
+
+/** Fills app.html's `%unset.theme%` (the html element's data-theme) and `%unset.scheme%` (the color-scheme meta). */
+export function themeChunk(group: PageGroup, header: string | null): (input: { html: string }) => string {
+  const theme = themeOf(group, header);
+  const attribute = theme === "system" ? "" : ` data-theme="${theme}"`;
+  const scheme = theme === "system" ? "dark light" : theme;
+  return ({ html }) => html.replace("%unset.theme%", attribute).replace("%unset.scheme%", scheme);
+}
+
+/** The page's choice for an app page: what themeChunk applies, for the settings form's checked option. */
+export const themeFromCookies = (header: string | null): ThemePref => themeOf("app", header);
