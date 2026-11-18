@@ -2,8 +2,9 @@
 
 The UI pieces the plan needed that the design sheet did not have when P1.24's gate first read it (plan §8 Phase 1:
 anything missing is a stop item for Alex). Each was drafted on the sheet by the design session and approved by Alex
-on its own, and only then built. A piece with no approval keeps `status: "stop"` in `shared/ui/inventory.json`
-and is used nowhere in `apps/`. One line per piece: its name, the step that builds it, the sheet draft, and the
+on its own, and only then built. Since P1.20k the React kit that built them is gone and `shared/ui/inventory.json`
+marks every piece `status: "reference"` (sheet data only; the Svelte UI keeps its own list,
+`apps/web/lib/components/inventory.json`, ADR 0055), so this file is the approval record. One line per piece: its name, the step that builds it, the sheet draft, and the
 approval with its date (UTC) and the sheet version it was published in. `shared/ui/inventory.test.ts` reads this
 file.
 

@@ -1,4 +1,4 @@
-// Ported unchanged from interfaces/http/card-form.ts (P1.20i); that copy goes with P1.20k.
+// Ported unchanged from interfaces/http/card-form.ts (P1.20i); that copy went with P1.20k.
 // A card editor's plain form (ADR 0037 point 7, ADR 0051), read into the object a JSON editor would send, so both
 // reach the same parser in domains/profile. This only translates the form's shape: indexed fields such as
 // `items.2.uri` become rows of a list, and a row the member left blank is an unused slot. What each field may hold,

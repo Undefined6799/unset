@@ -1,3 +1,0 @@
-// fixture: apps/web/src/Shell.tsx findings=2
-import { Toast } from "@unset/shared-ui";
-export const Shell = () => <Toast />;

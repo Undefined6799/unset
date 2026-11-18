@@ -17,8 +17,11 @@ export type HrefScheme = "http:" | "https:" | "mailto:" | "path";
 const MAX_LENGTH = 2000;
 const PROBE_ORIGIN = "https://href.invalid";
 
-/** C0, DEL, C1, U+2028, U+2029 and U+FEFF, which browsers strip or treat specially inside URLs. */
-function hasForbiddenCharacter(text: string): boolean {
+/**
+ * C0, DEL, C1, U+2028, U+2029 and U+FEFF, which browsers strip or treat specially inside URLs. shared/http's
+ * safeReturnPath uses the same check.
+ */
+export function hasForbiddenCharacter(text: string): boolean {
   for (const character of text) {
     const code = character.codePointAt(0) ?? 0;
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029 || code === 0xfeff) {
