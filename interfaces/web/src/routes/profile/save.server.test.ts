@@ -1,9 +1,11 @@
 // The profile save's outcomes (save.server.ts), as interfaces/http/routes/profile.test.ts checks them. The PDS is the
 // one unmanaged dependency, so the save is a double (TE-1); the gate's outcomes are in tests/integration/web.
-import type { Did } from "@unset/domains-identity";
-import type { ProfileEdit } from "@unset/domains-profile";
 import { describe, expect, test } from "vitest";
-import { type ProfileSave, saveProfileForm } from "./save.server.ts";
+import { type ProfileSave, type SaveProfile, saveProfileForm } from "./save.server.ts";
+
+// The domain types, read off the module under test: a test beside a route imports no domain (svelte-screens-no-core).
+type Did = Parameters<SaveProfile>[0];
+type ProfileEdit = Parameters<SaveProfile>[1];
 
 const DID = `did:plc:${"a".repeat(24)}` as Did;
 

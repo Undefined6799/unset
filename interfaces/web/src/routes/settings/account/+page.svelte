@@ -9,9 +9,9 @@ import { Icon } from "@unset/apps-web/lib/components/icon";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import { SETTINGS } from "../messages.ts";
-import type { PageProps } from "./$types";
+import type { AccountView } from "./account.server.ts";
 
-let { data }: PageProps = $props();
+let { data }: { data: AccountView & { privacyNotice: boolean } } = $props();
 
 const withHost = (text: string, host: string) => text.replace("{pdsHost}", host);
 </script>

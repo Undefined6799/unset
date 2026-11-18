@@ -3,9 +3,8 @@
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { SETTINGS } from "../messages.ts";
-import type { PageProps } from "./$types";
 
-let { data }: PageProps = $props();
+let { data }: { data: { privacyNotice: boolean } } = $props();
 </script>
 
 <svelte:head>

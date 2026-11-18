@@ -1,9 +1,12 @@
 // What Settings › Account shows (account.server.ts), as interfaces/http/routes/settings.test.ts and the account-issuer
 // cases check it. The handle check and the token-set read reach the network and the store, so they are doubles (TE-1).
-import type { Did, HandleVerdict } from "@unset/domains-identity";
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import { type AccountDeps, accountView, issuerOrigin } from "./account.server.ts";
+
+// The domain types, read off the module under test: a test beside a route imports no domain (svelte-screens-no-core).
+type Did = Parameters<AccountDeps["verifyHandle"]>[0];
+type HandleVerdict = Awaited<ReturnType<AccountDeps["verifyHandle"]>>;
 
 const DID = `did:plc:${"a".repeat(24)}` as Did;
 const OURS = "https://pds.unset.test";
