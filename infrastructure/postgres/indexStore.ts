@@ -80,8 +80,17 @@ export const INGEST_COUNTERS = [
   "ingest_account_inactive",
   "ingest_account_confirm",
   "ingest_dead_letter",
+  "track_added",
+  "track_erased",
+  "track_foreign",
+  "track_unresolved",
+  "backfill_applied",
+  "backfill_skipped",
+  "backfill_stale",
+  "backfill_failed",
+  "backfill_dead_letter",
 ] as const;
-type Counter = (typeof INGEST_COUNTERS)[number];
+export type Counter = (typeof INGEST_COUNTERS)[number];
 
 export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexStore {
   const inTx = <T>(fn: (tx: PoolClient) => Promise<T>) =>
@@ -95,10 +104,12 @@ export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexS
     apply: (frame) => inTx((tx) => applyFrame(tx, options.source, frame)),
     missedEvents: () =>
       inTx(async (tx) => {
+        // Like queueJob, a job already queued becomes due now, which also breaks the claim of a read in flight: its
+        // snapshot may predate the lost events. Rows are taken in DID order so two recoveries cannot deadlock.
         await tx.query(
           `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
-           SELECT did, 'backfill', now(), 0, now() FROM idx.account
-           ON CONFLICT (did, kind) DO NOTHING`,
+           SELECT did, 'backfill', now(), 0, now() FROM idx.account ORDER BY did
+           ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
         );
       }),
     deadLetter: (frame, attempts, firstSeen) => {
@@ -129,12 +140,10 @@ export function isDatabaseUnavailable(failure: unknown): boolean {
 async function deadLetterFrame(tx: PoolClient, source: string, frame: IndexFrame, attempts: number, firstSeen: Date) {
   const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
   if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return;
-  await holdErasure(tx, frame.did);
   // The DID is kept only for a member the index tracks and erasure has not removed: a row for an erased DID would
   // name the person again after core.erase_did deleted theirs, and a non-member's DID is not ours to keep. The reason
   // is a fixed code, since the error itself may quote member content (rule SE-7).
-  const erased = await tx.query("SELECT idx.is_erased($1) AS erased", [frame.did]);
-  const tracked = erased.rows[0]?.erased === true ? null : await lockAccount(tx, frame.did);
+  const tracked = (await isErased(tx, frame.did)) ? null : await lockAccount(tx, frame.did);
   const did = tracked === null ? null : frame.did;
   await tx.query(
     `INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
@@ -165,9 +174,7 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
 async function applyFrame(tx: PoolClient, source: string, frame: IndexFrame): Promise<void> {
   const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
   if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return count(tx, "ingest_replayed");
-  await holdErasure(tx, frame.did);
-  const erased = await tx.query("SELECT idx.is_erased($1) AS erased", [frame.did]);
-  if (erased.rows[0]?.erased === true) await count(tx, "ingest_erased");
+  if (await isErased(tx, frame.did)) await count(tx, "ingest_erased");
   else {
     const account = await lockAccount(tx, frame.did);
     if (account === null) await count(tx, "ingest_untracked");
@@ -196,8 +203,18 @@ async function holdErasure(tx: PoolClient, did: string): Promise<void> {
   await tx.query("SELECT pg_advisory_xact_lock(hashtext('erase:' || $1::text))", [did]);
 }
 
+/**
+ * The erasure tombstone's check (P3.07s, migration 0028), the first check under every path. It takes the erasure
+ * lock first, so the answer holds until this transaction ends.
+ */
+export async function isErased(tx: PoolClient, did: string): Promise<boolean> {
+  await holdErasure(tx, did);
+  const { rows } = await tx.query("SELECT idx.is_erased($1) AS erased", [did]);
+  return rows[0]?.erased === true;
+}
+
 /** The account row, locked for this frame; ingest never creates one (the track loop does, book P3.02s). */
-async function lockAccount(tx: PoolClient, did: string): Promise<IndexAccount | null> {
+export async function lockAccount(tx: PoolClient, did: string): Promise<IndexAccount | null> {
   const { rows } = await tx.query("SELECT last_rev, pds_active FROM idx.account WHERE did = $1 FOR UPDATE", [did]);
   const row = rows[0];
   if (row === undefined) return null;
@@ -245,9 +262,9 @@ async function applyAccount(tx: PoolClient, frame: Extract<IndexFrame, { kind: "
   await count(tx, "ingest_account_inactive");
 }
 
-type JobKind = "handle_check" | "backfill" | "confirm_status" | "confirm_deletion";
+export type JobKind = "handle_check" | "backfill" | "confirm_status" | "confirm_deletion";
 
-async function queueJob(tx: PoolClient, did: string, kind: JobKind): Promise<void> {
+export async function queueJob(tx: PoolClient, did: string, kind: JobKind): Promise<void> {
   await tx.query(
     `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES ($1, $2, now(), 0, now())
      ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
@@ -255,7 +272,7 @@ async function queueJob(tx: PoolClient, did: string, kind: JobKind): Promise<voi
   );
 }
 
-async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {
+export async function applyWrite(tx: PoolClient, did: string, rev: string, write: IndexWrite): Promise<void> {
   if (write.kind === "profile") return putProfile(tx, did, rev, write);
   if (write.kind === "section") return putSection(tx, did, rev, write);
   const uri = `at://${did}/${write.collection}/${write.rkey}`;
@@ -321,7 +338,7 @@ async function sectionFits(tx: PoolClient, did: string, uri: string): Promise<bo
   return rows[0]?.known === true || Number(rows[0]?.held) < MAX_SECTIONS_PER_ACCOUNT;
 }
 
-async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: readonly BlobRef[]): Promise<void> {
+export async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: readonly BlobRef[]): Promise<void> {
   await tx.query("DELETE FROM idx.record_blob WHERE did = $1 AND uri = $2", [did, uri]);
   for (const blob of blobs) {
     await tx.query("INSERT INTO idx.record_blob (uri, cid, did, mime, size) VALUES ($1, $2, $3, $4, $5)", [
@@ -334,7 +351,7 @@ async function replaceBlobs(tx: PoolClient, did: string, uri: string, blobs: rea
   }
 }
 
-async function count(tx: PoolClient, name: Counter, by = 1): Promise<void> {
+export async function count(tx: PoolClient, name: Counter, by = 1): Promise<void> {
   await tx.query(
     `INSERT INTO idx.ingest_stat (name, value, updated_at) VALUES ($1, $2, now())
      ON CONFLICT (name) DO UPDATE SET value = idx.ingest_stat.value + excluded.value, updated_at = excluded.updated_at`,

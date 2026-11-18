@@ -72,4 +72,13 @@ export {
   type Purpose,
   type SingleUseStore,
 } from "./singleUse/store.ts";
+export {
+  type BackfillFailure,
+  type BackfillJob,
+  backfillDelaySeconds,
+  createTrackStore,
+  MAX_BACKFILL_ATTEMPTS,
+  type TrackOutcome,
+  type TrackStore,
+} from "./trackStore.ts";
 export { type Isolation, withTransaction } from "./tx.ts";
