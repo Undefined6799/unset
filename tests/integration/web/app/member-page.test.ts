@@ -207,12 +207,13 @@ function largestCollection(filler: string, entries = 100): string {
 }
 
 /**
- * Sends only the head of a card save that declares a `length`-byte body, and resolves with the status line the server
- * answers. The gate refuses a declared length past the route's maxBody before reading any body (hooks.server.ts
- * requestProblem) and closes the connection; sending the body as well raced that close, and the client's write failed
- * with EPIPE (CI on #1722). If the gate waited for the body instead, no answer would come and the test would time out.
+ * Sends only the head of a card save framed by `framing` (its Content-Length or Transfer-Encoding line), and resolves
+ * with the status line the server answers. The gate refuses a declared length past the route's maxBody, and a body
+ * with no declared length, before reading any body (hooks.server.ts requestProblem), and closes the connection;
+ * sending the body as well raced that close, and the client's write failed with EPIPE (CI on #1722). If the gate
+ * waited for the body instead, no answer would come and the test would time out.
  */
-function declaredLength(length: number): Promise<string> {
+function headOnly(framing: string): Promise<string> {
   const head = [
     `POST /${OWNER}?/create HTTP/1.1`,
     `host: ${HOST}`,
@@ -221,7 +222,7 @@ function declaredLength(length: number): Promise<string> {
     `content-type: ${FORM}`,
     `x-forwarded-for: ${clientAddress()}`,
     `cookie: ${cookie}`,
-    `content-length: ${length}`,
+    framing,
   ].join("\r\n");
   return new Promise((done, fail) => {
     const socket = connect(member.web.port, "127.0.0.1", () => socket.write(`${head}\r\n\r\n`));
@@ -420,7 +421,10 @@ describe("card writes", () => {
   test("a_body_past_2_mib_is_refused_with_no_write", async () => {
     const writes = await writesOf(async () => {
       const body = `kind=readme&width=full&text=${"x".repeat(2 * 1024 * 1024)}`;
-      expect(await declaredLength(Buffer.byteLength(body))).toMatch(/^HTTP\/1\.1 413 /);
+      expect(await headOnly(`content-length: ${Buffer.byteLength(body)}`)).toMatch(/^HTTP\/1\.1 413 /);
+      // A chunked body declares no length, so it is refused before any of it is read; a body longer than the length
+      // it declares is cut at that length (gate.test.ts no_route_reads_past_the_length_it_declared).
+      expect(await headOnly("transfer-encoding: chunked")).toMatch(/^HTTP\/1\.1 413 /);
     });
     expect(writes).toEqual([]);
   });
