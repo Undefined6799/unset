@@ -24,7 +24,7 @@ export type SessionDb = {
 export type WithSessionDb = <T>(deadline: AbortSignal | null, fn: (db: SessionDb) => Promise<T>) => Promise<T>;
 type Db = SessionDb;
 
-/** Idle and absolute lifetimes, and the least time between two touches, in seconds (interfaces/http config). */
+/** Idle and absolute lifetimes, and the least time between two touches, in seconds (interfaces/web config). */
 export type SessionLimits = { readonly idleS: number; readonly absoluteS: number; readonly touchIntervalS: number };
 export type Session = {
   readonly did: Did;
@@ -79,7 +79,8 @@ export type SessionStore = {
 };
 /**
  * `replacingCookie` names the browser's previous session, which dies first. `issuerOrigin` is the sign-in server's
- * origin, already checked by the caller (interfaces/http `issuerOrigin`); it is written once and never updated.
+ * origin, already checked by the caller (interfaces/web sign-in-state.ts `issuerOrigin`); it is written once and never
+ * updated.
  */
 export type CreateOptions = { readonly replacingCookie?: string; readonly issuerOrigin?: string | null };
 /** `idHash` names the new row for a later write on it (the callback's email answer, P2.06 step 11); never logged. */

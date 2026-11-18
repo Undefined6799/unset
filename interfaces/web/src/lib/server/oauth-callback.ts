@@ -74,9 +74,10 @@ const abandoned = (signal: AbortSignal): Promise<null> =>
 /**
  * P2.06 step 11: ask the PDS once whether the email is confirmed and cache an answer on the new session, so the P2.11
  * gate (unchanged) passes a confirmed member straight on. Best effort: a PDS that is slow, failing or gives no answer
- * leaves the cache null, which the gate reads as "not confirmed" and sends to /verify-email. Never throws, so it never
- * stops the sign-in. Logs the error class only. Runs inside the sign-in scope, so the library's lock calls for this
- * account reuse the lock the scope already holds (sign-in-lock.ts).
+ * leaves the cache null, which the gate reads as "not confirmed" and sends to /verify-email; that page always reads the
+ * PDS afresh and caches its answer, so a confirmation made later is picked up there. Never throws, so it never stops
+ * the sign-in. Logs `auth.email_read_failed` with the error class or "timeout" only. Runs inside the sign-in scope,
+ * so the library's lock calls for this account reuse the lock the scope already holds (sign-in-lock.ts).
  */
 async function emailAnswerAtSignIn(event: CallbackEvent, did: Did, idHash: Buffer): Promise<void> {
   const { pds, setEmailConfirmed, log } = services();
@@ -91,10 +92,14 @@ async function emailAnswerAtSignIn(event: CallbackEvent, did: Did, idHash: Buffe
       pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
       abandoned(deadline),
     ]);
-    if (info?.kind !== "ok" || info.value.emailConfirmed === undefined) return;
+    if (info === null) {
+      log.warn("auth.email_read_failed", { kind: "timeout" });
+      return;
+    }
+    if (info.kind !== "ok" || info.value.emailConfirmed === undefined) return;
     await setEmailConfirmed(idHash, info.value.emailConfirmed, deadline);
   } catch (error) {
-    log.warn("oauth.callback_failed", { kind: className(error) });
+    log.warn("auth.email_read_failed", { kind: className(error) });
   }
 }
 

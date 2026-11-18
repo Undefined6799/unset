@@ -87,6 +87,9 @@ const EVENTS = [
   "handle.verify_failed",
   // P2.08b, the account page could not read the issuer recorded at sign-in, so it shows no account link. No DID.
   "auth.account_issuer_unknown",
+  // P2.06 step 11, the email read at sign-in: it gave no answer in time (`kind` "timeout") or failed (the class name).
+  // The sign-in goes on with no cached answer. No DID.
+  "auth.email_read_failed",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

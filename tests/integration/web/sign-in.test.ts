@@ -352,6 +352,7 @@ describe("the email answer at sign-in", () => {
     expect(performance.now() - started).toBeLessThan(5000);
     expect(await signedIn(sid)).toBe(true);
     expect(await cachedAnswer(sid)).toEqual({ email_confirmed: null, checked: false });
+    expect(web.logs()).toContainEqual(expect.objectContaining({ event: "auth.email_read_failed", kind: "timeout" }));
   }, 15_000);
 
   test("no_did_handle_email_or_token_reaches_the_log", async () => {
