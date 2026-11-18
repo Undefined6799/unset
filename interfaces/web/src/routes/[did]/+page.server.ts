@@ -74,8 +74,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
   return {
     shell,
     account,
-    // P1.20f puts the onboarding answer on locals; until then no banner, as for a member already past it.
-    privacyNotice: false,
+    privacyNotice: locals.privacyNotice,
     name,
     letter: avatarLetter(name),
     profile:
