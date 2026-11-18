@@ -3,7 +3,7 @@
 // session store are real. The PDS and its authorization server are the network the server may not reach in a test
 // (TE-1): stand-in-server.ts answers them, and getSession's answer is changed per test. The OAuth client that
 // restores the member's grant and signs each PDS call is real.
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -308,7 +308,61 @@ describe("the app gate", () => {
   test("a_confirmation_past_the_cap_that_the_pds_gives_again_restores_the_page", async () => {
     const { did, cookie } = await signedIn();
     await staleConfirmation(did, 4000);
+    const checkedAt = async () =>
+      (await pool.query<{ at: Date }>("SELECT email_checked_at AS at FROM app.session WHERE did = $1", [did])).rows[0]
+        ?.at;
+    const prior = await checkedAt();
     expect((await get("/test-routes/members", cookie)).status).toBe(200);
+    // The answer was cached again: that is what lets the next view pass without asking.
+    expect((await checkedAt())?.getTime()).toBeGreaterThan(prior?.getTime() ?? Number.POSITIVE_INFINITY);
+  });
+
+  // Ported from tests/integration/http/email-recheck.test.ts (P2.11a, P2.11d) at P1.20k.
+  test("a_dead_grant_ends_every_browser_of_the_member", async () => {
+    const first = await signedIn({ expired: true });
+    const second = await signedIn({ did: first.did, expired: true });
+    await staleConfirmation(first.did, 1000);
+    // The second browser's cache is fresh again, so it asks the PDS nothing; its session still ends with the grant.
+    const secondHash = createHash("sha256")
+      .update(Buffer.from(second.cookie.slice("__Host-sid=".length), "base64url"))
+      .digest();
+    expect(
+      (await pool.query("UPDATE app.session SET email_checked_at = now() WHERE id_hash = $1", [secondHash])).rowCount,
+    ).toBe(1);
+    const ended = await get("/test-routes/members", first.cookie);
+    expect(location(ended)).toBe("/login?error=login.session_ended");
+    expect(await sessionCount(first.did)).toBe(0);
+    expect((await pool.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [first.did])).rows).toEqual([]);
+    const next = await get("/test-routes/members", second.cookie);
+    expect(location(next)).toBe("/login?next=%2Ftest-routes%2Fmembers");
+    expect(next.headers.getSetCookie().some((line) => line.startsWith("__Host-sid=;"))).toBe(true);
+  });
+
+  test("inside_the_recheck_the_pds_is_not_asked_so_a_dead_grant_waits_for_it", async () => {
+    // The bound P2.11a pins: a grant revoked at the PDS is seen at most EMAIL_RECHECK_S (900 s) later.
+    const { did, cookie } = await signedIn({ expired: true });
+    await staleConfirmation(did, 899);
+    const before = web.standInCalls().length;
+    expect((await get("/test-routes/members", cookie)).status).toBe(200);
+    expect(web.standInCalls().slice(before)).not.toContain(GET_SESSION);
+    expect(await sessionCount(did)).toBe(1);
+    await staleConfirmation(did, 901);
+    expect(location(await get("/test-routes/members", cookie))).toBe("/login?error=login.session_ended");
+  });
+
+  test("a_rate_limit_or_a_401_with_the_grant_stored_past_the_cap_keeps_the_session", async () => {
+    // pds-call.ts: a 429, and a 401 while our token set remains, are transient, so the member is told and kept.
+    for (const status of [429, 401]) {
+      web.setStandIns(pdsFixture({ status }));
+      const { did, cookie } = await signedIn();
+      await staleConfirmation(did, 4000);
+      expect(location(await get("/test-routes/members", cookie)), String(status)).toBe("/verify-email");
+      expect(await (await get("/verify-email", cookie)).text(), String(status)).toContain(
+        "is not answering; your session is kept.",
+      );
+      expect(await sessionCount(did), String(status)).toBe(1);
+      expect((await pool.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did])).rows.length).toBe(1);
+    }
   });
 
   test("the_hold_after_a_pds_that_does_not_answer_is_per_member", async () => {
