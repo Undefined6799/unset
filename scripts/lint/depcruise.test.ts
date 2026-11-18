@@ -185,6 +185,8 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
   "shared-ui-islands": [edge("shared/ui/a.ts", "../islands/index.ts")],
   "shared-islands": [edge("shared/islands/a.ts", "./b.ts"), edge("shared/islands/a.ts", "left-pad")],
+  "shared-ui-safe-href": [edge("shared/ui/a.ts", "../safe-href/index.ts")],
+  "shared-safe-href": [edge("shared/safe-href/a.ts", "./b.ts")],
   "shared-ui-build": [
     edge("shared/ui-build/a.ts", "./b.ts"),
     edge("shared/ui-build/a.ts", "../ui/index.ts", "type"),
