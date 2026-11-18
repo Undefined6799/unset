@@ -1,2 +1,2 @@
-// fixture: apps/web/lib/components/ui/radio-group/radio-group-item.svelte findings=1
+// fixture: apps/web/lib/components/ui/button/button.svelte findings=1
 <Icon name="circle" size={16} />

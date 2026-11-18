@@ -18,7 +18,8 @@ type Entry = {
   extensions?: { path: string; sha256: string }[];
 };
 const inventory = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8")) as Record<string, Entry>;
-const STATUSES = ["built", "p1.24", "p1.24s", "p1.24a", "p1.24k", "p1.24f", "stop"];
+/** Since P1.20k the inventory is sheet reference data: the React kit that built each piece is gone (ADR 0055). */
+const STATUSES = ["reference"];
 
 /** One "- **Name** · needed by <step> · … · approved by Alex <date>" line per piece; approval is optional in shape. */
 const ITEM = /^- \*\*(\w+)\*\* · needed by (P\d\.\d+[a-z]?) · sheet draft: (\S+) · (.*)$/;
@@ -43,12 +44,8 @@ function stopItemProblems(doc: string, inv: Record<string, Pick<Entry, "status">
   const problems: string[] = [];
   for (const item of items(doc)) {
     if (inv[item.name] === undefined) problems.push(`${item.name}: not in inventory.json`);
-    else if (item.approval === null && inv[item.name]?.status !== "stop")
-      problems.push(`${item.name}: status ${inv[item.name]?.status} without a dated approval`);
+    else if (item.approval === null) problems.push(`${item.name}: no dated approval`);
   }
-  for (const [name, entry] of Object.entries(inv))
-    if (entry.status === "stop" && !items(doc).some((i) => i.name === name))
-      problems.push(`${name}: a stop item missing from stop-items.md`);
   return problems;
 }
 
@@ -87,7 +84,7 @@ test("inventory_registers_the_approved_navigation_extension", () => {
       .digest("hex"),
     props: "NavigationProps",
     variants: ["left drawer", "phone floating bar"],
-    status: "built",
+    status: "reference",
     extensions: [
       {
         path: "approved-extensions.json",
@@ -109,28 +106,22 @@ test("stop_items_doc_exists", () => {
 test("stop_item_needs_dated_approval", () => {
   const doc = readFileSync(STOP_ITEMS, "utf8");
   expect(stopItemProblems(doc, inventory)).toEqual([]);
-  // A piece built (or booked to be built) without Alex's dated approval fails; one still marked stop does not.
+  // Every recorded piece carries Alex's dated approval and is in the inventory.
   const line = "- **Avatar** · needed by P1.24s · sheet draft: https://claude.ai/artifact/x · not yet approved";
-  expect(stopItemProblems(line, { Avatar: { status: "p1.24s" } })).toEqual([
-    "Avatar: status p1.24s without a dated approval",
-  ]);
-  expect(stopItemProblems(line, { Avatar: { status: "stop" } })).toEqual([]);
-  expect(stopItemProblems("", { Avatar: { status: "stop" } })).toEqual([
-    "Avatar: a stop item missing from stop-items.md",
-  ]);
+  expect(stopItemProblems(line, { Avatar: { status: "reference" } })).toEqual(["Avatar: no dated approval"]);
+  expect(stopItemProblems(line, {})).toEqual(["Avatar: not in inventory.json"]);
 });
 
 test("icon_approval_recorded", () => {
-  expect(inventory.Icon?.status).toBe("built");
+  expect(inventory.Icon?.status).toBe("reference");
   const icon = items(readFileSync(STOP_ITEMS, "utf8")).find((i) => i.name === "Icon");
   expect(icon?.approval?.slice(1)).toEqual(["2026-10-03", "18:02", "34"]);
 });
 
-test("inventory_all_built", () => {
-  // P1.24f finishes the imported kit; the approved core shell adds Navigation without changing that snapshot.
+test("inventory_all_reference", () => {
+  // The 34 sheet pieces and the approved Navigation, all reference data since the React kit went (P1.20k).
   const statuses = Object.values(inventory).map((entry) => entry.status);
-  expect(statuses.filter((status) => status !== "built" && status !== "stop")).toEqual([]);
-  expect(statuses.filter((status) => status === "built")).toHaveLength(35);
+  expect(statuses.filter((status) => status === "reference")).toHaveLength(35);
 });
 
 test("approved_extension_pointers_preserve_the_imported_inventory", () => {

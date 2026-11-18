@@ -90,6 +90,9 @@ const EVENTS = [
   // P2.06 step 11, the email read at sign-in: it gave no answer in time (`kind` "timeout") or failed (the class name).
   // The sign-in goes on with no cached answer. No DID.
   "auth.email_read_failed",
+  // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
+  // menus, so it offers none. `kind` is the class name. No DID.
+  "shell.account_read_failed",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

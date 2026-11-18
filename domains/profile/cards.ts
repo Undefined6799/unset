@@ -174,6 +174,30 @@ export function orderCards(order: unknown, cards: readonly Card[]): Card[] {
   return [...listed, ...rest];
 }
 
+/** A card record as a repo holds it: its record key and value, neither checked yet. */
+export type StoredCardRecord = { readonly key: string; readonly value: unknown };
+
+/** The cards a page shows: a key that is not a record key, or a card that does not read, is left out. */
+export function shownCards(stored: readonly StoredCardRecord[]): Card[] {
+  const cards: Card[] = [];
+  for (const item of stored) {
+    const key = parseCardKey(item.key);
+    const card = key === null ? null : readCard(key, item.value);
+    if (card !== null) cards.push(card);
+  }
+  return cards;
+}
+
+/** The shown cards in page order: as the profile record's `cards` list sets it, then the rest oldest first. */
+export function pageCards(profileRecord: unknown, stored: readonly StoredCardRecord[]): Card[] {
+  return orderCards(cardOrder(profileRecord), shownCards(stored));
+}
+
+function cardOrder(record: unknown): unknown {
+  if (typeof record !== "object" || record === null) return undefined;
+  return (record as { readonly cards?: unknown }).cards;
+}
+
 /**
  * Oldest first, by the instant each card was made: lexicon datetimes may carry any offset and precision
  * (https://atproto.com/specs/lexicon#datetime), so their text does not sort. Date.parse stops at milliseconds, so

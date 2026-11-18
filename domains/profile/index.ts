@@ -16,9 +16,24 @@ export {
   type CardWidth,
   type LinkPreset,
   orderCards,
+  pageCards,
   parseCardKey,
   readCard,
+  type StoredCardRecord,
+  shownCards,
 } from "./cards.ts";
+export {
+  type BlobRef,
+  INDEXED_COLLECTIONS,
+  type IndexAccount,
+  type IndexChange,
+  type IndexedCollection,
+  type IndexPlan,
+  type IndexWrite,
+  MAX_RECORD_BYTES,
+  MAX_SECTIONS_PER_ACCOUNT,
+  planCommit,
+} from "./index-plan.ts";
 export {
   APP_LIMITS,
   type AvatarShape,

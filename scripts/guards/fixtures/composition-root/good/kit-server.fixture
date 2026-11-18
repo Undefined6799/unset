@@ -1,0 +1,4 @@
+// fixture: interfaces/web/server.ts findings=0
+import { createServer } from "node:http";
+import { createLogger } from "@unset/shared-log";
+const { handler } = await import("#kit/handler");
