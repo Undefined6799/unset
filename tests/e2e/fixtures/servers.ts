@@ -117,18 +117,20 @@ function certificate(dir: string): { key: Buffer; cert: Buffer } {
 }
 
 /**
- * The address the TLS listener names as the client. Every browser here connects from loopback, inside the trusted
- * proxy range, and the resolver skips such entries as proxies (shared/http/trustedProxy.ts fromHeader), so a loopback
- * client reads as unknown and gets the strict shared bucket. The listener names one documentation address instead
- * (RFC 5737 TEST-NET-3): the whole run is one client, as one tester is.
+ * Loopback reads as an unknown client (the resolver skips trusted-proxy entries, shared/http/trustedProxy.ts), so the
+ * listener names a TEST-NET-3 address (RFC 5737), a new one per TLS connection: each test's own browser context reads
+ * as its own visitor. One address for the whole run outran one bucket (limits.ts: 60, 5 a second) and got 429s; the
+ * limit itself is tested in tests/integration/web/gate.test.ts.
  */
-const BROWSER_ADDRESS = "203.0.113.7";
+let connections = 0;
+const nextBrowserAddress = (): string => `203.0.113.${(connections++ % 254) + 1}`;
 
 /**
- * The TLS listener in front of the web server, as the edge is: it forwards each request unchanged with BROWSER_ADDRESS
- * in X-Forwarded-For (the web server trusts that header from loopback only, TRUSTED_PROXY_MODE header).
+ * The TLS listener in front of the web server, as the edge is: it forwards each request unchanged with its connection's
+ * address in X-Forwarded-For (the web server trusts that header from loopback only, TRUSTED_PROXY_MODE header).
  */
 function tlsFront(dir: string, listen: number, inner: number): Promise<void> {
+  const addresses = new WeakMap<object, string>();
   const server = createTlsServer(certificate(dir), (req, res) => {
     const forwarded = httpRequest(
       {
@@ -136,7 +138,7 @@ function tlsFront(dir: string, listen: number, inner: number): Promise<void> {
         port: inner,
         method: req.method,
         path: req.url,
-        headers: { ...req.headers, "x-forwarded-for": BROWSER_ADDRESS },
+        headers: { ...req.headers, "x-forwarded-for": addresses.get(req.socket) ?? nextBrowserAddress() },
       },
       (answer) => {
         res.writeHead(answer.statusCode ?? 502, answer.rawHeaders);
@@ -149,6 +151,7 @@ function tlsFront(dir: string, listen: number, inner: number): Promise<void> {
     });
     req.pipe(forwarded);
   });
+  server.on("secureConnection", (socket) => addresses.set(socket, nextBrowserAddress()));
   return new Promise((done) => server.listen(listen, "127.0.0.1", () => done()));
 }
 

@@ -19,8 +19,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
-  // interfaces/web/src/lib/server/limits.ts allows 60 requests per address on the default bucket, refilled 5 a
-  // second, and the whole run is one address (fixtures/servers.ts BROWSER_ADDRESS). One worker stays inside it.
+  // One worker. fixtures/servers.ts names each TLS connection its own client address, so the rate limit
+  // (interfaces/web/src/lib/server/limits.ts) sees each test as its own visitor.
   workers: 1,
   timeout: 60_000,
   reporter: [
