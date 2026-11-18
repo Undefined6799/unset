@@ -86,20 +86,21 @@ async function emailAnswerAtSignIn(event: CallbackEvent, did: Did, idHash: Buffe
   if (budget <= 0) return;
   const deadline = AbortSignal.any([event.deadline, AbortSignal.timeout(budget)]);
   const deadlineAt = performance.now() + budget;
-  try {
-    // The token restore inside pdsSessionInfo does not take the signal, hence the race.
-    const info = await Promise.race([
-      pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
-      abandoned(deadline),
-    ]);
-    if (info === null) {
-      log.warn("auth.email_read_failed", { kind: "timeout" });
-      return;
+  const readAndCache = async (): Promise<"done"> => {
+    const info = await pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did);
+    if (info.kind === "ok" && info.value.emailConfirmed !== undefined) {
+      await setEmailConfirmed(idHash, info.value.emailConfirmed, deadline);
     }
-    if (info.kind !== "ok" || info.value.emailConfirmed === undefined) return;
-    await setEmailConfirmed(idHash, info.value.emailConfirmed, deadline);
-  } catch (error) {
+    return "done";
+  };
+  // Neither the token restore inside pdsSessionInfo nor a running query watches the signal, so the read and the write
+  // race the budget together: the sign-in never waits past it. Work left behind ends on its own; a failure is logged.
+  const work = readAndCache().catch((error: unknown) => {
     log.warn("auth.email_read_failed", { kind: className(error) });
+    return "done" as const;
+  });
+  if ((await Promise.race([work, abandoned(deadline)])) === null) {
+    log.warn("auth.email_read_failed", { kind: "timeout" });
   }
 }
 
