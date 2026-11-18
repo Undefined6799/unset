@@ -96,6 +96,19 @@ export type StandInFixture = {
   http?: Record<string, { status?: number; body: unknown }>;
   txt?: Record<string, string[]>;
   fetch?: Record<string, { status?: number; body: unknown }>;
+  /** A stand-in PDS and authorization server at `origin` holding `did`'s repo (stand-in-pds.ts). */
+  pds?: PdsFixture;
+};
+
+export type PdsFixture = {
+  readonly origin: string;
+  readonly did: string;
+  /** collection → record key → record value. */
+  readonly records: Record<string, Record<string, unknown>>;
+  /** Every write is appended here as one JSON line, for the test to read back. */
+  readonly writesFile: string;
+  /** XRPC methods that answer 503, to play an unavailable PDS. */
+  readonly failing?: readonly string[];
 };
 
 export type Postgres = { host: string; port: number; database: string; user: string; password: string };

@@ -3,9 +3,10 @@
 // server.ts reads them (interfaces/web/src/lib/server/note.ts `StandIns`), then starts server.ts as production does.
 // compose.ts refuses stand-ins outside the test profile. Answers come from the JSON file WEB_STAND_IN_FIXTURE names,
 // written by the test (built-server.ts `StandInFixture`); anything not in it is a 404 or no record.
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import type { IdentityNetwork } from "@unset/domains-identity";
 import type { StandInFixture } from "./built-server.ts";
+import { standInPds } from "./stand-in-pds.ts";
 
 const fixture = JSON.parse(readFileSync(process.env.WEB_STAND_IN_FIXTURE ?? "", "utf8")) as StandInFixture;
 const encode = (body: unknown): Uint8Array =>
@@ -25,8 +26,14 @@ const network: IdentityNetwork = {
 };
 
 /** Every request the OAuth client makes: the fixture's answer for its method and URL, else 404. */
+const pds =
+  fixture.pds === undefined
+    ? undefined
+    : standInPds(fixture.pds, (write) => appendFileSync(fixture.pds?.writesFile ?? "", `${JSON.stringify(write)}\n`));
 const fetchStandIn: typeof fetch = async (input, init) => {
   const request = new Request(input, init);
+  const fromPds = pds === undefined ? undefined : await pds(request);
+  if (fromPds !== undefined) return fromPds;
   const found = fixture.fetch?.[`${request.method} ${request.url}`];
   if (found === undefined) return new Response("not in the fixture", { status: 404 });
   return new Response(JSON.stringify(found.body), {
