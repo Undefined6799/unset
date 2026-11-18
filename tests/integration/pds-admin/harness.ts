@@ -23,6 +23,10 @@ export type FakePds = {
   account: Record<string, unknown> | "not_found";
   takedown: boolean;
   codes: number;
+  /** Status createInviteCode answers with; 200 by default. */
+  createStatus: number;
+  /** Called when createInviteCode arrives, before it answers. */
+  onCreate: () => void;
   close: () => Promise<void>;
 };
 
@@ -38,6 +42,10 @@ export async function fakePds(): Promise<FakePds> {
     account: { did: ALICE, emailConfirmedAt: "2026-11-01T00:00:00Z", invites: [] },
     takedown: false,
     codes: 0,
+    createStatus: 200,
+    onCreate: () => {
+      // Nothing by default.
+    },
     close: async () => {
       // Replaced once the server listens.
     },
@@ -58,6 +66,8 @@ export async function fakePds(): Promise<FakePds> {
         return json(res, 200, { subject: { did: ALICE }, takedown: { applied: fake.takedown } });
       }
       if (path === "/xrpc/com.atproto.server.createInviteCode") {
+        fake.onCreate();
+        if (fake.createStatus !== 200) return json(res, fake.createStatus, { error: "InternalServerError" });
         fake.codes += 1;
         return json(res, 200, { code: `pds-example-com-abcde-${String(fake.codes).padStart(5, "0")}` });
       }

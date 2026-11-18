@@ -99,13 +99,11 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     // Steps 8 to 12, one at a time.
     const dids = { actorDid: payload.actor_did, targetDid: payload.target };
     return serialized(async () => {
-      const result = await issueInvite(
-        deps.pds,
-        deps.limits,
-        payload.target,
-        () => deps.log.issuedToday(deps.now()),
-        deps.now,
-      );
+      const daily = {
+        reservedToday: () => deps.log.reservedToday(deps.now()),
+        reserve: () => record({ outcome: "reserved", ...who, ...dids }),
+      };
+      const result = await issueInvite(deps.pds, deps.limits, payload.target, daily, deps.now);
       const reason =
         result.kind === "issued" ? {} : { reason: result.kind === "closed" ? "signups_closed" : result.reason };
       record({

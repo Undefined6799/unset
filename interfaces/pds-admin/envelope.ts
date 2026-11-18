@@ -38,7 +38,7 @@ export function checkShape(body: unknown): Shaped | Refusal {
   return { kid, sig, payload: payload as Record<string, string | number> };
 }
 
-/** Steps 4 to 6: a known key allowed this verb, a valid signature, then every claim; returns the payload. */
+/** Steps 4 to 6: a known key, a valid signature, the key's verb and self-only issuing, then every claim. */
 export function checkEnvelope(
   envelope: Shaped,
   keys: readonly ServiceKey[],
@@ -48,11 +48,12 @@ export function checkEnvelope(
   const { kid, sig, payload: p } = envelope;
   const key = keys.find((k) => k.kid === kid);
   if (key === undefined) return { status: 403, reason: "unknown_kid" };
-  if (typeof p.verb !== "string" || !key.verbs.includes(p.verb)) return { status: 403, reason: "verb" };
-  if (key.iss !== "web" || p.actor_did !== p.target) return { status: 403, reason: "actor_not_target" };
+  // The signature first, so no claim is read before the key has vouched for the whole payload.
   if (!verify(null, Buffer.from(canonicalize(p)), key.key, Buffer.from(sig, "base64url"))) {
     return { status: 403, reason: "signature" };
   }
+  if (typeof p.verb !== "string" || !key.verbs.includes(p.verb)) return { status: 403, reason: "verb" };
+  if (key.iss !== "web" || p.actor_did !== p.target) return { status: 403, reason: "actor_not_target" };
   if (p.aud !== "pds-admin" || p.env !== expected.env || p.pds_did !== expected.pdsDid || p.v !== 1) {
     return { status: 403, reason: "claims" };
   }

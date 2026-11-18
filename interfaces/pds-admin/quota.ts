@@ -21,8 +21,8 @@ export function accountQuota(createdAt: readonly number[], now: number, windowMs
 /** The start of `now`'s UTC day, in ms. */
 export const utcMidnight = (now: number): number => now - (now % 86_400_000);
 
-/** Whether one more code fits the server-wide daily cap, given how many this service issued today. */
-export function globalQuota(issuedToday: number, now: number, max: number): QuotaResult {
-  if (issuedToday >= max) return { ok: false, availableAt: utcMidnight(now) + 86_400_000 };
-  return { ok: true, remaining: max - issuedToday - 1, availableAt: null };
+/** Whether one more code fits the server-wide daily cap, given how many this service reserved today. */
+export function globalQuota(reservedToday: number, now: number, max: number): QuotaResult {
+  if (reservedToday >= max) return { ok: false, availableAt: utcMidnight(now) + 86_400_000 };
+  return { ok: true, remaining: max - reservedToday - 1, availableAt: null };
 }

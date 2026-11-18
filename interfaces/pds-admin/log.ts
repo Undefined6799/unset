@@ -7,7 +7,9 @@ import { canonicalize } from "@unset/shared-admin-envelope";
 import { utcMidnight } from "./quota.ts";
 import { appendLine, readLines } from "./state-file.ts";
 
-export type Outcome = "issued" | "denied" | "error";
+/** `reserved` is written, fsynced, before the PDS call and is what the daily cap counts, so a crash after the PDS
+ * created a code can never leave that code uncounted. `issued` follows when the code is back. */
+export type Outcome = "reserved" | "issued" | "denied" | "error";
 
 /** What a caller records; the log adds `seq`, `ts`, `prev` and `hash`, and turns DIDs and the code into MACs. */
 export type LogFields = {
@@ -23,8 +25,8 @@ export type LogFields = {
 
 export type RequestLog = {
   readonly append: (fields: LogFields, now: number) => void;
-  /** Codes this service issued since `now`'s UTC midnight. */
-  readonly issuedToday: (now: number) => number;
+  /** Codes this service reserved (and so may have created) since `now`'s UTC midnight. */
+  readonly reservedToday: (now: number) => number;
 };
 
 const GENESIS = "0".repeat(64);
@@ -38,9 +40,9 @@ export function openRequestLog(file: string, logKey: Buffer): RequestLog {
   const last = lines.length > 0 ? (JSON.parse(lines[lines.length - 1] as string) as Entry) : undefined;
   let seq = typeof last?.seq === "number" ? last.seq : 0;
   let prev = typeof last?.hash === "string" ? last.hash : GENESIS;
-  const issued = lines
+  const reserved = lines
     .map((line) => JSON.parse(line) as Entry)
-    .filter((entry) => entry.outcome === "issued")
+    .filter((entry) => entry.outcome === "reserved")
     .map((entry) => Date.parse(String(entry.ts)));
   const mac = (value: string): string => createHmac("sha256", logKey).update(value).digest("hex");
 
@@ -58,9 +60,9 @@ export function openRequestLog(file: string, logKey: Buffer): RequestLog {
       const hash = hashOf(prev, entry);
       appendLine(file, JSON.stringify({ ...entry, hash }));
       prev = hash;
-      if (fields.outcome === "issued") issued.push(now);
+      if (fields.outcome === "reserved") reserved.push(now);
     },
-    issuedToday: (now) => issued.filter((at) => at >= utcMidnight(now)).length,
+    reservedToday: (now) => reserved.filter((at) => at >= utcMidnight(now)).length,
   };
 }
 

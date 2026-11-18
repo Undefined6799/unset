@@ -114,6 +114,23 @@ describe("issue", () => {
     const body = (await res.json()) as { availableAt: string };
     expect(Date.parse(body.availableAt) % 86_400_000).toBe(0);
   });
+
+  test("issue.reserve_before_create: the daily slot is on disk before the PDS call, and stays spent if it fails", async () => {
+    await service.close();
+    service = await startService(pds, {
+      limits: { signupsOpen: true, windowMs: 86_400_000, maxPerWindow: 5, maxPerDayGlobal: 1 },
+    });
+    let atCreate: Record<string, unknown> | undefined;
+    pds.onCreate = () => {
+      atCreate = lastLog();
+    };
+    pds.createStatus = 500;
+    expect((await issue()).status).toBe(503);
+    expect(atCreate).toMatchObject({ outcome: "reserved" });
+    pds.createStatus = 200;
+    expect((await issue()).status).toBe(429);
+    expect(pds.codes).toBe(0);
+  });
 });
 
 describe("envelope", () => {
@@ -213,12 +230,18 @@ describe("routes and log", () => {
     expect(pds.seen).toEqual([]);
   });
 
-  test("log.hash_chain: three entries chain; editing the second breaks it at seq 2", async () => {
+  test("log.hash_chain: five entries chain; editing the second breaks it at seq 2", async () => {
     await issue();
     await service.post("{");
     await issue();
     const lines = logLines();
-    expect(lines).toHaveLength(3);
+    expect(lines.map((line) => JSON.parse(line).outcome)).toEqual([
+      "reserved",
+      "issued",
+      "denied",
+      "reserved",
+      "issued",
+    ]);
     expect(verifyLog(lines)).toBeNull();
     const second = JSON.parse(lines[1] as string) as Record<string, unknown>;
     lines[1] = JSON.stringify({ ...second, reason: "edited" });

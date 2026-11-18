@@ -48,12 +48,15 @@ async function standing(pds: Pds, did: string): Promise<Standing> {
   return { kind: "ok", createdAt };
 }
 
-/** Steps 8 to 11 for one inviter; `issuedToday` reads the log at the moment of the check. */
+/** How issuing reads and spends the daily cap: the count so far, and a durable reservation made before the PDS call. */
+export type DailyCap = { readonly reservedToday: () => number; readonly reserve: () => void };
+
+/** Steps 8 to 11 for one inviter. The daily slot is reserved before the PDS call and stays spent even if it fails. */
 export async function issueInvite(
   pds: Pds,
   limits: IssueLimits,
   did: string,
-  issuedToday: () => number,
+  daily: DailyCap,
   now: () => number,
 ): Promise<IssueResult> {
   if (!limits.signupsOpen) return { kind: "closed" };
@@ -62,8 +65,9 @@ export async function issueInvite(
     if (inviter.kind !== "ok") return inviter;
     const account = accountQuota(inviter.createdAt, now(), limits.windowMs, limits.maxPerWindow);
     if (!account.ok) return { kind: "quota", reason: "account", availableAt: account.availableAt };
-    const global = globalQuota(issuedToday(), now(), limits.maxPerDayGlobal);
+    const global = globalQuota(daily.reservedToday(), now(), limits.maxPerDayGlobal);
     if (!global.ok) return { kind: "quota", reason: "global", availableAt: global.availableAt };
+    daily.reserve();
     const created = await pds.createInviteCode(did);
     const code = isRecord(created.body) ? created.body.code : undefined;
     if (created.status !== 200 || typeof code !== "string" || !CODE.test(code)) {
