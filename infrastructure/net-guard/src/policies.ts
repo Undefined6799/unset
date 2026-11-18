@@ -44,3 +44,10 @@ export const localPlc: Policy = internalPolicy("plc", ["http://plc:2582"]);
  * calling process's composition root passes in, so its answers must be private and no other host or port is reachable.
  */
 export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin]);
+
+/**
+ * pds-admin (P2.09k; plan §5.2): the one internal service that holds the PDS admin password. `web` reaches it by one
+ * exact origin, the `PDS_ADMIN_URL` its composition root passes in, so answers must be private and nothing else is
+ * reachable under this policy.
+ */
+export const pdsAdmin = (origin: string): Policy => internalPolicy("pds-admin", [origin]);

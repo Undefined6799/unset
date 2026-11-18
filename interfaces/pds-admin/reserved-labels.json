@@ -1,0 +1,4 @@
+{
+  "labels": ["www", "api", "admin", "account", "mail", "mta-sts", "autoconfig", "status", "a", "b", "x"],
+  "rules": ["any label starting with _"]
+}
