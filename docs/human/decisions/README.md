@@ -22,8 +22,8 @@ one-paragraph entry; new decisions also get their own file.
 | [0012](0012-licence.md) | AGPL-3.0-only for the product, MIT for `shared/` (decision 27) | Accepted 2026-10-03 |
 | [0013](0013-identity-network-port.md) | Identity resolution behind a network port, DNS on c-ares | Proposed (awaiting Alex) |
 | [0014](0014-node-postgres.md) | node-postgres as the Postgres driver | Proposed (awaiting Alex) |
-| [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
-| [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
+| [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Superseded by 0054 |
+| [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Superseded by 0055 |
 | [0017](0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06; merge sentence superseded by 0019 |
 | [0018](0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Accepted 2026-10-07 (P1.28, #409) |
 | [0019](0019-verified-agent-merges.md) | Verified agent merges: a verifier session merges checked agent PRs (P0.15) | Accepted on merge (2026-10-12) |
@@ -60,4 +60,8 @@ one-paragraph entry; new decisions also get their own file.
 | [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
 | [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17; decision 3's queue clause superseded by 0053, decision 1's `Firehose` phrase by 0058 |
 | [0053](0053-queue-members-for-the-index-at-onboarding-end.md) | Queue members for the index when their onboarding ends, in `idx`; supersedes one clause of 0052 (P3.02s) | Accepted 2026-11-17 |
+| [0054](0054-web-process-on-sveltekit.md) | The web process runs on SvelteKit with Svelte 5 screens; Hono is removed; supersedes 0015 (P1.20a) | Accepted 2026-11-18 |
+| [0055](0055-shadcn-svelte-and-one-theme-file.md) | shadcn-svelte components, themed by one file in the repo; supersedes 0016 (P1.20a) | Accepted 2026-11-18 |
+| [0056](0056-web-boundary-by-file-kind.md) | In the web process the UI/server boundary is by file kind, checked; the request gate is server.ts plus the hook (P1.20a) | Accepted 2026-11-18 |
+| [0057](0057-small-and-auditable-means-the-code.md) | "Small and auditable" means our own code; a package meeting a written bar needs no ADR unless it touches auth, crypto, egress or personal data; amends DO-1 (P0.09) | Accepted 2026-11-17 |
 | [0058](0058-read-the-stream-without-the-firehose-class.md) | Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class; supersedes one phrase of 0052 (P3.05s) | Accepted 2026-11-17 |
