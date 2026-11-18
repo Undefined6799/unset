@@ -14,7 +14,16 @@ import {
 const NONCE = "n".repeat(43);
 const DID = `did:plc:${"a".repeat(24)}`;
 const state = (fields: Record<string, unknown>) =>
-  JSON.stringify({ v: 1, flow: "login", nonce: NONCE, expectedDid: null, next: null, silent: false, startedAt: 1, ...fields });
+  JSON.stringify({
+    v: 1,
+    flow: "login",
+    nonce: NONCE,
+    expectedDid: null,
+    next: null,
+    silent: false,
+    startedAt: 1,
+    ...fields,
+  });
 
 describe("the appState", () => {
   test("what_post_login_writes_reads_back_the_same", () => {
