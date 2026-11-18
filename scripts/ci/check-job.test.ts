@@ -77,8 +77,9 @@ function normalised(step: Step): Step {
     : { ...step, uses: `unpinned:${step.uses}` };
 }
 
+/** P0.07l (Alex 2026-11-18 11:38Z): the code job has no `if`, so it also runs on drafts; the rest still waits for ready. */
 const ifProblems = (text: string): string[] =>
-  checkJob(text).if === CHECK_IF ? [] : ["the code job's if differs from the pinned condition"];
+  checkJob(text).if === undefined ? [] : ["the code job has an if; it must run on every event, drafts included"];
 
 function gateStepProblems(text: string): string[] {
   const steps = checkJob(text).steps ?? [];
@@ -183,9 +184,9 @@ describe("code job", () => {
 
   test("check_job_if_exact", () => {
     expect(ifProblems(CI)).toEqual([]);
-    const differs = ["the code job's if differs from the pinned condition"];
-    expect(ifProblems(edited(`if: ${CHECK_IF}`, `if: ${CHECK_IF} && false`))).toEqual(differs);
-    expect(ifProblems(edited(`    if: ${CHECK_IF}\n`, ""))).toEqual(differs);
+    const has = ["the code job has an if; it must run on every event, drafts included"];
+    expect(ifProblems(edited("  code:\n", `  code:\n    if: ${CHECK_IF}\n`))).toEqual(has);
+    expect(ifProblems(edited("  code:\n", "  code:\n    if: false\n"))).toEqual(has);
   });
 
   test("check_job_gate_steps_exact", () => {

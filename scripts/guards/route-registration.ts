@@ -1,11 +1,10 @@
-// Guard (P1.04q; P1.04 route_registration_guard): routes are registered only through the server kit, so every route
-// passes the kit's checks (host, method, content type, deadline, rate-limit policy). Outside the two kit files,
-// nothing may call `app.<verb>(` or import Hono, which is the only way to build a router that skips them.
-// Lexical on purpose, and no guard-allow: a route that needs something the kit lacks is a change to the kit.
+// Guard (P1.04q; P1.04 route_registration_guard): routes are registered only through SvelteKit's file routes, so
+// every route passes the gate (hooks.server.ts and its typed policy.ts). Nothing in product code may call
+// `app.<verb>(` or import Hono, which is the only way to build a router that skips them. The Hono server kit's two
+// files were exempt until P1.20k deleted them; nothing is exempt now. Lexical on purpose, and no guard-allow.
 import { type Finding, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from "./files.ts";
 
 const SCANNED_DIRS = PRODUCT_DIRS;
-export const KIT_FILES = ["shared/http/server.ts", "shared/http/routes.ts"];
 const RULE = "route-registration";
 
 /**
@@ -20,7 +19,6 @@ function flagged(text: string): boolean {
 }
 
 export function scanRouteRegistration(file: string, source: string): Finding[] {
-  if (KIT_FILES.includes(file)) return [];
   const findings: Finding[] = [];
   source.split("\n").forEach((text, i) => {
     if (flagged(text)) findings.push({ file, line: i + 1, rule: RULE, text });

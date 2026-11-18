@@ -8,7 +8,7 @@
 import { type Cookies, error, redirect } from "@sveltejs/kit";
 import type { Did } from "@unset/domains-identity";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
-import type { Session, SessionDb } from "@unset/infrastructure-session";
+import type { Session } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
 import { dropSessionCookie } from "./session.ts";
 import { remainingSessions } from "./session-count.ts";
@@ -31,8 +31,11 @@ const className = (cause: unknown): string => (cause instanceof Error && cause.n
 /** A retryable 503 with the catalog's code (shared/errors catalog.ts `logout.failed`); the cookie stays for the retry. */
 const failed = (): never => error(503, { message: "logout.failed" });
 
-/** `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. */
-function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
+/**
+ * `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. Sign-out and the under-age
+ * block (welcome.ts) both revoke a grant through it.
+ */
+export function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
   const limit = AbortSignal.any([deadline, AbortSignal.timeout(REVOKE_MS)]);
   if (limit.aborted) return Promise.reject(new Error("revoke timed out"));
   return new Promise((resolve, reject) => {

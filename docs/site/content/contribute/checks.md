@@ -36,6 +36,8 @@ Versions are the root `devDependencies`.
 
 [`.github/workflows/ci.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/ci.yml) runs `code` and `image-tests` in parallel. `check` is the required name in [`.github/required-checks.json`](https://github.com/Undefined6799/unset/blob/main/.github/required-checks.json). It needs both and fails unless both succeeded.
 
+On a draft only `code` runs, together with `pr-shape`; every other job waits for the pull request to be marked ready (P0.07l, ADR 0059). The required checks are the names in `.github/required-checks.json`, eight today.
+
 | Job | What it runs |
 | --- | --- |
 | `code` | Includes typecheck, lint, guards, then `npm test -- --units` |

@@ -41,6 +41,35 @@
   ],
   "packageRules": [
     {
+      "description": "P0.07l (ADR 0059): one weekly PR for every non-major update; later rules keep their own groups. Alex merges it",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "minimumReleaseAge": "7 days",
+      "groupName": "weekly updates",
+      "schedule": ["* 0-5 * * 1"]
+    },
+    {
+      "description": "P0.07l (ADR 0059): non-major updates of the test, lint and type tools only, past 1.0; the verifier may merge this PR",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": [
+        "@biomejs/biome",
+        "typescript",
+        "vitest",
+        "@vitest/**",
+        "@playwright/test",
+        "@axe-core/playwright",
+        "dependency-cruiser",
+        "jscpd",
+        "fast-check",
+        "jsdom",
+        "@types/**"
+      ],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "matchCurrentVersion": "!/^0/",
+      "minimumReleaseAge": "7 days",
+      "groupName": "weekly test and lint tools",
+      "schedule": ["* 0-5 * * 1"]
+    },
+    {
       "description": "One PR for all atproto packages (plan §9)",
       "minimumReleaseAge": "7 days",
       "matchPackageNames": ["@atproto/**"],
