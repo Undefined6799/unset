@@ -5,7 +5,6 @@
 // may be imported only from shared/lexicons (dependency-cruiser SDK_ADAPTERS), so it cannot sit on this session.
 import { Agent } from "@atproto/api";
 import type { Did } from "@unset/domains-identity";
-import { withErrorParam } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
 import { className, opFailure, restoreOutcome, statusOf } from "./pds-errors.ts";
 
@@ -33,11 +32,6 @@ export type PdsContext = {
 };
 
 export type SessionInfo = { readonly handle: string; readonly email?: string; readonly emailConfirmed?: boolean };
-
-export type PdsFailure =
-  | { readonly action: "notice"; readonly status: 200 | 503; readonly text: string }
-  | { readonly action: "redirect"; readonly location: string }
-  | { readonly action: "rejected"; readonly xrpcError: string; readonly status: number };
 
 /** What `OAuthSession.fetchHandler` is (@atproto/oauth-client 0.8.9). `Agent` takes this shape. */
 type SessionFetch = {
@@ -215,26 +209,4 @@ export function createPdsCall(deps: PdsCallDeps) {
   }
 
   return { pdsCall, pdsSessionInfo };
-}
-
-/** What a route does with a failure. The page renders `text`; this file does not (infrastructure does not own UI). */
-export function respondToPdsFailure(
-  method: "GET" | "POST",
-  result: Exclude<PdsResult<unknown>, { kind: "ok" }>,
-  pdsHost: string,
-): PdsFailure {
-  if (result.kind === "transient") {
-    return {
-      action: "notice",
-      status: method === "POST" ? 503 : 200,
-      text: `${pdsHost} is not answering; your session is kept`,
-    };
-  }
-  if (result.kind === "scope_missing") {
-    return { action: "redirect", location: withErrorParam("/verify-email", "login.scope_insufficient") };
-  }
-  if (result.kind === "auth_dead") {
-    return { action: "redirect", location: withErrorParam("/login", "login.session_ended") };
-  }
-  return { xrpcError: result.xrpcError, status: result.status, action: "rejected" };
 }

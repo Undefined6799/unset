@@ -1,7 +1,7 @@
 // Profile cards (ADR 0051): one sh.unset.section record per card, read leniently from any client, written strictly,
 // and shown in the order the profile's cards list sets.
 import { describe, expect, test } from "vitest";
-import { type Card, orderCards, parseCardKey, readCard } from "./cards.ts";
+import { type Card, orderCards, pageCards, parseCardKey, readCard, shownCards } from "./cards.ts";
 
 const T1 = "2026-11-01T00:00:00.000Z";
 const T2 = "2026-11-02T00:00:00.000Z";
@@ -174,5 +174,37 @@ describe("orderCards", () => {
   test("a missing or broken list means creation order", () => {
     expect(orderCards(undefined, [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
     expect(orderCards([7, null], [a, b]).map((x) => x.key)).toEqual(["b", "a"]);
+  });
+});
+
+describe("shownCards and pageCards (the page's cards, own or public)", () => {
+  const readme = (text: string, createdAt = T1) => stored({ $type: ref("readme"), text }, { createdAt });
+
+  test("a key that is not a record key, or a card that does not read, is left out", () => {
+    const shown = shownCards([
+      { key: KEY, value: readme("kept") },
+      { key: "../escape", value: readme("bad key") },
+      { key: "3jzfcijpj2z2b", value: stored({ $type: "nope" }) },
+    ]);
+    expect(shown.map((card) => card.key)).toEqual([KEY]);
+  });
+
+  test("cards the profile lists come first in its order, then the rest oldest first", () => {
+    const records = [
+      { key: "aaa", value: readme("a", T2) },
+      { key: "bbb", value: readme("b", T1) },
+      { key: "ccc", value: readme("c", T2) },
+    ];
+    const cards = pageCards({ $type: "sh.unset.profile", cards: ["ccc", "missing", "ccc"] }, records);
+    expect(cards.map((card) => card.key)).toEqual(["ccc", "bbb", "aaa"]);
+  });
+
+  test("no profile record, or one that is not an object, shows every card oldest first", () => {
+    const records = [
+      { key: "aaa", value: readme("a", T2) },
+      { key: "bbb", value: readme("b", T1) },
+    ];
+    expect(pageCards(undefined, records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
+    expect(pageCards("not a record", records).map((card) => card.key)).toEqual(["bbb", "aaa"]);
   });
 });
