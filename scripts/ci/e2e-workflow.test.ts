@@ -21,6 +21,7 @@ type Step = {
   "timeout-minutes"?: number;
 };
 type Job = {
+  env?: Record<string, string>;
   needs?: string[];
   if?: string;
   strategy?: { "fail-fast"?: boolean; matrix?: { project?: string[] } };
@@ -101,7 +102,8 @@ describe("browser install (P0.07f, P0.07g)", () => {
   }
 
   test("every_browser_install_is_bounded_and_retried_once", () => {
-    expect(installs.map(([id]) => id)).toEqual(["browser", "a11y"]);
+    // P0.07n: only a11y still installs a browser on the runner; the browser jobs use Playwright's image.
+    expect(installs.map(([id]) => id)).toEqual(["a11y"]);
     for (const [id, step] of installs) {
       expect(step["timeout-minutes"], id).toBe(9);
       const run = step.run ?? "";
@@ -160,7 +162,7 @@ describe("browser install (P0.07f, P0.07g)", () => {
 // fetched for it are cached. apt does not check the hash of a file already in its archive directory (a flipped byte
 // reached dpkg on Ubuntu 24.04), so a cached package is handed over only when it matches the signed index.
 describe("browser cache (P0.07h)", () => {
-  const jobs = ["browser", "a11y"].map((id) => [id, wf.jobs[id]?.steps ?? []] as const);
+  const jobs = ["a11y"].map((id) => [id, wf.jobs[id]?.steps ?? []] as const);
   const at = (steps: readonly Step[], match: (step: Step) => boolean) => steps.findIndex(match);
 
   test("each_install_restores_the_cache_before_it_and_keeps_the_packages_after_it", () => {
@@ -300,5 +302,61 @@ describe("browser cache (P0.07h)", () => {
       expect(handOver(script, { "libnss3_9_amd64.deb": "good 1 amd64" }), id).toEqual(["good_1_amd64.deb"]);
       expect(handOver(script, { "good_1%3a2_amd64.deb": "good 1:2 amd64" }), id).toEqual(["good_1%3a2_amd64.deb"]);
     }
+  });
+});
+
+// P0.07n: the apt mirror served 20 to 60 kB/s on 2026-11-18 and the browser jobs timed out installing system packages
+// before any test ran, cache or not. The browser jobs now take the browsers and their libraries prebuilt from
+// Playwright's own image (playwright.dev/docs/docker, "Remote Connection"), run its server from the lockfile's
+// playwright-core, and connect the tests to it through PW_TEST_CONNECT_WS_ENDPOINT
+// (node_modules/playwright/lib/index.js connectOptionsFromEnv, 1.64.1).
+describe("browser server image (P0.07n)", () => {
+  const job = wf.jobs.browser;
+  const steps = job?.steps ?? [];
+  const lock = JSON.parse(readFileSync(join(ROOT, "package-lock.json"), "utf8")) as {
+    packages: Record<string, { version?: string }>;
+  };
+  const playwright = lock.packages["node_modules/playwright-core"]?.version;
+
+  test("the_image_is_playwrights_own_at_the_lockfile_version_pinned_by_digest", () => {
+    const image = job?.env?.PLAYWRIGHT_IMAGE ?? "";
+    expect(playwright).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(image).toMatch(new RegExp(`^mcr\\.microsoft\\.com/playwright:v${playwright}-noble@sha256:[0-9a-f]{64}$`));
+  });
+
+  test("the_browser_jobs_install_nothing_on_the_runner", () => {
+    const run = steps.map((step) => step.run ?? "").join("\n");
+    expect(run).not.toMatch(/apt-get|playwright install|dpkg/);
+    expect(steps.some((step) => step.uses?.startsWith("actions/cache"))).toBe(false);
+  });
+
+  test("the_server_runs_the_lockfiles_playwright_core_and_the_tests_connect_to_it", () => {
+    const start = steps.find((step) => step.run?.includes("run-server"));
+    const tests = steps.find((step) => step.run?.includes("npx playwright test"));
+    if (start?.run === undefined || tests?.run === undefined) throw new Error("no server or test step");
+    expect(steps.indexOf(start)).toBeLessThan(steps.indexOf(tests));
+    // No npx download inside the image: the server is node_modules/playwright-core, mounted read-only.
+    expect(start.run).toContain(
+      '--volume "$PWD/node_modules:/opt/pw/node_modules:ro" "$PLAYWRIGHT_IMAGE" node /opt/pw/node_modules/playwright-core/cli.js run-server',
+    );
+    expect(start.run).not.toContain("npx");
+    expect(start.run).toContain("--user pwuser");
+    expect(start.run).toContain("--host 127.0.0.1");
+    expect(tests.run).toContain('PW_TEST_CONNECT_WS_ENDPOINT="ws://127.0.0.1:$BROWSER_PORT/" npx playwright test');
+  });
+
+  // The start step's first line refuses an image whose tag names another Playwright version than node_modules.
+  test("a_version_mismatch_stops_the_job", () => {
+    const start = steps.find((step) => step.run?.includes("run-server"))?.run ?? "";
+    const check = start.split("\n")[0] ?? "";
+    const run = (image: string) =>
+      spawnSync("bash", ["-e", "-c", check], {
+        cwd: ROOT,
+        env: { PATH: process.env.PATH, PLAYWRIGHT_IMAGE: image },
+        stdio: "ignore",
+      }).status;
+    expect(run(`mcr.microsoft.com/playwright:v${playwright}-noble@sha256:${"a".repeat(64)}`)).toBe(0);
+    expect(run(`mcr.microsoft.com/playwright:v1.0.0-noble@sha256:${"a".repeat(64)}`)).not.toBe(0);
+    expect(run("")).not.toBe(0);
   });
 });

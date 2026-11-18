@@ -1,7 +1,7 @@
 # Accessibility and browser harness (P1.26). Drafts run nothing; marking the PR ready runs it.
 # pa11y-ci 5.0.0 and @lhci/cli 0.15.1 are installed here, not in the lockfile: their trees fail
 # npm audit --audit-level=high. Lighthouse upload is filesystem only (lighthouserc.json).
-# Browser download is each job's own; a blocked download fails it.
+# The browser jobs take their browsers from Playwright's image (P0.07n); a11y downloads Chromium itself.
 #
 # P0.07b: the suite runs as parallel jobs, one per Playwright project and one for pa11y and Lighthouse, so the
 # critical path is the slowest part rather than their sum. Each job starts its own servers on its own runner, so each
@@ -44,6 +44,15 @@
 # (actions/cache/save) under a key naming its contents when that differs from the one restored. What one slow run
 # fetched is kept for the next, and a set from any image is safe to restore, since the hand-over above checks every
 # file against this runner's signed index.
+# P0.07n: it was not enough. On 2026-11-18 the us-east-2 mirror served 20 to 60 kB/s and the WebKit and Firefox jobs
+# still hit the install timeout with a partly filled cache (#1714, #1716, #1718). The browser jobs now install nothing:
+# they start Playwright's own image (mcr.microsoft.com/playwright, v<version>-noble, browsers and system libraries
+# built in; playwright.dev/docs/docker) pinned by index digest, run its browser server from the lockfile's
+# playwright-core mounted read-only (no npx download), on the runner's network so the browsers reach the CONNECT proxy
+# on 127.0.0.1, and point the tests at it with PW_TEST_CONNECT_WS_ENDPOINT (node_modules/playwright/lib/index.js,
+# connectOptionsFromEnv, 1.64.1). The start step refuses an image whose version is not the lockfile's, and Renovate
+# moves both in one "playwright" group. The steps below that install and cache now serve a11y only: pa11y and
+# Lighthouse need Chromium on the runner.
 
 name: e2e
 
@@ -74,6 +83,10 @@ jobs:
         project: [chromium, firefox, webkit]
     env:
       PROJECT: ${{ matrix.project }}
+      # Playwright's own image at the lockfile's Playwright version (playwright.dev/docs/docker, v1.64.1-noble), pinned
+      # by its index digest; the start step refuses a tag whose version differs from node_modules/playwright-core.
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      BROWSER_PORT: "8445"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,69 +96,19 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Name the browser cache (P0.07h)
-        id: cache-name
-        run: echo "playwright=$(node -p 'require("playwright-core/package.json").version')" >> "$GITHUB_OUTPUT"
-      - name: Restore the browser (P0.07h)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: e2e-${{ runner.os }}-playwright-${{ steps.cache-name.outputs.playwright }}-${{ env.PROJECT }}
-      - name: Restore the newest apt packages kept for this browser (P0.07m)
-        id: apt-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/apt-archives
-          key: e2e-apt-${{ runner.os }}-${{ env.PROJECT }}-
-      - name: Hand apt the cached packages that match its signed index (P0.07h)
-        timeout-minutes: 3
+      # P0.07n: the browsers and their system libraries come prebuilt in Playwright's own image, at the version the
+      # lockfile pins; the tests connect to it, so this job installs nothing from the Ubuntu mirror.
+      - name: Start the browser server from Playwright's image (P0.07n)
+        timeout-minutes: 8
         run: |
-          sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3 > /dev/null || true
-          for deb in "$HOME"/apt-archives/*.deb; do
-            [ -f "$deb" ] || continue
-            name=$(dpkg-deb -f "$deb" Package) || continue
-            arch=$(dpkg-deb -f "$deb" Architecture) || continue
-            version=$(dpkg-deb -f "$deb" Version) || continue
-            want=$(apt-cache show "$name:$arch=$version" 2> /dev/null | sed -n 's/^SHA256: //p' | head -n 1)
-            have=$(sha256sum < "$deb" | cut -d ' ' -f 1)
-            if [ -n "$want" ] && [ "$have" = "$want" ]; then
-              sudo cp "$deb" "/var/cache/apt/archives/${name}_${version//:/%3a}_${arch}.deb"
-            fi
+          test "$(node -p 'require("playwright-core/package.json").version')" = "$(echo "$PLAYWRIGHT_IMAGE" | sed -n 's/^[^:]*:v\([0-9.]*\)-.*/\1/p')"
+          docker run --detach --name browsers --init --ipc=host --network host --user pwuser --volume "$PWD/node_modules:/opt/pw/node_modules:ro" "$PLAYWRIGHT_IMAGE" node /opt/pw/node_modules/playwright-core/cli.js run-server --port "$BROWSER_PORT" --host 127.0.0.1
+          for _ in $(seq 60); do
+            if (: > "/dev/tcp/127.0.0.1/$BROWSER_PORT") 2> /dev/null; then exit 0; fi
+            sleep 2
           done
-      - name: Install the browser, once more if the first attempt stalls (P0.07f, P0.07g)
-        timeout-minutes: 9
-        run: |
-          printf 'Acquire::http::Timeout "20";\nAcquire::Retries "3";\nAPT::Keep-Downloaded-Packages "true";\n' | sudo tee /etc/apt/apt.conf.d/80-e2e-install > /dev/null
-          attempt() { timeout --kill-after=10s 240s npx playwright install --with-deps "$PROJECT"; }
-          attempt || {
-            sudo pkill -KILL -x apt-get || true
-            while pgrep -x apt-get > /dev/null || pgrep -x dpkg > /dev/null; do sleep 2; done
-            sudo dpkg --configure -a
-            attempt
-          }
-      - name: Add the packages apt has now to the kept set, even after a failed install (P0.07m)
-        id: apt-keep
-        if: ${{ !cancelled() }}
-        env:
-          PREFIX: ${{ steps.apt-cache.outputs.cache-primary-key }}
-        run: |
-          kept="$HOME/apt-archives"
-          mkdir -p "$kept"
-          for deb in "$kept"/*.deb; do
-            file=${deb##*/}
-            [ -f "$deb" ] && [ ! -e "/var/cache/apt/archives/$file" ] || continue
-            if compgen -G "/var/cache/apt/archives/${file%%_*}_*_${file##*_}" > /dev/null; then rm "$deb"; fi
-          done
-          find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$kept" {} +
-          if [ -n "$PREFIX" ] && compgen -G "$kept/*.deb" > /dev/null; then
-            echo "key=$PREFIX$(cd "$kept" && LC_ALL=C && sha256sum -- *.deb | sha256sum | cut -c 1-16)" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Save the kept set if it changed (P0.07m)
-        if: ${{ !cancelled() && steps.apt-keep.outputs.key != '' && steps.apt-keep.outputs.key != steps.apt-cache.outputs.cache-matched-key }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/apt-archives
-          key: ${{ steps.apt-keep.outputs.key }}
+          docker logs browsers
+          exit 1
       - name: Run Playwright
         run: |
           node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
@@ -157,7 +120,10 @@ jobs:
           }
           trap cleanup EXIT
           node tests/e2e/fixtures/servers.ts wait
-          npx playwright test --config tests/e2e/playwright.config.ts --project "$PROJECT"
+          PW_TEST_CONNECT_WS_ENDPOINT="ws://127.0.0.1:$BROWSER_PORT/" npx playwright test --config tests/e2e/playwright.config.ts --project "$PROJECT"
+      - name: Keep the browser server's log (P0.07n)
+        if: ${{ !cancelled() }}
+        run: docker logs browsers > e2e-browsers.log 2>&1 || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -169,6 +135,7 @@ jobs:
             playwright-report/
             e2e-prod.log
             e2e-test.log
+            e2e-browsers.log
 
   a11y:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
