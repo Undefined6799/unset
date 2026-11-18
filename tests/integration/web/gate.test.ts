@@ -255,6 +255,20 @@ describe("requests", () => {
   });
 });
 
+// The independent review, M1: an app route's refusal page linked the stylesheet under the app group's fallback CSP
+// (default-src 'none'), so the browser blocked it. A styled refusal page carries the public policy: the build's styles
+// and our fonts, no script.
+test("an_app_route_refusal_page_may_load_its_stylesheet", async () => {
+  const page = await formPost("/test-routes/form-post", `text=${"a".repeat(2_000)}`);
+  expect(page.status).toBe(413);
+  expect(await page.text()).toMatch(/<link rel="stylesheet" href="\/_app\/immutable\/assets\/[\w.-]+\.css"/);
+  const csp = page.headers.get("content-security-policy") ?? "";
+  expect(csp).toContain(`style-src ${ORIGIN}/_app/`);
+  expect(csp).toContain(`font-src ${ORIGIN}/fonts/`);
+  expect(csp).not.toContain("script-src");
+  expect(page.headers.get("cache-control")).toBe("private, no-store");
+});
+
 describe("limits", () => {
   test("a_client_address_over_its_limit_gets_429", async () => {
     const from = clientAddress();

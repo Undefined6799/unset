@@ -4,8 +4,8 @@
 // answers a request that asks for HTML with this page and every other request with the code as text, as before. The
 // page shows only the catalog's text and code: nothing from the request reaches it. On an app or public route it links
 // the build's stylesheet, whose path server.ts read once from the build manifest, so it looks like the error page;
-// those groups' CSP allows /_app/ styles. On any other route, or with no stylesheet, it loads nothing, so the static
-// group's `default-src 'none'` holds.
+// the hook sends it under the public policy, which allows /_app/ styles and /fonts/ and no script. On any other
+// route, or with no stylesheet, it loads nothing, so the static group's `default-src 'none'` holds.
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };

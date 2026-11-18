@@ -193,8 +193,11 @@ export const handle: Handle = async (input) => {
   const group = policyOf(event.route.id)?.group ?? "static";
   const refused = REFUSALS.get(response);
   if (refused !== undefined && wantsPage(event.request, event.isDataRequest)) {
-    const styled = group === "app" || group === "public" ? stylesheet : undefined;
-    response = refusalPage(refused, response.status, response.headers, styled);
+    const styled = group === "app" || group === "public";
+    response = refusalPage(refused, response.status, response.headers, styled ? stylesheet : undefined);
+    // A styled refusal page runs no script and loads only the build's styles and our fonts: the public policy. The app
+    // group's fallback (default-src 'none') would block its stylesheet.
+    if (styled) return withGroupHeaders(response, group, event.isDataRequest, "public");
   }
   return withGroupHeaders(response, group, event.isDataRequest);
 };
@@ -205,7 +208,7 @@ export const handle: Handle = async (input) => {
  * varies on Cookie, as interfaces/http/prefs/theme.ts has it; public pages get neither, so their bytes never depend on
  * a cookie.
  */
-function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean): Response {
+function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean, cspGroup = group): Response {
   const out = new Response(response.body, response); // SvelteKit's own responses may have immutable headers
   const html = out.headers.get("content-type")?.startsWith("text/html") === true;
   // A redirect is never stored, as interfaces/http's redirect.ts sends it (a 303 is not cacheable without explicit
@@ -222,7 +225,7 @@ function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boo
     // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5).
     if (!dev) out.headers.set("content-security-policy", narrowed(kit, config.PUBLIC_ORIGIN));
   } else {
-    out.headers.set("content-security-policy", ZERO_SCRIPT[group]);
+    out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
   }
   return out;
 }
