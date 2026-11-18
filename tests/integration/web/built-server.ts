@@ -21,21 +21,28 @@ export const PDS_HOST = "pds.unset.test";
  */
 export function buildOnce(run: string | number): void {
   const marker = join(WEB, "build", `.built-${run}`);
+  if (existsSync(marker)) return;
+  withBuildLock(() => {
+    if (existsSync(marker)) return;
+    execFileSync("npx", ["vite", "build", "--logLevel", "error"], { cwd: WEB, stdio: "inherit" });
+    writeFileSync(marker, "");
+  });
+}
+
+/**
+ * Runs `work` while no other test file writes interfaces/web's generated folders: vite build and svelte-kit sync both
+ * rewrite .svelte-kit, and two at once fail.
+ */
+export function withBuildLock<T>(work: () => T): T {
   const lock = join(WEB, ".build-lock");
-  for (let waited = 0; !existsSync(marker); waited += 1) {
-    if (tryLock(lock)) {
-      try {
-        if (!existsSync(marker)) {
-          execFileSync("npx", ["vite", "build", "--logLevel", "error"], { cwd: WEB, stdio: "inherit" });
-          writeFileSync(marker, "");
-        }
-      } finally {
-        rmSync(lock, { recursive: true, force: true });
-      }
-      return;
-    }
+  for (let waited = 0; !tryLock(lock); waited += 1) {
     if (waited > 1200) throw new Error("interfaces/web build: waited 10 minutes for another file's build");
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  }
+  try {
+    return work();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
   }
 }
 

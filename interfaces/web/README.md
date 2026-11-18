@@ -52,5 +52,5 @@ the integration branch's owner.
 ## Commands
 
     npm run build -w @unset/interfaces-web    # the build the tests run on
-    npm run check -w @unset/interfaces-web    # svelte-check (TypeScript 6); svelte-check.test.ts runs it in CI
+    npm run check -w @unset/interfaces-web    # svelte-check (TypeScript 6); tests/integration/web/svelte-check.test.ts runs it in CI
     npx vitest run --project tests/integration tests/integration/web
