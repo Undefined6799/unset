@@ -29,6 +29,8 @@ describe("pds-admin package", () => {
     expect(lines).toHaveLength(11);
     expect(lines[0]).toBe("www.unset.example.com free");
     expect(lines[2]).toBe("admin.unset.example.com taken");
+    // Only the PDS's HandleNotFound means free; any other answer is unknown, never free.
+    expect(lines[7]).toBe("status.unset.example.com unknown (HTTP 503)");
     expect(pds.seen.every((seen) => seen.auth === undefined)).toBe(true);
   });
 });

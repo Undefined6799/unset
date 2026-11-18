@@ -72,7 +72,9 @@ export async function fakePds(): Promise<FakePds> {
         return json(res, 200, { code: `pds-example-com-abcde-${String(fake.codes).padStart(5, "0")}` });
       }
       if (path.startsWith("/xrpc/com.atproto.identity.resolveHandle")) {
-        return path.includes("admin.") ? json(res, 200, { did: ALICE }) : json(res, 400, { error: "InvalidRequest" });
+        if (path.includes("admin.")) return json(res, 200, { did: ALICE });
+        if (path.includes("status.")) return json(res, 503, { error: "Unavailable" });
+        return json(res, 400, { error: "HandleNotFound", message: "Unable to resolve handle" });
       }
       json(res, 404, {});
     });
