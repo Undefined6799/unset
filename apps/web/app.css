@@ -1,0 +1,81 @@
+/* The app shell's stylesheet (P1.20c; ADR 0055): Tailwind 4 for the shadcn-svelte components in lib/components and the
+ * app shell, over the one theme file. The SvelteKit root layout imports it, and Tailwind's Vite plugin
+ * (interfaces/web) builds it into one file under /_app/. Mapping as shadcn-svelte 1.8.1's Tailwind 4 setup writes it
+ * (https://shadcn-svelte.com/docs/installation/manual, "Configure styles"), with our variables only. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./theme.css";
+
+/* Classes are read from the components and the shell only (lib/), never from the pages (scripts/guards/page-classes.ts). */
+@source "./lib";
+
+/* dark: follows the same choice as theme.css: an explicit <html data-theme>, otherwise the system setting. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Our two variable fonts, from the path the web process serves them on (ADR 0054 point 4: font-src /fonts/). */
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "Space Grotesk";
+  src: url("/fonts/SpaceGrotesk-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor gives the variable font's range. */
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  /* biome-ignore lint/plugin: an @font-face descriptor names the face, as in shared/ui tokens.css. */
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  /* biome-ignore lint/plugin: an @font-face descriptor gives the variable font's range. */
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) / 2);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 2);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  a {
+    @apply text-info underline-offset-4 hover:underline;
+  }
+}
