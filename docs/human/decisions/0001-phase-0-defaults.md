@@ -621,3 +621,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   and Hono is removed; the app CSP admits SvelteKit's startup script and two style attributes by hash and two named
   Trusted Types policies; the UI/server boundary in the web process is by file kind; the request gate is `server.ts`
   plus the hook. Supersede 0015 and 0016 once accepted. Proposed, awaiting Alex.
+- **ADRs 0054, 0055 and 0056 accepted (Alex, 2026-11-18 00:19:20Z, against 23b09e6; own records:
+  [0054](0054-web-process-on-sveltekit.md), [0055](0055-shadcn-svelte-and-one-theme-file.md),
+  [0056](0056-web-boundary-by-file-kind.md)):** the web process moves to SvelteKit and Hono is removed, with the app
+  CSP change written out in 0054; shadcn-svelte and one theme file replace the shared/ui approval rule; the boundary in
+  the web process is by file kind and the request gate is `server.ts` plus the hook. 0015 and 0016 are superseded.

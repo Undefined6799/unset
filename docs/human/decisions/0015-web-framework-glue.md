@@ -1,6 +1,6 @@
 # 0015 — Web framework glue: Hono with server-rendered React and islands
 
-Status: Accepted (pending merge). P1.20 spike, verdict PASS. Alex merges.
+Status: Superseded by 0054.
 
 ## Context
 Plan §5.1 picks Hono, server-rendered React, CSS Modules and islands, with a typed CSP that has no nonces and a

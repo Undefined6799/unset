@@ -1,6 +1,6 @@
 # 0056 — In the web process, the UI/server boundary is by file kind, checked
 
-Status: Proposed. Amends decision 34's folder split for the web process only; acceptance needs Alex's typed line.
+Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry and the superseded marks on 0015 and 0016. Amends decision 34's folder split for the web process only.
 
 ## Context
 Decision 34 puts screens in `apps/web` and the server in `interfaces/http`. SvelteKit keeps a page's screen

@@ -1,6 +1,6 @@
 # 0055 — shadcn-svelte components, themed by one file in the repo
 
-Status: Proposed. Supersedes ADR 0016 (proposed) when accepted.
+Status: Accepted by Alex, 2026-11-18 00:19:20Z, against 23b09e6 (his line "I accept the three ADRs, ADR 54, 55, and 56", typed in the project chat after the coordinator had reviewed that head and asked for one line per ADR at 23b09e6). The only changes since that head are the status paragraphs, the index rows, the ADR 0001 entry and the superseded marks on 0015 and 0016. Supersedes ADR 0016 (proposed).
 
 ## Context
 On 2026-11-17 Alex chose shadcn-svelte (Bits UI underneath, Tailwind 4) over our 34 hand-built components and Panda
