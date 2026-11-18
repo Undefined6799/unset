@@ -48,8 +48,9 @@ export function openRequestLog(file: string, logKey: Buffer): RequestLog {
 
   return {
     append: (fields, now) => {
-      seq += 1;
-      const entry: Entry = { seq, ts: new Date(now).toISOString(), outcome: fields.outcome, prev };
+      // seq and prev move only after the line is on disk, so a failed append leaves no gap in the chain.
+      const next = seq + 1;
+      const entry: Entry = { seq: next, ts: new Date(now).toISOString(), outcome: fields.outcome, prev };
       if (fields.reason !== undefined) entry.reason = fields.reason;
       if (fields.verb !== undefined) entry.verb = fields.verb;
       if (fields.kid !== undefined) entry.kid = fields.kid;
@@ -59,6 +60,7 @@ export function openRequestLog(file: string, logKey: Buffer): RequestLog {
       if (fields.code !== undefined) entry.codeMac = mac(fields.code);
       const hash = hashOf(prev, entry);
       appendLine(file, JSON.stringify({ ...entry, hash }));
+      seq = next;
       prev = hash;
       if (fields.outcome === "reserved") reserved.push(now);
     },
