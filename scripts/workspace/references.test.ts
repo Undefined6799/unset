@@ -283,6 +283,8 @@ describe("workspace references", () => {
   test("svelte_check_files_count_and_strays_fail", () => {
     const root = typecheckTree({});
     put(root, "apps/web/tsconfig.svelte.json", { include: ["lib/**/*.ts", "lib/**/*.svelte"] });
+    put(root, "interfaces/web/tsconfig.svelte.json", { include: ["src/routes", "*.ts"] });
+    put(root, "interfaces/web/src/routes/+page.svelte", "");
     for (const file of ["apps/web/lib/a.ts", "apps/web/lib/ui/b/b.svelte", "apps/web/lib/ui/b/index.ts"])
       put(root, file, "");
     for (const file of ["apps/web/other/c.svelte", "apps/web/other/d.ts", "interfaces/web/src/e.svelte"])
