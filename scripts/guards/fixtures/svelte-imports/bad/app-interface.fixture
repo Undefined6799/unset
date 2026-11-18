@@ -1,0 +1,5 @@
+/* fixture: apps/web/lib/profile/Card.svelte findings=2 */
+<script lang="ts">
+  import type { AccountView } from "@unset/interfaces-web";
+  import type { Pool } from "@unset/infrastructure-postgres";
+</script>

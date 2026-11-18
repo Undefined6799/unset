@@ -1,0 +1,4 @@
+// fixture: interfaces/web/server.ts findings=1
+import { createServer } from "node:http";
+import { createPdsCall } from "@unset/infrastructure-pds";
+const { handler } = await import("#kit/handler");
