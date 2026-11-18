@@ -2,6 +2,8 @@
 // fills its fields from `content`), and beside it what the card shows, built on the server: the README's blocks and
 // every address already through safeHref, so a component never decides whether a link is safe.
 
+import type { Action } from "svelte/action";
+
 export type CardLayout = "list" | "carousel" | "grid";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
@@ -95,3 +97,13 @@ export type CardView = {
 
 /** How many rows the editors write per list (domains/profile CARD_EDIT_LIMITS). */
 export type CardEditLimits = { readonly links: number; readonly collection: number; readonly buttons: number };
+
+/**
+ * The part of SvelteKit's SubmitFunction (kit 3.2.0 types/index.d.ts) a card editor uses: after the action answers,
+ * `update` does what `enhance` does by default. apps/web imports nothing from the
+ * framework (ADR 0056), so the page passes kit's `enhance` in as an Enhance.
+ */
+export type SubmitHandler = () => (outcome: { update: () => Promise<void> }) => Promise<void>;
+
+/** The page's form enhancement, `use:enhance` or `use:enhance={handler}`; the default does nothing (no script). */
+export type Enhance = Action<HTMLFormElement, SubmitHandler | undefined>;

@@ -2,12 +2,17 @@
   The owner's controls under each card (ADR 0051; from apps/web/src/screens/profile/CardControls.tsx, P1.20i): the
   editor, move up and down, and delete behind a confirm. Up and down are labelled buttons the keyboard reaches; each
   posts the whole new order to the page's `reorder` action and works with no script. Edit and delete open the stock
-  Dialog, which needs script, as today's Modal did.
+  Dialog, which needs script, as today's Modal did. With script the moved card keeps focus: its same button, or its
+  other move button once it reaches an end, since the button pressed is redrawn and focus would fall to the body.
 -->
+<script module lang="ts">
+/** The card a move button was pressed on, and which, until the new order arrives. */
+let pendingMove: { key: string; to: "up" | "down" } | null = null;
+</script>
+
 <script lang="ts">
-import type { Action } from "svelte/action";
 import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
-import type { CardContent, CardEditLimits, CardView } from "../../profile/types.ts";
+import type { CardContent, CardEditLimits, CardView, Enhance } from "../../profile/types.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import CardEditor from "./card-editor.svelte";
@@ -17,7 +22,7 @@ let {
   index,
   limits,
   enhance = () => undefined,
-}: { cards: readonly CardView[]; index: number; limits: CardEditLimits; enhance?: Action<HTMLFormElement> } = $props();
+}: { cards: readonly CardView[]; index: number; limits: CardEditLimits; enhance?: Enhance } = $props();
 
 const card = $derived(cards[index]);
 const keys = $derived(cards.map((c) => c.key));
@@ -50,17 +55,29 @@ const EDIT_TITLE = {
   buttons: BUTTONS_EDIT.editTitle,
 };
 const maxOf = (kind: CardContent["kind"]) => (kind === "readme" ? 0 : limits[kind]);
+
+let group: HTMLFieldSetElement | undefined = $state();
+// Runs when the new order arrives (cards changes); pendingMove itself is not reactive, so a press alone does nothing.
+$effect(() => {
+  const moved = cards[index];
+  const pending = pendingMove;
+  if (pending === null || moved?.key !== pending.key || group === undefined) return;
+  pendingMove = null;
+  const target = group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ?? group.querySelector<HTMLElement>("[data-move]");
+  target?.focus();
+});
 </script>
 
 {#snippet move(to: number, label: string)}
-  <form method="POST" action="?/reorder" use:enhance>
+  {@const direction = to < index ? "up" : "down"}
+  <form method="POST" action="?/reorder" use:enhance onsubmit={() => (pendingMove = { key: card?.key ?? "", to: direction })}>
     {#each swapped(index, to) as key (key)}<input type="hidden" name="order" value={key} />{/each}
-    <Button type="submit" variant="outline">{label}</Button>
+    <Button type="submit" variant="outline" data-move={direction}>{label}</Button>
   </form>
 {/snippet}
 
 {#if card !== undefined}
-  <fieldset class="mt-2 flex min-w-0 flex-wrap gap-3 border-t pt-4">
+  <fieldset bind:this={group} class="mt-2 flex min-w-0 flex-wrap gap-3 border-t pt-4">
     <legend class="sr-only">{CARD_EDIT.group(cardName(card.content))}</legend>
     <CardEditor
       kind={card.content.kind}

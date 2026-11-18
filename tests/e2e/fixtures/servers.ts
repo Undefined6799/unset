@@ -293,7 +293,12 @@ async function serveTest(): Promise<void> {
       pds: {
         origin: `https://${PDS_HOST}`,
         did: ACCOUNT.did,
-        records: {},
+        // A profile, so the member page shows its card controls (cards.spec.ts adds and deletes its own cards).
+        records: {
+          "sh.unset.profile": {
+            self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: "2026-11-01T00:00:00.000Z" },
+          },
+        },
         writesFile,
         session: { emailConfirmed: true },
       },

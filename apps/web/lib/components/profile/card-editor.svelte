@@ -5,9 +5,8 @@
   is shown, then blank rows while the editor's limit allows, so a save never drops one and clearing a row removes it.
 -->
 <script lang="ts">
-import type { Action } from "svelte/action";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
-import type { CardContent, CardWidth } from "../../profile/types.ts";
+import type { CardContent, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import Choice from "./choice.svelte";
@@ -36,8 +35,19 @@ let {
   submit: string;
   /** Rows a list editor writes (domains/profile CARD_EDIT_LIMITS). */
   max: number;
-  enhance?: Action<HTMLFormElement>;
+  enhance?: Enhance;
 } = $props();
+
+let open = $state(false);
+// With script, the editor closes once the action has answered and the page has updated, as the Hono page did when the
+// browser followed the action's answer: a saved card is on the page, and a refused save's message is the page's alert
+// (+page.svelte `form.message`), which the open dialog would hide.
+const closeWhenAnswered: SubmitHandler =
+  () =>
+  async ({ update }) => {
+    await update();
+    open = false;
+  };
 
 /** Blank rows a list editor offers to add more. */
 const BLANK_ROWS = 10;
@@ -70,17 +80,31 @@ const entryRows = $derived([
   ...(collection?.items ?? []),
   ...Array(blanks(collection?.items.length ?? 0)).fill({ title: "", tag: "", description: "", uri: "" }),
 ]);
+/**
+ * On open, focus the card's first text field (the README's text area, a list's title), not the width radios above
+ * it; bits-ui 2.20.6 focuses the first tabbable element unless onOpenAutoFocus prevents it
+ * (dist/bits/utilities/focus-scope/types.d.ts).
+ */
+function focusFirstText(event: Event) {
+  const form = document.getElementById(formId);
+  // The stock Input and Textarea mark themselves with data-slot; the radio groups' hidden inputs carry none.
+  const field = form?.querySelector<HTMLElement>('[data-slot="input"], [data-slot="textarea"]');
+  if (field == null) return;
+  event.preventDefault();
+  field.focus();
+}
+const hintId = `${formId}-hint`;
 const buttonRows = $derived([
   ...(buttons?.buttons ?? []),
   ...Array(blanks(buttons?.buttons.length ?? 0)).fill({ kind: "link", preset: "custom", uri: "", label: "" }),
 ]);
 </script>
 
-<Dialog.Root>
+<Dialog.Root bind:open>
   <Dialog.Trigger class={buttonVariants({ variant: "outline" })}>{trigger}</Dialog.Trigger>
-  <Dialog.Content class="max-h-[90vh] overflow-y-auto">
+  <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText}>
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
-    <form id={formId} method="POST" action={cardKey === undefined ? "?/create" : "?/save"} class="grid gap-4" use:enhance>
+    <form id={formId} method="POST" action={cardKey === undefined ? "?/create" : "?/save"} class="grid gap-4" use:enhance={closeWhenAnswered}>
       {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
       <input type="hidden" name="kind" value={kind} />
       <Choice label={CARD_EDIT.width} name="width" value={width} options={WIDTHS} />
@@ -89,9 +113,9 @@ const buttonRows = $derived([
       {:else if kind === "links"}
         <Field label={LINKS_EDIT.title} name="title" value={links?.title ?? ""} />
         <Choice label={LINKS_EDIT.layout} name="layout" value={links?.layout ?? "list"} options={LAYOUTS} />
-        <p>{LINKS_EDIT.hint(max)}</p>
+        <p id={hintId}>{LINKS_EDIT.hint(max)}</p>
         {#each linkRows as link, i (i)}
-          <fieldset class="grid gap-2">
+          <fieldset class="grid gap-2" aria-describedby={hintId}>
             <legend class="font-medium">{LINKS_EDIT.row(i + 1)}</legend>
             <Field label={LINKS_EDIT.uri} name="items.{i}.uri" value={link.uri} inputmode="url" autocomplete="url" />
             <Field label={LINKS_EDIT.label} name="items.{i}.label" value={link.label} />
@@ -101,9 +125,9 @@ const buttonRows = $derived([
       {:else if kind === "collection"}
         <Field label={COLLECTION_EDIT.title} name="title" value={collection?.title ?? ""} />
         <Choice label={LINKS_EDIT.layout} name="layout" value={collection?.layout ?? "carousel"} options={LAYOUTS} />
-        <p>{COLLECTION_EDIT.hint(max)}</p>
+        <p id={hintId}>{COLLECTION_EDIT.hint(max)}</p>
         {#each entryRows as entry, i (i)}
-          <fieldset class="grid gap-2">
+          <fieldset class="grid gap-2" aria-describedby={hintId}>
             <legend class="font-medium">{COLLECTION_EDIT.row(i + 1)}</legend>
             <Field label={COLLECTION_EDIT.entryTitle} name="items.{i}.title" value={entry.title} />
             <Field label={COLLECTION_EDIT.tag} name="items.{i}.tag" value={entry.tag} />
@@ -114,9 +138,9 @@ const buttonRows = $derived([
       {:else}
         <Field label={BUTTONS_EDIT.heading} name="heading" value={buttons?.heading ?? ""} required />
         <Field label={BUTTONS_EDIT.text} name="text" value={buttons?.text ?? ""} rows={3} />
-        <p>{BUTTONS_EDIT.hint(max)}</p>
+        <p id={hintId}>{BUTTONS_EDIT.hint(max)}</p>
         {#each buttonRows as button, i (i)}
-          <fieldset class="grid gap-2">
+          <fieldset class="grid gap-2" aria-describedby={hintId}>
             <legend class="font-medium">{BUTTONS_EDIT.row(i + 1)}</legend>
             <Choice label={BUTTONS_EDIT.kind} name="buttons.{i}.kind" value={button.kind} options={KINDS} />
             <Field
