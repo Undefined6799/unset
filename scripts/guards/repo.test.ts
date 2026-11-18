@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
 import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
+import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
@@ -34,6 +35,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["also-known-as", alsoKnownAs.scanAll],
   ["ui-inventory", uiInventory.scanAll],
   ["page-classes", pageClasses.scanAll],
+  ["class-colours", classColours.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -58,6 +60,11 @@ test("ui_inventory_scans_files", () => {
   expect(uiInventory.scannedFiles(ROOT).length).toBeGreaterThan(0);
 });
 
+test("class_colours_scans_files", () => {
+  // AB-4: an empty scan would pass vacuously; the shell and the components exist from P1.20b.
+  expect(classColours.scannedFiles(ROOT).length).toBeGreaterThan(0);
+});
+
 test("report_format", () => {
   expect(report([{ file: "a.ts", line: 3, rule: "egress", text: "fetch(u)" }])).toBe("a.ts:3  [egress]  fetch(u)");
 });
@@ -71,6 +78,7 @@ test("unreadable_file_is_finding", () => {
     // The inventory is the base the rest is checked against, so an unreadable one is the whole report.
     "ui-inventory": "shared/ui/inventory.json",
     "page-classes": "interfaces/web/src/routes/+page.svelte",
+    "class-colours": "apps/web/lib/components/profile/bad.svelte",
     "web-prerender": "interfaces/web/src/routes/+page.ts",
   };
   // case-collision reads only names from git, never file contents.

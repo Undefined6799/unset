@@ -1,0 +1,5 @@
+/* fixture: interfaces/web/src/routes/+layout.svelte findings=5 */
+<header class="bg-[rgb(0,0,0)]"></header>
+<nav class="text-[hsl(10_20%_30%)] ring-[oklch(0.5_0.1_200)]"></nav>
+<div class="fill-[color-mix(in_oklab,red,blue)]"></div>
+<div class="[color:red]"></div>

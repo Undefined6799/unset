@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
+import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
@@ -35,6 +36,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "composition-root": compositionRoot.scanAll,
   "also-known-as": alsoKnownAs.scanAll,
   "page-classes": pageClasses.scanAll,
+  "class-colours": classColours.scanAll,
 };
 
 const temps: string[] = [];
@@ -188,6 +190,11 @@ describe("css-layers", () => {
 describe("page-classes", () => {
   test("page_classes_bad_fixture", () => expectFixtures("page-classes", "bad"));
   test("page_classes_good_fixture", () => expectFixtures("page-classes", "good"));
+});
+
+describe("class-colours", () => {
+  test("class_colours_bad_fixture", () => expectFixtures("class-colours", "bad"));
+  test("class_colours_good_fixture", () => expectFixtures("class-colours", "good"));
 });
 
 describe("inner-html", () => {
