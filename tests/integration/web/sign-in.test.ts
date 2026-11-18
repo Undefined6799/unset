@@ -195,6 +195,14 @@ describe("the sign-in form", () => {
     const other = await (await web.fetch("/login", { headers: headers({ referer: "https://evil.test/x" }) })).text();
     expect(other).not.toContain("evil.test");
   });
+
+  // The shell's Sign in carries the page as `next` (P1.20k), so Close returns to that same page.
+  test("close_returns_to_the_page_whose_sign_in_was_pressed", async () => {
+    const html = await (
+      await web.fetch("/login?next=%2Flegal%2Fterms", { headers: headers({ referer: `${ORIGIN}/legal/terms` }) })
+    ).text();
+    expect(html).toContain('href="/legal/terms"');
+  });
 });
 
 describe("starting a sign-in", () => {

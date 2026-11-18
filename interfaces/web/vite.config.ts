@@ -13,6 +13,9 @@ export default defineConfig({
   // path, dist/node/chunks/node.js). Without it a file outside this folder is matched against the root solution file,
   // whose references name tests/, which the image's build context leaves out (P1.20j).
   tsconfig: "tsconfig.json",
+  // Never inline an imported file as a data: URL (Vite 8.3.5 build.assetsInlineLimit, default 4096 bytes): no policy
+  // here allows data:, so the 1 KB favicon would not load. Every file is emitted under /_app/ instead (P1.20k).
+  build: { assetsInlineLimit: 0 },
   plugins: [
     tailwindcss(),
     sveltekit({

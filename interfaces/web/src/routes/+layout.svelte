@@ -9,9 +9,12 @@ import "@unset/apps-web/app.css";
 import { Icon } from "@unset/apps-web/lib/components/icon";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
+import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
+import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import type { Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
+import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 import { type ShellData, SITE_SHELL, SHELL_TEXT as T, type ThemeChoice } from "../lib/shell.ts";
 import type { LayoutData } from "./$types";
@@ -110,6 +113,12 @@ function restoreSaved(event: PageTransitionEvent): void {
 }
 
 const MENU = "core-menu";
+// A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
+// Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
+afterNavigate(() => {
+  const drawer = document.getElementById(MENU);
+  if (drawer?.matches(":popover-open")) drawer.hidePopover();
+});
 // A footer link is a 24px target (WCAG 2.2 SC 2.5.8): its 20px line plus 2px above and below.
 const footerLink = "py-0.5";
 const row =
@@ -119,6 +128,13 @@ const row =
 <svelte:window onpageshow={restoreSaved} />
 
 <svelte:head>
+  <!-- As the Hono head had them (apps/web/src/shell/head.tsx): both fonts preloaded, in anonymous CORS mode because a
+       font is fetched that way even from our own origin and a preload is reused only when its mode matches (MDN
+       rel="preload"); the icons as files under /_app/ (vite.config.ts inlines nothing). -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/SpaceGrotesk-Variable.woff2" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/JetBrainsMono-Variable.woff2" />
+  <link rel="icon" href={favicon} sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href={appleTouchIcon} />
   {#if shell.noindex}<meta name="robots" content="noindex" />{/if}
 </svelte:head>
 
@@ -171,6 +187,11 @@ const row =
   {@render children()}
 {/snippet}
 
+{#if shell.kind === "bare"}
+  <main id="main" class="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center px-4 py-8">
+    {@render content()}
+  </main>
+{:else}
 <a
   href="#main"
   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2"
@@ -250,20 +271,15 @@ const row =
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">
       <a href="/" class="font-mono font-semibold text-foreground" aria-label={T.homeLabel}>{T.brand}</a>
-      {#if !signedIn}<Button href="/login" size="sm">{T.signIn}</Button>{/if}
+      {#if !signedIn}<Button href={data.signInHref} size="sm">{T.signIn}</Button>{/if}
     </header>
-    <main
-      id="main"
-      class="mx-auto w-full max-w-3xl flex-1 px-4 py-8 [&_h1]:mb-4 [&_h1]:text-3xl [&_h1]:font-semibold [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:font-semibold [&_p]:my-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_table]:my-4 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_th]:text-left [&_code]:font-mono"
-    >
-      {@render content()}
-    </main>
+    <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{@render content()}</main>
   </div>
   <footer class="flex flex-wrap gap-8 border-t px-4 py-8 text-sm">
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.siteColumn}</h2>
       <a href="/" class={footerLink}>{T.home}</a>
-      {#if !signedIn}<a href="/login" class={footerLink}>{T.signIn}</a>{/if}
+      {#if !signedIn}<a href={data.signInHref} class={footerLink}>{T.signIn}</a>{/if}
     </div>
     <div class="flex flex-col gap-2">
       <h2 class="font-medium">{T.legalColumn}</h2>
@@ -272,4 +288,5 @@ const row =
     {#if prefs !== undefined}<div>{@render themeForm()}</div>{/if}
     <p class="w-full text-muted-foreground">{T.note}</p>
   </footer>
+{/if}
 {/if}

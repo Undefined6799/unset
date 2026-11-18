@@ -75,6 +75,44 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+  /* Text inside a page's main, in both shells (the site shell's main had these as classes; the core shell's had none).
+   * Only an element with no class of its own: a list or heading a component or shell draws keeps its look. */
+  main :where(h1:not([class])) {
+    @apply mb-4 text-3xl font-semibold;
+  }
+  main :where(h2:not([class])) {
+    @apply mt-8 mb-3 text-xl font-semibold;
+  }
+  main :where(h3:not([class])) {
+    @apply mt-6 mb-2 font-semibold;
+  }
+  main :where(p, ul, ol, dl):not([class]) {
+    @apply my-3;
+  }
+  main :where(ul:not([class])) {
+    @apply list-disc pl-6;
+  }
+  main :where(ol:not([class])) {
+    @apply list-decimal pl-6;
+  }
+  main :where(dt:not([class])) {
+    @apply font-medium;
+  }
+  main :where(dd:not([class])) {
+    @apply mb-2 text-muted-foreground;
+  }
+  main :where(table:not([class])) {
+    @apply my-4 w-full;
+  }
+  main :where(td, th):not([class]) {
+    @apply border p-2;
+  }
+  main :where(th:not([class])) {
+    @apply text-left;
+  }
+  main :where(code:not([class])) {
+    @apply font-mono;
+  }
   /* A link in text is underlined, so it never relies on colour alone (WCAG 1.4.1; axe link-in-text-block). A link
    * drawn as a component (shadcn's Button with href sets data-slot) keeps that component's own colour and look. */
   a:not([data-slot]) {
@@ -98,5 +136,30 @@
   /* Native check boxes and radios at the 24px target size (WCAG 2.2 SC 2.5.8, as the React kit drew them). */
   input:where([type="checkbox"], [type="radio"]) {
     @apply size-6 shrink-0 accent-primary;
+  }
+}
+
+/* Reduced motion (WCAG 2.2 SC 2.3.3), for the stock dialog, sheet and popover animations without editing them. A
+   near-zero length, the common pattern: bits-ui 2.20.6 unmounts a closed dialog once getAnimations() have finished
+   (dist/internal/animations-complete.js), which a near-zero animation does at once. Outside any layer, so it beats
+   every Tailwind utility with no !important (CSS Cascade 5: unlayered normal styles win over layered ones). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+/* Forced colours (WCAG 2.2 SC 2.4.7): the stock Button draws focus with a box-shadow ring and outline-none, which
+   forced colours drop (Tailwind 4 outline-none is outline-style: none), so a focused button showed nothing. A system
+   colour outline instead, outside any layer like the rule above so it beats the stock classes. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
   }
 }

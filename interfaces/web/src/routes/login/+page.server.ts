@@ -5,13 +5,16 @@ import { readErrorParam } from "@unset/shared-errors";
 import { safeReturnPath } from "@unset/shared-http";
 import { config } from "../../lib/server/runtime.ts";
 import { closeTarget, startSignIn } from "../../lib/server/sign-in.ts";
+import type { ShellData } from "../../lib/shell.ts";
 
 export const load: ServerLoad = ({ url, locals, request }) => {
   const error = readErrorParam(url.searchParams);
   // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
   if (locals.did !== undefined && error === null) redirect(303, "/me");
   const next = safeReturnPath(url.searchParams.get("next"));
-  return { next, pdsHost: config.PDS_HOSTNAME, close: closeTarget(request, next) };
+  // The box alone, with no header or footer, as Hono rendered it (interfaces/http/routes/login.ts passed no shell).
+  const shell: ShellData = { kind: "bare" };
+  return { next, pdsHost: config.PDS_HOSTNAME, close: closeTarget(request), shell };
 };
 
 export const actions: Actions = {

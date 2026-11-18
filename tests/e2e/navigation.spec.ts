@@ -31,7 +31,8 @@ test("continue_after_a_confirmed_email_reaches_the_member_page", async ({ page }
   await expect(page.locator("h1")).not.toContainText("does not exist");
 });
 
-test("the_drawer_profile_link_reaches_the_member_page", async ({ page }) => {
+// Gap 4 of the P1.20k review: a client navigation keeps the layout, so the drawer closes itself, as Hono's did.
+test("the_drawer_profile_link_reaches_the_member_page_and_closes", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   await page.locator('header button[popovertargetaction="toggle"]').click();
@@ -40,6 +41,7 @@ test("the_drawer_profile_link_reaches_the_member_page", async ({ page }) => {
     .getByRole("link", { name: /Profile/ })
     .click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
+  await expect(page.locator("#core-menu")).toBeHidden();
 });
 
 test("me_from_the_home_page_reaches_the_member_page", async ({ page }) => {
@@ -68,7 +70,7 @@ test("a_client_side_not_found_offers_no_sign_in_to_a_member", async ({ page }) =
     `/did:plc:${"z".repeat(24)}`,
   );
   await expect(page.locator("h1")).toContainText("That page does not exist.");
-  await expect(page.locator('a[href="/login"]')).toHaveCount(0);
+  await expect(page.locator('a[href^="/login"]')).toHaveCount(0);
 });
 
 type DocumentLike = {

@@ -39,8 +39,8 @@ test.describe("javascript disabled", () => {
   // P2.05n: the browser's own Referer (Referrer-Policy same-origin) brings Close back to the page the visitor left.
   test("login_close_returns_to_the_page_before", async ({ page }) => {
     await page.goto("/legal/terms");
-    await page.locator('footer a[href="/login"]').click();
-    await expect(page).toHaveURL(/\/login$/);
+    await page.locator('footer a[href="/login?next=%2Flegal%2Fterms"]').click();
+    await expect(page).toHaveURL(/\/login\?next=%2Flegal%2Fterms$/);
     const close = page.getByRole("region", { name: "Sign in" }).getByRole("link", { name: "Close" });
     await expect(close).toHaveAttribute("href", "/legal/terms");
     await close.click();

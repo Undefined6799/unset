@@ -7,11 +7,12 @@
 // - "core": skip link, a header with the menu button, the menu drawer (a native popover, so it opens with no script),
 //   a bottom bar on phones, and main. `account` is the signed-in member's profile link; with it the drawer also offers
 //   Sign out, and with `prefs` the theme picker.
+// - "bare": main alone, centred (the sign-in page, which Hono drew with no shell).
 
 export type ThemeChoice = "dark" | "light" | "system";
 
 export type ShellData = Readonly<{
-  kind: "site" | "core";
+  kind: "site" | "core" | "bare";
   /** The core shell's current destination. */
   active?: "home" | "account" | "settings";
   /** The signed-in member (core shell): their profile path and, when known, the name shown beside it. */

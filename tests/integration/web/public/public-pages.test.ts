@@ -173,3 +173,35 @@ describe("fonts", () => {
     }
   });
 });
+
+// Gaps 8, 13 and 18 of the P1.20k review: what the Hono head and Link gave every page.
+describe("the head and links", () => {
+  test("every_page_preloads_both_fonts_and_links_its_icons_as_build_files", async () => {
+    for (const path of ["/", "/legal/terms", "/login", "/nobody"]) {
+      const html = await (await get(path)).text();
+      expect(html.match(/<link rel="preload"[^>]*>/g), path).toEqual([
+        '<link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/SpaceGrotesk-Variable.woff2"/>',
+        '<link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/JetBrainsMono-Variable.woff2"/>',
+      ]);
+      const icons = [...html.matchAll(/<link rel="(icon|apple-touch-icon)" href="([^"]+)"/g)];
+      expect(
+        icons.map((m) => m[1]),
+        path,
+      ).toEqual(["icon", "apple-touch-icon"]);
+      for (const [, , href] of icons) {
+        expect(href, path).toMatch(/^\/_app\/immutable\/assets\/[^/]+\.png$/);
+        const icon = await get(href as string);
+        expect(icon.status, href).toBe(200);
+        expect(icon.headers.get("content-type"), href).toBe("image/png");
+      }
+    }
+  });
+
+  test("a_legal_link_off_our_origin_carries_noopener_noreferrer", async () => {
+    const html = await (await get("/legal/privacy")).text();
+    const external = [...html.matchAll(/<a href="(https:[^"]+)"([^>]*)>/g)];
+    expect(external.length).toBeGreaterThan(0);
+    for (const [, href, rest] of external) expect(rest, href).toContain('rel="noopener noreferrer"');
+    expect(html).not.toMatch(/<a href="\/[^"]*" rel=/);
+  });
+});

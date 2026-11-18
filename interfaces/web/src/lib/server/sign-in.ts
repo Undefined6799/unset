@@ -108,14 +108,16 @@ export function storedTarget(request: Request): SafeHref | null {
  * Where the sign-in box's Close goes (P2.05n; Alex, 2026-10-23: "back to the page to which I came from"): the page the
  * Referer names, if it is on this request's host, which server.ts's host check already held to HTTP_ALLOWED_HOSTS.
  * Only the host is compared, since TLS may end at the edge. Referrer-Policy same-origin sends it only between our own
- * pages. A sign-in page, or the protected page `next` names, would only bounce back here, so those go home.
+ * pages. A sign-in page would only bounce back here, so it goes home. The page `next` names is fine to return to: a
+ * protected page sends a visitor here with its own path as `next` and the page before it as the Referer, so the two
+ * meet only when the visitor pressed the shell's Sign in on a page they could see (P1.20k).
  */
-export function closeTarget(request: Request, next: SafePath | null): string {
+export function closeTarget(request: Request): string {
   const referer = request.headers.get("referer");
   if (referer === null || !URL.canParse(referer)) return "/";
   const from = new URL(referer);
   const ours = from.host === request.headers.get("host");
   if (!ours || from.pathname === "/login" || from.pathname.startsWith("/login/")) return "/";
   const back = safeReturnPath(`${from.pathname}${from.search}`);
-  return back === null || back === next ? "/" : back;
+  return back ?? "/";
 }
