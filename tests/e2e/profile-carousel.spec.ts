@@ -51,12 +51,10 @@ test("a_carousel_has_previous_and_next_buttons", async ({ browser, page }) => {
     await page.keyboard.press("Enter");
     await expect.poll(() => scrollLeft(shelf)).toBeGreaterThan(0);
     await expect(previous).toBeEnabled();
-    for (let i = 0; i < 3; i++) if (await next.isEnabled()) await next.click();
-    await expect(next).toBeDisabled();
-    await expect(page.getByRole("heading", { name: "Entry 4" })).toBeInViewport({ ratio: 0.9 });
 
     // Review of #1718: presses heading for a tile are dropped once the person scrolls it themselves, so the next
-    // press steps from where the carousel is (here two quick presses, then arrow keys back to the start).
+    // press steps from where the carousel is (here two quick presses, then arrow keys back to the start). The arrow
+    // keys run before the carousel reaches its end: in Firefox, Left from the very end did not move it in CI.
     await backToStart(page, shelf);
     await next.click();
     await next.click();
@@ -70,6 +68,14 @@ test("a_carousel_has_previous_and_next_buttons", async ({ browser, page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await next.click();
     expect(await scrollLeft(shelf)).toBe(second);
+
+    // Next until it is off at the end, with the last entry in view. A press can turn it off while a click is on its
+    // way, so each try gives up quickly and the next one looks again.
+    await expect(async () => {
+      if (await next.isEnabled()) await next.click({ timeout: 500 });
+      await expect(next).toBeDisabled({ timeout: 500 });
+    }).toPass({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Entry 4" })).toBeInViewport({ ratio: 0.9 });
 
     // Without script the buttons could not scroll, so they are not drawn; the region still scrolls by keyboard.
     const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
