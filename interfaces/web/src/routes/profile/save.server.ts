@@ -3,7 +3,13 @@
 // the session, never the form (SE-2). The fields are read once by domains/profile (DM-1); the record is built over the
 // stored one and written with a compare-and-swap (infrastructure/pds/profile-record.ts).
 import type { Did } from "@unset/domains-identity";
-import { PROFILE_FIELDS, type ProfileEdit, type ProfileError, parseProfileFields } from "@unset/domains-profile";
+import {
+  PROFILE_FIELDS,
+  type ProfileEdit,
+  type ProfileError,
+  type ProfileField,
+  parseProfileFields,
+} from "@unset/domains-profile";
 import type { ErrorCode } from "@unset/shared-errors";
 
 export type ProfileSave =
@@ -16,8 +22,11 @@ export type ProfileSave =
 
 export type SaveProfile = (did: Did, fields: ProfileEdit) => Promise<ProfileSave>;
 
-/** Where the browser goes next (a 303), or the code of the failure the page shows. */
-export type SaveResult = { readonly location: string } | { readonly code: ErrorCode };
+/**
+ * Where the browser goes next (a 303), or the code of the failure the page shows, with the field to blame when one
+ * is (the form marks it, as the card editors do: staging walkthrough 2026-11-18 round two, finding 5).
+ */
+export type SaveResult = { readonly location: string } | { readonly code: ErrorCode; readonly field?: ProfileField };
 
 /** Where a saved form returns: Settings › Profile when it came from there, else the member's own page. */
 const SETTINGS_PROFILE = "/settings/profile";
@@ -43,7 +52,7 @@ export async function saveProfileForm(form: FormData, did: Did, save: SaveProfil
   const input = formFields(form);
   if (input === null) return { code: "profile.invalid" };
   const parsed = parseProfileFields(input);
-  if (!parsed.ok) return { code: parsed.code };
+  if (!parsed.ok) return { code: parsed.code, field: parsed.field };
   const saved = await save(did, parsed.fields);
   if (saved.kind === "saved") return { location: form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE : `/${did}` };
   if (saved.kind === "redirect") return { location: saved.location };

@@ -1,0 +1,5 @@
+// fixture: interfaces/web/src/hooks.server.ts findings=2
+// No lib/server/compose.ts in this fixture (one finding), and the hook builds a pool itself (the other).
+import { services, startServices } from "./lib/server/compose.ts";
+import { createPool } from "@unset/infrastructure-postgres";
+export const init = async () => startServices(createPool(config));

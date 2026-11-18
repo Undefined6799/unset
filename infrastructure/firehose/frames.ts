@@ -6,6 +6,7 @@
 // The checks here are structural only: is it the shape the parser below expects? Whether a commit is genuine is
 // decided by verifyProofs (reader.ts), and whether a record is valid by the lexicon validator in ingest.
 import type { CommitEvt } from "@atproto/sync";
+import { recordToJson } from "@unset/shared-lexicons";
 
 /** One change to one record, proven against the signed commit it came in. */
 export type RecordChange =
@@ -14,7 +15,11 @@ export type RecordChange =
       readonly collection: string;
       readonly rkey: string;
       readonly cid: string;
-      /** Decoded from CBOR, not yet validated: ingest checks it against the lexicon. */
+      /**
+       * In its JSON form (https://atproto.com/specs/data-model, "JSON Representation": a CID as `{ $link }`, bytes as
+       * `{ $bytes }`), converted by shared/lexicons (@atproto/lex-json 0.1.9). Not yet validated: ingest checks it
+       * against the lexicon, and it is stored as jsonb.
+       */
       readonly record: unknown;
     }
   | { readonly kind: "delete"; readonly collection: string; readonly rkey: string };
@@ -162,7 +167,7 @@ export function commitFrame(body: CommitBody, writes: readonly CommitEvt[]): Rep
             collection: write.collection,
             rkey: write.rkey,
             cid: write.cid.toString(),
-            record: write.record,
+            record: recordToJson(write.record),
           },
   );
   const rev = changes.length === 0 ? null : body.rev;

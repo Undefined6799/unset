@@ -9,11 +9,12 @@
 // `weed shell` reads the entry (`fs.meta.cat`), deletes it (`fs.rm`) and vacuums (`lock`, `volume.vacuum
 // -garbageThreshold 0`, `unlock`), and the volume server returns a chunk's stored bytes by its file id. Checked on
 // 4.53 (2026-11-16).
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
+import { makeReadableScript, regularFilesHolding } from "../../tests/support/files.ts";
 import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const IMAGES = import.meta.dirname;
@@ -63,14 +64,14 @@ function waitFor(container: string, probe: () => boolean): boolean {
 
 /**
  * Every regular file under the store's /data, at `dir` on the host, that holds `needle`. The store writes its files as
- * its own uid (1000), some of them 0600, and CI's runner is another uid, so the store first makes them readable.
+ * its own uid (1000), some of them 0600, and CI's runner is another uid, so the store first makes them readable. The
+ * store keeps writing while we look, so a file gone during find's walk, the chmod or the read is skipped (main CI on
+ * a25d62a and #1706); any other failure still fails the test.
  */
 function filesHolding({ container, data: dir }: { container: string; data: string }, needle: Buffer): string[] {
-  const readable = inStore(container, "find /data -mindepth 1 -exec chmod a+rX {} +");
+  const readable = inStore(container, makeReadableScript("/data"));
   expect(readable.code, readable.err).toBe(0);
-  return readdirSync(dir, { recursive: true, encoding: "utf8" })
-    .map((name) => join(dir, name))
-    .filter((path) => statSync(path).isFile() && readFileSync(path).includes(needle));
+  return regularFilesHolding(dir, needle);
 }
 
 /** Puts a text draft holding the marker, and returns the stored (encrypted) bytes of its one chunk. */

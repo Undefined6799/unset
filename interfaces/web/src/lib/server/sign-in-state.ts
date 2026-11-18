@@ -1,5 +1,5 @@
 // Ported from interfaces/http/routes/sign-in-state.ts (P1.20e): the same state and cookies, written through SvelteKit's
-// cookies API instead of Set-Cookie strings. The Hono copy goes at P1.20k.
+// cookies API instead of Set-Cookie strings. The Hono copy went at P1.20k.
 // The browser state of signing in (plan §2 rule 2; §5.3). What binds a sign-in to the browser that started it: the
 // appState POST /login writes (P2.05) and the callback reads back (P2.06), and the `__Host-oauth_nonce` cookie holding
 // the same P1.16 nonce. The library keeps the appState sealed and single-use in app.oauth_state; the authorization

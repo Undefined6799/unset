@@ -1,5 +1,5 @@
 <!--
-  The shell of every page (P1.20d), as apps/web/src/shell/AppShell.tsx draws it today; src/lib/shell.ts says what a
+  The shell of every page (P1.20d), as the React AppShell drew it before P1.20k; src/lib/shell.ts says what a
   page passes. The page's own load returns `shell`; the error page and any page that passes nothing get the site shell.
   Neither shell offers Sign in when the gate read a live session for the route (+layout.server.ts). Everything here works with no script: links, plain forms, and a native popover for the menu drawer
   (https://html.spec.whatwg.org/multipage/popover.html). The `?error=` callout shows only the catalog's text.

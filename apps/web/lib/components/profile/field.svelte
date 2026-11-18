@@ -19,6 +19,7 @@ let {
   inputmode,
   autocomplete,
   error,
+  maxlength,
 }: {
   label: string;
   name: string;
@@ -31,6 +32,8 @@ let {
   inputmode?: "url";
   autocomplete?: "url" | "email";
   error?: string;
+  /** Only where the limit is one maxlength can keep: see CardEditLimits text. */
+  maxlength?: number;
 } = $props();
 const id = $props.id();
 const described = $derived(
@@ -46,7 +49,7 @@ const invalid = $derived(error === undefined ? undefined : ("true" as const));
   {#if rows === undefined}
     <Input {id} {name} {type} {value} {required} {inputmode} {autocomplete} aria-invalid={invalid} aria-describedby={described} />
   {:else}
-    <Textarea {id} {name} {value} {rows} {required} aria-invalid={invalid} aria-describedby={described} />
+    <Textarea {id} {name} {value} {rows} {required} {maxlength} aria-invalid={invalid} aria-describedby={described} />
   {/if}
   {#if hint !== undefined}<p id="{id}-hint" class="text-muted-foreground text-sm">{hint}</p>{/if}
   {#if error !== undefined}<p id="{id}-error" class="text-destructive text-sm">{error}</p>{/if}

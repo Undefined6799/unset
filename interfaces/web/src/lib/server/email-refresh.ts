@@ -1,4 +1,4 @@
-// The email gate's refresh (P2.11, P2.11g), ported from interfaces/http/email-refresh.ts (P1.20f; the Hono copy goes
+// The email gate's refresh (P2.11, P2.11g), ported from interfaces/http/email-refresh.ts (P1.20f; the Hono copy went
 // at P1.20k): when the cached confirmation is stale, ask the PDS again through P2.07's pdsSessionInfo and cache a fresh
 // answer on this session. A PDS that does not answer is not asked again for the same member for `PDS_HOLD_MS`; during
 // a hold the gate hears "transient", exactly what the PDS call would have said. The hold is this process's memory only.

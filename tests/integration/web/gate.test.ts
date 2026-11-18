@@ -479,6 +479,17 @@ describe("policies and logs", () => {
     expect(missing.map((dir) => relative(ROUTES, dir))).toEqual([]);
   });
 
+  test("only_health_skips_the_rate_limit", async () => {
+    // Holds what the deleted route-policy guard checked as "exempt only on a static route": a limit is a PolicyName
+    // (a key of limits.ts, checked by the type), and `probe` is the one way past it, kept to /health.
+    const skipping: string[] = [];
+    for (const dir of routeFolders()) {
+      const { policy } = (await import(join(dir, "policy.ts"))) as { policy: { group: string; probe?: true } };
+      if (policy.probe) skipping.push(`${relative(ROUTES, dir)} ${policy.group}`);
+    }
+    expect(skipping).toEqual(["health static"]);
+  });
+
   test("the_build_holds_no_prerendered_page", () => {
     const prerendered = join(REPO, "interfaces", "web", "build", "prerendered");
     expect(() => readdirSync(prerendered)).toThrow();

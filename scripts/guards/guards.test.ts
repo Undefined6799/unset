@@ -1,7 +1,7 @@
 // Each guard against planted fixtures (fixtures/<rule>/{bad,good}/*.fixture). The first line of a fixture names the
 // path it is copied to and the number of findings expected there; the .fixture suffix keeps it out of the real scan.
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -17,8 +17,8 @@ import { fixtureGitEnv } from "./git-env.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as pageClasses from "./page-classes.ts";
-import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
+import * as svelteImports from "./svelte-imports.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 import * as webPrerender from "./web-prerender.ts";
 
@@ -30,6 +30,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "inner-html": innerHtml.scanAll,
   "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
+  "svelte-imports": svelteImports.scanAll,
   "web-prerender": webPrerender.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
@@ -218,6 +219,16 @@ describe("web-prerender", () => {
   test("web_prerender_good_fixture", () => expectFixtures("web-prerender", "good"));
 });
 
+describe("svelte-imports", () => {
+  test("svelte_type_import_of_core_fails", () => expectFixtures("svelte-imports", "bad", ["type-domain.fixture"]));
+  test("svelte_app_names_no_interface", () => expectFixtures("svelte-imports", "bad", ["app-interface.fixture"]));
+  test("svelte_imports_good_fixture", () => expectFixtures("svelte-imports", "good"));
+  test("svelte_imports_scans_components", () => {
+    // AB-4: an empty scan would pass vacuously; apps/web and interfaces/web hold components from P1.20a.
+    expect(svelteImports.scannedFiles(join(import.meta.dirname, "..", "..")).length).toBeGreaterThan(0);
+  });
+});
+
 describe("web-no-moderator", () => {
   test("web_moderator_bad_fixture", () => expectFixtures("web-no-moderator", "bad", ["routes.fixture"]));
   test("web_moderator_good_fixture", () => expectFixtures("web-no-moderator", "good"));
@@ -274,77 +285,27 @@ describe("ip-columns", () => {
 describe("route-registration", () => {
   test("route_registration_guard", () => expectFixtures("route-registration", "bad", ["app-post.fixture"]));
   test("route_registration_own_hono", () => expectFixtures("route-registration", "bad", ["own-hono.fixture"]));
+  test("route_registration_old_kit_path_is_not_exempt", () =>
+    expectFixtures("route-registration", "bad", ["old-kit-path.fixture"]));
   test("route_registration_good_fixture", () => expectFixtures("route-registration", "good"));
-
-  test("route_registration_exemptions_exact", () => {
-    expect(routeRegistration.KIT_FILES).toEqual(["shared/http/server.ts", "shared/http/routes.ts"]);
-  });
-});
-
-/**
- * route-policy fixtures are whole trees (fixtures/route-policy/{bad,good}/<case>/), because the guard reads a manifest
- * and imports a limits.ts beside it. Every file ends in .fixture, which the copy strips, so nothing in the fixture tree
- * is typechecked, linted or scanned as real code.
- */
-function routePolicyRepo(kind: "bad" | "good", name: string): string {
-  const root = tempRepo({});
-  cpSync(join(FIXTURES, "route-policy", kind, name), root, { recursive: true });
-  const strip = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) strip(path);
-      else if (entry.name.endsWith(".fixture")) renameSync(path, path.slice(0, -".fixture".length));
-    }
-  };
-  strip(root);
-  return root;
-}
-
-const routePolicyFindings = async (kind: "bad" | "good", name: string) =>
-  (await routePolicy.scanAll(routePolicyRepo(kind, name))).map((f) => `${f.file}: ${f.text}`);
-
-describe("route-policy", () => {
-  const manifest = "interfaces/http/routes.manifest.json";
-  test.each([
-    ["route_without_rate_limit_fails", [`${manifest}: GET /feed: no rateLimit`]],
-    ["unknown_policy_name_fails", [`${manifest}: POST /login: "nope" is not a policy in interfaces/http/limits.ts`]],
-    ["exempt_on_app_route_fails", [`${manifest}: GET /profile: "exempt" outside static`]],
-    [
-      "non_static_route_without_limits_fails",
-      [
-        'interfaces/media/routes.manifest.json: GET /blob: names "default" but interfaces/media/limits.ts does not exist',
-      ],
-    ],
-    ["limits_without_policies_export_fails", ["interfaces/http/limits.ts: limits.ts has no `policies` export"]],
-    ["limits_import_throws_fails", ["interfaces/http/limits.ts: limits.ts could not be imported"]],
-  ])("%s", async (name, expected) => {
-    expect(await routePolicyFindings("bad", name)).toEqual(expected);
-  });
-
-  test.each(readdirSync(join(FIXTURES, "route-policy", "good")))("route_policy_good_%s", async (name) => {
-    expect(await routePolicyFindings("good", name)).toEqual([]);
-  });
-
-  test("route_policy_fixtures_all_run", () => {
-    expect(readdirSync(join(FIXTURES, "route-policy", "bad")).sort()).toEqual([
-      "exempt_on_app_route_fails",
-      "limits_import_throws_fails",
-      "limits_without_policies_export_fails",
-      "non_static_route_without_limits_fails",
-      "route_without_rate_limit_fails",
-      "unknown_policy_name_fails",
-    ]);
-    expect(readdirSync(join(FIXTURES, "route-policy", "good")).length).toBeGreaterThan(0);
-  });
 });
 
 describe("composition-root", () => {
   test("composition_root_split", () => expectFixtures("composition-root", "bad", ["infra-import.fixture"]));
   test("composition_root_compose_present", () => expectFixtures("composition-root", "bad", ["no-compose.fixture"]));
   test("composition_root_good_fixture", () => expectFixtures("composition-root", "good"));
+  test("composition_root_kit_hooks", () => expectFixtures("composition-root", "bad", ["kit-hooks.fixture"]));
+  test("composition_root_kit_server", () => expectFixtures("composition-root", "bad", ["kit-server.fixture"]));
   test("composition_root_empty_tree_passes", () => {
     expect(compositionRoot.scanAll(tempRepo({ "shared/x/index.ts": "export {};" }))).toEqual([]);
     expect(compositionRoot.scanAll(join(import.meta.dirname, "..", ".."))).toEqual([]);
+  });
+
+  test("composition_root_examines_the_web_entries", () => {
+    // AB-4: after the SvelteKit move the guard matched no file (P1.20k); the web's two entry files must be scanned.
+    expect(compositionRoot.entryFiles(join(import.meta.dirname, "..", ".."))).toEqual(
+      expect.arrayContaining(["interfaces/web/server.ts", "interfaces/web/src/hooks.server.ts"]),
+    );
   });
 
   test("composition_root_needs_one_compose_import", () => {

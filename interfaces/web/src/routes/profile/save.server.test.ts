@@ -65,13 +65,26 @@ describe("saveProfileForm", () => {
   });
 
   test.each([
-    ["a repeated field", form({ ...FIELDS, headline: ["one", "again"] }), "profile.invalid"],
-    ["an unsafe website", form({ displayName: "A", website: "javascript:alert(1)" }), "profile.url_invalid"],
-    ["a name that is too long", form({ displayName: "x".repeat(65) }), "profile.too_long"],
-    ["a newline in the name", form({ displayName: "A\nB" }), "profile.invalid"],
-  ])("%s is refused and nothing is written", async (_name, body, code) => {
+    ["a repeated field", form({ ...FIELDS, headline: ["one", "again"] }), { code: "profile.invalid" }],
+    [
+      "an unsafe website",
+      form({ displayName: "A", website: "javascript:alert(1)" }),
+      { code: "profile.url_invalid", field: "website" },
+    ],
+    [
+      "a name that is too long",
+      form({ displayName: "x".repeat(65) }),
+      { code: "profile.too_long", field: "displayName" },
+    ],
+    [
+      "a headline that is too long",
+      form({ headline: "x".repeat(121) }),
+      { code: "profile.too_long", field: "headline" },
+    ],
+    ["a newline in the name", form({ displayName: "A\nB" }), { code: "profile.invalid", field: "displayName" }],
+  ])("%s is refused, naming the field to blame, and nothing is written", async (_name, body, refusal) => {
     const { save, saved } = saver();
-    expect(await saveProfileForm(body, DID, save)).toEqual({ code });
+    expect(await saveProfileForm(body, DID, save)).toEqual(refusal);
     expect(saved).toEqual([]);
   });
 

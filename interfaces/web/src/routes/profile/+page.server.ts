@@ -4,9 +4,10 @@
 // The route has no page of its own, so a GET is a 404 as it is under interfaces/http.
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { toProfileRecord } from "@unset/domains-profile";
-import { respondToPdsFailure, saveProfileRecord } from "@unset/infrastructure-pds";
+import { saveProfileRecord } from "@unset/infrastructure-pds";
 import { ERROR_CODES } from "@unset/shared-errors";
 import { services } from "../../lib/server/compose.ts";
+import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { type SaveProfile, saveProfileForm } from "./save.server.ts";
 
@@ -33,6 +34,7 @@ export const actions: Actions = {
     const result = await saveProfileForm(await request.formData(), did, saveToPds(locals.deadline, locals.deadlineAt));
     setHeaders({ "cache-control": "no-store" });
     if ("location" in result) redirect(303, result.location);
-    error(ERROR_CODES[result.code].status, { message: result.code });
+    const blame = "field" in result && result.field !== undefined ? { field: result.field } : {};
+    error(ERROR_CODES[result.code].status, { message: result.code, ...blame });
   },
 };

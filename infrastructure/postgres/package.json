@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@unset/domains-identity": "*",
+    "@unset/domains-profile": "*",
     "@unset/infrastructure-net-guard": "*",
     "@unset/infrastructure-seal": "*",
     "@unset/shared-config": "*",
