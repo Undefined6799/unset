@@ -1,6 +1,7 @@
 // P1.20d: the public pages on the built SvelteKit server, with the outcomes interfaces/http/routes/public-pages.test.ts
 // and legal.test.ts check for the Hono server: home, the legal pages, security.txt and the error pages run no script,
 // read no cookie, are cached five minutes (home, legal), carry the public or static CSP, and echo nothing sent.
+import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
@@ -137,5 +138,38 @@ describe("error pages", () => {
     expect(html).not.toContain("%3Cscript");
     expect(html).not.toContain("<script");
     expect(html.match(/<main id="main"/g)).toHaveLength(1);
+  });
+});
+
+// The two fonts app.css names (apps/web/app.css; ADR 0054 point 4, font-src /fonts/). Hono served them from /assets/;
+// found missing at P1.20j. Only the exact two names are files; anything else is a plain 404.
+describe("fonts", () => {
+  const FONTS = ["/fonts/SpaceGrotesk-Variable.woff2", "/fonts/JetBrainsMono-Variable.woff2"];
+  const SOURCE = new URL("../../../../shared/ui/fonts/", import.meta.url);
+
+  test("the_two_fonts_are_served_as_woff2_and_cached", async () => {
+    for (const path of FONTS) {
+      const response = await get(path);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("content-type"), path).toBe("font/woff2");
+      expect(response.headers.get("cache-control"), path).toBe("public, max-age=86400");
+      expect(response.headers.get("set-cookie"), path).toBeNull();
+      const body = Buffer.from(await response.arrayBuffer());
+      expect(body.equals(readFileSync(new URL(path.slice("/fonts/".length), SOURCE))), path).toBe(true);
+    }
+  });
+
+  test("no_other_name_reaches_a_file", async () => {
+    for (const path of [
+      "/fonts/OFL-SpaceGrotesk.txt",
+      "/fonts/..%2Fpackage.json",
+      "/fonts/%2e%2e/package.json",
+      "/fonts/spacegrotesk-variable.woff2",
+      "/fonts",
+    ]) {
+      const response = await get(path);
+      expect(response.status, path).toBe(404);
+      expect(response.headers.get("content-type"), path).not.toBe("font/woff2");
+    }
   });
 });
