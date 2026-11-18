@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net"; // guard-allow: egress test, finds a free local port
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { PROBE_DID } from "../../../interfaces/pds-admin/pds.ts";
 import { type FakePds, fakePds, PASSWORD, PDS_DID, payloadFor, signed, tempDir, webKey } from "./harness.ts";
 
 const MAIN = join(import.meta.dirname, "../../../interfaces/pds-admin/main.ts");
@@ -56,6 +57,11 @@ function env(url: URL, secretsDir: string, stateDir: string, port: number): Node
 async function start(environment: NodeJS.ProcessEnv): Promise<string> {
   const child = spawn(process.execPath, [MAIN], { env: environment, stdio: "ignore" });
   children.push(child);
+  return up(environment);
+}
+
+/** The service's base URL once its health answers. */
+async function up(environment: NodeJS.ProcessEnv): Promise<string> {
   const base = `http://127.0.0.1:${environment.PORT}`;
   for (let i = 0; i < 100; i++) {
     const up = await fetch(`${base}/health`).then(
@@ -110,5 +116,61 @@ describe("boot", () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toBe("pds-admin: PDS_INTERNAL_URL resolves to a public address\n");
+  });
+
+  describe("the admin password (P2.09e)", () => {
+    const WRONG = "secret pds_admin_password is not the PDS's admin password";
+    /** Runs main to its exit while this process keeps serving the fake PDS; its exit code and stderr. */
+    const exited = (child: ChildProcess) => {
+      let stderr = "";
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      return new Promise<{ code: number | null; stderr: string }>((resolve) =>
+        child.on("exit", (code) => resolve({ code, stderr })),
+      );
+    };
+    const run = (environment: NodeJS.ProcessEnv) => {
+      const child = spawn(process.execPath, [MAIN], { env: environment, stdio: ["ignore", "ignore", "pipe"] });
+      children.push(child);
+      return child;
+    };
+
+    test("boot.password_refused: a 401 to the probe → exit 1 naming the secret, never its value", async () => {
+      pds = await fakePds();
+      pds.password = "the-pds-has-another-password";
+      const result = await exited(run(env(pds.url, secrets(webKey()), tempDir(), await freePort())));
+      expect(result).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}\n` });
+      expect(pds.seen.map((s) => s.path)).toEqual([
+        `/xrpc/com.atproto.admin.getAccountInfo?did=${encodeURIComponent(PROBE_DID)}`,
+      ]);
+    });
+
+    test("boot.password_accepted: the probe's NotFound means the password works, and it starts", async () => {
+      pds = await fakePds();
+      pds.password = PASSWORD;
+      pds.account = "not_found";
+      await start(env(pds.url, secrets(webKey()), tempDir(), await freePort()));
+      expect(pds.seen.map((s) => s.path)).toContain(
+        `/xrpc/com.atproto.admin.getAccountInfo?did=${encodeURIComponent(PROBE_DID)}`,
+      );
+    });
+
+    test("boot.pds_unreachable: it starts, and the first 401 later stops it", async () => {
+      const pdsPort = await freePort();
+      const key = webKey();
+      const environment = env(new URL(`http://127.0.0.1:${pdsPort}`), secrets(key), tempDir(), await freePort());
+      const child = run(environment);
+      const done = exited(child);
+      const base = await up(environment);
+      pds = await fakePds(pdsPort);
+      pds.password = "the-pds-has-another-password";
+      await fetch(`${base}/v1/invite.issue`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(signed(key, payloadFor())),
+      }).catch(() => undefined);
+      expect(await done).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}; stopping\n` });
+    });
   });
 });

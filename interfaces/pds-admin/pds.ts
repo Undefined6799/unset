@@ -120,3 +120,40 @@ export function createPds(origin: URL, password: string, resolve: Resolve = syst
       call("GET", query("com.atproto.identity.resolveHandle", "handle", handle), READ_CAP, undefined, false),
   };
 }
+
+/**
+ * A DID no account can have (a did:plc id is 24 base32 characters), asked about only to learn whether the PDS takes
+ * our admin password (P2.09e). The pinned PDS checks the admin token before it looks the account up, and a wrong one
+ * is its AuthRequiredError, 401 (@atproto/pds 0.5.51 auth-verifier.ts adminToken); the right one answers 400 NotFound.
+ */
+export const PROBE_DID = "did:plc:pds-admin-password-probe";
+
+/** The boot probe: true only when the PDS answered 401. Unreachable is no answer; watchPassword covers later contact. */
+export async function passwordRefused(pds: Pds): Promise<boolean> {
+  try {
+    return (await pds.getAccountInfo(PROBE_DID)).status === 401;
+  } catch (error) {
+    if (error instanceof PdsUnavailable) return false;
+    throw error;
+  }
+}
+
+/**
+ * The client, with every admin answer of 401 calling `refused` before the caller sees it, so a password that was
+ * wrong at a boot the PDS did not answer still stops the service at its first contact.
+ */
+export function watchPassword(pds: Pds, refused: () => void): Pds {
+  const watched =
+    (call: (arg: string) => Promise<PdsAnswer>) =>
+    async (arg: string): Promise<PdsAnswer> => {
+      const answer = await call(arg);
+      if (answer.status === 401) refused();
+      return answer;
+    };
+  return {
+    getAccountInfo: watched(pds.getAccountInfo),
+    getSubjectStatus: watched(pds.getSubjectStatus),
+    createInviteCode: watched(pds.createInviteCode),
+    resolveHandle: pds.resolveHandle,
+  };
+}
