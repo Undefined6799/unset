@@ -32,6 +32,7 @@ import type { CardContent, CardEditLimits, CardView, Enhance, SubmitHandler } fr
 import { opensHere, PANEL_ANCHOR } from "../../profile/panel.ts";
 import { Icon } from "../icon/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
+import * as Alert from "../ui/alert/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
 import CardEditor from "./card-editor.svelte";
 
@@ -85,11 +86,24 @@ function backToRemove(event: Event) {
   removeLink.focus();
 }
 
+// A refused delete keeps the dialog open with the reason inside it, where the member is looking, as the card editor
+// does (Codex review of f14b5ab); the page's own alert would sit behind the modal. The message is the action's
+// catalog text (`fail(status, { code, message })`), or ours when the answer carried none or never came.
+let removeRefused: string | undefined = $state();
 const removeCard: SubmitHandler = () => {
   const at = index;
+  removeRefused = undefined;
   return async ({ result, update }) => {
+    if (result.type === "failure") {
+      const message = result.data?.message;
+      removeRefused = typeof message === "string" ? message : CARD_EDIT.removeRefused;
+      return;
+    }
+    if (result.type === "error") {
+      removeRefused = CARD_EDIT.removeRefused;
+      return;
+    }
     await update();
-    if (result.type !== "redirect" && result.type !== "success") return;
     await tick();
     focusAfterRemove(at);
   };
@@ -144,7 +158,10 @@ $effect(() => {
         aria-haspopup="dialog"
         class="{buttonVariants({ variant: 'ghost', size: 'icon-sm' })} {tap}"
         onclick={(event) => {
-          if (opensHere(event)) removing = true;
+          if (opensHere(event)) {
+            removeRefused = undefined;
+            removing = true;
+          }
         }}><Icon name="delete" size={20} label={CARD_EDIT.remove} /></a
       >
       <Dialog.Content onCloseAutoFocus={backToRemove}>
@@ -152,6 +169,9 @@ $effect(() => {
           <Dialog.Title>{CARD_EDIT.removeTitle}</Dialog.Title>
           <Dialog.Description>{CARD_EDIT.removeBody}</Dialog.Description>
         </Dialog.Header>
+        {#if removeRefused !== undefined}
+          <Alert.Root variant="destructive" role="alert"><Alert.Description>{removeRefused}</Alert.Description></Alert.Root>
+        {/if}
         <Dialog.Footer>
           <Dialog.Close class={buttonVariants({ variant: "outline" })}>{CARD_EDIT.cancel}</Dialog.Close>
           <form method="POST" action="?/remove" use:enhance={removeCard}>

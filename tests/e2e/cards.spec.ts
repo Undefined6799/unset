@@ -218,6 +218,40 @@ test("moving_or_deleting_a_card_keeps_the_place_and_focus", async ({ page }) => 
   }
 });
 
+// Codex review of f14b5ab: a delete the server refuses keeps the dialog open with the reason inside it, where the
+// member is looking, rather than behind the modal. The refusal is played as in the gate test above.
+test("a_refused_delete_shows_its_reason_inside_the_dialog", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, linksCard("Delta"));
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const code = "card.pds_unavailable";
+  try {
+    await page.route(
+      (url) => url.search === "?/remove",
+      (route) =>
+        route.fulfill({
+          status: 503,
+          headers: { "content-type": "application/json", "cache-control": "private, no-store" },
+          body: JSON.stringify({
+            type: "failure",
+            status: 503,
+            data: JSON.stringify([{ code: 1, message: 2 }, code, ERROR_MESSAGES[code]]),
+          }),
+        }),
+    );
+    await page.getByRole("group", { name: "Delta card" }).getByRole("link", { name: "Delete" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("not answering");
+    await expect(dialog.getByRole("button", { name: "Delete" })).toBeEnabled();
+  } finally {
+    await page.unrouteAll();
+    await page.keyboard.press("Escape");
+    await deleteCard(page, "Delta card");
+  }
+});
+
 // Finding 5: a carousel with more entries than fit is a named stop the keyboard reaches and scrolls, and says so.
 test("a_carousel_is_reached_and_scrolled_by_keyboard", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });

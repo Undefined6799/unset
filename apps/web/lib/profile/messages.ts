@@ -75,6 +75,8 @@ export const CARD_EDIT = {
   half: "Half width",
   /** A refused save whose answer carried no catalog message. */
   refused: "That card could not be saved.",
+  /** A refused delete whose answer carried no catalog message. */
+  removeRefused: "That card could not be deleted.",
   /** A refusal shown beside the field it blames, by its code; any other code shows the catalog message there. */
   fieldError: {
     "card.required": "Fill this in.",
