@@ -2,6 +2,15 @@
 // sync (P1.12p), the DID-column catalog query (P1.13), the single-use store (P1.16), the advisory lock (P1.17), the
 // sealed column registry and rewrapAll (P1.14d).
 export { type AccountRepositoryOptions, type BlockTransaction, createAccountRepository } from "./accountRepository.ts";
+export {
+  type AccountJob,
+  type AccountJobKind,
+  type AccountStore,
+  type ConfirmedStatus,
+  confirmDelaySeconds,
+  createAccountStore,
+  MAX_CONFIRM_DAYS,
+} from "./accountStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export {
