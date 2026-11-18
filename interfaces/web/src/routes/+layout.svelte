@@ -248,8 +248,8 @@ const row =
         disabled
         class="ml-auto flex h-8 w-70 max-w-85 min-w-38 shrink items-center gap-2 rounded-md border bg-background px-2.5 text-left text-sm text-muted-foreground opacity-60 pointer-coarse:h-11 max-md:w-58 max-sm:hidden"
       >
-        <Icon name="search" size={16} /><span class="truncate">{T.search}</span>
-        <span class="sr-only">, {T.comingSoon}</span>
+        <Icon name="search" size={16} /><span class="truncate" aria-hidden="true">{T.search}</span>
+        <span class="sr-only">{T.search}, {T.comingSoon}</span>
       </button>
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
         <Button variant="outline" size="icon-sm" disabled class="{control} {soon} sm:hidden">
@@ -304,8 +304,10 @@ const row =
         </a>
       {/each}
       {#each SOON_TABS as label (label)}
-        <span class="flex items-center px-3 text-sm whitespace-nowrap text-muted-foreground opacity-60 max-sm:px-2.5"
-          >{label}<span class="sr-only">, {T.comingSoon}</span></span
+        <!-- Muted text with no extra fading: unlike a disabled button, plain text is held to 4.5:1 (WCAG 1.4.3). The words
+             are one string for assistive technology, since a gap between two flex items reads as a space. -->
+        <span class="flex items-center px-3 text-sm whitespace-nowrap text-muted-foreground max-sm:px-2.5"
+          ><span aria-hidden="true">{label}</span><span class="sr-only">{label}, {T.comingSoon}</span></span
         >
       {/each}
     </nav>

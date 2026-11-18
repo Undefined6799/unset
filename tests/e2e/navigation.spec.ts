@@ -50,17 +50,17 @@ test("the_drawer_closes_after_a_client_navigation", async ({ page }) => {
   await expect(page.locator("#core-menu")).toBeHidden();
 });
 
-// Outside review of f5cab2f, finding 3: from one settings page to the other the settings layout stays too, and on a
-// phone the drawer opens from the bottom bar; both close it on arrival.
+// Outside review of f5cab2f, finding 3: from one settings page to the other the settings layout stays too, and the
+// account menu that took the visitor there is closed on arrival, on a phone as on a desktop.
 test.describe("phone", () => {
   test.use({ viewport: { width: 375, height: 800 } });
 
-  test("the_drawer_closes_after_settings_to_settings_on_a_phone", async ({ page }) => {
+  test("the_account_menu_closes_after_settings_to_settings_on_a_phone", async ({ page }) => {
     const account: PageFixture = { ...SETTINGS, path: "/settings/account", route: "/settings/account" };
     expect((await openPage(page, account))?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
-    await page.locator('nav:not([popover]) button[popovertargetaction="toggle"]').click();
-    const drawer = page.locator("#core-menu");
+    await page.locator('header button[popovertarget="account-menu"]').click();
+    const drawer = page.locator("#account-menu");
     await expect(drawer).toBeVisible();
     await drawer.getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
