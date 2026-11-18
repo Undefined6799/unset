@@ -3,10 +3,12 @@
 // server.ts reads them (interfaces/web/src/lib/server/note.ts `StandIns`), then starts server.ts as production does.
 // compose.ts refuses stand-ins outside the test profile. Answers come from the JSON file WEB_STAND_IN_FIXTURE names,
 // written by the test (built-server.ts `StandInFixture`) and read again on every request, so a test can change an
-// answer; anything not in it is a 404 or no record. Each fetch is appended to the file WEB_STAND_IN_CALLS names.
+// answer; anything not in it is a 404 or no record. Each fetch is appended to the file WEB_STAND_IN_CALLS names. The
+// stand-in PDS (`pds`) keeps its own state, so it is built once from the fixture the server started with.
 import { appendFileSync, readFileSync } from "node:fs";
 import type { IdentityNetwork } from "@unset/domains-identity";
 import type { StandInFixture } from "./built-server.ts";
+import { standInPds } from "./stand-in-pds.ts";
 
 const fixture = (): StandInFixture =>
   JSON.parse(readFileSync(process.env.WEB_STAND_IN_FIXTURE ?? "", "utf8")) as StandInFixture;
@@ -26,11 +28,18 @@ const network: IdentityNetwork = {
   },
 };
 
-/** Every request the OAuth client makes: the fixture's answer for its method and URL, else 404. */
+const started = fixture().pds;
+const pds =
+  started === undefined
+    ? undefined
+    : standInPds(started, (write) => appendFileSync(started.writesFile, `${JSON.stringify(write)}\n`));
+/** Every request the OAuth client and the PDS calls make: the stand-in PDS, else the fixture's answer, else 404. */
 const fetchStandIn: typeof fetch = async (input, init) => {
   const request = new Request(input, init);
   const key = `${request.method} ${request.url}`;
   appendFileSync(process.env.WEB_STAND_IN_CALLS ?? "", `${key}\n`);
+  const fromPds = pds === undefined ? undefined : await pds(request);
+  if (fromPds !== undefined) return fromPds;
   const found = fixture().fetch?.[key];
   if (found === undefined) return new Response("not in the fixture", { status: 404 });
   return new Response(JSON.stringify(found.body), {

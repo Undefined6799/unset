@@ -17,8 +17,11 @@
       "path": "../../shared/islands"
     },
     {
+      "path": "../../shared/safe-href"
+    },
+    {
       "path": "../../shared/ui"
     }
   ],
-  "exclude": ["dist", "vite.config.ts", "lib"]
+  "exclude": ["dist", "vite.config.ts", "lib/components", "lib/utils.ts"]
 }

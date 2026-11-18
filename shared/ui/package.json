@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@unset/shared-islands": "*",
+    "@unset/shared-safe-href": "*",
     "react": "19.3.1"
   },
   "devDependencies": {

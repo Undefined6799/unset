@@ -90,7 +90,7 @@ const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|t
 const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin|safe-href)/";
 // The lexicon build scripts and the Node built-ins they may import, each named exactly (P1.31d). Adding one loosens a
 // guard: a check-path PR with an architecture ruling and Alex's typed word.
 const LEXICON_SCRIPTS = "^shared/lexicons/scripts/";
@@ -194,6 +194,10 @@ const MATRIX = [
     to: [{ path: "^shared/lexicons/" }, { ...CORE, path: `^(${LEXICON_SCRIPT_BUILTINS.join("|")})$` }, NPM],
   },
   { name: "shared-ui-lexicons", from: { path: "^(shared/(ui|lexicons)/)" }, to: [{ path: "^$1" }, NPM] },
+  // The link checker (P1.20i; Alex 2026-11-18): a leaf with no dependencies, so the Svelte UI can use it without the
+  // React kit. shared/ui reaches it only through its index and re-exports safeHref, so no React caller changes.
+  { name: "shared-ui-safe-href", from: { path: "^shared/ui/" }, to: [{ path: "^shared/safe-href/index\\.ts$" }] },
+  { name: "shared-safe-href", from: { path: "^(shared/safe-href/)" }, to: [{ path: "^$1" }] },
   // The island runtime (define, props, readProps, slot), its own workspace from P1.25i (P1.25o; book edit
   // 2026-10-07-p125l-islands-lazy-chunks): it ships to the browser, so no Node built-in, and it never imports the
   // kit, which reaches it only through its index.
