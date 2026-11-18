@@ -1,3 +1,4 @@
 import { definePolicy } from "../lib/server/policy.ts";
 
-export const policy = definePolicy({ group: "public", limit: "default" });
+// Home: anyone may read it; a member's session is read so the header shows them signed in (P1.20k).
+export const policy = definePolicy({ group: "public", limit: "default", session: "optional" });

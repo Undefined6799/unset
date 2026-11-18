@@ -222,10 +222,7 @@ describe("the shell around the member page", () => {
   // Gap 7 of the P1.20k review: the Hono dialog carried the page as `next`, so a sign-in comes back to it.
   test("sign_in_in_the_shell_comes_back_to_this_page", async () => {
     const terms = await (await get("/legal/terms")).text();
-    expect(terms.match(/href="\/login[^"]*"/g)).toEqual([
-      'href="/login?next=%2Flegal%2Fterms"',
-      'href="/login?next=%2Flegal%2Fterms"',
-    ]);
+    expect(terms.match(/href="\/login[^"]*"/g)).toEqual(['href="/login?next=%2Flegal%2Fterms"']);
     // Coming back to the signed-out page would only offer Sign in again.
     const signedOut = await (await get("/signed-out")).text();
     expect(signedOut.match(/href="\/login[^"]*"/g)).toEqual(['href="/login"', 'href="/login"']);

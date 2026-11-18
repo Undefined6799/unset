@@ -1,7 +1,8 @@
 // GET /legal/terms, /legal/privacy and /legal/domains (P2.15; P1.20d): the document in apps/web/legal parsed once at
 // load (lib/server/legal-markdown.ts refuses raw HTML and keeps only links safeHref accepts), with its {{holes}}
-// filled from config here as plain text the page escapes. No cookie is read, so a browser may keep it five minutes;
-// kept out of search results. `?lang=` is ignored: English only until i18n.
+// filled from config here as plain text the page escapes. In the core shell like every app page (P1.20k), so a member
+// sees the same header here: a visitor's copy may be kept five minutes, a member's is private and never stored
+// (hooks.server.ts). Kept out of search results. `?lang=` is ignored: English only until i18n.
 import type { ServerLoad } from "@sveltejs/kit";
 import domains from "../../../../../../apps/web/legal/domains.en.md?raw";
 import privacy from "../../../../../../apps/web/legal/privacy.en.md?raw";
@@ -15,7 +16,7 @@ type Document = "terms" | "privacy" | "domains";
 const DOCUMENTS = { terms: parseLegal(terms), privacy: parseLegal(privacy), domains: parseLegal(domains) };
 
 const TITLES = { terms: "Terms of service", privacy: "Privacy notice", domains: "Our domains" } as const;
-const SHELL: ShellData = { kind: "site", noindex: true };
+const SHELL: ShellData = { kind: "core", noindex: true };
 
 const fill = (inlines: readonly Inline[], values: LegalValues): Run[] =>
   inlines.map((inline): Run => {

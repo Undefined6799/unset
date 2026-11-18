@@ -5,6 +5,10 @@ import { ALL_PAGES, cellName, originOf, PAGES, requestHeaders, themeCells } from
 // The book text said "absent in dev"; the server does not, and this harness does not change it.
 const HSTS = "max-age=63072000; includeSubDomains";
 
+// Home and the legal pages read a member's session (policy session "optional", P1.20k), so even a visitor's copy
+// varies on Cookie; other public pages read none.
+const OPTIONAL_SESSION = new Set(["/", "/legal/terms", "/legal/privacy", "/legal/domains"]);
+
 function header(headers: Record<string, string>, name: string): string | undefined {
   return headers[name];
 }
@@ -22,7 +26,7 @@ for (const fixture of ALL_PAGES) {
       expect(csp).toContain("default-src 'none'");
       if (fixture.group === "public") {
         expect(csp).not.toContain("script-src");
-        expect(header(headers, "vary")).toBeUndefined();
+        expect(header(headers, "vary")).toBe(OPTIONAL_SESSION.has(fixture.path) ? "Cookie" : undefined);
       } else {
         expect(csp).toContain("script-src");
         expect(csp).toContain("trusted-types");

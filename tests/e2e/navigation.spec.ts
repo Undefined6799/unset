@@ -41,13 +41,22 @@ test("the_account_menu_profile_link_reaches_the_member_page_and_closes", async (
   await expect(page.locator("#account-menu")).toBeHidden();
 });
 
-test("the_drawer_closes_after_a_client_navigation", async ({ page }) => {
+test("the_create_menu_closes_after_a_client_navigation", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  await page.locator('header button[popovertarget="core-menu"]').click();
-  await page.locator("#core-menu").getByRole("link", { name: "Terms" }).click();
+  await page.locator('header button[popovertarget="create-menu"]').click();
+  await page.locator("#create-menu").getByRole("link", { name: "Add a profile card" }).click();
+  await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}#add-card`);
+  await expect(page.locator("#create-menu")).toBeHidden();
+});
+
+// Alex, 2026-11-18 05:02Z: a signed-in member reading a legal page sees the same header, signed in.
+test("a_legal_page_shows_the_member_signed_in", async ({ page }) => {
+  expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+  await page.locator("footer").getByRole("link", { name: "Terms" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/legal/terms`);
-  await expect(page.locator("#core-menu")).toBeHidden();
+  await expect(page.locator('header button[popovertarget="account-menu"]')).toBeVisible();
+  await expect(page.locator("header").getByRole("link", { name: "Sign in" })).toHaveCount(0);
 });
 
 // Outside review of f5cab2f, finding 3: from one settings page to the other the settings layout stays too, and the
@@ -68,10 +77,12 @@ test.describe("phone", () => {
   });
 });
 
-test("me_from_the_home_page_reaches_the_member_page", async ({ page }) => {
+// P1.20k: home reads the member's session, so its header has their account menu, not Sign in.
+test("your_profile_from_the_home_page_reaches_the_member_page", async ({ page }) => {
   const watched = watch(page);
   expect((await openPage(page, HOME_SIGNED_IN))?.status()).toBe(200);
-  await page.locator("header").getByRole("link", { name: "Profile" }).click();
+  await page.locator('header button[popovertarget="account-menu"]').click();
+  await page.locator("#account-menu").getByRole("link", { name: "Your profile" }).click();
   await expect(page).toHaveURL(`${TEST_ORIGIN}/${ACCOUNT.did}`);
   expect(watched.pageErrors).toEqual([]);
 });

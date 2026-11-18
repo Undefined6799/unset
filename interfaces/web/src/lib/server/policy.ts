@@ -21,9 +21,13 @@ export type RoutePolicy = Readonly<{
    * `locals.privacyNotice`.
    * `onboarding`: a session as for `required`, but no app gate, for the pages the gate sends members to (welcome,
    * verify-email), which check their own step.
-   * Each way a signed-in request also counts against the member's buckets.
+   * Each of those three ways a signed-in request also counts against the member's buckets.
+   * `optional`: a page anyone may read that shows a member as signed in (home, the legal pages). The session is read
+   * when a cookie is sent, never required and never gated, so a member mid-onboarding can still read the terms. A page
+   * rendered for a member is private and never stored (hooks.server.ts), and these pages always vary on Cookie, so a
+   * stored visitor copy is never reused for a signed-in browser.
    */
-  session?: "required" | "writes" | "onboarding";
+  session?: "required" | "writes" | "onboarding" | "optional";
   /**
    * Where sign-in returns after a signed-out request the session refuses. A page whose route id has no parameter returns
    * to itself; one with a parameter must name a fixed path here, or the gate refuses it (500), as interfaces/http's

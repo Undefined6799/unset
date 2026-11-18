@@ -110,7 +110,7 @@ async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline
     const back = next();
     redirect(303, back === "/" ? "/login" : `/login?${new URLSearchParams({ next: back })}`);
   }
-  if (policy.session === undefined || policy.probe) return { did };
+  if (policy.session === undefined || policy.session === "optional" || policy.probe) return { did };
   // The member's bucket first, so a refused request costs no account read and no PDS call.
   const refused = limited(limitOf(event.request, policy), { did: session.did });
   if (refused || policy.session === "onboarding") return { did, refused };
@@ -137,7 +137,9 @@ const gate: Handle = async ({ event, resolve }) => {
     const { did, refused } = await sessionProblem(event, policy, deadline);
     if (refused) return refused;
     event.locals.did = did;
-    return resolve(event, { transformPageChunk: themeChunk(policy.group, event.request.headers.get("cookie")) });
+    // A member's own theme on every page rendered for them; a page every visitor shares follows the system.
+    const readsTheme = policy.group === "app" || did !== undefined;
+    return resolve(event, { transformPageChunk: themeChunk(readsTheme, event.request.headers.get("cookie")) });
   });
 };
 
@@ -196,16 +198,22 @@ export const handle: Handle = async (input) => {
     const styled = group === "app" || group === "public" ? stylesheet : undefined;
     response = refusalPage(refused, response.status, response.headers, styled);
   }
-  return withGroupHeaders(response, group, event.isDataRequest);
+  const optional = policyOf(event.route.id)?.session === "optional";
+  return withGroupHeaders(response, group, event.isDataRequest, { member: event.locals.did !== undefined, optional });
 };
+
+/** Who a response was rendered for: a member (the gate read a live session), and whether the route reads one if sent. */
+type Audience = Readonly<{ member: boolean; optional: boolean }>;
 
 /**
  * An `app` page keeps SvelteKit's CSP, narrowed to our paths; every other response gets its group's fixed one. An
  * `app` page, and the data its client loads (__data.json), may differ per member, so it is private, never stored and
- * varies on Cookie, as interfaces/http/prefs/theme.ts has it; public pages get neither, so their bytes never depend on
- * a cookie.
+ * varies on Cookie, as interfaces/http/prefs/theme.ts has it. So is any other response rendered for a member, or one
+ * that clears a cookie, whatever the page asked for. A page with an `optional` session varies on Cookie even for a
+ * visitor, so a browser that signs in never reuses the visitor copy it kept; other public pages read no cookie, so
+ * their bytes never depend on one.
  */
-function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean): Response {
+function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean, audience: Audience): Response {
   const out = new Response(response.body, response); // SvelteKit's own responses may have immutable headers
   const html = out.headers.get("content-type")?.startsWith("text/html") === true;
   // A redirect is never stored, as interfaces/http's redirect.ts sends it (a 303 is not cacheable without explicit
@@ -213,8 +221,11 @@ function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boo
   if (out.status >= 300 && out.status < 400 && !out.headers.has("cache-control")) {
     out.headers.set("cache-control", "no-store");
   }
-  if (group === "app" && (html || dataRequest)) {
+  const personal = audience.member || out.headers.has("set-cookie");
+  if ((group === "app" && (html || dataRequest)) || (group !== "app" && personal)) {
     out.headers.set("cache-control", "private, no-store");
+    out.headers.append("vary", "Cookie");
+  } else if (audience.optional) {
     out.headers.append("vary", "Cookie");
   }
   const kit = out.headers.get("content-security-policy");

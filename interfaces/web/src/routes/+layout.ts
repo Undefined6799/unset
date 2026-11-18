@@ -10,9 +10,15 @@ import type { ShellData } from "../lib/shell.ts";
 export const csr = false;
 
 export const load: Load = ({ url, data }) => {
-  const server = data as { signedIn?: boolean; prefs?: ShellData["prefs"]; signInHref?: string } | null;
+  const server = data as {
+    signedIn?: boolean;
+    account?: ShellData["account"];
+    prefs?: ShellData["prefs"];
+    signInHref?: string;
+  } | null;
   return {
     signedIn: server?.signedIn === true,
+    account: server?.account,
     prefs: server?.prefs,
     signInHref: server?.signInHref ?? "/login",
     error: readErrorParam(url.searchParams),

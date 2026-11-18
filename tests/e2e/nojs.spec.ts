@@ -39,7 +39,7 @@ test.describe("javascript disabled", () => {
   // P2.05n: the browser's own Referer (Referrer-Policy same-origin) brings Close back to the page the visitor left.
   test("login_close_returns_to_the_page_before", async ({ page }) => {
     await page.goto("/legal/terms");
-    await page.locator('footer a[href="/login?next=%2Flegal%2Fterms"]').click();
+    await page.locator('header a[href="/login?next=%2Flegal%2Fterms"]').click();
     await expect(page).toHaveURL(/\/login\?next=%2Flegal%2Fterms$/);
     const close = page.getByRole("region", { name: "Sign in" }).getByRole("link", { name: "Close" });
     await expect(close).toHaveAttribute("href", "/legal/terms");
@@ -60,7 +60,7 @@ test.describe("javascript disabled", () => {
       await expect(panel).toBeHidden();
       await toggle.press("Enter");
       await expect(panel).toBeVisible();
-      await expect(panel.getByRole("link", { name: "Terms" })).toBeVisible();
+      await expect(panel.getByRole("button", { name: "Close More on unset.sh" })).toBeFocused();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       await expect(toggle).toBeFocused();
@@ -89,32 +89,60 @@ test.describe("javascript disabled", () => {
     });
   });
 
-  // P2.13e: on desktop the header's menu button opens the drawer and its X closes it, with no script.
-  test("navigation_drawer_without_js", async ({ page }) => {
+  // P2.13e, P1.20k: on desktop each header button opens its panel and the panel's X closes it, with no script. The
+  // legal links live in the footer, not the menu (Alex, 2026-11-18 05:02Z).
+  test("header_panels_without_js", async ({ page }) => {
     await page.goto("/");
-    const panel = page.locator("#core-menu");
-    await page.locator('header button[popovertarget="core-menu"]').click();
-    await expect(panel).toBeVisible();
-    await expect(panel.getByRole("link", { name: "Privacy" })).toBeVisible();
-    await panel.getByRole("button", { name: "Close menu" }).click();
-    await expect(panel).toBeHidden();
+    for (const [id, title] of [
+      ["core-menu", "More on unset.sh"],
+      ["create-menu", "Create"],
+      ["messages-menu", "Messages"],
+      ["notifications-menu", "Notifications"],
+    ] as const) {
+      const panel = page.locator(`#${id}`);
+      await page.locator(`header button[popovertarget="${id}"]`).click();
+      await expect(panel, id).toBeVisible();
+      await expect(panel.getByRole("heading", { name: title }), id).toBeVisible();
+      await panel.getByRole("button", { name: `Close ${title}` }).click();
+      await expect(panel, id).toBeHidden();
+    }
+    await expect(page.locator("#core-menu").getByRole("link")).toHaveCount(0);
+    await expect(page.locator("footer").getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "href",
+      "/legal/privacy",
+    );
   });
 
-  // Clean tabs (Alex, 2026-11-18): features not built yet are shown greyed and disabled, never as links.
+  // Clean tabs (Alex, 2026-11-18): features not built yet are shown greyed and disabled, never as links; the menus
+  // open, but their rows for unbuilt features are disabled, and only Add a profile card is a link.
   test("coming_soon_items_are_disabled_not_links", async ({ page }) => {
     await page.goto("/");
     const main = page.getByRole("navigation", { name: "Main" });
     await expect(main.getByRole("link")).toHaveCount(1);
     await expect(main).toContainText("Community, coming soon");
     await expect(main).toContainText("Explore, coming soon");
-    for (const name of ["Search unset.sh", "Create", "Messages", "Notifications"]) {
-      await expect(
-        page
-          .locator("header")
-          .getByRole("button", { name: `${name}, coming soon` })
-          .first(),
-      ).toBeDisabled();
+    await expect(
+      page.locator("header").getByRole("button", { name: "Search unset.sh, coming soon" }).first(),
+    ).toBeDisabled();
+    const soon = {
+      "core-menu": ["Saved", "Your communities", "Help"],
+      "create-menu": ["New post", "Share a link", "Ask a question"],
+      "messages-menu": ["Open inbox"],
+      "notifications-menu": ["View all notifications"],
+    };
+    for (const [id, names] of Object.entries(soon)) {
+      for (const name of names)
+        await expect(
+          page.locator(`#${id}`).getByRole("button", { name: `${name}, coming soon`, includeHidden: true }),
+          name,
+        ).toBeDisabled();
     }
+    const create = page.locator("#create-menu");
+    await expect(create.getByRole("link", { includeHidden: true })).toHaveCount(1);
+    await expect(create.getByRole("link", { name: "Add a profile card", includeHidden: true })).toHaveAttribute(
+      "href",
+      "/me",
+    );
   });
 
   // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.

@@ -1,8 +1,9 @@
 // The root layout's server load (P1.20k): what the shell needs on a page that does not pass it, which is every page
 // for the theme form and the error page for the session (+error.svelte gets only layout data). It adds no session or
-// cookie read on a public route: locals.did is what the gate (hooks.server.ts) already read for this route's policy,
-// none on a public route, and the theme form is on app pages only, as interfaces/http/web/page.ts had it (the theme
-// follows the system on public pages, so a choice there would change nothing and their bytes stay the same for all).
+// cookie read of its own: locals.did is what the gate (hooks.server.ts) already read for this route's policy, none on a
+// public route unless its session is `optional` (home, legal). The theme form and the member's own profile link are
+// on app pages and on pages rendered for a member, which the gate sends private and uncached; a visitor's public page
+// follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
 import { safeReturnPath } from "@unset/shared-http";
 import { policyOf } from "../lib/server/route-table.ts";
@@ -24,12 +25,14 @@ function signInHref(path: string): string {
 }
 
 export const load: ServerLoad = ({ locals, request, route, url }) => {
+  const member = locals.did !== undefined;
   const prefs: ShellData["prefs"] =
-    policyOf(route.id)?.group === "app"
+    policyOf(route.id)?.group === "app" || member
       ? {
           theme: themeFromCookies(request.headers.get("cookie")),
           returnTo: themeReturnTo(SIGN_IN_PATHS.has(url.pathname) ? url.pathname + url.search : url.pathname),
         }
       : undefined;
-  return { signedIn: locals.did !== undefined, prefs, signInHref: signInHref(url.pathname) };
+  const account: ShellData["account"] = member ? { path: `/${locals.did}` } : undefined;
+  return { signedIn: member, account, prefs, signInHref: signInHref(url.pathname) };
 };
