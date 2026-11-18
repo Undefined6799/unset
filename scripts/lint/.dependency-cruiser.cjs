@@ -102,6 +102,11 @@ const ASSET = "\\.css$";
 // "./icons.json" export, because shared/ui's index.ts brings React. It is the only file that may, and only that file.
 const SVELTE_ICON = "^apps/web/lib/components/icon/icon\\.svelte$";
 const ICON_DATA = "^shared/ui/icons/icons\\.json$";
+// The web's font route reads the two woff2 files from shared/ui/fonts, their one copy in the repository (Alex
+// 2026-11-18 12:10Z: no identical copies), through @unset/shared-ui's "./fonts/*.woff2" export. Only that file may,
+// and only those files, as the Icon may only icons.json.
+const FONT_READER = "^interfaces/web/src/lib/server/fonts\\.ts$";
+const FONT_DATA = "^shared/ui/fonts/[A-Za-z]+-Variable\\.woff2$";
 // P1.20c: stock shadcn-svelte dialog-content.svelte imports its own folder's index.ts, which re-exports it. The only
 // cycle allowed, and only inside that folder.
 const STOCK_DIALOG = "^apps/web/lib/components/ui/dialog/";
@@ -267,8 +272,14 @@ module.exports = {
     forbidden(
       "svelte-no-react-ui",
       "The web process and the Svelte components take only icons.json from shared/ui, never its React UI (ADR 0055, P1.20c).",
-      { path: SVELTE_UI_FROM },
+      { path: SVELTE_UI_FROM, pathNot: FONT_READER },
       { path: "^shared/ui/", pathNot: ICON_DATA },
+    ),
+    forbidden(
+      "svelte-no-react-ui",
+      "The web's font route takes only the two font files from shared/ui.",
+      { path: FONT_READER },
+      { path: "^shared/ui/", pathNot: FONT_DATA },
     ),
     forbidden(
       "app-render-entry-only",
@@ -309,7 +320,7 @@ module.exports = {
     forbidden(
       "infra-shared-via-index",
       "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt (fake-only-in-composition-root governs it, and an index.ts never exports one), and so is CSS.",
-      { pathNot: [`^${WORKSPACE_WITH_INDEX}`, SVELTE_ICON] },
+      { pathNot: [`^${WORKSPACE_WITH_INDEX}`, SVELTE_ICON, FONT_READER] },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET] },
     ),
     forbidden(
@@ -317,6 +328,18 @@ module.exports = {
       "The Svelte Icon reaches shared/ only through an index.ts, and shared/ui's icons.json through its package export.",
       { path: SVELTE_ICON },
       { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET, ICON_DATA] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "The web's font route reaches shared/ only through an index.ts, and shared/ui's fonts through their package export.",
+      { path: FONT_READER },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE, ASSET, FONT_DATA] },
+    ),
+    forbidden(
+      "infra-shared-via-index",
+      "Outside shared/ui, the fonts are read through the @unset/shared-ui/fonts export, never by a path.",
+      { pathNot: "^shared/ui/" },
+      { path: FONT_DATA, dependencyTypes: ["local"] },
     ),
     forbidden(
       "infra-shared-via-index",

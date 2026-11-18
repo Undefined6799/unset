@@ -6,6 +6,7 @@
   "license": "MIT",
   "exports": {
     ".": "./index.ts",
-    "./icons.json": "./icons/icons.json"
+    "./icons.json": "./icons/icons.json",
+    "./fonts/*.woff2": "./fonts/*.woff2"
   }
 }

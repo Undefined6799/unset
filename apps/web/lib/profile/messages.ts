@@ -1,4 +1,4 @@
-// Copied from apps/web/src/screens/profile/messages.ts for the Svelte page (P1.20i); that copy goes with P1.20k.
+// Copied from apps/web/src/screens/profile/messages.ts for the Svelte page (P1.20i); that copy went with P1.20k.
 // The words a profile card shows that the member does not write (ADR 0051 decision 4: button text comes from the
 // preset). English first (plan: English, then French).
 export const CARD_TEXT = {

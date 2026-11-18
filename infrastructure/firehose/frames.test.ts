@@ -1,6 +1,8 @@
 // P3.05s (frames.ts): the structural check on each decoded frame body.
+import { cidForRecord } from "@atproto/repo";
+import type { CommitEvt } from "@atproto/sync";
 import { describe, expect, test } from "vitest";
-import { parseMessage } from "./frames.ts";
+import { type CommitBody, commitFrame, parseMessage } from "./frames.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const type = (name: string) => `com.atproto.sync.subscribeRepos#${name}`;
@@ -59,5 +61,25 @@ describe("parseMessage", () => {
   test("frames.identity_carries_no_handle", () => {
     const message = parseMessage({ $type: type("identity"), seq: 4, did: DID, time: "t", handle: "evil.example" });
     expect(message).toEqual({ kind: "frame", frame: { kind: "identity", seq: 4, did: DID } });
+  });
+});
+
+describe("commitFrame", () => {
+  test("frames.record_reaches_ingest_in_its_json_form", async () => {
+    const blob = await cidForRecord({ image: 1 });
+    const record = {
+      $type: "sh.unset.profile",
+      avatar: { $type: "blob", ref: blob, mimeType: "image/png", size: 10 },
+      bytes: new TextEncoder().encode("Hello"),
+    };
+    const json = {
+      $type: "sh.unset.profile",
+      avatar: { $type: "blob", ref: { $link: blob.toString() }, mimeType: "image/png", size: 10 },
+      bytes: { $bytes: "SGVsbG8" },
+    };
+    const write = { event: "create", collection: "sh.unset.profile", rkey: "self", cid: blob, record };
+    const body = { ...commit(), seq: 9 } as unknown as CommitBody;
+    const frame = commitFrame(body, [write as unknown as CommitEvt]);
+    expect(frame).toMatchObject({ kind: "repoCommit", seq: 9, rev: "3l", changes: [{ kind: "put", record: json }] });
   });
 });
