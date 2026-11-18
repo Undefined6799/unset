@@ -41,6 +41,11 @@ export const PUBLIC_PAGE_CACHE = "public, max-age=300";
 
 export const SITE_SHELL: ShellData = { kind: "site" };
 
+/** Every error page (P1.20k): the core shell, kept out of search results, signed in when the gate read a session. */
+export const ERROR_SHELL: ShellData = { kind: "core", noindex: true };
+/** An error page for a member mid-onboarding: signed in, but none of the app's menus, which would send them back. */
+export const STEP_ERROR_SHELL: ShellData = { kind: "site", signedIn: true, noindex: true };
+
 /** The account button's letter, as the React Avatar's avatarLetter drew it before P1.20k: the first character
  * of the name without a leading "@", uppercased; "?" for an empty name. */
 export function accountLetter(name: string): string {
