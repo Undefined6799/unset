@@ -60,4 +60,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
 | [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17; decision 3's queue clause superseded by 0053 |
 | [0053](0053-queue-members-for-the-index-at-onboarding-end.md) | Queue members for the index when their onboarding ends, in `idx`; supersedes one clause of 0052 (P3.02s) | Accepted 2026-11-17 |
+| [0054](0054-web-process-on-sveltekit.md) | The web process runs on SvelteKit with Svelte 5 screens; Hono is removed; supersedes 0015 (P1.20a) | Proposed |
+| [0055](0055-shadcn-svelte-and-one-theme-file.md) | shadcn-svelte components, themed by one file in the repo; supersedes 0016 (P1.20a) | Proposed |
+| [0056](0056-web-boundary-by-file-kind.md) | In the web process the UI/server boundary is by file kind, checked; the request gate is server.ts plus the hook (P1.20a) | Proposed |
 | [0057](0057-small-and-auditable-means-the-code.md) | "Small and auditable" means our own code; a package meeting a written bar needs no ADR unless it touches auth, crypto, egress or personal data; amends DO-1 (P0.09) | Accepted 2026-11-17 |
