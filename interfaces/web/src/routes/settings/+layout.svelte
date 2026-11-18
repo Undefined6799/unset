@@ -3,17 +3,18 @@
   SettingsLayout. It links only pages that run today. The site shell around it is the root layout's.
 -->
 <script lang="ts">
+import type { IconName } from "@unset/apps-web/lib/components/icon";
 import SettingsLayout from "@unset/apps-web/lib/components/settings/settings-layout.svelte";
+import { SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 import type { Snippet } from "svelte";
 import { page } from "$app/state";
-import { SETTINGS } from "./messages.ts";
 
 let { children }: { children: Snippet } = $props();
 
-const PAGES = [
-  { label: SETTINGS.profile, path: "/settings/profile" },
-  { label: SETTINGS.account, path: "/settings/account" },
-] as const;
+const PAGES: readonly { label: string; path: string; icon: IconName }[] = [
+  { label: SETTINGS.profile, path: "/settings/profile", icon: "profile" },
+  { label: SETTINGS.account, path: "/settings/account", icon: "private" },
+];
 </script>
 
 <SettingsLayout label={SETTINGS.label} navLabel={SETTINGS.nav} pages={PAGES} current={page.url.pathname}>

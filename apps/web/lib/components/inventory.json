@@ -333,6 +333,14 @@
       "settings-layout.svelte": {
         "origin": "ours",
         "purpose": "The settings pages' frame: the side list of settings pages beside the page, a row above it on phones."
+      },
+      "account-settings.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Account's cards: handle and DID, the sign-in server link, and the two sign-out forms."
+      },
+      "profile-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Profile's form: name, headline, place and website, posted to /profile, inline refusal with script."
       }
     }
   }

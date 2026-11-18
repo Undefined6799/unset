@@ -19,6 +19,7 @@
     "./lib/components/profile/*": "./lib/components/profile/*",
     "./lib/components/settings/*": "./lib/components/settings/*",
     "./lib/profile/*": "./lib/profile/*",
+    "./lib/settings/*": "./lib/settings/*",
     "./lib/fonts/*.woff2": "./lib/fonts/*.woff2",
     "./lib/icons/*.png": "./lib/icons/*.png"
   },

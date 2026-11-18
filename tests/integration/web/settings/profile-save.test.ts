@@ -13,7 +13,9 @@ import { createOAuthSessionStore, createPool, withTransaction } from "@unset/inf
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { elements, textContent } from "../../../../interfaces/http/web/fixtures/html.ts";
 import { buildOnce, clientAddress, ORIGIN, PDS_HOST, type RunningWeb, startWeb } from "../built-server.ts";
 import { readyMember } from "../members.ts";
 import type { PdsWrite } from "../stand-in-pds.ts";
@@ -91,14 +93,15 @@ async function server(failing?: readonly string[]): Promise<Server> {
 
 let up: Server;
 let down: Server;
+let unread: Server;
 let cookie: string;
 beforeAll(async () => {
   buildOnce(provided.port);
-  [up, down] = await Promise.all([server(), server(["putRecord"])]);
+  [up, down, unread] = await Promise.all([server(), server(["putRecord"]), server(["getRecord"])]);
   cookie = await signedIn();
 }, 120_000);
 afterAll(async () => {
-  await Promise.all([up?.web.stop(), down?.web.stop()]);
+  await Promise.all([up?.web.stop(), down?.web.stop(), unread?.web.stop()]);
   await pool.end();
 });
 
@@ -115,6 +118,38 @@ const save = (on: Server, body: string) =>
       cookie,
     },
   });
+
+// First in the file: the stand-in repo holds no sh.unset.profile record yet, as for a new member (staging walkthrough
+// 2026-11-18 finding 1: no screen created one, so the card editor was out of reach).
+describe("a new member with no profile record", () => {
+  test("Settings › Profile offers an empty form, and its save creates the record", async () => {
+    const page = await up.web.fetch("/settings/profile", {
+      headers: { accept: "text/html", "x-forwarded-for": clientAddress(), cookie },
+    });
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain("Add a name to start your page.");
+    const [form] = elements(parse(html), "form", { method: "post", action: "/profile" });
+    expect(elements(form, "input").map((input) => attr(input, "value") ?? "")).toEqual([
+      "/settings/profile",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    const before = up.writes().length;
+    const response = await save(up, "displayName=New+Member&headline=&location=&website=&next=%2Fsettings%2Fprofile");
+    expect(response.headers.get("location")).toBe("/settings/profile");
+    const [written] = up.writes().slice(before);
+    expect(written).toMatchObject({
+      method: "putRecord",
+      collection: "sh.unset.profile",
+      rkey: "self",
+      record: { $type: "sh.unset.profile", displayName: "New Member" },
+    });
+    expect(written?.swapRecord ?? null).toBeNull(); // a first profile can never overwrite another
+  });
+});
 
 describe("POST /profile on the stand-in PDS", () => {
   test("saves the session's own profile and returns to it", async () => {
@@ -164,5 +199,51 @@ describe("POST /profile on the stand-in PDS", () => {
       headers: { accept: "text/html", "x-forwarded-for": clientAddress(), cookie },
     });
     expect(again.status).toBe(200);
+  });
+});
+
+/** A signed-in GET of Settings › Profile. */
+const settingsPage = (on: Server) =>
+  on.web.fetch("/settings/profile", { headers: { accept: "text/html", "x-forwarded-for": clientAddress(), cookie } });
+
+type Node = Parameters<typeof elements>[0];
+const attr = (node: Node | undefined, name: string) =>
+  (node as { attrs?: { name: string; value: string }[] } | undefined)?.attrs?.find((a) => a.name === name)?.value;
+
+describe("GET /settings/profile on the stand-in PDS", () => {
+  test("the form holds the stored fields and posts to the one profile save", async () => {
+    await save(up, "displayName=Mara+Lind&headline=Night+trains.&location=Lund&website=mara.example");
+    const response = await settingsPage(up);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    const document = parse(await response.text());
+    const nav = elements(document, "nav", { "aria-label": "Settings" })[0];
+    expect(elements(nav, "a").map((a) => [attr(a, "href"), attr(a, "aria-current") ?? null])).toEqual([
+      ["/settings/profile", "page"],
+      ["/settings/account", null],
+    ]);
+    const [form, ...others] = elements(document, "form", { method: "post", action: "/profile" });
+    expect(others).toEqual([]);
+    const inputs = elements(form, "input").map((input) => [attr(input, "name"), attr(input, "value")]);
+    expect(inputs).toEqual([
+      ["next", "/settings/profile"],
+      ["displayName", "Mara Lind"],
+      ["headline", "Night trains."],
+      ["location", "Lund"],
+      ["website", "https://mara.example"],
+    ]);
+    // No field for what the save cannot write (picture, its shape, listing), and no DID for the save to trust (SE-2).
+    expect(inputs.map(([name]) => name)).not.toContain("did");
+    expect(elements(form, "button").map((button) => textContent(button).trim())).toEqual(["Save profile"]);
+  });
+
+  test("a PDS that cannot be read shows no form, and the session is kept", async () => {
+    const response = await settingsPage(unread);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie") ?? "").not.toContain("__Host-sid=;");
+    const html = await response.text();
+    expect(html).toContain("Your profile could not be loaded");
+    expect(elements(parse(html), "form", { action: "/profile" })).toEqual([]);
   });
 });
