@@ -3,7 +3,7 @@
 // a 303 to the member's /<DID>) was matched to /[did] with did "me" and showed not found, and its error page offered
 // Sign in to a member signed in (2026-11-18).
 import { expect, test } from "@playwright/test";
-import { openPage, watch } from "./observe.ts";
+import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
 
 const HOME_SIGNED_IN: PageFixture = { path: "/", route: "/", group: "public", expectJs: false, member: "account" };
@@ -81,6 +81,19 @@ test.describe("phone", () => {
 });
 
 // P1.20k: home reads the member's session, so its header has their account menu, not Sign in.
+// Alex's staging report 2026-11-18: the home page showed the signed-out header and the light theme to a member. A
+// browser that kept the visitor's copy of / must not show it after signing in (hooks.server.ts sends Vary: Cookie).
+test("the_home_page_seen_as_a_visitor_shows_the_member_after_sign_in", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  expect((await page.goto(`${TEST_ORIGIN}/`))?.status()).toBe(200);
+  const accountMenu = page.locator('header button[popovertarget="account-menu"]');
+  await expect(accountMenu).toHaveCount(0);
+  await addPageCookies(page.context(), HOME_SIGNED_IN, { kind: "cookie", theme: "dark" });
+  await page.goto(`${TEST_ORIGIN}/`);
+  await expect(accountMenu).toHaveCount(1);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
 test("your_profile_from_the_home_page_reaches_the_member_page", async ({ page }) => {
   const watched = watch(page);
   expect((await openPage(page, HOME_SIGNED_IN))?.status()).toBe(200);
