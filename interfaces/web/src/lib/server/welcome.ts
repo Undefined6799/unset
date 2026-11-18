@@ -16,9 +16,8 @@ import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
 import { dropSessionCookie } from "./session.ts";
+import { withRevokeTimeout } from "./sign-out.ts";
 
-/** Book P2.08: the revocation call gets 10 seconds. */
-const REVOKE_MS = 10_000;
 const EMAIL = /^[^\s@]+@[^\s@]+$/;
 
 /** Where a member at `step` belongs; a member who is done goes to their page, or to confirm their email first. */
@@ -71,17 +70,6 @@ function failure(cause: unknown): { kind: string; sqlstate?: string } {
 /** True when the grant's issuer is our PDS: compared as origins, never by suffix. */
 function hostedOnOurPds(issuer: string | null): boolean {
   return issuer !== null && URL.canParse(issuer) && new URL(issuer).origin === services().pdsIssuer;
-}
-
-/** `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. */
-function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
-  const limit = AbortSignal.any([deadline, AbortSignal.timeout(REVOKE_MS)]);
-  if (limit.aborted) return Promise.reject(new Error("revoke timed out"));
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(new Error("revoke timed out"));
-    limit.addEventListener("abort", onAbort, { once: true });
-    work.then(resolve, reject).finally(() => limit.removeEventListener("abort", onAbort));
-  });
 }
 
 /**
