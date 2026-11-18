@@ -3,7 +3,7 @@
 // a skipped required check reads as passing (expressions, "Status check functions"), hence always() and the result
 // check, run here as Actions runs a step with no shell key: `bash -e` (workflow syntax, jobs.<job_id>.steps[*].shell).
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -343,6 +343,35 @@ describe("browser server image (P0.07n)", () => {
     expect(start.run).toContain("--user pwuser");
     expect(start.run).toContain("--host 127.0.0.1");
     expect(tests.run).toContain('PW_TEST_CONNECT_WS_ENDPOINT="ws://127.0.0.1:$BROWSER_PORT/" npx playwright test');
+  });
+
+  // Nobody re-runs a failed job by hand (agents cannot): a pull that fails or stalls is tried again in the job, up to
+  // three times, before the server starts. docker keeps the layers a cut attempt finished, so each retry resumes.
+  test("the_image_pull_retries_in_the_job_up_to_three_times", () => {
+    const pull = steps.find((step) => step.run?.includes("docker pull"));
+    const start = steps.find((step) => step.run?.includes("run-server"));
+    if (pull?.run === undefined || start === undefined) throw new Error("no pull or start step");
+    expect(steps.indexOf(pull)).toBeLessThan(steps.indexOf(start));
+    expect(pull["timeout-minutes"]).toBeGreaterThanOrEqual(16);
+    const bin = mkdtempSync(join(tmpdir(), "e2e-pull-"));
+    const log = join(bin, "calls");
+    const fake = (name: string, body: string) => {
+      writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+      chmodSync(join(bin, name), 0o755);
+    };
+    fake("sleep", "exit 0");
+    const run = (failures: number) => {
+      writeFileSync(log, "");
+      fake("docker", `echo x >> "${log}"; [ "$(wc -l < "${log}")" -gt ${failures} ]`);
+      const status = spawnSync("bash", ["-e", "-c", pull.run ?? ""], {
+        env: { PATH: `${bin}:${process.env.PATH}`, PLAYWRIGHT_IMAGE: "img" },
+        stdio: "ignore",
+      }).status;
+      return { status, calls: readFileSync(log, "utf8").split("\n").filter(Boolean).length };
+    };
+    expect(run(0)).toEqual({ status: 0, calls: 1 });
+    expect(run(2)).toEqual({ status: 0, calls: 3 });
+    expect(run(3)).toEqual({ status: 1, calls: 3 });
   });
 
   // The start step's first line refuses an image whose tag names another Playwright version than node_modules.

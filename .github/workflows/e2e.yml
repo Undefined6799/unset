@@ -98,6 +98,17 @@ jobs:
       - run: npm ci --ignore-scripts
       # P0.07n: the browsers and their system libraries come prebuilt in Playwright's own image, at the version the
       # lockfile pins; the tests connect to it, so this job installs nothing from the Ubuntu mirror.
+      # Nobody re-runs a failed job by hand: a pull that fails or stalls past 5 minutes is tried again here, up to three
+      # times; docker keeps the layers a cut attempt finished, so each retry resumes rather than starts over.
+      - name: Pull Playwright's image, up to three attempts (P0.07n)
+        timeout-minutes: 17
+        run: |
+          for n in 1 2 3; do
+            if timeout --kill-after=10s 300s docker pull --quiet "$PLAYWRIGHT_IMAGE"; then exit 0; fi
+            echo "::warning::Image pull attempt $n of 3 failed or stalled"
+            sleep $((n * 10))
+          done
+          exit 1
       - name: Start the browser server from Playwright's image (P0.07n)
         timeout-minutes: 8
         run: |
