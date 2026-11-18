@@ -58,9 +58,10 @@ one-paragraph entry; new decisions also get their own file.
 | [0048](0048-session-issuer-origin.md) | The session row records the sign-in server's origin, so account pages stop unsealing the token set for a link (P2.03n) | Accepted 2026-11-15 |
 | [0049](0049-sessions-end-with-their-token-set.md) | A browser session ends with its token set, enforced by a foreign key with ON DELETE CASCADE (P2.03t) | Accepted 2026-11-16 |
 | [0051](0051-profile-cards-lexicon.md) | The profile is a minimal record plus one card record per card; supersedes parts of 0037 (P2.20m) | Accepted 2026-11-17 |
-| [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17; decision 3's queue clause superseded by 0053 |
+| [0052](0052-ingest-our-pds-with-atproto-sync.md) | Ingest our own PDS with `@atproto/sync`, not Tap, for the first indexer slice (P3.05s) | Accepted 2026-11-17; decision 3's queue clause superseded by 0053, decision 1's `Firehose` phrase by 0058 |
 | [0053](0053-queue-members-for-the-index-at-onboarding-end.md) | Queue members for the index when their onboarding ends, in `idx`; supersedes one clause of 0052 (P3.02s) | Accepted 2026-11-17 |
 | [0054](0054-web-process-on-sveltekit.md) | The web process runs on SvelteKit with Svelte 5 screens; Hono is removed; supersedes 0015 (P1.20a) | Accepted 2026-11-18 |
 | [0055](0055-shadcn-svelte-and-one-theme-file.md) | shadcn-svelte components, themed by one file in the repo; supersedes 0016 (P1.20a) | Accepted 2026-11-18 |
 | [0056](0056-web-boundary-by-file-kind.md) | In the web process the UI/server boundary is by file kind, checked; the request gate is server.ts plus the hook (P1.20a) | Accepted 2026-11-18 |
 | [0057](0057-small-and-auditable-means-the-code.md) | "Small and auditable" means our own code; a package meeting a written bar needs no ADR unless it touches auth, crypto, egress or personal data; amends DO-1 (P0.09) | Accepted 2026-11-17 |
+| [0058](0058-read-the-stream-without-the-firehose-class.md) | Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class; supersedes one phrase of 0052 (P3.05s) | Accepted 2026-11-17 |

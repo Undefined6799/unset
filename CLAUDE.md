@@ -14,7 +14,8 @@ changing it. Before touching an area, read its `importance: high` notes in `docs
 service behaves, read its current official documentation (or its source) for the version we pin, using WebFetch or
 node_modules, and cite what you read (URL or path, plus version) in the comment, commit, PR or reply. When the docs
 and your memory disagree, the docs win. When the docs are silent or unreachable, say the behaviour is unverified until
-a test proves it. (Rule DO-3.)
+a test proves it. (Rule DO-3.) **Challenge Alex's calls.** When one looks wrong, say so with
+the evidence, research the options and settle on the best one: the aim is the right decision, not him being right.
 
 ## Engineering principles (Alex, 2026-10-03/04; read before designing or changing code)
 @docs/human/engineering/architecture-instructions.md
@@ -49,8 +50,7 @@ an admin bypass, a forged membership, acting as another user, or a "lock down la
 design choice, **stop and ask**. Fail closed.
 
 Every change:
-- **AuthZ fail-closed.** Verified session plus the one CSRF gate on every non-GET. Scope every resource id to the
-  caller.
+- **AuthZ fail-closed.** Verified session plus the one CSRF gate on every non-GET. Scope every resource id to the caller.
 - **Identity.** Verify handle↔DID in both directions through `verifyHandle`; never trust self-asserted DID-doc fields.
   Validate OAuth state/nonce/PKCE.
 - **SQL.** Parameterised only, with a tenant/DID predicate.
