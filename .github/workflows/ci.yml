@@ -39,7 +39,7 @@ jobs:
     env:
       # The notes guard's code-moved warning diffs BASE_SHA...HEAD (P0.09d).
       BASE_SHA: ${{ github.event.before }}
-      RENOVATE_IMAGE: renovate/renovate:44.224.1@sha256:0405454d925558d5a2368ddb1d8318244e96c73974697a5264a4d1977a277598
+      RENOVATE_IMAGE: renovate/renovate:44.230.1@sha256:04b74bd1759014c724be28d4169951375e7fd12562d4fe2375e176b711a86e04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
