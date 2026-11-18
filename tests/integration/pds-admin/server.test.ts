@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { verifyLog } from "../../../interfaces/pds-admin/log.ts";
 import { ALICE, type FakePds, fakePds, PASSWORD, payloadFor, signed, startService, webKey } from "./harness.ts";
 
@@ -142,6 +142,69 @@ describe("issue", () => {
     pds.createStatus = 200;
     expect((await issue()).status).toBe(429);
     expect(pds.codes).toBe(0);
+  });
+});
+
+describe("queued work", () => {
+  /** Holds the first request at createInviteCode until `release`, so the next one waits in the issuing chain. */
+  async function holdFirst(now: () => number) {
+    let release = () => {
+      // Replaced by the promise's resolver below.
+    };
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reached = () => {
+      // Replaced by the promise's resolver below.
+    };
+    const atCreate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    pds.onCreate = () => {
+      reached();
+      return held;
+    };
+    await service.close();
+    service = await startService(pds, { now });
+    const first = issue();
+    await atCreate;
+    return { first, release };
+  }
+  const queued = () =>
+    vi.waitFor(() => expect(readFileSync(service.jtiFile, "utf8").trim().split("\n")).toHaveLength(2));
+
+  test("issue.queued_expiry: an envelope that expires while queued issues nothing", async () => {
+    let skew = 0;
+    const { first, release } = await holdFirst(() => Date.now() + skew);
+    const second = issue();
+    await queued();
+    skew = 120_000;
+    release();
+    expect((await first).status).toBe(200);
+    expect((await second).status).toBe(403);
+    expect(pds.codes).toBe(1);
+    expect(lastLog()).toMatchObject({ outcome: "denied", reason: "time" });
+  });
+
+  test("issue.queued_client_gone: a caller that hung up while queued gets no code", async () => {
+    const { first, release } = await holdFirst(() => Date.now());
+    const abort = new AbortController();
+    const envelope = signed(service.key, payloadFor());
+    const second = fetch(`${service.base}/v1/invite.issue`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(envelope),
+      signal: abort.signal,
+    }).catch(() => "aborted"); // guard-allow: egress test, local service only
+    await queued();
+    abort.abort();
+    expect(await second).toBe("aborted");
+    // The service has seen the hang-up once only the held request's connection is left.
+    await vi.waitFor(async () => expect(await service.connections()).toBe(1));
+    release();
+    expect((await first).status).toBe(200);
+    await vi.waitFor(() => expect(lastLog()).toMatchObject({ outcome: "denied", reason: "client_gone" }));
+    expect(pds.codes).toBe(1);
   });
 });
 

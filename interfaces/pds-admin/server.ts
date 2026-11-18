@@ -2,6 +2,7 @@
 // is 404. A request runs the checks below in order, and every outcome is one log line. Issuing runs in one chain, so
 // two requests can never read the same quota (step 7a).
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
+import type { AdminPayload } from "@unset/shared-admin-envelope";
 import { checkEnvelope, checkShape, type Expected, isRefusal, type ServiceKey } from "./envelope.ts";
 import { type IssueLimits, type IssueResult, issueInvite } from "./issue.ts";
 import type { JtiStore } from "./jti.ts";
@@ -74,7 +75,7 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
   };
   const record = (fields: LogFields) => deps.log.append(fields, deps.now());
 
-  async function handle(req: IncomingMessage): Promise<Answer> {
+  async function handle(req: IncomingMessage, clientGone: () => boolean): Promise<Answer> {
     // Step 1: the one route, by method and exact path, as JSON.
     if (req.method === "GET" && req.url === "/health") return { status: 200, body: { ok: true, commit: deps.commit } };
     if (req.method !== "POST" || req.url !== ROUTE) return fail(404);
@@ -98,24 +99,31 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     // Step 7: once only, recorded on disk before anything else happens.
     if (deps.jti.burn(payload.jti, payload.exp)) return deny(403, "replay", who);
     // Steps 8 to 12, one at a time.
+    return serialized(() => issueQueued(payload, who, clientGone));
+  }
+
+  /** Steps 8 to 12 for one authenticated request, run inside the issuing chain. */
+  async function issueQueued(payload: AdminPayload, who: Partial<LogFields>, clientGone: () => boolean) {
+    // Time spent waiting in the chain counts: an envelope that expired there, or a caller that hung up, issues
+    // nothing, so no abandoned request creates a code or spends a quota slot (SE-5, RE-1).
+    if (Math.floor(deps.now() / 1000) > payload.exp) return deny(403, "time", who);
+    if (clientGone()) return deny(403, "client_gone", who);
     const dids = { actorDid: payload.actor_did, targetDid: payload.target };
-    return serialized(async () => {
-      const daily = {
-        reservedToday: () => deps.log.reservedToday(deps.now()),
-        reserve: () => record({ outcome: "reserved", ...who, ...dids }),
-      };
-      const result = await issueInvite(deps.pds, deps.limits, payload.target, daily, deps.now);
-      const reason =
-        result.kind === "issued" ? {} : { reason: result.kind === "closed" ? "signups_closed" : result.reason };
-      record({
-        outcome: OUTCOMES[result.kind],
-        ...who,
-        ...dids,
-        ...reason,
-        ...(result.kind === "issued" ? { code: result.code } : {}),
-      });
-      return answerFor(result);
+    const daily = {
+      reservedToday: () => deps.log.reservedToday(deps.now()),
+      reserve: () => record({ outcome: "reserved", ...who, ...dids }),
+    };
+    const result = await issueInvite(deps.pds, deps.limits, payload.target, daily, deps.now);
+    const reason =
+      result.kind === "issued" ? {} : { reason: result.kind === "closed" ? "signups_closed" : result.reason };
+    record({
+      outcome: OUTCOMES[result.kind],
+      ...who,
+      ...dids,
+      ...reason,
+      ...(result.kind === "issued" ? { code: result.code } : {}),
     });
+    return answerFor(result);
   }
 
   function deny(status: 400 | 403, reason: string, who: Partial<LogFields> = {}): Answer {
@@ -125,8 +133,13 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
 
   async function respond(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let answer: Answer;
+    // 'close' before the answer is written means the caller hung up.
+    let gone = false;
+    res.once("close", () => {
+      gone = true;
+    });
     try {
-      answer = await handle(req);
+      answer = await handle(req, () => gone);
     } catch (error) {
       // Step 14: never 200 on an unexpected failure, and only the class name reaches the log.
       try {

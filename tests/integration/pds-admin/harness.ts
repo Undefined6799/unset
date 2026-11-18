@@ -25,8 +25,8 @@ export type FakePds = {
   codes: number;
   /** Status createInviteCode answers with; 200 by default. */
   createStatus: number;
-  /** Called when createInviteCode arrives, before it answers. */
-  onCreate: () => void;
+  /** Called when createInviteCode arrives; it answers once what this returns has settled. */
+  onCreate: () => void | Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -66,10 +66,12 @@ export async function fakePds(): Promise<FakePds> {
         return json(res, 200, { subject: { did: ALICE }, takedown: { applied: fake.takedown } });
       }
       if (path === "/xrpc/com.atproto.server.createInviteCode") {
-        fake.onCreate();
-        if (fake.createStatus !== 200) return json(res, fake.createStatus, { error: "InternalServerError" });
-        fake.codes += 1;
-        return json(res, 200, { code: `pds-example-com-abcde-${String(fake.codes).padStart(5, "0")}` });
+        void Promise.resolve(fake.onCreate()).then(() => {
+          if (fake.createStatus !== 200) return json(res, fake.createStatus, { error: "InternalServerError" });
+          fake.codes += 1;
+          return json(res, 200, { code: `pds-example-com-abcde-${String(fake.codes).padStart(5, "0")}` });
+        });
+        return;
       }
       if (path.startsWith("/xrpc/com.atproto.identity.resolveHandle")) {
         if (path.includes("admin.")) return json(res, 200, { did: ALICE });
@@ -135,7 +137,17 @@ export async function startService(pds: FakePds, overrides: Partial<HandlerDeps>
   const post = (body: unknown, path = "/v1/invite.issue", headers = { "content-type": "application/json" }) =>
     send(`${base}${path}`, { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) });
   const close = () => new Promise<void>((resolve) => server.close(() => resolve()));
-  return { key, base, post, close, stateDir, logFile: join(stateDir, "log.jsonl"), jtiFile: join(stateDir, "jti.log") };
+  const connections = () => new Promise<number>((resolve) => server.getConnections((_, count) => resolve(count)));
+  return {
+    key,
+    base,
+    post,
+    close,
+    connections,
+    stateDir,
+    logFile: join(stateDir, "log.jsonl"),
+    jtiFile: join(stateDir, "jti.log"),
+  };
 }
 
 export const tempDir = () => mkdtempSync(join(tmpdir(), "pds-admin-"));
