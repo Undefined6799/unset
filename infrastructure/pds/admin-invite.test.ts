@@ -5,7 +5,7 @@ import { canonicalize } from "@unset/shared-admin-envelope";
 import { describe, expect, test } from "vitest";
 import { createInviteIssuer } from "./admin-invite.ts";
 
-const ALICE = "did:plc:aliceaaaaaaaaaaaaaaaaaaa" as Did;
+const ALICE = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 const settings = {
   origin: "http://pds-admin:8080",

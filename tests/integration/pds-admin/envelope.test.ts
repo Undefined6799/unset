@@ -7,7 +7,8 @@ describe("checkEnvelope", () => {
   test("envelope.jcs_roundtrip: web's signer and pds-admin's verifier agree on 20 random payloads", () => {
     const key = webKey();
     for (let i = 0; i < 20; i++) {
-      const did = `did:plc:${randomBytes(12).toString("hex")}`;
+      // SE-7a (a): one did:plc alphabet character repeated 24 times, never a value that could be a real account.
+      const did = `did:plc:${"abcdefghijklmnopqrstuvwxyz234567".charAt(randomInt(32)).repeat(24)}`;
       const env = `e${randomBytes(randomInt(1, 8)).toString("base64url")}é"\\`;
       const payload = payloadFor({ target: did, actor_did: did, env, iat: nowSeconds() - randomInt(0, 30) });
       const wire = JSON.parse(JSON.stringify(signed(key, { ...payload, exp: payload.iat + 60 })));

@@ -34,7 +34,7 @@ describe("issue", () => {
 
   test("log.no_raw_did: no DID, code or password anywhere in the log", async () => {
     await issue();
-    await issue({ target: "did:plc:bobbbbbbbbbbbbbbbbbbbbbb", actor_did: "did:plc:bobbbbbbbbbbbbbbbbbbbbbb" });
+    await issue({ target: "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", actor_did: "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb" });
     await service.post("{");
     const text = readFileSync(service.logFile, "utf8");
     expect(text).not.toContain("did:");

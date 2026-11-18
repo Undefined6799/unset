@@ -13,7 +13,7 @@ import { createPds } from "../../../interfaces/pds-admin/pds.ts";
 import { createHandler, type HandlerDeps } from "../../../interfaces/pds-admin/server.ts";
 
 export const PDS_DID = "did:web:pds.example.com";
-export const ALICE = "did:plc:aliceaaaaaaaaaaaaaaaaaaa";
+export const ALICE = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 export const PASSWORD = "test-admin-password-not-real";
 
 /** What the fake PDS saw and how it answers. */

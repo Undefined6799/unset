@@ -20,7 +20,7 @@ test("pds.deadline: a PDS that dribbles bytes is cut off at 5 s, not left to hol
   const { port } = server.address() as AddressInfo;
   const pds = createPds(new URL(`http://127.0.0.1:${port}`), "unused");
   const started = Date.now();
-  await expect(pds.getAccountInfo("did:plc:aliceaaaaaaaaaaaaaaaaaaa")).rejects.toBeInstanceOf(PdsUnavailable);
+  await expect(pds.getAccountInfo("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa")).rejects.toBeInstanceOf(PdsUnavailable);
   expect(Date.now() - started).toBeLessThan(6_000);
   server.close();
 }, 12_000);
