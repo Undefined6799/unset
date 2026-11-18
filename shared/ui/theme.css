@@ -33,6 +33,12 @@
   --destructive: light-dark(#a4036f, #dc5ca7);
   --ring: light-dark(#0a090c, #f0edee);
   --info: light-dark(#006f8b, #1d97b1);
+  --success: light-dark(#007544, #16db93);
+  --sidebar: light-dark(#e2dee0, #0f0e12);
+  --sidebar-foreground: light-dark(#0a090c, #f0edee);
+  --sidebar-accent: light-dark(#f7f5f6, #201f24);
+  --sidebar-accent-foreground: light-dark(#0a090c, #f0edee);
+  --sidebar-border: light-dark(#d6d2d4, #312f36);
 }
 
 :root[data-theme="light"] {

@@ -52,6 +52,10 @@ const TEXT: [string, string][] = [
   ["--destructive", "--card"],
   ["--info", "--background"],
   ["--info", "--card"],
+  ["--success", "--background"],
+  ["--success", "--card"],
+  ["--sidebar-foreground", "--sidebar"],
+  ["--sidebar-accent-foreground", "--sidebar-accent"],
 ];
 const EDGES: [string, string][] = [
   ["--input", "--background"],

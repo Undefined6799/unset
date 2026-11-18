@@ -71,6 +71,10 @@
       "linter": { "rules": { "nursery": { "useLayeredStyles": "off" } } }
     },
     {
+      "includes": ["deployment/pds/ui/unset-theme.css"],
+      "css": { "parser": { "tailwindDirectives": true } }
+    },
+    {
       "includes": ["shared/ui/theme.css"],
       "linter": { "rules": { "style": { "noHexColors": "off" }, "nursery": { "useLayeredStyles": "off" } } }
     },
