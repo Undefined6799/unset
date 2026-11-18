@@ -66,3 +66,23 @@ test.describe("no script", () => {
     await expect(panel.getByRole("textbox", { name: "README" })).toHaveAttribute("maxlength", "100000");
   });
 });
+
+// Alex 2026-11-18 12:24Z: the card's layout and width are chosen by icon, each with its word, as native radios.
+test("the_layout_and_width_choices_show_an_icon_with_their_word", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("link", { name: "Add card" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /^Links/ })
+    .click();
+  const editor = page.getByRole("dialog");
+  for (const name of ["Full width", "Half width", "List", "Grid", "Carousel"]) {
+    const radio = editor.getByRole("radio", { name, exact: true });
+    await expect(radio).toHaveAttribute("type", "radio");
+    const tile = editor.locator("label").filter({ has: page.getByRole("radio", { name, exact: true }) });
+    await expect(tile.locator("svg")).toHaveCount(1);
+  }
+  await editor.getByText("Carousel", { exact: true }).click();
+  await expect(editor.getByRole("radio", { name: "Carousel", exact: true })).toBeChecked();
+});

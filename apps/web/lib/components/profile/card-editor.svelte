@@ -145,15 +145,16 @@ $effect(() => {
 const BLANK_ROWS = 10;
 const blanks = (stored: number) => Math.max(0, Math.min(BLANK_ROWS, max - stored));
 const formId = $props.id();
+// The width and layout choices are icons with their words (Alex 2026-11-18 12:24Z; the profile-card mockup).
 const WIDTHS = [
-  { value: "full", label: CARD_EDIT.full },
-  { value: "half", label: CARD_EDIT.half },
-];
+  { value: "full", label: CARD_EDIT.full, icon: "full" },
+  { value: "half", label: CARD_EDIT.half, icon: "half" },
+] as const;
 const LAYOUTS = [
-  { value: "list", label: LINKS_EDIT.list },
-  { value: "grid", label: LINKS_EDIT.grid },
-  { value: "carousel", label: LINKS_EDIT.carousel },
-];
+  { value: "list", label: LINKS_EDIT.list, icon: "list" },
+  { value: "grid", label: LINKS_EDIT.grid, icon: "apps" },
+  { value: "carousel", label: LINKS_EDIT.carousel, icon: "carousel" },
+] as const;
 const PRESETS = (["bookCall", "hire", "subscribe", "custom"] as const).map((p) => ({ value: p, label: CARD_TEXT[p] }));
 const KINDS = [
   { value: "email", label: BUTTONS_EDIT.email },
