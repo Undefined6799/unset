@@ -109,6 +109,15 @@ export type RunningWeb = {
   stop: () => Promise<number | null>;
 };
 
+/** The legal settings (P1.20d), as deployment/compose.local.yaml has them: the placeholder tokens. */
+export const LEGAL_ENV = {
+  PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]",
+  PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]",
+  SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]",
+  SECURITY_CONTACT: "privacy-page",
+  SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z",
+};
+
 /**
  * Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. With `standIns` it
  * starts through stand-in-server.ts, which answers the network from that fixture.
@@ -164,6 +173,7 @@ export async function startWeb(
       PDS_HOSTNAME: PDS_HOST,
       HANDLE_SUFFIX: `.${PDS_HOST}`,
       TEST_ROUTES: "true",
+      ...LEGAL_ENV,
       ...fixture,
       ...env,
     },

@@ -18,6 +18,7 @@ import {
   withRule,
 } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
+import { legalConfig } from "./legal.ts";
 
 /** Browser session timeouts (plan section 5.3), as interfaces/http/config.ts defines them. */
 const sessionConfig = {
@@ -79,6 +80,7 @@ export const schema = defineEntrypointConfig({
   ...identityConfig,
   ...oauthFields,
   ...pdsConfig,
+  ...legalConfig,
   ...testRoutesConfig,
 });
 
