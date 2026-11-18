@@ -86,3 +86,15 @@ test("the_avatar_shape_is_chosen_without_javascript", async ({ page }) => {
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(panel).toHaveCount(0);
 });
+
+// Alex 2026-11-18: the profile carries no Sign out and no link to the sign-in server; with no script, signing out is
+// still in the account menu (a native popover).
+test("sign_out_is_in_the_account_menu_not_on_the_profile", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const main = page.locator("main");
+  await expect(main.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+  await expect(main.locator('form[action="/logout"]')).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /sign-in server|Your account on/ })).toHaveCount(0);
+  await page.locator('header button[popovertarget="account-menu"]').click();
+  await expect(page.locator("#account-menu").getByRole("button", { name: "Sign out" })).toBeVisible();
+});

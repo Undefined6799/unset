@@ -1,7 +1,7 @@
 <!--
   The profile's side column (the profile-card mockup, Alex 2026-11-17: "Mara Lind"): the avatar, the name, the handle,
-  the headline and a short list of details, then whatever the page adds (its notes, the sign-in server link and Sign
-  out), in small muted text. On wide screens it is the left column; from tablet width down to phones it sits above the
+  the headline and a short list of details, then whatever the page adds (its notes, when a read
+  failed), in small muted text. On wide screens it is the left column; from tablet width down to phones it sits above the
   cards, the avatar beside the text on a tablet and above it on a phone. On the owner's page a small pen beside the
   name goes to Settings › Profile, and the avatar opens its editor (its shape, for now). There is no picture yet (no
   media proxy), so the avatar is the letter, as everywhere else, in the member's chosen shape.
