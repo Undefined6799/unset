@@ -1,9 +1,9 @@
 // P2.04w: the web service's environment in both compose files satisfies the web server's config schema
-// (interfaces/http/config.ts), so a key the server needs and the stack does not set fails here, not at the container's
+// (interfaces/web/src/lib/server/config.ts since P1.20j; interfaces/http's before), so a key the server needs and the stack does not set fails here, not at the container's
 // first boot. A `${NAME}` reference takes the example env file's placeholder; each `*_FILE` key must name one of web's
 // mounted secrets, and points at a stand-in written per run in the shape its reader parses (the real files live beside
 // the checkout, docs/human/runbooks/dev-stack-secrets.md). The config modules load by path, as the query budget test
-// loads them, so this workspace takes no reference on interfaces/http.
+// loads them, so this workspace takes no reference on interfaces/web.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -55,7 +55,7 @@ describe("web's environment against its config", () => {
     test(`web_env_loads_its_config ${file}`, async () => {
       const { env, secrets } = webEnv(file);
       expect(secrets).toEqual(["pg_web_password", "web_seal_keyring", "web_oauth_client_keys"]);
-      const { config } = await import(join(REPOSITORY, "interfaces/http/config.ts"));
+      const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
       const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));
       // Unknown keys (NODE_OPTIONS, NODE_EXTRA_CA_CERTS) are the runtime's, not the server's; only refusals fail.
       expect(() => loadConfig(config, env, { onUnknownKeys: () => undefined })).not.toThrow();
