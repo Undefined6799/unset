@@ -165,26 +165,83 @@ describe("browser cache (P0.07h)", () => {
 
   test("each_install_restores_the_cache_before_it_and_keeps_the_packages_after_it", () => {
     for (const [id, steps] of jobs) {
-      const restore = at(steps, (step) => step.uses?.startsWith("actions/cache@") === true);
+      const browser = at(steps, (step) => step.uses?.startsWith("actions/cache@") === true);
+      const restore = at(steps, (step) => step.uses?.startsWith("actions/cache/restore@") === true);
       const handOver = at(steps, (step) => step.run?.includes("apt-cache show") === true);
       const install = at(steps, (step) => step.run?.includes("playwright install") === true);
       const keep = at(steps, (step) => step.run?.includes("/var/cache/apt/archives -maxdepth 1") === true);
+      const save = at(steps, (step) => step.uses?.startsWith("actions/cache/save@") === true);
+      expect(browser, id).toBeGreaterThan(-1);
       expect(restore, id).toBeGreaterThan(-1);
-      expect(handOver, id).toBeGreaterThan(restore);
+      expect(handOver, id).toBeGreaterThan(Math.max(browser, restore));
       expect(install, id).toBeGreaterThan(handOver);
       expect(keep, id).toBeGreaterThan(install);
-      const cache = steps[restore];
-      expect(cache?.with?.path?.trim().split("\n"), id).toEqual(["~/.cache/ms-playwright", "~/apt-archives"]);
-      for (const part of ["runner.os", "steps.cache-name.outputs.image", "steps.cache-name.outputs.playwright"]) {
-        expect(cache?.with?.key, id).toContain(part);
+      expect(save, id).toBe(keep + 1);
+      // P0.07m: no runner image in either key, so a runner on another image still finds them.
+      expect(steps[browser]?.with?.path, id).toBe("~/.cache/ms-playwright");
+      for (const part of ["runner.os", "steps.cache-name.outputs.playwright"]) {
+        expect(steps[browser]?.with?.key, id).toContain(part);
       }
-      expect(steps[keep]?.if, id).toBe(`steps.${cache?.id}.outputs.cache-hit != 'true'`);
+      const apt = steps[restore];
+      expect(apt?.with?.path, id).toBe("~/apt-archives");
+      expect(apt?.with?.key, id).toMatch(/^e2e-apt-\$\{\{ runner\.os \}\}-.+-$/);
+      for (const step of [steps[browser], apt]) expect(step?.with?.key, id).not.toContain("image");
+      // A failed install still keeps what apt fetched; a cancelled run does not.
+      expect(steps[keep]?.if, id).toBe(`$${"{{"} !cancelled() }}`);
+      expect(steps[keep]?.env?.PREFIX, id).toBe(`$${"{{"} steps.${apt?.id}.outputs.cache-primary-key }}`);
+      expect(steps[save]?.with?.key, id).toBe(`$${"{{"} steps.${steps[keep]?.id}.outputs.key }}`);
+      expect(steps[save]?.if, id).toContain("!cancelled()");
+      expect(steps[save]?.if, id).toContain(`steps.${apt?.id}.outputs.cache-matched-key`);
       expect(steps[install]?.run, id).toContain(`APT::Keep-Downloaded-Packages "true";`);
       // Codex on #1292: the index refresh before the hand-over must not wait on a stalled mirror past the step.
       expect(steps[handOver]?.["timeout-minutes"], id).toBe(3);
       expect(steps[handOver]?.run, id).toContain(
         "sudo timeout --kill-after=10s 120s apt-get update -q -o Acquire::http::Timeout=20 -o Acquire::Retries=3",
       );
+    }
+  });
+
+  // Runs the keep step as Actions does (`bash -e`) over a kept directory and apt's archive directory, and returns the
+  // kept files and the key it wrote.
+  function keep(script: string, kept: Record<string, string>, archives: Record<string, string>, prefix = "p-") {
+    const root = mkdtempSync(join(tmpdir(), "e2e-keep-"));
+    const home = join(root, "home");
+    const apt = join(root, "archives");
+    const output = join(root, "output");
+    for (const [dir, files] of [
+      [join(home, "apt-archives"), kept],
+      [apt, archives],
+    ] as const) {
+      mkdirSync(dir, { recursive: true });
+      for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, file), text);
+    }
+    writeFileSync(output, "");
+    const status = spawnSync("bash", ["-e", "-c", script.replaceAll("/var/cache/apt/archives", apt)], {
+      env: { PATH: process.env.PATH, HOME: home, PREFIX: prefix, GITHUB_OUTPUT: output },
+      stdio: "ignore",
+    }).status;
+    const files = readdirSync(join(home, "apt-archives")).sort();
+    const key = readFileSync(output, "utf8").trim();
+    rmSync(root, { recursive: true });
+    expect(status).toBe(0);
+    return { files, key };
+  }
+
+  test("the_kept_set_gains_new_packages_and_drops_replaced_versions", () => {
+    for (const [id, steps] of jobs) {
+      const script = steps.find((step) => step.run?.includes("/var/cache/apt/archives -maxdepth 1"))?.run ?? "";
+      const first = keep(script, { "a_1_amd64.deb": "a1", "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a2" });
+      expect(first.files, id).toEqual(["a_2_amd64.deb", "b_1_all.deb"]);
+      expect(first.key, id).toMatch(/^key=p-[0-9a-f]{16}$/);
+      // The same set gives the same key, so it is not saved twice; different contents give another.
+      const again = keep(script, { "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a2" });
+      expect(again.key, id).toBe(first.key);
+      expect(keep(script, { "b_1_all.deb": "b1" }, { "a_2_amd64.deb": "a3" }).key, id).not.toBe(first.key);
+      // A failed install that fetched nothing keeps the restored set as it was.
+      expect(keep(script, { "b_1_all.deb": "b1" }, {}).files, id).toEqual(["b_1_all.deb"]);
+      // Nothing to keep, or a cache service that never answered: no key, so no save.
+      expect(keep(script, {}, {}).key, id).toBe("");
+      expect(keep(script, { "b_1_all.deb": "b1" }, {}, "").key, id).toBe("");
     }
   });
 
