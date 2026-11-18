@@ -162,6 +162,18 @@ describe("GET /settings/profile", () => {
   });
 });
 
+describe("the settings theme picker", () => {
+  test("the menu offers the theme form, preset to the member's theme and returning to the page", async () => {
+    const { cookie } = await signedIn();
+    const html = await (await get("/settings/account", `${cookie}; __Host-theme=dark`)).text();
+    const form = elements(parse(html), "form", { method: "post", action: "/prefs/theme" })[0];
+    const checked = elements(form, "input").filter((input) => (input.attrs ?? []).some((a) => a.name === "checked"));
+    expect(checked.map((input) => input.attrs?.find((a) => a.name === "value")?.value)).toEqual(["dark"]);
+    const back = elements(form, "input", { name: "return" })[0];
+    expect(back?.attrs?.find((a) => a.name === "value")?.value).toBe("/settings/account");
+  });
+});
+
 describe("GET /settings/account", () => {
   test("settings_account_shows_the_account_and_sign_out", async () => {
     const { did, cookie } = await signedIn();

@@ -4,10 +4,10 @@
 import type { ServerLoad } from "@sveltejs/kit";
 import { settingsShell } from "../shell.server.ts";
 
-export const load: ServerLoad = ({ locals, setHeaders }) => {
+export const load: ServerLoad = ({ locals, request, setHeaders }) => {
   setHeaders({ "x-robots-tag": "noindex" });
   return {
-    shell: settingsShell(locals),
+    shell: settingsShell(locals, request, "/settings/profile"),
     // FALLBACK until locals carry the gate's privacyNotice (P1.20f): no notice is shown.
     privacyNotice: false,
   };
