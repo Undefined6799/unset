@@ -54,10 +54,9 @@ export async function accountView(
   carriedIssuer: string | null | undefined,
   signal: AbortSignal,
 ): Promise<AccountView> {
-  const [verdict, issuer] = await Promise.all([
-    deps.handles.verifyHandle(did, { signal }),
-    issuerFor(deps, did, carriedIssuer, signal),
-  ]);
+  // Bound first, so the syntactic floating-promise rule (scripts/lint/semgrep/floating-promises.yml) sees it is kept.
+  const issuerRead = issuerFor(deps, did, carriedIssuer, signal);
+  const [verdict, issuer] = await Promise.all([deps.handles.verifyHandle(did, { signal }), issuerRead]);
   return {
     handle: displayHandle(verdict),
     did,
