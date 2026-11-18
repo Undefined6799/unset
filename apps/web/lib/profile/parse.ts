@@ -4,7 +4,7 @@
 // code and thematic breaks. Inline: code spans, strong, emphasis, links and autolinks. A link is kept only when
 // safeHref accepts it as http or https (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here
 // throws: any input renders.
-import { type SafeHref, safeHref } from "@unset/shared-ui";
+import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 import {
   codeCloser,
   destinationFinder,

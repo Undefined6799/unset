@@ -8,6 +8,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react"
   },
-  "references": [{ "path": "../islands" }],
+  "references": [{ "path": "../islands" }, { "path": "../safe-href" }],
   "include": ["**/*.ts", "**/*.tsx", "icons/icons.json"]
 }

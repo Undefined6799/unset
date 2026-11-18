@@ -1,0 +1,10 @@
+{
+  "name": "@unset/shared-safe-href",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.ts"
+  }
+}

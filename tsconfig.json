@@ -19,6 +19,7 @@
     { "path": "shared/config" },
     { "path": "shared/errors" },
     { "path": "shared/host-pin" },
+    { "path": "shared/safe-href" },
     { "path": "shared/http" },
     { "path": "shared/islands" },
     { "path": "shared/lexicons" },
