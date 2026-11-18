@@ -21,15 +21,24 @@ decide lives there.
 **Shape (P3.05s PR 3).** `main.ts` reads the config (exit 78 when invalid) and serves `GET /health` on `HEALTH_PORT`;
 `compose.ts` is the composition root and the only file that builds adapters (AB-2, the composition-root guard checks
 it); `run.ts` starts the stream reader, then runs the track, backfill and confirm passes on a timer. With
-`INDEXER_ENABLED` off (the default) `compose` is never called: no pool, no reads. The stream starts before the first
-backfill pass, so a commit made during a repo read reaches us either way; `run.stream_starts_before_the_first_backfill_pass`
-pins that order.
+`INDEXER_ENABLED` off (the default) `compose` builds nothing: no pool, no reads. On, it first checks the pool fits the
+role's connection limit across `PG_MAX_REPLICAS` (exit 78 otherwise, as web); the indexer role allows 10. The config
+refuses any `PG_USER` but `indexer` and plain http to anything but a one-label stack name. The stream starts before the
+first backfill pass, so a commit made during a repo read reaches us either way;
+`run.stream_starts_before_the_first_backfill_pass` pins that order.
+
+**Stop.** SIGTERM aborts the stream and hands the abort to the pass in hand, which ends after its current item and
+records nothing about a read the stop cut short. `shutdown.ts` waits for the loop, the pool's end and the health server
+for `INDEXER_SHUTDOWN_GRACE_MS` (at most 9 s, under Docker's 10 s), exiting 1 when cut short or after an unhandled
+rejection, so restart-on-failure brings it back.
 
 **Health.** Counts only (SE-7): the stream's counts and last stop reason, each pass's last counts, totals since start
 and failures by pass name, the index counters, and `accounts.deletionsWaiting` (held hidden as deleted with a
 confirm_deletion job queued). A deletionsWaiting that keeps rising means erasures fall behind the hourly cap (P3.06e);
-alert on it before production. A failed read answers 503 with no body. There is no rate-limit policy: the endpoint
-sits on the process's internal network with no published port.
+alert on it before production. A failed read answers 503 with no body. One read is shared for 5 s
+(`HEALTH_CACHE_MS`), so callers on the internal network cannot starve the pool. A stream that keeps stopping with no
+frame applied for `INDEXER_STREAM_UNHEALTHY_MS` (5 min) makes health 503 with the counts, so the image's HEALTHCHECK
+fails (`stream-watch.ts`; a quiet PDS after one stop is not a fault).
 
 **Image.** `deployment/images/indexer.Dockerfile`, its own image because the preflight's compose subset refuses
 `entrypoint` and `command`. The compose service and its egress network come in a later PR, once publish-images has

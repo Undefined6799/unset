@@ -2,7 +2,8 @@
 # stream and repos into the idx schema as the indexer role. Built like the migrate image: two stages on the locked
 # Node base (deployment/images/bases.lock.json, the same digest and GHCR mirror as the web image, P2.26b), production
 # dependencies only, then a runtime stage that copies just the workspaces the process loads and runs as 65532. Node
-# runs the TypeScript sources directly, so there is no build stage. The stages install no OS packages.
+# runs the TypeScript sources directly, so there is no build stage. The only OS package step is the temporary zlib
+# upgrade below, as in the other Node images.
 # node-app.test.ts indexer_image_copies_every_workspace_the_process_reaches fails when a workspace is missing.
 
 FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS deps
