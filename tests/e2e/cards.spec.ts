@@ -6,16 +6,8 @@
 // The cards added are deleted again, so the member page is as the other specs expect it.
 import { expect, type Page, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
+import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE } from "./cards.ts";
 import { openPage } from "./observe.ts";
-import { ACCOUNT, type PageFixture } from "./pages.ts";
-
-const OWN_PAGE: PageFixture = {
-  path: `/${ACCOUNT.did}`,
-  route: "/:did",
-  group: "app",
-  expectJs: true,
-  member: "account",
-};
 
 test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
@@ -133,20 +125,6 @@ test("a_save_the_gate_refuses_keeps_the_editor_and_what_was_typed", async ({ pag
   await expect(page).toHaveURL(/\/did:plc:/);
 });
 
-/** Adds a card as a plain form post (the fields as the editor names them), then reloads the page. */
-async function addCard(page: Page, fields: Record<string, string>) {
-  const status = await page.evaluate(async (body) => {
-    const init = {
-      method: "POST",
-      body: new URLSearchParams(body),
-      headers: { accept: "text/html" },
-      redirect: "manual",
-    } as const;
-    const answer = await fetch("?/create", init);
-    return answer.type === "opaqueredirect" ? 303 : answer.status;
-  }, fields);
-  expect(status).toBe(303);
-}
 const scrolled = () => (globalThis as unknown as { scrollY: number }).scrollY;
 const linksCard = (title: string) => ({
   kind: "links",
@@ -154,18 +132,6 @@ const linksCard = (title: string) => ({
   title,
   "items.0.uri": `${title.toLowerCase()}.example`,
 });
-/** The three-dot menu button on the card whose controls are grouped under `name` ("Gamma card"). */
-const menuButton = (page: Page, name: string) =>
-  page.getByRole("group", { name }).getByRole("button", { name: `More for ${name}` });
-async function chooseFromMenu(page: Page, name: string, item: string) {
-  await menuButton(page, name).click();
-  await page.getByRole("menuitem", { name: item }).click();
-}
-async function deleteCard(page: Page, name: string) {
-  await chooseFromMenu(page, name, "Delete");
-  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByRole("group", { name })).toHaveCount(0);
-}
 
 // Staging walkthrough 2026-11-18, finding 4: a refusal that blames one field is shown under it, the field is marked
 // invalid and takes focus, scrolled into view, however long the editor is.
