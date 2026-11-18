@@ -53,7 +53,6 @@ const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSe
 const PDS = `https://${PDS_HOST}`;
 const OWNER = parseDid(`did:plc:${"m".repeat(24)}`) as Did;
 const OTHER = parseDid(`did:plc:${"o".repeat(24)}`) as Did;
-const HANDLE = `member.${PDS_HOST}`;
 const CARD_A = "3jzfcijpj2z2a";
 const CARD_B = "3jzfcijpj2z2b";
 const NOW = "2026-11-18T00:00:00.000Z";
@@ -64,7 +63,7 @@ function readme(text: string) {
   return built.record;
 }
 
-/** The owner's DID document (their PDS and handle) and the handle's DNS record, so the page can name them. */
+/** The owner's DID document, naming their PDS. It claims no handle, so the page shows none (identity's tests own that). */
 function fixture(writesFile: string, failing?: readonly string[]): StandInFixture {
   return {
     http: {
@@ -72,7 +71,6 @@ function fixture(writesFile: string, failing?: readonly string[]): StandInFixtur
         body: {
           "@context": ["https://www.w3.org/ns/did/v1"],
           id: OWNER,
-          alsoKnownAs: [`at://${HANDLE}`],
           verificationMethod: [
             { id: `${OWNER}#atproto`, type: "Multikey", controller: OWNER, publicKeyMultibase: "zQ3sh" },
           ],
@@ -80,7 +78,6 @@ function fixture(writesFile: string, failing?: readonly string[]): StandInFixtur
         },
       },
     },
-    txt: { [`_atproto.${HANDLE}`]: [`did=${OWNER}`] },
     pds: {
       origin: PDS,
       did: OWNER,
