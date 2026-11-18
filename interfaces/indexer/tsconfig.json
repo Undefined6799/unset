@@ -1,9 +1,37 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist"
+  },
   "references": [
-    { "path": "../../domains/profile" },
-    { "path": "../../infrastructure/firehose" },
-    { "path": "../../infrastructure/postgres" }
+    {
+      "path": "../../domains/identity"
+    },
+    {
+      "path": "../../domains/profile"
+    },
+    {
+      "path": "../../infrastructure/firehose"
+    },
+    {
+      "path": "../../infrastructure/net-guard"
+    },
+    {
+      "path": "../../infrastructure/pds"
+    },
+    {
+      "path": "../../infrastructure/postgres"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/log"
+    }
   ]
 }

@@ -93,6 +93,10 @@ const EVENTS = [
   // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
   // menus, so it offers none. `kind` is the class name. No DID.
   "shell.account_read_failed",
+  // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), and its stream reader stopped and
+  // will dial again (`reason` the StopReason, `count` the stops since start). No DID, handle or record.
+  "indexer.started",
+  "indexer.stream_stopped",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
