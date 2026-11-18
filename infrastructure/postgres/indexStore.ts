@@ -116,7 +116,9 @@ export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexS
  * it towards the dead letter. Anything else, a statement timeout on this frame included, counts.
  * SQLSTATE classes: postgresql.org/docs/current/errcodes-appendix.html.
  */
-export function isDatabaseUnavailable(error: unknown): boolean {
+export function isDatabaseUnavailable(failure: unknown): boolean {
+  // inTransaction throws a failed operation and its failed rollback together, the operation's error first (tx.ts).
+  const error: unknown = failure instanceof AggregateError ? failure.errors[0] : failure;
   if (error instanceof AppError) return error.code === "db.busy" || error.code === "http.deadline";
   const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
   if (typeof code !== "string") return false;
@@ -127,6 +129,7 @@ export function isDatabaseUnavailable(error: unknown): boolean {
 async function deadLetterFrame(tx: PoolClient, source: string, frame: IndexFrame, attempts: number, firstSeen: Date) {
   const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
   if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return;
+  await holdErasure(tx, frame.did);
   // The DID is kept only for a member the index tracks and erasure has not removed: a row for an erased DID would
   // name the person again after core.erase_did deleted theirs, and a non-member's DID is not ours to keep. The reason
   // is a fixed code, since the error itself may quote member content (rule SE-7).
@@ -162,6 +165,7 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
 async function applyFrame(tx: PoolClient, source: string, frame: IndexFrame): Promise<void> {
   const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
   if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return count(tx, "ingest_replayed");
+  await holdErasure(tx, frame.did);
   const erased = await tx.query("SELECT idx.is_erased($1) AS erased", [frame.did]);
   if (erased.rows[0]?.erased === true) await count(tx, "ingest_erased");
   else {
@@ -182,6 +186,16 @@ async function writeCursor(tx: PoolClient, source: string, seq: number): Promise
   );
 }
 
+/**
+ * Waits for an erasure of this DID that is under way, and holds the next one off until this transaction ends: the
+ * same per-DID advisory lock core.erase_did takes (migration 0028, step 3). Without it a write here could land between
+ * erasure's deletes and its tombstone, and a table with no cascade from idx.account (idx.dead_letter) would keep it.
+ * After the wait, READ COMMITTED's next statement sees the tombstone the erasure committed.
+ */
+async function holdErasure(tx: PoolClient, did: string): Promise<void> {
+  await tx.query("SELECT pg_advisory_xact_lock(hashtext('erase:' || $1::text))", [did]);
+}
+
 /** The account row, locked for this frame; ingest never creates one (the track loop does, book P3.02s). */
 async function lockAccount(tx: PoolClient, did: string): Promise<IndexAccount | null> {
   const { rows } = await tx.query("SELECT last_rev, pds_active FROM idx.account WHERE did = $1 FOR UPDATE", [did]);
@@ -199,7 +213,11 @@ async function applyTo(tx: PoolClient, frame: IndexFrame, account: IndexAccount)
   if (plan.kind === "unsigned") return count(tx, "ingest_unsigned");
   if (plan.kind === "inactive") await count(tx, "ingest_inactive");
   else {
-    for (const write of plan.writes) await applyWrite(tx, frame.did, plan.rev, write);
+    // Deletes first, so a section created in the same commit as one is deleted finds room under the cap. Order changes
+    // nothing else: the reader proves every op against the commit's one signed tree and refuses the frame if any op
+    // is unproven (infrastructure/firehose, commitFrame), so a put and a delete of the same path cannot both arrive.
+    const ordered = [...plan.writes].sort((a, b) => Number(b.kind === "delete") - Number(a.kind === "delete"));
+    for (const write of ordered) await applyWrite(tx, frame.did, plan.rev, write);
     if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
   }
   await tx.query(

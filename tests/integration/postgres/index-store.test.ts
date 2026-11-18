@@ -2,8 +2,14 @@
 // `indexer` role (TE-2). Account rows and pds_active are set as the superuser, as the track loop (P3.02s) and the
 // account-state machine (P3.06s) will. The tests run in order on one database of their own container.
 import { join } from "node:path";
-import type { IndexChange } from "@unset/domains-profile";
-import { createIndexStore, type IndexStore, type Pool, withClient } from "@unset/infrastructure-postgres";
+import { type IndexChange, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
+import {
+  createIndexStore,
+  type IndexStore,
+  type Pool,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   migrateAsMigrator,
@@ -30,12 +36,15 @@ const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
 const E = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
 const C = "did:plc:cccccccccccccccccccccccc";
 const D = "did:plc:dddddddddddddddddddddddd";
+const G = "did:plc:gggggggggggggggggggggggg";
+const H = "did:plc:hhhhhhhhhhhhhhhhhhhhhhhh";
 const T = "2026-11-18T00:00:00.000Z";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
 const CARD_1 = "3jzfcijpj2z2a";
 const CARD_2 = "3jzfcijpj2z2b";
 const rev = (n: number) => `3kaaaaaaaaa${String(n).padStart(2, "2")}`; // TIDs that sort as n does, for n in 2..9
+const sql = (query: string) => postgres.sql("unset", query);
 const lines = (query: string) => postgres.sql("unset", query).split("\n").filter(Boolean);
 const stat = (name: string) => lines(`SELECT value FROM idx.ingest_stat WHERE name = '${name}'`)[0] ?? "0";
 
@@ -215,6 +224,41 @@ describe("index store", () => {
     await store.deadLetter({ kind: "identity", seq: ++seq, did: D }, 5, new Date());
     await withClient(migrator, null, (c) => c.query("SELECT core.erase_did($1, 'user_request')", [D]));
     expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did = '${D}'`)).toEqual(["0"]);
+  });
+
+  test("index.dead_letter_waits_for_an_erasure_under_way", async () => {
+    // An erasure holds its per-DID lock from before its deletes until its tombstone commits. A dead letter for the
+    // same DID must wait for it, then see the tombstone and keep no DID (Codex review, #1688). The lock is taken
+    // first on its own, so the wait is the lock's and not a row lock's.
+    track(G, true);
+    let settled = false;
+    let pending: Promise<void> = Promise.resolve();
+    await withTransaction(migrator, null, async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(hashtext('erase:' || $1::text))", [G]);
+      pending = store.deadLetter({ kind: "identity", seq: ++seq, did: G }, 5, new Date()).then(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled).toBe(false);
+      await c.query("SELECT core.erase_did($1, 'user_request')", [G]);
+    });
+    await pending;
+    expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did = '${G}'`)).toEqual(["0"]);
+  });
+
+  test("index.section_cap_counts_the_commits_own_deletes", async () => {
+    track(H, true);
+    sql(
+      `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, indexed_at)
+       SELECT 'at://${H}/sh.unset.section/old' || n, '${H}', 'old' || n, '${CID}', '${rev(2)}', '{}', now()
+         FROM generate_series(1, ${MAX_SECTIONS_PER_ACCOUNT}) AS n`,
+    );
+    const drop: IndexChange = { kind: "delete", collection: "sh.unset.section", rkey: "3jzfcijpj2z2a" };
+    sql(`UPDATE idx.section SET rkey = '3jzfcijpj2z2a', uri = 'at://${H}/sh.unset.section/3jzfcijpj2z2a'
+         WHERE uri = 'at://${H}/sh.unset.section/old1'`);
+    await commit(H, rev(3), [section("3jzfcijpj2z2d"), drop]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}'`)).toEqual([String(MAX_SECTIONS_PER_ACCOUNT)]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${H}' AND rkey = '3jzfcijpj2z2d'`)).toEqual(["1"]);
   });
 
   test("index.active_status_is_only_queued_for_confirmation", async () => {

@@ -84,6 +84,15 @@ describe("indexConsumer", () => {
     expect(consumer.health()).toEqual({ failingSeq: null, attempts: 0 });
   });
 
+  test("indexer.outage_wrapped_with_a_failed_rollback_never_counts", async () => {
+    const wrapped = new AggregateError([sqlError("08006"), sqlError("08003")], "transaction failed");
+    const { store, dead } = recordingStore(() => wrapped);
+    const consumer = indexConsumer(store);
+    await applyTimes(consumer.apply, commitFrame(5), MAX_ATTEMPTS * 2);
+    expect(dead).toEqual([]);
+    expect(consumer.health()).toEqual({ failingSeq: null, attempts: 0 });
+  });
+
   test("indexer.account_frame_is_never_dead_lettered", async () => {
     const { store, dead } = recordingStore(() => sqlError("22P05"));
     const consumer = indexConsumer(store);
