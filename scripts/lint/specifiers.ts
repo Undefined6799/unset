@@ -62,6 +62,13 @@ const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
  * (ADR 0054). Its Vite plugin resolves them; nothing else in the repository may spell one. */
 const SVELTEKIT_MODULE = /^\$app\/(env|forms|navigation|paths|server|state|types)$/;
 const WEB_PROCESS = "interfaces/web/";
+/**
+ * The web server's own build (P1.20k): server.ts loads SvelteKit's handler and client manifest through these package
+ * "imports" (interfaces/web/package.json), literal for the computed-import rule; .dependency-cruiser.cjs
+ * WEB_SERVER_BUILD allows the same two edges. Only this file, only these specifiers.
+ */
+const WEB_SERVER = "interfaces/web/server.ts";
+const WEB_SERVER_BUILD = new Set(["#kit/handler", "#kit/manifest"]);
 const RELATIVE = /^\.{1,2}(\/|$)/;
 
 // A package name as npm accepts new ones (docs.npmjs.com/cli/v11/configuring-npm/package-json, "name"): an optional
@@ -85,7 +92,7 @@ export function refusal(packages: Packages, file: string, spec: string): string 
   if (spec.includes("\\")) return "a backslash";
   if (spec.startsWith("/")) return "a root-absolute path";
   if (SCHEME.test(spec)) return "a URL scheme";
-  if (spec.startsWith("#")) return "a # subpath import";
+  if (spec.startsWith("#")) return file === WEB_SERVER && WEB_SERVER_BUILD.has(spec) ? undefined : "a # subpath import";
   if (SVELTEKIT_MODULE.test(spec))
     return file.startsWith(WEB_PROCESS) ? undefined : "a SvelteKit module outside the web process";
   if (RELATIVE.test(spec)) return undefined;

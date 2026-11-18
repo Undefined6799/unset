@@ -68,6 +68,17 @@ test("allowed_forms_pass", () => {
   expect(refusal(PACKAGES, "scripts/a.ts", "hono")).toBe("a package the root package.json does not declare");
 });
 
+test("web_server_takes_only_its_two_build_subpaths", () => {
+  // P1.20k: interfaces/web/server.ts loads its own build through #kit/handler and #kit/manifest (package "imports");
+  // no other file and no other # specifier passes.
+  const server = "interfaces/web/server.ts";
+  expect(refusal(PACKAGES, server, "#kit/handler")).toBeUndefined();
+  expect(refusal(PACKAGES, server, "#kit/manifest")).toBeUndefined();
+  for (const spec of ["#kit/other", "#kit/handler/x", "#kit", "#preflight"])
+    expect(refusal(PACKAGES, server, spec), spec).toBe("a # subpath import");
+  expect(refusal(PACKAGES, "interfaces/web/src/hooks.server.ts", "#kit/handler")).toBe("a # subpath import");
+});
+
 test("root_only_packages_only_in_test_files", () => {
   // P1.28m: a workspace file may use a root-only package only when Vitest would run it as a test.
   expect(TEST_GLOBS).toContain("shared/**/*.test.{ts,tsx,mts,cts}");

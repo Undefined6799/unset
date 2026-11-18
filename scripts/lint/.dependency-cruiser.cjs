@@ -80,6 +80,13 @@ const RENDER_BUILD_MODULE = "@unset/apps-web/server";
 const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: RENDER_BUILD_MODULE };
 const E2E_SERVER_BUILD = { from: "tests/e2e/fixtures/servers.ts", module: RENDER_BUILD_MODULE };
 const UNRESOLVED_BUILD_IMPORTERS = [RENDER_BUILD_IMPORT.from, E2E_SERVER_BUILD.from];
+/**
+ * The web process's own build (P1.20k): server.ts loads SvelteKit's adapter-node handler and the client manifest
+ * through the package "imports" #kit/handler and #kit/manifest (interfaces/web/package.json), literal so semgrep's
+ * computed-import rule passes. Their targets are under build/, which does not exist when lint runs, so the edges are
+ * unresolved. Only this file, only these two specifiers.
+ */
+const WEB_SERVER_BUILD = { from: "interfaces/web/server.ts", modules: ["#kit/handler", "#kit/manifest"] };
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
@@ -147,6 +154,11 @@ const MATRIX = [
     name: "interface-web-components",
     from: { path: "^interfaces/web/" },
     to: [{ path: WEB_COMPONENTS }],
+  },
+  {
+    name: "interface-web-build",
+    from: { path: oneOfFiles([WEB_SERVER_BUILD.from]) },
+    to: [{ path: oneOfFiles(WEB_SERVER_BUILD.modules), couldNotResolve: true }],
   },
   {
     name: "interface-http-render",
@@ -562,6 +574,7 @@ Object.defineProperties(module.exports, {
   RENDER_ENTRIES: { value: RENDER_ENTRIES },
   RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
   E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
+  WEB_SERVER_BUILD: { value: WEB_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
   DOMAIN_ENTRY_FILES: { value: DOMAIN_ENTRY_FILES },

@@ -146,6 +146,12 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
       unresolved: true,
     },
   ],
+  "interface-web-build": config.WEB_SERVER_BUILD.modules.map((spec) => ({
+    from: config.WEB_SERVER_BUILD.from,
+    spec,
+    kind: "dynamic" as const,
+    unresolved: true,
+  })),
   "interface-admin-render": [edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`)],
   "admin-service": [
     edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/index.ts"),
@@ -736,6 +742,16 @@ describe("allowlist matrix", () => {
     await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
     await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
     await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
+  });
+
+  test("web_server_build_import_is_exact", async () => {
+    // P1.20k: server.ts loads its own build through two literal #kit specifiers; nothing near them passes.
+    const { from, modules } = config.WEB_SERVER_BUILD;
+    expect({ from, modules }).toEqual({ from: "interfaces/web/server.ts", modules: ["#kit/handler", "#kit/manifest"] });
+    const unresolved = (file: string, spec: string): Edge => ({ from: file, spec, kind: "dynamic", unresolved: true });
+    for (const spec of modules) await expectPass(unresolved(from, spec));
+    await expectFail("not-in-allowed", unresolved("interfaces/web/src/hooks.server.ts", "#kit/handler"));
+    await expectFail("not-in-allowed", unresolved(from, "#kit/other"), unresolved(from, "#kit/handlerx"));
   });
 
   test("web_process_takes_only_svelte_components_and_icon_data", async () => {
