@@ -1,13 +1,14 @@
 // P2.12: the account row against Postgres as web. The birth date never reaches a parameter, so the row cannot hold it.
+// Moved from tests/integration/http at P1.20k; the audit writer is now the web server's (lib/server/age-gate-audit.ts).
 // P3.02s: finishing onboarding queues the member for the indexer (migration 0026), read back as indexer.
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { createAccountRepository, createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, expect, inject, test } from "vitest";
-import { recordUnderageBlock } from "../../../interfaces/http/age-gate-audit.ts";
+import { recordUnderageBlock } from "../../../../interfaces/web/src/lib/server/age-gate-audit.ts";
 
 const provided = inject("postgres");
-const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
+const database = provided.databases[relative(`${import.meta.dirname}/../../../..`, import.meta.filename)] ?? "";
 const pool = createPool({
   connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
   service: "onboarding-http",
