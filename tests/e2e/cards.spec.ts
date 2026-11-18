@@ -432,3 +432,85 @@ test("a_carousel_is_reached_and_scrolled_by_keyboard", async ({ page }) => {
     await deleteCard(page, "Shelf card");
   }
 });
+
+// Alex's staging report 2026-11-18: a carousel had no arrows. With script, Previous and Next buttons scroll it by
+// a tile, each is off at its end, and the keyboard reaches both.
+test("a_carousel_has_previous_and_next_buttons", async ({ browser, page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const entries = Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`items.${i}.title`, `Entry ${i + 1}`]));
+  await addCard(page, { kind: "collection", width: "full", title: "Shelf", layout: "carousel", ...entries });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const shelf = page.getByRole("region", { name: "Shelf, scrolls sideways" });
+    const previous = page.getByRole("button", { name: "Previous in Shelf" });
+    const next = page.getByRole("button", { name: "Next in Shelf" });
+    const left = () => shelf.evaluate((node) => (node as unknown as { scrollLeft: number }).scrollLeft);
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeEnabled();
+    await next.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(left).toBeGreaterThan(0);
+    await expect(previous).toBeEnabled();
+    for (let i = 0; i < 3; i++) if (await next.isEnabled()) await next.click();
+    await expect(next).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "Entry 4" })).toBeInViewport({ ratio: 0.9 });
+    await previous.click();
+    await expect(next).toBeEnabled();
+
+    // Without script the buttons could not scroll, so they are not drawn; the region still scrolls by keyboard.
+    const plain = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
+    try {
+      const noScript = await plain.newPage();
+      expect((await openPage(noScript, OWN_PAGE))?.status()).toBe(200);
+      await expect(noScript.getByRole("region", { name: "Shelf, scrolls sideways" })).toBeVisible();
+      await expect(noScript.getByRole("button", { name: /^(Previous|Next) in Shelf$/ })).toHaveCount(0);
+    } finally {
+      await plain.close();
+    }
+  } finally {
+    await deleteCard(page, "Shelf card");
+  }
+});
+
+// A carousel whose tiles all fit has nothing to scroll, so it shows no buttons.
+test("a_carousel_that_fits_shows_no_buttons", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, {
+    kind: "collection",
+    width: "full",
+    title: "Pair",
+    layout: "carousel",
+    "items.0.title": "One",
+    "items.1.title": "Two",
+  });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    await expect(page.getByRole("region", { name: "Pair, scrolls sideways" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(Previous|Next) in Pair$/ })).toHaveCount(0);
+  } finally {
+    await deleteCard(page, "Pair card");
+  }
+});
+
+// Staging walkthrough 2026-11-18: a full-width grid of three entries left an empty fourth column. The tiles now
+// share the whole row.
+test("a_full_width_grid_fills_its_row", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const entries = Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`items.${i}.title`, `Tile ${i + 1}`]));
+  await addCard(page, { kind: "collection", width: "full", title: "Trio", layout: "grid", ...entries });
+  await page.reload();
+  try {
+    const list = page.locator("ul", { has: page.getByRole("heading", { name: "Tile 3" }) });
+    const last = list.locator("li").last();
+    const [row, tile] = await Promise.all([list.boundingBox(), last.boundingBox()]);
+    if (row === null || tile === null) throw new Error("the grid was not drawn");
+    expect(row.x + row.width - (tile.x + tile.width)).toBeLessThan(2);
+  } finally {
+    await deleteCard(page, "Trio card");
+  }
+});

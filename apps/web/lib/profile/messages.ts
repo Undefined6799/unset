@@ -15,6 +15,9 @@ export const CARD_TEXT = {
   scrollSideways: "scroll sideways for more",
   /** The name of a carousel's scrolling area, which the keyboard reaches. */
   carousel: (title: string) => `${title || "Entries"}, scrolls sideways`,
+  /** A carousel's buttons, which scroll it by one tile. */
+  previous: (title: string) => `Previous in ${title || "Entries"}`,
+  next: (title: string) => `Next in ${title || "Entries"}`,
 } as const;
 
 /** The single Add picker (the profile-card mockup). */
