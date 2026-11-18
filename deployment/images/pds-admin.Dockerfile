@@ -12,6 +12,9 @@ COPY . .
 RUN npm ci --ignore-scripts --omit=dev
 RUN find node_modules -mindepth 1 -maxdepth 1 ! -name @unset -exec rm -r {} + \
   && find node_modules/@unset -mindepth 1 -maxdepth 1 ! -name shared-admin-envelope -exec rm -r {} +
+# The service's STATE_DIR (replay guard and request log, ADR 0060), empty here: compose mounts a named volume over it,
+# and a fresh volume takes the owner and mode of the directory it covers, so only 65532 can read or write it.
+RUN mkdir /app/state
 
 FROM ghcr.io/undefined6799/mirror/node@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
@@ -21,6 +24,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/shared/admin-envelope /app/shared/admin-envelope
 COPY --from=deps /app/interfaces/pds-admin /app/interfaces/pds-admin
+COPY --from=deps --chown=65532:65532 --chmod=0700 /app/state /app/state
 # Temporary (Alex, 2026-11-16, "yes zlib exception"; ZLIB_UPGRADE in images.test.ts, expires 2026-11-30): the
 # base ships zlib1g 1:1.3.dfsg+really1.3.1-1+b1, and Debian fixed CVE-2026-76844 and CVE-2026-85091 in deb13u1, which
 # no upstream index carries yet. Upgrade exactly that package to exactly that version while apt is still here.
