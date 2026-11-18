@@ -2,3 +2,11 @@
 // @atproto/xrpc-server (dependency-cruiser `vendor-sdk-one-adapter`).
 export type { AccountStatus, RecordChange, RepoFrame } from "./frames.ts";
 export { type FirehoseConsumer, type FirehoseReaderOptions, readFirehose, type StopReason } from "./reader.ts";
+export {
+  createRepoReader,
+  type RepoFailure,
+  RepoReadError,
+  type RepoReader,
+  type RepoReaderOptions,
+  type RepoSnapshot,
+} from "./repo.ts";
