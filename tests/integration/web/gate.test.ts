@@ -451,6 +451,17 @@ describe("deadline and errors", () => {
       await off.stop();
     }
   });
+
+  test("health_reads_no_request_input", async () => {
+    // Ported from shared/http/server.test.ts (P1.04k): /health answers its status, service and commit only, whatever
+    // the request carries; it reads no client identity, and server.ts skips the host check for it alone.
+    const forged = { "x-forwarded-for": "192.0.2.9", cookie: "__Host-sid=x", authorization: "Bearer x" };
+    const plain = (await (await web.fetch("/health")).json()) as Record<string, unknown>;
+    const loud = await web.fetch("/health?who=1", { headers: { ...forged, host: "evil.example" } });
+    expect(loud.status).toBe(200);
+    expect(await loud.json()).toEqual(plain);
+    expect(Object.keys(plain).sort()).toEqual(["commit", "service", "status"]);
+  });
 });
 
 describe("policies and logs", () => {
