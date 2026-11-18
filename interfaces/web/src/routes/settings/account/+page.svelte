@@ -8,8 +8,8 @@
 import { Icon } from "@unset/apps-web/lib/components/icon";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
+import type { AccountView } from "../../../lib/server/account.ts";
 import { SETTINGS } from "../messages.ts";
-import type { AccountView } from "./account.server.ts";
 
 let { data }: { data: AccountView & { privacyNotice: boolean } } = $props();
 
@@ -36,14 +36,14 @@ const withHost = (text: string, host: string) => text.replace("{pdsHost}", host)
 {#if data.handleUnavailable}
   <p>{SETTINGS.handleUnavailable}</p>
 {/if}
-{#if data.link}
+{#if data.accountLink}
   <section>
     <p>{SETTINGS.accountLead}</p>
-    {#if data.link.ours}
-      <p>{withHost(SETTINGS.accountInterstitial, data.link.host)}</p>
+    {#if data.accountLink.ours}
+      <p>{withHost(SETTINGS.accountInterstitial, data.accountLink.host)}</p>
     {/if}
-    <a href={data.link.href} target="_blank" rel="noopener noreferrer">
-      {withHost(data.link.ours ? SETTINGS.accountOurs : SETTINGS.accountForeign, data.link.host)}
+    <a href={data.accountLink.href} target="_blank" rel="noopener noreferrer">
+      {withHost(data.accountLink.ours ? SETTINGS.accountOurs : SETTINGS.accountForeign, data.accountLink.host)}
       <Icon name="external" size={16} label={SETTINGS.newTab} />
     </a>
   </section>
