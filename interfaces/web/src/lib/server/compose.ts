@@ -29,6 +29,7 @@ import { createHealth, createRateLimiter, type RateLimiter } from "@unset/shared
 import { createLogger, type Logger } from "@unset/shared-log";
 import { pdsIssuerOf } from "./config.ts";
 import { policiesFor } from "./limits.ts";
+import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
 import { createSignInLock } from "./sign-in-lock.ts";
 import { startSweeps } from "./sweeps.ts";
@@ -82,7 +83,15 @@ export type Services = {
   readonly pdsIssuer: string;
 };
 
+/** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
+function standInsOf(): NonNullable<ReturnType<typeof publishedNote>>["standIns"] {
+  const standIns = publishedNote()?.standIns;
+  if (standIns !== undefined && config.UNSET_ENV !== "test") throw new Error("stand-ins outside the test profile");
+  return standIns;
+}
+
 async function build(): Promise<Services> {
+  const standIns = standInsOf();
   const log: Logger = createLogger({ service: "web", commit: config.UNSET_COMMIT, env: config.UNSET_ENV });
   const connection = connectionOf(config);
   const pool = createPool({
@@ -119,12 +128,14 @@ async function build(): Promise<Services> {
     commit: config.UNSET_COMMIT,
   });
   const plcUrl = new URL(config.PLC_URL);
-  const network = createIdentityNetwork({
-    guard,
-    plcUrl,
-    httpTimeoutMs: config.IDENTITY_HTTP_TIMEOUT_MS,
-    dnsTimeoutMs: config.IDENTITY_DNS_TIMEOUT_MS,
-  });
+  const network =
+    standIns?.network ??
+    createIdentityNetwork({
+      guard,
+      plcUrl,
+      httpTimeoutMs: config.IDENTITY_HTTP_TIMEOUT_MS,
+      dnsTimeoutMs: config.IDENTITY_DNS_TIMEOUT_MS,
+    });
   const resolveDid = createDidResolver({
     network,
     plcUrl,
@@ -144,7 +155,7 @@ async function build(): Promise<Services> {
     stateStore,
     sessionStore: signIn.tokenSets,
     requestLock: signIn.requestLock,
-    fetch: libraryFetch(guard),
+    fetch: standIns?.fetch ?? libraryFetch(guard),
     network,
     resolveDid,
     allowHttp: config.OAUTH_ALLOW_HTTP,

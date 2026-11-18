@@ -79,9 +79,10 @@ async function sessionProblem(event: RequestEvent, policy: RoutePolicy, deadline
   const needed = policy.session === "required" || (policy.session === "writes" && !isRead(event.request));
   if (did === undefined) {
     if (!needed) return { did };
-    if (!isRead(event.request)) return { did, refused: plain(401, "auth.required") };
+    // A visitor, or a member whose session ended mid-edit, goes to sign-in and back, as interfaces/http does; a form
+    // action enhanced by the client gets the same redirect as JSON (kit respond.js `action_json_redirect`).
     const next = returnPathOf(event.route.id ?? "", policy);
-    if (next === null) throw new Error("gate: a required page with a parameter names no returnTo");
+    if (next === null) throw new Error("gate: a session route with a parameter names no returnTo");
     // SvelteKit's redirect keeps the cookie changes (a cleared stale cookie) and answers a client-side navigation
     // (__data.json) in the form its client expects (kit respond.js).
     redirect(303, next === "/" ? "/login" : `/login?${new URLSearchParams({ next })}`);
@@ -118,8 +119,10 @@ async function withDeadline(
   policy: RoutePolicy,
   run: (deadline: AbortSignal) => Promise<Response>,
 ): Promise<Response> {
-  const deadline = AbortSignal.timeout(policy.deadlineMs ?? config.REQUEST_DEADLINE_MS);
+  const ms = policy.deadlineMs ?? config.REQUEST_DEADLINE_MS;
+  const deadline = AbortSignal.timeout(ms);
   event.locals.deadline = deadline; // loads and actions pass it to every call they make
+  event.locals.deadlineAt = performance.now() + ms;
   const result = run(deadline);
   const timedOut = new Promise<"deadline">((done) =>
     deadline.addEventListener("abort", () => done("deadline"), { once: true }),

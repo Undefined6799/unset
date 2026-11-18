@@ -12,7 +12,7 @@ import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
 import { drain, exitOnSignals, headerSets, hostAllowed } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
 import { schema } from "./src/lib/server/config.ts";
-import { NOTE_KEY, type ProcessNote, type RequestNote } from "./src/lib/server/note.ts";
+import { NOTE_KEY, type ProcessNote, type RequestNote, STAND_INS_KEY, type StandIns } from "./src/lib/server/note.ts";
 
 const config = bootOrExit(schema);
 const log = createLogger({ service: "web", commit: config.UNSET_COMMIT, env: config.UNSET_ENV });
@@ -27,8 +27,10 @@ process.on("uncaughtException", (error: unknown) => {
   log.logError(error);
   process.exit(1);
 });
+const standIns = (globalThis as Record<symbol, unknown>)[STAND_INS_KEY] as StandIns | undefined;
 const note: ProcessNote = {
   config,
+  ...(standIns === undefined ? {} : { standIns }),
   requests: new AsyncLocalStorage<RequestNote>(),
   shutdown: { draining: [], close: [] },
 };

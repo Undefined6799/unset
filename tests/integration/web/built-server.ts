@@ -59,6 +59,17 @@ function send(port: number, path: string, init: WebRequest): Promise<Response> {
   });
 }
 
+/**
+ * What stand-in-server.ts answers in place of the network: `http` for identity GETs (PLC documents, did:web, handle
+ * domains) by URL, `txt` for DNS TXT lookups by name, `fetch` for the OAuth client's and the PDS calls' requests by
+ * "METHOD url". A server started without one reaches the real network through net-guard, as in production.
+ */
+export type StandInFixture = {
+  http?: Record<string, { status?: number; body: unknown }>;
+  txt?: Record<string, string[]>;
+  fetch?: Record<string, { status?: number; body: unknown }>;
+};
+
 export type Postgres = { host: string; port: number; database: string; user: string; password: string };
 
 export type RunningWeb = {
@@ -70,8 +81,15 @@ export type RunningWeb = {
   stop: () => Promise<number | null>;
 };
 
-/** Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. */
-export async function startWeb(pg: Postgres, env: Record<string, string> = {}): Promise<RunningWeb> {
+/**
+ * Starts the built server with the test profile and TEST_ROUTES on; `env` adds or replaces keys. With `standIns` it
+ * starts through stand-in-server.ts, which answers the network from that fixture.
+ */
+export async function startWeb(
+  pg: Postgres,
+  env: Record<string, string> = {},
+  standIns?: StandInFixture,
+): Promise<RunningWeb> {
   const secrets = mkdtempSync(join(tmpdir(), "web-kit-"));
   const secret = (name: string, text: string): string => {
     const path = join(secrets, name);
@@ -86,7 +104,10 @@ export async function startWeb(pg: Postgres, env: Record<string, string> = {}): 
     alg: "ES256",
   };
   const port = await freePort();
-  const child: ChildProcess = spawn(process.execPath, ["server.ts"], {
+  const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
+  const fixture =
+    standIns === undefined ? {} : { WEB_STAND_IN_FIXTURE: secret("stand-ins.json", JSON.stringify(standIns)) };
+  const child: ChildProcess = spawn(process.execPath, [entry], {
     cwd: WEB,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -115,6 +136,7 @@ export async function startWeb(pg: Postgres, env: Record<string, string> = {}): 
       PDS_HOSTNAME: PDS_HOST,
       HANDLE_SUFFIX: `.${PDS_HOST}`,
       TEST_ROUTES: "true",
+      ...fixture,
       ...env,
     },
   });

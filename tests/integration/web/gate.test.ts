@@ -96,6 +96,7 @@ const formPost = (path: string, body: string, from = clientAddress(), headers: R
     body,
     headers: {
       origin: ORIGIN,
+      accept: "text/html", // a browser's form post with no script; an enhanced one asks for JSON
       "content-type": "application/x-www-form-urlencoded",
       "x-forwarded-for": from,
       ...headers,
@@ -222,7 +223,9 @@ describe("session", () => {
     const read = await web.fetch("/test-routes/writes/abc", { headers: from() });
     expect(read.status).toBe(200);
     expect(await read.text()).toContain("visitor");
-    expect((await formPost("/test-routes/writes/abc?/save", "x=1")).status).toBe(401);
+    const visitorWrite = await formPost("/test-routes/writes/abc?/save", "x=1");
+    expect(visitorWrite.status).toBe(303);
+    expect(visitorWrite.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
     const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"e".repeat(24)}`))}`;
     expect((await formPost("/test-routes/writes/abc?/save", "x=1", clientAddress(), { cookie })).status).toBe(200);
   });
@@ -248,8 +251,20 @@ describe("session", () => {
     expect(open.headers.get("vary") ?? "").not.toContain("Cookie");
   });
 
-  test("a_signed_in_write_without_a_session_is_401", async () => {
-    expect((await formPost("/test-routes/members", "x=1")).status).toBe(401);
+  test("a_signed_in_write_without_a_session_goes_to_sign_in", async () => {
+    const response = await formPost("/test-routes/members", "x=1");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Ftest-routes%2Fmembers");
+    // The same post enhanced by SvelteKit's client gets the redirect as JSON its client follows (kit actions.js).
+    const enhanced = await formPost("/test-routes/members", "x=1", clientAddress(), {
+      accept: "application/json",
+      "x-sveltekit-action": "true",
+    });
+    expect(await enhanced.json()).toEqual({
+      type: "redirect",
+      status: 303,
+      location: "/login?next=%2Ftest-routes%2Fmembers",
+    });
   });
 
   test("a_session_reaches_the_page", async () => {
@@ -331,6 +346,16 @@ describe("policies and logs", () => {
     expect(text).not.toContain("203.0.113.9");
     expect(text).not.toContain("did:plc:");
     expect(text).not.toContain("must never see");
+  });
+
+  test("stand_ins_are_refused_outside_the_test_profile", async () => {
+    const started = startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false" }, {});
+    const failure = await started.then(
+      () => "listened",
+      (error: unknown) => String(error),
+    );
+    expect(failure).toContain("exited before listening");
+    expect(failure).not.toContain("config.invalid");
   });
 
   test("the_process_drains_and_exits_0", async () => {

@@ -5,6 +5,7 @@ export const policy = definePolicy({
   limit: "default",
   writeLimit: "profile",
   session: "writes",
+  returnTo: "/test-routes/members",
   maxBody: 1_024,
   testOnly: true,
 });

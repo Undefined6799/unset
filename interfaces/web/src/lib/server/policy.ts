@@ -14,14 +14,14 @@ export type RoutePolicy = Readonly<{
    * more than its reads: the cards on /[did]). */
   writeLimit?: PolicyName;
   /**
-   * `required`: only a signed-in visitor gets through; GET and HEAD are sent to /login, anything else gets 401.
-   * `writes`: GET and HEAD pass as for a visitor; a POST needs a session (401 without one), so no action on the page
-   * runs without `locals.did`.
+   * `required`: only a signed-in visitor gets through; anyone else is sent to /login?next=<returnTo or the page>.
+   * `writes`: GET and HEAD pass as for a visitor; a POST needs a session (sent to /login without one), so no action
+   * on the page runs without `locals.did`.
    * Either way a signed-in request also counts against the member's buckets.
    */
   session?: "required" | "writes";
   /**
-   * Where sign-in returns after a signed-out GET of a `required` page. A page whose route id has no parameter returns
+   * Where sign-in returns after a signed-out request the session refuses. A page whose route id has no parameter returns
    * to itself; one with a parameter must name a fixed path here, or the gate refuses it (500), as interfaces/http's
    * RETURN_TO table did. Never taken from the request.
    */

@@ -16,8 +16,8 @@ declare global {
       reqId: string;
       /** The request's deadline; every load and action passes it to each call it makes (rule RE-1). */
       deadline: AbortSignal;
+      /** When `deadline` fires, on the `performance.now()` clock: what a PDS call context needs (infrastructure/pds pds-call.ts, P2.07a). */
+      deadlineAt: number;
     }
   }
 }
-
-export {};
