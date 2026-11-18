@@ -1,4 +1,4 @@
-// Copied from interfaces/http/sign-in-lock.ts for the web process (P1.20e); that copy goes at P1.20k.
+// Copied from interfaces/http/sign-in-lock.ts for the web process (P1.20e); that copy went at P1.20k.
 // One sign-in at a time per account, against the last browser's sign-out (P1.36y; security review 2026-10-28).
 //
 // @atproto/oauth-client 0.8.9 `callback` revokes the account's stored token set and deletes it before it stores the

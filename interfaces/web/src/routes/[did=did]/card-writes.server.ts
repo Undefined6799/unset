@@ -1,4 +1,4 @@
-// Ported from interfaces/http/card-writes.ts (P1.20i), import path only; that copy goes with P1.20k.
+// Ported from interfaces/http/card-writes.ts (P1.20i), import path only; that copy went with P1.20k.
 // The card writes behind the card routes (ADR 0051): create, edit, delete and reorder a member's cards on their own
 // PDS. Records are built by domains/profile; the PDS calls come from infrastructure/pds through `CardStore`, bound to
 // the session's DID in the composition root, so no write here can reach another member's repo.

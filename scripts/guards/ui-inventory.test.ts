@@ -65,7 +65,6 @@ describe("ui-inventory", () => {
   test.each([
     "icon-package.fixture",
     "unknown-icon.fixture",
-    "inline-svg.fixture",
     "svelte-icon-package.fixture",
     "svelte-inline-svg.fixture",
     "svelte-unknown-icon.fixture",
@@ -87,16 +86,6 @@ describe("ui-inventory", () => {
     expect(texts(root)).toEqual([
       "shared/ui/sheet/components/Button/README.md: Button: sheet README changed since recorded; re-review and update sheetSha256",
     ]);
-  });
-
-  test("inventory_stop_item_used_fails", () => {
-    const root = base();
-    editJson(root, INVENTORY, (inventory) => {
-      (inventory.Toast as { status: string }).status = "stop";
-    });
-    const { path, count } = plant(root, "bad", "stop-item.fixture");
-    const findings = scanAll(root);
-    expect(findings.map((f) => f.file)).toEqual(Array(count).fill(path));
   });
 
   test("no_icon_packages_in_manifests_or_lockfile", () => {

@@ -1,4 +1,4 @@
-// Ported unchanged from interfaces/http/own-profile.ts (P1.20i); that copy goes with P1.20k.
+// Ported unchanged from interfaces/http/own-profile.ts (P1.20i); that copy went with P1.20k.
 // The member's own profile and cards for their page (ADR 0051), read from their own PDS. Every record is checked by
 // domains/profile on the way in: a bad field reads as unset, a bad card is hidden, a key that is not a record key
 // is dropped. Visitors never reach this: public pages wait for the indexer (ADR 0052), so there is no live PDS
