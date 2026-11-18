@@ -4,6 +4,7 @@
 // exist for this file and are served only when TEST_ROUTES is on (interfaces/web/src/routes/test-routes/README.md).
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readdirSync, statSync } from "node:fs";
+import { connect } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import type { SavedSession } from "@unset/infrastructure-pds";
@@ -90,6 +91,24 @@ afterAll(async () => {
 /** A form post from our own origin, from `from` (a client address the edge names). */
 /** A fresh client address, so a test never shares the unknown-address bucket (shared/http rateLimit.ts). */
 const from = (): Record<string, string> => ({ "x-forwarded-for": clientAddress() });
+/**
+ * Writes `request` on one connection, then `after` once the first answer arrives, and resolves with everything the
+ * server answers until it closes. Sent together, Node's parser refuses the whole buffer before any route runs.
+ */
+function rawRequest(port: number, request: string, after: string): Promise<string> {
+  return new Promise((done, fail) => {
+    const socket = connect(port, "127.0.0.1", () => socket.write(request));
+    let answer = "";
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => {
+      if (answer === "") socket.end(after);
+      answer += chunk;
+    });
+    socket.once("error", fail);
+    socket.once("close", () => done(answer));
+  });
+}
+
 const formPost = (path: string, body: string, from = clientAddress(), headers: Record<string, string> = {}) =>
   web.fetch(path, {
     method: "POST",
@@ -164,6 +183,38 @@ describe("requests", () => {
 
   test("a_body_over_the_route_limit_is_refused", async () => {
     expect((await formPost("/test-routes/form-post", `text=${"a".repeat(2_000)}`)).status).toBe(413);
+  });
+
+  test("a_small_route_refuses_a_body_the_largest_route_takes", async () => {
+    // 70 KB: over HTTP_BODY_LIMIT_BYTES (64 KB), under /[did]'s 1 MiB maxBody, so the process cap lets it through.
+    const body = `text=${"a".repeat(70_000)}`;
+    expect((await formPost("/test-routes/form-post", body)).status).toBe(413);
+    // /[did] takes it: a visitor's write goes to sign-in, never a 413.
+    const card = await formPost(`/did:plc:${"a".repeat(24)}?/save`, body);
+    expect(card.status).toBe(303);
+    expect(card.headers.get("location")).toMatch(/^\/login\?next=/);
+  });
+
+  test("no_route_reads_past_the_length_it_declared", async () => {
+    // Content-Length 20, then 4996 more bytes: the body is the declared 20, so the action sees 15 characters and a
+    // route never reads more than its maxBody, whatever the client sends after the declared length.
+    const head = [
+      "POST /test-routes/form-post HTTP/1.1",
+      "host: unset.test",
+      `origin: ${ORIGIN}`,
+      "accept: application/json",
+      "content-type: application/x-www-form-urlencoded",
+      `x-forwarded-for: ${clientAddress()}`,
+      "content-length: 20",
+    ].join("\r\n");
+    const raw = await rawRequest(
+      web.port,
+      `${head}\r\n\r\ntext=${"a".repeat(5_015)}`.slice(0, head.length + 24),
+      "a".repeat(4_996),
+    );
+    expect(raw.split("\r\n")[0]).toBe("HTTP/1.1 200 OK");
+    // The action's answer is SvelteKit's devalue of { length }: 15, the characters after "text=" in 20 bytes.
+    expect(raw).toContain(String.raw`{\"length\":1},15]`);
   });
 
   test("only_get_head_and_post_are_allowed", async () => {

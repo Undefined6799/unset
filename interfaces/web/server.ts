@@ -8,9 +8,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"; // guard-allow: egress inbound listener only, sends nothing out
+import { join } from "node:path";
 import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
 import { drain, exitOnSignals, headerSets, hostAllowed } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
+import { largestMaxBody, routePolicies } from "./src/lib/server/body-cap.ts";
 import { schema } from "./src/lib/server/config.ts";
 import { NOTE_KEY, type ProcessNote, type RequestNote, STAND_INS_KEY, type StandIns } from "./src/lib/server/note.ts";
 
@@ -37,9 +39,10 @@ const note: ProcessNote = {
 (globalThis as Record<symbol, unknown>)[NOTE_KEY] = note;
 
 // adapter-node reads these when its handler loads (adapter-node files/env.js): the origin for the request URL and
-// SvelteKit's Origin check, and the cap on any request body. Ours come from config, never from the environment raw.
+// SvelteKit's Origin check, and the cap on any request body, the largest route's maxBody (body-cap.ts says why).
+// Ours come from config and the route table, never from the environment raw.
 process.env.ORIGIN = config.PUBLIC_ORIGIN;
-process.env.BODY_SIZE_LIMIT = String(config.HTTP_BODY_LIMIT_BYTES);
+process.env.BODY_SIZE_LIMIT = String(largestMaxBody(await routePolicies(join(import.meta.dirname, "src", "routes"))));
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
 /**

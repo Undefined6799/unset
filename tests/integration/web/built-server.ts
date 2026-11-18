@@ -121,6 +121,8 @@ export type PdsFixture = {
 export type Postgres = { host: string; port: number; database: string; user: string; password: string };
 
 export type RunningWeb = {
+  /** The loopback port it listens on, for a test that must write the bytes of a request itself. */
+  port: number;
   /** A request to the server, with the Host header ours unless `headers` sets one. */
   fetch: (path: string, init?: WebRequest) => Promise<Response>;
   /** Every log line written so far, parsed. */
@@ -218,6 +220,7 @@ export async function startWeb(
   const fetchWeb = (path: string, init: WebRequest = {}) => send(port, path, init);
   await waitUntilListening(fetchWeb, exited, () => out);
   return {
+    port,
     fetch: fetchWeb,
     logs: () =>
       out
