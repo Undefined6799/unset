@@ -2,8 +2,9 @@
 // Postgres, as the real `indexer` role (TE-2). Erasure runs as migrator, its only caller (migration 0022's header);
 // pds_active is set as the superuser, as the account-state machine (P3.06s) will.
 import { join } from "node:path";
-import type { IndexChange } from "@unset/domains-profile";
+import { type IndexChange, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
 import {
+  type BackfillJob,
   createIndexStore,
   createTrackStore,
   type IndexStore,
@@ -42,6 +43,10 @@ const T = "2026-11-18T00:00:00.000Z";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const CARD_1 = "3jzfcijpj2z2a";
 const CARD_2 = "3jzfcijpj2z2b";
+const B32 = "234567abcdefghijklmnopqrstuvwxyz";
+/** A valid TID record key ending in n written in base32-sortable digits. */
+const tid = (prefix: string, n: number) =>
+  prefix + [3, 2, 1, 0].map((place) => B32[Math.floor(n / 32 ** place) % 32]).join("");
 const rev = (n: number) => `3kaaaaaaaaa${String(n).padStart(2, "2")}`;
 const lines = (query: string) => postgres.sql("unset", query).split("\n").filter(Boolean);
 const sql = (query: string) => postgres.sql("unset", query);
@@ -63,6 +68,15 @@ const section = (rkey: string): IndexChange => ({
 const request = (did: string) => sql(`INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now())`);
 const activate = (did: string) => sql(`UPDATE idx.account SET pds_active = true WHERE did = '${did}'`);
 const jobs = (did: string) => lines(`SELECT kind FROM idx.account_job WHERE did = '${did}' ORDER BY kind`);
+/** Takes the account's backfill job as the backfill pass would, queueing it first if needed, and returns the claim. */
+const claim = (did: string, attempts = 0): BackfillJob => {
+  const token = lines(`INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
+    VALUES ('${did}', 'backfill', now() + interval '10 minutes', ${attempts}, now())
+    ON CONFLICT (did, kind) DO UPDATE SET due_at = clock_timestamp() + interval '10 minutes', attempts = ${attempts}
+    RETURNING due_at::text`)[0];
+  return { did, attempts, claim: String(token) };
+};
+const snapshot = (did: string, at: string, records: IndexChange[]) => tracks.applySnapshot(claim(did), at, records);
 const erase = (did: string) =>
   withClient(migrator, null, (c) => c.query("SELECT core.erase_did($1, 'user_request')", [did]));
 
@@ -104,14 +118,14 @@ describe("track store", () => {
   });
 
   test("track.inactive_account_backfill_writes_nothing", async () => {
-    await tracks.applySnapshot(A, rev(3), [profile()]);
+    await snapshot(A, rev(3), [profile()]);
     expect(lines("SELECT count(*) FROM idx.profile")).toEqual(["0"]);
     expect(jobs(A)).toEqual(["confirm_status"]);
   });
 
   test("track.backfill_writes_the_snapshot", async () => {
     activate(A);
-    await tracks.applySnapshot(A, rev(3), [profile(), section(CARD_1), section(CARD_2)]);
+    await snapshot(A, rev(3), [profile(), section(CARD_1), section(CARD_2)]);
     expect(lines(`SELECT rkey, position FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual([
       `${CARD_1}|0`,
       `${CARD_2}|1`,
@@ -123,7 +137,7 @@ describe("track store", () => {
 
   test("track.backfill_removes_records_the_repo_no_longer_holds", async () => {
     // A delete of CARD_2 was missed (dead-lettered, say): the next snapshot no longer holds it.
-    await tracks.applySnapshot(A, rev(4), [profile(), section(CARD_1)]);
+    await snapshot(A, rev(4), [profile(), section(CARD_1)]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}'`)).toEqual([CARD_1]);
   });
 
@@ -138,7 +152,7 @@ describe("track store", () => {
       rev: rev(6),
       changes: [section("3jzfcijpj2z2c"), { kind: "delete", collection: "sh.unset.section", rkey: CARD_1 }],
     });
-    await tracks.applySnapshot(A, rev(5), [profile("Old"), section(CARD_1)]);
+    await snapshot(A, rev(5), [profile("Old"), section(CARD_1)]);
     expect(lines(`SELECT rkey FROM idx.section WHERE did = '${A}' ORDER BY rkey`)).toEqual(["3jzfcijpj2z2c"]);
     expect(lines(`SELECT display_name, last_rev FROM idx.profile JOIN idx.account USING (did)`)).toEqual([
       `Ada|${rev(6)}`,
@@ -148,7 +162,7 @@ describe("track store", () => {
   });
 
   test("track.backfill_drops_an_older_version_of_a_record_it_now_skips", async () => {
-    await tracks.applySnapshot(A, rev(7), [
+    await snapshot(A, rev(7), [
       { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "sh.unset.section" } },
     ]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
@@ -167,7 +181,7 @@ describe("track store", () => {
   test("track.erased_did_stays_erased_under_backfill", async () => {
     // Even with an account row recreated by mistake and active, a backfill writes nothing for an erased DID.
     sql(`INSERT INTO idx.account (did, pds_active, updated_at) VALUES ('${E}', true, now())`);
-    await tracks.applySnapshot(E, rev(3), [profile(), section(CARD_1)]);
+    await snapshot(E, rev(3), [profile(), section(CARD_1)]);
     expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${E}'`)).toEqual(["0"]);
     expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${E}'`)).toEqual(["0"]);
   });
@@ -195,12 +209,12 @@ describe("track store", () => {
   test("track.failed_backfill_backs_off_then_dead_letters", async () => {
     request(B);
     await tracks.track(B, true);
-    await tracks.backfillFailed({ did: B, attempts: 0 }, "failed");
+    await tracks.backfillFailed(claim(B), "failed");
     expect(
       lines(`SELECT attempts, due_at > now() FROM idx.account_job WHERE did = '${B}' AND kind = 'backfill'`),
     ).toEqual(["1|t"]);
     expect(await tracks.dueBackfills(10)).toEqual([]);
-    await tracks.backfillFailed({ did: B, attempts: MAX_BACKFILL_ATTEMPTS - 1 }, "failed");
+    await tracks.backfillFailed(claim(B, MAX_BACKFILL_ATTEMPTS - 1), "failed");
     expect(jobs(B)).toEqual(["confirm_status"]);
     expect(lines(`SELECT kind, did, reason_code FROM idx.dead_letter`)).toEqual([`backfill|${B}|backfill_failed`]);
   });
@@ -210,8 +224,45 @@ describe("track store", () => {
     sql(
       `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES ('${A}', 'backfill', now(), 0, now())`,
     );
-    expect((await tracks.dueBackfills(10)).map((job) => job.did)).toEqual([A]);
-    await tracks.backfillFailed({ did: A, attempts: 0 }, "gone");
+    const [due] = await tracks.dueBackfills(10);
+    expect(due?.did).toBe(A);
+    expect(await tracks.dueBackfills(10)).toEqual([]); // claimed: a second pass does not take it too
+    await tracks.backfillFailed(due as BackfillJob, "gone");
     expect(jobs(A)).not.toContain("backfill");
+  });
+
+  test("track.a_backfill_asked_for_during_the_read_survives", async () => {
+    // The pass claims A's job and reads the repo; meanwhile a sync frame (or a dead-lettered commit) asks for another
+    // backfill. Applying the older read must not end that newer request.
+    const job = claim(A);
+    seq += 1;
+    await index.apply({ kind: "sync", seq, did: A });
+    await tracks.applySnapshot(job, rev(7), [profile()]);
+    expect(lines(`SELECT due_at <= now() FROM idx.account_job WHERE did = '${A}' AND kind = 'backfill'`)).toEqual([
+      "t",
+    ]);
+    // Nor does a failure of that older read back the newer request off.
+    const again = claim(A);
+    seq += 1;
+    await index.apply({ kind: "sync", seq, did: A });
+    await tracks.backfillFailed(again, "failed");
+    expect(
+      lines(`SELECT attempts, due_at <= now() FROM idx.account_job WHERE did = '${A}' AND kind = 'backfill'`),
+    ).toEqual(["0|t"]);
+  });
+
+  test("track.backfill_replaces_sections_at_the_cap", async () => {
+    // A holds the cap of old sections; the repo now holds as many different ones. The old ones go first, so every new
+    // one fits.
+    sql(`DELETE FROM idx.section WHERE did = '${A}'`);
+    const old = Array.from({ length: MAX_SECTIONS_PER_ACCOUNT }, (_, n) => section(tid("3kbbbbbbb", n)));
+    seq += 1;
+    await index.apply({ kind: "repoCommit", seq, did: A, rev: rev(32), changes: old });
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}'`)).toEqual([String(MAX_SECTIONS_PER_ACCOUNT)]);
+    const fresh = Array.from({ length: MAX_SECTIONS_PER_ACCOUNT }, (_, n) => section(tid("3kccccccc", n)));
+    await snapshot(A, rev(33), fresh);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey LIKE '3kccccccc%'`)).toEqual([
+      String(MAX_SECTIONS_PER_ACCOUNT),
+    ]);
   });
 });

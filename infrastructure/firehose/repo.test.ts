@@ -127,6 +127,18 @@ describe("createRepoReader", () => {
     await expect(reader(pds.url, () => "unused")(DID, signal())).rejects.toMatchObject({ reason });
   });
 
+  test("repo.reads_a_json_xrpc_error_as_its_status", async () => {
+    // The PDS answers a missing or deactivated repo with a JSON XRPC error, not a CAR.
+    const error = new TextEncoder().encode(JSON.stringify({ error: "RepoNotFound", message: "Could not find repo" }));
+    const pds = await stubPds(() => ({ status: 400, body: error, type: "application/json" }));
+    await expect(reader(pds.url, () => "unused")(DID, signal())).rejects.toMatchObject({ reason: "not_found" });
+  });
+
+  test("repo.success_must_be_a_car", async () => {
+    const pds = await stubPds(() => ({ status: 200, body: new TextEncoder().encode("{}"), type: "application/json" }));
+    await expect(reader(pds.url, () => "unused")(DID, signal())).rejects.toMatchObject({ reason: "unavailable" });
+  });
+
   test("repo.refuses_a_repo_over_the_size_cap", async () => {
     const key = await Secp256k1Keypair.create();
     const car = await signedRepoCar(key);

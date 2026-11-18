@@ -14,7 +14,12 @@ import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 
 export type TrackOutcome = "tracked" | "erased" | "foreign";
-export type BackfillJob = { readonly did: string; readonly attempts: number };
+/**
+ * A claimed backfill job. `claim` is the job's due time the claim set (as text, to the microsecond): a request that
+ * arrives while the repo is read moves the due time back to now, so the claim no longer matches and the older read
+ * neither ends nor backs off the newer request.
+ */
+export type BackfillJob = { readonly did: string; readonly attempts: number; readonly claim: string };
 /** Why a backfill failed; `gone` means the PDS no longer serves the repo, which the account-state machine handles. */
 export type BackfillFailure = "gone" | "failed";
 
@@ -29,14 +34,16 @@ export type TrackStore = {
    * this slice indexes only our PDS (book P3.02s). The request row is deleted either way.
    */
   readonly track: (did: string, hosted: boolean) => Promise<TrackOutcome>;
-  /** Backfill jobs that are due, oldest first, at most `limit`. */
+  /** Claims due backfill jobs, at most `limit`, for BACKFILL_LEASE_SECONDS: another pass will not take them. */
   readonly dueBackfills: (limit: number) => Promise<BackfillJob[]>;
   /** Writes a verified repo snapshot; see applySnapshot. */
-  readonly applySnapshot: (did: string, rev: string, records: readonly IndexChange[]) => Promise<void>;
+  readonly applySnapshot: (job: BackfillJob, rev: string, records: readonly IndexChange[]) => Promise<void>;
   /** Backs the job off, or dead-letters it after MAX_BACKFILL_ATTEMPTS; a `gone` repo ends the job at once. */
   readonly backfillFailed: (job: BackfillJob, failure: BackfillFailure) => Promise<void>;
 };
 
+/** How long a claimed backfill job is left alone; a pass that died is retried after it. Above the read's deadline. */
+export const BACKFILL_LEASE_SECONDS = 600;
 /** Attempts before a backfill job is dead-lettered (about a day with the backoff below). */
 export const MAX_BACKFILL_ATTEMPTS = 12;
 /** The wait after the n-th failure: one minute doubling, at most six hours. */
@@ -62,16 +69,21 @@ export function createTrackStore(pool: Pool, options: { readonly timeoutMs: numb
         await count(tx, "track_unresolved");
       }),
     track: (did, hosted) => inTx((tx) => trackOne(tx, did, hosted)),
+    // The claim locks only job rows and never waits on the erasure lock (SKIP LOCKED), so it cannot deadlock with
+    // core.erase_did, which takes that lock first.
     dueBackfills: (limit) =>
       withClient(pool, deadline(), async (client) => {
         const { rows } = await client.query(
-          `SELECT did, attempts FROM idx.account_job WHERE kind = 'backfill' AND due_at <= now()
-           ORDER BY due_at, did LIMIT $1`,
-          [limit],
+          `UPDATE idx.account_job j SET due_at = now() + make_interval(secs => $2)
+             FROM (SELECT did FROM idx.account_job WHERE kind = 'backfill' AND due_at <= now()
+                    ORDER BY due_at, did LIMIT $1 FOR UPDATE SKIP LOCKED) due
+            WHERE j.did = due.did AND j.kind = 'backfill'
+           RETURNING j.did, j.attempts, j.due_at::text AS claim`,
+          [limit, BACKFILL_LEASE_SECONDS],
         );
-        return rows.map((row) => ({ did: String(row.did), attempts: Number(row.attempts) }));
+        return rows.map((row) => ({ did: String(row.did), attempts: Number(row.attempts), claim: String(row.claim) }));
       }),
-    applySnapshot: (did, rev, records) => inTx((tx) => applySnapshot(tx, did, rev, records)),
+    applySnapshot: (job, rev, records) => inTx((tx) => applySnapshot(tx, job, rev, records)),
     backfillFailed: (job, failure) => inTx((tx) => backfillFailed(tx, job, failure)),
   };
 }
@@ -108,10 +120,11 @@ async function trackOne(tx: PoolClient, did: string, hosted: boolean): Promise<T
  * may have deleted a row, and nothing would stop the snapshot restoring it. An erased, untracked or inactive account gets no
  * writes and its job ends; the account-state machine queues a new backfill when it confirms the account active.
  */
-async function applySnapshot(tx: PoolClient, did: string, rev: string, records: readonly IndexChange[]) {
+async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, records: readonly IndexChange[]) {
+  const did = job.did;
   const account = (await isErased(tx, did)) ? null : await lockAccount(tx, did);
   if (account === null || !account.active) {
-    await endJob(tx, did);
+    await endJob(tx, job);
     return count(tx, "backfill_skipped");
   }
   // The stream has applied a later commit since the repo was read. A row that commit deleted is gone, so no rev guard
@@ -123,10 +136,8 @@ async function applySnapshot(tx: PoolClient, did: string, rev: string, records: 
   }
   const plan = planCommit({ lastRev: null, active: true }, rev, records);
   if (plan.kind !== "apply") throw new TypeError("a verified snapshot always has a signed rev");
-  for (const write of plan.writes) await applyWrite(tx, did, rev, write);
-  if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
-  // Only what this snapshot wrote is kept: a record the repo holds but the plan skipped (invalid, over the cap) must
-  // not leave an older indexed version of it public.
+  // Only what this snapshot writes is kept: a record the repo holds but the plan skipped (invalid, over the cap) must
+  // not leave an older indexed version of it public. Removed first, so a replacement section finds room under the cap.
   const kept = plan.writes.flatMap((write) =>
     write.kind === "profile"
       ? [`at://${did}/sh.unset.profile/self`]
@@ -144,12 +155,14 @@ async function applySnapshot(tx: PoolClient, did: string, rev: string, records: 
       await tx.query("UPDATE idx.section SET position = NULL WHERE did = $1", [did]);
     }
   }
+  for (const write of plan.writes) await applyWrite(tx, did, rev, write);
+  if (plan.skipped > 0) await count(tx, "ingest_invalid", plan.skipped);
   await tx.query(
     `UPDATE idx.account SET last_rev = GREATEST(last_rev, $2 COLLATE "C"), backfilled_at = now(), updated_at = now()
      WHERE did = $1`,
     [did, rev],
   );
-  await endJob(tx, did);
+  await endJob(tx, job);
   await count(tx, "backfill_applied");
 }
 
@@ -157,29 +170,36 @@ async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: Backfil
   const erased = await isErased(tx, job.did); // the erasure lock first, as on every path
   const attempts = job.attempts + 1;
   if (failure === "gone") {
-    await endJob(tx, job.did);
+    await endJob(tx, job);
     return count(tx, "backfill_failed");
   }
+  await count(tx, "backfill_failed");
   if (attempts < MAX_BACKFILL_ATTEMPTS) {
+    // Only the claimed request backs off; a newer one stays due.
     await tx.query(
       `UPDATE idx.account_job SET attempts = $2, due_at = now() + make_interval(secs => $3)
-       WHERE did = $1 AND kind = 'backfill'`,
-      [job.did, attempts, backfillDelaySeconds(attempts)],
+       WHERE did = $1 AND kind = 'backfill' AND due_at = $4::timestamptz`,
+      [job.did, attempts, backfillDelaySeconds(attempts), job.claim],
     );
-    return count(tx, "backfill_failed");
+    return;
   }
   // As for a stream frame, the DID is kept only while the account is tracked and not erased (rule SE-7, P3.07s).
   const keep = !erased && (await lockAccount(tx, job.did)) !== null;
-  await tx.query(
+  const { rowCount } = await tx.query(
     `INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
-     SELECT 'backfill', $1, 'backfill_failed', $2, coalesce(
-       (SELECT first_queued_at FROM idx.account_job WHERE did = $3 AND kind = 'backfill'), now()), now()`,
-    [keep ? job.did : null, attempts, job.did],
+     SELECT 'backfill', $1, 'backfill_failed', $2, first_queued_at, now() FROM idx.account_job
+      WHERE did = $3 AND kind = 'backfill' AND due_at = $4::timestamptz`,
+    [keep ? job.did : null, attempts, job.did, job.claim],
   );
-  await endJob(tx, job.did);
+  if (rowCount === 0) return; // a newer request took the job over
+  await endJob(tx, job);
   await count(tx, "backfill_dead_letter");
 }
 
-async function endJob(tx: PoolClient, did: string): Promise<void> {
-  await tx.query("DELETE FROM idx.account_job WHERE did = $1 AND kind = 'backfill'", [did]);
+/** Ends the claimed job; a request that arrived during the read has moved its due time and stays. */
+async function endJob(tx: PoolClient, job: BackfillJob): Promise<void> {
+  await tx.query("DELETE FROM idx.account_job WHERE did = $1 AND kind = 'backfill' AND due_at = $2::timestamptz", [
+    job.did,
+    job.claim,
+  ]);
 }

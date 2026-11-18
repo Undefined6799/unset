@@ -85,7 +85,7 @@ export async function backfillPass(deps: BackfillDeps): Promise<BackfillPass> {
   for (const job of await deps.store.dueBackfills(BACKFILL_BATCH)) {
     try {
       const snapshot = await deps.readRepo(job.did, AbortSignal.timeout(deps.timeoutMs));
-      await deps.store.applySnapshot(job.did, snapshot.rev, snapshot.records);
+      await deps.store.applySnapshot(job, snapshot.rev, snapshot.records);
       applied += 1;
     } catch (error) {
       failed += 1;

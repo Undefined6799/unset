@@ -45,6 +45,17 @@ export class RepoReadError extends Error {
 
 export type RepoReader = (did: string, signal: AbortSignal) => Promise<RepoSnapshot>;
 
+const CAR = "application/vnd.ipld.car";
+
+function mediaType(header: string | string[] | undefined): string {
+  return (
+    String(header ?? "")
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase() ?? ""
+  );
+}
+
 export function createRepoReader(options: RepoReaderOptions): RepoReader {
   const policy = internalPolicy("pds-internal", [options.service.origin]);
   return async (did, signal) => {
@@ -53,7 +64,8 @@ export function createRepoReader(options: RepoReaderOptions): RepoReader {
     const response = await options.guard
       .request(policy, {
         url: url.href,
-        accept: ["application/vnd.ipld.car"],
+        // An XRPC error comes back as JSON; a success must still be a CAR (checked below).
+        accept: [CAR, "application/json"],
         timeoutMs: options.timeoutMs,
         maxBytes: options.maxBytes,
         signal,
@@ -63,7 +75,9 @@ export function createRepoReader(options: RepoReaderOptions): RepoReader {
       });
     // The lexicon answers an unknown or unavailable repo with 400 (RepoNotFound, RepoTakendown, RepoDeactivated...).
     if (response.status === 400 || response.status === 404) throw new RepoReadError("not_found");
-    if (response.status !== 200) throw new RepoReadError("unavailable");
+    if (response.status !== 200 || mediaType(response.headers["content-type"]) !== CAR) {
+      throw new RepoReadError("unavailable");
+    }
     return snapshotOf(await verified(options, did, response.body), options.collections);
   };
 }

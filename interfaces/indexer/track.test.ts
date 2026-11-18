@@ -25,8 +25,8 @@ function fakeStore(pending: string[], due: BackfillJob[]) {
       return hosted ? "tracked" : "foreign";
     },
     dueBackfills: async () => due,
-    applySnapshot: async (did, rev) => {
-      applied.push([did, rev]);
+    applySnapshot: async (job, rev) => {
+      applied.push([job.did, rev]);
     },
     backfillFailed: async (job, failure) => {
       failed.push([job.did, failure]);
@@ -90,9 +90,9 @@ describe("backfillPass", () => {
     const fake = fakeStore(
       [],
       [
-        { did: OURS, attempts: 0 },
-        { did: THEIRS, attempts: 2 },
-        { did: LOST, attempts: 0 },
+        { did: OURS, attempts: 0, claim: "c" },
+        { did: THEIRS, attempts: 2, claim: "c" },
+        { did: LOST, attempts: 0, claim: "c" },
       ],
     );
     const readRepo: RepoReader = async (did) => {
