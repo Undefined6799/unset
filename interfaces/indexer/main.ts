@@ -44,6 +44,7 @@ server.listen(config.HEALTH_PORT, () => {
 exitOnSignals(async () => {
   stop.abort();
   const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-  const code = await stopWithin([indexer.done, closed], config.INDEXER_SHUTDOWN_GRACE_MS);
-  return failed ? 1 : code;
+  const outcome = await stopWithin([indexer.done, closed], config.INDEXER_SHUTDOWN_GRACE_MS);
+  log.info("indexer.stopped", { kind: outcome });
+  return outcome === "finished" && !failed ? 0 : 1;
 }, process.exit);

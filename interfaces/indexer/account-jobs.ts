@@ -38,6 +38,7 @@ export async function confirmPass(deps: ConfirmDeps): Promise<ConfirmPass> {
           confirmed += 1;
         }
       } catch {
+        if (deps.signal.aborted) return { confirmed, unavailable, failed };
         failed += 1;
       }
     }
