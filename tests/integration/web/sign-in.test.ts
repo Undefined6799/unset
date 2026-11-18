@@ -5,7 +5,7 @@
 import { join, relative } from "node:path";
 import { createPool } from "@unset/infrastructure-postgres";
 import { scopeString } from "@unset/shared-lexicons";
-import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   buildOnce,
   clientAddress,
@@ -31,18 +31,31 @@ const PDS = `https://${PDS_HOST}`;
 const DID = `did:plc:${"s".repeat(24)}`;
 const REQUEST_URI = "urn:ietf:params:oauth:request_uri:req-0123456789abcdef";
 
-/** Our PDS as the OAuth library sees it: discovery, PAR, the token endpoint (a grant for DID) and revocation. */
-const fixture: StandInFixture = {
-  http: {
-    [`https://plc.directory/${DID}`]: {
-      body: {
-        "@context": ["https://www.w3.org/ns/did/v1"],
-        id: DID,
-        verificationMethod: [{ id: `${DID}#atproto`, type: "Multikey", controller: DID, publicKeyMultibase: "zQ3sh" }],
-        service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: PDS }],
-      },
-    },
-  },
+/** A PLC document placing `did` on our PDS. */
+const plcDocument = (did: string) => ({
+  "@context": ["https://www.w3.org/ns/did/v1"],
+  id: did,
+  alsoKnownAs: did === DID ? ["at://alice.example.com"] : [],
+  verificationMethod: [{ id: `${did}#atproto`, type: "Multikey", controller: did, publicKeyMultibase: "zQ3sh" }],
+  service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: PDS }],
+});
+
+/** Accounts the stand-in PLC knows, all on our PDS: DID, and the ones the outcome tests below sign in as. */
+const OTHER = `did:plc:${"o".repeat(24)}`;
+const LAST = `did:plc:${"l".repeat(24)}`;
+const DROP = `did:plc:${"d".repeat(24)}`;
+
+type Grant = { sub?: string; scope?: string; revokeStatus?: number };
+
+/**
+ * Our PDS as the OAuth library sees it: discovery, PAR, the token endpoint (a grant for `sub`, DID unless given, with
+ * `scope`) and revocation (answering `revokeStatus`).
+ */
+const pdsFixture = ({ sub = DID, scope = scopeString(), revokeStatus = 200 }: Grant = {}): StandInFixture => ({
+  http: Object.fromEntries(
+    [DID, OTHER, LAST, DROP].map((did) => [`https://plc.directory/${did}`, { body: plcDocument(did) }]),
+  ),
+  txt: { "_atproto.alice.example.com": [`did=${DID}`] },
   fetch: {
     [`GET ${PDS}/.well-known/oauth-protected-resource`]: { body: { resource: PDS, authorization_servers: [PDS] } },
     [`GET ${PDS}/.well-known/oauth-authorization-server`]: {
@@ -66,24 +79,20 @@ const fixture: StandInFixture = {
     },
     [`POST ${PDS}/oauth/par`]: { status: 201, body: { request_uri: REQUEST_URI, expires_in: 299 } },
     [`POST ${PDS}/oauth/token`]: {
-      body: {
-        access_token: "at",
-        refresh_token: "rt",
-        token_type: "DPoP",
-        sub: DID,
-        expires_in: 3600,
-        scope: scopeString(),
-      },
+      body: { access_token: "at", refresh_token: "rt", token_type: "DPoP", sub, expires_in: 3600, scope },
     },
-    [`POST ${PDS}/oauth/revoke`]: { body: {} },
+    [`POST ${PDS}/oauth/revoke`]: { status: revokeStatus, body: {} },
   },
-};
+});
+const fixture = pdsFixture();
 
 let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
-  web = await startWeb(pg, {}, fixture);
+  // The shortest deadline config allows, so a store held below stops the request in 5 seconds, not 30.
+  web = await startWeb(pg, { REQUEST_DEADLINE_MS: "5000" }, fixture);
 }, 120_000);
+afterEach(() => web.setStandIns(fixture));
 afterAll(async () => {
   await web?.stop();
   await pool.end();
@@ -141,16 +150,27 @@ async function newestState(): Promise<string> {
   return rows[0]?.key ?? "";
 }
 
-/** A whole sign-in for DID, through the callback; returns the session cookie. */
-async function signIn(): Promise<string> {
+/** The callback for the newest sign-in, as our PDS sends the browser back: `params` replace the code. */
+async function callBack(nonce: string | undefined, params: Record<string, string> = { code: "code-1" }, cookie = "") {
+  const query = new URLSearchParams({ state: await newestState(), iss: PDS, ...params });
+  const jar = [`__Host-oauth_nonce=${value(nonce)}`, cookie].filter(Boolean).join("; ");
+  return web.fetch(`/oauth/callback?${query}`, { headers: headers({ cookie: jar }) });
+}
+
+/** A whole sign-in, through the callback, for the account the token endpoint names; returns the session cookie. */
+async function signIn(cookie = ""): Promise<string> {
   const { nonce } = await startSignIn();
-  const query = new URLSearchParams({ state: await newestState(), code: "code-1", iss: PDS });
-  const callback = await web.fetch(`/oauth/callback?${query}`, {
-    headers: headers({ cookie: `__Host-oauth_nonce=${value(nonce)}` }),
-  });
+  const callback = await callBack(nonce, undefined, cookie);
   expect(callback.status).toBe(303);
   return value(setCookies(callback).get("__Host-sid"));
 }
+
+/** The session cookie still signs a browser in: /login sends it on to its page. */
+const signedIn = async (sid: string): Promise<boolean> =>
+  (await web.fetch("/login", { headers: headers({ cookie: `__Host-sid=${sid}` }) })).status === 303;
+
+/** POST /login with a typed handle or DID, as the form posted before P2.05r (chooseAccount still reads it). */
+const typed = (handle: string) => post("/login", new URLSearchParams({ handle }).toString());
 
 describe("the sign-in form", () => {
   test("a_visitor_sees_the_one_button_to_our_pds", async () => {
@@ -326,6 +346,171 @@ describe("signing out", () => {
     expect(crossSite.status).toBe(403);
     const still = await web.fetch("/login", { headers: headers({ cookie: `__Host-sid=${sid}` }) });
     expect(still.status).toBe(303);
+  });
+});
+
+describe("typed accounts", () => {
+  test("a_handle_that_resolves_starts_a_sign_in_for_its_did", async () => {
+    const response = await typed("@Alice.example.com");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login/continue");
+    expect(setCookies(response).has("__Host-oauth_nonce")).toBe(true);
+  });
+
+  test("a_did_starts_a_sign_in_as_typed", async () => {
+    const response = await typed(DID);
+    expect(response.headers.get("location")).toBe("/login/continue");
+  });
+
+  test.each([
+    ["a handle nobody holds", "nobody.example.com", "login.handle_not_found"],
+    ["a handle that does not parse", "bad..name", "login.handle_invalid"],
+    ["a DID that does not parse", "did:plc:", "login.handle_invalid"],
+  ])("%s_goes_back_to_the_form_with_its_code", async (_name, handle, code) => {
+    const response = await typed(handle);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`/login?error=${code}`);
+    expect(setCookies(response).has("__Host-oauth_nonce")).toBe(false);
+  });
+});
+
+describe("callback refusals", () => {
+  test("a_spent_nonce_is_refused_and_makes_no_session", async () => {
+    const { nonce } = await startSignIn();
+    // As if another callback had spent it first: web's own consume statement, for every unspent sign-in nonce.
+    await pool.query(
+      "UPDATE app.single_use SET consumed_at = now() WHERE purpose = 'login.nonce' AND consumed_at IS NULL",
+    );
+    const response = await callBack(nonce);
+    expect(response.headers.get("location")).toBe("/login?error=login.expired");
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+  });
+
+  test("a_grant_for_another_account_than_the_one_typed_is_refused", async () => {
+    web.setStandIns(pdsFixture({ sub: OTHER }));
+    const started = await typed(DID);
+    const response = await callBack(setCookies(started).get("__Host-oauth_nonce"));
+    expect(response.headers.get("location")).toBe("/login?error=login.account_mismatch");
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+  });
+
+  test("a_grant_that_does_not_cover_a_session_is_revoked_and_refused", async () => {
+    web.setStandIns(pdsFixture({ sub: OTHER, scope: "atproto" }));
+    const { nonce } = await startSignIn();
+    const before = web.standInCalls().length;
+    const response = await callBack(nonce);
+    expect(response.headers.get("location")).toBe("/login?error=login.scope_insufficient");
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+    expect(web.standInCalls().slice(before)).toContain(`POST ${PDS}/oauth/revoke`);
+    const { rows } = await pool.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [OTHER]);
+    expect(rows).toEqual([]);
+  });
+
+  test("a_silent_try_that_needs_a_page_is_asked_again_once_with_one", async () => {
+    const { nonce } = await startSignIn();
+    const before = web.standInCalls().length;
+    const response = await callBack(nonce, { error: "login_required" });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toMatch(new RegExp(`^${PDS}/oauth/authorize\\?`));
+    expect(web.standInCalls().slice(before)).toContain(`POST ${PDS}/oauth/par`);
+    // The nonce is not spent and its cookie stays, so the callback of the page's answer can spend it.
+    expect(setCookies(response).has("__Host-oauth_nonce")).toBe(false);
+    // The second answer comes back for a flow that is no longer silent: refused, never asked a third time.
+    const again = await callBack(nonce, { error: "login_required" });
+    expect(again.headers.get("location")).toBe("/login?error=login.failed");
+  });
+
+  test("a_silent_refusal_for_another_browser_is_not_asked_again", async () => {
+    await startSignIn();
+    const response = await callBack("x".repeat(43), { error: "login_required" });
+    expect(response.headers.get("location")).toBe("/login?error=login.state_mismatch");
+  });
+
+  test("a_sign_in_over_a_session_replaces_it", async () => {
+    const old = await signIn();
+    const fresh = await signIn(`__Host-sid=${old}`);
+    expect(fresh).not.toBe(old);
+    expect(await signedIn(old)).toBe(false);
+    expect(await signedIn(fresh)).toBe(true);
+  });
+});
+
+/**
+ * Holds `lock` (a statement taking row or table locks) in an open transaction of the test's own connection while
+ * `during` runs, so the server's statement on those rows waits until its request deadline: a store that does not answer.
+ */
+async function whileHeld<T>(lock: string, params: unknown[], during: () => Promise<T>): Promise<T> {
+  const holder = await pool.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query(lock, params);
+    return await during();
+  } finally {
+    await holder.query("ROLLBACK");
+    holder.release();
+  }
+}
+
+describe("a store that does not answer", () => {
+  test("a_nonce_store_that_does_not_answer_refuses_the_sign_in", async () => {
+    const { nonce } = await startSignIn();
+    const response = await whileHeld(
+      "SELECT 1 FROM app.single_use WHERE purpose = 'login.nonce' AND consumed_at IS NULL FOR UPDATE",
+      [],
+      () => callBack(nonce),
+    );
+    expect(response.headers.get("location")).toBe("/login?error=login.failed");
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+  }, 20_000);
+
+  test("a_session_store_that_does_not_answer_refuses_the_sign_in", async () => {
+    const { nonce } = await startSignIn();
+    const response = await whileHeld("LOCK TABLE app.session IN SHARE MODE", [], () => callBack(nonce));
+    expect(response.headers.get("location")).toBe("/login?error=login.failed");
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+  }, 20_000);
+
+  test("sign_out_everywhere_that_cannot_end_the_sessions_is_a_retryable_503", async () => {
+    web.setStandIns(pdsFixture({ sub: OTHER }));
+    const sid = await signIn();
+    const response = await whileHeld("SELECT 1 FROM app.session WHERE did = $1 FOR UPDATE", [OTHER], () =>
+      post("/logout/everywhere", "", { cookie: `__Host-sid=${sid}` }),
+    );
+    expect(response.status).toBe(503);
+    // The cookie stays, so the member can try again.
+    expect(setCookies(response).has("__Host-sid")).toBe(false);
+    // The deadline answers first (http.deadline); the abandoned attempt then gives up and says so, for an operator.
+    await expect
+      .poll(() => web.logs().map((line) => line.event), { timeout: 2000 })
+      .toContain("auth.logout_everywhere_incomplete");
+  }, 20_000);
+});
+
+describe("the last browser", () => {
+  const tokenSet = async (did: string): Promise<boolean> =>
+    (await pool.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did])).rows.length === 1;
+
+  test("only_the_last_browser_to_sign_out_revokes_the_grant", async () => {
+    web.setStandIns(pdsFixture({ sub: LAST }));
+    const first = await signIn();
+    const second = await signIn();
+    const before = web.standInCalls().length;
+    await post("/logout", "", { cookie: `__Host-sid=${first}` });
+    expect(web.standInCalls().slice(before)).not.toContain(`POST ${PDS}/oauth/revoke`);
+    expect(await tokenSet(LAST)).toBe(true);
+    expect(await signedIn(second)).toBe(true);
+    await post("/logout", "", { cookie: `__Host-sid=${second}` });
+    expect(web.standInCalls().slice(before)).toContain(`POST ${PDS}/oauth/revoke`);
+    expect(await tokenSet(LAST)).toBe(false);
+  });
+
+  test("a_revocation_the_server_refuses_still_leaves_no_grant_here", async () => {
+    web.setStandIns(pdsFixture({ sub: DROP, revokeStatus: 500 }));
+    const sid = await signIn();
+    expect(await tokenSet(DROP)).toBe(true);
+    const response = await post("/logout", "", { cookie: `__Host-sid=${sid}` });
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(await tokenSet(DROP)).toBe(false);
   });
 });
 

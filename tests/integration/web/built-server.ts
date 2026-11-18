@@ -3,7 +3,7 @@
 // test file starts its own server against its own database, as the web role (TE-2), and stops it when done.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http"; // guard-allow: egress loopback requests to the test server only
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
 import { tmpdir } from "node:os";
@@ -112,6 +112,10 @@ export type RunningWeb = {
   fetch: (path: string, init?: WebRequest) => Promise<Response>;
   /** Every log line written so far, parsed. */
   logs: () => Record<string, unknown>[];
+  /** Replaces the stand-ins' answers (a server started with a fixture only). */
+  setStandIns: (standIns: StandInFixture) => void;
+  /** Every stand-in fetch so far, as "METHOD url", oldest first. */
+  standInCalls: () => string[];
   /** Stops the server with SIGTERM and resolves with its exit code. */
   stop: () => Promise<number | null>;
 };
@@ -150,7 +154,12 @@ export async function startWeb(
   const port = await freePort();
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
   const fixture =
-    standIns === undefined ? {} : { WEB_STAND_IN_FIXTURE: secret("stand-ins.json", JSON.stringify(standIns)) };
+    standIns === undefined
+      ? {}
+      : {
+          WEB_STAND_IN_FIXTURE: secret("stand-ins.json", JSON.stringify(standIns)),
+          WEB_STAND_IN_CALLS: secret("stand-in-calls.txt", ""),
+        };
   const child: ChildProcess = spawn(process.execPath, [entry], {
     cwd: WEB,
     stdio: ["ignore", "pipe", "pipe"],
@@ -202,6 +211,13 @@ export async function startWeb(
         .split("\n")
         .filter((line) => line.startsWith("{"))
         .map((line) => JSON.parse(line) as Record<string, unknown>),
+    setStandIns: (next) => {
+      secret("stand-ins.json", JSON.stringify(next));
+    },
+    standInCalls: () =>
+      standIns === undefined
+        ? []
+        : readFileSync(join(secrets, "stand-in-calls.txt"), "utf8").split("\n").filter(Boolean),
     stop: async () => {
       child.kill("SIGTERM");
       const code = await exited;
