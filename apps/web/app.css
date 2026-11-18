@@ -156,10 +156,11 @@
 
 /* Forced colours (WCAG 2.2 SC 2.4.7): the stock Button draws focus with a box-shadow ring and outline-none, which
    forced colours drop (Tailwind 4 outline-none is outline-style: none), so a focused button showed nothing. A system
-   colour outline instead, outside any layer like the rule above so it beats the stock classes. */
+   colour outline instead (forced colours replace outline-color with a system colour, CSS Color Adjust 1 §3.1),
+   outside any layer like the rule above so it beats the stock classes. */
 @media (forced-colors: active) {
   :focus-visible {
-    outline: 2px solid CanvasText;
+    outline: 2px solid currentColor;
     outline-offset: 2px;
   }
 }
