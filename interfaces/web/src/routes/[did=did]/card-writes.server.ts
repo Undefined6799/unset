@@ -50,7 +50,8 @@ export type CardFailure =
   | "profile.pds_unavailable";
 export type CardWrite =
   | { readonly kind: "saved" }
-  | { readonly kind: "failed"; readonly code: CardFailure }
+  /** `field`, when given, is the form field to blame (the card editor shows the refusal beside it). */
+  | { readonly kind: "failed"; readonly code: CardFailure; readonly field?: string }
   /** The PDS grant is gone or lacks a scope; the sign-in pages take over. */
   | { readonly kind: "redirect"; readonly location: string };
 

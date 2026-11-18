@@ -49,24 +49,43 @@ describe("parseCardInput", () => {
 
   test.each([
     [{ kind: "video" }, "card.kind_unknown"],
-    [{ kind: "readme", text: "  " }, "card.required"],
-    [{ kind: "buttons", heading: "", buttons: [] }, "card.required"],
-    [{ kind: "collection", items: [{ title: "" }] }, "card.required"],
-    [{ kind: "links", items: [{ uri: "javascript:alert(1)" }] }, "card.url_invalid"],
-    [{ kind: "links", items: [{ uri: "https://a@b.example" }] }, "card.url_invalid"],
-    [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b" }] }, "card.email_invalid"],
+    [{ kind: "readme", text: "  " }, "card.required", "text"],
+    [{ kind: "buttons", heading: "", buttons: [] }, "card.required", "heading"],
+    [{ kind: "collection", items: [{ title: "a" }, { title: "" }] }, "card.required", "items.1.title"],
+    [{ kind: "links", items: [{ uri: "javascript:alert(1)" }] }, "card.url_invalid", "items.0.uri"],
+    [{ kind: "links", items: [{ uri: "https://a@b.example" }] }, "card.url_invalid", "items.0.uri"],
+    [
+      { kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b" }] },
+      "card.email_invalid",
+      "buttons.0.address",
+    ],
     [
       { kind: "buttons", heading: "Hi", buttons: [{ kind: "email", address: "a@b.example?bcc=c@d.example" }] },
       "card.email_invalid",
+      "buttons.0.address",
     ],
-    [{ kind: "buttons", heading: "Hi", buttons: [{ kind: "link", preset: "tip", uri: "x.example" }] }, "card.invalid"],
+    [
+      { kind: "buttons", heading: "Hi", buttons: [{ kind: "link", preset: "tip", uri: "x.example" }] },
+      "card.invalid",
+      "buttons.0",
+    ],
     [{ kind: "links", items: "x" }, "card.invalid"],
     [{ kind: "links", layout: "masonry", items: [] }, "card.invalid"],
     [{ kind: "readme", text: "x", width: "third" }, "card.invalid"],
-    [{ kind: "links", title: ["x"], items: [] }, "card.invalid"],
-    [{ kind: "links", title: "a\nb", items: [] }, "card.invalid"],
-  ])("refuses %j with %s", (input, code) => {
-    expect(parseCardInput(input)).toEqual({ ok: false, code });
+    [{ kind: "links", title: ["x"], items: [] }, "card.invalid", "title"],
+    [{ kind: "links", title: "a\nb", items: [] }, "card.invalid", "title"],
+  ])("refuses %j with %s, naming the field to blame", (input, code, field?: string) => {
+    expect(parseCardInput(input)).toEqual(field === undefined ? { ok: false, code } : { ok: false, code, field });
+  });
+
+  test.each([
+    [{ kind: "buttons", heading: "x".repeat(121), buttons: [{ kind: "email", address: "a@b.example" }] }, "heading"],
+    [
+      { kind: "links", items: [{ uri: "https://a.example/" }, { uri: "https://b.example/", label: "x".repeat(101) }] },
+      "items.1.label",
+    ],
+  ])("text past the lexicon's limit is refused with its field, from the validator's path", (input, field) => {
+    expect(parseCardInput(input)).toEqual({ ok: false, code: "card.too_long", field });
   });
 
   test("a list longer than the lexicon allows is refused", () => {
@@ -213,13 +232,14 @@ describe("toCardRecord", () => {
     expect(parseCardInput(input)).toEqual({ ok: false, code: "card.empty" });
   });
 
-  test("text past the lexicon's limit is refused", () => {
-    const { content, width } = parsed({
+  test("text past the lexicon's limit is refused here too", () => {
+    const content = {
       kind: "buttons",
       heading: "x".repeat(121),
+      text: "",
       buttons: [{ kind: "email", address: "a@b.example" }],
-    });
-    expect(toCardRecord(content, width, null, NOW)).toEqual({ ok: false, code: "card.too_long" });
+    } as const;
+    expect(toCardRecord(content, "full", null, NOW)).toEqual({ ok: false, code: "card.too_long" });
   });
 
   test("the editor adds at most its own limit of rows, under the lexicon's", () => {

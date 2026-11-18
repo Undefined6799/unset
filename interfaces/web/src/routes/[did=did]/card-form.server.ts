@@ -50,14 +50,11 @@ function rowField(name: string, list: NonNullable<Shape["list"]>): { readonly in
   return { index: Number(index), field };
 }
 
-/** The rows in index order, without the blank ones. */
-function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): Record<string, string>[] {
+/** The rows in index order, without the blank ones, each with its index in the form. */
+function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): [number, Record<string, string>][] {
   const used = (row: Record<string, string>) =>
     Object.entries(row).some(([field, value]) => !shape.preset?.includes(field) && value.trim() !== "");
-  return [...byIndex.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([, row]) => row)
-    .filter(used);
+  return [...byIndex.entries()].sort(([a], [b]) => a - b).filter(([, row]) => used(row));
 }
 
 /**
@@ -65,6 +62,18 @@ function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): Recor
  * against the shape of the form's kind. A form without a known kind is card.kind_unknown.
  */
 export function cardForm(form: URLSearchParams): Readonly<Record<string, unknown>> {
+  return readCardForm(form).body;
+}
+
+/**
+ * The form as one card object, as cardForm, and `fieldName`, which turns a field path the domain names in that object
+ * ("items.1.uri", the second row it read) back into the form's own field ("items.4.uri", blank rows counted), so a
+ * refusal can be shown beside the field the member typed in. A path it does not know is undefined.
+ */
+export function readCardForm(form: URLSearchParams): {
+  readonly body: Readonly<Record<string, unknown>>;
+  readonly fieldName: (path: string) => string | undefined;
+} {
   let count = 0;
   for (const _ of form) if (++count > CARD_FORM_MAX_FIELDS) throw invalid();
   const names = [...form.keys()];
@@ -85,6 +94,23 @@ export function cardForm(form: URLSearchParams): Readonly<Record<string, unknown
     row[field] = value;
     byIndex.set(index, row);
   }
-  if (shape.list !== undefined) body[shape.list.name] = rows(byIndex, shape);
-  return body;
+  const rowList = shape.list;
+  const used = rowList === undefined ? [] : rows(byIndex, shape);
+  if (rowList !== undefined) body[rowList.name] = used.map(([, row]) => row);
+  const fieldName = (path: string) => {
+    if (shape.fields.includes(path)) return path;
+    const [list, index, field] = path.split(".");
+    const at = index === undefined || !INDEX.test(index) ? undefined : used[Number(index)]?.[0];
+    if (
+      rowList === undefined ||
+      list !== rowList.name ||
+      at === undefined ||
+      field === undefined ||
+      !rowList.row.includes(field)
+    ) {
+      return undefined;
+    }
+    return `${list}.${at}.${field}`;
+  };
+  return { body, fieldName };
 }

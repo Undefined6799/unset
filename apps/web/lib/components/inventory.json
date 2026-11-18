@@ -302,11 +302,15 @@
       },
       "card-editor.svelte": {
         "origin": "ours",
-        "purpose": "A profile card's editor: the stock Dialog holding one form for the page's create or save action."
+        "purpose": "A profile card's editor: the stock Dialog holding one form for the page's create or save action, or the same form in place as a panel."
+      },
+      "card-panel.svelte": {
+        "origin": "ours",
+        "purpose": "The owner's editor in place on the stock Card when the page is opened with one (no script): edit, delete, add or the avatar's shape."
       },
       "choice.svelte": {
         "origin": "ours",
-        "purpose": "A labelled choice in a card editor: the stock RadioGroup and Label, submitted by name."
+        "purpose": "A labelled choice in a card editor: native radio inputs and the stock Label, so it works with no script."
       },
       "field.svelte": {
         "origin": "ours",

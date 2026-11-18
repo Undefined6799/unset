@@ -5,6 +5,7 @@
 // it reaches the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again
 // with its code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
+import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
 import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { CARD_EDIT_LIMITS, type CardKey, parseAvatarShape, parseCardInput, parseCardKey } from "@unset/domains-profile";
@@ -22,7 +23,7 @@ import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
-import { cardForm } from "./card-form.server.ts";
+import { readCardForm } from "./card-form.server.ts";
 import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
@@ -51,7 +52,26 @@ const pdsContext = (locals: App.Locals) => ({
   deadlineAt: locals.deadlineAt,
 });
 
-export const load: ServerLoad = async ({ params, locals, request }) => {
+const PANEL_KINDS = ["readme", "links", "collection", "buttons"] as const;
+
+/**
+ * The editor the page opens in place, from its query (apps/web/lib/profile/panel.ts): a card's editor or delete
+ * confirm for a card the page shows, the Add card picker or a kind's editor, or the avatar's shape. Anything else, or
+ * no profile to edit yet, opens none.
+ */
+function cardPanel(query: URLSearchParams, cards: readonly CardView[], editable: boolean): CardPanelRequest | null {
+  if (!editable) return null;
+  const shown = (key: string | null) => (key !== null && cards.some((card) => card.key === key) ? key : null);
+  const edit = shown(query.get("edit"));
+  if (edit !== null) return { kind: "edit", key: edit };
+  const remove = shown(query.get("remove"));
+  if (remove !== null) return { kind: "remove", key: remove };
+  const add = query.get("add");
+  if (add !== null) return { kind: "add", card: PANEL_KINDS.find((kind) => kind === add) ?? null };
+  return query.has("avatar") ? { kind: "avatar" } : null;
+}
+
+export const load: ServerLoad = async ({ params, locals, request, url }) => {
   const did = ownDid(params.did, locals.did, "GET");
   const { pdsCall } = services().pds;
   const ctx = pdsContext(locals);
@@ -74,6 +94,7 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
     noindex: true,
     wide: true,
   };
+  const cards = own.kind === "ok" ? cardViews(own.cards) : [];
   return {
     shell,
     account,
@@ -85,7 +106,8 @@ export const load: ServerLoad = async ({ params, locals, request }) => {
         ? null
         : { headline: profile.headline, location: profile.location, website: websiteLink(profile.website) },
     avatarShape: own.kind === "ok" ? own.avatarShape : "round",
-    cards: own.kind === "ok" ? cardViews(own.cards) : [],
+    cards,
+    cardPanel: cardPanel(url.searchParams, cards, profile !== null),
     cardEditLimits: CARD_EDIT_LIMITS,
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete,
     profileUnavailable: own.kind !== "ok",
@@ -130,11 +152,18 @@ function keyField(form: URLSearchParams): CardKey {
   return key;
 }
 
-/** A card form's content and width, checked by domains/profile (DM-1). */
+/**
+ * A card form's content and width, checked by domains/profile (DM-1); a refusal names the form's field to blame when
+ * the domain names one, so the editor can show it there.
+ */
 function cardInput(form: URLSearchParams) {
-  const parsed = parseCardInput(cardForm(form));
-  if (!parsed.ok) throw new AppError(parsed.code);
-  return parsed;
+  const { body, fieldName } = readCardForm(form);
+  const parsed = parseCardInput(body);
+  if (parsed.ok) return parsed;
+  const field = parsed.field === undefined ? undefined : fieldName(parsed.field);
+  const failed: CardWrite =
+    field === undefined ? { kind: "failed", code: parsed.code } : { kind: "failed", code: parsed.code, field };
+  return { ok: false, failed } as const;
 }
 
 /** Only the named fields, each as the forms send it; anything else is card.invalid. */
@@ -145,9 +174,17 @@ function onlyFields(form: URLSearchParams, allowed: readonly string[]): void {
 type ShownCode = keyof typeof ERROR_MESSAGES;
 const isShown = (code: string): code is ShownCode => Object.hasOwn(ERROR_MESSAGES, code);
 
-/** A refusal: the page again, with the code's status and its message for the member. */
-function refused(code: ShownCode) {
-  return fail(new AppError(code).status, { code, message: ERROR_MESSAGES[code] });
+/**
+ * A refusal: the page again, with the code's status, its message for the member, the field to blame if one is, and
+ * for a card form what was typed, so an editor drawn in place with no script shows it again (card-panel.svelte).
+ */
+function refused(code: ShownCode, field?: string, values?: Record<string, string>) {
+  return fail(new AppError(code).status, {
+    code,
+    message: ERROR_MESSAGES[code],
+    ...(field === undefined ? {} : { field }),
+    ...(values === undefined ? {} : { values }),
+  });
 }
 
 /**
@@ -156,33 +193,45 @@ function refused(code: ShownCode) {
  */
 async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
-  run: (form: URLSearchParams, did: Did) => Promise<CardWrite>,
+  run: (form: URLSearchParams, did: Did) => CardWrite | Promise<CardWrite>,
+  echo = false,
 ) {
   const did = ownDid(params.did, locals.did, "POST");
   let written: CardWrite;
+  let typed: Record<string, string> | undefined;
   try {
-    written = await run(await formText(request), did);
+    const form = await formText(request);
+    if (echo) typed = Object.fromEntries(form);
+    written = await run(form, did);
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
-    return refused(cause.code);
+    return refused(cause.code, undefined, typed);
   }
   if (written.kind === "redirect") redirect(303, written.location);
-  if (written.kind === "failed") return refused(written.code);
+  if (written.kind === "failed") return refused(written.code, written.field, typed);
   redirect(303, `/${did}`);
 }
 
 export const actions: Actions = {
   create: (event) =>
-    write(event, (form, did) => {
-      const { content, width } = cardInput(form);
-      return writesFor(did, event.locals).create(content, width);
-    }),
+    write(
+      event,
+      (form, did) => {
+        const input = cardInput(form);
+        return input.ok ? writesFor(did, event.locals).create(input.content, input.width) : input.failed;
+      },
+      true,
+    ),
   save: (event) =>
-    write(event, (form, did) => {
-      const key = keyField(form);
-      const { content, width } = cardInput(form);
-      return writesFor(did, event.locals).save(key, content, width);
-    }),
+    write(
+      event,
+      (form, did) => {
+        const key = keyField(form);
+        const input = cardInput(form);
+        return input.ok ? writesFor(did, event.locals).save(key, input.content, input.width) : input.failed;
+      },
+      true,
+    ),
   remove: (event) =>
     write(event, (form, did) => {
       const key = keyField(form);

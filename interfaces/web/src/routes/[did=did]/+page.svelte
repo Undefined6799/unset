@@ -1,20 +1,22 @@
 <!--
   The member's own page (P2.13, ADR 0051; from apps/web/src/screens/Me.tsx, P1.20g, P1.20i; laid out as the
   profile-card mockup, Alex 2026-11-17): the side column with the account at a glance, the link to the sign-in server
-  and sign-out, then the cards with their controls and an editor for each new kind. Everything shown was built by +page.server.ts; card forms post to this page's actions.
+  and sign-out, then the cards with their controls and an editor for each new kind. Everything shown was built by +page.server.ts; card forms post to this page's actions. With no script an editor opens in place at the top of the cards
+  (CardPanel, from the page's query).
 -->
 <script lang="ts">
 import { Icon } from "@unset/apps-web/lib/components/icon";
 import AddCard from "@unset/apps-web/lib/components/profile/add-card.svelte";
 import CardControls from "@unset/apps-web/lib/components/profile/card-controls.svelte";
+import CardPanel from "@unset/apps-web/lib/components/profile/card-panel.svelte";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
 import ProfileLayout from "@unset/apps-web/lib/components/profile/profile-layout.svelte";
 import ProfileSide from "@unset/apps-web/lib/components/profile/profile-side.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
-import { CARD_EDIT, OWN_PAGE } from "@unset/apps-web/lib/profile/messages.ts";
-import { enhance } from "$app/forms";
+import { OWN_PAGE } from "@unset/apps-web/lib/profile/messages.ts";
+import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
 
 let { data, form } = $props();
 const link = $derived(data.account.accountLink);
@@ -35,7 +37,7 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
         <Alert.Description><a href="/legal/privacy">{OWN_PAGE.privacyNotice}</a></Alert.Description>
       </Alert.Root>
     {/if}
-    {#if form?.message}
+    {#if form?.message && data.cardPanel === null}
       <Alert.Root variant="destructive" role="alert">
         <Alert.Description>{form.message}</Alert.Description>
       </Alert.Root>
@@ -72,6 +74,17 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
     </ProfileSide>
   {/snippet}
 
+  {#if data.cardPanel !== null}
+    <CardPanel
+      request={data.cardPanel}
+      cards={data.cards}
+      limits={data.cardEditLimits}
+      shape={data.avatarShape}
+      here={`/${data.account.did}`}
+      refusal={form}
+      {enhance}
+    />
+  {/if}
   {#if data.profile === null}
     <ProfileCards cards={data.cards} handle={readmeHandle} />
   {:else}
@@ -83,7 +96,6 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
         <AddCard limits={data.cardEditLimits} {enhance} />
       {/snippet}
     </ProfileCards>
-    <noscript><p>{CARD_EDIT.noScript}</p></noscript>
   {/if}
 
   {#if setUp}

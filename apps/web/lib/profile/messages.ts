@@ -12,6 +12,9 @@ export const CARD_TEXT = {
   links: (n: number) => (n === 1 ? "1 link" : `${n} links`),
   entries: (n: number) => (n === 1 ? "1 entry" : `${n} entries`),
   scrollForMore: "scroll for more",
+  scrollSideways: "scroll sideways for more",
+  /** The name of a carousel's scrolling area, which the keyboard reaches. */
+  carousel: (title: string) => `${title || "Entries"}, scrolls sideways`,
 } as const;
 
 /** The single Add picker (the profile-card mockup). */
@@ -70,9 +73,16 @@ export const CARD_EDIT = {
   width: "Width",
   full: "Full width",
   half: "Half width",
-  noScript: "Adding, editing or deleting a card needs JavaScript. Moving one does not.",
   /** A refused save whose answer carried no catalog message. */
   refused: "That card could not be saved.",
+  /** A refusal shown beside the field it blames, by its code; any other code shows the catalog message there. */
+  fieldError: {
+    "card.required": "Fill this in.",
+    "card.url_invalid": "Use an http or https address, such as https://example.com.",
+    "card.email_invalid": "That email address does not look right.",
+    "card.too_long": "This is too long. Shorten it and save again.",
+    "card.invalid": "This could not be read. Check it and save again.",
+  } as Readonly<Record<string, string>>,
 } as const;
 
 export const LINKS_EDIT = {

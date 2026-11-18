@@ -319,6 +319,22 @@ describe("card writes", () => {
     expect(content?.items?.map((item) => item.uri)).toEqual(["https://a.example", "https://b.example"]);
   });
 
+  test("a_refusal_names_the_field_to_blame_as_the_form_names_it", async () => {
+    // The second row read is the form's third (a blank row is skipped), so the editor can mark the field typed in.
+    const form = "kind=links&items.0.uri=a.example&items.1.uri=&items.2.uri=not%20a%20url";
+    const writes = await writesOf(async () => {
+      const refused = await action("create", form, { accept: "application/json" });
+      // Kit's answer to its own client: the action's data as devalue's flat array, each field an index into it.
+      const flat = JSON.parse((JSON.parse(await refused.text()) as { data: string }).data) as unknown[];
+      const data = flat[0] as Record<string, number>;
+      const at = (name: string) => flat[data[name] ?? -1];
+      expect([at("code"), at("field")]).toEqual(["card.url_invalid", "items.2.uri"]);
+      // What was typed comes back too, for the editor drawn in place with no script.
+      expect(flat).toContain("not a url");
+    });
+    expect(writes).toEqual([]);
+  });
+
   test("a_remove_deletes_the_named_card", async () => {
     const writes = await writesOf(() => action("remove", `key=${CARD_B}`));
     expect(writes).toEqual([{ method: "deleteRecord", collection: "sh.unset.section", rkey: CARD_B }]);

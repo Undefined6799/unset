@@ -30,7 +30,7 @@ async function withReadme(page: Page) {
 /** Deletes the README added through its own Delete, so the member page is as the other specs expect it. */
 async function removeReadme(page: Page) {
   const card = page.getByRole("group", { name: "README card" });
-  await card.getByRole("button", { name: "Delete" }).click();
+  await card.getByRole("link", { name: "Delete" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(card).toHaveCount(0);
 }
@@ -44,9 +44,9 @@ test("the_side_column_sits_left_of_the_cards_and_controls_show_on_focus", async 
     const name = await page.getByRole("heading", { level: 1 }).boundingBox();
     const readme = await page.getByText("README.md", { exact: true }).boundingBox();
     expect(name !== null && readme !== null && name.x + name.width <= readme.x).toBe(true);
-    await expect(page.getByRole("button", { name: "Add card" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Add card" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/settings/profile");
-    const edit = card.getByRole("button", { name: "Edit" });
+    const edit = card.getByRole("link", { name: "Edit" });
     await edit.focus();
     await expect(card).toHaveCSS("opacity", "1");
     const editBox = await edit.boundingBox();
@@ -83,7 +83,7 @@ test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page
   await page.setViewportSize({ width: 1600, height: 900 });
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   const menu = await page.locator('header button[popovertarget="core-menu"]').boundingBox();
-  const avatar = await page.getByRole("button", { name: "Change profile picture" }).boundingBox();
+  const avatar = await page.getByRole("link", { name: "Change profile picture" }).boundingBox();
   expect(Math.abs((avatar?.x ?? -99) - (menu?.x ?? 99))).toBeLessThanOrEqual(2);
 });
 
@@ -91,7 +91,7 @@ test("the_avatar_lines_up_under_the_menu_button_on_a_wide_screen", async ({ page
 test("the_owner_sets_the_avatar_shape_from_the_avatar", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  const avatar = page.getByRole("button", { name: "Change profile picture" });
+  const avatar = page.getByRole("link", { name: "Change profile picture" });
   const dialog = page.getByRole("dialog");
   const choose = async (shape: string) => {
     await avatar.click();
