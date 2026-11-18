@@ -6,7 +6,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { page } from "$app/state";
-import { SETTINGS } from "./messages.ts";
+import { SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 
 let { children }: { children: Snippet } = $props();
 

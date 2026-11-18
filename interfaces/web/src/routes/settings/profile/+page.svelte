@@ -2,7 +2,7 @@
 <script lang="ts">
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
-import { SETTINGS } from "../messages.ts";
+import { SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 
 let { data }: { data: { privacyNotice: boolean } } = $props();
 </script>

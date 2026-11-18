@@ -9,7 +9,7 @@ import { Icon } from "@unset/apps-web/lib/components/icon";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import type { AccountView } from "../../../lib/server/account.ts";
-import { SETTINGS } from "../messages.ts";
+import { SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 
 let { data }: { data: AccountView & { privacyNotice: boolean } } = $props();
 

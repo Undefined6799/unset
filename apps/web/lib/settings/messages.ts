@@ -1,5 +1,5 @@
-// English text for the settings pages (P2.13c), as apps/web/src/screens/settings/messages.ts has it until P1.20k
-// deletes the React screens. One catalog per feature until the i18n slice (P1.19).
+// English text for the settings pages (P2.13c), moved beside the settings components that show it. The React copy in
+// apps/web/src/screens/settings/messages.ts goes with P1.20k. One catalog per feature until the i18n slice (P1.19).
 
 export const SETTINGS = {
   label: "Settings",
