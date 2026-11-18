@@ -15,6 +15,7 @@ import type { Finding } from "./files.ts";
 import { fixtureGitEnv } from "./git-env.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as pageClasses from "./page-classes.ts";
 import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
@@ -31,6 +32,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
   "also-known-as": alsoKnownAs.scanAll,
+  "page-classes": pageClasses.scanAll,
 };
 
 const temps: string[] = [];
@@ -179,6 +181,11 @@ describe("css-layers", () => {
     ]);
     expect(cssLayers.layerFor("apps/web/other.css")).toBeUndefined();
   });
+});
+
+describe("page-classes", () => {
+  test("page_classes_bad_fixture", () => expectFixtures("page-classes", "bad"));
+  test("page_classes_good_fixture", () => expectFixtures("page-classes", "good"));
 });
 
 describe("inner-html", () => {
