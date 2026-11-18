@@ -1,40 +1,16 @@
 // pds-admin's composition root (P2.09; ADR 0060; rule AB-2): the one place its parts are built. It refuses a PDS URL
-// that resolves to a public address (step 13), opens the state files and returns the request handler.
-import { lookup } from "node:dns/promises";
+// that resolves to a public address (step 13; pds.ts also checks every later lookup), opens the state files and
+// returns the request handler.
 import type { IncomingMessage, ServerResponse } from "node:http"; // guard-allow: egress types only, inbound handler
-import { BlockList, isIP } from "node:net"; // guard-allow: egress range matching only, opens no socket
 import { join } from "node:path";
 import { BootError, type Config } from "./config.ts";
 import { openJtiStore } from "./jti.ts";
 import { openRequestLog } from "./log.ts";
-import { createPds } from "./pds.ts";
+import { createPds, resolvesInternal } from "./pds.ts";
 import { createHandler } from "./server.ts";
 
-/** Loopback, private, link-local and unique-local ranges: the PDS must answer only from these. */
-const INTERNAL = new BlockList();
-const V4 = [
-  ["10.0.0.0", 8],
-  ["172.16.0.0", 12],
-  ["192.168.0.0", 16],
-  ["127.0.0.0", 8],
-  ["169.254.0.0", 16],
-] as const;
-for (const [net, bits] of V4) INTERNAL.addSubnet(net, bits, "ipv4");
-for (const [net, bits] of [
-  ["::1", 128],
-  ["fc00::", 7],
-  ["fe80::", 10],
-] as const)
-  INTERNAL.addSubnet(net, bits, "ipv6");
-
 async function assertInternal(url: URL): Promise<void> {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  const answers = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true });
-  const internal = ({ address, family }: { address: string; family: number }) =>
-    INTERNAL.check(address, family === 6 ? "ipv6" : "ipv4");
-  if (answers.length === 0 || !answers.every(internal)) {
-    throw new BootError("PDS_INTERNAL_URL resolves to a public address");
-  }
+  if (!(await resolvesInternal(url))) throw new BootError("PDS_INTERNAL_URL resolves to a public address");
 }
 
 export type Composed = {
