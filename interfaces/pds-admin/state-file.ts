@@ -3,18 +3,32 @@
 // the next await is what makes the replay check race-free (P2.09 step 7).
 import { closeSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from "node:fs";
 
+/**
+ * Writes all of `text`. writeSync may write fewer bytes than asked (a full disk, a file-size limit), so it loops, and
+ * a write that makes no progress throws: the caller never fsyncs and acts on a line that is not all there.
+ */
+function writeAll(fd: number, text: string): void {
+  const bytes = Buffer.from(text, "utf8");
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = writeSync(fd, bytes, offset);
+    if (written <= 0) throw new Error("short write");
+    offset += written;
+  }
+}
+
 /** Appends one line and fsyncs it. */
 export function appendLine(file: string, line: string): void {
   const fd = openSync(file, "a", 0o600);
   try {
-    writeSync(fd, `${line}\n`);
+    writeAll(fd, `${line}\n`);
     fsyncSync(fd);
   } finally {
     closeSync(fd);
   }
 }
 
-/** The file's lines, without the empty last one; none when the file does not exist yet. */
+/** The file's lines, without the empty last one; none when the file does not exist yet (a state file's first boot). */
 export function readLines(file: string): string[] {
   if (!existsSync(file)) return [];
   return readFileSync(file, "utf8")
@@ -27,7 +41,7 @@ export function replaceLines(file: string, lines: readonly string[]): void {
   const temporary = `${file}.tmp`;
   const fd = openSync(temporary, "w", 0o600);
   try {
-    writeSync(fd, lines.map((line) => `${line}\n`).join(""));
+    writeAll(fd, lines.map((line) => `${line}\n`).join(""));
     fsyncSync(fd);
   } finally {
     closeSync(fd);

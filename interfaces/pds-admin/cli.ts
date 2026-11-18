@@ -2,7 +2,7 @@
 //   node cli.ts verify-log <file>   prints "ok" or the first seq whose chain does not hold (exit 1)
 //   node cli.ts check-reserved      for each reserved label, whether <label>.<HANDLE_DOMAIN> resolves on our PDS
 //                                   (exit 1 if any answer was neither a DID nor HandleNotFound)
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { verifyLog } from "./log.ts";
 import { createPds, type PdsAnswer } from "./pds.ts";
 import { readLines } from "./state-file.ts";
@@ -36,6 +36,11 @@ function stateOf({ status, body }: PdsAnswer): string {
 async function main(argv: readonly string[]): Promise<number> {
   const [command, file] = argv;
   if (command === "verify-log" && file !== undefined) {
+    // A missing log is not an empty, valid one: an operator's wrong path must not read as "ok".
+    if (!existsSync(file)) {
+      process.stderr.write(`no log at ${file}\n`);
+      return 1;
+    }
     const bad = verifyLog(readLines(file));
     process.stdout.write(bad === null ? "ok\n" : `chain broken at seq ${bad}\n`);
     return bad === null ? 0 : 1;
