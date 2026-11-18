@@ -3,7 +3,7 @@
 // test file starts its own server against its own database, as the web role (TE-2), and stops it when done.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http"; // guard-allow: egress loopback requests to the test server only
 import { createServer } from "node:net"; // guard-allow: egress binds a loopback port to find a free one
 import { tmpdir } from "node:os";
@@ -14,11 +14,39 @@ export const ORIGIN = "https://unset.test";
 export const HOST = "unset.test";
 export const PDS_HOST = "pds.unset.test";
 
-/** Builds interfaces/web once per run; a file that finds a build made by an earlier file in this run reuses it. */
-export function buildOnce(): void {
-  if (process.env.WEB_BUILD_DONE === "1" && existsSync(join(WEB, "build", "handler.js"))) return;
-  execFileSync("npx", ["vite", "build", "--logLevel", "error"], { cwd: WEB, stdio: "inherit" });
-  process.env.WEB_BUILD_DONE = "1";
+/**
+ * Builds interfaces/web once per run, however many files ask at once: the first takes a lock folder and builds; the
+ * others wait for its marker. `run` names the run (the test Postgres's port, new each run), so a later file in the
+ * same run never rebuilds under a server another file is still running.
+ */
+export function buildOnce(run: string | number): void {
+  const marker = join(WEB, "build", `.built-${run}`);
+  const lock = join(WEB, ".build-lock");
+  for (let waited = 0; !existsSync(marker); waited += 1) {
+    if (tryLock(lock)) {
+      try {
+        if (!existsSync(marker)) {
+          execFileSync("npx", ["vite", "build", "--logLevel", "error"], { cwd: WEB, stdio: "inherit" });
+          writeFileSync(marker, "");
+        }
+      } finally {
+        rmSync(lock, { recursive: true, force: true });
+      }
+      return;
+    }
+    if (waited > 1200) throw new Error("interfaces/web build: waited 10 minutes for another file's build");
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  }
+}
+
+/** mkdir is atomic: exactly one caller creates the folder. */
+function tryLock(path: string): boolean {
+  try {
+    mkdirSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function freePort(): Promise<number> {

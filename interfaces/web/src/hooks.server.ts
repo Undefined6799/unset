@@ -17,6 +17,7 @@ import type { PageGroup, RoutePolicy } from "./lib/server/policy.ts";
 import { policyOf } from "./lib/server/route-table.ts";
 import { config, requestNote } from "./lib/server/runtime.ts";
 import { sessionIssuerOrigin, sessionOf } from "./lib/server/session.ts";
+import { themeChunk } from "./lib/server/theme.ts";
 
 /** Only these bodies are accepted. SvelteKit's Origin check covers exactly the form types, so refusing every other
  * type here puts every POST under that check. */
@@ -112,7 +113,7 @@ const gate: Handle = async ({ event, resolve }) => {
     const { did, refused } = await sessionProblem(event, policy, deadline);
     if (refused) return refused;
     event.locals.did = did;
-    return resolve(event);
+    return resolve(event, { transformPageChunk: themeChunk(policy.group, event.request.headers.get("cookie")) });
   });
 };
 
@@ -178,6 +179,11 @@ export const handle: Handle = async (input) => {
 function withGroupHeaders(response: Response, group: PageGroup, dataRequest: boolean): Response {
   const out = new Response(response.body, response); // SvelteKit's own responses may have immutable headers
   const html = out.headers.get("content-type")?.startsWith("text/html") === true;
+  // A redirect is never stored, as interfaces/http's redirect.ts sends it (a 303 is not cacheable without explicit
+  // freshness anyway, RFC 9110 §15.4.4; this keeps it so behind any cache).
+  if (out.status >= 300 && out.status < 400 && !out.headers.has("cache-control")) {
+    out.headers.set("cache-control", "no-store");
+  }
   if (group === "app" && (html || dataRequest)) {
     out.headers.set("cache-control", "private, no-store");
     out.headers.append("vary", "Cookie");
