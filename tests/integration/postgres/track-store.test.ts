@@ -251,6 +251,17 @@ describe("track store", () => {
     ).toEqual(["0|t"]);
   });
 
+  test("track.missed_events_during_the_read_survive", async () => {
+    // The stream lost events (OutdatedCursor) while a pass read A's repo. The recovery asks every account for a fresh
+    // read, and applying the older read must not end that request: the lost events may postdate its snapshot.
+    const job = claim(A);
+    await index.missedEvents();
+    await tracks.applySnapshot(job, rev(8), [profile()]);
+    expect(lines(`SELECT due_at <= now() FROM idx.account_job WHERE did = '${A}' AND kind = 'backfill'`)).toEqual([
+      "t",
+    ]);
+  });
+
   test("track.backfill_replaces_sections_at_the_cap", async () => {
     // A holds the cap of old sections; the repo now holds as many different ones. The old ones go first, so every new
     // one fits.

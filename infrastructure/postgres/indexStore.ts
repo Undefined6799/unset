@@ -104,10 +104,12 @@ export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexS
     apply: (frame) => inTx((tx) => applyFrame(tx, options.source, frame)),
     missedEvents: () =>
       inTx(async (tx) => {
+        // Like queueJob, a job already queued becomes due now, which also breaks the claim of a read in flight: its
+        // snapshot may predate the lost events. Rows are taken in DID order so two recoveries cannot deadlock.
         await tx.query(
           `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
-           SELECT did, 'backfill', now(), 0, now() FROM idx.account
-           ON CONFLICT (did, kind) DO NOTHING`,
+           SELECT did, 'backfill', now(), 0, now() FROM idx.account ORDER BY did
+           ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
         );
       }),
     deadLetter: (frame, attempts, firstSeen) => {
