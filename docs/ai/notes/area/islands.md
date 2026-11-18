@@ -1,18 +1,21 @@
 ---
 id: islands
 type: area
-status: current
+status: replaced
 areas: ["[[ui]]"]
 summary: "Hub for shared/islands: the island runtime the kit, islands and apps/web import."
-code: [shared/islands/index.ts]
+code: []
 sources: [docs/ai/book/phase-1.md]
 importance: normal
 related: ["[[ui]]", "[[web]]"]
-replaced_by: null
+replaced_by: "[[web]]"
 tags: [area, ui]
-checked: 2026-10-28
+checked: 2026-11-18
 ---
 # islands
+
+**Deleted in P1.20k (2026-11-18)** with the React UI: Svelte pages hydrate through SvelteKit, so there is no
+island runtime. Kept as history.
 
 **What it owns.** The island runtime as `@unset/shared-islands` (P1.25i, P1.25p, `docs/ai/book/phase-1.md`).
 MIT-licensed. `safeHref` stays in [[ui]].
