@@ -4,12 +4,12 @@
  * (https://shadcn-svelte.com/docs/installation/manual, "Configure styles"), with our variables only. */
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "./theme.css";
+@import "@unset/shared-ui/theme.css";
 
 /* Classes are read from the components and the shell only (lib/), never from the pages (scripts/guards/page-classes.ts). */
 @source "./lib";
 
-/* dark: follows the same choice as theme.css: an explicit <html data-theme>, otherwise the system setting. */
+/* dark: follows the same choice as shared/ui/theme.css: an explicit <html data-theme>, otherwise the system setting. */
 @custom-variant dark {
   &:where([data-theme="dark"], [data-theme="dark"] *) {
     @slot;

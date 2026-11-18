@@ -163,6 +163,88 @@
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },
+    "dropdown-menu": {
+      "dropdown-menu-checkbox-group.svelte": {
+        "sha256": "e6f2804e753d941f8174a57e942c6c440731908103993ee53321957786733e10",
+        "registrySha256": "96f8cf7d2ce72fd2fd4ff5e579067b1a32101abbbe5a20612aa00a69e5df205d",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-checkbox-item.svelte": {
+        "sha256": "c4a8acdcbad74be012c62997c7e35aed34d600fe3f09e63dc947723c8224047c",
+        "registrySha256": "be5ffc36a79ce3a007cb447bb481922150cf796183febf3fa365bc83767042f1",
+        "change": "Lucide check and minus swapped for our Icon done and remove (ADR 0055 point 4). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-content.svelte": {
+        "sha256": "53de7c4f5a9431f9bbe1cc59d767cb7a6844bf525f58e8482c1fcde368e53901",
+        "registrySha256": "87858219be19e0078ddb50bf04a823ed8a5927f6df6c81e83d03bfc96b324402",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-group-heading.svelte": {
+        "sha256": "13828d891ffc3c29dc9c1456e770d0bd1bb7240d6c4b9a2fa3227dc0856d3b49",
+        "registrySha256": "f9e07b5350c5665d660abad80de206a84369925a6e140711053d1a8aa6bfbc1e",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-group.svelte": {
+        "sha256": "d03766867d5d84cc4ac010a7b174623b804bd296e6cc427d288f00807fab4e49",
+        "registrySha256": "75f1eaeff2b3cf25f957d7f9137d3addb409815ec480e1a3bb4036bb82e8d60c",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-item.svelte": {
+        "sha256": "88c933cdaec8613d4141df2a8318bda057695280ea9e23192e762be2f6fafd54",
+        "registrySha256": "dc270d798a7686886502125c70df942aa31ca05aaf41f9a31433ee20bdc77294",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-label.svelte": {
+        "sha256": "4977060fd6694c23f13d32aa5f098a3158b47ca4aa5067e2490542b56f413714",
+        "registrySha256": "4aad60a044c59c57a3b12c26f439eee2750ca7035c47cc010121007023233ad9",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-portal.svelte": {
+        "sha256": "1ad347b6fb105f87564d83d2ad226e96236ac449bc43984775e61e801c703ab8",
+        "registrySha256": "38f6abf9c1d47d2ab4912556d05845ec9ba1ee6825405adb5f8831d6a30ac08b",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-separator.svelte": {
+        "sha256": "41d50391e958b1e13b76cdaf225d7cd339f5e457786e97e9b1b26049855ce1ca",
+        "registrySha256": "96c4a7c60a036396cf5b9ef2947251c1b39590dbd0637e8ecde52475172cf6ff",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-shortcut.svelte": {
+        "sha256": "48e98142e9bdb9a6712abf739e3df163c8fb982e3f7ba7a13f34781fd2e64adf",
+        "registrySha256": "3151567fccc824348bdec3242c8dd117ef34b9b8b982daf2e7ab03aa2f73d8bd",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-sub-content.svelte": {
+        "sha256": "cf5670bf0124d5d542b4b21fc9235abb346397c3911c6f29fba0251fe2164388",
+        "registrySha256": "8005b0c3145a77ebc3b4811331e8fa007faf20e32087ce8b6ec97afe4fdda847",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-sub-trigger.svelte": {
+        "sha256": "4b168e6bda42c2ec2fc1f927b934e4eea013181627e3d5c262da1a27d4f19f47",
+        "registrySha256": "20c905f635f001ee4b26e465ba0a7aee22ff708d0b9995e7099acc3fd9be6681",
+        "change": "Lucide chevron-right swapped for our Icon next (ADR 0055 point 4). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-sub.svelte": {
+        "sha256": "5b1870433e2d085c7ebdd956449a0e94b677fd04c57d3f5eb2a1ead7ebced1ce",
+        "registrySha256": "1208155828183ef72dc8c96ff58c90fcd5584cce28d938a23545253013cfb9c5",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu-trigger.svelte": {
+        "sha256": "c8ebe9ba1ef484c873f36c27311b0c38ca2a40c68753334c4990bf28c299f5aa",
+        "registrySha256": "bdad1ff46fd23466dec6d1212186e9ac4e34edf862987308821956c6b24f709c",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "dropdown-menu.svelte": {
+        "sha256": "0addf152e501b1e69f71ba104dd737c2bb49e0973fccdbc2bd0fb6de256a5cd0",
+        "registrySha256": "d49b60f3d9832a870e5eed726d39f9c0e09abb2bc061deb1ef0dfec97aa319e5",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "index.ts": {
+        "sha256": "1a70ede40d8af0b01f01ceb7f134a1c18554b7acd16edc7ef4eceb861e187faf",
+        "registrySha256": "02354b1d65c9862b678ebc8d247860c418478f7b074af42bd23c10272aefc7e4",
+        "change": "RadioGroup and RadioItem left out: no screen needs them and Iconoir has no filled circle for the radio mark (ADR 0055 point 5). Then biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
     "input": {
       "index.ts": {
         "sha256": "5276711c7cf44f94fe4e2295639ce156ddd4d2bfef6dfd9e239cd963c880ef56",
@@ -184,6 +266,33 @@
       "label.svelte": {
         "sha256": "255f78b565fc865f4d31cf670bb57e57db072cf29e209f4af882bcebb6301fd4",
         "registrySha256": "3faed5716cbb15965080d262ff5a85b7aa0fda8eef6fb65089a12111a60ff3c9",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      }
+    },
+    "tabs": {
+      "index.ts": {
+        "sha256": "c507201eab4f8f3129cef00cb03b84633f3f11e04b9506796ef15a8add162483",
+        "registrySha256": "883f05e41daca89eb612f0959f4206edafa6fbba098ad41318d14d24358cbeb5",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "tabs-content.svelte": {
+        "sha256": "baf2c7bc2e3cbf6499f7ad41ce5dbc6bc3470b371c68a8ee9a6d181ae3701cdd",
+        "registrySha256": "47cedc7da89af451947d7a026530a564aa1da99eb3c17927717fae23a3f6e40c",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "tabs-list.svelte": {
+        "sha256": "5e18eb240fa6b9f8ab9a294f693b9804d32868323c6976006aff8bde2058c87f",
+        "registrySha256": "03afb0023f12cb98c2d42fa6bd67d049e1a490ea565bd4dc9e3073558bf3d844",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "tabs-trigger.svelte": {
+        "sha256": "03794e74ca0ad673bef126f135fad956f7bc56ede4f3b350d30aab703e5b66f1",
+        "registrySha256": "6edcb037ca26d11eb2bb2e7c05f52e809bbe4d60dc60ad6e1472da28843e7260",
+        "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
+      },
+      "tabs.svelte": {
+        "sha256": "fb97c4b845539d74b820aa453be9ce987954ddb07855070a036b53025ebb9a8a",
+        "registrySha256": "6ba8c4c659612f68cf36fc6e8a5ebea8ebc0fd515e2688fc2205a674d726d33e",
         "change": "Biome format and import order only, no behaviour change (lint the copied files, Alex 2026-11-18)."
       }
     },

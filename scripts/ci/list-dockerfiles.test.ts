@@ -245,7 +245,7 @@ describe("the pds-ui recipe's ignore file (P2.24t)", () => {
 
   test("pds_recipe_reads_the_pds_ignorefile_only_while_the_contract_accepts_it", () => {
     const accepted = tree({
-      "deployment/pds/Dockerfile": recipe(replaceOnly),
+      "deployment/pds/pds.Dockerfile": recipe(replaceOnly),
       "deployment/pds/source.lock.json": lock,
       "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     });
@@ -256,13 +256,13 @@ describe("the pds-ui recipe's ignore file (P2.24t)", () => {
 
     // A recipe that does more than replace the frontend is refused, so it is never scanned with the PDS file.
     const drifted = tree({
-      "deployment/pds/Dockerfile": recipe([...replaceOnly, "RUN npm install left-pad"]),
+      "deployment/pds/pds.Dockerfile": recipe([...replaceOnly, "RUN npm install left-pad"]),
       "deployment/pds/source.lock.json": lock,
     });
     expect(() => listDockerfiles(drifted)).toThrow(/exceeds exact distribution replacement/);
 
     // Without its lock the recipe is no pair, and the contract refuses it.
-    const unpaired = tree({ "deployment/pds/Dockerfile": recipe(replaceOnly) });
+    const unpaired = tree({ "deployment/pds/pds.Dockerfile": recipe(replaceOnly) });
     expect(() => listDockerfiles(unpaired)).toThrow(/regular files/);
 
     // Another Dockerfile named pds is not the recipe and keeps /dev/null.

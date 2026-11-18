@@ -55,7 +55,9 @@ const row = "flex min-w-0 justify-between gap-3 border-t py-2.5 first:border-t-0
 const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-foreground uppercase";
 /** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
 const site = `${label} max-sm:hidden`;
-const card = "min-w-0 gap-0 rounded-sm border-0 py-0 shadow-md [overflow-wrap:anywhere]";
+/** A card the owner drags another onto is ringed (card-controls.svelte sets data-drop). */
+const card =
+  "min-w-0 gap-0 rounded-sm border-0 py-0 shadow-md [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring";
 const head = "flex items-start justify-between gap-3";
 const count = "font-mono text-xs text-muted-foreground";
 </script>
