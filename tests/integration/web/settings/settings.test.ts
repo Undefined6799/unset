@@ -11,10 +11,10 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
-import { elements, textContent } from "../../../interfaces/http/web/fixtures/html.ts";
-import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "./built-server.ts";
+import { elements, textContent } from "../../../../interfaces/http/web/fixtures/html.ts";
+import { buildOnce, clientAddress, ORIGIN, type RunningWeb, type StandInFixture, startWeb } from "../built-server.ts";
 
-const REPO = join(import.meta.dirname, "..", "..", "..");
+const REPO = join(import.meta.dirname, "..", "..", "..", "..");
 const provided = inject("postgres");
 const database = provided.databases[relative(REPO, import.meta.filename)] ?? "";
 const pg = { host: provided.host, port: provided.port, database, ...provided.roles.web };
@@ -38,6 +38,12 @@ const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBy
 if (keyring === undefined) throw new Error("test keyring did not parse");
 const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSealer(keyring), log: quiet });
 
+function did(text: string): Did {
+  const parsed = parseDid(text);
+  if (parsed === null) throw new Error("test DID did not parse");
+  return parsed;
+}
+
 let dids = 0;
 /** A new DID per call, so two tests never share a member's limit. */
 function nextDid(): Did {
@@ -53,8 +59,7 @@ function nextDid(): Did {
 }
 
 /** A signed-in browser for a new member, its session carrying our PDS's origin; returns the DID and the cookie. */
-async function signedIn(): Promise<{ did: Did; cookie: string }> {
-  const did = nextDid();
+async function signedIn(did: Did = nextDid()): Promise<{ did: Did; cookie: string }> {
   const dpopJwk = {
     ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
     kid: "dpop",
@@ -76,10 +81,18 @@ async function signedIn(): Promise<{ did: Did; cookie: string }> {
   return { did, cookie: `__Host-sid=${created.cookieValue}` };
 }
 
+/** A member whose DID document the directory cannot serve just now. */
+const UNREACHABLE = did("did:plc:unreachableunreachableun");
+const STAND_INS: StandInFixture = {
+  http: {
+    [`https://plc.directory/${UNREACHABLE}`]: { status: 503, body: "unavailable" },
+  },
+};
+
 let web: RunningWeb;
 beforeAll(async () => {
   buildOnce();
-  web = await startWeb(pg);
+  web = await startWeb(pg, {}, STAND_INS);
 }, 120_000);
 afterAll(async () => {
   await web?.stop();
@@ -90,13 +103,19 @@ const get = (path: string, cookie?: string) =>
   web.fetch(path, { headers: { "x-forwarded-for": clientAddress(), ...(cookie ? { cookie } : {}) } });
 
 /** A form post to /profile from our own origin, unless `crossSite`. */
-const postProfile = (body: string, init: { cookie?: string; crossSite?: boolean; from?: string } = {}) =>
+const postProfile = (
+  body: string,
+  init: { cookie?: string; crossSite?: boolean; from?: string; accept?: string } = {},
+) =>
   web.fetch("/profile", {
     method: "POST",
     body,
     headers: {
       origin: init.crossSite ? "https://evil.test" : ORIGIN,
       "content-type": "application/x-www-form-urlencoded",
+      // A browser's plain form post; without it SvelteKit answers as to its enhanced client, in JSON (kit 3.2.0
+      // runtime/server/page/actions.js is_action_json_request).
+      accept: init.accept ?? "text/html",
       "x-forwarded-for": init.from ?? clientAddress(),
       ...(init.cookie ? { cookie: init.cookie } : {}),
     },
@@ -139,6 +158,7 @@ describe("GET /settings/profile", () => {
     ]);
     expect(html).toContain("Set up your profile");
     expect(html).toContain('<meta name="robots" content="noindex"');
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
   });
 });
 
@@ -155,13 +175,22 @@ describe("GET /settings/account", () => {
       { href: "/settings/account", current: true },
     ]);
     const document = parse(html);
-    // The test profile has no identity network, so the handle check answers unavailable: the DID is still shown.
+    // No DID document for this member in the stand-ins, so no handle is shown; the DID still is.
     expect(elements(document, "dd").map(textContent)).toEqual(["handle.invalid", did]);
-    expect(html).toContain("We could not check your handle just now");
+    expect(html).not.toContain("We could not check your handle just now");
     expect(html).toContain('href="https://pds.unset.test/account"');
     expect(html).toContain("Signs this browser out of unset.sh.");
-    expect(elements(document, "form", { method: "post", action: "/logout" })).toHaveLength(1);
+    // One in the page, one in the menu drawer (P2.13e).
+    const main = elements(document, "main")[0];
+    expect(elements(main, "form", { method: "post", action: "/logout" })).toHaveLength(1);
     expect(html).not.toContain("getBlob");
+  });
+
+  test("settings_account_handle_unavailable", async () => {
+    const { cookie } = await signedIn(UNREACHABLE);
+    const html = await (await get("/settings/account", cookie)).text();
+    expect(elements(parse(html), "dd").map(textContent)).toEqual(["handle.invalid", UNREACHABLE]);
+    expect(html).toContain("We could not check your handle just now");
   });
 
   test("settings_account_offers_sign_out_everywhere", async () => {
@@ -201,8 +230,15 @@ describe("POST /profile", () => {
     expect((await postProfile("displayName=A", { cookie, crossSite: true })).status).toBe(403);
   });
 
-  test("a signed-out post is refused", async () => {
-    expect((await postProfile("displayName=A")).status).toBe(401);
+  test("signed out goes to sign-in and saves nothing", async () => {
+    const response = await postProfile("displayName=A");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login?next=%2Fme");
+  });
+
+  test("signed out from the enhanced form gets the same redirect as JSON", async () => {
+    const response = await postProfile("displayName=A", { accept: "application/json" });
+    expect(await response.json()).toEqual({ type: "redirect", status: 303, location: "/login?next=%2Fme" });
   });
 
   test.each([

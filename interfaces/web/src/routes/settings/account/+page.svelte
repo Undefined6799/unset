@@ -18,7 +18,6 @@ const withHost = (text: string, host: string) => text.replace("{pdsHost}", host)
 
 <svelte:head>
   <title>{SETTINGS.account}</title>
-  <meta name="robots" content="noindex" />
 </svelte:head>
 
 {#if data.privacyNotice}

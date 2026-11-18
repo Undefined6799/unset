@@ -2,7 +2,7 @@
 // cases check it. The handle check and the token-set read reach the network and the store, so they are doubles (TE-1).
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { type AccountDeps, accountView, issuerOrigin } from "./account.server.ts";
+import { type AccountDeps, accountView } from "./account.server.ts";
 
 // The domain types, read off the module under test: a test beside a route imports no domain (svelte-screens-no-core).
 type Did = Parameters<AccountDeps["verifyHandle"]>[0];
@@ -80,16 +80,9 @@ describe("accountView", () => {
     expect(world.reads).toEqual([]);
   });
 
-  test("a stored origin that is no longer a bare https origin hides the link and is never replaced", async () => {
+  test("a stored origin the gate no longer passes hides the link and is never replaced", async () => {
     const world = deps();
-    for (const stored of [
-      "http://pds.unset.test",
-      "https://127.0.0.1",
-      "https://pds.unset.test/x",
-      "https://a.test:8443",
-    ]) {
-      expect((await accountView(world.deps, DID, stored, SIGNAL)).link).toBeNull();
-    }
+    expect((await accountView(world.deps, DID, null, SIGNAL)).link).toBeNull();
     expect(world.reads).toEqual([]);
   });
 
@@ -104,11 +97,4 @@ describe("accountView", () => {
       expect((await accountView(deps({ issuer }).deps, DID, undefined, SIGNAL)).link).toBeNull();
     }
   });
-});
-
-test("issuerOrigin keeps only a bare https origin on a DNS name", () => {
-  expect(issuerOrigin("https://pds.unset.test")).toBe("https://pds.unset.test");
-  expect(issuerOrigin("https://u:p@pds.unset.test")).toBeNull();
-  expect(issuerOrigin("https://app.localhost")).toBeNull();
-  expect(issuerOrigin("not a url")).toBeNull();
 });

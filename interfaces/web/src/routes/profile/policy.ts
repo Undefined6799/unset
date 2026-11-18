@@ -8,4 +8,6 @@ export const policy = definePolicy({
   limit: "profile",
   session: "required",
   maxBody: PROFILE_BODY_LIMIT_BYTES,
+  // A signed-out save comes back to the member's own page after sign-in (interfaces/http sent /did, now /me).
+  returnTo: "/me",
 });

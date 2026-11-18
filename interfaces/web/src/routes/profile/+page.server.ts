@@ -3,7 +3,6 @@
 // anything. It works as a plain form: a save answers 303 to where the member came from; a refusal shows its code.
 // The route has no page of its own, so a GET is a 404 as it is under interfaces/http.
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
-import { parseDid } from "@unset/domains-identity";
 import { toProfileRecord } from "@unset/domains-profile";
 import { respondToPdsFailure, saveProfileRecord } from "@unset/infrastructure-pds";
 import { ERROR_CODES } from "@unset/shared-errors";
@@ -29,10 +28,9 @@ const saveToPds =
 
 export const actions: Actions = {
   default: async ({ request, locals, setHeaders }) => {
-    const did = parseDid(locals.did ?? "");
-    if (did === null) error(500, { message: "internal.error" }); // the gate let no session through: never guess one
-    const deadlineAt = performance.now() + config.REQUEST_DEADLINE_MS; // FALLBACK until locals carry the gate's own
-    const result = await saveProfileForm(await request.formData(), did, saveToPds(locals.deadline, deadlineAt));
+    const did = locals.did;
+    if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through: never guess one
+    const result = await saveProfileForm(await request.formData(), did, saveToPds(locals.deadline, locals.deadlineAt));
     setHeaders({ "cache-control": "no-store" });
     if ("location" in result) redirect(303, result.location);
     error(ERROR_CODES[result.code].status, { message: result.code });

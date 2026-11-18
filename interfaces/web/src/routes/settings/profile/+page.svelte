@@ -9,7 +9,6 @@ let { data }: { data: { privacyNotice: boolean } } = $props();
 
 <svelte:head>
   <title>{SETTINGS.profile}</title>
-  <meta name="robots" content="noindex" />
 </svelte:head>
 
 {#if data.privacyNotice}
