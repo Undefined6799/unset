@@ -70,6 +70,8 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
 | ADR 0056 | In the web process only server files (`*.server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or infrastructure; a screen or universal load never does | checked: `svelte-screens-no-core` |
 | ADR 0056 | Only the web process and its screens import Svelte or SvelteKit | checked: `sveltekit-web-only` |
+| ADR 0056 | The web process imports from `apps/web` only the Svelte components (`lib/`), `theme.css` and `app.css`, never the React UI or render entry | checked: `web-components-only`, `web_process_takes_only_svelte_components_and_icon_data` |
+| ADR 0055 | The web process and the Svelte components take only `icons.json` from `shared/ui`, never its React UI | checked: `svelte-no-react-ui`, `web_process_takes_only_svelte_components_and_icon_data` |
 | ADR 0056 | No web page is prerendered and no proof-only route exists | checked: `scripts/guards/web-prerender.ts`, `web_prerender_page_export`, `the_build_holds_no_prerendered_page` |
 | ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
 | ADG §1, plan §5.1, P1.25o | An island (`*.island.tsx`) imports only `shared/ui`, the island runtime `shared/islands` (through its index, DC-2), type-only modules and the npm modules named in the rule (today React's JSX runtime) | checked: `island-import-boundary`, `island_import_boundary`, `island_imports_jsx_runtime_passes` |

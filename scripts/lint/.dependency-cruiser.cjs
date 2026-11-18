@@ -11,6 +11,8 @@ const RENDER_ENTRIES = { http: "apps/web/render.tsx", admin: "apps/admin/render.
 // What interfaces/web may import from apps/web (ADR 0056 Consequences, P1.20c): the Svelte components, the theme file
 // and the Tailwind entry. Not the React UI.
 const WEB_COMPONENTS = "^apps/web/(lib/|app\\.css$|theme\\.css$)";
+// Svelte code: the web process and the components it composes. Neither reaches the React UI in shared/ui.
+const SVELTE_UI_FROM = "^(interfaces/web/|apps/web/lib/)";
 
 /** Each vendor SDK is imported in exactly one adapter folder per runtime (guideline §1, O-7). */
 const SDK_ADAPTERS = [
@@ -269,10 +271,16 @@ module.exports = {
       { path: "^apps/" },
     ),
     forbidden(
-      "app-render-entry-only",
+      "web-components-only",
       "interfaces/web imports only apps/web's Svelte components, theme and Tailwind entry (ADR 0056, P1.20c).",
       { path: "^interfaces/web/" },
       { path: "^apps/", pathNot: WEB_COMPONENTS },
+    ),
+    forbidden(
+      "svelte-no-react-ui",
+      "The web process and the Svelte components take only icons.json from shared/ui, never its React UI (ADR 0055, P1.20c).",
+      { path: SVELTE_UI_FROM },
+      { path: "^shared/ui/", pathNot: ICON_DATA },
     ),
     forbidden(
       "app-render-entry-only",
