@@ -16,8 +16,11 @@ export {
   type CardWidth,
   type LinkPreset,
   orderCards,
+  pageCards,
   parseCardKey,
   readCard,
+  type StoredCardRecord,
+  shownCards,
 } from "./cards.ts";
 export {
   type BlobRef,
