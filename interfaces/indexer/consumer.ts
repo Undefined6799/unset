@@ -1,24 +1,43 @@
 // The indexer's consumer of our PDS's stream (book P3.05s): the reader's frames, applied by the index store. The
-// process wiring that starts the reader with it comes with its compose service (P3.05s, PR 3).
+// process wiring that starts the reader with it, and serves `health` on the indexer's health endpoint, comes with its
+// compose service (P3.05s PR 3).
 //
-// An `#account` frame stops the stream until the account-state machine (book P3.06s) can apply it: ingest must not
-// keep indexing an account the PDS has taken down or deactivated, and skipping the frame would move the cursor past
-// it. Throwing makes the reader stop with `apply_failed` and redial from the same cursor (fail closed).
+// A frame that keeps failing must not stall every member behind it (book P3.05, "event_failed"): the reader stops
+// on a failed apply and redials from the cursor, so the same frame comes back, and after MAX_ATTEMPTS failures of
+// the same seq it is dead-lettered, its account queued for a backfill and the cursor moved past it, counted on
+// health. A failure that says nothing about the frame (the database unreachable) is never counted. An account frame
+// is never dead-lettered (book P3.05: status events hold): skipping one could leave a taken-down account public.
 import type { FirehoseConsumer, RepoFrame } from "@unset/infrastructure-firehose";
-import type { IndexFrame, IndexStore } from "@unset/infrastructure-postgres";
+import { type IndexFrame, type IndexStore, isDatabaseUnavailable } from "@unset/infrastructure-postgres";
 
-export class AccountFrameUnsupported extends Error {
-  constructor() {
-    super("account frames wait for the account-state machine (P3.06s)");
-    this.name = "AccountFrameUnsupported";
-  }
-}
+/** Failures of one frame before it is dead-lettered (book P3.05, `INDEXER_MAX_ATTEMPTS`). */
+export const MAX_ATTEMPTS = 5;
 
-export function indexConsumer(store: IndexStore): FirehoseConsumer {
+/** The frame now failing, if any: its seq and how often, never its DID or content (rule SE-7). */
+export type ConsumerHealth = { readonly failingSeq: number | null; readonly attempts: number };
+
+export type IndexConsumer = FirehoseConsumer & { readonly health: () => ConsumerHealth };
+
+export function indexConsumer(store: IndexStore, now: () => Date = () => new Date()): IndexConsumer {
+  let failing: { seq: number; attempts: number; firstSeen: Date } | null = null;
+  const apply = async (frame: RepoFrame): Promise<void> => {
+    const indexed = indexFrame(frame);
+    try {
+      await store.apply(indexed);
+    } catch (error) {
+      if (isDatabaseUnavailable(error)) throw error;
+      if (failing?.seq !== frame.seq) failing = { seq: frame.seq, attempts: 0, firstSeen: now() };
+      failing.attempts += 1;
+      if (failing.attempts < MAX_ATTEMPTS || indexed.kind === "account") throw error;
+      await store.deadLetter(indexed, failing.attempts, failing.firstSeen);
+    }
+    failing = null;
+  };
   return {
     cursor: store.cursor,
-    apply: async (frame) => store.apply(indexFrame(frame)),
+    apply,
     missedEvents: store.missedEvents,
+    health: () => ({ failingSeq: failing?.seq ?? null, attempts: failing?.attempts ?? 0 }),
   };
 }
 
@@ -31,6 +50,6 @@ function indexFrame(frame: RepoFrame): IndexFrame {
     case "sync":
       return { kind: "sync", seq: frame.seq, did: frame.did };
     case "account":
-      throw new AccountFrameUnsupported();
+      return { kind: "account", seq: frame.seq, did: frame.did, active: frame.active, status: frame.status };
   }
 }
