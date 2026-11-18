@@ -1,7 +1,17 @@
 // Durable appends for pds-admin's state files: each line is written and fsynced before the call returns, so a crash
 // cannot lose a line the service has acted on. Synchronous on purpose: the service is tiny, and a line on disk before
 // the next await is what makes the replay check race-free (P2.09 step 7).
-import { closeSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  writeSync,
+} from "node:fs";
 
 /**
  * Writes all of `text`. writeSync may write fewer bytes than asked (a full disk, a file-size limit), so it loops, and
@@ -17,11 +27,22 @@ function writeAll(fd: number, text: string): void {
   }
 }
 
-/** Appends one line and fsyncs it. */
+/**
+ * Appends one line and fsyncs it. A write that fails part-way is cut back to the file's old length, so the next line
+ * never joins a torn one (a jti merged into a torn line would be lost on reopen). If even the cut fails, the error
+ * still propagates and the caller refuses the request.
+ */
 export function appendLine(file: string, line: string): void {
   const fd = openSync(file, "a", 0o600);
   try {
-    writeAll(fd, `${line}\n`);
+    const before = fstatSync(fd).size;
+    try {
+      writeAll(fd, `${line}\n`);
+    } catch (error) {
+      ftruncateSync(fd, before);
+      fsyncSync(fd);
+      throw error;
+    }
     fsyncSync(fd);
   } finally {
     closeSync(fd);

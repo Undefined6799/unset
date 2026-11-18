@@ -22,7 +22,8 @@ try { appendLine(process.argv[1], "y".repeat(100)); console.log("accepted"); } c
     },
   );
   expect(result.stdout.trim()).toBe("refused");
-  expect(readFileSync(file, "utf8").length).toBe(1024);
+  // The torn part of the second line is cut away, so the next append starts on a line boundary.
+  expect(readFileSync(file, "utf8")).toBe(`${"x".repeat(1000)}\n`);
 });
 
 test("cli.verify_log_missing: a log path that does not exist exits 1, never ok", () => {
