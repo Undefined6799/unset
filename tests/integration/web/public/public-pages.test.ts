@@ -17,7 +17,7 @@ const TITLE = "<b>x</b>";
 
 let web: RunningWeb;
 beforeAll(async () => {
-  buildOnce();
+  buildOnce(provided.port);
   web = await startWeb(pg, { PRIVACY_OFFICER_TITLE: TITLE });
 }, 120_000);
 afterAll(async () => {
