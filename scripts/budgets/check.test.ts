@@ -132,16 +132,15 @@ test("budgets_match_plan", () => {
   const budgets = JSON.parse(readFileSync(join(import.meta.dirname, "budgets.json"), "utf8"));
   expect(budgets).toEqual({
     "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/config + shared/errors + shared/i18n + shared/log + shared/http + shared/admin-envelope": 9000,
-    "apps/web + interfaces/http": 7000,
+    "apps/web + interfaces/web + !apps/web/lib/components/ui": 7000,
     "interfaces/api": 1200,
     "interfaces/indexer": 1500,
     "interfaces/media": 600,
     "interfaces/review": 2500,
     "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
     "infrastructure/net-guard": 400,
-    "shared/ui": 2500,
+    "shared/ui": 100,
     "shared/ui-build": 800,
-    "shared/islands": 300,
   });
 });
 
@@ -149,7 +148,7 @@ test("ui_build_counted_under_its_own_key", () => {
   // P1.25w (architecture ruling 2026-10-07-p125h-follow-ups, N1): the moved runners are measured on their own, never
   // under shared/ui, and the plan defaults carry the same number as budgets.json.
   const root = tree({ "shared/ui/a.ts": lines(10), "shared/ui-build/a.ts": lines(900) });
-  expect(check(root, { "shared/ui": 2500, "shared/ui-build": 800 })).toEqual([
+  expect(check(root, { "shared/ui": 100, "shared/ui-build": 800 })).toEqual([
     { key: "shared/ui-build", lines: 900, max: 800, level: "warning" },
   ]);
   expect(check(root, { "shared/ui": 9 })).toEqual([{ key: "shared/ui", lines: 10, max: 9, level: "warning" }]);
@@ -170,14 +169,16 @@ test("ui_build_plan_default_pinned", () => {
   );
 });
 
-test("islands_plan_default_pinned", () => {
-  // P1.25o: the plan defaults carry shared/islands at 300, so raising it without a reason warns.
-  const root = tree({ "scripts/budgets/budgets.json": JSON.stringify({ "shared/islands": 400 }) });
-  const out: string[] = [];
-  expect(main(root, (line) => out.push(line))).toBe(0);
-  expect(out).toContain(
-    "::warning title=line-budget::shared/islands raised to 400 above the plan's 300 without a reason",
-  );
+test("svelte_files_count_and_the_stock_shadcn_copies_do_not", () => {
+  // P1.20k: the web key counts our .svelte files with the .ts ones, and leaves out the stock shadcn-svelte copies.
+  const key = "apps/web + interfaces/web + !apps/web/lib/components/ui";
+  const root = tree({
+    "apps/web/lib/a.svelte": lines(10),
+    "apps/web/lib/components/ui/button/button.svelte": lines(50),
+    "interfaces/web/src/b.ts": lines(5),
+  });
+  expect(check(root, { [key]: 14 })).toEqual([{ key, lines: 15, max: 14, level: "warning" }]);
+  expect(check(root, { [key]: 100 })).toEqual([]);
 });
 
 test("summary_unwritable_still_exits_zero", () => {

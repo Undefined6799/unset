@@ -1,5 +1,6 @@
-// Guard (P1.24q; step P1.24 "check-inventory"; decision 33): the UI kit holds only what the unset.sh design sheet
-// defines. A component folder must be in shared/ui/inventory.json and a built entry must have its folder; a sheet
+// Guard (P1.24q; step P1.24 "check-inventory"; decision 33): the UI holds only what the unset.sh design sheet
+// defines. shared/ui/inventory.json records the sheet's components (the React kit that built them went with P1.20k;
+// the Svelte UI keeps its own list, apps/web/lib/components/inventory.json, ADR 0055); a sheet
 // README must still have the bytes recorded for it; a `stop` piece is never used in apps/; no icon package is imported,
 // listed or locked; icons are the sheet's Iconoir 7.12.1 files, byte for byte and free of active content; and no other
 // SVG exists in product code. The inventory is the base: if it cannot be read, that one finding is reported.
@@ -11,19 +12,11 @@ import { type Finding, filesUnder, isTestFile, PRODUCT_DIRS, scanFiles, sourceFi
 const RULE = "ui-inventory";
 const UI = "shared/ui";
 export const INVENTORY = `${UI}/inventory.json`;
-const COMPONENTS = `${UI}/components`;
 const ICONS_JSON = `${UI}/icons/icons.json`;
 const ICON_SVGS = `${UI}/icons/svg`;
 const ICONOIR_VERSION = "7.12.1";
-/**
- * The only files that draw an inline <svg>: the Icon component and the Mark, both from sheet geometry, and the Svelte
- * Icon (P1.20c), which draws the same icons.json data.
- */
-export const INLINE_SVG_FILES: readonly string[] = [
-  `${COMPONENTS}/Icon/Icon.tsx`,
-  `${COMPONENTS}/Mark/Mark.tsx`,
-  "apps/web/lib/components/icon/icon.svelte",
-];
+/** The only file that draws an inline <svg>: the Svelte Icon (P1.20c), from the icons.json data. */
+export const INLINE_SVG_FILES: readonly string[] = ["apps/web/lib/components/icon/icon.svelte"];
 /**
  * Icon packages, by name or prefix, as the step lists them, plus the @lucide scope shadcn-svelte imports (P1.20c);
  * the copied data under shared/ui/icons is files.
@@ -51,14 +44,7 @@ const isFinding = (value: unknown): value is Finding => (value as Finding | null
 
 function checkComponents(root: string, inventory: Record<string, Entry>): Finding[] {
   const out: Finding[] = [];
-  const dirs = existsSync(join(root, COMPONENTS))
-    ? readdirSync(join(root, COMPONENTS), { withFileTypes: true }).filter((d) => d.isDirectory())
-    : [];
-  for (const dir of dirs)
-    if (inventory[dir.name] === undefined) out.push(finding(`${COMPONENTS}/${dir.name}`, "not in inventory.json"));
   for (const [name, entry] of Object.entries(inventory)) {
-    if (entry.status === "built" && !dirs.some((d) => d.name === name))
-      out.push(finding(INVENTORY, `${name} is built but ${COMPONENTS}/${name} does not exist`));
     const readme = `${UI}/${entry.sheet}`;
     if (!existsSync(join(root, readme))) out.push(finding(INVENTORY, `${name}: ${readme} does not exist`));
     else if (sha256(readFileSync(join(root, readme))) !== entry.sheetSha256)
@@ -100,14 +86,14 @@ function iconNames(line: string): string[] {
 
 type SourceContext = { readonly icons: Set<string>; readonly stop: readonly string[] };
 
-/** What is wrong with one source line, as reasons; `svgAllowed` is false for product .tsx and .svelte outside the Icons and Mark. */
+/** What is wrong with one source line, as reasons; `svgAllowed` is false for product .tsx and .svelte outside the Icon. */
 function lineProblems(file: string, text: string, ctx: SourceContext, svgAllowed: boolean): string[] {
   const why = specifiersOn(text)
     .filter((spec) => ICON_PACKAGE.test(spec))
     .map(() => "icon package import");
   for (const name of iconNames(text))
     if (!ctx.icons.has(name)) why.push(`icon "${name}" is not on the sheet's Icon list`);
-  if (!svgAllowed && /<svg\b/.test(text)) why.push("inline <svg> outside the Icon and Mark components");
+  if (!svgAllowed && /<svg\b/.test(text)) why.push("inline <svg> outside the Icon component");
   if (file.startsWith("apps/"))
     for (const stop of ctx.stop)
       if (new RegExp(`<${stop}\\b|components/${stop}\\b|\\bimport\\b.*\\b${stop}\\b`).test(text))

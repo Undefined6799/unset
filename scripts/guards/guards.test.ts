@@ -317,7 +317,6 @@ describe("route-policy", () => {
     ],
     ["limits_without_policies_export_fails", ["interfaces/http/limits.ts: limits.ts has no `policies` export"]],
     ["limits_import_throws_fails", ["interfaces/http/limits.ts: limits.ts could not be imported"]],
-    ["no_manifests_fails", ["interfaces: no routes.manifest.json found"]],
   ])("%s", async (name, expected) => {
     expect(await routePolicyFindings("bad", name)).toEqual(expected);
   });
@@ -331,7 +330,6 @@ describe("route-policy", () => {
       "exempt_on_app_route_fails",
       "limits_import_throws_fails",
       "limits_without_policies_export_fails",
-      "no_manifests_fails",
       "non_static_route_without_limits_fails",
       "route_without_rate_limit_fails",
       "unknown_policy_name_fails",

@@ -21,7 +21,6 @@
 
 # Auth and sessions
 /domains/identity/auth/ @Undefined6799
-/interfaces/http/session-cookie.ts @Undefined6799
 /infrastructure/pds/ @Undefined6799
 
 # Request security: server kit (CSRF gate, CSP, limits, client IP, return path)
@@ -52,10 +51,8 @@
 # Boundary rules
 /scripts/lint/.dependency-cruiser.cjs @Undefined6799
 
-# Islands and links
-/shared/ui/islands/ @Undefined6799
-/shared/islands/ @Undefined6799
-/shared/ui/safe-href.ts @Undefined6799
+# Links
+/shared/safe-href/ @Undefined6799
 
 # Egress
 /infrastructure/net-guard/ @Undefined6799
@@ -116,7 +113,6 @@
 # CSRF gate, session and CSP builder
 /shared/http/ @Undefined6799
 /infrastructure/session/ @Undefined6799
-/interfaces/http/session-cookie.ts @Undefined6799
 # The SvelteKit web gate (P1.20k): server.ts, the hook, its server modules and each route's policy.ts
 /interfaces/web/server.ts @Undefined6799
 /interfaces/web/src/hooks.server.ts @Undefined6799
@@ -126,10 +122,8 @@
 /domains/identity/verify-handle.ts @Undefined6799
 # net-guard
 /infrastructure/net-guard/ @Undefined6799
-# Islands props serialiser
-/shared/islands/ @Undefined6799
 # safeHref
-/shared/ui/safe-href.ts @Undefined6799
+/shared/safe-href/ @Undefined6799
 # Seal
 /infrastructure/seal/ @Undefined6799
 # Media sandbox headers
@@ -145,7 +139,6 @@
 # audit/ append
 /infrastructure/audit/ @Undefined6799
 # eraseDid
-/interfaces/http/jobs/erase-storage.ts @Undefined6799
 /interfaces/indexer/erase-untrack.ts @Undefined6799
 # Admin envelope and the zero-dependency services
 /shared/admin-envelope/ @Undefined6799

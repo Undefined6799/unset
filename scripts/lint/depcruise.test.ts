@@ -216,13 +216,13 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
 
 /** One real file per top-level area, cruised with the real config (P1.28z). */
 const REAL_FILES = [
-  "apps/web/render.tsx",
+  "apps/web/lib/profile/parse.ts",
   "domains/identity/index.ts",
   "shared/errors/index.ts",
   "shared/host-pin/index.ts",
   "shared/host-pin/index.test.ts",
   "infrastructure/net-guard/index.ts",
-  "interfaces/http/main.ts",
+  "interfaces/web/server.ts",
   "deployment/preflight/index.ts",
   "scripts/guards/files.ts",
 ];

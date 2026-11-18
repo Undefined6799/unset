@@ -118,8 +118,6 @@ jobs:
         run: |
           mkdir -p "$HOME/apt-archives"
           find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
-      - name: Build the web app
-        run: npm run build -w @unset/apps-web
       - name: Run Playwright
         run: |
           node tests/e2e/fixtures/servers.ts prod > e2e-prod.log 2>&1 &
@@ -203,8 +201,6 @@ jobs:
         run: |
           mkdir -p "$HOME/apt-archives"
           find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t "$HOME/apt-archives" {} +
-      - name: Build the web app
-        run: npm run build -w @unset/apps-web
       - name: Install pa11y and Lighthouse outside the lockfile
         run: npm install --ignore-scripts --prefix /tmp/a11y-tools pa11y-ci@5.0.0 @lhci/cli@0.15.1
       - name: Point pa11y and Lighthouse at Playwright's Chromium

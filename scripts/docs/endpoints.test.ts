@@ -60,18 +60,6 @@ test("endpoint_pages_match_manifests", async () => {
   expect(await checkEndpoints(ROOT)).toEqual([]);
 });
 
-test("http_policies_match_limits_ts", async () => {
-  const loaded = await loadEndpointModel(ROOT);
-  expect(loaded.ok).toBe(true);
-  if (!loaded.ok) return;
-  const http = loaded.model.processes.find((process) => process.name === "http");
-  expect(http?.policies?.get("default")).toEqual([
-    { scope: "ip", capacity: 60, refillPerSec: 5 },
-    { scope: "global", capacity: 3000, refillPerSec: 50 },
-  ]);
-  expect(http?.policies?.get("login")).toEqual([{ scope: "ip", capacity: 10, refillPerSec: 10 / 60 }]);
-});
-
 describe("endpoint cells", () => {
   test("session_csrf_and_buckets_come_only_from_recorded_fields", () => {
     const page = pageOf({

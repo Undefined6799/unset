@@ -80,18 +80,6 @@ describe("ui-inventory", () => {
     expect(findings).toHaveLength(count);
   });
 
-  test("inventory_unknown_component_fails", () => {
-    const root = base();
-    write(root, "shared/ui/components/Fancy/Fancy.tsx", "export const Fancy = () => null;\n");
-    expect(texts(root)).toEqual(["shared/ui/components/Fancy: not in inventory.json"]);
-  });
-
-  test("inventory_built_without_folder_fails", () => {
-    const root = base();
-    rmSync(join(root, "shared/ui/components/Kbd"), { recursive: true });
-    expect(texts(root)).toEqual([`${INVENTORY}: Kbd is built but shared/ui/components/Kbd does not exist`]);
-  });
-
   test("inventory_sheet_readme_changed_fails", () => {
     const root = base();
     const readme = join(root, "shared/ui/sheet/components/Button/README.md");
