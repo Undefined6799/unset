@@ -41,6 +41,9 @@ export const PUBLIC_PAGE_CACHE = "public, max-age=300";
 
 export const SITE_SHELL: ShellData = { kind: "site" };
 
+/** Every error page (P1.20k): the core shell, kept out of search results, signed in when the gate read a session. */
+export const ERROR_SHELL: ShellData = { kind: "core", noindex: true };
+
 /** The account button's letter, as shared/ui/components/Avatar/Avatar.tsx avatarLetter draws it: the first character
  * of the name without a leading "@", uppercased; "?" for an empty name. */
 export function accountLetter(name: string): string {
