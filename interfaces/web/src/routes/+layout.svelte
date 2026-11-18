@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 import "@unset/apps-web/app.css";
-import { Icon } from "@unset/apps-web/lib/components/icon";
+import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
@@ -79,6 +79,12 @@ function rememberedTheme(): ThemeChoice | null {
   }
 }
 
+// The Appearance row's icon: the picker's for the current choice.
+const PICKER_ICON = Object.fromEntries(PICKER.map((choice) => [choice.value, choice.icon])) as Record<
+  ThemeChoice,
+  IconName
+>;
+
 // The picker's choice once saved in the background; until then the server's.
 let saved = $state<ThemeChoice | undefined>(undefined);
 const current = $derived(saved ?? prefs?.theme ?? "system");
@@ -115,6 +121,9 @@ function restoreSaved(event: PageTransitionEvent): void {
 const MENU = "core-menu";
 const ACCOUNT = "account-menu";
 const ACTIONS = "actions-menu";
+const CREATE = "create-menu";
+const MESSAGES = "messages-menu";
+const NOTIFICATIONS = "notifications-menu";
 // The core header's main destinations (Clean tabs): those that run today are links.
 const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as const;
 // Coming soon (Alex, 2026-11-18: "still have them in a nav bar ... show them inactive, and then make a note somewhere
@@ -122,27 +131,50 @@ const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as con
 // The list, and what each needs when its feature lands:
 // - Search (header field; an icon on narrow screens): a search page or palette, its route and policy (policy.ts),
 //   honest results (only what it really searches), then make the field a form and add it to the e2e and axe pages.
-// - Create (+), Messages, Notifications (header icons; in the "More actions" menu on phones): each a real flow or
-//   page with its route and policy; Messages and Notifications need real counts, loading and error states (never a
-//   hard-coded "all caught up"). Make the button a link or menu and add tests for it.
+// - The menu panel's Saved, Your communities and Help; the Create panel's New post, Share a link and Ask a question:
+//   each a real flow or page with its route and policy; then make its row a link and add tests for it.
+// - The Messages and Notifications panels: real lists with counts, loading and error states (never a hard-coded "all
+//   caught up"); until then they say the feature is coming, and their "open all" rows stay disabled.
 // - Community, Explore (tabs below): a page each with its route and policy; move the entry from SOON_TABS to TABS
 //   with its `active` value in ShellData, so aria-current and the underline follow, and add its denial and e2e tests.
-// Icons: Community and Explore have none on the approved list (no users or compass icon), so they are words only.
-const SOON_ACTIONS = [
-  { label: T.create, icon: "add" },
-  { label: T.messages, icon: "comment" },
-  { label: T.notifications, icon: "notifications" },
+const SOON_MENU = [
+  { label: T.saved, icon: "saved" },
+  { label: T.yourCommunities, icon: "community" },
+  { label: T.help, icon: "help" },
 ] as const;
-const SOON_TABS = [T.community, T.explore] as const;
+const SOON_CREATE = [
+  { label: T.newPost, icon: "edit" },
+  { label: T.shareLink, icon: "link" },
+  { label: T.askQuestion, icon: "help" },
+] as const;
+const PANEL_BUTTONS = [
+  { id: MESSAGES, label: T.messages, icon: "comment", empty: T.messagesSoon, all: T.openInbox },
+  {
+    id: NOTIFICATIONS,
+    label: T.notifications,
+    icon: "notifications",
+    empty: T.notificationsSoon,
+    all: T.allNotifications,
+  },
+] as const;
+const SOON_TABS = [
+  { label: T.community, icon: "community" },
+  { label: T.explore, icon: "explore" },
+] as const;
 // A coming-soon control: the stock disabled look (opacity) with no hover; disabled buttons are skipped by Tab.
 const soon = "disabled:opacity-60";
 // The header's icon controls: 34px on a mouse, a 44px target on touch (Clean tabs handoff).
 const control = "pointer-coarse:size-11";
-const letter = $derived(shell.account?.name === undefined ? undefined : accountLetter(shell.account.name));
+// Every header panel: a native popover under the header, the popover surface, a title row, then rows.
+const panel =
+  "fixed top-16 bottom-auto m-0 w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:w-auto";
+// The member the page passed (their own page and settings, with a name there) or the gate found (+layout.server.ts).
+const account = $derived(shell.account ?? data.account);
+const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
-  for (const id of [MENU, ACCOUNT, ACTIONS]) {
+  for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -229,10 +261,12 @@ const row =
 >
 
 {#if shell.kind === "core"}
-  <!-- The core shell's header (P1.20k; Alex, 2026-11-18, "Clean tabs"): the menu button and wordmark, the account menu
-       at the right edge, and a row of main destinations below. Both menus are native popovers, so they open with no
-       script, close on Escape or a click outside, and give focus back to their button. Only destinations that run
-       today are links; the rest are drawn disabled, as SOON_ACTIONS and SOON_TABS list them. -->
+  <!-- The core shell's header (P1.20k; Alex, 2026-11-18, "Clean tabs", and the planned menus he sent at 05:04Z): the
+       menu button and wordmark, the action buttons and account menu at the right edge, and a row of main destinations
+       below. Every menu is a native popover with a title and a close button, so it opens with no script, closes on
+       Escape or a click outside, and gives focus back to its button. Only what runs today is a link; the rest is drawn
+       disabled, as SOON_ACTIONS, SOON_TABS and the panels list them. -->
+  <div class="flex min-h-svh flex-col">
   <header class="border-b bg-secondary">
     <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
       <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
@@ -255,9 +289,24 @@ const row =
         <Button variant="outline" size="icon-sm" disabled class="{control} {soon} sm:hidden">
           <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
         </Button>
-        {#each SOON_ACTIONS as action (action.label)}
-          <Button variant="outline" size="icon-sm" disabled class="{control} {soon} max-sm:hidden">
-            <Icon name={action.icon} size={20} label="{action.label}, {T.comingSoon}" />
+        <Button
+          variant="outline"
+          size="sm"
+          popovertarget={CREATE}
+          popovertargetaction="toggle"
+          class="h-8 gap-1 px-2 pointer-coarse:h-11 max-sm:hidden"
+        >
+          <Icon name="add" size={20} label={T.create} /><Icon name="open" size={16} />
+        </Button>
+        {#each PANEL_BUTTONS as button (button.id)}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            popovertarget={button.id}
+            popovertargetaction="toggle"
+            class="{control} max-sm:hidden"
+          >
+            <Icon name={button.icon} size={20} label={button.label} />
           </Button>
         {/each}
         <Button
@@ -269,7 +318,7 @@ const row =
         >
           <Icon name="more" size={20} label={T.moreActions} />
         </Button>
-        {#if shell.account !== undefined}
+        {#if account !== undefined}
           <Button
             variant="outline"
             size="icon-sm"
@@ -281,14 +330,9 @@ const row =
             <span class="sr-only">{T.accountMenu}</span>
           </Button>
         {:else}
-          <Button
-            variant="outline"
-            size="icon-sm"
-            href="/me"
-            class={control}
-            aria-current={shell.active === "account" ? "page" : undefined}
-          >
-            <Icon name="profile" size={20} label={T.profile} />
+          <!-- A visitor signs in here and comes back to this page (signInHref, +layout.server.ts). -->
+          <Button variant="outline" size="icon-sm" href={data.signInHref} class={control}>
+            <Icon name="profile" size={20} label={T.signIn} />
           </Button>
         {/if}
       </div>
@@ -303,63 +347,96 @@ const row =
           <Icon name={tab.icon} size={16} class="text-muted-foreground" /><span>{tab.label}</span>
         </a>
       {/each}
-      {#each SOON_TABS as label (label)}
+      {#each SOON_TABS as tab (tab.label)}
         <!-- Muted text with no extra fading: unlike a disabled button, plain text is held to 4.5:1 (WCAG 1.4.3). The words
              are one string for assistive technology, since a gap between two flex items reads as a space. -->
-        <span class="flex items-center px-3 text-sm whitespace-nowrap text-muted-foreground max-sm:px-2.5"
-          ><span aria-hidden="true">{label}</span><span class="sr-only">{label}, {T.comingSoon}</span></span
+        <span class="flex items-center gap-2 px-3 text-sm whitespace-nowrap text-muted-foreground max-sm:px-2.5"
+          ><Icon name={tab.icon} size={16} /><span aria-hidden="true">{tab.label}</span><span class="sr-only"
+            >{tab.label}, {T.comingSoon}</span
+          ></span
         >
       {/each}
     </nav>
   </header>
-  <section
-    id={ACTIONS}
-    popover="auto"
-    aria-label={T.moreActions}
-    class="fixed top-16 right-2 bottom-auto left-2 m-0 w-auto flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex"
-  >
+  {#snippet soonRow(item: { label: string; icon: IconName })}
+    <li>
+      <button type="button" disabled class="{row} w-full text-muted-foreground opacity-60">
+        <!-- One string for assistive technology, since a gap between two flex items reads as a space. -->
+        <Icon name={item.icon} size={20} /><span aria-hidden="true">{item.label}</span>
+        <span class="ml-auto text-xs" aria-hidden="true">{T.comingSoon}</span><span class="sr-only"
+          >{item.label}, {T.comingSoon}</span
+        >
+      </button>
+    </li>
+  {/snippet}
+  {#snippet panelTitle(id: string, title: string, focusClose: boolean)}
+    <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
+      <h2 id="{id}-title" class="font-semibold">{title}</h2>
+      {#if focusClose}
+        <!-- svelte-ignore a11y_autofocus -- nothing in this panel runs yet, so focus lands on its close button -->
+        <Button variant="ghost" size="icon-sm" autofocus popovertarget={id} popovertargetaction="hide" class={control}>
+          <Icon name="close" size={20} label="{T.close} {title}" />
+        </Button>
+      {:else}
+        <Button variant="ghost" size="icon-sm" popovertarget={id} popovertargetaction="hide" class={control}>
+          <Icon name="close" size={20} label="{T.close} {title}" />
+        </Button>
+      {/if}
+    </div>
+  {/snippet}
+  <section id={MENU} popover="auto" aria-labelledby="{MENU}-title" class="{panel} right-auto left-3 max-sm:right-2 max-sm:left-2">
+    {@render panelTitle(MENU, T.more, true)}
     <ul class="flex flex-col gap-1">
-      {#each SOON_ACTIONS as action (action.label)}
+      {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
+    </ul>
+  </section>
+  <section id={CREATE} popover="auto" aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+    {@render panelTitle(CREATE, T.create, false)}
+    <ul class="flex flex-col gap-1">
+      {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
+    </ul>
+    <ul class="mt-1 flex flex-col gap-1 border-t pt-1">
+      <li>
+        <!-- svelte-ignore a11y_autofocus -- the one item that runs today takes focus when the menu opens -->
+        <a href={account === undefined ? "/me" : `${account.path}#add-card`} class={row} autofocus>
+          <Icon name="apps" size={20} /><span>{T.addCard}</span>
+        </a>
+      </li>
+    </ul>
+  </section>
+  {#each PANEL_BUTTONS as button (button.id)}
+    <section id={button.id} popover="auto" aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(button.id, button.label, true)}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
+      <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+    </section>
+  {/each}
+  <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
+    {@render panelTitle(ACTIONS, T.moreActions, false)}
+    <ul class="flex flex-col gap-1">
+      <li>
+        <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens -->
+        <button type="button" popovertarget={CREATE} popovertargetaction="show" class="{row} w-full" autofocus>
+          <Icon name="add" size={20} /><span>{T.create}</span>
+        </button>
+      </li>
+      {#each PANEL_BUTTONS as button (button.id)}
         <li>
-          <button type="button" disabled class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground opacity-60">
-            <Icon name={action.icon} size={20} /><span>{action.label}</span>
-            <span class="ml-auto text-xs">{T.comingSoon}</span>
+          <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
+            <Icon name={button.icon} size={20} /><span>{button.label}</span>
           </button>
         </li>
       {/each}
     </ul>
   </section>
-  <nav
-    id={MENU}
-    popover="auto"
-    aria-label={T.more}
-    class="fixed inset-y-0 left-0 m-0 h-full w-72 max-w-[85vw] flex-col gap-4 border-r bg-background p-4 text-foreground open:flex"
-  >
-    <div class="flex items-center justify-between">
-      <a href="/" class="font-mono font-semibold text-foreground no-underline" aria-label={T.homeLabel}>{T.brand}</a>
-      <!-- svelte-ignore a11y_autofocus -- focus belongs inside the drawer it opens, so Escape returns it to the menu button -->
-      <Button variant="ghost" size="icon" autofocus popovertarget={MENU} popovertargetaction="hide">
-        <Icon name="close" size={24} label={T.closeMenu} />
-      </Button>
-    </div>
-    <ul class="flex flex-col gap-1">
-      {#each LEGAL as link (link.href)}
-        <li><a href={link.href} class={row}><span>{link.label}</span></a></li>
-      {/each}
-    </ul>
-  </nav>
-  {#if shell.account !== undefined}
-    <section
-      id={ACCOUNT}
-      popover="auto"
-      aria-label={T.account}
-      class="fixed top-16 right-3 bottom-auto left-auto m-0 w-72 flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:right-2 max-sm:w-auto max-sm:left-2"
-    >
-      {#if shell.account.name}<p class="truncate px-3 pt-1 pb-2 font-medium" title={shell.account.name}>{shell.account.name}</p>{/if}
+  {#if account !== undefined}
+    <section id={ACCOUNT} popover="auto" aria-labelledby="{ACCOUNT}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+      {@render panelTitle(ACCOUNT, T.account, false)}
+      {#if account.name}<p class="truncate px-3 pb-2 font-medium" title={account.name}>{account.name}</p>{/if}
       <ul class="flex flex-col gap-1">
         <li>
           <!-- svelte-ignore a11y_autofocus -- focus belongs inside the menu it opens, so Escape returns it to the avatar -->
-          <a href={shell.account.path} class={row} autofocus aria-current={shell.active === "account" ? "page" : undefined}>
+          <a href={account.path} class={row} autofocus aria-current={shell.active === "account" ? "page" : undefined}>
             <Icon name="profile" size={20} /><span>{T.yourProfile}</span>
           </a>
         </li>
@@ -370,19 +447,32 @@ const row =
         </li>
       </ul>
       {#if prefs !== undefined}
-        <div class="flex items-center justify-between gap-3 border-t px-3 pt-2 pb-1">
-          <span class="text-sm">{T.appearance}</span>
+        <div class="mt-1 flex items-center justify-between gap-3 border-t px-3 pt-2 pb-1">
+          <span class="flex items-center gap-3 text-sm"
+            ><Icon name={PICKER_ICON[current]} size={20} />{T.appearance}</span
+          >
           {@render themePicker()}
         </div>
       {/if}
-      <form method="post" action="/logout" class="border-t pt-1">
-        <Button type="submit" variant="ghost" class="w-full justify-start px-3">
+      <form method="post" action="/logout" class="mt-1 border-t pt-1">
+        <Button type="submit" variant="ghost" class="h-auto w-full justify-start gap-3 px-3 py-2 font-normal">
           <Icon name="signout" size={20} /><span>{T.signOut}</span>
         </Button>
       </form>
     </section>
   {/if}
-  <main id="main" tabindex="-1" class="mx-auto w-full py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
+  <main id="main" tabindex="-1" class="mx-auto w-full flex-1 py-8 {shell.wide ? 'px-5.5 max-md:px-4' : 'max-w-3xl px-4'}">{@render content()}</main>
+  <footer class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t px-5.5 py-6 text-sm text-muted-foreground max-sm:px-4">
+    <p>{T.note}</p>
+    <nav aria-label={T.legalColumn}>
+      <ul class="flex flex-wrap gap-x-5 gap-y-1">
+        {#each LEGAL as link (link.href)}
+          <li><a href={link.href} class="{footerLink} text-muted-foreground hover:text-foreground">{link.label}</a></li>
+        {/each}
+      </ul>
+    </nav>
+  </footer>
+  </div>
 {:else}
   <div class="flex min-h-svh flex-col">
     <header class="flex h-14 items-center justify-between border-b px-4">

@@ -63,7 +63,7 @@ test("icon_allowlist_matches_sheet", () => {
   const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
   expect(json.iconoirVersion).toBe("7.12.1");
   expect(ICONOIR_VERSION).toBe("7.12.1");
-  expect(Object.keys(json.icons)).toHaveLength(41);
+  expect(Object.keys(json.icons)).toHaveLength(46);
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
@@ -186,6 +186,14 @@ const ADDITIONS: Record<string, string> = {
   "bulb-on":
     '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M21 2L20 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 2L4 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M21 16L20 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M3 16L4 15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 18H15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 21H14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M11.9998 3C7.9997 3 5.95186 4.95029 5.99985 8C6.02324 9.48689 6.4997 10.5 7.49985 11.5C8.5 12.5 9 13 8.99985 15H14.9998C15 13.0001 15.5 12.5 16.4997 11.5001L16.4998 11.5C17.4997 10.5 17.9765 9.48689 17.9998 8C18.0478 4.95029 16 3 11.9998 3Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
   tv: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M7 21L17 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M2 16.4V3.6C2 3.26863 2.26863 3 2.6 3H21.4C21.7314 3 22 3.26863 22 3.6V16.4C22 16.7314 21.7314 17 21.4 17H2.6C2.26863 17 2 16.7314 2 16.4Z" stroke="currentColor" stroke-width="1.5"/>\n</svg>\n',
+  community:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M1 20V19C1 15.134 4.13401 12 8 12V12C11.866 12 15 15.134 15 19V20" stroke="currentColor" stroke-linecap="round"/>\n<path d="M13 14V14C13 11.2386 15.2386 9 18 9V9C20.7614 9 23 11.2386 23 14V14.5" stroke="currentColor" stroke-linecap="round"/>\n<path d="M8 12C10.2091 12 12 10.2091 12 8C12 5.79086 10.2091 4 8 4C5.79086 4 4 5.79086 4 8C4 10.2091 5.79086 12 8 12Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M18 9C19.6569 9 21 7.65685 21 6C21 4.34315 19.6569 3 18 3C16.3431 3 15 4.34315 15 6C15 7.65685 16.3431 9 18 9Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  explore:
+    '<svg width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M10.5857 10.5857L16.9496 7.0502L13.4141 13.4142L7.05012 16.9497L10.5857 10.5857Z" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor"  stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  saved:
+    '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21L13.0815 17.1953C12.4227 16.7717 11.5773 16.7717 10.9185 17.1953L5 21Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  help: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M9 9C9 5.49997 14.5 5.5 14.5 9C14.5 11.5 12 10.9999 12 13.9999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M12 18.01L12.01 17.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
+  link: '<svg width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\n<path d="M14 11.9976C14 9.5059 11.683 7 8.85714 7C8.52241 7 7.41904 7.00001 7.14286 7.00001C4.30254 7.00001 2 9.23752 2 11.9976C2 14.376 3.70973 16.3664 6 16.8714C6.36756 16.9525 6.75006 16.9952 7.14286 16.9952" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n<path d="M10 11.9976C10 14.4893 12.317 16.9952 15.1429 16.9952C15.4776 16.9952 16.581 16.9952 16.8571 16.9952C19.6975 16.9952 22 14.7577 22 11.9976C22 9.6192 20.2903 7.62884 18 7.12383C17.6324 7.04278 17.2499 6.99999 16.8571 6.99999" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>\n</svg>\n',
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -193,7 +201,7 @@ const APPROVED_TEXT = readFileSync(join(UI, "approved-extensions.json"), "utf8")
 const REGISTRATION = JSON.parse(APPROVED_TEXT) as {
   designApproval: unknown;
   icons: Record<
-    "devices" | "apps" | "bulb-off" | "bulb-on" | "tv",
+    "devices" | "apps" | "bulb-off" | "bulb-on" | "tv" | "community" | "explore" | "saved" | "help" | "link",
     { sourceSha256: string; drawings: [string, Record<string, string>][] }
   >;
 };
@@ -300,14 +308,14 @@ test("icon_absent_extension_preserves_every_output_byte", () => {
   expect(writes).toEqual([]);
 });
 
-test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
+test("icon_approved_extension_generates_only_the_46_registered_icons", () => {
   const fixture = registered();
   expect(fixture.run()).toEqual({ code: 0, lines: [] });
   const json = JSON.parse(fixture.files.get("icons/icons.json") as string);
   const baseText = baseFiles().get("icons/icons.json") as string;
   expect(sha256(baseText)).toBe(LEGACY_JSON_SHA256);
   const base = JSON.parse(baseText);
-  expect(Object.keys(json.icons)).toHaveLength(41);
+  expect(Object.keys(json.icons)).toHaveLength(46);
   expect(json.icons).toEqual({
     ...base.icons,
     devices: "f6e8345b720d99dbdd418f402f50b078e195fce7568f1c670c72086b5755278a",
@@ -315,6 +323,11 @@ test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
     "bulb-off": REGISTRATION.icons["bulb-off"].sourceSha256,
     "bulb-on": REGISTRATION.icons["bulb-on"].sourceSha256,
     tv: REGISTRATION.icons.tv.sourceSha256,
+    community: REGISTRATION.icons.community.sourceSha256,
+    explore: REGISTRATION.icons.explore.sourceSha256,
+    saved: REGISTRATION.icons.saved.sourceSha256,
+    help: REGISTRATION.icons.help.sourceSha256,
+    link: REGISTRATION.icons.link.sourceSha256,
   });
   expect(json.sheetVersion).toBe("1792621080-00d4");
   expect(json.iconoir).toEqual({
@@ -324,6 +337,11 @@ test("icon_approved_extension_generates_only_the_41_registered_icons", () => {
     "bulb-off": "light-bulb",
     "bulb-on": "light-bulb-on",
     tv: "modern-tv",
+    community: "group",
+    explore: "compass",
+    saved: "bookmark",
+    help: "help-circle",
+    link: "link",
   });
   expect(json.drawings.devices).toEqual(REGISTRATION.icons.devices.drawings.map(([, attributes]) => attributes));
   expect(json.drawings.apps).toEqual(REGISTRATION.icons.apps.drawings.map(([, attributes]) => attributes));
