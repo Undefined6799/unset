@@ -158,8 +158,7 @@ const strayIconFiles = (root: string): Finding[] =>
     .map((file) => finding(file, "SVG file outside shared/ui/icons/svg"));
 
 /** The source files the guard reads; the repository test checks there are some, so an empty scan cannot pass. */
-export const scannedFiles = (root: string): string[] =>
-  [...sourceFiles(root, [...PRODUCT_DIRS, "scripts"]), ...filesUnder(root, PRODUCT_DIRS, /\.svelte$/)].sort();
+export const scannedFiles = (root: string): string[] => sourceFiles(root, [...PRODUCT_DIRS, "scripts"]).sort();
 
 export function scanAll(root: string): Finding[] {
   const inventory = readJson<Record<string, Entry>>(root, INVENTORY);

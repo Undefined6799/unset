@@ -95,6 +95,7 @@ function expectFixtures(rule: string, kind: "bad" | "good", names?: string[]): v
 describe("egress", () => {
   test("egress_bad_fixture", () => expectFixtures("egress", "bad", ["dynamic-fetch.fixture"]));
   test("egress_bad_fixture_raw_sockets", () => expectFixtures("egress", "bad", ["raw-sockets.fixture"]));
+  test("egress_reads_svelte_files", () => expectFixtures("egress", "bad", ["svelte.fixture"]));
   test("egress_good_fixture", () => expectFixtures("egress", "good"));
   test("egress_fetch_split_over_lines_and_bare_allow", () => expectFixtures("egress", "bad", ["split-fetch.fixture"]));
 
@@ -221,6 +222,7 @@ describe("web-no-moderator", () => {
   test("web_moderator_bad_fixture", () => expectFixtures("web-no-moderator", "bad", ["routes.fixture"]));
   test("web_moderator_good_fixture", () => expectFixtures("web-no-moderator", "good"));
   test("web_moderator_preserve_verb", () => expectFixtures("web-no-moderator", "bad", ["preserve.fixture"]));
+  test("web_moderator_reads_svelte_files", () => expectFixtures("web-no-moderator", "bad", ["svelte.fixture"]));
   test("web_moderator_relative_admin_import", () =>
     expectFixtures("web-no-moderator", "bad", ["relative-admin.fixture"]));
 });

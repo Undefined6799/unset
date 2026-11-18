@@ -1,0 +1,2 @@
+/* fixture: interfaces/web/src/routes/x/+page.svelte findings=1 */
+<script lang="ts">import { gate } from "../../../../admin/gate.ts";</script>
