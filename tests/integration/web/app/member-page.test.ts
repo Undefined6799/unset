@@ -5,6 +5,7 @@
 // restores the member's grant and signs each PDS call is real.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { connect } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -18,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   buildOnce,
   clientAddress,
+  HOST,
   ORIGIN,
   PDS_HOST,
   type RunningWeb,
@@ -204,6 +206,35 @@ function largestCollection(filler: string, entries = 100): string {
   return form.toString();
 }
 
+/**
+ * Sends only the head of a card save that declares a `length`-byte body, and resolves with the status line the server
+ * answers. The gate refuses a declared length past the route's maxBody before reading any body (hooks.server.ts
+ * requestProblem) and closes the connection; sending the body as well raced that close, and the client's write failed
+ * with EPIPE (CI on #1722). If the gate waited for the body instead, no answer would come and the test would time out.
+ */
+function declaredLength(length: number): Promise<string> {
+  const head = [
+    `POST /${OWNER}?/create HTTP/1.1`,
+    `host: ${HOST}`,
+    `origin: ${ORIGIN}`,
+    `accept: ${HTML}`,
+    `content-type: ${FORM}`,
+    `x-forwarded-for: ${clientAddress()}`,
+    `cookie: ${cookie}`,
+    `content-length: ${length}`,
+  ].join("\r\n");
+  return new Promise((done, fail) => {
+    const socket = connect(member.web.port, "127.0.0.1", () => socket.write(`${head}\r\n\r\n`));
+    let answer = "";
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => {
+      answer += chunk;
+    });
+    socket.once("error", fail);
+    socket.once("close", () => done(answer.split("\r\n")[0] ?? ""));
+  });
+}
+
 /** Runs `step` and returns the PDS writes it made. */
 async function writesOf(step: () => Promise<unknown>): Promise<PdsWrite[]> {
   const before = member.writes().length;
@@ -388,8 +419,8 @@ describe("card writes", () => {
 
   test("a_body_past_2_mib_is_refused_with_no_write", async () => {
     const writes = await writesOf(async () => {
-      const response = await action("create", `kind=readme&width=full&text=${"x".repeat(2 * 1024 * 1024)}`);
-      expect(response.status).toBe(413);
+      const body = `kind=readme&width=full&text=${"x".repeat(2 * 1024 * 1024)}`;
+      expect(await declaredLength(Buffer.byteLength(body))).toMatch(/^HTTP\/1\.1 413 /);
     });
     expect(writes).toEqual([]);
   });
