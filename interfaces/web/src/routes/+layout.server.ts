@@ -6,6 +6,8 @@
 // follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
 import { safeReturnPath } from "@unset/shared-http";
+import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
+import { services } from "../lib/server/compose.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
 import type { ShellData } from "../lib/shell.ts";
@@ -24,7 +26,12 @@ function signInHref(path: string): string {
   return next === null ? "/login" : `/login?next=${encodeURIComponent(next)}`;
 }
 
-export const load: ServerLoad = ({ locals, request, route, url }) => {
+function appOpenDeps(): AppOpenDeps {
+  const { accounts, versions, log } = services();
+  return { readAccount: (did, deadline) => accounts.get(did, deadline), versions, log };
+}
+
+export const load: ServerLoad = async ({ locals, request, route, url }) => {
   const member = locals.did !== undefined;
   const prefs: ShellData["prefs"] =
     policyOf(route.id)?.group === "app" || member
@@ -34,5 +41,15 @@ export const load: ServerLoad = ({ locals, request, route, url }) => {
         }
       : undefined;
   const account: ShellData["account"] = member ? { path: `/${locals.did}` } : undefined;
-  return { signedIn: member, account, prefs, signInHref: signInHref(url.pathname) };
+  // Whether an error page may offer the app's menus (app-open.ts); a path no route matches has no policy row.
+  const open =
+    locals.did === undefined
+      ? false
+      : await appOpen(
+          appOpenDeps(),
+          locals.did,
+          route.id === null ? null : (policyOf(route.id) ?? null),
+          locals.deadline,
+        );
+  return { signedIn: member, account, appOpen: open, prefs, signInHref: signInHref(url.pathname) };
 };

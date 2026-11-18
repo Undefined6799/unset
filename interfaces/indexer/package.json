@@ -5,6 +5,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "dependencies": {
+    "@unset/domains-profile": "*",
     "@unset/infrastructure-firehose": "*",
     "@unset/infrastructure-postgres": "*"
   }
