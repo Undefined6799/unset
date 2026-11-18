@@ -1,5 +1,5 @@
 // The legal documents' markdown (P2.15), copied for the web process (P1.20d) from apps/web/src/legal/markdown.ts,
-// which P1.20k deletes with the React UI. Parsed once, when the module loads, into blocks a request only fills. There
+// which P1.20k deleted with the React UI. Parsed once, when the module loads, into blocks a request only fills. There
 // is no HTML pass-through: text stays text (Svelte escapes it) and a link is kept only when documentLink accepts it.
 // A hole is {{name}} and is filled later, never concatenated into HTML.
 
@@ -8,9 +8,9 @@ declare const linkBrand: unique symbol;
 export type DocumentLink = string & { readonly [linkBrand]: true };
 
 /**
- * The links a committed legal document may hold, narrower than shared/ui's safeHref (which the web process may not
- * import): a path on our origin of plain characters, an https URL with no userinfo, or a mailto address. Anything
- * else refuses the document at load, so a bad link fails the build's first request and the tests, never a visitor.
+ * The links a committed legal document may hold, narrower on purpose than shared/safe-href's safeHref: a path on our
+ * origin of plain characters, an https URL with no userinfo, or a mailto address. Anything else refuses the document
+ * at load, so a bad link fails the build's first request and the tests, never a visitor.
  */
 function documentLink(text: string): DocumentLink | null {
   if (/^\/(?!\/)[A-Za-z0-9/_.#-]*$/.test(text)) return text as DocumentLink;

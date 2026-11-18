@@ -1,4 +1,4 @@
-// Ported from interfaces/http/age-gate-audit.ts (P1.20f); the Hono copy goes at P1.20k.
+// Ported from interfaces/http/age-gate-audit.ts (P1.20f); the Hono copy went at P1.20k.
 // The audit row an under-age block writes (P2.12): `age_gate.blocked`, with the member as actor and target, and the
 // hosted reason when the account is on our PDS. The account repository calls this on the block's own transaction, so
 // a failed audit rolls the block back. It sits in the interface because infrastructure/postgres may not import

@@ -1,4 +1,4 @@
-// English text for onboarding (P2.12), as apps/web/src/screens/welcome/messages.ts has it; that copy goes at P1.20k.
+// English text for onboarding (P2.12), as apps/web/src/screens/welcome/messages.ts had it; that copy went at P1.20k.
 // The age screen's strings are scanned for a threshold: none of them may name it.
 export const WELCOME = {
   ageTitle: "When were you born?",

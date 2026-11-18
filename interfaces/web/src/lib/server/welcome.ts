@@ -1,5 +1,5 @@
 // Onboarding (P2.12; plan §6 age 16), ported from interfaces/http/routes/welcome.ts for the pages under
-// src/routes/welcome (P1.20f; the Hono copy goes at P1.20k). Age, then terms, then a chat placeholder. Each page
+// src/routes/welcome (P1.20f; the Hono copy went at P1.20k). Age, then terms, then a chat placeholder. Each page
 // serves only its own step and sends any other step where it belongs. An under-16 answer blocks the account, writes
 // the audit row, asks an operator when the account is on our PDS, revokes the grant and ends every session. The date
 // is a local variable of the age request and is never stored or logged.
