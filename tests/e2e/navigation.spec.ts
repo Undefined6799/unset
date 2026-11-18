@@ -44,6 +44,24 @@ test("the_drawer_profile_link_reaches_the_member_page_and_closes", async ({ page
   await expect(page.locator("#core-menu")).toBeHidden();
 });
 
+// Outside review of f5cab2f, finding 3: from one settings page to the other the settings layout stays too, and on a
+// phone the drawer opens from the bottom bar; both close it on arrival.
+test.describe("phone", () => {
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("the_drawer_closes_after_settings_to_settings_on_a_phone", async ({ page }) => {
+    const account: PageFixture = { ...SETTINGS, path: "/settings/account", route: "/settings/account" };
+    expect((await openPage(page, account))?.status()).toBe(200);
+    await page.waitForLoadState("networkidle");
+    await page.locator('nav:not([popover]) button[popovertargetaction="toggle"]').click();
+    const drawer = page.locator("#core-menu");
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("link", { name: "Settings" }).click();
+    await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
+    await expect(drawer).toBeHidden();
+  });
+});
+
 test("me_from_the_home_page_reaches_the_member_page", async ({ page }) => {
   const watched = watch(page);
   expect((await openPage(page, HOME_SIGNED_IN))?.status()).toBe(200);
