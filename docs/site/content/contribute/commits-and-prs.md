@@ -61,7 +61,7 @@ The template then has the line `AI notes: updated / none needed / which`. Keep o
 
 ## pr-shape
 
-The workflow runs on a pull request that is not a draft. `runChangeShape` reports:
+The workflow runs on every pull request, drafts included (P0.07l). `runChangeShape` reports:
 
 | Check | When it fires |
 | --- | --- |
