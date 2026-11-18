@@ -100,6 +100,23 @@ test.describe("javascript disabled", () => {
     await expect(panel).toBeHidden();
   });
 
+  // Clean tabs (Alex, 2026-11-18): features not built yet are shown greyed and disabled, never as links.
+  test("coming_soon_items_are_disabled_not_links", async ({ page }) => {
+    await page.goto("/");
+    const main = page.getByRole("navigation", { name: "Main" });
+    await expect(main.getByRole("link")).toHaveCount(1);
+    await expect(main).toContainText("Community, coming soon");
+    await expect(main).toContainText("Explore, coming soon");
+    for (const name of ["Search unset.sh", "Create", "Messages", "Notifications"]) {
+      await expect(
+        page
+          .locator("header")
+          .getByRole("button", { name: `${name}, coming soon` })
+          .first(),
+      ).toBeDisabled();
+    }
+  });
+
   // P2.05s: "No thanks" on the signed-out box is a form, so it works with no script, and it goes home.
   test("signed_out_no_thanks_posts_home", async ({ page }) => {
     await page.goto("/signed-out");

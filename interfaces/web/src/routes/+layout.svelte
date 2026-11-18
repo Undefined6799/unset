@@ -114,15 +114,35 @@ function restoreSaved(event: PageTransitionEvent): void {
 
 const MENU = "core-menu";
 const ACCOUNT = "account-menu";
-// The core header's main destinations (Clean tabs): only those that run today.
+const ACTIONS = "actions-menu";
+// The core header's main destinations (Clean tabs): those that run today are links.
 const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as const;
+// Coming soon (Alex, 2026-11-18: "still have them in a nav bar ... show them inactive, and then make a note somewhere
+// so we don't forget"). Each is drawn greyed and disabled: not a link, not focusable, its name read with "coming soon".
+// The list, and what each needs when its feature lands:
+// - Search (header field; an icon on narrow screens): a search page or palette, its route and policy (policy.ts),
+//   honest results (only what it really searches), then make the field a form and add it to the e2e and axe pages.
+// - Create (+), Messages, Notifications (header icons; in the "More actions" menu on phones): each a real flow or
+//   page with its route and policy; Messages and Notifications need real counts, loading and error states (never a
+//   hard-coded "all caught up"). Make the button a link or menu and add tests for it.
+// - Community, Explore (tabs below): a page each with its route and policy; move the entry from SOON_TABS to TABS
+//   with its `active` value in ShellData, so aria-current and the underline follow, and add its denial and e2e tests.
+// Icons: Community and Explore have none on the approved list (no users or compass icon), so they are words only.
+const SOON_ACTIONS = [
+  { label: T.create, icon: "add" },
+  { label: T.messages, icon: "comment" },
+  { label: T.notifications, icon: "notifications" },
+] as const;
+const SOON_TABS = [T.community, T.explore] as const;
+// A coming-soon control: the stock disabled look (opacity) with no hover; disabled buttons are skipped by Tab.
+const soon = "disabled:opacity-60";
 // The header's icon controls: 34px on a mouse, a 44px target on touch (Clean tabs handoff).
 const control = "pointer-coarse:size-11";
 const letter = $derived(shell.account?.name === undefined ? undefined : accountLetter(shell.account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
-  for (const id of [MENU, ACCOUNT]) {
+  for (const id of [MENU, ACCOUNT, ACTIONS]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -212,18 +232,43 @@ const row =
   <!-- The core shell's header (P1.20k; Alex, 2026-11-18, "Clean tabs"): the menu button and wordmark, the account menu
        at the right edge, and a row of main destinations below. Both menus are native popovers, so they open with no
        script, close on Escape or a click outside, and give focus back to their button. Only destinations that run
-       today are linked: search, create, messages, notifications, Community and Explore come with their features. -->
+       today are links; the rest are drawn disabled, as SOON_ACTIONS and SOON_TABS list them. -->
   <header class="border-b bg-secondary">
-    <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:px-4 max-sm:gap-2 max-sm:px-3">
-      <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-2">
+    <div class="flex min-h-18 items-center gap-4 px-5.5 max-md:gap-3 max-md:px-4 max-sm:gap-1.5 max-sm:px-2">
+      <div class="flex items-center gap-3.5 max-md:gap-2.5 max-sm:gap-1.5">
         <Button variant="outline" size="icon-sm" popovertarget={MENU} popovertargetaction="toggle" class={control}>
           <Icon name="menu" size={20} label={T.menu} />
         </Button>
-        <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap text-foreground no-underline" aria-label={T.homeLabel}
+        <a href="/" class="font-mono text-xl font-semibold whitespace-nowrap max-sm:text-lg text-foreground no-underline" aria-label={T.homeLabel}
           >{T.brandName}<span class="font-normal text-muted-foreground">{T.brandSuffix}</span></a
         >
       </div>
-      <div class="ml-auto flex items-center gap-2">
+      <button
+        type="button"
+        disabled
+        class="ml-auto flex h-8 w-70 max-w-85 min-w-38 shrink items-center gap-2 rounded-md border bg-background px-2.5 text-left text-sm text-muted-foreground opacity-60 pointer-coarse:h-11 max-md:w-58 max-sm:hidden"
+      >
+        <Icon name="search" size={16} /><span class="truncate">{T.search}</span>
+        <span class="sr-only">, {T.comingSoon}</span>
+      </button>
+      <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
+        <Button variant="outline" size="icon-sm" disabled class="{control} {soon} sm:hidden">
+          <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
+        </Button>
+        {#each SOON_ACTIONS as action (action.label)}
+          <Button variant="outline" size="icon-sm" disabled class="{control} {soon} max-sm:hidden">
+            <Icon name={action.icon} size={20} label="{action.label}, {T.comingSoon}" />
+          </Button>
+        {/each}
+        <Button
+          variant="outline"
+          size="icon-sm"
+          popovertarget={ACTIONS}
+          popovertargetaction="toggle"
+          class="{control} sm:hidden"
+        >
+          <Icon name="more" size={20} label={T.moreActions} />
+        </Button>
         {#if shell.account !== undefined}
           <Button
             variant="outline"
@@ -258,8 +303,30 @@ const row =
           <Icon name={tab.icon} size={16} class="text-muted-foreground" /><span>{tab.label}</span>
         </a>
       {/each}
+      {#each SOON_TABS as label (label)}
+        <span class="flex items-center px-3 text-sm whitespace-nowrap text-muted-foreground opacity-60 max-sm:px-2.5"
+          >{label}<span class="sr-only">, {T.comingSoon}</span></span
+        >
+      {/each}
     </nav>
   </header>
+  <section
+    id={ACTIONS}
+    popover="auto"
+    aria-label={T.moreActions}
+    class="fixed top-16 right-2 bottom-auto left-2 m-0 w-auto flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex"
+  >
+    <ul class="flex flex-col gap-1">
+      {#each SOON_ACTIONS as action (action.label)}
+        <li>
+          <button type="button" disabled class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground opacity-60">
+            <Icon name={action.icon} size={20} /><span>{action.label}</span>
+            <span class="ml-auto text-xs">{T.comingSoon}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </section>
   <nav
     id={MENU}
     popover="auto"
