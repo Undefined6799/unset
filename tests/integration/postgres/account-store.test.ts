@@ -215,6 +215,18 @@ describe("account store", () => {
     expect(jobs(B)).toEqual(["confirm_status"]);
   });
 
+  test("account.a_deletion_found_not_deleted_leaves_the_unerased_count", async () => {
+    // A P3.06s dead letter for W, whose deletion our PDS now denies: W is no longer waiting for erasure, so health
+    // stops counting it (the dead letter itself is append-only for indexer).
+    const W = "did:plc:wwwwwwwwwwwwwwwwwwwwwwww";
+    account(W, false, "deleted");
+    sql(`INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
+      VALUES ('track', '${W}', 'deletion_confirmed_not_erased', 1, now(), now())`);
+    expect((await index.health()).deletionsNotErased).toBe(1);
+    await accounts.confirmed(job(W, "confirm_deletion"), { kind: "active" });
+    expect((await index.health()).deletionsNotErased).toBe(0);
+  });
+
   test("account.erased_did_is_never_revealed", async () => {
     account(E, false, null, "confirm_status");
     await withClient(migrator, null, (c) => c.query("SELECT core.erase_did($1, 'user_request')", [E]));

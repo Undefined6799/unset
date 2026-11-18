@@ -44,7 +44,7 @@ export type IndexHealth = {
   readonly cursor: number | null;
   readonly counters: Readonly<Record<Counter, number>>;
   readonly deadLetters: number;
-  /** Accounts whose deletion our PDS confirmed and that wait, hidden, for erasure (P3.06e). */
+  /** Accounts whose deletion our PDS confirmed and that still wait, hidden, for erasure (P3.06s dead letters). */
   readonly deletionsNotErased: number;
 };
 
@@ -172,8 +172,12 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
     [...INGEST_COUNTERS],
   ]);
   const dead = await client.query(
-    `SELECT count(*) AS n, count(*) FILTER (WHERE reason_code = 'deletion_confirmed_not_erased') AS unerased
-     FROM idx.dead_letter`,
+    // A P3.06s deletion dead letter counts only while its account is still held as deleted: once our PDS denies the
+    // deletion, the account no longer waits for erasure (the dead letter is append-only for indexer).
+    `SELECT count(*) AS n,
+            count(DISTINCT d.did) FILTER (WHERE d.reason_code = 'deletion_confirmed_not_erased' AND EXISTS (
+              SELECT 1 FROM idx.account a WHERE a.did = d.did AND a.pds_status = 'deleted' AND NOT a.pds_active)) AS unerased
+     FROM idx.dead_letter d`,
   );
   const counters = Object.fromEntries(INGEST_COUNTERS.map((name) => [name, 0])) as Record<Counter, number>;
   for (const row of stats.rows) counters[row.name as Counter] = Number(row.value);
