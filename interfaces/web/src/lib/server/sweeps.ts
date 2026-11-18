@@ -1,4 +1,4 @@
-// Copied from interfaces/http/jobs/sweeps.ts for the web process (P1.20e); that copy goes at P1.20k.
+// Copied from interfaces/http/jobs/sweeps.ts for the web process (P1.20e); that copy went at P1.20k.
 // web's expiry sweeps (P2.03s; whole-project review 2026-11-15, security item 2). The session store and the OAuth
 // state store each had a sweep with no caller, so an expired session whose cookie never came back, and every
 // abandoned sign-in, stayed for good. web runs both because web is the role that may delete from those tables

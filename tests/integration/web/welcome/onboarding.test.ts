@@ -626,6 +626,25 @@ describe("verify email", () => {
     const body = await (await get("/verify-email", cookie)).text();
     expect(body).toContain(`href="${PDS}/account"`);
     expect(body).toContain('rel="noopener noreferrer"');
+    // The core shell (P1.20k): the member's own account menu and the footer, never Sign in.
+    expect(body).toContain('id="account-menu"');
+    expect(body).toContain(`href="/${did}"`);
+    expect(body).toContain("<footer");
+    expect(body).not.toMatch(/href="\/login/);
+  });
+
+  // P1.20k: an error page reached mid-onboarding keeps the member signed in but offers none of the app's menus, which
+  // would only send them back to their step.
+  test("an_error_page_mid_onboarding_shows_no_app_navigation", async () => {
+    const { cookie } = await signedIn();
+    const response = await get("/nowhere-at-all", cookie);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const body = await response.text();
+    for (const menu of ["core-menu", "create-menu", "messages-menu", "notifications-menu", "account-menu"]) {
+      expect(body, menu).not.toContain(`id="${menu}"`);
+    }
+    expect(body).not.toMatch(/href="\/login/);
   });
 
   test("a_member_not_onboarded_goes_to_their_step_first", async () => {

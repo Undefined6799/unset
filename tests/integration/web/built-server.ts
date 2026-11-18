@@ -142,7 +142,8 @@ function send(port: number, path: string, init: WebRequest): Promise<Response> {
 export type StandInFixture = {
   http?: Record<string, { status?: number; body: unknown }>;
   txt?: Record<string, string[]>;
-  fetch?: Record<string, { status?: number; body: unknown }>;
+  /** `delayMs` holds the answer that long, or until the request is aborted, to play a slow server. */
+  fetch?: Record<string, { status?: number; body: unknown; delayMs?: number }>;
   /** A stand-in PDS and authorization server at `origin` holding `did`'s repo (stand-in-pds.ts). */
   pds?: PdsFixture;
 };

@@ -109,6 +109,7 @@ const backToAdd = () => document.getElementById(triggerId);
     title={option.title}
     submit={CARD_EDIT.add}
     max={maxRows(limits, option.kind)}
+    textMax={limits.text}
     {enhance}
   />
 {/each}

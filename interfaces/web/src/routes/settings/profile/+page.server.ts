@@ -5,8 +5,9 @@
 // wrote badly reads as empty. A dead grant sends the member to sign in; any other failed read shows no form.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { APP_LIMITS, EMPTY_PROFILE, type ProfileFields, readProfileRecord } from "@unset/domains-profile";
-import { loadProfileRecord, respondToPdsFailure } from "@unset/infrastructure-pds";
+import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
+import { respondToPdsFailure } from "../../../lib/server/pds-failure.ts";
 import { config } from "../../../lib/server/runtime.ts";
 import { settingsShell } from "../shell.server.ts";
 

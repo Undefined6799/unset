@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
+  "references": [
+    { "path": "../../domains/profile" },
+    { "path": "../../infrastructure/firehose" },
+    { "path": "../../infrastructure/postgres" }
+  ]
+}

@@ -132,19 +132,10 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/admin/a.ts", "../../shared/http/index.ts"),
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
-  "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
   "interface-web-sveltekit": [{ from: "interfaces/web/src/hooks.server.ts", spec: "$app/env", unresolved: true }],
   "interface-web-components": [
     edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/lib/components/ui/button/index.ts"),
     edge("interfaces/web/src/routes/a.ts", "../../../../apps/web/app.css"),
-  ],
-  "interface-http-render-build": [
-    {
-      from: config.RENDER_BUILD_IMPORT.from,
-      spec: config.RENDER_BUILD_IMPORT.module,
-      kind: "dynamic",
-      unresolved: true,
-    },
   ],
   "interface-web-build": config.WEB_SERVER_BUILD.modules.map((spec) => ({
     from: config.WEB_SERVER_BUILD.from,
@@ -189,8 +180,6 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("shared/lexicons/scripts/build.ts", "@atproto/lex-cli"),
     ...config.LEXICON_SCRIPT_BUILTINS.map((name) => edge("shared/lexicons/scripts/build.ts", `node:${name}`)),
   ],
-  "shared-ui-islands": [edge("shared/ui/a.ts", "../islands/index.ts")],
-  "shared-islands": [edge("shared/islands/a.ts", "./b.ts"), edge("shared/islands/a.ts", "left-pad")],
   "shared-ui-safe-href": [edge("shared/ui/a.ts", "../safe-href/index.ts")],
   "shared-safe-href": [edge("shared/safe-href/a.ts", "./b.ts")],
   "shared-ui-build": [
@@ -305,8 +294,9 @@ describe("boundary rules", () => {
 
   test("depcruise_app_render_entry", async () => {
     await expectFail("app-render-entry-only", edge("interfaces/api/a.ts", "../../apps/web/render.tsx"));
-    await expectPass(edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`));
-    await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/other.ts"));
+    await expectPass(edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`));
+    // P1.20k: interfaces/http and the React render entry are gone; the folder may import no app now.
+    await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx"));
     await expectFail("app-render-entry-only", edge("interfaces/admin/a.ts", "../../apps/admin/other.ts"));
   });
 
@@ -318,12 +308,6 @@ describe("boundary rules", () => {
       await expectFail("vendor-sdk-one-adapter", edge("interfaces/indexer/a.ts", sdk));
       await expectFail("vendor-sdk-one-adapter", edge("infrastructure/pds/a.ts", sdk));
       await expectPass(edge("infrastructure/firehose/a.ts", sdk));
-    }
-    // The owner's README editor (ADR 0037 point 5): BlockNote and its ProseMirror stay in apps/web/src/editor/.
-    for (const sdk of ["@blocknote/core", "prosemirror-state", "@tiptap/core"]) {
-      await expectFail("vendor-sdk-one-adapter", edge("apps/web/src/islands/a.island.tsx", sdk));
-      await expectFail("vendor-sdk-one-adapter", edge("apps/web/src/screens/a.tsx", sdk));
-      await expectPass(edge("apps/web/src/editor/a.tsx", sdk));
     }
   });
 
@@ -342,7 +326,12 @@ describe("boundary rules", () => {
     await expectFail("infrastructure-not-entry", edge("infrastructure/pds/a.ts", "../../interfaces/http/b.ts"));
     await expectFail("shared-leaf", edge("shared/config/a.ts", "../../domains/identity/b.ts"));
     await expectFail("vendor-sdk-one-adapter", edge("domains/identity/a.ts", "pg"));
-    await expectFail("web-not-admin", edge("interfaces/http/a.ts", "../../apps/admin/b.ts"));
+    // P1.20k: the rule named interfaces/http, which the Svelte move deleted; it names the web process now.
+    await expectFail(
+      "web-not-admin",
+      edge("interfaces/web/src/lib/server/a.ts", "../../../../../apps/admin/b.ts"),
+      edge("interfaces/web/src/routes/a.ts", "../../../admin/b.ts"),
+    );
     await expectFail("domain-cross-via-index", edge("domains/content/a.ts", "../identity/sessions/b.ts"));
     await expectPass(edge("domains/content/a.ts", "../identity/index.ts"));
     await expectFail("domain-no-io-builtins", edge("domains/identity/a.ts", "node:fs"));
@@ -485,40 +474,6 @@ describe("boundary rules", () => {
     await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx/x.ts"));
   });
 
-  const ISLANDS = ["apps/web/src/islands/demo.island.tsx", "shared/ui/islands/menu.island.tsx"];
-  const up = (island: string) => "../".repeat(island.split("/").length - 1);
-
-  test("island_import_boundary", async () => {
-    for (const island of ISLANDS) {
-      await expectFail("island-import-boundary", edge(island, `${up(island)}domains/identity/index.ts`));
-      await expectFail("island-import-boundary", edge(island, `${up(island)}infrastructure/postgres/index.ts`));
-      await expectFail("island-import-boundary", edge(island, `${up(island)}interfaces/http/compose.ts`));
-      await expectFail("island-import-boundary", edge(island, `${up(island)}shared/config/index.ts`));
-      await expectPass(edge(island, `${up(island)}shared/ui/index.ts`));
-      await expectPass(edge(island, `${up(island)}shared/islands/index.ts`));
-    }
-    await expectFail("island-import-boundary", edge(ISLANDS[0] as string, "../server/session.ts"));
-    await expectPass(edge(ISLANDS[0] as string, "../../../../shared/config/index.ts", "type"));
-  });
-
-  test("island_imports_jsx_runtime_passes", async () => {
-    for (const island of ISLANDS) await expectPass(edge(island, "react/jsx-runtime"));
-  });
-
-  test("island_imports_other_subpath_fails", async () => {
-    for (const island of ISLANDS) {
-      await expectFail("island-import-boundary", edge(island, "react/jsx-dev-runtime"), edge(island, "react"));
-    }
-  });
-
-  test("island_imports_unrelated_package_fails", async () => {
-    for (const island of ISLANDS) await expectFail("island-import-boundary", edge(island, "left-pad"));
-  });
-
-  test("island_imports_node_builtin_fails", async () => {
-    for (const island of ISLANDS) await expectFail("island-import-boundary", edge(island, "node:fs"));
-  });
-
   test("depcruise_scans_every_source_file", () => {
     // dependency-cruiser reads .mts/.cts only with the TypeScript parser, which TypeScript 7 no longer
     // provides, so such a file would skip every boundary. None may exist until that changes.
@@ -593,21 +548,6 @@ describe("allowlist matrix", () => {
       | undefined;
     expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui-build/a.ts")).toBe(false);
     expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui/a.ts")).toBe(true);
-  });
-
-  test("shared_islands_is_a_leaf", async () => {
-    // P1.25o: the island runtime ships to the browser, so it reaches only itself and npm (no Node built-in), and never
-    // the kit, which imports it. The kit sees it only through its index (DC-2).
-    await expectFail(
-      "not-in-allowed",
-      edge("shared/islands/a.ts", "node:fs"),
-      edge("shared/islands/a.ts", "../ui/index.ts"),
-      edge("shared/islands/a.ts", "../ui/index.ts", "type"),
-      edge("shared/ui/a.ts", "../islands/props.ts"),
-      // The kit's edge to the runtime adds the index alone: no Node built-in for the kit, and no other leaf gains it.
-      edge("shared/ui/a.ts", "node:fs"),
-      edge("shared/lexicons/a.ts", "../islands/index.ts"),
-    );
   });
 
   test("deployment_preflight_is_a_leaf", async () => {
@@ -731,17 +671,6 @@ describe("allowlist matrix", () => {
     expect(resolved(result, from, "exp-only")?.resolved).toBe("node_modules/exp-only/dist/index.js");
     expect(outcome(result).rules).toEqual(["not-in-allowed", "not-in-allowed"]);
     expect(result.modules.map((m) => m.source)).not.toContain("apps/web/dist/server.js");
-  });
-
-  test("render_build_import_is_exact", async () => {
-    // P1.23w: the one unresolvable edge is this file's import of this specifier; nothing near it passes.
-    const { from, module } = config.RENDER_BUILD_IMPORT;
-    expect({ from, module }).toEqual({ from: "interfaces/http/web/render-entry.ts", module: "@unset/apps-web/server" });
-    const unresolved = (file: string, spec: string): Edge => ({ from: file, spec, kind: "dynamic", unresolved: true });
-    await expectPass(unresolved(from, module));
-    await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
-    await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
-    await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
   });
 
   test("web_server_build_import_is_exact", async () => {

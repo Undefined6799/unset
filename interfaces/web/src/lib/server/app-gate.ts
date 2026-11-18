@@ -1,4 +1,4 @@
-// The app gate (P2.11, P2.12), ported from interfaces/http/app-gate.ts (P1.20f; the Hono copy goes at P1.20k): after
+// The app gate (P2.11, P2.12), ported from interfaces/http/app-gate.ts (P1.20f; the Hono copy went at P1.20k): after
 // the session, onboarding, then a confirmed email. hooks.server.ts runs it for every request that needs a member
 // (`session: "required"`, and a member's request to a `session: "writes"` route); the welcome and verify-email pages
 // (`session: "onboarding"`) skip it, because they are where it sends people. The decisions are the identity domain's;

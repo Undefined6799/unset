@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@unset/shared-config": "*",
-    "@unset/shared-errors": "*",
-    "@unset/shared-log": "*"
+    "@unset/shared-safe-href": "*"
   }
 }

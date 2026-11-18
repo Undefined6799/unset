@@ -1,13 +1,14 @@
 <!--
   The owner's controls on each card (ADR 0051; from apps/web/src/screens/profile/CardControls.tsx, P1.20i): the
-  editor, move up and down, and delete behind a confirm. They sit at the card's top right as small icon buttons, each
-  named for assistive tech; with a mouse they show while the card is hovered or holds focus, on touch always (the
-  profile-card mockup, Alex 2026-11-17, which puts a pencil and a menu there; these stay plain buttons, so moving works
-  with no script). Up and down are labelled buttons the keyboard reaches; each
-  posts the whole new order to the page's `reorder` action and works with no script. Edit and delete are links that
+  editor, move up and down, and delete behind a confirm. They sit at the card's top right, always shown (Alex
+  2026-11-18: phones have no hover), as the profile-card mockup's pencil and three-dot menu. With script the menu is
+  the stock DropdownMenu holding Move up, Move down and Delete; with none the same three are plain icon buttons and
+  links, so moving and deleting still work. Each move posts the whole new order to the page's `reorder` action. On a
+  large screen with a mouse the card is also dragged by its top bar and dropped on another card to take its place
+  (Alex 2026-11-18: dragging on big screens only; phones and the keyboard use the menu). Edit and delete are links that
   open the stock Dialog with script, and with none go to the page with that editor or confirm in place (card-panel.svelte;
-  staging walkthrough 2026-11-18, finding 8). With script the moved card keeps focus: its same button, or its
-  other move button once it reaches an end, since the button pressed is redrawn and focus would fall to the body. A
+  staging walkthrough 2026-11-18, finding 8). A card moved from its menu keeps focus on its menu button; with no script
+  the page reloads. A
   deleted card's place goes to the card that takes it (its first control), or the one before when it was last, or Add
   card when none is left; the page stays where it was (the page's enhance refreshes in place).
 -->
@@ -34,6 +35,7 @@ import { Icon } from "../icon/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import * as Dialog from "../ui/dialog/index.ts";
+import * as DropdownMenu from "../ui/dropdown-menu/index.ts";
 import CardEditor from "./card-editor.svelte";
 
 let {
@@ -45,6 +47,19 @@ let {
 
 const card = $derived(cards[index]);
 const keys = $derived(cards.map((c) => c.key));
+
+/** Whether the page runs script: false while the server renders and until the first effect runs in the browser. */
+let hydrated = $state(false);
+$effect(() => {
+  hydrated = true;
+});
+
+/** The whole new order, with the card `key` taken out and put where the card at `at` was. */
+function placed(key: string, at: number): string[] {
+  const order = keys.filter((k) => k !== key);
+  order.splice(at, 0, key);
+  return order;
+}
 
 /** The whole new order, with the cards at `from` and `to` swapped. */
 function swapped(from: number, to: number): string[] {
@@ -80,11 +95,85 @@ const maxOf = (kind: CardContent["kind"]) => (kind === "readme" ? 0 : limits[kin
 let group: HTMLFieldSetElement | undefined = $state();
 let removing = $state(false);
 let removeLink: HTMLAnchorElement | undefined = $state();
+let menuButton: HTMLButtonElement | null = $state(null);
+/** On closing the delete dialog, focus goes back to what opened it: the menu button, or the Delete link. */
 function backToRemove(event: Event) {
-  if (removeLink === undefined || !removeLink.isConnected) return;
+  const target = [menuButton, removeLink].find((el) => el?.isConnected);
+  if (target == null) return;
   event.preventDefault();
-  removeLink.focus();
+  target.focus();
 }
+/** The move forms the menu submits, by direction. */
+const moveForms: Record<"up" | "down", HTMLFormElement | undefined> = $state({ up: undefined, down: undefined });
+function moveFromMenu(to: "up" | "down") {
+  moveForms[to]?.requestSubmit();
+}
+function removeFromMenu() {
+  removeRefused = undefined;
+  removing = true;
+}
+
+/** Large screens with a mouse drag cards; phones and the keyboard use the menu. */
+const DRAGS = "(min-width: 64rem) and (pointer: fine)";
+const DRAG_TYPE = "application/x-unset-card";
+let dropOrder: string[] = $state([]);
+let dropForm: HTMLFormElement | undefined = $state();
+async function dropped(key: string) {
+  dropOrder = placed(key, index);
+  await tick();
+  dropForm?.requestSubmit();
+}
+// The card's top bar (the element the controls sit in) is the handle, the whole card the drop target; a dragged card
+// carries only its key, and a drop posts the new order as a move does.
+$effect(() => {
+  const head = group?.parentElement;
+  const shown = group?.closest<HTMLElement>('[data-slot="card"]');
+  const key = card?.key;
+  if (!hydrated || head == null || shown == null || key === undefined) return;
+  const wide = matchMedia(DRAGS);
+  const sync = () => {
+    head.draggable = wide.matches;
+    head.style.cursor = wide.matches ? "grab" : "";
+  };
+  const start = (event: DragEvent) => {
+    if (event.dataTransfer === null) return;
+    event.dataTransfer.setData(DRAG_TYPE, key);
+    event.dataTransfer.effectAllowed = "move";
+    const box = shown.getBoundingClientRect();
+    event.dataTransfer.setDragImage(shown, event.clientX - box.left, event.clientY - box.top);
+  };
+  const over = (event: DragEvent) => {
+    if (!event.dataTransfer?.types.includes(DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    shown.dataset.drop = "";
+  };
+  const leave = (event: DragEvent) => {
+    if (!(event.relatedTarget instanceof Node && shown.contains(event.relatedTarget))) delete shown.dataset.drop;
+  };
+  const drop = (event: DragEvent) => {
+    delete shown.dataset.drop;
+    const from = event.dataTransfer?.getData(DRAG_TYPE);
+    if (from === undefined || from === "") return;
+    event.preventDefault();
+    if (from !== key) void dropped(from);
+  };
+  sync();
+  wide.addEventListener("change", sync);
+  head.addEventListener("dragstart", start);
+  shown.addEventListener("dragover", over);
+  shown.addEventListener("dragleave", leave);
+  shown.addEventListener("drop", drop);
+  return () => {
+    wide.removeEventListener("change", sync);
+    head.removeEventListener("dragstart", start);
+    shown.removeEventListener("dragover", over);
+    shown.removeEventListener("dragleave", leave);
+    shown.removeEventListener("drop", drop);
+    head.draggable = false;
+    head.style.cursor = "";
+  };
+});
 
 // A refused delete keeps the dialog open with the reason inside it, where the member is looking, as the card editor
 // does (Codex review of f14b5ab); the page's own alert would sit behind the modal. The message is the action's
@@ -114,18 +203,30 @@ $effect(() => {
   const pending = pendingMove;
   if (pending === null || moved?.key !== pending.key || group === undefined) return;
   pendingMove = null;
-  const target = group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ?? group.querySelector<HTMLElement>("[data-move]");
+  const target =
+    group.querySelector<HTMLElement>("[data-card-menu]") ??
+    group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ??
+    group.querySelector<HTMLElement>("[data-move]");
   target?.focus();
 });
 </script>
 
 {#snippet move(to: number, label: string)}
   {@const direction = to < index ? "up" : "down"}
-  <form method="POST" action="?/reorder" use:enhance onsubmit={() => (pendingMove = { key: card?.key ?? "", to: direction })}>
+  <form
+    bind:this={moveForms[direction]}
+    method="POST"
+    action="?/reorder"
+    hidden={hydrated}
+    use:enhance
+    onsubmit={() => (pendingMove = { key: card?.key ?? "", to: direction })}
+  >
     {#each swapped(index, to) as key (key)}<input type="hidden" name="order" value={key} />{/each}
-    <Button type="submit" variant="ghost" size="icon-sm" data-move={direction} class={tap}
-      ><Icon name={direction} size={20} label={label} /></Button
-    >
+    {#if !hydrated}
+      <Button type="submit" variant="ghost" size="icon-sm" data-move={direction} class={tap}
+        ><Icon name={direction} size={20} label={label} /></Button
+      >
+    {/if}
   </form>
 {/snippet}
 
@@ -133,7 +234,7 @@ $effect(() => {
   <fieldset
     bind:this={group}
     data-card-controls
-    class="-me-2 -mt-1 flex shrink-0 gap-0.5 transition-opacity motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:group-focus-within/card:opacity-100 pointer-fine:group-hover/card:opacity-100"
+    class="-me-2 -mt-1 flex shrink-0 gap-0.5"
   >
     <legend class="sr-only">{CARD_EDIT.group(cardName(card.content))}</legend>
     <CardEditor
@@ -147,11 +248,41 @@ $effect(() => {
       title={EDIT_TITLE[card.content.kind]}
       submit={CARD_EDIT.save}
       max={maxOf(card.content.kind)}
+      textMax={limits.text}
       {enhance}
     />
     {#if index > 0}{@render move(index - 1, CARD_EDIT.up)}{/if}
     {#if index < cards.length - 1}{@render move(index + 1, CARD_EDIT.down)}{/if}
+    {#if hydrated}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          bind:ref={menuButton}
+          data-card-menu
+          class="{buttonVariants({ variant: 'ghost', size: 'icon-sm' })} {tap}"
+          ><Icon name="more" size={20} label={CARD_EDIT.more(cardName(card.content))} /></DropdownMenu.Trigger
+        >
+        <!-- No scroll lock: the menu's lock and the delete dialog's overlap and the page jumps to the top (bits-ui 2.20.6 popper-layer-inner.svelte locks by default). -->
+        <DropdownMenu.Content align="end" preventScroll={false}>
+          {#if index > 0}
+            <DropdownMenu.Item onSelect={() => moveFromMenu("up")}><Icon name="up" size={16} />{CARD_EDIT.up}</DropdownMenu.Item>
+          {/if}
+          {#if index < cards.length - 1}
+            <DropdownMenu.Item onSelect={() => moveFromMenu("down")}
+              ><Icon name="down" size={16} />{CARD_EDIT.down}</DropdownMenu.Item
+            >
+          {/if}
+          {#if cards.length > 1}<DropdownMenu.Separator />{/if}
+          <DropdownMenu.Item variant="destructive" onSelect={removeFromMenu}
+            ><Icon name="delete" size={16} />{CARD_EDIT.remove}</DropdownMenu.Item
+          >
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      <form bind:this={dropForm} method="POST" action="?/reorder" hidden use:enhance>
+        {#each dropOrder as key (key)}<input type="hidden" name="order" value={key} />{/each}
+      </form>
+    {/if}
     <Dialog.Root bind:open={removing}>
+      {#if !hydrated}
       <a
         bind:this={removeLink}
         href="?remove={card.key}#{PANEL_ANCHOR}"
@@ -164,6 +295,7 @@ $effect(() => {
           }
         }}><Icon name="delete" size={20} label={CARD_EDIT.remove} /></a
       >
+      {/if}
       <Dialog.Content onCloseAutoFocus={backToRemove}>
         <Dialog.Header>
           <Dialog.Title>{CARD_EDIT.removeTitle}</Dialog.Title>

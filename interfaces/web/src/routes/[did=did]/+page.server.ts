@@ -18,6 +18,7 @@ import {
   saveProfileRecord,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
+import { LIMITS } from "@unset/shared-lexicons";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
@@ -108,7 +109,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     avatarShape: own.kind === "ok" ? own.avatarShape : "round",
     cards,
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: CARD_EDIT_LIMITS,
+    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes },
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete,
     profileUnavailable: own.kind !== "ok",
   };

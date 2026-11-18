@@ -27,6 +27,3 @@ export function definePolicies(table: PolicyTable): PolicyTable {
   }
   return Object.freeze({ ...table });
 }
-
-/** Whether a policy limits per DID, which only a route that requires a session can apply (`rateLimitDid`). */
-export const hasDidEntry = (policy: Policy): boolean => policy.some((entry) => entry.scope === "did");

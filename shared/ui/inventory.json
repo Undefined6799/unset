@@ -4,25 +4,25 @@
     "sheetSha256": "b30832fa9591d44d454cc1aadcdf09462a7404a6e8ce71f18cd612af6cbb5432",
     "props": "AsciiBackgroundProps",
     "variants": ["fadeFrom=left"],
-    "status": "built"
+    "status": "reference"
   },
   "Avatar": {
     "sheet": "sheet/components/Avatar/README.md",
     "sheetSha256": "d1a59b6575b3b68fb1ce1d50bbebf6a4ab58cd85f27f8c15f02923438e2da998",
     "props": "AvatarProps",
     "variants": ["size=24", "size=40", "size=64", "size=128"],
-    "status": "built"
+    "status": "reference"
   },
   "Button": {
     "sheet": "sheet/components/Button/README.md",
     "sheetSha256": "23f8a1a60d2e7bdd001e9acd545d64b3f1657d929e6a188093b453483f80b440",
     "props": "ButtonProps",
     "variants": ["type=button", "type=submit", "type=reset"],
-    "status": "built",
+    "status": "reference",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -31,67 +31,67 @@
     "sheetSha256": "4d13b1095e99a137f92023ac958c16a236d477449d4eb1664d1687faba564600",
     "props": "CalloutProps",
     "variants": ["tone=info", "tone=danger", "tone=success", "tone=note"],
-    "status": "built"
+    "status": "reference"
   },
   "Card": {
     "sheet": "sheet/components/Card/README.md",
     "sheetSha256": "e92607c0cd202c6f634ab049b0e166e2dfb3515d4b3dd8ebcf15838e479102ba",
     "props": "CardProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Checkbox": {
     "sheet": "sheet/components/Checkbox/README.md",
     "sheetSha256": "ea6318a47b56fcbaf0138ff86704c1a5cbdb858eae678e876152c6aa3c3fe2ec",
     "props": "CheckboxProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "CodeBlock": {
     "sheet": "sheet/components/CodeBlock/README.md",
     "sheetSha256": "ba613c6fd56eff6685e15ffb53cb487b605df30dcf349459ee38ff81f0fad14f",
     "props": "CodeBlockProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "CommandBlock": {
     "sheet": "sheet/components/CommandBlock/README.md",
     "sheetSha256": "ffa951b13f0d174a9afb72b8fd170ba4b971406043396586584cd2e8f380ab6f",
     "props": "CommandBlockProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "DescriptionList": {
     "sheet": "sheet/components/DescriptionList/README.md",
     "sheetSha256": "eded74473ca72d6c5597d268fff7d7fa0c86ff706c7de9165866856387f3b122",
     "props": "DescriptionListProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "FeedMore": {
     "sheet": "sheet/components/FeedMore/README.md",
     "sheetSha256": "1cdd6724fada302ea35e50c902e5db28740f358f9ad8bca518c79fe06e0d8646",
     "props": "FeedMoreProps",
     "variants": ["state=idle", "state=loading", "state=end", "state=error"],
-    "status": "built"
+    "status": "reference"
   },
   "Footer": {
     "sheet": "sheet/components/Footer/README.md",
     "sheetSha256": "1942f2a4fba3c9d5a9a5e80eb411af96f92e5566e094b87e78b05e8f0c8868f1",
     "props": "FooterProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Header": {
     "sheet": "sheet/components/Header/README.md",
     "sheetSha256": "b0e61c678fbab72bc1331c456084fc0158b9fd90282625e475627cd81e933c3c",
     "props": "HeaderProps",
     "variants": [],
-    "status": "built",
+    "status": "reference",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -100,11 +100,11 @@
     "sheetSha256": "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
     "props": "IconProps",
     "variants": ["size=16", "size=20", "size=24"],
-    "status": "built",
+    "status": "reference",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -113,53 +113,53 @@
     "sheetSha256": "a22d7cb0d15c4e7e98558d26cba2c5b4d6d0cb97ba395fb10dfd630791943f16",
     "props": "InputProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Kbd": {
     "sheet": "sheet/components/Kbd/README.md",
     "sheetSha256": "0e830063e303ab9757b27e0b7f7efbffc09592a616637ad2cee3a01e428ca6fe",
     "props": "inline",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Link": {
     "sheet": "sheet/components/Link/README.md",
     "sheetSha256": "3a20da2a18bbe9e686a258239af30b2a19edb8429e7bf0aee4e3c8fe4cb6d27a",
     "props": "LinkProps",
     "variants": ["variant=inline", "variant=standalone"],
-    "status": "built"
+    "status": "reference"
   },
   "Mark": {
     "sheet": "sheet/components/Mark/README.md",
     "sheetSha256": "33c5b1594da646c188612860e30705dd04d2bbd94f5e90e679f1850a7fe0749d",
     "props": "MarkProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "MediaFrame": {
     "sheet": "sheet/components/MediaFrame/README.md",
     "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
     "props": "MediaFrameProps",
     "variants": ["ratio=1:1", "ratio=4:5", "ratio=9:16", "ratio=16:9", "ratio=3:1"],
-    "status": "built"
+    "status": "reference"
   },
   "Modal": {
     "sheet": "sheet/components/Modal/README.md",
     "sheetSha256": "916a5935cf357b38a30288a15aa3eebd67c339b46a9bcb6e83b3db39ec07c2d0",
     "props": "ModalProps",
     "variants": ["tone=default", "tone=danger"],
-    "status": "built"
+    "status": "reference"
   },
   "Navigation": {
     "sheet": "components/Navigation/README.md",
     "sheetSha256": "562d406c3094dfd83e50ac634da522ec34eeb68df2e7d35425ac71d49f7ca82c",
     "props": "NavigationProps",
     "variants": ["left drawer", "phone floating bar"],
-    "status": "built",
+    "status": "reference",
     "extensions": [
       {
         "path": "approved-extensions.json",
-        "sha256": "8a423a4662336599b7d85440b98764036bac50055d12b67ffa7f64e5d0356071"
+        "sha256": "5ee83326ce8d04787fd2f3bcc80eb4911323f6b1b47175cdeee2c41272631ba6"
       }
     ]
   },
@@ -168,104 +168,104 @@
     "sheetSha256": "5495a0162714dd03509584768e5d3329c24ae8c84ee00b68e8f28c3790d5c7c3",
     "props": "NewPostsProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Pagination": {
     "sheet": "sheet/components/Pagination/README.md",
     "sheetSha256": "3a2a06bce8d46cdc14deeb413bda0900ecf3656a537d61bef53a2db1b42c750d",
     "props": "PaginationProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Progress": {
     "sheet": "sheet/components/Progress/README.md",
     "sheetSha256": "01be03ec37c8f463e6481bba052d8feecceb67712aa7a1058c26a2700245d8a9",
     "props": "ProgressProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "RadioGroup": {
     "sheet": "sheet/components/RadioGroup/README.md",
     "sheetSha256": "4509e963285b49b8bfc17c8f89aafb4b91898fd3f2f41f49355d66c1b0f59979",
     "props": "RadioGroupProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Search": {
     "sheet": "sheet/components/Search/README.md",
     "sheetSha256": "db887055fa1c50d14416e3d8bbbdfe8553e6ca8119dfae8812a3442c89e41698",
     "props": "SearchProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "SectionHeading": {
     "sheet": "sheet/components/SectionHeading/README.md",
     "sheetSha256": "b4ff1aea3afe2360dad99ad4cffd031a03625dc495ed337a4db0ed8e9d9f747b",
     "props": "inline",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Select": {
     "sheet": "sheet/components/Select/README.md",
     "sheetSha256": "8881d3a82138f77908023b5fd004f23067a9e0680c09a0dd9737c9da62cee68a",
     "props": "SelectProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "SkipLink": {
     "sheet": "sheet/components/SkipLink/README.md",
     "sheetSha256": "08d187737a974cf026c2e4606c302b8a8c6a630931951bb0b4e004d7ad403faf",
     "props": "SkipLinkProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Spinner": {
     "sheet": "sheet/components/Spinner/README.md",
     "sheetSha256": "e2f61565abc5fd4889a2a9d00b01f2598bea16eff363d49a61338f38cc590cb9",
     "props": "inline",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Switch": {
     "sheet": "sheet/components/Switch/README.md",
     "sheetSha256": "a0889cc6a85f8af77cefccfa7dfcc67c92033597dd615ef2d0b55925bd0965ea",
     "props": "SwitchProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Table": {
     "sheet": "sheet/components/Table/README.md",
     "sheetSha256": "2d85dda81d6390cf68dd874ac971dd18457cb5129f8bb6018d4557b2f0638e8d",
     "props": "TableProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Tabs": {
     "sheet": "sheet/components/Tabs/README.md",
     "sheetSha256": "fa5c269ab980876cb1523bf9eff692c1135ab91f5814d5091ef13bf28846460c",
     "props": "TabsProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Tag": {
     "sheet": "sheet/components/Tag/README.md",
     "sheetSha256": "d29d5376477f1eca0f6c66f67e2c6d3a23a7d4fb40790f4de880741e61727c85",
     "props": "TagProps",
     "variants": ["status=ok", "status=err", "status=info", "status=plain"],
-    "status": "built"
+    "status": "reference"
   },
   "Textarea": {
     "sheet": "sheet/components/Textarea/README.md",
     "sheetSha256": "340b284a18c55a054488628493224d816b4bccf799200dbbf0412b97a9cedc15",
     "props": "TextareaProps",
     "variants": [],
-    "status": "built"
+    "status": "reference"
   },
   "Toast": {
     "sheet": "sheet/components/Toast/README.md",
     "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
-    "status": "built"
+    "status": "reference"
   }
 }

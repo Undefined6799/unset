@@ -1,4 +1,6 @@
-// fixture: apps/web/src/Like.tsx findings=2
-import { Heart } from "iconoir-react";
-import { FaHeart } from "react-icons/fa";
-export const Like = () => <Heart />;
+// fixture: apps/web/lib/components/profile/like.svelte findings=2
+<script lang="ts">
+  import { Heart } from "@tabler/icons-svelte";
+  import Star from "@phosphor-icons/svelte/Star";
+</script>
+<Heart />

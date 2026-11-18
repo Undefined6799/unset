@@ -1,5 +1,5 @@
 // The legal pages' settings and security.txt (P2.15; P1.20d), as interfaces/http/config.ts, legal-placeholders.ts and
-// security-txt.ts have them until P1.20k deletes that folder. RFC 9116, read 2026-10-17,
+// security-txt.ts had them before P1.20k deleted that folder. RFC 9116, read 2026-10-17,
 // https://www.rfc-editor.org/rfc/rfc9116.html: Contact, Expires, Preferred-Languages, Canonical and Policy are
 // §§2.5.3, 2.5.5, 2.5.8, 2.5.2 and 2.5.7; Expires is an RFC 3339 instant; LF line endings are allowed (§2.2).
 import { str, withRule } from "@unset/shared-config";

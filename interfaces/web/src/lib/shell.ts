@@ -1,7 +1,7 @@
 // What a page tells the shell (routes/+layout.svelte), and the shell's English text (P1.20d). A page's load returns
 // `shell` (a ShellData); with none, the page gets the signed-out site shell. Only display state goes here: the shell
 // never reads a cookie or a session itself; the only member it shows unasked is the one the gate read (locals.did).
-// Three shells, as apps/web/src/shell/AppShell.tsx draws them today:
+// Three shells, as apps/web/src/shell/AppShell.tsx drew them before P1.20k:
 // - "site": skip link, a header with Sign in (none when `signedIn`), main, and a footer of links, plus the theme form
 //   when `prefs` is given (app pages only).
 // - "core": skip link, the two-row header (Alex, 2026-11-18, "Clean tabs", and the planned menus he sent at 05:04Z):
@@ -41,7 +41,12 @@ export const PUBLIC_PAGE_CACHE = "public, max-age=300";
 
 export const SITE_SHELL: ShellData = { kind: "site" };
 
-/** The account button's letter, as shared/ui/components/Avatar/Avatar.tsx avatarLetter draws it: the first character
+/** Every error page (P1.20k): the core shell, kept out of search results, signed in when the gate read a session. */
+export const ERROR_SHELL: ShellData = { kind: "core", noindex: true };
+/** An error page for a member mid-onboarding: signed in, but none of the app's menus, which would send them back. */
+export const STEP_ERROR_SHELL: ShellData = { kind: "site", signedIn: true, noindex: true };
+
+/** The account button's letter, as the React Avatar's avatarLetter drew it before P1.20k: the first character
  * of the name without a leading "@", uppercased; "?" for an empty name. */
 export function accountLetter(name: string): string {
   const first = [...name.replace(/^@/, "").trim()][0];

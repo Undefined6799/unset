@@ -1,4 +1,4 @@
-// Ported unchanged from interfaces/http/card-form.ts (P1.20i); that copy goes with P1.20k.
+// Ported unchanged from interfaces/http/card-form.ts (P1.20i); that copy went with P1.20k.
 // A card editor's plain form (ADR 0037 point 7, ADR 0051), read into the object a JSON editor would send, so both
 // reach the same parser in domains/profile. This only translates the form's shape: indexed fields such as
 // `items.2.uri` become rows of a list, and a row the member left blank is an unused slot. What each field may hold,
@@ -14,6 +14,8 @@ type Shape = {
   readonly list?: { readonly name: string; readonly row: readonly string[]; readonly max: number };
   /** Row fields a form always fills (a select), so they alone never make a row used. */
   readonly preset?: readonly string[];
+  /** Row fields that count only on a row of that `kind`: the editor hides the other kind's fields, which still post. */
+  readonly byKind?: Readonly<Record<string, readonly string[]>>;
 };
 
 const SHAPES: Readonly<Record<string, Shape>> = {
@@ -30,6 +32,7 @@ const SHAPES: Readonly<Record<string, Shape>> = {
     fields: ["heading", "text"],
     list: { name: "buttons", row: ["kind", "address", "preset", "uri", "label"], max: LIMITS.section.buttonsMax },
     preset: ["kind", "preset"],
+    byKind: { email: ["address"], link: ["uri", "label"] },
   },
 };
 
@@ -52,8 +55,19 @@ function rowField(name: string, list: NonNullable<Shape["list"]>): { readonly in
 
 /** The rows in index order, without the blank ones, each with its index in the form. */
 function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): [number, Record<string, string>][] {
-  const used = (row: Record<string, string>) =>
-    Object.entries(row).some(([field, value]) => !shape.preset?.includes(field) && value.trim() !== "");
+  const used = (row: Record<string, string>) => {
+    // A row of an unknown kind (an inherited name such as toString too) keeps every field, so the domain refuses it
+    // rather than this dropping it.
+    const kind = row.kind;
+    const counted =
+      kind === undefined || shape.byKind === undefined || !Object.hasOwn(shape.byKind, kind)
+        ? undefined
+        : shape.byKind[kind];
+    return Object.entries(row).some(
+      ([field, value]) =>
+        !shape.preset?.includes(field) && (counted === undefined || counted.includes(field)) && value.trim() !== "",
+    );
+  };
   return [...byIndex.entries()].sort(([a], [b]) => a - b).filter(([, row]) => used(row));
 }
 

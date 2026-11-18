@@ -18,9 +18,7 @@ type Config = {
   options: object;
   MATRIX: Row[];
   ZERO_DEP_ALLOWLIST: string[];
-  RENDER_ENTRIES: { http: string; admin: string };
-  RENDER_BUILD_IMPORT: { from: string; module: string };
-  E2E_SERVER_BUILD: { from: string; module: string };
+  RENDER_ENTRIES: { admin: string };
   WEB_SERVER_BUILD: { from: string; modules: string[] };
   LEXICON_SCRIPT_BUILTINS: string[];
   DOMAIN_ENTRY_FILES: string[];

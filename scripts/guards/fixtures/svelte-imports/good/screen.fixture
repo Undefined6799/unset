@@ -1,0 +1,6 @@
+/* fixture: interfaces/web/src/routes/settings/account/+page.svelte findings=0 */
+<script lang="ts">
+  import type { AccountView } from "../../../lib/server/account.ts";
+  import Button from "@unset/apps-web/lib/components/ui/button/button.svelte";
+  import { t } from "@unset/shared-i18n";
+</script>
