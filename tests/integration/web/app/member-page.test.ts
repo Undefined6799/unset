@@ -24,6 +24,7 @@ import {
   type StandInFixture,
   startWeb,
 } from "../built-server.ts";
+import { readyMember } from "../members.ts";
 import type { PdsWrite } from "../stand-in-pds.ts";
 
 const REPO = new URL("../../../../", import.meta.url).pathname;
@@ -113,7 +114,9 @@ async function signedIn(owner: Did): Promise<string> {
       token_type: "DPoP",
     },
   });
-  return (await withTransaction(pool, null, (tx) => sessions.create(tx, owner))).cookieValue;
+  const created = await withTransaction(pool, null, (tx) => sessions.create(tx, owner));
+  await readyMember(pool, owner);
+  return created.cookieValue;
 }
 
 type Member = { web: RunningWeb; writes: () => PdsWrite[]; stop: () => Promise<void> };

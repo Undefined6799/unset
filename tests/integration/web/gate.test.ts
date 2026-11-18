@@ -14,6 +14,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "./built-server.ts";
+import { readyMember } from "./members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROUTES = join(REPO, "interfaces", "web", "src", "routes");
@@ -75,7 +76,9 @@ async function signedIn(owner: Did): Promise<string> {
       token_type: "DPoP",
     },
   });
-  return (await withTransaction(pool, null, (tx) => sessions.create(tx, owner))).cookieValue;
+  const created = await withTransaction(pool, null, (tx) => sessions.create(tx, owner));
+  await readyMember(pool, owner);
+  return created.cookieValue;
 }
 
 let web: RunningWeb;

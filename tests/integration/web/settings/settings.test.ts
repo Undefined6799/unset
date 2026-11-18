@@ -13,6 +13,7 @@ import { parse } from "parse5";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { elements, textContent } from "../../../../interfaces/http/web/fixtures/html.ts";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, type StandInFixture, startWeb } from "../built-server.ts";
+import { readyMember } from "../members.ts";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
 const provided = inject("postgres");
@@ -78,6 +79,7 @@ async function signedIn(did: Did = nextDid(), issuerOrigin: string = ISSUER): Pr
     },
   });
   const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin }));
+  await readyMember(pool, did);
   return { did, cookie: `__Host-sid=${created.cookieValue}` };
 }
 
