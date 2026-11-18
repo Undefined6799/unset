@@ -2,12 +2,12 @@
 // them from /assets/; found missing at P1.20j. Each route folder is one exact file name, so no part of the request is
 // ever a path. Vite emits each imported file into the build and SvelteKit's `read` (kit 3.2.0
 // src/runtime/app/server/index.js, https://svelte.dev/docs/kit/$app-server#read) returns its bytes. The names carry no
-// hash, so they are cached a day, not for good; they carry no personal data. The files and their OFL licences are
-// copies of shared/ui/fonts, the design data's home; public-pages.test.ts keeps the served bytes equal to it (the
-// edge keeps its own copy for the PDS pages).
+// hash, so they are cached a day, not for good; they carry no personal data. The files and their OFL licences live
+// once, in shared/ui/fonts with the rest of the design data (the edge image keeps its own copy for the PDS pages,
+// because its build context is deployment/edge; edge.test.ts holds it byte-equal).
 
-import jetBrainsMono from "@unset/apps-web/lib/fonts/JetBrainsMono-Variable.woff2";
-import spaceGrotesk from "@unset/apps-web/lib/fonts/SpaceGrotesk-Variable.woff2";
+import jetBrainsMono from "@unset/shared-ui/fonts/JetBrainsMono-Variable.woff2";
+import spaceGrotesk from "@unset/shared-ui/fonts/SpaceGrotesk-Variable.woff2";
 import { read } from "$app/server";
 
 const FILES = { "JetBrainsMono-Variable.woff2": jetBrainsMono, "SpaceGrotesk-Variable.woff2": spaceGrotesk } as const;
