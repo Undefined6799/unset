@@ -43,6 +43,7 @@
     {
       "description": "P0.07l (ADR 0059): one weekly PR for every non-major update; later rules keep their own groups. Alex merges it",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "minimumReleaseAge": "7 days",
       "groupName": "weekly updates",
       "schedule": ["* 0-5 * * 1"]
     },
@@ -64,6 +65,7 @@
       ],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "matchCurrentVersion": "!/^0/",
+      "minimumReleaseAge": "7 days",
       "groupName": "weekly test and lint tools",
       "schedule": ["* 0-5 * * 1"]
     },
