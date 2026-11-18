@@ -29,6 +29,7 @@ const A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
 const E = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
 const C = "did:plc:cccccccccccccccccccccccc";
+const D = "did:plc:dddddddddddddddddddddddd";
 const T = "2026-11-18T00:00:00.000Z";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const BLOB = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
@@ -195,6 +196,25 @@ describe("index store", () => {
     const health = await store.health();
     expect(health).toMatchObject({ cursor: seq, deadLetters: 1 });
     expect(health.counters).toMatchObject({ ingest_dead_letter: 1, ingest_replayed: 2, ingest_erased: 2 });
+  });
+
+  test("index.dead_letter_keeps_no_did_of_an_erased_or_untracked_account", async () => {
+    const firstSeen = new Date("2026-11-18T00:00:00Z");
+    const jobs = () => lines("SELECT did, kind FROM idx.account_job ORDER BY did, kind");
+    const before = jobs();
+    for (const did of [E, "did:plc:zzzzzzzzzzzzzzzzzzzzzzzz"]) {
+      await store.deadLetter({ kind: "identity", seq: ++seq, did }, 5, firstSeen);
+    }
+    expect(lines("SELECT coalesce(did, '-') FROM idx.dead_letter ORDER BY id")).toEqual([A, "-", "-"]);
+    expect(jobs()).toEqual(before);
+    expect(await store.cursor()).toBe(seq);
+  });
+
+  test("index.erasure_clears_dead_letters", async () => {
+    track(D, true);
+    await store.deadLetter({ kind: "identity", seq: ++seq, did: D }, 5, new Date());
+    await withClient(migrator, null, (c) => c.query("SELECT core.erase_did($1, 'user_request')", [D]));
+    expect(lines(`SELECT count(*) FROM idx.dead_letter WHERE did = '${D}'`)).toEqual(["0"]);
   });
 
   test("index.active_status_is_only_queued_for_confirmation", async () => {

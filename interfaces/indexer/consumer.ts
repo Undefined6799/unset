@@ -7,6 +7,12 @@
 // the same seq it is dead-lettered, its account queued for a backfill and the cursor moved past it, counted on
 // health. A failure that says nothing about the frame (the database unreachable) is never counted. An account frame
 // is never dead-lettered (book P3.05: status events hold): skipping one could leave a taken-down account public.
+//
+// A statement timeout (57014) counts, so under heavy load a frame can be dead-lettered that would have applied later.
+// That is safe because the dead letter queues the account's backfill, which rewrites the account from its signed repo
+// and removes indexed records the repo no longer holds (P3.05s PR 2b), so a lost delete is undone. The attempts are
+// counted in memory: a frame that crashes the process restarts the count with it, and shows as a restart loop on the
+// process's health rather than on this count.
 import type { FirehoseConsumer, RepoFrame } from "@unset/infrastructure-firehose";
 import { type IndexFrame, type IndexStore, isDatabaseUnavailable } from "@unset/infrastructure-postgres";
 

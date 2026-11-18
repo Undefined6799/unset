@@ -127,14 +127,18 @@ export function isDatabaseUnavailable(error: unknown): boolean {
 async function deadLetterFrame(tx: PoolClient, source: string, frame: IndexFrame, attempts: number, firstSeen: Date) {
   const cursor = await tx.query("SELECT seq FROM idx.relay_cursor WHERE source = $1 FOR UPDATE", [source]);
   if (cursor.rows[0] !== undefined && frame.seq <= Number(cursor.rows[0].seq)) return;
-  // The reason is a fixed code: the error itself may quote member content (rule SE-7).
+  // The DID is kept only for a member the index tracks and erasure has not removed: a row for an erased DID would
+  // name the person again after core.erase_did deleted theirs, and a non-member's DID is not ours to keep. The reason
+  // is a fixed code, since the error itself may quote member content (rule SE-7).
+  const erased = await tx.query("SELECT idx.is_erased($1) AS erased", [frame.did]);
+  const tracked = erased.rows[0]?.erased === true ? null : await lockAccount(tx, frame.did);
+  const did = tracked === null ? null : frame.did;
   await tx.query(
     `INSERT INTO idx.dead_letter (kind, did, reason_code, attempts, first_seen, last_seen)
      VALUES ('event', $1, 'apply_failed', $2, $3, now())`,
-    [frame.did, attempts, firstSeen],
+    [did, attempts, firstSeen],
   );
-  const tracked = await tx.query("SELECT 1 FROM idx.account WHERE did = $1", [frame.did]);
-  if (tracked.rows.length > 0) await queueJob(tx, frame.did, "backfill");
+  if (did !== null) await queueJob(tx, did, "backfill");
   await count(tx, "ingest_dead_letter");
   await writeCursor(tx, source, frame.seq);
 }
