@@ -326,7 +326,12 @@ describe("boundary rules", () => {
     await expectFail("infrastructure-not-entry", edge("infrastructure/pds/a.ts", "../../interfaces/http/b.ts"));
     await expectFail("shared-leaf", edge("shared/config/a.ts", "../../domains/identity/b.ts"));
     await expectFail("vendor-sdk-one-adapter", edge("domains/identity/a.ts", "pg"));
-    await expectFail("web-not-admin", edge("interfaces/http/a.ts", "../../apps/admin/b.ts"));
+    // P1.20k: the rule named interfaces/http, which the Svelte move deleted; it names the web process now.
+    await expectFail(
+      "web-not-admin",
+      edge("interfaces/web/src/lib/server/a.ts", "../../../../../apps/admin/b.ts"),
+      edge("interfaces/web/src/routes/a.ts", "../../../admin/b.ts"),
+    );
     await expectFail("domain-cross-via-index", edge("domains/content/a.ts", "../identity/sessions/b.ts"));
     await expectPass(edge("domains/content/a.ts", "../identity/index.ts"));
     await expectFail("domain-no-io-builtins", edge("domains/identity/a.ts", "node:fs"));

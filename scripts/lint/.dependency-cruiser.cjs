@@ -398,7 +398,7 @@ module.exports = {
     forbidden(
       "web-not-admin",
       "The public web surface imports nothing admin (§5.7).",
-      { path: "^(apps/web|interfaces/http)/" },
+      { path: "^(apps/web|interfaces/web)/" },
       { path: "(^|/)admin/" },
     ),
     forbidden(

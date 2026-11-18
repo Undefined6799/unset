@@ -67,12 +67,12 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, ADR 0015 | Nothing imports an app's `vite.config.ts` | checked: `app-build-config-not-imported`, `app_build_config_is_tooling` |
 | ADG §1 | Only the serving interface imports its app's render entry | checked: `app-render-entry-only` |
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
-| ADR 0056 | In the web process only server files (`*.server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or infrastructure; a screen or universal load never does | checked: `svelte-screens-no-core` |
+| ADR 0056 | In the web process only server files (`*.server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or infrastructure; a screen or universal load never does | checked: `svelte-screens-no-core`; for type-only imports in .svelte files, which dependency-cruiser cannot see, `scripts/guards/svelte-imports.ts` (`svelte_type_import_of_core_fails`, `svelte_app_names_no_interface`) |
 | ADR 0056 | Only the web process and its screens import Svelte or SvelteKit | checked: `sveltekit-web-only` |
 | ADR 0056 | The web process imports from `apps/web` only the Svelte components (`lib/`), `theme.css`, `app.css` and the `.md` files directly in `legal/`, nothing else | checked: `web-components-only`, `web_process_takes_only_svelte_components_and_icon_data` |
 | ADR 0055 | The web process and the Svelte components take only `icons.json` from `shared/ui`, nothing else there | checked: `svelte-no-react-ui`, `web_process_takes_only_svelte_components_and_icon_data` |
 | ADR 0056 | No web page is prerendered and no proof-only route exists | checked: `scripts/guards/web-prerender.ts`, `web_prerender_page_export`, `the_build_holds_no_prerendered_page` |
-| ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
+| ADG §1 | `web` (`apps/web`, `interfaces/web`) never imports `admin` | checked: `web-not-admin` |
 | ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
 | DC-2, P0.09s | From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names | checked: `domain-via-exports` |
@@ -82,7 +82,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
 | ADG §1, P1.28p | No file outside the tooling set imports one inside it. The set is the Vitest test files, `tests/`, the SE-6 check paths under `scripts/` (not `scripts/ui`), the root `vitest.config.ts`, `fixtures/` and `__fixtures__/` folders, `*.fixture.*`, `*.vector.json` and `*.image.test.*`. It is defined once in `scripts/lint/tooling.ts`, and P1.28m's test-file check reads the same definition (architecture amendments 11 and 11a, 2026-10-08) | checked: `no-product-imports-tooling-set`, `product_never_imports_the_tooling_set` |
 | ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |
-| AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`) | checked: `scripts/guards/composition-root.ts`, `composition_root_split` (each interface's main.ts has a compose.ts beside it, imports it, and imports nothing from infrastructure); `domain-pure` keeps adapters out of domains. Review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use |
+| AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`; in the web process `src/hooks.server.ts`/`src/lib/server/compose.ts`) | checked: `scripts/guards/composition-root.ts`, `composition_root_split`, `composition_root_kit_hooks`, `composition_root_kit_server`, `composition_root_examines_the_web_entries` (each entry file imports nothing from infrastructure, and one that wires services imports its compose.ts once); `domain-pure` keeps adapters out of domains. Review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use |
 | AB-2 | A port exists only for I/O or non-determinism | review-only: no tool can tell why an interface exists |
 | ADG §1 | `shared/` leaf folders import nothing product-specific | checked: `shared-leaf` |
 | ADG §1 | `pds-admin` and `chat-admin` import only themselves, Node built-ins and the zero-dependency allowlist | checked: `admin-services-zero-deps`, `depcruise_allowlist_exact` |
