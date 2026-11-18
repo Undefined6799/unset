@@ -514,3 +514,52 @@ test("a_full_width_grid_fills_its_row", async ({ page }) => {
     await deleteCard(page, "Trio card");
   }
 });
+
+// Review of #1718: one or two grid entries keep their tile width rather than stretching into banners.
+test("a_grid_of_one_keeps_its_tile_width", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, { kind: "collection", width: "full", title: "Solo", layout: "grid", "items.0.title": "Only" });
+  await page.reload();
+  try {
+    const tile = await page.locator("li", { has: page.getByRole("heading", { name: "Only" }) }).boundingBox();
+    if (tile === null) throw new Error("the grid was not drawn");
+    expect(tile.width).toBeLessThan(300);
+  } finally {
+    await deleteCard(page, "Solo card");
+  }
+});
+
+// Review of #1718: when the person scrolls the carousel themselves while a press is still scrolling it, the next
+// press steps from where the carousel is, not from where the interrupted press was heading.
+test("a_carousel_press_after_the_person_scrolls_steps_from_where_it_is", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const entries = Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`items.${i}.title`, `Entry ${i + 1}`]));
+  await addCard(page, { kind: "collection", width: "full", title: "Shelf", layout: "carousel", ...entries });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  try {
+    const shelf = page.getByRole("region", { name: "Shelf, scrolls sideways" });
+    const next = page.getByRole("button", { name: "Next in Shelf" });
+    const left = () => shelf.evaluate((node) => Math.round((node as unknown as { scrollLeft: number }).scrollLeft));
+    const tileAt = (n: number) =>
+      shelf.evaluate((node, i) => {
+        const tiles = (
+          node as unknown as { querySelectorAll(s: string): ArrayLike<{ offsetLeft: number }> }
+        ).querySelectorAll("li");
+        return Math.round((tiles[i]?.offsetLeft ?? 0) - (tiles[0]?.offsetLeft ?? 0));
+      }, n);
+    // Next twice in quick succession heads for the third tile; the person then presses Home before it lands.
+    await next.click();
+    await next.click();
+    await shelf.focus();
+    await page.keyboard.press("Home");
+    await expect.poll(left).toBe(0);
+    await next.click();
+    const second = await tileAt(1);
+    await expect.poll(left).toBe(second);
+  } finally {
+    await deleteCard(page, "Shelf card");
+  }
+});

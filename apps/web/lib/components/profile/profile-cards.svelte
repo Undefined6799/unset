@@ -34,13 +34,16 @@ let {
 const SCROLL_AFTER = 4;
 const LAYOUT: Record<CardLayout, string> = {
   list: "grid",
-  grid: "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3",
+  grid: "grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3",
   carousel: "grid grid-flow-col gap-3",
 };
 /**
  * A carousel's tile width by its number of tiles (1, 2, 3, 4, more): whole tiles while they all fit at the card's
  * width, else a quarter of the next one shows. TAIL says at which widths some are left over, for the count line.
  */
+/** Three or more grid entries share the whole row (no empty column); one or two keep the tile width. */
+const GRID_FILLS_ROW_FROM = 3;
+const GRID_FILLED = "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3";
 const TILES = [
   "auto-cols-[100%]",
   "auto-cols-[85%] @sm:auto-cols-[calc((100%-0.75rem)/2)]",
@@ -81,7 +84,7 @@ const count = "font-mono text-xs text-muted-foreground";
     {#snippet tiles()}{@render list(`${LAYOUT.carousel} ${TILES[tierOf(count)]}`)}{/snippet}
     <Carousel {title} list={tiles} />
   {:else}
-    <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : ""}>{@render list(LAYOUT[layout])}</div>
+    <div class={scrolls ? "-me-2 max-h-60 overflow-y-auto pe-2" : ""}>{@render list(layout === "grid" && count >= GRID_FILLS_ROW_FROM ? GRID_FILLED : LAYOUT[layout])}</div>
   {/if}
 {/snippet}
 

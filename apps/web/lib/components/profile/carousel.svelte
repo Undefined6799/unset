@@ -26,14 +26,21 @@ $effect(() => {
   const resized = new ResizeObserver(measure);
   resized.observe(node);
   node.addEventListener("scroll", measure, { passive: true });
+  for (const kind of TAKE_OVER) node.addEventListener(kind, forget, { passive: true });
   return () => {
     resized.disconnect();
     node.removeEventListener("scroll", measure);
+    for (const kind of TAKE_OVER) node.removeEventListener(kind, forget);
   };
 });
 
 /** Where the last press is scrolling to, so presses made before the smooth scroll ends add up instead of restarting. */
 let target: number | undefined;
+/** The person's own scrolling, which takes over from a press still under way, so the next press starts from there. */
+const TAKE_OVER = ["pointerdown", "wheel", "touchstart", "keydown"] as const;
+function forget() {
+  target = undefined;
+}
 
 /** The ends, with a pixel to spare for the rounding snap scrolling leaves. */
 function measure() {
