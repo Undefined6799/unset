@@ -93,6 +93,23 @@ describe("cardForm", () => {
     expect(body).toEqual({ kind: "buttons", heading: "Work with me", buttons: [] });
   });
 
+  test.each(["constructor", "toString", "__proto__", "nope"])(
+    "a button row of the unknown kind %s keeps its fields",
+    (kind) => {
+      const body = read([
+        ["kind", "buttons"],
+        ["heading", "Work with me"],
+        [`buttons.0.kind`, kind],
+        ["buttons.0.address", "me@example.com"],
+      ]);
+      expect(body).toEqual({
+        kind: "buttons",
+        heading: "Work with me",
+        buttons: [{ kind, address: "me@example.com" }],
+      });
+    },
+  );
+
   test.each([
     [
       "a field another kind holds",

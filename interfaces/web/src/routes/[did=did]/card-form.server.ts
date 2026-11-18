@@ -56,8 +56,13 @@ function rowField(name: string, list: NonNullable<Shape["list"]>): { readonly in
 /** The rows in index order, without the blank ones, each with its index in the form. */
 function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): [number, Record<string, string>][] {
   const used = (row: Record<string, string>) => {
-    // A row of an unknown kind keeps every field, so the domain refuses it rather than this dropping it.
-    const counted = row.kind === undefined ? undefined : shape.byKind?.[row.kind];
+    // A row of an unknown kind (an inherited name such as toString too) keeps every field, so the domain refuses it
+    // rather than this dropping it.
+    const kind = row.kind;
+    const counted =
+      kind === undefined || shape.byKind === undefined || !Object.hasOwn(shape.byKind, kind)
+        ? undefined
+        : shape.byKind[kind];
     return Object.entries(row).some(
       ([field, value]) =>
         !shape.preset?.includes(field) && (counted === undefined || counted.includes(field)) && value.trim() !== "",
