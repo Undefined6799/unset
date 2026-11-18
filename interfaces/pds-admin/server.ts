@@ -122,20 +122,25 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     return fail(status);
   }
 
+  async function respond(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let answer: Answer;
+    try {
+      answer = await handle(req);
+    } catch (error) {
+      // Step 14: never 200 on an unexpected failure, and only the class name reaches the log.
+      try {
+        record({ outcome: "error", reason: error instanceof Error ? error.constructor.name : "unknown" });
+      } catch {
+        // The log itself failed: the answer is still 503, never 200.
+      }
+      answer = fail(503);
+    }
+    res.writeHead(answer.status, { "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify(answer.body));
+  }
+
+  // A failure while writing the answer leaves nothing to tell the client: drop the connection.
   return (req, res) => {
-    handle(req)
-      .catch((error: unknown) => {
-        // Step 14: never 200 on an unexpected failure, and only the class name reaches the log.
-        try {
-          record({ outcome: "error", reason: error instanceof Error ? error.constructor.name : "unknown" });
-        } catch {
-          // The log itself failed: the answer is still 503, never 200.
-        }
-        return fail(503);
-      })
-      .then((answer) => {
-        res.writeHead(answer.status, { "content-type": "application/json", "cache-control": "no-store" });
-        res.end(JSON.stringify(answer.body));
-      });
+    void respond(req, res).catch(() => res.destroy());
   };
 }
