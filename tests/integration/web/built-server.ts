@@ -209,6 +209,8 @@ export async function startWeb(
     kid: "A",
     alg: "ES256",
   };
+  // web's key for pds-admin (P2.10): a fresh Ed25519 pair; a test that plays pds-admin passes PDS_ADMIN_URL.
+  const adminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
   // A caller may pin the port (the browser harness, tests/e2e/fixtures/servers.ts); otherwise any free one.
   const port = env.LISTEN_PORT === undefined ? await freePort() : Number(env.LISTEN_PORT);
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
@@ -247,6 +249,10 @@ export async function startWeb(
       OAUTH_ACTIVE_KID: "A",
       PDS_HOSTNAME: PDS_HOST,
       HANDLE_SUFFIX: `.${PDS_HOST}`,
+      PDS_ADMIN_URL: "http://pds-admin.test:8080",
+      PDS_ADMIN_WEB_KEY_FILE: secret("web_pds_admin_key", adminKey),
+      PDS_ADMIN_WEB_KID: "web-test",
+      PDS_DID: `did:web:${PDS_HOST}`,
       TEST_ROUTES: "true",
       ...LEGAL_ENV,
       ...fixture,
