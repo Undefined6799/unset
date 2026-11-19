@@ -5,12 +5,12 @@ each tester's `_atproto` TXT record by hand through the runbook (0025:89-91). Th
 rejection of `*.staging.unset.im` through Pangolin (0025:93-94), which this record keeps.
 
 ## Context
-A member's handle `<name>.staging.unset.im` shows as `handle.invalid` in our app until something on the internet maps
+A member's handle `<name>.staging.unset.name` shows as `handle.invalid` in our app until something on the internet maps
 it to their DID. Our check is two-way (`domains/identity/verify-handle.ts`, `resolve-handle.ts`): it reads the TXT
 record `_atproto.<handle>` first, then `https://<handle>/.well-known/atproto-did`
 (https://atproto.com/specs/handle, "Handle Resolution"). The PDS (`@atproto/pds` 0.5.51) answers the well-known path
 from its own database by the request's Host (`packages/pds/src/well-known.ts`), but no request for a handle host
-reaches it: there is no wildcard DNS name, Pangolin resource or certificate for `*.staging.unset.im`.
+reaches it: there is no wildcard DNS name, Pangolin resource or certificate for `*.staging.unset.name`.
 
 ADR 0025 chose one TXT record per tester, added by hand. On 2026-11-19 Alex asked that handles work for every
 account without that step ("we are going to have this set up for every account now right?", 01:17Z), and proposed
@@ -27,19 +27,17 @@ a fourth file mount under C18 and a new SAN on the dev leaf. Pangolin's raw reso
 not reachable through it either.
 
 ## Decision
-1. **`unset.im` is a zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host). Its name servers move
-   from Namecheap BasicDNS to deSEC (Alex, 2026-11-19 01:33Z, "yea lets do that", answering whether to move all of
-   `unset.im` tonight); Namecheap stays the registrar. deSEC allows a new account one domain until a domain is
-   delegated with DNSSEC, and `.im` itself is unsigned at the root
-   (https://www.iana.org/domains/root/db/im.html, checked 2026-11-19), so `staging.unset.im` starts inside the
-   `unset.im` zone. Token policies match exact subnames only (no patterns), so a token that can write staging
-   handle records could also write production ones: the writer is not deployed until `staging.unset.im` is its own
-   zone (deSEC raises the limit on request) and each environment's token is limited to its own zone. Alex owns the
-   deSEC account; its password and recovery are his. The move drops Namecheap's parking page, `@` redirect and email
-   forwarding for `unset.im`.
+1. **`unset.name` is a zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host), with DNSSEC; handles
+   moved there from `unset.im` by ADR 0064, because `.im` is unsigned at the root
+   (https://www.iana.org/domains/root/db/im.html, checked 2026-11-19). Namecheap stays the registrar. deSEC allows
+   a new account one domain until a domain is securely delegated, so `staging.unset.name` starts inside the
+   `unset.name` zone. Token policies match exact subnames only (no patterns), so a token that can write staging
+   handle records could also write production ones: the writer is not deployed until `staging.unset.name` is its
+   own zone (the limit rises once `unset.name` is seen signed) and each environment's token is limited to its own
+   zone. Alex owns the deSEC account; its password and recovery are his.
 2. **One key, restricted.** A deSEC token whose token policies allow writes only to TXT RRsets in
-   `staging.unset.im` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies");
-   production gets its own token, limited the same way to TXT in `unset.im`, created only when production's writer
+   `staging.unset.name` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies");
+   production gets its own token, limited the same way to TXT in `unset.name`, created only when production's writer
    is deployed. It is a file secret of the one process in Decision 4, never in web, never in a log.
 3. **When a record is written.** A member's `_atproto.<handle>` record (`did=<DID>`) is added once our app has seen
    both a confirmed email for that account (the email gate, `interfaces/web/src/lib/server/app-gate.ts`) and a
@@ -64,7 +62,7 @@ not reachable through it either.
    `com.atproto.identity.resolveHandle` returns the same DID. The writer is not deployed without them.
 
 ## Alternatives
-- Wildcard `*.staging.unset.im` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
+- Wildcard `*.staging.unset.name` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
   the Pangolin host and an edge site; rejected, as in ADR 0025.
 - Our own authoritative DNS on the Pangolin host (Knot or PowerDNS): no outside organisation, but a new public port
   (53) and a service to keep patched, and one server only. Not now; reconsidered in Phase 5 as a second server.
@@ -75,22 +73,19 @@ not reachable through it either.
 - What deSEC learns: each member's handle and DID, both already public through the PDS and the PLC directory, and
   when they change. No content, email or address. It is still a new processor of an identifier, so the ROPA gains a
   row and the privacy notice a sentence before the first invite.
-- Production is decided now: `<name>.unset.im` sits at the apex of `unset.im`, so the whole zone is at deSEC. One
+- Production is decided now: `<name>.unset.name` sits at the apex of `unset.name`, so the whole zone is at deSEC. One
   provider then answers for every handle; deSEC runs several anycast servers, and a second, independent provider or
   our own server is a Phase 5 choice. Switching back is a name-server change at Namecheap. No production handle
   record or token exists until production's writer is deployed.
 - The indexer now holds a credential and has a second outside destination. Until now it held none, and its only
   way out was the guarded egress to the PLC directory; that was the basis for its private network with the PDS. A
   compromised indexer can now, beyond what it could already do, rewrite or delete TXT records in
-  `staging.unset.im`, and nothing else: the token's policies grant no other zone, type or account action. It was
+  `staging.unset.name`, and nothing else: the token's policies grant no other zone, type or account action. It was
   still chosen over web, which faces the internet and would put the token one request away from any attacker, and
   over a new writer process, which would add a service, an image and a network for one call, while the indexer
   already follows the events that trigger every write.
-- `.im` is unsigned at the root (IANA, above), so no registrar can publish a DS record and the delegation is unsigned;
-  deSEC signs the zone, but resolvers cannot validate it. Handle verification already does not rely on DNSSEC. For
-  staging this is accepted. For production it is an open question for Alex before the first member: without DNSSEC, an
-  attacker who can spoof answers to another app's resolver can make that app show their account under a member's
-  handle (our own app is covered by Decision 7). A signed TLD for production handles would need its own ADR.
+- `unset.name` is signed (`.name` is signed at the root), so resolvers can validate handle records; the DNSSEC
+  concern that moved handles off `.im` is recorded in ADR 0064.
 
 ## Compliance
 SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone. Pointing a
