@@ -321,6 +321,20 @@ beside the PDS fails C17, and ADR 0060 Decision 1 ("on the internal network only
 follow-up record before prod. This step asks Alex how `pds-admin` reaches the production PDS (for example through the
 edge on an internal route), records his answer in that ADR, and changes C17 to match; nothing ships to prod before.
 
+**Open before the first prod deploy: how the indexer reaches the production PDS.** Preflight C17 lets the `indexer`
+share `indexer_pds` with the PDS under local and dev only (P3.05s, `deployment/preflight/checks/networks.ts`
+`pdsNeighbours`). Alex, 2026-11-19T01:04Z, typing the line that allowed it: "Allow the indexer on its own private
+network with the PDS on staging only". So a prod stack with the indexer beside the PDS fails C17, while ADR 0052
+Decision 2 has it read the PDS at its internal URL. The doors weighed on 2026-11-19 (direct, through Pangolin and the
+edge, a private edge listener) are in `docs/ai/notes/area/indexer.md`. This step asks Alex which one production uses,
+records it in a decision that follows ADR 0052, and changes C17 to match; nothing ships to prod before.
+
+**Review point (Alex, 2026-11-19T00:54Z: "we can make it work for now but that should be something we review sooner
+than later so we remain on solid foundation").** Before sign-in opens to accounts hosted on other servers (the relay
+slice), review two things together: moving the reader from our own PDS's stream to a relay plus Tap (ADR 0052
+Consequences: "it either adds Tap for foreign repos ... or replaces this reader with Tap for everything"), and how the
+indexer reaches the PDS, as above.
+
 Outputs: a revised `phase-5.md`, with every "assumed" interface replaced by the real name and shape (file:line); a review
 report in `reviews/`; a short list of steps whose size or order changed.
 
