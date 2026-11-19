@@ -1,0 +1,72 @@
+# 0063 — Each member's handle record is written to DNS when they claim it, in a zone at deSEC
+
+Status: Proposed (awaiting Alex). Supersedes, for the dev profile, the sentence of accepted ADR 0025 that has Alex add
+each tester's `_atproto` TXT record by hand through the runbook (0025:89-91). The rest of 0025 stands, including its
+rejection of `*.staging.unset.im` through Pangolin (0025:93-94), which this record keeps.
+
+## Context
+A member's handle `<name>.staging.unset.im` shows as `handle.invalid` in our app until something on the internet maps
+it to their DID. Our check is two-way (`domains/identity/verify-handle.ts`, `resolve-handle.ts`): it reads the TXT
+record `_atproto.<handle>` first, then `https://<handle>/.well-known/atproto-did`
+(https://atproto.com/specs/handle, "Handle Resolution"). The PDS (`@atproto/pds` 0.5.51) answers the well-known path
+from its own database by the request's Host (`packages/pds/src/well-known.ts`), but no request for a handle host
+reaches it: there is no wildcard DNS name, Pangolin resource or certificate for `*.staging.unset.im`.
+
+ADR 0025 chose one TXT record per tester, added by hand. On 2026-11-19 Alex asked that handles work for every
+account without that step ("we are going to have this set up for every account now right?", 01:17Z), and proposed
+the trigger: "the user can claim the handle after he verified his email" (01:21Z). He chose deSEC for the zone
+(01:24Z, "sure lets set up that", answering the zone choice).
+
+What the wildcard route would have cost, checked on 2026-11-19: Pangolin's wildcard resources are Enterprise Edition
+only (https://docs.pangolin.net/manage/resources/public/wildcard-resources); a wildcard certificate needs DNS-01
+(https://docs.pangolin.net/self-host/advanced/wild-card-domains), so the Pangolin host would hold a DNS key;
+Namecheap enables its API only with 20 domains or $50 spent, and its key controls the whole account
+(https://www.namecheap.com/support/knowledgebase/article.aspx/9739/63/api-faq/); and our edge would need a new site,
+a fourth file mount under C18 and a new SAN on the dev leaf. Pangolin's raw resources route by port only
+(https://docs.pangolin.net/manage/resources/public/raw-resources), so Caddy's on-demand certificates at our edge are
+not reachable through it either.
+
+## Decision
+1. **`staging.unset.im` is its own zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host), delegated by
+   NS records at Namecheap. Namecheap keeps the rest of `unset.im`. Alex owns the deSEC account; its password and
+   recovery are his.
+2. **One key, restricted.** A deSEC token whose token policies allow writes only to TXT RRsets in
+   `staging.unset.im` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies").
+   It is a file secret of the one process in Decision 4, never in web, never in a log.
+3. **When a record is written.** A member's `_atproto.<handle>` record (`did=<DID>`) is added once our app has seen
+   both a confirmed email for that account (the email gate, `interfaces/web/src/lib/server/app-gate.ts`) and a
+   handle under the configured handle domain whose DID document names it (`alsoKnownAs`, read through the existing
+   resolver, never trusted from the request). It is replaced when the handle changes, and removed when the handle
+   leaves our domain, when the account is deleted or taken down, and by `eraseDid`. Only names under the configured
+   handle domain, one label deep, are ever written.
+4. **Who writes it.** Web and the indexer only enqueue a request in an app-owned Postgres table (DID, wanted state,
+   attempts; no handle history). The indexer drains it, because it already follows identity and account events on
+   our PDS (`interfaces/indexer/consumer.ts`) and holds no inbound public surface. Its one new egress is HTTPS to
+   `desec.io`'s API through net-guard, with no new package (plain `fetch`). pds-admin is not used: it stays
+   dependency-free and PDS-only (ADR 0060).
+5. **Failure.** A failed or refused write is retried with backoff from the queue; until it succeeds the handle reads
+   `handle.invalid`, as today. Sign-up, sign-in and the email gate never wait on it. Logs carry the outcome and a
+   count, never the handle or DID (SE-7).
+
+## Alternatives
+- Wildcard `*.staging.unset.im` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
+  the Pangolin host and an edge site; rejected, as in ADR 0025.
+- Our own authoritative DNS on the Pangolin host (Knot or PowerDNS): no outside organisation, but a new public port
+  (53) and a service to keep patched, and one server only. Not now; reconsidered for production.
+- Records kept at Namecheap by API: the key would control every domain on the account; rejected.
+- Records added by hand (ADR 0025): stays the fallback, and is how the first two accounts get theirs tonight.
+
+## Consequences
+- What deSEC learns: each member's handle and DID, both already public through the PDS and the PLC directory, and
+  when they change. No content, email or address. It is still a new processor of an identifier, so the ROPA gains a
+  row and the privacy notice a sentence before the first invite.
+- Production: `<name>.unset.im` sits at the apex of `unset.im`, so the same shape means moving `unset.im`'s name
+  servers to deSEC (or to our own DNS) in Phase 5; that choice is made there, with a second server.
+- `.im` has no DNSSEC at the registry through Namecheap, so the delegation is unsigned; deSEC signs the zone, but
+  resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
+
+## Compliance
+SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone (make a
+handle point to another DID); our two-way check still requires the DID document to name the handle, so it cannot
+verify a handle for the wrong account. SE-7 logging. DA-4: the queue row is the concurrency mechanism, no network I/O
+inside a transaction. GDPR: erasure through `eraseDid` (Decision 3), ROPA row, notice sentence.
