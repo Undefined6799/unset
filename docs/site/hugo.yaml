@@ -39,16 +39,19 @@ menu:
     - name: Endpoints
       pageRef: /endpoints
       weight: 4
+    - name: Settings
+      pageRef: /settings
+      weight: 5
     - name: Operate
       pageRef: /operate
-      weight: 5
+      weight: 6
     - name: Contribute
       pageRef: /contribute
-      weight: 6
+      weight: 7
     # Hextra renders the search trigger only for a menu item of this type
     # (layouts/_partials/navbar.html at v0.13.0). The dialog itself is in baseof.
     - name: Search
-      weight: 7
+      weight: 8
       params:
         type: search
 
