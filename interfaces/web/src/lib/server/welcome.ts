@@ -14,9 +14,9 @@ import { withTransaction } from "@unset/infrastructure-postgres";
 import type { Session } from "@unset/infrastructure-session";
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { services } from "./compose.ts";
+import { withRevokeTimeout } from "./revoke-timeout.ts";
 import { config } from "./runtime.ts";
 import { dropSessionCookie } from "./session.ts";
-import { withRevokeTimeout } from "./sign-out.ts";
 
 const EMAIL = /^[^\s@]+@[^\s@]+$/;
 
