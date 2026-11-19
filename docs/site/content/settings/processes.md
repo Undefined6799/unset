@@ -65,6 +65,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `PDS_ADMIN_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_ADMIN_WEB_KID` | str | text (pattern in source) | required | from env file: `WEB_PDS_ADMIN_KID` | from env file: `WEB_PDS_ADMIN_KID` | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_DID` | str | text (pattern in source) | required | from env file: `PDS_DID` | from env file: `PDS_DID` | `interfaces/web/src/lib/server/config.ts` |
+| `SEARCH_LISTING` | oneOf | on, off | `off` | `off` | `off` | `interfaces/web/src/lib/server/config.ts` |
 | `PRIVACY_OFFICER_TITLE` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_TITLE]` | `Privacy Officer` | `interfaces/web/src/lib/server/legal.ts` |
 | `PRIVACY_OFFICER_CONTACT` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_CONTACT]` | `contact@staging.unset.sh` | `interfaces/web/src/lib/server/legal.ts` |
 | `SUPPORT_EMAIL` | str | text (pattern in source) | required | `[to fill: SUPPORT_EMAIL]` | `support@staging.unset.sh` | `interfaces/web/src/lib/server/legal.ts` |

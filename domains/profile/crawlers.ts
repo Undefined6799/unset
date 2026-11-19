@@ -71,6 +71,24 @@ export function robotsTxt(origin: string, aiSearchPaths: readonly string[]): str
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * robots.txt when Search and AI listing is off on the whole site (P1.21b). Search engines may still fetch every page,
+ * because a page they cannot fetch never shows them its noindex and a linked address can still be listed (Google,
+ * developers.google.com/search/docs/crawling-indexing/block-indexing, read 2026-11-19; ADR 0031 Decision 1). Training
+ * and AI search crawlers, which are not known to honour noindex (ADR 0062), are refused every path. No sitemap is
+ * offered and members' choices are not read.
+ */
+export const CLOSED_ROBOTS_TXT = [
+  "# unset.sh: search and AI listing is switched off on this site. Every page says noindex.",
+  ...TRAINING_CRAWLERS.map((token) => `User-agent: ${token}`),
+  ...AI_SEARCH_CRAWLERS.map((token) => `User-agent: ${token}`),
+  "Disallow: /",
+  "",
+  "User-agent: *",
+  "Allow: /",
+  "",
+].join("\n");
+
 const XML_ESCAPES: Readonly<Record<string, string>> = {
   "&": "&amp;",
   "<": "&lt;",

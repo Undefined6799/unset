@@ -63,3 +63,18 @@ describe("web's environment against its config", () => {
     });
   }
 });
+
+describe("search and AI listing on the stacks", () => {
+  // P1.21b: staging and local are never listed. The setting defaults to off; each stack also says so in its file, so
+  // turning it on is a change someone reads in a PR. compose.dev.source.yaml builds the same stack from source.
+  for (const file of ["compose.dev.yaml", "compose.dev.source.yaml", "compose.local.yaml"]) {
+    test(`listing_is_off ${file}`, async () => {
+      const { env } = webEnv(file);
+      expect(env.SEARCH_LISTING).toBe("off");
+      const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
+      const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));
+      const { SEARCH_LISTING: _set, ...unset } = env;
+      expect(loadConfig(config, unset, { onUnknownKeys: () => undefined }).SEARCH_LISTING).toBe("off");
+    });
+  }
+});
