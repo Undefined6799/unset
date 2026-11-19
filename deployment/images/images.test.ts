@@ -18,6 +18,8 @@ const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf
 const DOCKERFILE = "images/node-app.Dockerfile";
 /** The migrate CLI's image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1). */
 const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
+/** The indexer process's image (P3.05s PR 3; ADR 0052). */
+const INDEXER_DOCKERFILE = "images/indexer.Dockerfile";
 /** Our gosu-free Postgres image (P1.29d). */
 const POSTGRES_DOCKERFILE = "images/postgres.Dockerfile";
 
@@ -2305,6 +2307,35 @@ describe("migrate image", () => {
     expect(migrate).toContain('ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]');
     // One-shot: it listens on nothing and Compose waits for its exit, not its health.
     expect(migrate.filter((line) => /^(?:EXPOSE|HEALTHCHECK|CMD) /.test(line))).toEqual([]);
+  });
+});
+
+// The indexer image (P3.05s PR 3): a long-running process on the internal network, so unlike migrate it exposes and
+// checks its health port. Its runtime stage copies what `node interfaces/indexer/main.ts` loads and nothing else: no
+// app, other interface, script, test or deployment file. node-app.test.ts proves the list covers every workspace the
+// process reaches; indexer.image.test.ts builds it and proves it boots.
+describe("indexer image", () => {
+  const indexer = runtimeStage(read(INDEXER_DOCKERFILE));
+
+  test("indexer_image_copies_only_its_paths", () => {
+    expect(fromImages(read(INDEXER_DOCKERFILE))).toEqual([pinnedNode, pinnedNode]);
+    expect(indexer.filter((line) => /^(?:COPY|ADD) /.test(line))).toEqual([
+      "COPY --from=deps /app/package.json /app/package.json",
+      "COPY --from=deps /app/node_modules /app/node_modules",
+      "COPY --from=deps /app/shared /app/shared",
+      "COPY --from=deps /app/domains/identity /app/domains/identity",
+      "COPY --from=deps /app/domains/profile /app/domains/profile",
+      "COPY --from=deps /app/infrastructure/firehose /app/infrastructure/firehose",
+      "COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard",
+      "COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds",
+      "COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres",
+      "COPY --from=deps /app/infrastructure/seal /app/infrastructure/seal",
+      "COPY --from=deps /app/interfaces/indexer /app/interfaces/indexer",
+    ]);
+    expect(indexer).toContain('ENTRYPOINT ["node", "interfaces/indexer/main.ts"]');
+    expect(indexer).toContain("USER 65532:65532");
+    expect(indexer.filter((line) => /^(?:EXPOSE|CMD) /.test(line))).toEqual(["EXPOSE 8081"]);
+    expect(indexer.some((line) => line.startsWith("HEALTHCHECK ") && line.includes("/health"))).toBe(true);
   });
 });
 
