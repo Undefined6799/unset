@@ -2,7 +2,13 @@
 // index is written as the superuser here, as idx-schema.test.ts writes moderator state: the indexer's own paths have
 // their tests. One database of its own container; the tests run in order.
 import { join } from "node:path";
-import { createPublicProfileStore, type Pool, type PoolClient, withClient } from "@unset/infrastructure-postgres";
+import {
+  createDiscoverabilityStore,
+  createPublicProfileStore,
+  type Pool,
+  type PoolClient,
+  withClient,
+} from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   migrateAsMigrator,
@@ -91,6 +97,7 @@ describe("public profile store", () => {
       cid: "cid-p",
       record: { displayName: "N" },
       sections: [{ key: "3k", cid: "cid-s", value: { type: "x" } }],
+      discoverability: { searchEngines: false, aiSearch: false, title: "", description: "" },
     });
     expect(await store().find({ handle: "alice.unset.test" }, null)).toEqual(byDid);
   });
@@ -126,6 +133,47 @@ describe("public profile store", () => {
       ),
     );
     expect(writes.rows[0]?.any).toBe(false);
+  });
+
+  test("search_and_ai_choices_saved_for_one_member_and_listed_only_when_visible", async () => {
+    postgres.sql(
+      "unset",
+      `INSERT INTO app.account (did, first_seen_at) VALUES ('${SHOWN}', now()), ('${INACTIVE}', now()), ('${UNVERIFIED}', now())`,
+    );
+    const own = createDiscoverabilityStore(web);
+    const choice = { searchEngines: true, aiSearch: true, title: "T", description: "D" };
+    await own.save(SHOWN, choice, null);
+    await own.save(INACTIVE, choice, null);
+    await own.save(UNVERIFIED, { ...choice, aiSearch: false }, null);
+    expect(await own.get(SHOWN, null)).toEqual(choice);
+    expect((await store().find({ did: SHOWN }, null))?.discoverability).toEqual(choice);
+    expect(await store().listed("searchEngines", 10, null)).toEqual([
+      { did: SHOWN, handle: "alice.unset.test" },
+      { did: UNVERIFIED, handle: null },
+    ]);
+    expect(await store().listed("aiSearch", 10, null)).toEqual([{ did: SHOWN, handle: "alice.unset.test" }]);
+    expect(await store().listed("searchEngines", 1, null)).toHaveLength(1);
+  });
+
+  test("all_off_keeps_no_row", async () => {
+    const own = createDiscoverabilityStore(web);
+    await own.save(UNVERIFIED, { searchEngines: false, aiSearch: false, title: "", description: "" }, null);
+    expect(postgres.sql("unset", `SELECT count(*) FROM app.discoverability WHERE did = '${UNVERIFIED}'`).trim()).toBe(
+      "0",
+    );
+    expect(await own.get(UNVERIFIED, null)).toEqual({
+      searchEngines: false,
+      aiSearch: false,
+      title: "",
+      description: "",
+    });
+  });
+
+  test("the_table_refuses_overlong_text", async () => {
+    const own = createDiscoverabilityStore(web);
+    await expect(
+      own.save(SHOWN, { searchEngines: true, aiSearch: false, title: "x".repeat(71), description: "" }, null),
+    ).rejects.toMatchObject({ code: "23514" });
   });
 
   test("erased_account_reads_as_missing", async () => {

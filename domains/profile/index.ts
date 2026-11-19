@@ -23,6 +23,22 @@ export {
   shownCards,
 } from "./cards.ts";
 export {
+  AI_SEARCH_CRAWLERS,
+  MAX_AI_SEARCH_PAGES,
+  MAX_SITEMAP_PAGES,
+  robotsTxt,
+  sitemapXml,
+  TRAINING_CRAWLERS,
+} from "./crawlers.ts";
+export {
+  DISCOVERABILITY_LIMITS,
+  DISCOVERABILITY_OFF,
+  type Discoverability,
+  type DiscoverabilityField,
+  type ParsedDiscoverability,
+  parseDiscoverabilityForm,
+} from "./discoverability.ts";
+export {
   type BlobRef,
   INDEXED_COLLECTIONS,
   type IndexAccount,

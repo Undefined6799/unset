@@ -30,6 +30,7 @@ import {
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
+  createDiscoverabilityStore,
   createInviteStore,
   createLockPool,
   createOAuthSessionStore,
@@ -38,6 +39,7 @@ import {
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type DiscoverabilityStore,
   type InviteStore,
   oauthSessionExists,
   type Pool,
@@ -120,6 +122,8 @@ export type Services = {
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
+  /** The signed-in member's own Search and AI choices (ADR 0062). */
+  readonly discoverability: DiscoverabilityStore;
 };
 
 /** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
@@ -302,6 +306,7 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     publicProfiles: createPublicProfileStore(pool),
+    discoverability: createDiscoverabilityStore(pool),
   };
 }
 
