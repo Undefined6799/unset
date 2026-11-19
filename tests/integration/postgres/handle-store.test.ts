@@ -123,4 +123,21 @@ describe("handle store", () => {
     expect(stored(N)).toEqual([]);
     expect(jobs(N)).toEqual([]);
   });
+
+  test("handle.public_profile_shows_only_what_the_check_verified", async () => {
+    // The public page reads idx.public_profile (migration 0030), which shows the handle only when this store wrote
+    // 'verified'; an invalid outcome clears it and the page falls back to the DID.
+    const P = "did:plc:pppppppppppppppppppppppp";
+    account(P, null, "unresolved", null);
+    sql(`INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+      VALUES ('${P}', 'at://${P}/sh.unset.profile/self', 'cid-p', '3l', '{}', 'P', false, now())`);
+    const shown = () => lines(`SELECT coalesce(handle, '-') FROM idx.public_profile WHERE did = '${P}'`);
+    expect(shown()).toEqual(["-"]);
+    await handles.checked(await claim(P), { status: "verified", handle: "Page.Example.org" });
+    expect(shown()).toEqual(["page.example.org"]);
+    await handles.checked(await claim(P), { status: "unresolved" });
+    expect(shown()).toEqual(["page.example.org"]);
+    await handles.checked(await claim(P), { status: "invalid" });
+    expect(shown()).toEqual(["-"]);
+  });
 });
