@@ -201,7 +201,7 @@ describe("search and AI when the read fails", () => {
 
 describe("search and AI switched off on the whole site", () => {
   // P1.21b: SEARCH_LISTING off, its default, as on staging. A member who turned both choices on is still kept out:
-  // every response says noindex, robots.txt refuses every crawler, and the sitemap lists nothing. Their choices stay.
+  // every response says noindex, robots.txt refuses AI crawlers and names no member, and the sitemap lists nothing.
   let closed: RunningWeb;
   const getClosed = (path: string) => closed.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
   beforeAll(async () => {
@@ -222,12 +222,15 @@ describe("search and AI switched off on the whole site", () => {
     }
   });
 
-  test("robots_refuses_every_crawler_and_names_no_member", async () => {
+  test("robots_lets_search_engines_read_noindex_and_names_no_member", async () => {
     const robots = await getClosed("/robots.txt");
     expect(robots.status).toBe(200);
     const text = await robots.text();
-    expect(text).toMatch(/^User-agent: \*\nDisallow: \/\n$/m);
-    expect(text).not.toMatch(/^(Allow|Sitemap):/m);
+    // Search engines must fetch a page to read its noindex (ADR 0031 Decision 1); AI crawlers are refused everything.
+    expect(text).toContain("User-agent: *\nAllow: /\n");
+    expect(text).toContain("User-agent: OAI-SearchBot");
+    expect(text).toContain("User-agent: GPTBot");
+    expect(text).not.toMatch(/^(Sitemap:|Allow: \/@)/m);
     expect(text).not.toContain(HANDLE);
   });
 

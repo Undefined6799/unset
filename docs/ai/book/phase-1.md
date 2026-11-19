@@ -4649,8 +4649,10 @@ shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/route
 Alex asked on 2026-11-19 for one line that turns search and AI listing off for the whole app, so staging is never
 listed. The web setting `SEARCH_LISTING` (`on` or `off`) defaults to `off`. Off: every response carries
 `X-Robots-Tag: noindex` (server.ts) and every page `<meta name="robots" content="noindex">` (root layout),
-robots.txt is one `User-agent: *` group with `Disallow: /` and no sitemap line, and the sitemap lists nothing; neither
-reads members' choices. Members' stored choices are untouched, and Settings › Profile › Search and AI says listing is
+robots.txt refuses the training and AI search crawlers every path, lets `User-agent: *` fetch every page (a page it
+blocks never shows its noindex, and a linked address could still be listed: ADR 0031 Decision 1), and names no
+sitemap; the sitemap lists nothing; neither reads members' choices. The switch takes a restart, and a copy cached
+before it may live five minutes. Members' stored choices are untouched, and Settings › Profile › Search and AI says listing is
 off on this site. On: ADR 0062 exactly. Both staging compose files and the local one set `off` as a literal; turning
 it on for production is a later step that needs Alex's word. Fits inside ADR 0062, which decides what a member's
 choice does on a listed site; it adds no data and no crawler rule. The letter does not belong to the token pipeline

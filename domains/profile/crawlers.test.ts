@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { CLOSED_ROBOTS_TXT, MAX_AI_SEARCH_PAGES, robotsTxt, sitemapXml } from "./crawlers.ts";
+import {
+  AI_SEARCH_CRAWLERS,
+  CLOSED_ROBOTS_TXT,
+  MAX_AI_SEARCH_PAGES,
+  robotsTxt,
+  sitemapXml,
+  TRAINING_CRAWLERS,
+} from "./crawlers.ts";
 
 const ORIGIN = "https://unset.sh";
 
@@ -72,12 +79,17 @@ describe("sitemapXml", () => {
 });
 
 describe("CLOSED_ROBOTS_TXT", () => {
-  // Search and AI listing switched off on the whole site (P1.21b): every crawler that honours RFC 9309 reads the `*`
-  // group when no group names it (as read for crawlers.ts), so one group refuses them all, and no sitemap is offered.
-  test("refuses_every_crawler_everywhere_and_offers_no_sitemap", () => {
-    expect(CLOSED_ROBOTS_TXT).toMatch(/^User-agent: \*\nDisallow: \/\n$/m);
-    expect(CLOSED_ROBOTS_TXT).not.toMatch(/^(Allow|Sitemap):/m);
-    expect(CLOSED_ROBOTS_TXT.match(/^User-agent:/gm)).toEqual(["User-agent:"]);
-    expect(CLOSED_ROBOTS_TXT.endsWith("\n")).toBe(true);
+  // Search and AI listing switched off on the whole site (P1.21b): search engines may fetch every page, so they read its
+  // noindex (a page robots.txt blocks never shows it, ADR 0031 Decision 1); training and AI search crawlers are refused
+  // every path; no sitemap and no member is named.
+  test("search_engines_read_noindex_ai_crawlers_are_refused_and_no_sitemap", () => {
+    const groups = CLOSED_ROBOTS_TXT.split("\n\n");
+    expect(groups).toHaveLength(2);
+    const refused = groups[0] ?? "";
+    for (const token of [...TRAINING_CRAWLERS, ...AI_SEARCH_CRAWLERS])
+      expect(refused).toContain(`User-agent: ${token}\n`);
+    expect(refused.endsWith("\nDisallow: /")).toBe(true);
+    expect(groups[1]).toBe("User-agent: *\nAllow: /\n");
+    expect(CLOSED_ROBOTS_TXT).not.toMatch(/^(Sitemap:|Allow: \/@|Disallow: \/@)/m);
   });
 });

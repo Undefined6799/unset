@@ -219,7 +219,7 @@ services:
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
-      # page says noindex and robots.txt refuses every crawler. A literal, so turning it on is a reviewed change.
+      # page says noindex and robots.txt names no member. A literal, so turning it on is a reviewed change.
       SEARCH_LISTING: "off"
       # Legal contacts (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
       # and these are not secrets. Alex's values for staging (2026-10-20T23:09:25Z); compose.local.yaml keeps the

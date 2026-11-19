@@ -85,8 +85,8 @@ const inviteConfig = {
 
 /**
  * Search and AI listing for the whole site (P1.21b, within ADR 0062). Off, the default, so a stack that leaves it unset
- * is never listed: every response says noindex, robots.txt refuses every crawler and the sitemap lists nothing,
- * whatever members chose; their choices are kept. On, each member's own choices decide, as ADR 0062 describes.
+ * is never listed: every response says noindex, robots.txt refuses AI crawlers and names no member, and the sitemap
+ * lists nothing, whatever members chose; their choices are kept. On, each member's own choices decide, as ADR 0062 describes.
  */
 const searchConfig = {
   SEARCH_LISTING: oneOf(["on", "off"], { default: "off" }),
