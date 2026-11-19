@@ -69,6 +69,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
 | ADR 0056 | In the web process only server files (`*.server.ts`, `hooks.server.ts`, `server.ts`, `lib/server/`) reach a domain or infrastructure; a screen or universal load never does | checked: `svelte-screens-no-core`; for type-only imports in .svelte files, which dependency-cruiser cannot see, `scripts/guards/svelte-imports.ts` (`svelte_type_import_of_core_fails`, `svelte_app_names_no_interface`) |
 | ADR 0056 | Only the web process and its screens import Svelte or SvelteKit | checked: `sveltekit-web-only` |
+| P1.20t | A web route reaches the database only through an operation in `lib/server`, never by importing `infrastructure/postgres` | checked: `web-routes-no-postgres` |
 | ADR 0056 | The web process imports from `apps/web` only the Svelte components (`lib/`), `theme.css`, `app.css` and the `.md` files directly in `legal/`, nothing else | checked: `web-components-only`, `web_process_takes_only_svelte_components_and_icon_data` |
 | ADR 0055 | The web process and the Svelte components take only `icons.json` from `shared/ui`, nothing else there | checked: `svelte-no-react-ui`, `web_process_takes_only_svelte_components_and_icon_data` |
 | ADR 0056 | No web page is prerendered and no proof-only route exists | checked: `scripts/guards/web-prerender.ts`, `web_prerender_page_export`, `the_build_holds_no_prerendered_page` |

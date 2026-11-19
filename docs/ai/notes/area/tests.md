@@ -7,10 +7,10 @@ summary: "Hub for tests/: Postgres integration tests and the browser accessibili
 code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/support/local-stack.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
-related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
+related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-11-18
+checked: 2026-11-19
 ---
 # tests
 
@@ -66,6 +66,11 @@ with it on, Lighthouse stopped with NO_NAVSTART in 16 of 277 local runs; with it
 loses the trace's `navigationStart` is inferred, not proven. Chrome keeps only the last `--disable-features`, so the
 flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins it, and fails if
 `chromeIgnoreDefaultFlags` is set.
+
+**Bundle experiment (P1.20u).** `tests/e2e/bundle-measure/` is a manual measuring tool, not a test: `run.ts` loads
+the member's pages through a local Caddy running staging's `app-ratelimit` (`edge.caddy`) in front of `serve.ts`, the
+built web in socket mode, and writes what reached the edge as JSON. It needs a caddy-ratelimit Caddy binary and
+Docker; nothing in CI runs it. Results: [[single-vs-split-bundle-at-the-edge]].
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

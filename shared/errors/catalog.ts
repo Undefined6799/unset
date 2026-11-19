@@ -62,6 +62,10 @@ export const ERROR_CODES = {
   "card.order_invalid": { status: 409, public: true },
   "card.missing": { status: 404, public: true },
   "card.too_many": { status: 409, public: true },
+  // More cards stored than a page shows (written outside this app): moving waits until the member deletes one.
+  "card.overflow": { status: 409, public: true },
+  // A new card's repo changed twice while it was being added (createRecord swapCommit refused); nothing was written.
+  "card.cards_changed": { status: 409, public: true },
   "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },

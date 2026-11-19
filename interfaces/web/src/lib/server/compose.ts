@@ -30,6 +30,7 @@ import {
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
+  createDiscoverabilityStore,
   createInviteStore,
   createLockPool,
   createOAuthSessionStore,
@@ -38,6 +39,7 @@ import {
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type DiscoverabilityStore,
   type InviteStore,
   oauthSessionExists,
   type Pool,
@@ -74,8 +76,6 @@ type SavedState = NonNullable<Awaited<ReturnType<Parameters<typeof createOAuthCl
 /** The one OAuth client and the account lock around its token sets (P2.04c, P1.36y). */
 export type OAuthServices = {
   readonly client: OAuthClient;
-  /** The library's token sets, sealed in app.oauth_session; a read never refreshes. */
-  readonly sessionStore: ReturnType<typeof createOAuthSessionStore<SavedSession>>;
   /** sign-in-lock.ts `during`: a sign-in holds the account's lock from storing its token set to its session row. */
   readonly signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   /** sign-in-lock.ts `exclusive`: runs `fn` holding `did`'s lock (the last browser's sign-out, sign-out everywhere). */
@@ -98,7 +98,6 @@ export type Services = {
   readonly issuerOf: (did: Did, signal?: AbortSignal) => Promise<string | null>;
   /** PLC, DNS and handle domains, through net-guard. */
   readonly network: IdentityNetwork;
-  readonly resolveDid: ReturnType<typeof createDidResolver>;
   /** P2.02's handle check, both directions (CLAUDE.md "Identity"). */
   readonly handles: ReturnType<typeof createHandleVerifier>;
   /** P1.16's single-use store (`login.nonce`). */
@@ -123,6 +122,8 @@ export type Services = {
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
+  /** The signed-in member's own Search and AI choices (ADR 0062). */
+  readonly discoverability: DiscoverabilityStore;
 };
 
 /** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
@@ -282,7 +283,6 @@ async function build(): Promise<Services> {
   );
   const oauth: OAuthServices = {
     client,
-    sessionStore: tokenSets,
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
   };
@@ -296,7 +296,6 @@ async function build(): Promise<Services> {
     oauth,
     issuerOf,
     network,
-    resolveDid,
     handles,
     nonces,
     pds,
@@ -307,6 +306,7 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     invites,
     publicProfiles: createPublicProfileStore(pool),
+    discoverability: createDiscoverabilityStore(pool),
   };
 }
 

@@ -46,6 +46,14 @@ export type IndexHealth = {
   readonly deadLetters: number;
   /** Accounts whose deletion our PDS confirmed and that still wait, hidden, for erasure (P3.06s dead letters). */
   readonly deletionsNotErased: number;
+  /**
+   * Per job kind, in whole seconds: how long the oldest due job has waited for a pass (a pass falling behind), and how
+   * long the oldest job that has failed at least once has been queued (our PDS or a check failing for that long). Null
+   * when there is none. For an outside alert; they do not make health unhealthy.
+   */
+  readonly jobs: Readonly<
+    Record<string, { readonly oldestDueS: number | null; readonly oldestFailingS: number | null }>
+  >;
 };
 
 export type IndexStore = {
@@ -192,6 +200,12 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
               SELECT 1 FROM idx.account a WHERE a.did = d.did AND a.pds_status = 'deleted' AND NOT a.pds_active)) AS unerased
      FROM idx.dead_letter d`,
   );
+  const jobs = await client.query(
+    `SELECT kind,
+            floor(extract(epoch FROM now() - min(due_at) FILTER (WHERE due_at <= now()))) AS oldest_due,
+            floor(extract(epoch FROM now() - min(first_queued_at) FILTER (WHERE attempts > 0))) AS oldest_failing
+     FROM idx.account_job GROUP BY kind ORDER BY kind`,
+  );
   const counters = Object.fromEntries(INGEST_COUNTERS.map((name) => [name, 0])) as Record<Counter, number>;
   for (const row of stats.rows) counters[row.name as Counter] = Number(row.value);
   return {
@@ -199,7 +213,17 @@ async function readHealth(client: PoolClient, source: string): Promise<IndexHeal
     counters,
     deadLetters: Number(dead.rows[0]?.n ?? 0),
     deletionsNotErased: Number(dead.rows[0]?.unerased ?? 0),
+    jobs: Object.fromEntries(
+      jobs.rows.map((row) => [
+        String(row.kind),
+        { oldestDueS: secondsOrNull(row.oldest_due), oldestFailingS: secondsOrNull(row.oldest_failing) },
+      ]),
+    ),
   };
+}
+
+function secondsOrNull(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
 }
 
 /** The checks in the book's order: replay, tombstone, account row; then the frame; then the cursor. */
