@@ -23,3 +23,18 @@ export const c32: Check = {
     return pass();
   },
 };
+
+/**
+ * C34 (P2.10, review N1 of #1733): every name the Compose files interpolate has a value in the interpolation env file.
+ * Compose turns a missing name into an empty string with only a warning (compose-spec 12-interpolation.md), so a
+ * setting a new step adds (WEB_PDS_ADMIN_KID, say) would reach the service empty and stop it at boot, after the old
+ * containers were replaced. The preflight runs before `compose up`, so the deploy stops here instead. The reason names
+ * the Compose variables, which come from the committed files, never a value.
+ */
+export const c34: Check = {
+  id: "C34",
+  run: ({ emptyInterpolated }) =>
+    emptyInterpolated.length === 0
+      ? pass()
+      : fail(`the interpolation env file gives no value for ${emptyInterpolated.join(", ")}`),
+};

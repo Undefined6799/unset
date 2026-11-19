@@ -61,4 +61,11 @@ describe("issueInvite", () => {
     const { guard } = network(answer as never);
     expect(await createInviteIssuer(guard, settings)(ALICE)).toEqual(expected);
   });
+
+  test("web.issueInvite_deadline: the request carries the caller's deadline (RE-1)", async () => {
+    const { guard, seen } = network({ status: 200, body: { code: "c-1", remaining: 4, availableAt: null } });
+    const deadline = new AbortController().signal;
+    await createInviteIssuer(guard, settings)(ALICE, deadline);
+    expect(seen[0]?.request.signal).toBe(deadline);
+  });
 });
