@@ -810,6 +810,16 @@ const TOO_MANY_TRIES: Red[] = [
     NOT_THE_PAGE("APP_HOST"),
   ],
   ["the page for a fetch", "dev", (c) => void delete pageRoutes(c, APP_DEV)[2]?.match, NOT_THE_PAGE("APP_HOST")],
+  ["no 5xx route", "shipped", (c) => void a(o(a(errorRoute(c, P).handle)[0]).routes).pop(), NOT_THE_PAGE("PDS_HOST")],
+  [
+    "a 5xx answered with a body",
+    "local",
+    (c) => {
+      const routes = a(o(a(errorRoute(c, APP_LOCAL).handle)[0]).routes);
+      routes[1] = { ...o(routes[1]), handle: [{ handler: "static_response", status_code: 502, body: "x" }] };
+    },
+    NOT_THE_PAGE("APP_HOST"),
+  ],
   [
     "the page as a 200",
     "shipped",

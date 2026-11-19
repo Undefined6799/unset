@@ -42,4 +42,11 @@
 			</html>
 			HTML 429
 	}
+	# The edge's own 5xx errors (an upstream it cannot reach, say) stay at ERROR in the error log. Once a server has
+	# error routes, Caddy logs an error they handle at DEBUG (server.go:747-756); one whose route fails again is logged
+	# at ERROR with the first error, its message and status, under first_error, and the client still gets the first
+	# error's status and no body (server.go:757-776). So a 5xx fails again here, as it was logged before.
+	handle_errors 5xx {
+		error "edge error" 500
+	}
 }

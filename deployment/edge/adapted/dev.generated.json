@@ -834,6 +834,29 @@
                             "expression": "{http.error.status_code} in [429]"
                           }
                         ]
+                      },
+                      {
+                        "handle": [
+                          {
+                            "handler": "subroute",
+                            "routes": [
+                              {
+                                "handle": [
+                                  {
+                                    "error": "edge error",
+                                    "handler": "error",
+                                    "status_code": 500
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ],
+                        "match": [
+                          {
+                            "expression": "{http.error.status_code} >= 500 && {http.error.status_code} <= 599"
+                          }
+                        ]
                       }
                     ]
                   }
@@ -935,6 +958,29 @@
                         "match": [
                           {
                             "expression": "{http.error.status_code} in [429]"
+                          }
+                        ]
+                      },
+                      {
+                        "handle": [
+                          {
+                            "handler": "subroute",
+                            "routes": [
+                              {
+                                "handle": [
+                                  {
+                                    "error": "edge error",
+                                    "handler": "error",
+                                    "status_code": 500
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ],
+                        "match": [
+                          {
+                            "expression": "{http.error.status_code} >= 500 && {http.error.status_code} <= 599"
                           }
                         ]
                       }

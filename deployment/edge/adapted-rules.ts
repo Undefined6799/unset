@@ -233,10 +233,20 @@ const cspAppend = (host: string): Json => ({
  * (too-many-tries) as adapted for one site (snippets/too-many-tries.caddy): on a 429 from a zone, the security headers,
  * the page's CSP and no-store on every response, and the page itself, still a 429, only for a browser navigation; a
  * fetch or a stream gets Caddy's empty 429. `body` is the page, which pageProblems judges, and `csp` its policy:
- * nothing but one style by its SHA-256 hash, so the page can load nothing else. The rules import nothing (no
+ * nothing but one style by its SHA-256 hash, so the page can load nothing else. A 5xx is raised again (LOG_5XX). The rules import nothing (no
  * dependency-cruiser row for the edge), so adapted-rules.test.ts proves the hash is the reviewed style's.
  */
 const NAVIGATE: Json = [{ header: { "Sec-Fetch-Mode": ["navigate"] } }];
+/**
+ * The second route: a 5xx fails again, so Caddy still logs the edge's own 5xx at ERROR and sends the first error's
+ * status with no body, as before the error routes existed (Caddy v2.11.9 server.go:747-776).
+ */
+const LOG_5XX: Json = {
+  handle: [
+    { handler: "subroute", routes: [{ handle: [{ handler: "error", error: "edge error", status_code: 500 }] }] },
+  ],
+  match: [{ expression: "{http.error.status_code} >= 500 && {http.error.status_code} <= 599" }],
+};
 export const PAGE_CSP =
   /^default-src 'none'; style-src 'sha256-([A-Za-z0-9+/]{43}=)'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'$/;
 const tooManyTries = (host: string, body: string, csp: string): Json => ({
@@ -271,6 +281,7 @@ const tooManyTries = (host: string, body: string, csp: string): Json => ({
           ],
           match: [{ expression: "{http.error.status_code} in [429]" }],
         },
+        LOG_5XX,
       ],
     },
   ],
