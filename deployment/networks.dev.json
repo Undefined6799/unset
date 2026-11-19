@@ -1,5 +1,5 @@
 {
-  "db": { "internal": true, "members": ["postgres", "migrate", "web"] },
+  "db": { "internal": true, "members": ["postgres", "migrate", "web", "indexer"] },
   "app": { "internal": true, "members": ["edge", "web"] },
   "edge": { "internal": false, "members": ["pds", "edge"] },
   "newt_edge": { "internal": true, "members": ["newt", "edge"] },
@@ -9,5 +9,7 @@
   "web_egress": { "internal": false, "members": ["web"] },
   "objects": { "internal": true, "members": ["objects"] },
   "pds_admin": { "internal": true, "members": ["pds-admin"] },
-  "pds_admin_pds": { "internal": true, "members": ["pds", "pds-admin"] }
+  "pds_admin_pds": { "internal": true, "members": ["pds", "pds-admin"] },
+  "indexer_pds": { "internal": true, "members": ["pds", "indexer"] },
+  "indexer_egress": { "internal": false, "members": ["indexer"] }
 }
