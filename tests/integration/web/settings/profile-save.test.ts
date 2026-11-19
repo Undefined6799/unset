@@ -139,7 +139,7 @@ describe("a new member with no profile record", () => {
     ]);
     const before = up.writes().length;
     const response = await save(up, "displayName=New+Member&headline=&location=&website=&next=%2Fsettings%2Fprofile");
-    expect(response.headers.get("location")).toBe("/settings/profile");
+    expect(response.headers.get("location")).toBe("/settings/profile?saved");
     const [written] = up.writes().slice(before);
     expect(written).toMatchObject({
       method: "putRecord",
@@ -171,7 +171,7 @@ describe("POST /profile on the stand-in PDS", () => {
   test("Settings › Profile comes back to Settings, and the second save swaps on the first", async () => {
     const before = up.writes().length;
     const response = await save(up, "displayName=Alice&headline=&next=%2Fsettings%2Fprofile");
-    expect(response.headers.get("location")).toBe("/settings/profile");
+    expect(response.headers.get("location")).toBe("/settings/profile?saved");
     const [written] = up.writes().slice(before);
     expect(written?.swapRecord).not.toBeNull(); // compare-and-swap on the stored record (DA-4)
   });
