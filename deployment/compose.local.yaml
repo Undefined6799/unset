@@ -202,6 +202,9 @@ services:
       PDS_ADMIN_WEB_KEY_FILE: /run/secrets/web_pds_admin_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
+      # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
+      # page says noindex and robots.txt refuses every crawler. A literal, so turning it on is a reviewed change.
+      SEARCH_LISTING: "off"
       # Legal placeholders (P2.15). Same literals as compose.dev.yaml; the local file may not differ here.
       PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]"
       PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]"
