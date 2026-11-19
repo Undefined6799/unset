@@ -53,10 +53,13 @@ function resultOf(status: number, body: Record<string, unknown> | null): IssueIn
   return { kind: "unavailable" };
 }
 
-/** `issueInvite(inviter)`: one code for the signed-in member, issued for themselves only. */
+/**
+ * `issueInvite(inviter, deadline)`: one code for the signed-in member, issued for themselves only. The request ends at
+ * the caller's deadline or after 8 s, whichever is first (RE-1); either answers unavailable.
+ */
 export function createInviteIssuer(guard: NetGuard, settings: InviteIssuerSettings, now = () => Date.now()) {
   const policy = pdsAdmin(settings.origin);
-  return async (inviter: Did): Promise<IssueInviteResult> => {
+  return async (inviter: Did, deadline?: AbortSignal): Promise<IssueInviteResult> => {
     const iat = Math.floor(now() / 1000);
     const payload: AdminPayload = {
       v: 1,
@@ -79,6 +82,7 @@ export function createInviteIssuer(guard: NetGuard, settings: InviteIssuerSettin
         body,
         timeoutMs: 8_000,
         maxBytes: 4_096,
+        ...(deadline === undefined ? {} : { signal: deadline }),
       });
       return resultOf(res.status, parse(res.body));
     } catch (error) {
