@@ -1009,6 +1009,7 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
         "WEB_OAUTH_ACTIVE_KID=web-local",
         "WEB_PDS_ADMIN_KID=web-local",
         "PDS_DID=did:web:pds.example.net",
+        `PDS_PUBLIC_URL=https://${PDS}`,
         "",
       ].join("\n"),
     );
