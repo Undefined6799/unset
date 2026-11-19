@@ -31,7 +31,7 @@ export const HEALTH_WAIT_MS = 180_000;
 const POLL_MS = 3_000;
 const PROBE_MS = 15_000;
 /** The services `up` starts; pds-token-reader is a tools profile and never starts. */
-export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin"] as const;
+export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin", "indexer"] as const;
 const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
