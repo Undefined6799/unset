@@ -100,6 +100,10 @@ export const INGEST_COUNTERS = [
   "account_job_superseded",
   "account_job_failed",
   "account_job_dead_letter",
+  "handle_verified",
+  "handle_invalid",
+  "handle_unresolved",
+  "handle_moved",
 ] as const;
 export type Counter = (typeof INGEST_COUNTERS)[number];
 

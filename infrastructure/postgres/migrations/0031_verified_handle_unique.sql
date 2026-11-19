@@ -1,0 +1,13 @@
+-- phase: expand
+-- One verified holder of a handle at a time (book P3.08s in docs/ai/book/phase-3.md; plan section 5.2, "handles in
+-- events are hints only"). The handle check writes a handle only after verifyHandle confirmed it in both directions,
+-- and moves any other verified holder of the same handle to 'unresolved' in the same transaction; this index makes
+-- the database refuse the second holder if that code is ever wrong, so /@handle can never resolve to two accounts.
+--
+-- Partial: an invalid or unresolved row may keep a stale handle text, which /@handle never serves. Handles are stored
+-- in the lower-case form verifyHandle returns (https://atproto.com/specs/handle, "Handles are not case-sensitive";
+-- parseHandle normalises), so a plain equality index suffices. idx can be dropped and rebuilt (rule DA-1), and
+-- account rows today hold no verified handle (the identity frame only queues a check), so the index builds empty.
+-- query: infrastructure/postgres/handleStore.ts
+-- why: unique
+CREATE UNIQUE INDEX account_verified_handle ON idx.account (handle) WHERE handle_status = 'verified';
