@@ -24,6 +24,7 @@ export {
 } from "./cards.ts";
 export {
   AI_SEARCH_CRAWLERS,
+  CLOSED_ROBOTS_TXT,
   MAX_AI_SEARCH_PAGES,
   MAX_SITEMAP_PAGES,
   robotsTxt,

@@ -24,6 +24,7 @@ let {
     pagePath: string;
     discoverability: { searchEngines: boolean; aiSearch: boolean; title: string; description: string };
     discoverabilityLimits: { title: number; description: number };
+    searchListingOff: boolean;
   };
 } = $props();
 
@@ -53,4 +54,4 @@ const save: Action<HTMLFormElement> = (form) =>
 {:else}
   <ProfileForm values={data.profile} limits={data.limits} pagePath={data.pagePath} {messageFor} enhance={save} {status} />
 {/if}
-<SearchAiForm values={data.discoverability} limits={data.discoverabilityLimits} />
+<SearchAiForm values={data.discoverability} limits={data.discoverabilityLimits} siteOff={data.searchListingOff} />

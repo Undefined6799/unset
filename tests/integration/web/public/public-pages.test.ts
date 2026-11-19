@@ -85,7 +85,8 @@ async function memberCookie(onboarded = true): Promise<{ did: Did; cookie: strin
 let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
-  web = await startWeb(pg, { PRIVACY_OFFICER_TITLE: TITLE });
+  // Listing on (P1.21b), so home's missing noindex below shows the legal pages carry their own.
+  web = await startWeb(pg, { PRIVACY_OFFICER_TITLE: TITLE, SEARCH_LISTING: "on" });
 }, 120_000);
 afterAll(async () => {
   await web?.stop();
