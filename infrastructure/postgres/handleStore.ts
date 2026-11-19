@@ -44,8 +44,18 @@ export type HandleStore = {
 export const HANDLE_LEASE_SECONDS = 150;
 /** An unresolved check asks again after this, rather than on every pass until the outage ends. */
 export const HANDLE_RETRY_SECONDS = 600;
+/**
+ * How long past its recheck a verified handle stands through an outage: one day, the default recheck interval, so a
+ * PLC or DNS outage of up to a day costs nobody their handle, and a DID document its holder keeps unreadable (a
+ * did:web host they control) cannot keep one for ever (P3.08s re-review). Measured from the last answer.
+ */
+export const HANDLE_OUTAGE_GRACE_SECONDS = 86_400;
 
-export function createHandleStore(pool: Pool, options: { readonly timeoutMs: number }): HandleStore {
+export function createHandleStore(
+  pool: Pool,
+  options: { readonly timeoutMs: number; readonly recheckSeconds: number },
+): HandleStore {
+  const standsFor = options.recheckSeconds + HANDLE_OUTAGE_GRACE_SECONDS;
   const deadline = () => AbortSignal.timeout(options.timeoutMs);
   return {
     queueStale: (limit, maxAgeSeconds) =>
@@ -63,15 +73,15 @@ export function createHandleStore(pool: Pool, options: { readonly timeoutMs: num
       }),
     dueChecks: (limit) =>
       withClient(pool, deadline(), (client) => claimJobs(client, "handle_check" as const, limit, HANDLE_LEASE_SECONDS)),
-    checked: (job, outcome) => withTransaction(pool, deadline(), (tx) => writeOutcome(tx, job, outcome)),
+    checked: (job, outcome) => withTransaction(pool, deadline(), (tx) => writeOutcome(tx, job, outcome, standsFor)),
   };
 }
 
-async function writeOutcome(tx: PoolClient, job: HandleJob, outcome: HandleOutcome): Promise<void> {
+async function writeOutcome(tx: PoolClient, job: HandleJob, outcome: HandleOutcome, standsFor: number): Promise<void> {
   const account = (await isErased(tx, job.did)) ? null : await lockAccount(tx, job.did);
   if (!(await endJob(tx, job))) return count(tx, "account_job_superseded");
   if (account === null) return count(tx, "account_job_skipped");
-  if (outcome.status === "unresolved") return askAgainLater(tx, job.did, outcome.claimed);
+  if (outcome.status === "unresolved") return askAgainLater(tx, job.did, outcome.claimed, standsFor);
   if (outcome.status === "invalid") {
     await tx.query(
       `UPDATE idx.account SET handle = NULL, handle_status = 'invalid', handle_checked_at = now(), updated_at = now()
@@ -104,9 +114,15 @@ async function moveOtherHolders(tx: PoolClient, did: string, handle: string): Pr
 /**
  * An outage says nothing about the handle, so the check is due again later. What is stored stays verified only while
  * the DID document still claims it: when the document was read and claims another handle, the stored one is no longer
- * verified (the public page then shows the DID), and the next check decides (review B1 on #1728).
+ * verified (the public page then shows the DID), and the next check decides (review B1 on #1728). Nor does it stand
+ * once its last answer is `standsFor` seconds old (HANDLE_OUTAGE_GRACE_SECONDS).
  */
-async function askAgainLater(tx: PoolClient, did: string, claimed: string | undefined): Promise<void> {
+async function askAgainLater(
+  tx: PoolClient,
+  did: string,
+  claimed: string | undefined,
+  standsFor: number,
+): Promise<void> {
   if (claimed !== undefined) {
     const { rowCount } = await tx.query(
       `UPDATE idx.account SET handle_status = 'unresolved', updated_at = now()
@@ -115,6 +131,12 @@ async function askAgainLater(tx: PoolClient, did: string, claimed: string | unde
     );
     if ((rowCount ?? 0) > 0) await count(tx, "handle_unclaimed");
   }
+  const lapsed = await tx.query(
+    `UPDATE idx.account SET handle_status = 'unresolved', updated_at = now()
+     WHERE did = $1 AND handle_status = 'verified' AND handle_checked_at < now() - make_interval(secs => $2)`,
+    [did, standsFor],
+  );
+  if ((lapsed.rowCount ?? 0) > 0) await count(tx, "handle_outage_lapsed");
   await tx.query(
     `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
      VALUES ($1, 'handle_check', now() + make_interval(secs => $2), 0, now())

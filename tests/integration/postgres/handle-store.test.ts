@@ -56,7 +56,7 @@ beforeAll(async () => {
   await migrateAsMigrator(postgres, migratorPassword);
   postgres.sql("postgres", `ALTER ROLE indexer PASSWORD '${indexerPassword}'`);
   indexer = pools.open(postgres, "unset", "indexer", indexerPassword);
-  handles = createHandleStore(indexer, { timeoutMs: 5_000 });
+  handles = createHandleStore(indexer, { timeoutMs: 5_000, recheckSeconds: 86_400 });
 }, 120_000);
 afterAll(() => stopAllPostgresAfter(pools.end), STOP_ALL_MS);
 
@@ -80,7 +80,7 @@ describe("handle store", () => {
 
   test("handle.unresolved_keeps_stored_and_asks_again_later", async () => {
     sql(`UPDATE idx.account SET handle = 'alice.example.org', handle_status = 'verified',
-      handle_checked_at = now() - interval '2 days' WHERE did = '${A}'`);
+      handle_checked_at = now() - interval '25 hours' WHERE did = '${A}'`);
     await handles.checked(await claim(A), { status: "unresolved" });
     expect(stored(A)).toEqual(["alice.example.org|verified|t"]);
     expect(lines(`SELECT due_at > now() + interval '1 minute' FROM idx.account_job WHERE did = '${A}'`)).toEqual(["t"]);
@@ -153,5 +153,20 @@ describe("handle store", () => {
     await handles.checked(await claim(C), { status: "unresolved", claimed: "new.example.org" });
     expect(stored(C)).toEqual(["old.example.org|unresolved|t"]);
     expect(jobs(C)).toEqual(["handle_check"]);
+  });
+
+  test("handle.outage_keeps_the_handle_for_a_day_past_its_recheck_only", async () => {
+    // P3.08s re-review: a DID document its holder keeps unreadable (did:web) must not keep a handle for ever. The last
+    // answer stands through an outage until a day past the recheck (86 400 s here), then the page shows the DID.
+    const D = "did:plc:dddddddddddddddddddddddd";
+    const E = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
+    account(D, "kept.example.org", "verified", "now() - interval '47 hours'");
+    account(E, "lapsed.example.org", "verified", "now() - interval '49 hours'");
+    await handles.checked(await claim(D), { status: "unresolved" });
+    await handles.checked(await claim(E), { status: "unresolved" });
+    expect(stored(D)).toEqual(["kept.example.org|verified|t"]);
+    expect(stored(E)).toEqual(["lapsed.example.org|unresolved|t"]);
+    expect(jobs(E)).toEqual(["handle_check"]);
+    expect(counter("handle_outage_lapsed")).toBe("1");
   });
 });

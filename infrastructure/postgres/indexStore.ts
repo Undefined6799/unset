@@ -105,6 +105,7 @@ export const INGEST_COUNTERS = [
   "handle_unresolved",
   "handle_moved",
   "handle_unclaimed",
+  "handle_outage_lapsed",
 ] as const;
 export type Counter = (typeof INGEST_COUNTERS)[number];
 

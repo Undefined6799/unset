@@ -99,7 +99,7 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
     maxBytes: config.INDEXER_REPO_MAX_BYTES,
   });
   const readStatus = createRepoStatusReader({ service, guard, timeoutMs });
-  const handles = createHandleStore(pool, { timeoutMs });
+  const handles = createHandleStore(pool, { timeoutMs, recheckSeconds: config.HANDLE_RECHECK_S });
   // Every check asks fresh (book P3.08 step 2), so the verifier's cache only shares a check asked twice at once.
   const { verifyHandle } = createHandleVerifier({
     network,
