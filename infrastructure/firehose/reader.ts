@@ -16,8 +16,8 @@ import { type CommitBody, commitFrame, parseMessage, type RepoFrame } from "./fr
 export type FirehoseConsumer = {
   /**
    * The last sequence number applied, or null when none has been. Read on every dial. With null the first dial
-   * starts at the live tip (https://atproto.com/specs/event-stream, "Sequence Numbers"); a later one resumes from the
-   * first frame this reader saw, or calls missedEvents when it saw none it could number.
+   * asks for cursor 0, the oldest event kept (https://atproto.com/specs/event-stream, "Sequence Numbers"); a later
+   * one resumes from the first frame this reader saw, or calls missedEvents when it saw none it could number.
    */
   readonly cursor: () => Promise<number | null>;
   /** Applies one frame and writes `frame.seq` as the cursor in the same transaction. Must accept a replayed frame. */
@@ -120,11 +120,17 @@ async function run(reason: StopReason, step: () => Promise<void>): Promise<void>
 }
 
 /**
- * Where to resume while the consumer has no cursor yet: just before the first frame this reader saw. Without it a
- * redial after that frame failed would start at the live tip again and skip it for good. `tipAllowed` says a dial
- * with nothing to resume from may go to the live tip: once at start, then once after each successful missedEvents.
+ * Where to resume while the consumer has no cursor yet: just before the first frame this reader saw, so a redial after
+ * that frame failed asks for it again. With neither, the dial asks for cursor 0, which starts at the oldest event the
+ * PDS keeps and sends its whole window before the live stream (https://atproto.com/specs/event-stream, "cursor is
+ * 0"). Never the live tip: a commit made after a backfill read but before the socket opens would be missed for good.
+ * `fromStartAllowed` says such a dial may go out: once at start, then once after each successful missedEvents, since
+ * the window may have moved past events a later dial can no longer get.
  */
-type Position = { floor: number | null; tipAllowed: boolean };
+type Position = { floor: number | null; fromStartAllowed: boolean };
+
+/** The cursor that asks for the oldest event the PDS keeps. */
+const OLDEST_KEPT = 0;
 
 /** Records the first frame's sequence number, read from the raw body so even an unreadable frame can be retried. */
 function noteFrame(position: Position, value: unknown): void {
@@ -154,13 +160,13 @@ async function readUntilStop(
     },
     // Called on every dial, including Subscription's own redials after a dropped socket. A throw here rejects the
     // iteration (@atproto/ws-client 0.2.1 dist/websocket.js resolves the url outside its retry), so a second
-    // live-tip dial stops the stream and goes through catchUp first.
+    // dial from the window's start stops the stream and goes through catchUp first.
     getParams: async () => {
       const cursor = (await options.consumer.cursor()) ?? position.floor;
       if (cursor !== null) return { cursor };
-      if (!position.tipAllowed) throw new Stop("stream_failed", new Error("redial with nothing to resume from"));
-      position.tipAllowed = false;
-      return {};
+      if (!position.fromStartAllowed) throw new Stop("stream_failed", new Error("redial with nothing to resume from"));
+      position.fromStartAllowed = false;
+      return { cursor: OLDEST_KEPT };
     },
     // Subscription skips a frame whose validate returns undefined, and it passes undefined for a body that is not
     // a map; throwing instead ends the iteration, so such a frame stops the stream like any other unreadable one.
@@ -191,16 +197,16 @@ function report(options: FirehoseReaderOptions, stop: Stop): void {
 }
 
 /**
- * Before a redial with nothing to resume from, the consumer learns that it may have missed events. That dial goes
- * to the live tip, so it waits until the consumer has taken the news: a throw here stops like any other failure,
- * the live tip stays closed, and the next attempt asks again.
+ * Before a redial with nothing to resume from, the consumer learns that it may have missed events: that dial starts
+ * at the oldest event kept, which may now be later than where the first dial started. It waits until the consumer
+ * has taken the news: a throw here stops like any other failure, the dial stays closed, and the next attempt asks again.
  */
 async function catchUp(options: FirehoseReaderOptions, position: Position): Promise<void> {
-  if (position.tipAllowed || position.floor !== null) return;
+  if (position.fromStartAllowed || position.floor !== null) return;
   await run("apply_failed", async () => {
     if ((await options.consumer.cursor()) === null) await options.consumer.missedEvents();
   });
-  position.tipAllowed = true;
+  position.fromStartAllowed = true;
 }
 
 const wait = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -221,7 +227,7 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> =>
  */
 export async function readFirehose(options: FirehoseReaderOptions, signal: AbortSignal): Promise<void> {
   let delay = options.restartDelayMs;
-  const position: Position = { floor: null, tipAllowed: true };
+  const position: Position = { floor: null, fromStartAllowed: true };
   while (!signal.aborted) {
     const connection = new AbortController();
     const stopConnection = () => connection.abort();

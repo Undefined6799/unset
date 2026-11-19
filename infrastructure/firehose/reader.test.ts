@@ -18,9 +18,9 @@ const METHOD = "com.atproto.sync.subscribeRepos";
 type Sent = { seq: number; bytes: Uint8Array };
 
 /**
- * Serves `frames()` after the dial's cursor (exclusive, https://atproto.com/specs/event-stream), then idles. A dial
- * with no cursor starts at the live tip, as the spec says: the first such dial sees the frames as they arrive, a later
- * one sees none of them again.
+ * Serves `frames()` after the dial's cursor (exclusive), then idles, as https://atproto.com/specs/event-stream says:
+ * cursor 0 starts at the oldest event kept, so it gets every frame; a dial with no cursor starts at the live tip,
+ * which has moved past every frame already made, so it gets none.
  */
 async function fakePds(frames: () => Sent[]) {
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
@@ -30,10 +30,9 @@ async function fakePds(frames: () => Sent[]) {
     const url = new URL(request.url ?? "/", "http://x");
     expect(url.pathname).toBe(`/xrpc/${METHOD}`);
     const cursor = url.searchParams.get("cursor");
-    const live = cursor === null && dials.every((dial) => dial !== null);
     dials.push(cursor === null ? null : Number(cursor));
-    if (cursor === null && !live) return; // the tip has moved past everything sent so far
-    for (const frame of frames()) if (cursor === null || frame.seq > Number(cursor)) socket.send(frame.bytes);
+    if (cursor === null) return;
+    for (const frame of frames()) if (Number(cursor) === 0 || frame.seq > Number(cursor)) socket.send(frame.bytes);
   });
   const { port } = server.address() as { port: number };
   return { url: new URL(`http://127.0.0.1:${port}`), dials, close: () => server.close() };
@@ -165,7 +164,7 @@ describe("readFirehose", () => {
         record: { $type: PROFILE, displayName: "Ada" },
       }),
     ]);
-    expect(pds.dials).toEqual([null]);
+    expect(pds.dials).toEqual([0]);
     expect(run.stops).toEqual([]);
   });
 
@@ -182,7 +181,7 @@ describe("readFirehose", () => {
     await until(() => run.stops.length >= 2);
     expect(run.stops.slice(0, 2)).toEqual(["commit_unverified", "commit_unverified"]);
     expect(run.applied).toEqual([]);
-    expect(pds.dials.slice(0, 2)).toEqual([null, 0]); // nothing moved the cursor; the redial asks for frame 1 again
+    expect(pds.dials.slice(0, 2)).toEqual([0, 0]); // nothing moved the cursor; the redial asks for frame 1 again
   });
 
   test("reader.refuses_a_commit_with_an_unproven_op", async () => {
@@ -293,8 +292,26 @@ describe("readFirehose", () => {
     await expect(done).resolves.toBeUndefined();
   });
 
+  test("reader.first_dial_replays_commits_made_before_the_socket_opened", async () => {
+    // With no cursor the reader dials from the oldest event kept (cursor 0), not the live tip: a commit made after a
+    // backfill read but before this socket opened still reaches the consumer (Codex review of #1723).
+    const key = await Secp256k1Keypair.create();
+    const commit = await signedRepo(key);
+    const sent = [await commit(1, create("self", "Ada"))];
+    const { pds, run } = await setup(
+      () => sent,
+      undefined,
+      () => key.did(),
+    );
+    await until(() => run.applied.length === 1);
+    expect(run.applied.map((applied) => applied.seq)).toEqual([1]);
+    expect(pds.dials[0]).toBe(0);
+    expect(run.missed).toBe(0);
+  });
+
   test("reader.first_frame_failure_replays_without_a_stored_cursor", async () => {
-    // No cursor yet: a redial with none would start at the live tip and skip the failed frame for good.
+    // No cursor yet: a redial from the start of the window again would replay it, but resuming just before the failed
+    // frame keeps the replay short.
     const sent = [
       { seq: 5, bytes: frame("#identity", { seq: 5, did: DID, time: "t" }) },
       { seq: 6, bytes: frame("#identity", { seq: 6, did: DID, time: "t" }) },
@@ -311,7 +328,7 @@ describe("readFirehose", () => {
     await until(() => seen.length === 2);
     expect(seen).toEqual([5, 6]);
     expect(run.stops).toEqual(["apply_failed"]);
-    expect(pds.dials).toEqual([null, 4]);
+    expect(pds.dials).toEqual([0, 4]);
   });
 
   test("reader.handler_failure_replays_from_cursor", async () => {
@@ -340,7 +357,7 @@ describe("readFirehose", () => {
     await until(() => seen.length === 3);
     expect(seen).toEqual([1, 2, 3]);
     expect(run.stops).toEqual(["apply_failed"]);
-    expect(pds.dials).toEqual([null, 1]);
+    expect(pds.dials).toEqual([0, 1]);
   });
 
   test("reader.unreadable_frame_stops_before_the_next", async () => {
@@ -379,7 +396,8 @@ describe("readFirehose", () => {
 
   test("reader.transport_redial_without_a_cursor_reports_missed_events", async () => {
     // Subscription redials a dropped socket itself (@atproto/ws-client 0.2.1 dist/websocket.js, the reconnect
-    // branch), asking getParams again. With no cursor and no frame seen, that redial would go to the live tip.
+    // branch), asking getParams again. With no cursor and no frame seen, events older than the window may be gone by
+    // then, so the consumer hears about it before the redial from the oldest event kept.
     const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await new Promise((resolve) => server.once("listening", resolve));
     const dials: (string | null)[] = [];
@@ -400,11 +418,12 @@ describe("readFirehose", () => {
     });
     await until(() => dials.length === 2, 4000); // the library's first reconnect waits about a second
     expect(dialsAtMissed).toEqual([1]);
-    expect(dials).toEqual([null, null]);
+    expect(dials).toEqual(["0", "0"]);
   });
 
   test("reader.retries_a_failed_missed_events_before_redial", async () => {
-    // A redial with no cursor goes to the live tip, so a backfill request that failed must succeed before it.
+    // A redial with nothing to resume from may have lost events past the window, so a backfill request that failed
+    // must succeed before it.
     const sent = [{ seq: 0, bytes: new ErrorFrame({ error: "FutureCursor", message: "ahead" }).toBytes() }];
     let failures = 1;
     const dialsAtSuccess: number[] = [];
@@ -416,7 +435,8 @@ describe("readFirehose", () => {
     });
     await until(() => pds.dials.length === 2);
     expect(dialsAtSuccess).toEqual([1]); // taken before the second dial, and asked only once more
-    expect(run.stops).toEqual(["stream_failed", "apply_failed"]);
+    // The second dial gets the error frame again, so a third stop may already be in.
+    expect(run.stops.slice(0, 2)).toEqual(["stream_failed", "apply_failed"]);
   });
 });
 

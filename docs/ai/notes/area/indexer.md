@@ -24,8 +24,11 @@ it); `run.ts` starts the stream reader, then runs the track, backfill and confir
 `INDEXER_ENABLED` off (the default) `compose` builds nothing: no pool, no reads. On, it first checks the pool fits the
 role's connection limit across `PG_MAX_REPLICAS` (exit 78 otherwise, as web); the indexer role allows 10. The config
 refuses any `PG_USER` but `indexer` and plain http to anything but a one-label stack name. The stream starts before the
-first backfill pass, so a commit made during a repo read reaches us either way;
-`run.stream_starts_before_the_first_backfill_pass` pins that order.
+first backfill pass (`run.stream_starts_before_the_first_backfill_pass`), but starting is not being open, so the order
+alone proves nothing. What closes the gap is the cursor: with none stored, the reader dials cursor 0, the oldest event
+our PDS keeps, never the live tip, so a commit made after a repo read but before the socket opens still arrives
+(`reader.first_dial_replays_commits_made_before_the_socket_opened`; Codex on #1723). First start therefore replays
+the PDS's whole kept window; the consumer takes replays by rev.
 
 **Stop.** SIGTERM aborts the stream and hands the abort to the pass in hand, which ends after its current item and
 records nothing about a read the stop cut short. `shutdown.ts` waits for the loop, the pool's end and the health server
