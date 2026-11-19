@@ -308,6 +308,8 @@ services:
       INDEXER_ENABLED: "true"
       INDEXER_PDS_URL: http://pds:3000
       PDS_PUBLIC_URL: ${PDS_PUBLIC_URL}
+      # Our PDS's word is taken only for the names it serves: the same variable as the PDS's (P3.08s).
+      HOSTED_HANDLE_SUFFIXES: ${PDS_SERVICE_HANDLE_DOMAINS}
       NODE_OPTIONS: --max-old-space-size=384
     secrets: [pg_indexer_password]
     depends_on:

@@ -15,6 +15,14 @@ export {
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export {
+  createHandleStore,
+  HANDLE_LEASE_SECONDS,
+  HANDLE_RETRY_SECONDS,
+  type HandleJob,
+  type HandleOutcome,
+  type HandleStore,
+} from "./handleStore.ts";
+export {
   createIndexStore,
   INGEST_COUNTERS,
   type IndexFrame,
