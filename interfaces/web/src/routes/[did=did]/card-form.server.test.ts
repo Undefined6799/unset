@@ -234,6 +234,7 @@ describe("readCardForm", () => {
     const full: [string, string][] = [
       ["kind", "collection"],
       ["width", "full"],
+      ["surface", "outlined"],
       ["title", "t"],
       ["layout", "list"],
     ];
@@ -242,4 +243,19 @@ describe("readCardForm", () => {
     expect(full.length).toBeLessThanOrEqual(CARD_FORM_MAX_FIELDS);
     expect(code(full)).toBe("read");
   });
+});
+
+test("surface reaches the domain for every kind and duplicates are refused", () => {
+  for (const kind of ["readme", "links", "collection", "buttons"]) {
+    const form = readCardForm(new URLSearchParams({ kind, surface: "plain" }));
+    expect(form.body.surface).toBe("plain");
+    expect(form.fieldName("surface")).toBe("surface");
+    expect(
+      code([
+        ["kind", kind],
+        ["surface", "plain"],
+        ["surface", "filled"],
+      ]),
+    ).toBe("card.invalid");
+  }
 });

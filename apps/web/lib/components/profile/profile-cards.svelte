@@ -11,7 +11,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
-import type { CardLayout, CardView } from "../../profile/types.ts";
+import type { CardLayout, CardSurface, CardView } from "../../profile/types.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import Carousel from "./carousel.svelte";
@@ -62,8 +62,15 @@ const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-fo
 /** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
 const site = `${label} max-sm:hidden`;
 /** A card the owner drags another onto is ringed (card-controls.svelte sets data-drop). */
-const card =
-  "min-w-0 gap-0 rounded-sm border-0 py-0 shadow-md [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring";
+const card = "min-w-0 gap-0 rounded-sm py-0 [overflow-wrap:anywhere] data-drop:ring-2 data-drop:ring-ring";
+/** Surface changes only the outer card; nested tiles and dividers keep their own structure. */
+const SURFACE: Record<CardSurface, string> = {
+  filled: "border-0 bg-card shadow-md",
+  outlined: "border border-border bg-transparent shadow-none",
+  plain: "border-0 bg-transparent shadow-none",
+};
+const CONTACT_FILLED =
+  "border border-input bg-secondary shadow-none before:absolute before:inset-y-0 before:start-0 before:w-0.75 before:bg-info";
 const head = "flex items-start justify-between gap-3";
 const count = "font-mono text-xs text-muted-foreground";
 </script>
@@ -94,9 +101,11 @@ const count = "font-mono text-xs text-muted-foreground";
 {#if cards.length > 0 || add !== undefined}
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
     {#each cards as shown, index (shown.key)}
+      {@const surface = shown.surface === "filled" && shown.shown.kind === "buttons" ? CONTACT_FILLED : SURFACE[shown.surface]}
+      {@const editing = shown.surface === "plain" && controls !== undefined ? "outline-offset-2 focus-within:outline focus-within:outline-1 focus-within:outline-ring" : ""}
       {@const span = shown.width === "half" ? "" : "md:col-span-2"}
       {#if shown.shown.kind === "readme"}
-        <Card.Root class="group/card {card} {span}">
+        <Card.Root class="group/card {card} {span} {surface} {editing}">
           <div class="{head} min-h-12 items-center border-b px-5 py-2">
             <p class="flex min-w-0 items-center gap-2 font-mono text-sm text-muted-foreground">
               <!-- The handle gives way on a narrow card, never the file name (staging walkthrough 2026-11-19). -->
@@ -124,7 +133,7 @@ const count = "font-mono text-xs text-muted-foreground";
             {/each}
           </ul>
         {/snippet}
-        <Card.Root class="group/card {card} {span} @container flex flex-col gap-3 p-5">
+        <Card.Root class="group/card {card} {span} {surface} {editing} @container flex flex-col gap-3 p-5">
           {@render listHead(links.title, CARD_TEXT.links(links.items.length), scrolls, index, sideways)}
           {@render scroller(links.layout, links.title, links.items.length, scrolls, linkList)}
         </Card.Root>
@@ -147,7 +156,7 @@ const count = "font-mono text-xs text-muted-foreground";
             {/each}
           </ul>
         {/snippet}
-        <Card.Root class="group/card {card} {span} @container flex flex-col gap-3 p-5">
+        <Card.Root class="group/card {card} {span} {surface} {editing} @container flex flex-col gap-3 p-5">
           {@render listHead(entries.title, CARD_TEXT.entries(entries.items.length), scrolls, index, sideways)}
           {@render scroller(entries.layout, entries.title, entries.items.length, scrolls, entryList)}
         </Card.Root>
@@ -155,7 +164,7 @@ const count = "font-mono text-xs text-muted-foreground";
         {@const contact = shown.shown}
         {@const addresses = contact.buttons.flatMap((b) => (b.address === undefined ? [] : [b.address]))}
         <Card.Root
-          class="group/card {card} {span} relative border border-input bg-secondary p-6 shadow-none before:absolute before:inset-y-0 before:start-0 before:w-0.75 before:bg-info"
+          class="group/card {card} {span} {surface} {editing} relative p-6"
         >
           <div class={head}>
             <p class="font-mono text-xs leading-8 tracking-wider text-muted-foreground uppercase">{CARD_TEXT.contact}</p>

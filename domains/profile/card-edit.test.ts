@@ -296,3 +296,47 @@ describe("reorderCards", () => {
     },
   );
 });
+
+describe("card surfaces", () => {
+  test.each(["filled", "outlined", "plain"] as const)("accepts %s and carries it to a new record", (surface) => {
+    const parsed = parseCardInput({ kind: "readme", text: "Hi", surface });
+    expect(parsed).toMatchObject({ ok: true, surface });
+    if (!parsed.ok) throw new Error("input refused");
+    const built = toCardRecord(parsed.content, parsed.width, null, NOW, parsed.surface);
+    expect(built.ok).toBe(true);
+    if (!built.ok) throw new Error("record refused");
+    expect(built.record.surface).toBe(surface === "filled" ? undefined : surface);
+    expect(validateRecord("sh.unset.section", built.record, "write").ok).toBe(true);
+  });
+
+  test.each(["", "future", " Plain ", null, 1, {}])("refuses new surface %j", (surface) => {
+    expect(parseCardInput({ kind: "readme", text: "Hi", surface })).toEqual({
+      ok: false,
+      code: "card.invalid",
+      field: "surface",
+    });
+  });
+
+  for (const before of [undefined, "filled", "outlined", "plain", "future"]) {
+    test.each(["filled", "outlined", "plain", undefined] as const)(
+      `changes ${before} to %s while preserving other record fields`,
+      (surface) => {
+        const existing = stored(
+          { $type: ref("readme"), text: "Old", futureContent: 7 },
+          { surface: before, futureEnvelope: true },
+        );
+        if (before === undefined) delete (existing as Record<string, unknown>).surface;
+        const built = toCardRecord({ kind: "readme", text: "New" }, "half", existing, NOW, surface);
+        expect(built.ok).toBe(true);
+        if (!built.ok) throw new Error("record refused");
+        expect(built.record).toMatchObject({
+          createdAt: T1,
+          futureEnvelope: true,
+          width: "half",
+          content: { text: "New", futureContent: 7 },
+        });
+        expect(built.record.surface).toBe(surface === undefined ? before : surface === "filled" ? undefined : surface);
+      },
+    );
+  }
+});

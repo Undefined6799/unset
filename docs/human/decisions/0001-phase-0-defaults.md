@@ -644,3 +644,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   Renovate groups non-major updates weekly and the verifier may merge the test and lint tools group; drafts run the
   cheap checks; the required checks are the file's list; a merge is tested on main's current tip. ADR 0019 and one
   sentence of ADR 0044 are amended.
+
+2026-11-19: ADR [0066](0066-profile-card-surfaces.md) proposes an optional surface on each profile card, implementing Alex's approved Filled / Outlined / Plain direction.

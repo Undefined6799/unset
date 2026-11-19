@@ -10,6 +10,7 @@ declare const cardKey: unique symbol;
 /** A record key of one of the member's sh.unset.section records. */
 export type CardKey = string & { readonly [cardKey]: true };
 
+export type CardSurface = "filled" | "outlined" | "plain";
 export type CardWidth = "full" | "half";
 export type CardLayout = "list" | "carousel" | "grid";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
@@ -43,6 +44,7 @@ export type CardKind = CardContent["kind"];
 export type Card = {
   readonly key: CardKey;
   readonly width: CardWidth;
+  readonly surface: CardSurface;
   readonly createdAt: string;
   readonly content: CardContent;
 };
@@ -66,6 +68,7 @@ export const NSID = "sh.unset.section";
 /** The most cards a member keeps: the profile's `cards` order holds this many, and the page reads this many. */
 export const CARDS_MAX = LIMITS.profile.cardsMax;
 const KINDS: readonly CardKind[] = ["readme", "links", "collection", "buttons"];
+export const SURFACES: readonly CardSurface[] = ["filled", "outlined", "plain"];
 export const WIDTHS: readonly CardWidth[] = ["full", "half"];
 export const LAYOUTS: readonly CardLayout[] = ["list", "carousel", "grid"];
 export const PRESETS: readonly LinkPreset[] = ["bookCall", "hire", "subscribe", "custom"];
@@ -154,7 +157,8 @@ export function readCard(key: CardKey, value: unknown): Card | null {
   const content = readContent(value.content);
   if (content === null) return null;
   const width = oneOf(WIDTHS, value.width) ? value.width : "full";
-  return { key, width, createdAt: text(value.createdAt), content };
+  const surface = oneOf(SURFACES, value.surface) ? value.surface : "filled";
+  return { key, width, surface, createdAt: text(value.createdAt), content };
 }
 
 /**

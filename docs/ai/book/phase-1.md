@@ -4746,6 +4746,18 @@ signs a browser in. The fallback delete calls the token store's `del`, which tak
 transaction and lock, the same outcome for the last browser and for one of several; the existing sign-out integration
 tests pin it. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21f — Let each profile card choose its surface (added step, 2026-11-19)
+
+**Tags:** trusted · **Depends on:** P1.20 · **Plan:** §5.4
+
+Alex approved Filled / Outlined / Plain per card and requested implementation on 2026-11-19. Add optional
+`sh.unset.section.surface` (ADR 0066), checked in domains/profile and carried through the existing form actions.
+Reuse the native editor choice and preserve no-script retries. All four card kinds share the outer treatment;
+Filled keeps the existing appearance, Outlined is transparent with a fine border, and Plain has no outer fill,
+border or shadow. Keep content, inner tiles, spacing and controls. Missing legacy form input preserves a stored
+choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
+Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
