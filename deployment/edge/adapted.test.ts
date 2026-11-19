@@ -24,7 +24,11 @@ const adaptedFor = (name: AdaptedEnvName, env: Readonly<Record<EnvName, string>>
     NAMES.reduce((text, each) => text.replaceAll(SENTINELS[each], env[each]), JSON.stringify(reviewed(name))),
   ) as Json;
 
-type Server = { routes: Json[]; tls_connection_policies?: { match?: { sni?: string[] } }[] };
+type Server = {
+  routes: Json[];
+  errors?: { routes: Json[] };
+  tls_connection_policies?: { match?: { sni?: string[] } }[];
+};
 /** The servers of a config, for a test to change in place. */
 const servers = (config: Json): Server[] =>
   Object.values((config as { apps: { http: { servers: Record<string, Server> } } }).apps.http.servers);
@@ -66,13 +70,15 @@ describe("reviewed adapted configs (P1.39a)", () => {
     }
   });
 
-  // Caddy v2.11.7 puts the longer host's site first, so a long PDS host swaps the two site routes and the SNI names
+  // Caddy v2.11.7 puts the longer host's site first, so a long PDS host swaps the two site routes, their error routes
+  // (checked on v2.11.9, 2026-11-19, Codex on #1739) and the SNI names
   // (observed with the pinned build, 2026-11-15: PDS_HOST of 43 characters beside an APP_HOST of 4).
   test("adapted_site_order_caddy_derives_from_host_length_is_equal", () => {
     for (const env of ["dev", "local"] as const) {
       const swapped = adaptedFor(env, REAL);
       const server = publicServer(swapped);
       server.routes.reverse();
+      server.errors?.routes.reverse();
       for (const policy of server.tls_connection_policies ?? []) policy.match?.sni?.reverse();
       expect(canonical(swapped), env).not.toBe(canonical(adaptedFor(env, REAL)));
       expect(reviewedDifference(swapped, reviewed(env), REAL), env).toBeNull();
@@ -97,6 +103,12 @@ describe("reviewed adapted configs (P1.39a)", () => {
           }),
       ],
       ["no tls app", (config) => delete (config as { apps: { tls?: Json } }).apps.tls],
+      ["an error route removed", (config) => void publicServer(config).errors?.routes.pop()],
+      [
+        "an error route that is not terminal",
+        (config) =>
+          delete ((publicServer(config).errors as { routes: Json[] }).routes[0] as { terminal?: boolean }).terminal,
+      ],
     ];
     for (const [what, change] of different) {
       const config = adaptedFor("dev", REAL);

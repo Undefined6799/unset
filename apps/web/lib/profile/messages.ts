@@ -153,6 +153,7 @@ export const OWN_PAGE = {
   handleUnavailable: "We could not check your handle just now.",
   profileUnavailable: "We could not load your profile just now.",
   cardsIncomplete: "Some of your cards could not be loaded just now. Reload to try again.",
+  cardsOverflow: "You have more cards than your page can show. Delete one to bring a hidden card back.",
   editProfile: "Edit profile",
   setUpEyebrow: "Not set up yet",
   setUpTitle: "Set up your profile",

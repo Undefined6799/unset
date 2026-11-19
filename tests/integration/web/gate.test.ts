@@ -4,7 +4,7 @@
 // exist for this file and are served only when TEST_ROUTES is on (interfaces/web/src/routes/test-routes/README.md).
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readdirSync, statSync } from "node:fs";
-import { connect } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
+import { connect, createServer, type Socket } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test server only
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import type { SavedSession } from "@unset/infrastructure-pds";
@@ -441,6 +441,38 @@ describe("deadline and errors", () => {
     const body = await response.text();
     expect(body).toContain("internal.error");
     expect(body).not.toContain("must never see");
+  });
+
+  // C6 (outside review 2026-11-19): the session store's outage is a known, public failure (service.unavailable or
+  // the pool's db.busy, both 503), so a member is told to try again, not shown an internal error. The web server's
+  // Postgres sits behind a loopback relay here, which is cut after start, as a network outage cuts it.
+  test("a_session_store_outage_is_its_503_never_a_500", async () => {
+    const sockets = new Set<Socket>();
+    let up = true;
+    const relay = createServer((client) => {
+      client.on("error", () => undefined);
+      if (!up) return void client.destroy();
+      const upstream = connect(pg.port, pg.host);
+      upstream.on("error", () => undefined);
+      for (const socket of [client, upstream]) sockets.add(socket);
+      client.pipe(upstream).pipe(client);
+    });
+    await new Promise<void>((done) => relay.listen(0, "127.0.0.1", done));
+    const address = relay.address();
+    if (address === null || typeof address === "string") throw new Error("relay has no port");
+    const cut = await startWeb({ ...pg, host: "127.0.0.1", port: address.port }, { PG_CONNECT_TIMEOUT_MS: "500" });
+    try {
+      const cookie = `__Host-sid=${await signedIn(did(`did:plc:${"o".repeat(24)}`))}`;
+      up = false;
+      for (const socket of sockets) socket.destroy();
+      const response = await cut.fetch("/test-routes/members", { headers: { cookie, ...from() } });
+      expect(response.status).toBe(503);
+      expect(["service.unavailable\n", "db.busy\n"]).toContain(await response.text());
+      expect(response.headers.get("set-cookie")).toBeNull(); // a blip never signs anyone out
+    } finally {
+      await cut.stop();
+      relay.close();
+    }
   });
 
   test("test_routes_are_404_unless_turned_on", async () => {

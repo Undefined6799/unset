@@ -1,0 +1,52 @@
+# The page a person sees when a zone refuses them (snippets/ratelimit.caddy), in place of an empty 429. Every site
+# imports it. caddy-ratelimit sets Retry-After and returns a 429 handler error (5625512f24f6 handler.go:301 and 334),
+# so Caddy runs the server's error routes (Caddy v2.11.9 modules/caddyhttp/server.go:745-747); `handle_errors 429`
+# adapts to one such route per site, matched on the status (httpcaddyfile/builtins.go:832-894). Retry-After is on the
+# response's own header map, so it stays, and the status stays 429.
+#
+# The site's own deferred headers never ran (no response was written inside the route), so the security headers are
+# applied here again; noindex is not deferred and is already set. A browser navigation (Sec-Fetch-Mode: navigate,
+# w3c.github.io/webappsec-fetch-metadata, section 2.3) gets the page; anything else, a fetch or a stream, falls
+# through to Caddy's own empty 429 (modules/caddyhttp/caddyhttp.go:104-111, errorEmptyHandler), as before. Any other
+# error keeps Caddy's default too: the route matches 429 alone.
+#
+# The page is fixed text: no placeholder, nothing from the request, no limit number, no script. Its one inline style
+# is allowed by hash alone (adapted-rules.test.ts checks the hash against it), and nothing else may load. Caddy
+# replaces placeholders in the body at run time, so the page holds no brace outside its CSS blocks and the style no
+# nested block (light-dark() in place of a media query; adapted-rules.ts pageProblems).
+(too-many-tries) {
+	handle_errors 429 {
+		import security-headers
+		header {
+			Content-Security-Policy "default-src 'none'; style-src 'sha256-OhohhPP16pWhW6Z/EmVxKjFY8saJBHVHQzJ57EyLeb0='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+			Cache-Control no-store
+		}
+		@navigate header Sec-Fetch-Mode navigate
+		header @navigate Content-Type "text/html; charset=utf-8"
+		respond @navigate <<HTML
+			<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>Too many tries</title>
+			<style>:root{color-scheme:light dark;--bg:light-dark(#f0edee,#17161b);--fg:light-dark(#0a090c,#f0edee);--muted:light-dark(#5a575b,#a19ea2);--card:light-dark(#fbfafa,#232227);--line:light-dark(#d6d2d4,#312f36)}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;font-size:16px;line-height:1.5}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>
+			</head>
+			<body>
+			<main>
+			<h1>Too many tries</h1>
+			<p>Wait a few minutes, then try again.</p>
+			<p><a href="/">Go to the home page</a></p>
+			</main>
+			</body>
+			</html>
+			HTML 429
+	}
+	# The edge's own 5xx errors (an upstream it cannot reach, say) stay at ERROR in the error log. Once a server has
+	# error routes, Caddy logs an error they handle at DEBUG (server.go:747-756); one whose route fails again is logged
+	# at ERROR with the first error, its message and status, under first_error, and the client still gets the first
+	# error's status and no body (server.go:757-776). So a 5xx fails again here, as it was logged before.
+	handle_errors 5xx {
+		error "edge error" 500
+	}
+}
