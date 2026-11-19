@@ -62,3 +62,20 @@ for a column to hold it.
 produced a digest to pin.
 
 **Links.** [[http]], [[postgres]].
+
+**How the indexer reaches the PDS (2026-11-19).** On staging it shares `indexer_pds` with the PDS, an internal network
+holding the two alone, which C17 allows under local and dev only (Alex, 01:04Z: "on staging only"). Two other doors
+were weighed. Through the edge "as web does" means, under dev, public DNS, Pangolin, Newt and the edge (compose.dev.yaml
+"No aliases under dev"), so our own repos leave the host, the indexer shares every edge rate-limit bucket with web and
+the homelab's browsers (one public address through Newt), a full backfill of 10,000 accounts alone fills the identity
+zone's 300 per 5 minutes, it needs net-guard's public policy instead of `internalPolicy`, and whether the stream survives
+the edge's `write 135s`/`idle 2m` and Pangolin is unverified. A private edge listener on its own network would give the
+indexer its own zones, but puts it on a network with the edge (ADR 0052 Decision 2 says not) and is more code for the
+same protection. The direct door's cost: the PDS trusts private addresses as proxies, so a compromised indexer could call
+it without the edge's limits; it holds no PDS credential. Production's door is open (step book P5.00).
+
+**Handles need DNS.** `verifyHandle` resolves a handle by `_atproto` TXT and `https://<handle>/.well-known/atproto-did`
+before P3.08s asks our PDS anything, so with no DNS for the handle domain every handle reads `invalid`. Our PDS answers
+`resolveHandle` and the well-known path from its own database (@atproto/pds 0.5.51 resolveHandle.ts:14-32,
+well-known.ts:8-28), so a wildcard record for the handle domain pointing at the PDS's ingress, with an edge route for
+the well-known path, is what makes them verify.
