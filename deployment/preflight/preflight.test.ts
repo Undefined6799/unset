@@ -3477,6 +3477,31 @@ describe("preflight C32 (P1.38d)", () => {
 
 // P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
 // stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
+// P2.10 (review N1 of #1733): Compose makes a name its env file leaves out an empty string, so a new setting would reach
+// its service empty and stop it at boot, after the old containers went. C34 fails first, naming the variables only.
+describe("preflight C34 every interpolated name has a value", () => {
+  const withKid = COMPOSE.replace(
+    "      FINGERPRINT_CHECK: arachnid\n",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    "$&      ADMIN_KID: ${WEB_KID}\n      OTHER: ${A_NAME}\n",
+  );
+
+  test("c34_missing_or_empty_name_fails", async () => {
+    expect(withKid).not.toBe(COMPOSE);
+    expect(await expectOnly("C34", { compose: withKid })).toBe(
+      "FAIL C34 the interpolation env file gives no value for A_NAME, WEB_KID",
+    );
+    expect(await expectOnly("C34", { compose: withKid, dotEnv: "WEB_KID=\nA_NAME=x\n" })).toBe(
+      "FAIL C34 the interpolation env file gives no value for WEB_KID",
+    );
+  });
+
+  test("c34_every_name_set_passes", async () => {
+    const result = await check({ compose: withKid, dotEnv: "WEB_KID=web-1\nA_NAME=x\n" });
+    expect(result.lines.find((l) => / C34 /.test(l))).toBe("PASS C34 ok");
+  });
+});
+
 describe("preflight C33 the PDS's blobs in the object store (P2.18p)", () => {
   const dev = (pdsEnv: Record<string, string | null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...pdsEnv } });
 
