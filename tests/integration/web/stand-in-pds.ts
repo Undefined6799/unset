@@ -1,8 +1,10 @@
 // A stand-in PDS and its authorization server for the built web server's tests (rule TE-1: the PDS is unmanaged), run
 // inside stand-in-server.ts. It answers what a restored OAuth session asks for (the authorization server metadata, as
-// tests/integration/oauth/refresh.test.ts serves it) and the five com.atproto.repo calls the member's page makes, over
-// one in-memory repo: getRecord, listRecords, putRecord (with swapRecord), createRecord and deleteRecord
-// (https://atproto.com/specs/xrpc; lexicons com.atproto.repo.*). Each write is reported through `onWrite`.
+// tests/integration/oauth/refresh.test.ts serves it) and the calls the member's page makes, over one in-memory repo:
+// getRecord, listRecords, putRecord (with swapRecord), createRecord (with swapCommit), deleteRecord and
+// com.atproto.sync.getLatestCommit (https://atproto.com/specs/xrpc; lexicons com.atproto.repo.*, sync.*). Every write
+// moves the repo's head, as a real commit does. Each write is reported through `onWrite`.
+import { createHash } from "node:crypto";
 import type { PdsFixture } from "./built-server.ts";
 
 export type PdsWrite = {
@@ -37,6 +39,21 @@ function metadata(issuer: string) {
   };
 }
 
+/** A CIDv1 (raw, sha-256) for `n`, base32 as atproto writes CIDs, so each head the stand-in reports is distinct. */
+function cidOf(n: number): string {
+  const bytes = Buffer.concat([Buffer.from([0x01, 0x55, 0x12, 0x20]), createHash("sha256").update(`${n}`).digest()]);
+  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+  let bits = 0;
+  let value = 0;
+  let out = "b";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    for (; bits >= 5; bits -= 5) out += alphabet[(value >>> (bits - 5)) & 31];
+  }
+  return bits > 0 ? out + alphabet[(value << (5 - bits)) & 31] : out;
+}
+
 let created = 0;
 /** A fresh TID-shaped record key (13 base32-sortable characters). */
 const nextKey = () => `3l${String(++created).padStart(11, "2")}`;
@@ -51,6 +68,8 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
   };
   const uri = (c: string, rkey: string) => `at://${fixture.did}/${c}/${rkey}`;
   const wrongRepo = () => json(400, { error: "InvalidRequest", message: "not this repo" });
+  let commits = 0;
+  const head = () => cidOf(commits);
 
   return async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
@@ -67,8 +86,14 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         email: "alice@example.test",
         emailConfirmed: fixture.session.emailConfirmed,
       });
+    if (url.pathname === "/xrpc/com.atproto.sync.getLatestCommit")
+      return url.searchParams.get("did") === fixture.did
+        ? json(200, { cid: head(), rev: "3jzfcijpj2z2a" })
+        : wrongRepo();
     const method = url.pathname.replace(/^\/xrpc\/com\.atproto\.repo\./, "");
     if (fixture.failing?.includes(method)) return json(503, { error: "Unavailable" });
+    const hold = fixture.slow?.[method];
+    if (hold !== undefined) await new Promise((done) => setTimeout(done, hold));
     if (request.method === "GET") {
       const q = url.searchParams;
       if (q.get("repo") !== fixture.did) return wrongRepo();
@@ -96,13 +121,17 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
       rkey?: string;
       record?: unknown;
       swapRecord?: string | null;
+      swapCommit?: string;
     };
     if (input.repo !== fixture.did) return wrongRepo();
+    if (input.swapCommit !== undefined && input.swapCommit !== head())
+      return json(400, { error: "InvalidSwap", message: `Commit was at ${head()}` });
     const records = collection(input.collection);
     if (method === "putRecord") {
       const rkey = input.rkey ?? "";
       if (input.swapRecord === null && records.has(rkey)) return json(400, { error: "InvalidSwap", message: "exists" });
       records.set(rkey, input.record);
+      commits += 1;
       onWrite({
         method,
         collection: input.collection,
@@ -115,11 +144,13 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
     if (method === "createRecord") {
       const rkey = nextKey();
       records.set(rkey, input.record);
+      commits += 1;
       onWrite({ method, collection: input.collection, rkey, record: input.record });
       return json(200, { uri: uri(input.collection, rkey), cid: CID });
     }
     if (method === "deleteRecord") {
       records.delete(input.rkey ?? "");
+      commits += 1;
       onWrite({ method, collection: input.collection, rkey: input.rkey ?? "" });
       return json(200, {});
     }
