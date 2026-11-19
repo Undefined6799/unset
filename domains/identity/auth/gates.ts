@@ -71,6 +71,8 @@ export type OnboardingAccount = {
   readonly onboarding: Onboarding;
   readonly termsVersion: string | null;
   readonly privacyVersion: string | null;
+  /** The privacy notice version the member dismissed the change banner for (P2.12b): seen, never accepted. */
+  readonly privacyNoticeSeenVersion: string | null;
 };
 
 export type OnboardingVersions = { readonly terms: string; readonly privacy: string };
@@ -110,8 +112,9 @@ export type OnboardingDecision =
 
 /**
  * Whether an app page may render (P2.12). Pass means onboarding is done and the accepted terms are current. A privacy
- * bump sets `privacyNotice` and does not redirect. The banner stays until a later terms acceptance records the
- * current privacy version: writing it when the banner is drawn would store an acceptance that was not made.
+ * bump sets `privacyNotice` and does not redirect. The banner shows until the member dismisses it (P2.12b, a POST that
+ * records the version as seen) or a later terms acceptance records the current privacy version, whichever comes
+ * first. Drawing it writes nothing: a write on render would store a view or an acceptance that was not made.
  * Anything else is a redirect the caller makes.
  */
 export function requireOnboarded(account: OnboardingAccount | null, versions: OnboardingVersions): OnboardingDecision {
@@ -120,7 +123,10 @@ export function requireOnboarded(account: OnboardingAccount | null, versions: On
     case "done":
       return {
         outcome: "pass",
-        privacyNotice: account !== null && account.privacyVersion !== versions.privacy,
+        privacyNotice:
+          account !== null &&
+          account.privacyVersion !== versions.privacy &&
+          account.privacyNoticeSeenVersion !== versions.privacy,
       };
     case "terms":
       return { outcome: "terms" };

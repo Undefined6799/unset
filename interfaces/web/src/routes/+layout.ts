@@ -1,5 +1,6 @@
 // The root layout's load (P1.20d): the `?error=` code a redirect carried, only when it is a catalog code
-// (readErrorParam), so no request text reaches the page, and the server load's session flag and theme form (P1.20k).
+// (readErrorParam), so no request text reaches the page, and the server load's session flag and theme form (P1.20k)
+// and the changed privacy notice banner (P2.12b).
 // No script by default: a page that runs SvelteKit's client (group "app") says `export const csr = true` in its +page.ts; every other page, the error page for an unmatched
 // path included, ships none (kit docs, page options: https://svelte.dev/docs/kit/page-options#csr, kit 3.2.0).
 
@@ -15,6 +16,7 @@ export const load: Load = ({ url, data }) => {
     appOpen?: boolean;
     account?: ShellData["account"];
     prefs?: ShellData["prefs"];
+    privacyNotice?: string | null;
     signInHref?: string;
   } | null;
   return {
@@ -22,6 +24,8 @@ export const load: Load = ({ url, data }) => {
     appOpen: server?.appOpen === true,
     account: server?.account,
     prefs: server?.prefs,
+    // The privacy notice version the changed-notice banner names (P2.12b), or null when it does not show.
+    privacyNotice: typeof server?.privacyNotice === "string" ? server.privacyNotice : null,
     signInHref: server?.signInHref ?? "/login",
     error: readErrorParam(url.searchParams),
   };
