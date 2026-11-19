@@ -45,7 +45,7 @@ describe("saveProfileForm", () => {
       DID,
       save,
     );
-    expect(result).toEqual({ location: "/settings/profile" });
+    expect(result).toEqual({ location: "/settings/profile?saved" });
     expect(saved).toEqual([{ did: DID, fields: { displayName: "Alice", headline: "" } }]);
   });
 
