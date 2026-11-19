@@ -27,8 +27,7 @@ const STANDIN: Record<string, () => string> = {
     const jwk = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" });
     return JSON.stringify([{ ...jwk, kid: example.get("WEB_OAUTH_ACTIVE_KID"), alg: "ES256" }]);
   },
-  web_pds_admin_key: () =>
-    generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+  web_pds_admin_key: () => generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
 };
 
 /** web's environment from one compose file, every reference resolved and every secret file replaced by a stand-in. */

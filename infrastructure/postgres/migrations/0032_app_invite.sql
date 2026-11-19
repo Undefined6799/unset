@@ -16,10 +16,8 @@ CREATE TABLE app.invite (
   CHECK ((state = 'issued') = (sealed_code IS NOT NULL)),
   UNIQUE (inviter_did, submission_id)
 );
--- The Invite page's list: a member's invites of the last 30 days, newest first.
--- query: infrastructure/postgres/inviteStore.ts:list
--- why: speed
-CREATE INDEX invite_inviter_created ON app.invite (inviter_did, created_at);
+-- No index beyond the unique one: it leads with inviter_did, so the Invite page's list and erasure reach a member's
+-- rows through it, and a member makes at most five a day, so sorting them is cheap.
 
 GRANT SELECT (id, inviter_did, submission_id, state, sealed_code, created_at, hidden_at) ON app.invite TO web;
 GRANT INSERT (id, inviter_did, submission_id, state, created_at) ON app.invite TO web;
