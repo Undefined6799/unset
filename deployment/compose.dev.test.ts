@@ -343,6 +343,13 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(networkTableProblems(withAdmin, imageTable as NetworkTable)).toEqual([
       "pds-admin is on db, the table says not",
     ]);
+    // The indexer too: the table lists it on db, but not for the image stack (P3.05s).
+    const indexer = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.find((s) => s.name === "indexer");
+    expect(indexer?.networks).toEqual(["db", "indexer_pds", "indexer_egress"]);
+    const withIndexer = { ...dev(), services: [...dev().services, { ...(indexer as Service), networks: ["db"] }] };
+    expect(networkTableProblems(withIndexer, imageTable as NetworkTable)).toEqual([
+      "indexer is on db, the table says not",
+    ]);
   });
 
   test("compose_dev_hardening", () => {
@@ -1016,7 +1023,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
     expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
     const renamed = (text: string) =>
-      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+      text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
     // Renamed, the PDS is still known by its image.
     expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
   });
@@ -1033,7 +1040,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
         "    networks: [db, app, web_egress, pds_admin, edge]\n",
       );
     const renamed = (text: string) =>
-      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+      text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
     expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([
       "web shares a network with the pds",
     ]);
