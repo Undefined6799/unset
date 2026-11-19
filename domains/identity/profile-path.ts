@@ -20,7 +20,7 @@ export function parseActor(segment: string, hostedSuffix: string): Actor | null 
   return handle === null ? null : { handle };
 }
 
-/** `/@alice.unset.im` for a verified handle, else `/@did:plc:…`. Pass a handle only when it is verified. */
+/** `/@alice.unset.name` for a verified handle, else `/@did:plc:…`. Pass a handle only when it is verified. */
 export function canonicalActorPath(verifiedHandle: Handle | null, did: Did): string {
   return `/@${verifiedHandle ?? did}`;
 }

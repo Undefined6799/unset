@@ -160,7 +160,7 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
   .replaceAll("pds.example.test", "staging.unset.ac")
   .replace("      FINGERPRINT_CHECK: arachnid\n", "$&      PUBLIC_ORIGIN: https://staging.unset.sh\n");
 // The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
-const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
+const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.name" };
 /** A from address of 254 or 255 characters, every part within its own cap, so only the length decides. */
 const addressOfLength = (length: 254 | 255) =>
   `${"a".repeat(64)}@${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(length - 193)}`;
@@ -2462,19 +2462,19 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   });
 
   test("c15_dev_handle_domain_is_the_staging_one", async () => {
-    // P1.35x (ADR 0025): the dev PDS mints only <user>.staging.unset.im, one exact entry, never .unset.im.
+    // P1.35x (ADR 0025, ADR 0064): the dev PDS mints only <user>.staging.unset.name, one exact entry, never .unset.name.
     const dev = async (domains: string) =>
       (await check({ compose: DEV, pdsEnv: { ...DEV_ENV, PDS_SERVICE_HANDLE_DOMAINS: domains } }, "dev")).lines.find(
         (l) => / C15 /.test(l),
       );
-    expect(await dev(".staging.unset.im")).toBe("PASS C15 ok");
+    expect(await dev(".staging.unset.name")).toBe("PASS C15 ok");
     for (const domains of [
       ".0x40.space",
-      ".unset.im",
-      ".x.staging.unset.im",
-      ".staging.unset.im.evil",
-      ".staging.unset.im,.unset.im",
-      ".staging.unset.im,",
+      ".unset.name",
+      ".x.staging.unset.name",
+      ".staging.unset.name.evil",
+      ".staging.unset.name,.unset.name",
+      ".staging.unset.name,",
     ]) {
       expect(await dev(domains), domains).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
@@ -5662,7 +5662,7 @@ networks:
     // S5 (the #789 verify): a look-alike that ends in the host's text but not at a label boundary.
     for (const domains of [
       ".example.test",
-      ".staging.unset.im",
+      ".staging.unset.name",
       ".other.localhost",
       ".pds.localhost,.example.test",
       ".evil-pds.localhost",

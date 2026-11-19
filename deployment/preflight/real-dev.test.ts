@@ -75,7 +75,7 @@ describe("compose.dev.yaml under the whole preflight (P2.26b)", () => {
     const publicEnv = readFileSync(join(DEPLOYMENT, "env/dev-public.example.env"), "utf8")
       .replaceAll("app.example.test", APP)
       .replace("PDS_HOSTNAME=pds.unset.localhost", `PDS_HOSTNAME=${PDS}`)
-      .replace("PDS_SERVICE_HANDLE_DOMAINS=.pds.unset.localhost", "PDS_SERVICE_HANDLE_DOMAINS=.staging.unset.im");
+      .replace("PDS_SERVICE_HANDLE_DOMAINS=.pds.unset.localhost", "PDS_SERVICE_HANDLE_DOMAINS=.staging.unset.name");
     file("unset-dev-env/dev-public.env", 0o600, publicEnv);
     const pdsEnv = readFileSync(join(DEPLOYMENT, "env/pds.example.env"), "utf8")
       .replace("PDS_JWT_SECRET=replace-me", `PDS_JWT_SECRET=${"j".repeat(64)}`)
