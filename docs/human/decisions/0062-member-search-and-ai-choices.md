@@ -46,19 +46,17 @@ turns indexing on.
    `/sitemap.xml`. Every other page keeps today's `noindex`.
 4. **AI search:** when `ai_search` is on, `/robots.txt` gives `OAI-SearchBot`, `PerplexityBot`, `Claude-SearchBot`,
    `meta-webindexer` and `Amzn-SearchBot` an `Allow: /@...$` line for that page; every other `/@` path stays
-   disallowed for them. With AI search on and search engines off, the page still says `noindex`; none of these
-   vendors says whether its AI search crawler reads `noindex`, so the page may or may not appear there. Either way
-   it fails toward less exposure, never more: search engines still do not list it.
+   disallowed for them. With AI search on and search engines off the page still says `noindex`; no vendor says if its
+   AI search crawler reads it, so the page may or may not show there, and search engines still do not list it.
 5. **AI training is blocked for the whole site**: `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`,
    `meta-externalagent`, `Amazonbot`, `CCBot` and `AI2Bot` (every training token with a vendor page on 2026-11-19)
    get `Disallow: /`, with no member switch. robots.txt only asks: it cannot stop a crawler that ignores it, one we
    cannot name, or a person who copies a page, and the settings page says so.
 6. **robots.txt and the sitemap are built on request** from `app.discoverability` joined with the visible-account
    view, so a hidden, deactivated, taken-down or erased member drops out at the next fetch. Both are capped (10,000
-   AI search lines, 50,000 sitemap URLs, the sitemaps.org per-file limit) and sent with `public, max-age=300`, the
-   same five minutes as every public page (P1.25v): the vendors re-read robots.txt about daily, so a shorter time
-   buys nothing, and a member's opt-out still leaves our copies within five minutes. Only paths of the form `/@` plus
-   handle or DID characters are written, so a record cannot inject a directive.
+   AI search lines within 450 KiB, after the group's `Disallow: /@`; 50,000 sitemap URLs) and sent with
+   `max-age=300` like every public page, since vendors re-read robots.txt about daily. Only `/@` plus handle or DID
+   characters are written, so a record cannot inject a directive.
 7. **The public page's title and description** use the member's override if set, else their name and headline; plus
    a canonical link, OpenGraph tags and a `summary` card, each escaped by the page's one HTML encoder. No JSON-LD:
    the public page runs no script and ships no script element.
@@ -88,8 +86,7 @@ turns indexing on.
   opted-in members, so today that is a handful of rows. Before they number in the thousands, a later change keeps the
   built file in memory for its max-age; not now, as at our size it would only add a cache to reason about.
 - Turning a switch off is immediate on our side; search engines and AI services can take hours to days to act.
-- Adding a crawler token later is a code change to `domains/profile/crawlers.ts` with its vendor page cited; the list
-  goes stale as vendors add crawlers.
+- A new crawler token is a code change to `domains/profile/crawlers.ts` with its vendor page cited.
 
 ## Compliance
 - `tests/integration/web/public/search-and-ai.test.ts`: off by default, a signed-out save is refused, saving on drops

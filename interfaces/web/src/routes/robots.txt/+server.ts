@@ -1,7 +1,6 @@
-// GET /robots.txt (ADR 0062): built on each request from the members' Search and AI choices, so a member who turns AI
-// search off, or whose account is hidden, leaves the file at once (idx.public_profile shows visible accounts only).
-// A read that fails answers 503, which RFC 9309 section 2.3.1.4 says crawlers read as "disallow everything": the file
-// fails closed. Kept five minutes, as public pages are; the vendors re-read it about daily anyway.
+// GET /robots.txt (ADR 0062): built per request from the members' choices joined with idx.public_profile (visible
+// accounts only), so turning AI search off or a hidden account leaves the file at once. A failed read answers 503,
+// which RFC 9309 section 2.3.1.4 reads as "disallow everything". Kept five minutes, as public pages are.
 import type { RequestHandler } from "@sveltejs/kit";
 import { MAX_AI_SEARCH_PAGES, robotsTxt } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";

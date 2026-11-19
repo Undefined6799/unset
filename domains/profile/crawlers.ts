@@ -12,10 +12,7 @@
 //   robots.txt). Cohere and ByteDance publish no page naming a token, so they are not guessed.
 // - AI search, per member (D12): the search tokens above and PerplexityBot (docs.perplexity.ai/guides/bots). Unnamed,
 //   they would follow the `*` group's `Allow: /`; named, each reads only the pages members allowed.
-// - Fetchers a person triggers (ChatGPT-User, Perplexity-User, Claude-User, meta-externalfetcher, Amzn-User) are not
-//   named: their vendors say robots.txt may not apply to them.
-// Search engines are not named: a page they may not list says `noindex` itself, which they can only read if robots.txt
-// lets them fetch it.
+// Fetchers a person triggers and search engines are not named (ADR 0062): a search engine reads each page's `noindex`.
 
 export const TRAINING_CRAWLERS = [
   "GPTBot",
@@ -34,8 +31,9 @@ export const AI_SEARCH_CRAWLERS = [
   "meta-webindexer",
   "Amzn-SearchBot",
 ] as const;
-/** Allow lines for AI search, at most: about 45 bytes each keeps the file well under RFC 9309's 500 KiB. */
+/** AI search Allow lines the query reads, at most; the file's byte budget, under RFC 9309's 500 KiB, may keep fewer. */
 export const MAX_AI_SEARCH_PAGES = 10_000;
+const ROBOTS_BYTE_BUDGET = 450 * 1024;
 /** URLs in one sitemap file (https://www.sitemaps.org/protocol.html, "no more than 50,000 URLs"). */
 export const MAX_SITEMAP_PAGES = 50_000;
 
@@ -43,28 +41,34 @@ export const MAX_SITEMAP_PAGES = 50_000;
 const SAFE_PATH = /^\/@[A-Za-z0-9._:-]+$/;
 
 /**
- * robots.txt: training crawlers refused everywhere; AI search refused on every profile but those of members who
- * allowed it (each `$`-anchored, so `/@ann` never allows `/@anna`); everyone else, search engines included, may fetch
- * every page, which carries its own `noindex` until its member says otherwise.
+ * robots.txt: training refused everywhere; everyone else may fetch every page (each says `noindex` until its member
+ * says otherwise); AI search refused on every profile but those allowed (`$`-anchored, so `/@ann` never allows
+ * `/@anna`). Member lines come last, after `Disallow: /@`, within a byte budget: a crawler that stops at 500 KiB (RFC
+ * 9309 section 2.5) misses some members, never the denial.
  */
 export function robotsTxt(origin: string, aiSearchPaths: readonly string[]): string {
-  const allowed = aiSearchPaths.filter((path) => SAFE_PATH.test(path)).slice(0, MAX_AI_SEARCH_PAGES);
-  return [
+  const lines = [
     "# unset.sh: AI training is not allowed anywhere on this site. We ask each training crawler below by name.",
     ...TRAINING_CRAWLERS.map((token) => `User-agent: ${token}`),
     "Disallow: /",
-    "",
-    "# AI search may show only the profiles whose members allowed it.",
-    ...AI_SEARCH_CRAWLERS.map((token) => `User-agent: ${token}`),
-    ...allowed.map((path) => `Allow: ${path}$`),
-    "Disallow: /@",
     "",
     "User-agent: *",
     "Allow: /",
     "",
     `Sitemap: ${origin}/sitemap.xml`,
     "",
-  ].join("\n");
+    "# AI search may show only the profiles whose members allowed it.",
+    ...AI_SEARCH_CRAWLERS.map((token) => `User-agent: ${token}`),
+    "Disallow: /@",
+  ];
+  let bytes = Buffer.byteLength(lines.join("\n"));
+  for (const path of aiSearchPaths.filter((one) => SAFE_PATH.test(one)).slice(0, MAX_AI_SEARCH_PAGES)) {
+    const line = `Allow: ${path}$`;
+    bytes += line.length + 1;
+    if (bytes > ROBOTS_BYTE_BUDGET) break;
+    lines.push(line);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 const XML_ESCAPES: Readonly<Record<string, string>> = {

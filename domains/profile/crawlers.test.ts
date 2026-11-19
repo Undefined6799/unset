@@ -26,9 +26,9 @@ describe("robotsTxt", () => {
         "User-agent: Claude-SearchBot",
         "User-agent: meta-webindexer",
         "User-agent: Amzn-SearchBot",
+        "Disallow: /@",
         "Allow: /@ann.unset.im$",
-        "Allow: /@did:plc:aaaaaaaaaaaaaaaaaaaaaaaa$",
-        "Disallow: /@\n",
+        "Allow: /@did:plc:aaaaaaaaaaaaaaaaaaaaaaaa$\n",
       ].join("\n"),
     );
     expect(text).toContain("User-agent: *\nAllow: /\n");
@@ -43,6 +43,16 @@ describe("robotsTxt", () => {
     const text = robotsTxt(ORIGIN, ["/@a*", "/@a\nUser-agent: *", "/@a$", "/x", "/@ok.unset.im"]);
     expect(text.match(/^Allow: \/@/gm)).toEqual(["Allow: /@"]);
     expect(text).toContain("Allow: /@ok.unset.im$");
+  });
+
+  test("long_handles_never_push_the_denial_past_500_kib", () => {
+    // RFC 9309 section 2.5: a crawler may stop reading at 500 KiB, and every rule it read must still deny by default.
+    const long = Array.from({ length: MAX_AI_SEARCH_PAGES }, (_, i) => `/@${"h".repeat(240)}${i}.unset.im`);
+    const text = robotsTxt(ORIGIN, long);
+    expect(Buffer.byteLength(text)).toBeLessThan(500 * 1024);
+    const group = text.slice(text.indexOf("User-agent: OAI-SearchBot"));
+    expect(group.indexOf("Disallow: /@\n")).toBeLessThan(group.indexOf("Allow: /@"));
+    expect(text.indexOf("User-agent: *")).toBeLessThan(text.indexOf("User-agent: OAI-SearchBot"));
   });
 
   test("capped", () => {
