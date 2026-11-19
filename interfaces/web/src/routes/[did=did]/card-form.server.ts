@@ -72,17 +72,11 @@ function rows(byIndex: Map<number, Record<string, string>>, shape: Shape): [numb
 }
 
 /**
- * The form as one card object. The checks run in order: the number of fields, then each field once, then each name
- * against the shape of the form's kind. A form without a known kind is card.kind_unknown.
- */
-export function cardForm(form: URLSearchParams): Readonly<Record<string, unknown>> {
-  return readCardForm(form).body;
-}
-
-/**
- * The form as one card object, as cardForm, and `fieldName`, which turns a field path the domain names in that object
+ * The form as one card object and `fieldName`, which turns a field path the domain names in that object
  * ("items.1.uri", the second row it read) back into the form's own field ("items.4.uri", blank rows counted), so a
  * refusal can be shown beside the field the member typed in. A path it does not know is undefined.
+ * The checks run in order: the number of fields, then each field once, then each name against the shape of the
+ * form's kind. A form without a known kind is card.kind_unknown.
  */
 export function readCardForm(form: URLSearchParams): {
   readonly body: Readonly<Record<string, unknown>>;
