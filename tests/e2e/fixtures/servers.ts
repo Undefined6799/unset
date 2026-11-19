@@ -257,12 +257,14 @@ const didOf = (letter: string): Did => {
  * Where each signed-in member stands: a step of onboarding, onboarded with an email not yet confirmed, or done with a
  * confirmed one (ACCOUNT, whose repo the stand-in PDS holds).
  */
-const MEMBERS: Record<MemberName, { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" }> = {
+const MEMBERS: Record<MemberName, { did: Did; step: "age" | "terms" | "chat" | "verify" | "done" | "notice" }> = {
   age: { did: didOf("b"), step: "age" },
   terms: { did: didOf("c"), step: "terms" },
   chat: { did: didOf("d"), step: "chat" },
   verify: { did: didOf("e"), step: "verify" },
   account: { did: ACCOUNT.did as Did, step: "done" },
+  // Done, but accepted an older privacy notice, so the shell shows the changed-notice banner (P2.12b).
+  notice: { did: didOf("f"), step: "notice" },
 };
 
 /** Each member's grant (so the session's foreign key holds) and session, stepped to where MEMBERS puts them. */
@@ -303,7 +305,10 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
     const deadline = AbortSignal.timeout(5000);
     if (step === "terms" || step === "chat") await accounts.confirmAdult(did, deadline);
     if (step === "chat") await accounts.acceptTerms(did, TERMS_VERSION, PRIVACY_VERSION, deadline);
-    if (step === "verify" || step === "done") await readyMember(pool, did, step === "done");
+    if (step === "verify" || step === "done" || step === "notice") {
+      await readyMember(pool, did, step !== "verify");
+    }
+    if (step === "notice") await accounts.acceptTerms(did, TERMS_VERSION, "2000-01-01", deadline);
     cookies[name] = `__Host-sid=${created.cookieValue}`;
   }
   await pool.end();

@@ -53,5 +53,8 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
           route.id === null ? null : (policyOf(route.id) ?? null),
           locals.deadline,
         );
-  return { signedIn: member, account, appOpen: open, prefs, signInHref: signInHref(url.pathname) };
+  // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
+  // shows so its dismiss records that one and no newer.
+  const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
+  return { signedIn: member, account, appOpen: open, prefs, privacyNotice, signInHref: signInHref(url.pathname) };
 };

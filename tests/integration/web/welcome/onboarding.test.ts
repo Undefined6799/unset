@@ -238,6 +238,77 @@ describe("the app gate", () => {
     expect(body).toContain("privacy notice");
   });
 
+  // P2.12b: the banner shows on every app page until the member dismisses it, and only a POST records that.
+  const seenOf = async (did: Did) =>
+    (
+      await pool.query<{ privacy_version: string | null; privacy_notice_seen_version: string | null }>(
+        "SELECT privacy_version, privacy_notice_seen_version FROM app.account WHERE did = $1",
+        [did],
+      )
+    ).rows[0];
+  async function withOldNotice() {
+    const member = await signedIn();
+    await readyMember(pool, member.did);
+    await accounts.acceptTerms(member.did, TERMS_VERSION, "2000-01-01", AbortSignal.timeout(5000));
+    return member;
+  }
+  const dismiss = (version = PRIVACY_VERSION) =>
+    new URLSearchParams({ version, return: "/test-routes/members" }).toString();
+  const BANNER = 'action="/privacy-notice/seen"';
+
+  test("terms.privacy_bump_notice_until_dismissed", async () => {
+    const { did, cookie } = await withOldNotice();
+    for (let i = 0; i < 3; i++) expect(await (await get("/test-routes/members", cookie)).text()).toContain(BANNER);
+    // A GET never records it.
+    expect(await seenOf(did)).toEqual({ privacy_version: "2000-01-01", privacy_notice_seen_version: null });
+  });
+
+  test("terms.privacy_notice_dismiss", async () => {
+    const { did, cookie } = await withOldNotice();
+    const response = await post("/privacy-notice/seen", dismiss(), cookie);
+    expect(response.status).toBe(303);
+    expect(location(response)).toBe("/test-routes/members");
+    expect(await (await get("/test-routes/members", cookie)).text()).not.toContain(BANNER);
+    // Seen, not accepted: the accepted version is unchanged.
+    expect(await seenOf(did)).toEqual({ privacy_version: "2000-01-01", privacy_notice_seen_version: PRIVACY_VERSION });
+  });
+
+  test("a_dismiss_of_an_older_notice_records_nothing", async () => {
+    const { did, cookie } = await withOldNotice();
+    expect(location(await post("/privacy-notice/seen", dismiss("2000-06-01"), cookie))).toBe("/test-routes/members");
+    expect(await seenOf(did)).toEqual({ privacy_version: "2000-01-01", privacy_notice_seen_version: null });
+    expect(await (await get("/test-routes/members", cookie)).text()).toContain(BANNER);
+  });
+
+  test("a_cross_site_or_signed_out_dismiss_writes_nothing", async () => {
+    const { did, cookie } = await withOldNotice();
+    const foreign = await web.fetch("/privacy-notice/seen", {
+      method: "POST",
+      body: dismiss(),
+      headers: {
+        origin: "https://evil.example",
+        accept: HTML,
+        "content-type": "application/x-www-form-urlencoded",
+        "x-forwarded-for": clientAddress(),
+        cookie,
+      },
+    });
+    expect(foreign.status).toBe(403);
+    const noOrigin = await web.fetch("/privacy-notice/seen", {
+      method: "POST",
+      body: dismiss(),
+      headers: {
+        accept: HTML,
+        "content-type": "application/x-www-form-urlencoded",
+        "x-forwarded-for": clientAddress(),
+        cookie,
+      },
+    });
+    expect(noOrigin.status).toBe(403);
+    expect(location(await post("/privacy-notice/seen", dismiss(), ""))).toMatch(/^\/login/);
+    expect(await seenOf(did)).toEqual({ privacy_version: "2000-01-01", privacy_notice_seen_version: null });
+  });
+
   test("an_unconfirmed_email_goes_to_verify_email", async () => {
     const { did, cookie } = await signedIn();
     await readyMember(pool, did, false);

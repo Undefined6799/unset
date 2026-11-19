@@ -53,6 +53,25 @@ test.describe("javascript disabled", () => {
     await expect(error).toHaveCount(0);
   });
 
+  // P2.12b: the changed privacy notice banner's Dismiss is a plain form; once posted, the banner is gone for good.
+  test("privacy_notice_dismiss_without_js", async ({ page }) => {
+    const fixture: PageFixture = {
+      path: "/test-routes/members",
+      route: "/test-routes/members",
+      group: "app",
+      expectJs: true,
+      member: "notice",
+    };
+    await openPage(page, fixture);
+    const banner = page.locator("main").getByText("Privacy notice updated");
+    await expect(banner).toBeVisible();
+    await page.getByRole("button", { name: "Dismiss" }).click();
+    await expect(page).toHaveURL(/\/test-routes\/members$/);
+    await expect(banner).toBeHidden();
+    await page.reload();
+    await expect(banner).toBeHidden();
+  });
+
   // P2.05m: the sign-in page is one box; with no Referer, Close goes home.
   test("login_box_without_js", async ({ page }) => {
     await page.goto("/login?next=/me");

@@ -2520,6 +2520,11 @@ recorded without a person's action, or forged across sites. Answered by POST onl
 and no GET writes.
 
 Done when the tests pass and check is green.
+As built (2026-11-19, Alex: the notice was "permanent on the profile page"): migration 0032 adds the column and its
+  web grant. The banner moved from the own profile and settings pages into the shell (+layout.svelte), so it shows on
+  whichever app page the member opens next; POST /privacy-notice/seen records only the version this build shows, so a
+  banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
+  there and the seen column its read state.
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
