@@ -50,6 +50,7 @@ Checks, in `CHECKS` order (`deployment/preflight/checks/index.ts`). `LOCAL_CHECK
 | C31 | `checks/newt.ts` | Dev requires a `newt` service. Its one env file holds `PANGOLIN_ENDPOINT`, `NEWT_ID` and `NEWT_SECRET`. Compose `environment` is the six `NEWT_SETTINGS` literals. No mount and no secret. Outside local it runs the lock's `newt` ref. Local may omit it. |
 | C32 | `checks/placeholders.ts` | Dev and prod: no environment value starts with `[to fill:`. Local skips. |
 | C33 | `checks/settings.ts` | Local and dev: the PDS keeps blobs in the object store's `unset-pds` bucket at `http://objects:8333`, path style, region `us-east-1`, with its key pair set, no disk blobstore key and no `AWS_` variable. Prod skips until P5.01. |
+| C34 | `checks/placeholders.ts` | Every name the Compose files interpolate has a non-empty value in the interpolation env file, so a setting a new step adds stops the deploy here, not the service at boot. |
 | L1 | `checks/local.ts` | Every published port binds `127.0.0.1`. |
 | L2 | `checks/local.ts` | `PDS_HOSTNAME` matches a `.localhost` name. |
 

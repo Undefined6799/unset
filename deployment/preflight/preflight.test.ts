@@ -186,6 +186,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C31",
   "C32",
   "C33",
+  "C34",
 ]);
 
 type Stack = {
@@ -1703,7 +1704,9 @@ describe("preflight", () => {
       expect(await only(DEV.replace(line, `      ${name}: "1"\n`)), name).toBe(
         `FAIL C31 ${name} is not its reviewed literal in the newt service`,
       );
-      expect(await only(DEV.replace(line, `      ${name}: \${FLAG}\n`)), name).toBe(
+      // An interpolated value is not the literal either; the env file gives it one, so C34 passes.
+      const flagged = { ...dev, compose: DEV.replace(line, `      ${name}: \${FLAG}\n`), dotEnv: "FLAG=true\n" };
+      expect(await expectOnly("C31", flagged, "dev"), name).toBe(
         `FAIL C31 ${name} is not its reviewed literal in the newt service`,
       );
     }
@@ -2930,9 +2933,10 @@ describe("preflight C17 (P1.30t)", () => {
     const hosts = (text: string) =>
       text.replace("      FINGERPRINT_CHECK: arachnid\n", "$&      NETGUARD_INTERNAL_HOSTS: pds.example.test\n");
     expect(failed((await check({ ...dev, compose: DEV, networks: table }, "dev")).lines)).not.toContain("C17");
-    expect(await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable }, "dev")).toBe(
-      "FAIL C17 the edge carries a network alias",
-    );
+    const hostNames = "APP_HOST=app.example.test\nPDS_HOSTNAME=pds.example.test\n";
+    expect(
+      await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable, dotEnv: hostNames }, "dev"),
+    ).toBe("FAIL C17 the edge carries a network alias");
     expect(await expectOnly("C17", { ...dev, compose: hosts(DEV), networks: table }, "dev")).toBe(
       "FAIL C17 a service names an internal host for net-guard",
     );
