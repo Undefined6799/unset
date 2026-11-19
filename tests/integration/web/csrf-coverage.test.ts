@@ -114,7 +114,7 @@ describe("csrf coverage", () => {
   test("only_these_routes_answer_a_get_with_their_own_handler", () => {
     // A GET is never under the Origin check, so a handler that changes state on one is a security-reviewed change:
     // a new entry here is one. The OAuth callback consumes the login nonce, stores the sealed token set and creates the
-    // session (P2.06), protected by the state and __Host- nonce binding, single-use (plan §2 rule 2).
+    // session (P2.06), protected by the state and __Host- nonce binding, single-use (plan §2 rule 2). robots.txt and the sitemap only read (ADR 0062).
     const gets = ROUTE_FILES.filter((route) => exports(route.source, "GET")).map((route) => route.path);
     expect(gets).toEqual([
       "/.well-known/security.txt",
@@ -125,7 +125,9 @@ describe("csrf coverage", () => {
       "/oauth-client-metadata.json",
       "/oauth/callback",
       "/oauth/jwks.json",
+      "/robots.txt",
       "/settings",
+      "/sitemap.xml",
       "/test-routes/fails",
       "/test-routes/waits",
     ]);

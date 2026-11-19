@@ -14,6 +14,7 @@ export {
 } from "./accountStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
+export { createDiscoverabilityStore, type DiscoverabilityStore } from "./discoverabilityStore.ts";
 export {
   createHandleStore,
   HANDLE_LEASE_SECONDS,
@@ -69,6 +70,7 @@ export {
 } from "./pool.ts";
 export {
   createPublicProfileStore,
+  type ListedPage,
   type PublicActor,
   type PublicProfile,
   type PublicProfileStore,
