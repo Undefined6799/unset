@@ -20,7 +20,7 @@ export type TrackOutcome = "tracked" | "erased" | "foreign";
  * neither ends nor backs off the newer request.
  */
 export type BackfillJob = { readonly did: string; readonly attempts: number; readonly claim: string };
-/** Why a backfill failed; `gone` means the PDS no longer serves the repo, which the account-state machine handles. */
+/** Why a backfill failed; `gone` means the PDS no longer serves the repo, which the account-state machine confirms. */
 export type BackfillFailure = "gone" | "failed";
 
 export type TrackStore = {
@@ -38,7 +38,10 @@ export type TrackStore = {
   readonly dueBackfills: (limit: number) => Promise<BackfillJob[]>;
   /** Writes a verified repo snapshot; see applySnapshot. */
   readonly applySnapshot: (job: BackfillJob, rev: string, records: readonly IndexChange[]) => Promise<void>;
-  /** Backs the job off, or dead-letters it after MAX_BACKFILL_ATTEMPTS; a `gone` repo ends the job at once. */
+  /**
+   * Backs the job off, or dead-letters it after MAX_BACKFILL_ATTEMPTS. A `gone` repo ends the job at once and queues
+   * confirm_status, which hides the account or starts its deletion as our PDS's status says (book P3.06).
+   */
   readonly backfillFailed: (job: BackfillJob, failure: BackfillFailure) => Promise<void>;
 };
 
@@ -170,6 +173,9 @@ async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: Backfil
   const erased = await isErased(tx, job.did); // the erasure lock first, as on every path
   const attempts = job.attempts + 1;
   if (failure === "gone") {
+    // getRepo refuses a deactivated, taken-down or deleted repo (400), so the account's status changed, perhaps in an
+    // event the stream lost. Only getRepoStatus says which, and only for an account still tracked and not erased.
+    if (!erased && (await lockAccount(tx, job.did)) !== null) await queueJob(tx, job.did, "confirm_status");
     await endJob(tx, job);
     return count(tx, "backfill_failed");
   }
