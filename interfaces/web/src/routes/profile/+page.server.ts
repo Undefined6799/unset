@@ -7,8 +7,7 @@ import { toProfileRecord } from "@unset/domains-profile";
 import { saveProfileRecord } from "@unset/infrastructure-pds";
 import { ERROR_CODES } from "@unset/shared-errors";
 import { services } from "../../lib/server/compose.ts";
-import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
-import { config } from "../../lib/server/runtime.ts";
+import { pdsSignInRedirect } from "../../lib/server/pds-failure.ts";
 import { type SaveProfile, saveProfileForm } from "./save.server.ts";
 
 export const load: ServerLoad = () => error(404, { message: "http.not_found" });
@@ -23,8 +22,8 @@ const saveToPds =
       toProfileRecord(fields, existing, now),
     );
     if (result.kind === "ok") return result.value;
-    const failure = respondToPdsFailure("POST", result, config.PDS_HOSTNAME);
-    return failure.action === "redirect" ? { kind: "redirect", location: failure.location } : { kind: "unavailable" };
+    const location = pdsSignInRedirect(result);
+    return location === null ? { kind: "unavailable" } : { kind: "redirect", location };
   };
 
 export const actions: Actions = {

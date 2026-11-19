@@ -25,7 +25,7 @@ The files the wrapper starts. `deployment/compose.dev.yaml` is the homelab file.
 
 All three files set `user`, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, and `mem_limit`, `cpus`, `pids_limit`. The edge is the service with `cap_add: [NET_BIND_SERVICE]`. The numbers are `deployment/limits.dev.json`.
 
-`deployment/preflight/local-only.ts` names what only one file may hold. `LOCAL_ONLY_SERVICES` is `pds-token-reader`. `DEV_ONLY_SERVICES` is `newt`. `DEV_ONLY_NETWORKS` is `newt_edge` and `newt_egress`. `LOCAL_ONLY_NETWORKS` is empty. `LOCAL_ONLY_KEY_NAMES` is `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN`.
+`deployment/preflight/local-only.ts` names what only one file may hold. `LOCAL_ONLY_SERVICES` is `pds-token-reader`. `DEV_ONLY_SERVICES` is `newt`. `DEV_ONLY_NETWORKS` is `newt_edge` and `newt_egress`. `LOCAL_ONLY_NETWORKS` is empty. `LOCAL_ONLY_KEY_NAMES` is `OAUTH_ALLOW_HTTP` and `NETGUARD_ALLOW_LOOPBACK`.
 
 Networks, from `deployment/networks.dev.json`. Under local, C17 leaves the two dev-only rows out.
 

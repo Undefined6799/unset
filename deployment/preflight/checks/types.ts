@@ -82,8 +82,8 @@ export type Inputs = WalkInputs & {
   readdir: (path: string) => Buffer[];
 };
 
-/** The http kit's origin-valued keys (shared/http/config.ts); an empty ASSETS_BASE means the public origin's. */
-export const ORIGIN_KEYS = ["PUBLIC_ORIGIN", "MEDIA_ORIGIN", "ASSETS_BASE"] as const;
+/** The http kit's origin-valued keys (shared/http/config.ts). */
+export const ORIGIN_KEYS = ["PUBLIC_ORIGIN", "MEDIA_ORIGIN"] as const;
 /** Every key an outcome may name, C29's: the only keys a preflight line prints beside its verdict (P1.37k). */
 export const NAMED_KEYS = [...LOCAL_ONLY_KEY_NAMES, ...ORIGIN_KEYS] as const;
 export type NamedKey = (typeof NAMED_KEYS)[number];

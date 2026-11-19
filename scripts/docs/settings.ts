@@ -158,7 +158,7 @@ function securityPage(model: SettingsModel): string {
       "",
       "## Web headers on every response",
       "",
-      "Fixed in code: `shared/http/csp/headers.ts`. These are the `static` group's headers, which web sends on every response (`interfaces/web/server.ts`); origins are shown by their setting name. The `media` group differs, since other sites embed it: `referrer-policy: no-referrer` and `cross-origin-resource-policy: cross-origin`.",
+      "Fixed in code: `STATIC_CSP` in `interfaces/web/src/lib/server/csp.ts` and `SECURITY_HEADERS` in `shared/http/headers.ts`. Web sends them on every response (`interfaces/web/server.ts`); a page replaces the CSP with its group's, below.",
       "",
       ...table(["Header", "Value"], model.webHeaders),
       "",

@@ -4720,6 +4720,19 @@ it on for production is a later step that needs Alex's word. Fits inside ADR 006
 choice does on a listed site; it adds no data and no crawler rule. The letter does not belong to the token pipeline
 below; it was the next free id.
 
+### P1.21c — Remove dead and duplicated code (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.1, §9
+
+Alex approved on 2026-11-19 three findings of that day's refactor pass (`reviews/2026-11-19-refactor-pass/`), each
+removing code without changing behaviour. (1) The Hono-era page CSPs in `shared/http/csp/` were read by nothing but
+their own test and the `static` header web sends before its hook; web's `csp.ts` becomes the only CSP source
+(`STATIC_CSP`), `shared/http/headers.ts` keeps the other security headers, and the unused `profile` page group, the
+settings `ASSETS_BASE` and `DEV_VITE_ORIGIN` and their preflight C29 entries go. A leftover key in an env file still
+boots. (2) `pds-failure.ts` returns only the sign-in redirect its four callers use, and the PDS host stops being
+threaded through for it. (3) The indexer's backfill queue uses the shared `claimJobs` and `endJob`, which move to
+`infrastructure/postgres/jobs.ts`. The letter does not belong to the token pipeline below; it was the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
@@ -4735,7 +4748,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
-P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch), l, m, q.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch), c (dead and duplicated code), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
