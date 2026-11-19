@@ -12,6 +12,7 @@ import { CARD_EDIT_LIMITS, type CardKey, parseAvatarShape, parseCardInput, parse
 import {
   createCardRecord,
   deleteCardRecord,
+  latestCommit,
   listCardRecords,
   loadProfileRecord,
   saveCardRecord,
@@ -99,7 +100,6 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
   return {
     shell,
     account,
-    privacyNotice: locals.privacyNotice,
     name,
     letter: avatarLetter(name),
     profile:
@@ -110,7 +110,8 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
     cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes },
-    cardsIncomplete: own.kind === "ok" && !own.cardsComplete,
+    cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
+    cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
   };
 };
@@ -127,7 +128,8 @@ function writesFor(did: Did, locals: App.Locals) {
   const ctx = pdsContext(locals);
   const store: CardStore = {
     list: () => listCardRecords(pdsCall, ctx, did),
-    create: (record) => createCardRecord(pdsCall, ctx, did, record),
+    head: () => latestCommit(pdsCall, ctx, did),
+    create: (record, swapCommit) => createCardRecord(pdsCall, ctx, did, record, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
     remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),

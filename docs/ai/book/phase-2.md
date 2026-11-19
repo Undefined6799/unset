@@ -2520,6 +2520,11 @@ recorded without a person's action, or forged across sites. Answered by POST onl
 and no GET writes.
 
 Done when the tests pass and check is green.
+As built (2026-11-19, Alex: the notice was "permanent on the profile page"): migration 0032 adds the column and its
+  web grant. The banner moved from the own profile and settings pages into the shell (+layout.svelte), so it shows on
+  whichever app page the member opens next; POST /privacy-notice/seen records only the version this build shows, so a
+  banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
+  there and the seen column its read state.
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
@@ -3042,6 +3047,16 @@ Tags: [SEC] (E3)            Depends on: P2.09d, P2.09, P2.05, P1.14, P1.14d (inv
 Where: `interfaces/http/routes/{invite.ts, join.ts, signup.ts}`, `apps/web/screens/{Invite.tsx, Join.tsx}`,
   `apps/web/islands/CopyButton.tsx`, migration `0204_app_invite.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), catalogs
 Size: ~210 source lines, ~240 test lines
+As built (SvelteKit, PR 1 of 2): `interfaces/web/src/routes/invite/` (form actions `issue` and `hide`) and
+  `routes/join/` (its form action is the book's `POST /signup`, at the sign-in limit), the rule in
+  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0033_app_invite.sql`
+  (column grants, row DELETE, `invite.denied` audit action, `core.erase_did` covering `app.invite.inviter_did`). The
+  list shows issued codes of the last 7 days only (a pending row holds none). Expiry (Alex 2026-11-19: used, or 7 days):
+  hiding and web's `sweep.invite` at 7 days delete our copy of the code and leave the row `cleared`; a code is single
+  use on the PDS, and pds-admin disabling unused codes there after 7 days is a follow-up updating ADR 0060. Preflight
+  C34 refuses an env file that leaves an interpolated name empty. Web mounts `web_pds_admin_key` in every stack and joins
+  `pds_admin` under `--source` and local. PR 2: the Share panel (copy button, share sheet, `sms:` link, QR) and the
+  plus-menu row.
 
 Goal: A signed-in member issues one-use invite codes through `pds-admin` under the invite-country rule, and an invitee
 lands on `/join?invite=` that explains the code, offers copy-to-clipboard and starts sign-up with `prompt=create`.

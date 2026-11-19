@@ -118,6 +118,12 @@
   a:not([data-slot]) {
     @apply text-info underline underline-offset-4;
   }
+  /* A focused link draws the stock Button's ring (3px of ring/50, button.svelte), not the browser's own outline, so
+   * every control shows one focus look (staging walkthrough 2026-11-19). An outline, not the Button's box-shadow, so
+   * it follows a link that wraps onto two lines, and forced colours keep it (the rule at the end of this file). */
+  a:not([data-slot]):focus-visible {
+    @apply rounded-xs outline-3 outline-offset-0 outline-ring/50;
+  }
   /* A card's actions wrap on a narrow screen, and a long label wraps inside its button, so nothing scrolls sideways at
    * 320px (WCAG 1.4.10 Reflow). shadcn's Card footer is one row and its Button never wraps; their own classes are
    * utilities, which outrank this base layer, so these are marked important (an important base rule outranks a normal

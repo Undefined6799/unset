@@ -35,7 +35,9 @@ for (const fixture of ALL_PAGES) {
       try {
         const response = await page.goto(`${originOf(fixture)}${fixture.path}`);
         expect(response?.status()).toBe(200);
-        expect(new URL(page.url()).pathname).toBe(fixture.path);
+        // Path and query: /join's fixture carries its invite code in the query (P2.10).
+        const opened = new URL(page.url());
+        expect(opened.pathname + opened.search).toBe(fixture.path);
         await page.waitForLoadState("networkidle");
         await expectTheme(page, fixture, cell);
         const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
@@ -81,6 +83,24 @@ test.describe("once per page", () => {
       expect(small).toEqual([]);
     });
   }
+});
+
+// Staging walkthrough 2026-11-19: a focused link drew the browser's own outline while a focused button drew the
+// design's 3px ring; a link draws the same 3px ring now.
+test("a_focused_link_draws_the_design_ring", async ({ page }) => {
+  await page.goto("/");
+  await page.keyboard.press("Tab");
+  const focus = await page.evaluate(() => {
+    const view = globalThis as unknown as {
+      document: { activeElement: { tagName: string } | null };
+      getComputedStyle: (element: object) => { outlineStyle: string; outlineWidth: string };
+    };
+    const element = view.document.activeElement;
+    if (element === null) return null;
+    const style = view.getComputedStyle(element);
+    return { tag: element.tagName, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+  });
+  expect(focus).toEqual({ tag: "A", outlineStyle: "solid", outlineWidth: "3px" });
 });
 
 test.describe("forced colours", () => {

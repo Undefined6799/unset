@@ -65,3 +65,17 @@ export async function accountView(
     accountLink: accountLinkOf(issuer, deps.pdsIssuer),
   };
 }
+
+/**
+ * The account button's member on every page (+layout.server.ts): their own page's path, and their handle when an
+ * earlier check on this process verified it (their own page and Settings › Account check it), so the button shows the
+ * same letter as on their own page. It reads the cache only: a page never waits on the network to name the button,
+ * and with no verified handle the button keeps its generic icon.
+ */
+export function shellAccount(
+  deps: Pick<AccountDeps, "handles">,
+  did: Did,
+): { readonly path: string; readonly name?: string } {
+  const handle = deps.handles.verifiedHandle(did);
+  return handle === null ? { path: `/${did}` } : { path: `/${did}`, name: handle };
+}

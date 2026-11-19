@@ -1,6 +1,8 @@
 // Copied from apps/web/src/screens/profile/messages.ts for the Svelte page (P1.20i); that copy went with P1.20k.
 // The words a profile card shows that the member does not write (ADR 0051 decision 4: button text comes from the
 // preset). English first (plan: English, then French).
+import type { CardContent } from "./types.ts";
+
 export const CARD_TEXT = {
   email: "Email me",
   bookCall: "Book a call",
@@ -76,7 +78,8 @@ export const CARD_EDIT = {
   more: (name: string) => `More for ${name} card`,
   down: "Move down",
   remove: "Delete",
-  removeTitle: "Delete this card?",
+  /** Names the card, so a page of similar cards says which one goes (staging audit 2026-11-19). */
+  removeTitle: (name: string) => `Delete ${name} card?`,
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   width: "Width",
   full: "Full width",
@@ -124,9 +127,10 @@ export const COLLECTION_EDIT = {
   hint: (max: number) => `Up to ${max} entries. Leave an entry's fields empty to remove it.`,
 } as const;
 
+// The buttons card is the Contact card everywhere the member reads its name (staging audit 2026-11-19).
 export const BUTTONS_EDIT = {
-  add: "Add buttons",
-  editTitle: "Edit buttons",
+  add: "Add contact",
+  editTitle: "Edit contact",
   heading: "Heading",
   text: "Text",
   row: (n: number) => `Button ${n}`,
@@ -146,14 +150,26 @@ export const BUTTONS_EDIT = {
 export const OWN_PAGE = {
   /** The tab's title when the page has no name to show (no display name, and a handle that did not verify). */
   title: "Your page",
-  privacyNoticeTitle: "Privacy notice",
-  privacyNotice: "The privacy notice has changed.",
   handleUnavailable: "We could not check your handle just now.",
   profileUnavailable: "We could not load your profile just now.",
   cardsIncomplete: "Some of your cards could not be loaded just now. Reload to try again.",
+  cardsOverflow: "You have more cards than your page can show. Delete one to bring a hidden card back.",
   editProfile: "Edit profile",
   setUpEyebrow: "Not set up yet",
   setUpTitle: "Set up your profile",
-  setUpBody:
-    "Your name, bio, picture and sections will be edited here. The editor is not ready yet, and your profile stays private until you publish it.",
+  setUpBody: "Add your name, a headline, a place and a website with Edit profile. Then add cards to your page.",
 } as const;
+
+/** The name a card goes by in its controls and its delete confirm: its own title, else its kind's name. */
+export function cardName(content: CardContent): string {
+  switch (content.kind) {
+    case "readme":
+      return CARD_EDIT.readme;
+    case "links":
+      return content.title || ADD_CARD.links;
+    case "collection":
+      return content.title || ADD_CARD.collection;
+    case "buttons":
+      return content.heading || ADD_CARD.buttons;
+  }
+}

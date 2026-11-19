@@ -13,7 +13,11 @@
   },
   "app.account.did": {
     "strategy": "delete_row",
-    "reason": "the person's app account, including onboarding; the row goes when they are erased"
+    "reason": "the person's app account, including onboarding and the privacy notice version they dismissed (P2.12b); the row goes when they are erased"
+  },
+  "app.invite.inviter_did": {
+    "strategy": "delete_row",
+    "reason": "the invites the person asked for, with their sealed codes; they go when the person is erased"
   },
   "audit.event_body.subject": {
     "strategy": "audit_redact",

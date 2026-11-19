@@ -144,6 +144,18 @@ describe("index store", () => {
     expect(stat("ingest_invalid")).toBe("1");
   });
 
+  test("index.invalid_replacement_removes_the_older_version", async () => {
+    // A rebuild of this repo would index nothing under the key (trackStore.ts applySnapshot), so the stream does the
+    // same: the member's older version does not stay public.
+    await commit(A, rev(6), [profile({ displayName: "Ada" }), section(CARD_1)]);
+    await commit(A, rev(7), [
+      profile({ displayName: 7 }),
+      { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "x" } },
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
+  });
+
   test("index.inactive_account_keeps_nothing_new", async () => {
     track(B, false);
     await commit(B, rev(3), [profile()]);
@@ -184,6 +196,8 @@ describe("index store", () => {
     await store.missedEvents();
     await store.missedEvents();
     expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'backfill'")).toEqual(["3"]);
+    // A lost #account event is recovered by asking our PDS for each account's status (book P3.06).
+    expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'confirm_status'")).toEqual(["3"]);
   });
 
   test("index.record_jsonb_refuses_is_skipped_not_retried", async () => {
@@ -205,6 +219,23 @@ describe("index store", () => {
     const health = await store.health();
     expect(health).toMatchObject({ cursor: seq, deadLetters: 1 });
     expect(health.counters).toMatchObject({ ingest_dead_letter: 1, ingest_replayed: 2, ingest_erased: 2 });
+  });
+
+  test("index.health_shows_how_long_jobs_have_waited_and_failed", async () => {
+    // A backfill due two minutes ago that no pass took, and a confirmation failing for an hour (backed off, so not due).
+    const J = "did:plc:jjjjjjjjjjjjjjjjjjjjjjjj";
+    track(J, true);
+    postgres.sql(
+      "unset",
+      `DELETE FROM idx.account_job WHERE did = '${J}';
+       INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES
+         ('${J}', 'backfill', now() - interval '2 minutes', 0, now() - interval '2 minutes'),
+         ('${J}', 'confirm_status', now() + interval '1 hour', 3, now() - interval '1 hour')`,
+    );
+    const { jobs } = await store.health();
+    expect(jobs.backfill?.oldestDueS).toBeGreaterThanOrEqual(120);
+    expect(jobs.confirm_status?.oldestFailingS).toBeGreaterThanOrEqual(3600);
+    postgres.sql("unset", `DELETE FROM idx.account WHERE did = '${J}'`);
   });
 
   test("index.dead_letter_keeps_no_did_of_an_erased_or_untracked_account", async () => {

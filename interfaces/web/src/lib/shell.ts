@@ -55,6 +55,9 @@ export function accountLetter(name: string): string {
 
 export const SHELL_TEXT = {
   skip: "Skip to content",
+  privacyNoticeTitle: "Privacy notice updated",
+  privacyNotice: "Read what changed in our privacy notice.",
+  privacyNoticeDismiss: "Dismiss",
   brand: "unset.sh",
   brandName: "unset",
   brandSuffix: ".sh",
@@ -87,6 +90,7 @@ export const SHELL_TEXT = {
   addCard: "Add a profile card",
   messagesSoon: "Messages are coming soon. Your conversations will appear here.",
   openInbox: "Open inbox",
+  searchSoon: "Search is coming soon. You will search unset.sh here.",
   notificationsSoon: "Notifications are coming soon. You will see them here.",
   allNotifications: "View all notifications",
   signOut: "Sign out",
