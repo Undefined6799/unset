@@ -703,8 +703,88 @@ const FONTS: Red[] = [
 ];
 
 const header = (value: string): Json => ({ handler: "headers", response: { set: { "X-Test": [value] } } });
+/**
+ * Edits to the page body a later change could try, each refused (review of 214f9f1, B1 and B2): a placeholder Caddy
+ * would fill at run time, in the words or the style, a tag or attribute outside the exact list, and anything the
+ * style could load. Each is [what, the text replaced, its replacement, why].
+ */
+const PAGE_EDITS: readonly (readonly [string, string, string, string])[] = [
+  ["a file placeholder", "Too many tries</h1>", "{file./data/caddy/x.key}</h1>", "holds a placeholder"],
+  ["an env placeholder", "Too many tries</h1>", "{env.PDS_ADMIN_PASSWORD}</h1>", "holds a placeholder"],
+  ["a request placeholder", "Too many tries</h1>", "{http.request.uri}</h1>", "holds a placeholder"],
+  ["an escaped brace", "Too many tries</h1>", "\\{x\\}</h1>", "holds a placeholder"],
+  ["a placeholder in the style", "a{color:var(--fg)}", "a{color:var(--fg)}{file./x}", "holds a placeholder"],
+  ["a placeholder nested in the style", "a{color:var(--fg)}", "a{b{file./x}}", "holds a placeholder"],
+  ["a placeholder as a style block", "a{color:var(--fg)}", "a{env.x:y}", "holds a placeholder"],
+  ["a script", "</main>", "<script>alert(1)</script></main>", "holds a tag outside the ruled ones"],
+  ["a handler", "<main>", '<main onclick="x()">', "holds a tag outside the ruled ones"],
+  [
+    "a refresh",
+    "<title>",
+    '<meta http-equiv="refresh" content="0;url=https://example.org/"><title>',
+    "holds a tag outside the ruled ones",
+  ],
+  ["a base", "<title>", '<base href="https://example.org/"><title>', "holds a tag outside the ruled ones"],
+  [
+    "a stylesheet link",
+    "<title>",
+    '<link rel="stylesheet" href="/x.css"><title>',
+    "holds a tag outside the ruled ones",
+  ],
+  ["a form", "</main>", '<form action="/x"><input name="q"></form></main>', "holds a tag outside the ruled ones"],
+  ["a frame", "</main>", '<iframe src="/x"></iframe></main>', "holds a tag outside the ruled ones"],
+  ["an object", "</main>", '<object data="/x"></object></main>', "holds a tag outside the ruled ones"],
+  ["an svg", "</main>", '<svg onload="x()"></svg></main>', "holds a tag outside the ruled ones"],
+  ["an image", "</main>", '<img src="/x.png"></main>', "holds a tag outside the ruled ones"],
+  ["an outside link", 'href="/"', 'href="https://example.org/"', "holds a tag outside the ruled ones"],
+  ["a data link", 'href="/"', 'href="data:text/html,x"', "holds a tag outside the ruled ones"],
+  ["a script link", 'href="/"', 'href="javascript:x()"', "holds a tag outside the ruled ones"],
+  ["a stray bracket", "Too many tries</h1>", "Too many tries ></h1>", "holds text outside the ruled characters"],
+  ["an entity", "Too many tries</h1>", "Too many tries&lt;</h1>", "holds text outside the ruled characters"],
+  ["a word outside ASCII", "Too many tries</h1>", "Too many tries…</h1>", "holds text outside the ruled characters"],
+  ["a second style", "</head>", "<style>p{color:red}</style></head>", "does not hold exactly one style"],
+  ["an image in the style", "body{margin:0;", "body{background:url(x.png);margin:0;", "loads or runs something"],
+  [
+    "an image set in the style",
+    "body{margin:0;",
+    "body{background:image-set(x 1x);margin:0;",
+    "loads or runs something",
+  ],
+  [
+    "an import in the style",
+    ":root{",
+    "@import url(x.css);:root{",
+    "styles with something outside the ruled characters",
+  ],
+  [
+    "a quoted font in the style",
+    "font-family:system-ui",
+    "font-family:'x'",
+    "styles with something outside the ruled characters",
+  ],
+  [
+    "an escape in the style",
+    "a{color:var(--fg)}",
+    "a{color:\\65}",
+    "styles with something outside the ruled characters",
+  ],
+  ["a second document", "</html>", "</html>\n<html>", "is not one document"],
+];
+
 /** The too-many-tries page (snippets/too-many-tries.caddy): on every site, the ruled route, fixed text loading nothing. */
 const TOO_MANY_TRIES: Red[] = [
+  ...PAGE_EDITS.map(
+    ([what, from, to, why]): Red => [
+      `a page with ${what}`,
+      "dev",
+      (c) =>
+        editPage(c, APP_DEV, (body) => {
+          if (!body.includes(from)) throw new Error(`${what}: the page has no ${from}`);
+          return body.replace(from, to);
+        }),
+      PAGE("APP_HOST", why),
+    ],
+  ),
   [
     "a site without the page",
     "local",
@@ -750,48 +830,6 @@ const TOO_MANY_TRIES: Red[] = [
       set["Content-Security-Policy"] = [`${String(a(set["Content-Security-Policy"])[0])}; script-src 'self'`];
     },
     NOT_THE_PAGE("APP_HOST"),
-  ],
-  [
-    "a page that runs a script",
-    "dev",
-    (c) => editPage(c, APP_DEV, (body) => body.replace("</main>", "<script>alert(1)</script></main>")),
-    PAGE("APP_HOST", "holds a tag outside the ruled ones"),
-  ],
-  [
-    "a page with a handler",
-    "dev",
-    (c) => editPage(c, APP_DEV, (body) => body.replace("<main>", '<main onclick="x()">')),
-    PAGE("APP_HOST", "loads or runs something"),
-  ],
-  [
-    "a page that loads an image",
-    "local",
-    (c) => editPage(c, P, (body) => body.replace("body{margin:0;", "body{background:url(/x.png);margin:0;")),
-    PAGE("PDS_HOST", "loads or runs something"),
-  ],
-  [
-    "a page that echoes the request",
-    "dev",
-    (c) => editPage(c, APP_DEV, (body) => body.replace("Too many tries</h1>", "{http.request.uri}</h1>")),
-    PAGE("APP_HOST", "holds a placeholder"),
-  ],
-  [
-    "a page that links elsewhere",
-    "shipped",
-    (c) => editPage(c, P, (body) => body.replace('href="/"', 'href="https://example.org/"')),
-    PAGE("PDS_HOST", "links somewhere other than /"),
-  ],
-  [
-    "a page with a second style",
-    "shipped",
-    (c) => editPage(c, P, (body) => body.replace("</head>", "<style>p{}</style></head>")),
-    PAGE("PDS_HOST", "does not hold exactly one style"),
-  ],
-  [
-    "a page outside ASCII",
-    "shipped",
-    (c) => editPage(c, P, (body) => body.replace("Too many tries</h1>", "Too many tries\u2026</h1>")),
-    PAGE("PDS_HOST", "is not one ASCII document"),
   ],
 ];
 

@@ -11,12 +11,14 @@
 # error keeps Caddy's default too: the route matches 429 alone.
 #
 # The page is fixed text: no placeholder, nothing from the request, no limit number, no script. Its one inline style
-# is allowed by hash alone (adapted-rules.ts checks the hash against the body), and nothing else may load.
+# is allowed by hash alone (adapted-rules.test.ts checks the hash against it), and nothing else may load. Caddy
+# replaces placeholders in the body at run time, so the page holds no brace outside its CSS blocks and the style no
+# nested block (light-dark() in place of a media query; adapted-rules.ts pageProblems).
 (too-many-tries) {
 	handle_errors 429 {
 		import security-headers
 		header {
-			Content-Security-Policy "default-src 'none'; style-src 'sha256-10GIk0mkNEBTY+WMfgI9xqFf1JOIf0M+jhovmIShbyQ='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+			Content-Security-Policy "default-src 'none'; style-src 'sha256-OhohhPP16pWhW6Z/EmVxKjFY8saJBHVHQzJ57EyLeb0='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 			Cache-Control no-store
 		}
 		@navigate header Sec-Fetch-Mode navigate
@@ -28,7 +30,7 @@
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<title>Too many tries</title>
-			<style>:root{color-scheme:light dark;--bg:#f0edee;--fg:#0a090c;--muted:#5a575b;--card:#fbfafa;--line:#d6d2d4}@media (prefers-color-scheme:dark){:root{--bg:#17161b;--fg:#f0edee;--muted:#a19ea2;--card:#232227;--line:#312f36}}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>
+			<style>:root{color-scheme:light dark;--bg:light-dark(#f0edee,#17161b);--fg:light-dark(#0a090c,#f0edee);--muted:light-dark(#5a575b,#a19ea2);--card:light-dark(#fbfafa,#232227);--line:light-dark(#d6d2d4,#312f36)}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;font-size:16px;line-height:1.5}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>
 			</head>
 			<body>
 			<main>

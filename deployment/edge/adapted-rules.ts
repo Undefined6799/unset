@@ -276,8 +276,41 @@ const tooManyTries = (host: string, body: string, csp: string): Json => ({
   ],
   terminal: true,
 });
-/** The page's tags: a document, its one style, a heading, text and a link. */
-const PAGE_TAGS = ["!doctype", "html", "head", "meta", "title", "style", "body", "main", "h1", "p", "a"];
+/**
+ * The page's tags, each written exactly so, attributes included: a document, its charset and viewport, a title, a
+ * heading, text and the one link home. <style> and </style> are judged on their own, once each.
+ */
+const PAGE_TAGS = [
+  "<!doctype html>",
+  '<html lang="en">',
+  "</html>",
+  "<head>",
+  "</head>",
+  '<meta charset="utf-8">',
+  '<meta name="viewport" content="width=device-width, initial-scale=1">',
+  "<title>",
+  "</title>",
+  "<body>",
+  "</body>",
+  "<main>",
+  "</main>",
+  "<h1>",
+  "</h1>",
+  "<p>",
+  "</p>",
+  '<a href="/">',
+  "</a>",
+];
+/** The page's words: letters, digits, spaces and plain punctuation; no brace, entity, backslash or angle bracket. */
+const PAGE_TEXT = /^[A-Za-z0-9 .,'!?\n-]*$/;
+/** The style's characters: lower-case CSS with no quote, slash, backslash, at-rule or escape. */
+const STYLE_TEXT = /^[a-z0-9 #:;,.()%{}-]*$/;
+/**
+ * What may sit between a `{` and the next `}` in the style. Caddy reads exactly that span as a placeholder key
+ * (v2.11.9 replacer.go:219-240), and every key it knows has a dotted prefix (file., env., http., system., time.) or
+ * no colon; a CSS block opens with a property name and a colon, so it can be neither.
+ */
+const STYLE_BLOCK = /^[a-z-]+:[^{}]*$/;
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
 type Host = "PDS_HOST" | "APP_HOST";
@@ -571,23 +604,32 @@ function pageOf(route: Obj): [body: string, csp: string] {
 }
 
 /**
- * Why the page is not fixed text that loads nothing: one printable-ASCII document with no Caddy placeholder (Caddy
- * v2.11.9 replaces known placeholders in a static_response body at run time, staticresp.go:208, so one could echo the
- * request), only the ruled tags, exactly one style, no handler, source, URL or import, and links only to "/".
+ * Why the page is not fixed text that loads nothing, judged by allow-list. Caddy v2.11.9 replaces known placeholders
+ * in a static_response body at run time (staticresp.go:208), {file.*} and {env.*} among them (replacer.go:364-373),
+ * so a brace in the page could serve an edge file, a secret or the request. Outside the style: only the ruled tags,
+ * each exact, and words with no brace. The style: once, lower-case CSS with no quote, slash, at-rule or URL, and
+ * every brace a CSS block.
  */
 function pageProblems(body: string): string[] {
   const found: string[] = [];
-  if (!/^<!doctype html>\n[\x20-\x7e\n]*<\/html>$/.test(body)) found.push("is not one ASCII document");
-  if (/\{[A-Za-z0-9_.>$-]+\}/.test(body)) found.push("holds a placeholder");
-  const tags = [...body.matchAll(/<\/?([!a-z0-9]+)/gi)].map((match) => (match[1] as string).toLowerCase());
-  if (!tags.every((tag) => PAGE_TAGS.includes(tag))) found.push("holds a tag outside the ruled ones");
-  if (tags.filter((tag) => tag === "style").length !== 2) found.push("does not hold exactly one style");
-  if (/\son[a-z]+\s*=|\ssrc\s*=|url\s*\(|@import|javascript:/i.test(body)) found.push("loads or runs something");
-  const links = [...body.matchAll(/\shref="([^"]*)"/gi)].map((match) => match[1]);
-  if ((body.match(/href/gi) ?? []).length !== links.length || links.some((link) => link !== "/")) {
-    found.push("links somewhere other than /");
+  if (!body.startsWith("<!doctype html>\n") || !body.endsWith("</html>")) found.push("is not one document");
+  const [head, rest, ...moreStyles] = body.split("<style>");
+  const [style, tail, ...moreEnds] = (rest ?? "").split("</style>");
+  if (rest === undefined || tail === undefined || moreStyles.length > 0 || moreEnds.length > 0) {
+    return [...found, "does not hold exactly one style"];
   }
-  return found;
+  const outside = `${head}${tail}`;
+  if (!(outside.match(/<[^>]*>/g) ?? []).every((tag) => PAGE_TAGS.includes(tag))) {
+    found.push("holds a tag outside the ruled ones");
+  }
+  const words = outside.replace(/<[^>]*>/g, "");
+  if (/[{}]/.test(words)) found.push("holds a placeholder");
+  else if (!PAGE_TEXT.test(words)) found.push("holds text outside the ruled characters");
+  const blocks = [...(style ?? "").matchAll(/\{([^}]*)\}?/g)].map((match) => match[1] as string);
+  if (!blocks.every((block) => STYLE_BLOCK.test(block))) found.push("holds a placeholder");
+  if (!STYLE_TEXT.test(style ?? "")) found.push("styles with something outside the ruled characters");
+  if (/url\(|image|expression/.test(style ?? "")) found.push("loads or runs something");
+  return [...new Set(found)];
 }
 
 const siteRoute = (server: Obj, host: string): Obj | null =>
