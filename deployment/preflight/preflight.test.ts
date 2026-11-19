@@ -5756,6 +5756,33 @@ describe("--source builds staging from the checkout (P1.37y)", () => {
     expect(await c17("deployment/images/node-app.Dockerfile")).toBe("FAIL C17 pds-admin shares a network with the pds");
   });
 
+  test("source_judges_a_built_indexer_by_its_dockerfile", async () => {
+    // P3.05s: under --source the indexer builds from the checkout; built from deployment/images/indexer.Dockerfile it
+    // may share indexer_pds with the PDS (Alex, 2026-11-19T01:04Z, "on staging only"), and from another scanned
+    // Dockerfile it may not.
+    const INDEXER = "deployment/images/indexer.Dockerfile";
+    const c17 = async (dockerfile: string) => {
+      const indexer = `  indexer:\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n    networks: [indexer_pds]\n`;
+      const { root, file } = stack({
+        compose: DEV.replace(
+          "    env_file: ../../unset-dev-env/pds.env\n",
+          "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, indexer_pds]\n",
+        )
+          .replace("networks:\n  back: {}\n", "networks:\n  back: {}\n  indexer_pds:\n    internal: true\n")
+          .replace("secrets:\n  db_password:", `${indexer}secrets:\n  db_password:`),
+        pdsEnv: DEV_ENV,
+        report: PART_A_DONE,
+        networks: { ...DEV_TABLE, indexer_pds: { internal: true, members: ["pds", "indexer"] } },
+        files: { [INDEXER]: "FROM scratch\n", ...DOCKERFILE },
+      });
+      const run = { root, run: fakeRun().run, ...fakeFs(root) };
+      const { lines } = await runPreflight(["--env", "dev", "--compose", file, "--source"], run);
+      return lines.find((line) => / C17 /.test(line));
+    };
+    expect(await c17(INDEXER)).toBe("PASS C17 ok");
+    expect(await c17("deployment/images/node-app.Dockerfile")).toBe("FAIL C17 indexer shares a network with the pds");
+  });
+
   test("source_refuses_a_build_beside_an_image", async () => {
     const result = await source((dev) => dev.replace(`    image: ${WEB}\n`, `$&${BUILD}`));
     expect(result.lines).toContain("FAIL C2 web has both an image and a build");

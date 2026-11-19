@@ -156,6 +156,7 @@ function folders(): void {
       `PDS_HOSTNAME=${PDS_HOST}`,
       `PDS_SERVICE_HANDLE_DOMAINS=.${PDS_HOST}`,
       `PDS_DID=did:web:${PDS_HOST}`,
+      `PDS_PUBLIC_URL=https://${PDS_HOST}`,
       "EDGE_ACME_EMAIL=edge@example.test",
       "WEB_OAUTH_ACTIVE_KID=web-ci",
       "",
