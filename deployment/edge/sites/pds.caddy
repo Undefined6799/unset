@@ -5,6 +5,7 @@
 	import access-log
 	import pds-route-class
 	import security-headers
+	import too-many-tries
 	route {
 		import pds-ratelimit
 		import xrpc-guard
