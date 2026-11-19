@@ -93,10 +93,12 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
  * address.
  *
- * A second, in every environment, prod included (P2.09e; ADR 0060 Decision 1; staging is production's shape): the
- * service named pds-admin that runs the lock's pds-admin image (or, under local and dev --source, builds
- * deployment/images/pds-admin.Dockerfile) may share pds_admin_pds, and that network alone, with the PDS, so it reaches
- * the PDS's internal URL. pds_admin_pds is internal and holds exactly those two, and pds-admin joins no network but it
+ * A second, under local and dev only (P2.09e; ADR 0060 Decision 1): the service named pds-admin that runs the lock's
+ * pds-admin image (or, under local and dev --source, builds deployment/images/pds-admin.Dockerfile) may share
+ * pds_admin_pds, and that network alone, with the PDS, so it reaches the PDS's internal URL. Prod has no exemption:
+ * Alex, 2026-11-19T00:55Z, typing the line that allowed it, "Allow pds-admin on its own private network with the PDS
+ * -> we need in memory somewhere that this must be removed on production". How invites reach the production PDS is
+ * open until the first prod deploy (step book P5.00). pds_admin_pds is internal and holds exactly those two, and pds-admin joins no network but it
  * and pds_admin, web's way in; both are pinned here as well as in the table (adminNetworkProblems). The PDS trusts it
  * as a proxy too, but pds-admin already holds the admin password, which is more than a forged client address could
  * give it.
@@ -136,7 +138,9 @@ function neighbourProblems(inputs: Inputs): string[] {
     s.name === "objects" &&
     runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
   const isAdmin = (s: Service) =>
-    s.name === "pds-admin" && runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
+    inputs.env !== "prod" &&
+    s.name === "pds-admin" &&
+    runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
   const exempt = new Map([
     [STORE_NETWORK, isStore],
     [ADMIN_NETWORK, isAdmin],

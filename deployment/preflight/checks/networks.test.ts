@@ -115,10 +115,11 @@ describe("the PDS's neighbours (architecture 2026-10-15 02:05Z, option C point 4
 });
 
 describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
-  // pds-admin calls the PDS's internal URL with the admin password, so it may share one internal network with the PDS,
-  // pds_admin_pds, which holds exactly the two, in every environment. It is known by its name and the lock's image.
+  // pds-admin calls the PDS's internal URL with the admin password, so under local and dev it may share one internal
+  // network with the PDS, pds_admin_pds, which holds exactly the two. It is known by its name and the lock's image.
+  // Prod has no exemption (Alex, 2026-11-19T00:55Z: "this must be removed on production").
   const LOCK = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, "pds-admin": { ref: "a" } });
-  const check = (yaml: string, env: Inputs["env"] = "prod", lock = LOCK) =>
+  const check = (yaml: string, env: Inputs["env"] = "dev", lock = LOCK) =>
     pdsNeighbours({
       env,
       source: false,
@@ -134,7 +135,7 @@ describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
   const refused = ["pds-admin shares a network with the pds"];
 
   test("pds_admin_network_admits_only_the_locked_pds_admin", () => {
-    for (const env of ["prod", "dev"] as const) expect(check(stack(ADMIN), env), env).toEqual([]);
+    expect(check(stack(ADMIN))).toEqual([]);
     // Another image under its name, or its image under another name.
     expect(check(stack("  pds-admin:\n    image: x\n    networks: [pds_admin_pds]\n"))).toEqual(refused);
     expect(check(stack("  admin:\n    image: a\n    networks: [pds_admin_pds]\n"))).toEqual([
@@ -146,7 +147,17 @@ describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
       ...refused,
     ]);
     // A lock with no pds-admin entry admits none.
-    expect(check(stack(ADMIN), "prod", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(refused);
+    expect(check(stack(ADMIN), "dev", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(refused);
+  });
+
+  test("pds_admin_exemption_does_not_hold_in_prod", () => {
+    // Alex, 2026-11-19T00:55Z: the exemption "must be removed on production". A prod stack with the locked pds-admin
+    // beside the PDS fails, until a decision says how invites reach the production PDS.
+    expect(check(stack(ADMIN), "prod")).toEqual(refused);
+    // Even with the PDS off that network, prod does not count pds-admin as one of its two members.
+    expect(check(stack(ADMIN, "", "[edge]"), "prod")).toEqual([
+      "pds_admin_pds holds a service other than the pds and pds-admin",
+    ]);
   });
 
   test("pds_admin_network_is_internal_and_pds_admin_joins_only_its_two", () => {
@@ -166,9 +177,9 @@ describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
     const digest = (d: string) => `ghcr.io/x/pds-admin@sha256:${d.repeat(64)}`;
     const pinned = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, "pds-admin": { ref: digest("a") } });
     const at = (ref: string) => stack(`  pds-admin:\n    image: ${ref}\n    networks: [pds_admin, pds_admin_pds]\n`);
-    expect(check(at(digest("a")), "prod", pinned)).toEqual([]);
-    expect(check(at(digest("b")), "prod", pinned)).toEqual(refused);
-    expect(check(at("ghcr.io/x/pds-admin:latest"), "prod", pinned)).toEqual(refused);
+    expect(check(at(digest("a")), "dev", pinned)).toEqual([]);
+    expect(check(at(digest("b")), "dev", pinned)).toEqual(refused);
+    expect(check(at("ghcr.io/x/pds-admin:latest"), "dev", pinned)).toEqual(refused);
   });
 
   test("pds_admin_network_holds_only_the_pds_and_pds_admin", () => {
