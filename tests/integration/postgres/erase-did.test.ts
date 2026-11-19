@@ -37,7 +37,7 @@ function seedApp(did: string, fill: string): void {
   // The token set before the session: a session needs one (session_did_token_set, migration 0024).
   postgres.sql(
     "unset",
-    `INSERT INTO app.account (did, first_seen_at) VALUES ('${did}', now());
+    `INSERT INTO app.account (did, first_seen_at, privacy_notice_seen_version) VALUES ('${did}', now(), '2026-11-19');
      INSERT INTO app.oauth_session (did, sealed, client_kid, updated_at) VALUES ('${did}', 's1.k1.made-up', 'kid', now());
      INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at)
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');

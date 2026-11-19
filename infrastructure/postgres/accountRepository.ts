@@ -45,10 +45,12 @@ function accountOf(raw: Record<string, unknown>): OnboardingAccount {
     onboarding: onboarding as Onboarding,
     termsVersion: text(raw.terms_version),
     privacyVersion: text(raw.privacy_version),
+    privacyNoticeSeenVersion: text(raw.privacy_notice_seen_version),
   };
 }
 
-const READ = "SELECT onboarding, terms_version, privacy_version FROM app.account WHERE did = $1";
+const READ =
+  "SELECT onboarding, terms_version, privacy_version, privacy_notice_seen_version FROM app.account WHERE did = $1";
 
 export function createAccountRepository(pool: Pool, options: AccountRepositoryOptions): AccountRepository {
   const read = <T>(deadline: AbortSignal, fn: (db: PoolClient) => Promise<T>) => withClient(pool, deadline, fn);
@@ -99,6 +101,17 @@ export function createAccountRepository(pool: Pool, options: AccountRepositoryOp
         ]);
         return true;
       });
+    },
+    async markPrivacyNoticeSeen(did, privacy, deadline) {
+      // Only a finished account sees the banner (requireOnboarded), so only one may dismiss it.
+      const { rows } = await write(deadline, (tx) =>
+        tx.query(
+          "UPDATE app.account SET privacy_notice_seen_version = $2 WHERE did = $1 AND onboarding = 'done' " +
+            "RETURNING onboarding",
+          [did, privacy],
+        ),
+      );
+      return rows.length === 1;
     },
     async blockUnderage(did, hosted, deadline) {
       return write(deadline, async (tx) => {

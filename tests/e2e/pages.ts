@@ -22,7 +22,7 @@ export const PROD_ORIGIN = `https://${HOST}:${LISTEN.prod}`;
 export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 
 /** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
-export type MemberName = "age" | "terms" | "chat" | "verify" | "account";
+export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice";
 /** The finished member, whose repo the stand-in PDS holds. */
 /** A code of the PDS's shape for /join; nothing ever redeems it. */
 export const JOIN_CODE = "pds-test-abcde-fghij";
@@ -109,6 +109,7 @@ export const originOf = (page: PageFixture): string => (page.member === undefine
  */
 export const NOT_DOCUMENTS: readonly { readonly route: string; readonly reason: string }[] = [
   { route: "/login/continue", reason: "sign-in handoff, covered by the web integration tests" },
+  { route: "/privacy-notice/seen", reason: "the banner's dismiss answer; tested in the web integration tests" },
   { route: "/prefs/theme", reason: "the no-script theme form's answer; the footer form is tested in nojs.spec.ts" },
   { route: "/welcome", reason: "always redirects to the current onboarding step" },
 ];

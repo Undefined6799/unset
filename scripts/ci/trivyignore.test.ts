@@ -98,6 +98,21 @@ const REPIN_ENTRIES = [
     purls: ["pkg:npm/zod@3.25.76"],
   },
 ].map((entry) => ({ ...entry, statement: REPIN_STATEMENT, expired_at: "2026-11-27" }));
+/** P1.38q: goat v0.2.7 in 0.4.5051 (8e58b797) is built with Go 1.27.3; Trivy reported CVE-2026-97054 on 2026-11-19.
+ * Alex's line 2026-11-19T02:00:23Z: "Waive CVE-2026-97054 for goat in the PDS image until 2026-12-19". */
+const GOAT_ENTRIES = [
+  {
+    id: "CVE-2026-97054",
+    paths: ["usr/local/bin/goat"],
+    purls: ["pkg:golang/stdlib@v1.27.3"],
+    statement: [
+      "sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6:",
+      "0.4.5051's goat v0.2.7 is built with Go 1.27.3; the PDS never runs goat and goat has no HTTP server;",
+      "accepted by Alex 2026-11-19T02:00:23Z, removed on the next re-pin",
+    ].join(" "),
+    expired_at: "2026-12-19",
+  },
+];
 
 type IgnoreEntry = { id?: string; statement?: string; expired_at?: unknown; paths?: string[]; purls?: string[] };
 
@@ -127,6 +142,7 @@ describe(".github/trivyignore.pds.yaml", () => {
     expect(entries.map((item) => ({ ...item, expired_at: dayOf(item.expired_at) }))).toEqual([
       ...KEPT_ENTRIES,
       ...REPIN_ENTRIES,
+      ...GOAT_ENTRIES,
     ]);
     for (const item of entries) {
       // Exact names only: a glob would also cover images nobody reviewed.
