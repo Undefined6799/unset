@@ -4,7 +4,7 @@
 import type { PolicyName } from "./limits.ts";
 
 /** The CSP group of a response (csp.ts). `app` runs SvelteKit's client; the others run no script (`csr = false`). */
-export type PageGroup = "app" | "public" | "profile" | "static";
+export type PageGroup = "app" | "public" | "static";
 
 export type RoutePolicy = Readonly<{
   group: PageGroup;

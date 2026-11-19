@@ -26,8 +26,6 @@ Every environment setting, by process. "not set" means the default applies.
 | `HTTP_BODY_LIMIT_BYTES` | int | 1024 to 1048576 | `65536` | not set | not set | `shared/http/config.ts` |
 | `RATE_LIMIT_MAX_KEYS` | int | 1 to 1000000 | `100000` | not set | not set | `shared/http/config.ts` |
 | `MEDIA_ORIGIN` | origin | https: or http: | required | from env file: `WEB_MEDIA_ORIGIN` | from env file: `WEB_MEDIA_ORIGIN` | `shared/http/config.ts` |
-| `ASSETS_BASE` | str | text (pattern in source) | (empty) | not set | not set | `shared/http/config.ts` |
-| `DEV_VITE_ORIGIN` | str | text (pattern in source) | (empty) | not set | not set | `shared/http/config.ts` |
 | `SESSION_IDLE_S` | int | 300 to 2592000 | `604800` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `SESSION_ABSOLUTE_S` | int | 300 to 2592000 | `2592000` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `SESSION_TOUCH_INTERVAL_S` | int | 1 to 3600 | `300` | not set | not set | `interfaces/web/src/lib/server/config.ts` |

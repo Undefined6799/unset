@@ -78,18 +78,6 @@ export const httpKitConfig = {
     const media = siteOf(new URL(String(config.MEDIA_ORIGIN)).hostname);
     return media !== undefined && media !== siteOf(new URL(String(config.PUBLIC_ORIGIN)).hostname);
   }),
-  /** Where scripts, styles and fonts load from: `<origin>/assets/`, exactly. Empty means `${PUBLIC_ORIGIN}/assets/`. */
-  ASSETS_BASE: withRule(str({ default: "" }), (config) => {
-    const value = String(config.ASSETS_BASE);
-    if (value === "") return true;
-    return URL.canParse(value) && `${new URL(value).origin}/assets/` === value && secureOrDev(value, config);
-  }),
-  /** The Vite dev server (P1.20), allowed in script-src and connect-src. Refused unless UNSET_ENV is dev. */
-  DEV_VITE_ORIGIN: withRule(str({ default: "" }), (config) => {
-    const value = String(config.DEV_VITE_ORIGIN);
-    if (value === "") return true;
-    return config.UNSET_ENV === "dev" && URL.canParse(value) && new URL(value).origin === value;
-  }),
 };
 
 /** What the kit reads from an entrypoint's loaded config: the common keys (P1.02) and its own fragment. */
@@ -109,6 +97,4 @@ export type HttpKitConfig = Readonly<{
   HTTP_BODY_LIMIT_BYTES: number;
   RATE_LIMIT_MAX_KEYS: number;
   MEDIA_ORIGIN: string;
-  ASSETS_BASE: string;
-  DEV_VITE_ORIGIN: string;
 }>;

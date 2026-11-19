@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { ALL_PAGES, cellName, JOIN_CODE, originOf, PAGES, requestHeaders, themeCells } from "./pages.ts";
 
-// shared/http/csp/headers.ts sets HSTS on every group, including dev (interfaces/web/server.ts applies its headerSets).
+// shared/http/headers.ts sets HSTS everywhere, including dev (interfaces/web/server.ts applies SECURITY_HEADERS).
 // The book text said "absent in dev"; the server does not, and this harness does not change it.
 const HSTS = "max-age=63072000; includeSubDomains";
 

@@ -44,8 +44,6 @@ describe("httpKitConfig", () => {
       HTTP_BODY_LIMIT_BYTES: 65_536,
       RATE_LIMIT_MAX_KEYS: 100_000,
       MEDIA_ORIGIN: "https://media.example.net",
-      ASSETS_BASE: "",
-      DEV_VITE_ORIGIN: "",
     });
   });
 
@@ -94,26 +92,11 @@ describe("httpKitConfig", () => {
     );
   });
 
-  test("dev_origin_refused_in_prod", () => {
-    // bootOrExit turns this ConfigError into exit 78 (shared/config/load.ts).
-    const vite = { ...ENV, DEV_VITE_ORIGIN: "http://localhost:5173" };
-    expect(problems(vite)).toEqual([{ key: "DEV_VITE_ORIGIN", reason: "invalid" }]);
-    expect(problems({ ...vite, UNSET_ENV: "test" })).toEqual([{ key: "DEV_VITE_ORIGIN", reason: "invalid" }]);
-    expect(problems({ ...vite, UNSET_ENV: "dev" })).toEqual([]);
-    expect(problems({ ...vite, UNSET_ENV: "dev", DEV_VITE_ORIGIN: "http://localhost:5173/" })).toEqual([
-      { key: "DEV_VITE_ORIGIN", reason: "invalid" },
-    ]);
-  });
-
-  test("assets_base_is_an_assets_folder", () => {
-    expect(problems({ ...ENV, ASSETS_BASE: "https://static.unset.sh/assets/" })).toEqual([]);
-    for (const bad of [
-      "https://static.unset.sh/",
-      "https://static.unset.sh/assets",
-      "http://static.unset.sh/assets/",
-    ]) {
-      expect(problems({ ...ENV, ASSETS_BASE: bad })).toEqual([{ key: "ASSETS_BASE", reason: "invalid" }]);
-    }
+  test("removed_keys_left_in_an_env_file_do_not_stop_boot", () => {
+    // P1.21c removed ASSETS_BASE and DEV_VITE_ORIGIN, which fed only the dead Hono-era CSPs. An env file that still
+    // sets them, even to a value the old rules refused, loads; the schema never reads a key it does not name.
+    const leftover = { ...ENV, ASSETS_BASE: "https://static.unset.sh/", DEV_VITE_ORIGIN: "http://localhost:5173" };
+    expect(problems(leftover)).toEqual([]);
   });
 
   test("plain_http_only_in_dev", () => {

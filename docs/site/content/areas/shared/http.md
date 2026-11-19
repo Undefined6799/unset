@@ -19,7 +19,7 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 | `csrf` | `POST` |
 | `session`, `rateLimitDid` | `session: "required"`. The server's `gate` runs after `csrf` |
 
-`headerSets` (`shared/http/csp/headers.ts`) is applied to the final response (`secured` in `server.ts`). A handler's own Content-Security-Policy is replaced.
+`SECURITY_HEADERS` (`shared/http/headers.ts`) are the non-CSP security headers. Web sends them on every response with its own CSP (`interfaces/web/server.ts`, `interfaces/web/src/lib/server/csp.ts`).
 
 `/health` (`shared/http/health.ts`) returns JSON `{ status, service, commit }` with `cache-control: no-store`. Ready is 200 `ok`. `draining`, not yet ready, and a failed check are 503 (`draining`, `starting` or `unready`). A check that throws, rejects, or takes longer than 1 s counts as not ready.
 
@@ -28,7 +28,7 @@ The server kit every interface process is built from. Package `@unset/shared-htt
 | Routes | `shared/http/routes.ts` | `defineRoute`, the only registration path |
 | CSRF gate | `shared/http/csrf/gate.ts` | Same-origin check for anything other than GET and HEAD |
 | GET mutations | `shared/http/csrf/exceptions.ts` | Paths a non-POST route may mark `mutates` |
-| CSP | `shared/http/csp/policies.ts` | One policy per route group |
+| Security headers | `shared/http/headers.ts` | Every header but the CSP, which is web's own |
 | Client address | `shared/http/trustedProxy.ts`, `shared/http/clientIp.ts` | The edge header, or the socket where there is no edge |
 | Body limit | `shared/http/limits/bodyLimit.ts` | Caps the request body |
 | Rate limit | `shared/http/limits/rateLimit.ts`, `shared/http/limits/policy.ts` | The primitive. Each interface owns its policy table |
@@ -106,7 +106,5 @@ No schema, role or table. Policy tables live in each interface's `limits.ts`. Th
 | `HTTP_BODY_LIMIT_BYTES` | 65536 |
 | `RATE_LIMIT_MAX_KEYS` | 100000 |
 | `MEDIA_ORIGIN` | none |
-| `ASSETS_BASE` | `""` |
-| `DEV_VITE_ORIGIN` | `""` |
 
-`DEV_VITE_ORIGIN` is refused unless `UNSET_ENV` is `dev`. `MEDIA_ORIGIN` must be a different site from `PUBLIC_ORIGIN`, except when `UNSET_SERVICE` is `media`.
+`MEDIA_ORIGIN` must be a different site from `PUBLIC_ORIGIN`, except when `UNSET_SERVICE` is `media`.
