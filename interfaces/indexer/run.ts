@@ -64,7 +64,8 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
 
   // The stream first: started (not awaited) before the first tick.
   const stream = deps.stream(signal);
-  const done = Promise.all([stream, loop()]).then(() => undefined);
+  const looping = loop();
+  const done = Promise.all([stream, looping]).then(() => undefined);
   return {
     done,
     health: () => ({
