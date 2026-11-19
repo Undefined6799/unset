@@ -23,6 +23,8 @@ export type OwnProfile =
       readonly cards: readonly Card[];
       /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
       readonly cardsComplete: boolean;
+      /** True when more cards are stored than the page shows: the page asks the member to delete one. */
+      readonly cardsOverflow: boolean;
     }
   | { readonly kind: "unavailable" }
   | { readonly kind: "redirect"; readonly location: string };
@@ -49,6 +51,7 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
     avatarShape: readAvatarShape(record),
     cards: pageCards(record, cards.value.cards),
     cardsComplete: cards.value.complete,
+    cardsOverflow: cards.value.overflow,
   };
 }
 
