@@ -219,7 +219,7 @@ describe("track store", () => {
     expect(lines(`SELECT kind, did, reason_code FROM idx.dead_letter`)).toEqual([`backfill|${B}|backfill_failed`]);
   });
 
-  test("track.gone_repo_ends_the_job", async () => {
+  test("track.gone_repo_ends_the_job_and_asks_for_the_status", async () => {
     sql(`UPDATE idx.account_job SET due_at = now() WHERE did = '${A}'`);
     sql(
       `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES ('${A}', 'backfill', now(), 0, now())`,
@@ -227,8 +227,18 @@ describe("track store", () => {
     const [due] = await tracks.dueBackfills(10);
     expect(due?.did).toBe(A);
     expect(await tracks.dueBackfills(10)).toEqual([]); // claimed: a second pass does not take it too
+    sql(`DELETE FROM idx.account_job WHERE did = '${A}' AND kind = 'confirm_status'`);
     await tracks.backfillFailed(due as BackfillJob, "gone");
-    expect(jobs(A)).not.toContain("backfill");
+    expect(jobs(A)).toEqual(["confirm_status"]); // getRepo refused the repo: only getRepoStatus says why
+  });
+
+  test("track.gone_repo_of_an_erased_did_queues_nothing", async () => {
+    request(F);
+    await tracks.track(F, true);
+    const job = claim(F);
+    await erase(F);
+    await tracks.backfillFailed(job, "gone");
+    expect(jobs(F)).toEqual([]);
   });
 
   test("track.a_backfill_asked_for_during_the_read_survives", async () => {
