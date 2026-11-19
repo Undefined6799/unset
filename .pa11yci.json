@@ -23,6 +23,7 @@
     "https://unset.test:8443/legal/terms",
     "https://unset.test:8443/legal/privacy",
     "https://unset.test:8443/legal/domains",
+    "https://unset.test:8443/@did:plc:pppppppppppppppppppppppp",
     "https://unset.test:8443/login",
     "https://unset.test:8443/signed-out",
     "https://unset.test:8443/welcome/blocked"

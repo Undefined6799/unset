@@ -21,6 +21,7 @@ export {
 export type { FetchRequest, FetchTarget, HttpOutcome, IdentityNetwork, TxtOutcome } from "./contract.ts";
 export type { ResolvedDid } from "./did-doc.ts";
 export { PRIVACY_VERSION, TERMS_VERSION } from "./legal/versions.ts";
+export { type Actor, canonicalActorPath, parseActor } from "./profile-path.ts";
 export {
   type Consistency,
   createDidResolver,
