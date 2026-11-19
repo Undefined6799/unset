@@ -25,7 +25,7 @@ let {
 } = $props();
 
 const id = $props.id();
-const box = "mt-0.5 size-4 shrink-0 accent-primary";
+const box = "size-6 shrink-0 accent-primary";
 </script>
 
 <Card.Root id="search-and-ai">
