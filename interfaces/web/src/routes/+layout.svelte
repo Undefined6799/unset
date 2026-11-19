@@ -126,6 +126,21 @@ const saveInPlace: SubmitFunction = ({ submitter, formElement }) => {
   };
 };
 
+// A panel opened from More actions sits on top of it, and Chromium gives focus back to the opener only for the first
+// panel of a stack (seen in a test on Chromium 1243, staging audit 2026-11-19): Escape closed the panel, More actions
+// stayed open, and focus was left in the hidden panel, so the next Tab went behind the menu. Once the client runs,
+// focus goes back to the row that opened the panel, unless it already moved elsewhere. A page with no script (the
+// public group) keeps the browser's own behaviour.
+function backToActions(event: ToggleEvent): void {
+  if (event.newState !== "closed") return;
+  const actions = document.getElementById(ACTIONS);
+  const panel = event.currentTarget as HTMLElement;
+  const focused = document.activeElement;
+  if (!actions?.matches(":popover-open")) return;
+  if (focused !== document.body && !panel.contains(focused)) return;
+  actions.querySelector<HTMLElement>(`[popovertarget="${panel.id}"]`)?.focus();
+}
+
 // A page the back-forward cache restores keeps the theme it was left with; this tab's last save replaces it.
 function restoreSaved(event: PageTransitionEvent): void {
   const last = event.persisted ? rememberedTheme() : null;
@@ -413,7 +428,7 @@ const row =
       {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
     </ul>
   </section>
-  <section id={CREATE} popover="auto" aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+  <section id={CREATE} popover="auto" ontoggle={backToActions} aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
     {@render panelTitle(CREATE, T.create, false)}
     <ul class="flex flex-col gap-1">
       {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
@@ -428,7 +443,7 @@ const row =
     </ul>
   </section>
   {#each PANEL_BUTTONS as button (button.id)}
-    <section id={button.id} popover="auto" aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+    <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
       {@render panelTitle(button.id, button.label, true)}
       <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
       <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
