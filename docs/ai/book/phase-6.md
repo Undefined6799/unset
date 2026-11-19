@@ -3032,7 +3032,8 @@ Edge cases and failures (the consistent states):
   - Seeding never succeeds (`failed_permanent`) → `unavailable`; the member continues as `chat_pending`; a held case
     opens in `admin`. No second chat identity is made (decision 42: ids never change).
   - Terms re-accepted after a version bump → `requestAccount` finds the existing row; no second chat identity.
-  - Blocked or erased while the seed runs → P6.05 step 3d writes nothing and `decideCompletion` refuses.
+  - Erased while the seed runs → P6.05 step 3d writes nothing. Blocked (suspended) while it runs → 3d still writes
+    the link, so P6.04a's `lock` can find the account, and `decideCompletion` refuses.
   - Under-age deactivation → the step is never reached.
 Done when (tests):
   - `step-waits-for-seed-with-refresh`; `continue-appears-after-60s-pending`; `step-unavailable-continues-chat-pending`;
