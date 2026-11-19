@@ -144,6 +144,18 @@ describe("index store", () => {
     expect(stat("ingest_invalid")).toBe("1");
   });
 
+  test("index.invalid_replacement_removes_the_older_version", async () => {
+    // A rebuild of this repo would index nothing under the key (trackStore.ts applySnapshot), so the stream does the
+    // same: the member's older version does not stay public.
+    await commit(A, rev(6), [profile({ displayName: "Ada" }), section(CARD_1)]);
+    await commit(A, rev(7), [
+      profile({ displayName: 7 }),
+      { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "x" } },
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
+  });
+
   test("index.inactive_account_keeps_nothing_new", async () => {
     track(B, false);
     await commit(B, rev(3), [profile()]);

@@ -1,6 +1,7 @@
 // P1.39b (ADR 0046 decision 3): the edge's rules on Caddy's adapted config. Each reviewed config in adapted/ passes
 // with real values in place of the sentinels, and each rule has a red built by changing one of them. No container:
 // the configs themselves are proved against the built image in adapted.image.test.ts.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -15,6 +16,7 @@ import {
   type EdgeMode,
   type EnvName,
   type Json,
+  PAGE_CSP,
 } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
@@ -78,6 +80,23 @@ const routeNamed = (config: Json, host: string, text: string): number =>
   inner(config, host).findIndex((route) => JSON.stringify(route).includes(text));
 
 type Red = readonly [what: string, mode: EdgeMode, change: (config: Json) => void, reason: string];
+
+// The too-many-tries error route of a site (snippets/too-many-tries.caddy), and the three routes inside it: the
+// navigation's Content-Type, the headers every 429 gets, and the page.
+const errorRoutes = (config: Json): Json[] => a(o(publicServer(config).errors).routes);
+const errorRoute = (config: Json, host: string): Obj =>
+  errorRoutes(config)
+    .map(o)
+    .find((route) => JSON.stringify(route.match) === JSON.stringify([{ host: [host] }])) as Obj;
+const pageRoutes = (config: Json, host: string): Obj[] =>
+  a(o(a(o(a(o(a(errorRoute(config, host).handle)[0]).routes)[0]).handle)[0]).routes).map(o);
+const page = (config: Json, host: string): Obj => o(a(pageRoutes(config, host)[2]?.handle)[0]);
+const editPage = (config: Json, host: string, edit: (body: string) => string): void => {
+  const respond = page(config, host);
+  respond.body = edit(String(respond.body));
+};
+const NOT_THE_PAGE = (host: string) => `{$${host}}: the error route is not the ruled too-many-tries page`;
+const PAGE = (host: string, problem: string) => `{$${host}}: the too-many-tries page ${problem}`;
 
 const SHAPE: Red[] = [
   [
@@ -684,6 +703,146 @@ const FONTS: Red[] = [
 ];
 
 const header = (value: string): Json => ({ handler: "headers", response: { set: { "X-Test": [value] } } });
+/**
+ * Edits to the page body a later change could try, each refused (review of 214f9f1, B1 and B2): a placeholder Caddy
+ * would fill at run time, in the words or the style, a tag or attribute outside the exact list, and anything the
+ * style could load. Each is [what, the text replaced, its replacement, why].
+ */
+const PAGE_EDITS: readonly (readonly [string, string, string, string])[] = [
+  ["a file placeholder", "Too many tries</h1>", "{file./data/caddy/x.key}</h1>", "holds a placeholder"],
+  ["an env placeholder", "Too many tries</h1>", "{env.PDS_ADMIN_PASSWORD}</h1>", "holds a placeholder"],
+  ["a request placeholder", "Too many tries</h1>", "{http.request.uri}</h1>", "holds a placeholder"],
+  ["an escaped brace", "Too many tries</h1>", "\\{x\\}</h1>", "holds a placeholder"],
+  ["a placeholder in the style", "a{color:var(--fg)}", "a{color:var(--fg)}{file./x}", "holds a placeholder"],
+  ["a placeholder nested in the style", "a{color:var(--fg)}", "a{b{file./x}}", "holds a placeholder"],
+  ["a placeholder as a style block", "a{color:var(--fg)}", "a{env.x:y}", "holds a placeholder"],
+  ["a script", "</main>", "<script>alert(1)</script></main>", "holds a tag outside the ruled ones"],
+  ["a handler", "<main>", '<main onclick="x()">', "holds a tag outside the ruled ones"],
+  [
+    "a refresh",
+    "<title>",
+    '<meta http-equiv="refresh" content="0;url=https://example.org/"><title>',
+    "holds a tag outside the ruled ones",
+  ],
+  ["a base", "<title>", '<base href="https://example.org/"><title>', "holds a tag outside the ruled ones"],
+  [
+    "a stylesheet link",
+    "<title>",
+    '<link rel="stylesheet" href="/x.css"><title>',
+    "holds a tag outside the ruled ones",
+  ],
+  ["a form", "</main>", '<form action="/x"><input name="q"></form></main>', "holds a tag outside the ruled ones"],
+  ["a frame", "</main>", '<iframe src="/x"></iframe></main>', "holds a tag outside the ruled ones"],
+  ["an object", "</main>", '<object data="/x"></object></main>', "holds a tag outside the ruled ones"],
+  ["an svg", "</main>", '<svg onload="x()"></svg></main>', "holds a tag outside the ruled ones"],
+  ["an image", "</main>", '<img src="/x.png"></main>', "holds a tag outside the ruled ones"],
+  ["an outside link", 'href="/"', 'href="https://example.org/"', "holds a tag outside the ruled ones"],
+  ["a data link", 'href="/"', 'href="data:text/html,x"', "holds a tag outside the ruled ones"],
+  ["a script link", 'href="/"', 'href="javascript:x()"', "holds a tag outside the ruled ones"],
+  ["a stray bracket", "Too many tries</h1>", "Too many tries ></h1>", "holds text outside the ruled characters"],
+  ["an entity", "Too many tries</h1>", "Too many tries&lt;</h1>", "holds text outside the ruled characters"],
+  ["a word outside ASCII", "Too many tries</h1>", "Too many tries…</h1>", "holds text outside the ruled characters"],
+  ["a second style", "</head>", "<style>p{color:red}</style></head>", "does not hold exactly one style"],
+  ["an image in the style", "body{margin:0;", "body{background:url(x.png);margin:0;", "loads or runs something"],
+  [
+    "an image set in the style",
+    "body{margin:0;",
+    "body{background:image-set(x 1x);margin:0;",
+    "loads or runs something",
+  ],
+  [
+    "an import in the style",
+    ":root{",
+    "@import url(x.css);:root{",
+    "styles with something outside the ruled characters",
+  ],
+  [
+    "a quoted font in the style",
+    "font-family:system-ui",
+    "font-family:'x'",
+    "styles with something outside the ruled characters",
+  ],
+  [
+    "an escape in the style",
+    "a{color:var(--fg)}",
+    "a{color:\\65}",
+    "styles with something outside the ruled characters",
+  ],
+  ["a second document", "</html>", "</html>\n<html>", "is not one document"],
+];
+
+/** The too-many-tries page (snippets/too-many-tries.caddy): on every site, the ruled route, fixed text loading nothing. */
+const TOO_MANY_TRIES: Red[] = [
+  ...PAGE_EDITS.map(
+    ([what, from, to, why]): Red => [
+      `a page with ${what}`,
+      "dev",
+      (c) =>
+        editPage(c, APP_DEV, (body) => {
+          if (!body.includes(from)) throw new Error(`${what}: the page has no ${from}`);
+          return body.replace(from, to);
+        }),
+      PAGE("APP_HOST", why),
+    ],
+  ),
+  [
+    "a site without the page",
+    "local",
+    (c) => void errorRoutes(c).splice(errorRoutes(c).indexOf(errorRoute(c, APP_LOCAL)), 1),
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  [
+    "an error route of its own",
+    "shipped",
+    (c) => void errorRoutes(c).push({ handle: [respond(200)], terminal: true }),
+    "an error route other than the sites' own",
+  ],
+  [
+    "an error handling key",
+    "shipped",
+    (c) => void Object.assign(o(publicServer(c).errors), { strict: true }),
+    "the error handling holds a key the rules do not read",
+  ],
+  [
+    "the page on every error",
+    "dev",
+    (c) => void delete o(a(errorRoute(c, APP_DEV).handle)[0]).routes,
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  ["the page for a fetch", "dev", (c) => void delete pageRoutes(c, APP_DEV)[2]?.match, NOT_THE_PAGE("APP_HOST")],
+  ["no 5xx route", "shipped", (c) => void a(o(a(errorRoute(c, P).handle)[0]).routes).pop(), NOT_THE_PAGE("PDS_HOST")],
+  [
+    "a 5xx answered with a body",
+    "local",
+    (c) => {
+      const routes = a(o(a(errorRoute(c, APP_LOCAL).handle)[0]).routes);
+      routes[1] = { ...o(routes[1]), handle: [{ handler: "static_response", status_code: 502, body: "x" }] };
+    },
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  [
+    "the page as a 200",
+    "shipped",
+    (c) => void Object.assign(page(c, P), { status_code: 200 }),
+    NOT_THE_PAGE("PDS_HOST"),
+  ],
+  [
+    "the page without the security headers",
+    "dev",
+    (c) => void a(pageRoutes(c, P)[1]?.handle).shift(),
+    NOT_THE_PAGE("PDS_HOST"),
+  ],
+  [
+    "a page CSP that allows a script",
+    "local",
+    (c) => {
+      const set = o(o(o(a(pageRoutes(c, APP_LOCAL)[1]?.handle).at(-1)).response).set);
+      set["Content-Security-Policy"] = [`${String(a(set["Content-Security-Policy"])[0])}; script-src 'self'`];
+    },
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+];
+
 const STRAY: Red[] = [
   [
     "the PDS host in a header",
@@ -829,6 +988,12 @@ const REVIEW: Red[] = [
     "a longer window",
     "dev",
     (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { window: 1 }),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "sign-up outside the sign-in zone",
+    "dev",
+    (c) => void Object.assign(o(a(o(zones(c, APP_DEV).app_signin).match)[0]), { path: ["/login", "/verify-email"] }),
     "{$APP_HOST}: the zones are not the ruled ones",
   ],
   ["a zone removed", "local", (c) => void delete zones(c, P).signup, "{$PDS_HOST}: the zones are not the ruled ones"],
@@ -983,6 +1148,7 @@ const REDS: readonly Red[] = [
   ...UPSTREAMS,
   ...DEV_SHAPE,
   ...FONTS,
+  ...TOO_MANY_TRIES,
   ...STRAY,
 ];
 const changed = ([, mode, change]: Red): string[] => {
@@ -995,6 +1161,40 @@ describe("edge rules on the adapted config (P1.39b)", () => {
   test("rules_pass_each_reviewed_config", () => {
     for (const mode of ["shipped", "local", "dev"] as const) {
       expect(adaptedProblems(adapted(mode), mode, ENVS[mode]), mode).toEqual([]);
+    }
+  });
+
+  test("too_many_tries_page_says_wait_and_names_no_limit", () => {
+    // The page's words (Alex 2026-11-19, "yes good idea with adding a page"): wait a few minutes, a way home, and no
+    // number, so it tells nobody a zone's size or window. The same page on every site of every env.
+    const bodies = (["shipped", "local", "dev"] as const).flatMap((mode) =>
+      errorRoutes(adapted(mode)).map((route) =>
+        String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
+      ),
+    );
+    expect(bodies.length).toBe(5);
+    expect(new Set(bodies).size).toBe(1);
+    const words = String(bodies[0])
+      .replace(/<style>[^<]*<\/style>/, "")
+      .replace(/<[^>]*>/g, " ");
+    expect(words).toContain("Wait a few minutes, then try again.");
+    expect(words).toContain("Go to the home page");
+    expect(words).not.toMatch(/[0-9]/);
+  });
+
+  test("too_many_tries_csp_allows_exactly_the_page_style", () => {
+    // The rules judge the CSP's shape; here its hash is the SHA-256 of the reviewed page's one style (CSP Level 3,
+    // "hash-source"), so the browser applies that style and nothing else, on every site of every env.
+    for (const mode of ["shipped", "local", "dev"] as const) {
+      const config = adapted(mode);
+      for (const route of errorRoutes(config)) {
+        const host = String(a(o(a(o(route).match)[0]).host)[0]);
+        const body = String(page(config, host).body);
+        const set = o(o(o(a(pageRoutes(config, host)[1]?.handle).at(-1)).response).set);
+        const hash = PAGE_CSP.exec(String(a(set["Content-Security-Policy"])[0]))?.[1];
+        const style = /<style>([^<]*)<\/style>/.exec(body)?.[1] ?? "";
+        expect(hash, `${mode} ${host}`).toBe(createHash("sha256").update(style).digest("base64"));
+      }
     }
   });
 

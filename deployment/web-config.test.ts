@@ -27,6 +27,7 @@ const STANDIN: Record<string, () => string> = {
     const jwk = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" });
     return JSON.stringify([{ ...jwk, kid: example.get("WEB_OAUTH_ACTIVE_KID"), alg: "ES256" }]);
   },
+  web_pds_admin_key: () => generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
 };
 
 /** web's environment from one compose file, every reference resolved and every secret file replaced by a stand-in. */
@@ -54,7 +55,7 @@ describe("web's environment against its config", () => {
   for (const file of ["compose.dev.yaml", "compose.local.yaml"]) {
     test(`web_env_loads_its_config ${file}`, async () => {
       const { env, secrets } = webEnv(file);
-      expect(secrets).toEqual(["pg_web_password", "web_seal_keyring", "web_oauth_client_keys"]);
+      expect(secrets).toEqual(["pg_web_password", "web_seal_keyring", "web_oauth_client_keys", "web_pds_admin_key"]);
       const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
       const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));
       // Unknown keys (NODE_OPTIONS, NODE_EXTRA_CA_CERTS) are the runtime's, not the server's; only refusals fail.

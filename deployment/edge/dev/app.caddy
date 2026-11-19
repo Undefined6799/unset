@@ -8,6 +8,7 @@
 	import tls
 	import access-log
 	import security-headers
+	import too-many-tries
 	import noindex
 	route {
 		import app-ratelimit

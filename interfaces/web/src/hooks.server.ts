@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { isRedirect, type RequestEvent, redirect } from "@sveltejs/kit";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
-import { ERROR_MESSAGES } from "@unset/shared-errors";
+import { AppError, ERROR_CODES, ERROR_MESSAGES } from "@unset/shared-errors";
 import { type ClientIp, createClientIpResolver } from "@unset/shared-http";
 import { building, dev } from "$app/env";
 import { openApp } from "./lib/server/app-gate.ts";
@@ -199,6 +199,16 @@ export const init: ServerInit = async () => {
   if (!building) await startServices();
 };
 
+/**
+ * What the gate answers for an error it caught: a catalog failure a page may show (the session store's
+ * service.unavailable, the pool's db.busy, a deadline: all 503) keeps its own status and code, so the member is told to
+ * try again; anything else is 500 internal.error. Only the code is sent, never the error's message or cause.
+ */
+function caughtResponse(error: unknown): Response {
+  if (error instanceof AppError && ERROR_CODES[error.code].public) return plain(error.status, error.code);
+  return plain(500, "internal.error");
+}
+
 /** The gate's outcome, an unexpected error as a code, and the group's CSP. server.ts writes the log line. */
 export const handle: Handle = async (input) => {
   const { event } = input;
@@ -211,7 +221,7 @@ export const handle: Handle = async (input) => {
   } catch (error) {
     if (isRedirect(error)) throw error; // SvelteKit builds it; server.ts still gives it the headers and the log line
     services().log.logError(error);
-    response = plain(500, "internal.error");
+    response = caughtResponse(error);
   }
   const group = policyOf(event.route.id)?.group ?? "static";
   const refused = REFUSALS.get(response);
