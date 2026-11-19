@@ -4,14 +4,7 @@
 # is yyyy-mm-dd, at most 30 days ahead (SEAWEEDFS_MAX_DAYS). Passed with --ignorefile
 # only when the source is docker.io/chrislusf/seaweedfs, in mirror.yml and images.yml,
 # and for the objects image built on it (scripts/ci/list-dockerfiles.ts IGNOREFILES).
-# Trivy v0.76.1 reported this one finding for 4.53 (ccad23e1) on 2026-11-15: x/net
-# v0.61.0 linked into weed, fixed in v0.62.0, which no SeaweedFS release ships yet
-# (4.53 is the newest tag). Removed when the pin moves to a release built with the fix.
-vulnerabilities:
-  - id: CVE-2026-78661
-    paths:
-      - "usr/bin/weed"
-    purls:
-      - "pkg:golang/golang.org/x/net@v0.61.0"
-    statement: "sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0: SeaweedFS 4.53, newest upstream release, no fixed build yet; removed on the re-pin to a release with x/net v0.62.0 or later"
-    expired_at: 2026-12-15
+# Empty since the 4.54 re-pin (4b42c212): its weed is built with Go 1.26.11 and
+# x/net v0.62.0, and Trivy v0.76.1 reported no HIGH or CRITICAL for it on 2026-11-19.
+# The 4.53 entry for CVE-2026-78661 (x/net v0.61.0) went with that pin.
+vulnerabilities: []
