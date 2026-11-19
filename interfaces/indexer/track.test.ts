@@ -35,7 +35,7 @@ function fakeStore(pending: string[], due: BackfillJob[]) {
   return { store, settled, applied, failed, unresolved };
 }
 
-const retries = () => ({ retries: new Map() as TrackRetries, now: () => 0 });
+const retries = () => ({ retries: new Map() as TrackRetries, now: () => 0, signal: new AbortController().signal });
 
 describe("trackPass", () => {
   test("indexer.tracks_only_dids_whose_pds_is_ours", async () => {
@@ -73,6 +73,7 @@ describe("trackPass", () => {
       timeoutMs: 1000,
       retries: new Map() as TrackRetries,
       now: () => clock,
+      signal: new AbortController().signal,
     };
     expect(await trackPass(deps)).toEqual({ tracked: 1, dropped: 0, unresolved: 1 });
     expect(await trackPass(deps)).toEqual({ tracked: 1, dropped: 0, unresolved: 0 }); // LOST waits its turn
@@ -81,6 +82,22 @@ describe("trackPass", () => {
       await trackPass(deps);
     }
     expect(fake.unresolved).toEqual([LOST]);
+    expect(deps.retries.size).toBe(0);
+  });
+
+  test("indexer.track_stop_cuts_the_read_short_and_records_nothing", async () => {
+    // SIGTERM mid-pass: the read in hand is aborted, the DID is neither settled nor counted as unresolved, and the
+    // rest of the batch waits for the next process.
+    const fake = fakeStore([LOST, OURS], []);
+    const stop = new AbortController();
+    const deps = { ...retries(), store: fake.store, ownPds: OWN, timeoutMs: 60_000, signal: stop.signal };
+    const pdsOf = (_did: string, signal: AbortSignal) =>
+      new Promise<URL>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        stop.abort();
+      });
+    expect(await trackPass({ ...deps, pdsOf })).toEqual({ tracked: 0, dropped: 0, unresolved: 0 });
+    expect(fake.settled).toEqual([]);
     expect(deps.retries.size).toBe(0);
   });
 });
@@ -100,12 +117,36 @@ describe("backfillPass", () => {
       if (did === LOST) throw new RepoReadError("not_found");
       return { rev: "3l", records: [] };
     };
-    const pass = await backfillPass({ store: fake.store, readRepo, timeoutMs: 1000 });
+    const pass = await backfillPass({
+      store: fake.store,
+      readRepo,
+      timeoutMs: 1000,
+      signal: new AbortController().signal,
+    });
     expect(fake.applied).toEqual([[OURS, "3l"]]);
     expect(fake.failed).toEqual([
       [THEIRS, "failed"],
       [LOST, "gone"],
     ]);
     expect(pass).toEqual({ applied: 1, failed: 2 });
+  });
+
+  test("indexer.backfill_stop_does_not_back_the_job_off", async () => {
+    const fake = fakeStore(
+      [],
+      [
+        { did: OURS, attempts: 0, claim: "c" },
+        { did: THEIRS, attempts: 0, claim: "c" },
+      ],
+    );
+    const stop = new AbortController();
+    const readRepo: RepoReader = (_did, signal) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new RepoReadError("unavailable")), { once: true });
+        stop.abort();
+      });
+    const pass = await backfillPass({ store: fake.store, readRepo, timeoutMs: 60_000, signal: stop.signal });
+    expect(pass).toEqual({ applied: 0, failed: 0 });
+    expect(fake.failed).toEqual([]);
   });
 });
