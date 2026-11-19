@@ -81,6 +81,16 @@ const REFUSAL: Record<Exclude<InviteIssue["kind"], "ok">, InviteRefusal> = {
  * One invite for `did`. Any answer other than a code deletes the pending row first, so the form can be sent again; an
  * `unavailable` after a lost reply may still have issued a code, which the quota absorbs as for `store_failed`.
  */
+/** The request; when it throws, the pending row goes first, so the same form can be sent again, and the error stands. */
+async function askOrDrop(ports: InvitePorts, did: Did, id: InviteId): Promise<InviteIssue> {
+  try {
+    return await ports.issue(did);
+  } catch (error) {
+    await ports.drop(did, id);
+    throw error;
+  }
+}
+
 export async function issueMemberInvite(
   ports: InvitePorts,
   did: Did,
@@ -89,7 +99,7 @@ export async function issueMemberInvite(
   const claim = await ports.claim(did, submission);
   if (claim.kind === "issued") return { kind: "issued", remaining: null };
   if (claim.kind === "pending") return { kind: "refused", code: "invite.in_progress" };
-  const answer = await ports.issue(did);
+  const answer = await askOrDrop(ports, did, claim.id);
   if (answer.kind === "ok") {
     try {
       await ports.store(did, claim.id, answer.code);

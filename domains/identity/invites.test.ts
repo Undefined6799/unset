@@ -95,6 +95,16 @@ describe("issueMemberInvite", () => {
   });
 });
 
+describe("issueMemberInvite when the request throws", () => {
+  test("invite.issue_throws: an unexpected failure drops the pending row and is rethrown, never swallowed", async () => {
+    const failure = new TypeError("bug in the issuer");
+    const { p, calls } = ports(claimed, failure);
+    await expect(issueMemberInvite(p, ALICE, SUBMISSION)).rejects.toBe(failure);
+    // Without the drop, the row stays pending and the same form answers "in progress" for good (review N4).
+    expect(calls).toEqual([`claim ${ALICE} ${SUBMISSION}`, `issue ${ALICE}`, `drop ${ALICE} row-1`]);
+  });
+});
+
 describe("parseSubmissionId", () => {
   test("takes a v4 UUID in lowercase only", () => {
     expect(parseSubmissionId("0b5f3c1e-8f6a-4d2b-9c7e-1a2b3c4d5e6f")).toBe("0b5f3c1e-8f6a-4d2b-9c7e-1a2b3c4d5e6f");
