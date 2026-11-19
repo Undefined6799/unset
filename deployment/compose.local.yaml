@@ -214,7 +214,7 @@ services:
     pids_limit: 128
     restart: unless-stopped
 
-  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.54 started as one
+  # The object store (ADR 0041, ADR 0050; P2.18s): the first-party objects image, SeaweedFS 4.53 started as one
   # `weed server` with its S3 gateway (deployment/images/objects.Dockerfile holds the start line and its reasons). It
   # publishes nothing and sits on internal networks only: its own, and objects_pds, which it shares with the PDS alone
   # (P2.18p). Its identities are the one secret objects_s3, which holds no Admin identity (ADR 0050 Decision
