@@ -76,6 +76,22 @@ test.describe("phone", () => {
         return root.documentElement.scrollWidth;
       });
       expect(width).toBeLessThanOrEqual(320);
+      // Staging walkthrough 2026-11-19: with a handle and the card's controls in the bar, a phone broke the file name
+      // ("READM", "E.md"). This member has no verified handle, so the card is narrowed to leave the name as little
+      // room; it stays on one line and the bar's other parts give way.
+      const file = page.getByText("README.md", { exact: true });
+      await file.evaluate((element) => {
+        type Box = { closest: (selector: string) => { style: { width: string } } | null };
+        const card = (element as unknown as Box).closest('[data-slot="card"]');
+        if (card !== null) card.style.width = "120px";
+      });
+      const lineHeight = Number.parseFloat(
+        await file.evaluate((element) => {
+          const view = globalThis as unknown as { getComputedStyle: (node: object) => { lineHeight: string } };
+          return view.getComputedStyle(element).lineHeight;
+        }),
+      );
+      expect((await file.boundingBox())?.height).toBeLessThan(lineHeight * 1.5);
     } finally {
       await removeReadme(page);
     }

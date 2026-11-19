@@ -26,6 +26,16 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // Staging walkthrough 2026-11-19: on a phone the search icon was disabled and said nothing to a finger; it opens a
+  // panel that says search is coming, as Messages and Notifications do, with no script.
+  test("the_phone_search_button_says_search_is_coming", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/");
+    await page.locator('header button[popovertarget="search-menu"]').click();
+    await expect(page.locator("#search-menu")).toBeVisible();
+    await expect(page.locator("#search-menu")).toContainText("Search is coming soon.");
+  });
+
   // P2.05m: the sign-in page is one box; with no Referer, Close goes home.
   test("login_box_without_js", async ({ page }) => {
     await page.goto("/login?next=/me");
