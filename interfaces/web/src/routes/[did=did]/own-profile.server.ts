@@ -12,7 +12,7 @@ import {
   readProfileRecord,
 } from "@unset/domains-profile";
 import type { CardList, PdsResult, StoredRecord } from "@unset/infrastructure-pds";
-import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
+import { pdsSignInRedirect } from "../../lib/server/pds-failure.ts";
 
 export type OwnProfile =
   | {
@@ -38,11 +38,11 @@ export type OwnProfileReads = {
  * The profile first, then the cards, one after the other on the same session: a failed first read skips the second.
  * Either failing hides the profile, and an ended session sends the member to sign in.
  */
-export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): Promise<OwnProfile> {
+export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile> {
   const profile = await reads.profile();
-  if (profile.kind !== "ok") return failure(profile, pdsHost);
+  if (profile.kind !== "ok") return failure(profile);
   const cards = await reads.cards();
-  if (cards.kind !== "ok") return failure(cards, pdsHost);
+  if (cards.kind !== "ok") return failure(cards);
   const record = profile.value?.value;
   const fields = record === undefined ? null : readProfileRecord(record);
   return {
@@ -55,7 +55,7 @@ export async function loadOwnProfile(reads: OwnProfileReads, pdsHost: string): P
   };
 }
 
-function failure(result: Exclude<PdsResult<unknown>, { kind: "ok" }>, pdsHost: string): OwnProfile {
-  const response = respondToPdsFailure("GET", result, pdsHost);
-  return response.action === "redirect" ? { kind: "redirect", location: response.location } : { kind: "unavailable" };
+function failure(result: Exclude<PdsResult<unknown>, { kind: "ok" }>): OwnProfile {
+  const location = pdsSignInRedirect(result);
+  return location === null ? { kind: "unavailable" } : { kind: "redirect", location };
 }

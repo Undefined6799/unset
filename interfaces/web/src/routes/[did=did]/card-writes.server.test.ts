@@ -62,7 +62,7 @@ function store(
       return ok(built.ok ? { kind: "saved" } : { kind: "refused", code: built.code });
     },
   };
-  return { writes: cardWrites({ ...base, ...over }, "pds.example", () => NOW), calls };
+  return { writes: cardWrites({ ...base, ...over }, () => NOW), calls };
 }
 
 describe("cardWrites", () => {

@@ -13,7 +13,7 @@ import {
 } from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
-import { respondToPdsFailure } from "../../../lib/server/pds-failure.ts";
+import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
 import { config } from "../../../lib/server/runtime.ts";
 import { settingsShell } from "../shell.server.ts";
 
@@ -30,8 +30,8 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   if (read.kind === "ok") {
     profile = read.value === null ? EMPTY_PROFILE : readProfileRecord(read.value.value);
   } else {
-    const failure = respondToPdsFailure("GET", read, config.PDS_HOSTNAME);
-    if (failure.action === "redirect") redirect(303, failure.location);
+    const location = pdsSignInRedirect(read);
+    if (location !== null) redirect(303, location);
   }
   return {
     shell: settingsShell(request, "/settings/profile"),
