@@ -102,20 +102,30 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * and pds_admin, web's way in; both are pinned here as well as in the table (adminNetworkProblems). The PDS trusts it
  * as a proxy too, but pds-admin already holds the admin password, which is more than a forged client address could
  * give it.
+ *
+ * A third, under local and dev only (P3.05s; ADR 0052 Decision 2, "reads our PDS's subscribeRepos at its internal
+ * URL"): the service named indexer that runs the lock's indexer image (or, under local and dev --source, builds
+ * deployment/images/indexer.Dockerfile) may share indexer_pds, and that network alone, with the PDS, for the stream,
+ * getRepo, getRepoStatus and resolveHandle. Prod has no exemption: Alex, 2026-11-19T01:04Z, typing the line that
+ * allowed it, "Allow the indexer on its own private network with the PDS on staging only". How the indexer reaches the
+ * production PDS is open until the first prod deploy (step book P5.00). indexer_pds is internal and holds exactly those
+ * two, and the indexer joins no network but it, db and indexer_egress, its net-guarded way out. The PDS trusts it as a
+ * proxy too, so a compromised indexer could call the PDS without the edge's limits, claiming any client address; it
+ * holds no PDS credential (the doors compared: docs/ai/notes/area/indexer.md, "How the indexer reaches the PDS").
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
   return [...adminNetworkProblems(inputs.compose), ...neighbourProblems(inputs)];
 }
 
-/** pds_admin_pds is internal, and the service named pds-admin joins only it and pds_admin (P2.09e). */
+/** Each exempt PDS network is internal, and its service joins only the networks pinned for it (P2.09e). */
 function adminNetworkProblems({ services, networks }: Inputs["compose"]): string[] {
   const problems: string[] = [];
-  if (networks.some((network) => network.name === ADMIN_NETWORK && !network.internal)) {
-    problems.push(`${ADMIN_NETWORK} is not internal`);
-  }
-  const admin = services.find((s) => s.name === "pds-admin");
-  if (admin !== undefined && !admin.networks.every((network) => ADMIN_JOINS.includes(network))) {
-    problems.push(`pds-admin joins a network other than ${ADMIN_JOINS.join(" and ")}`);
+  for (const { network, service, joins } of PINNED) {
+    if (networks.some((n) => n.name === network && !n.internal)) problems.push(`${network} is not internal`);
+    const found = services.find((s) => s.name === service);
+    if (found !== undefined && !found.networks.every((n) => joins.includes(n))) {
+      problems.push(`${service} joins a network other than ${joins.join(" and ")}`);
+    }
   }
   return problems;
 }
@@ -133,42 +143,57 @@ function neighbourProblems(inputs: Inputs): string[] {
   const [pds] = pdses;
   if (pds === undefined) return [];
   const isEdge = (s: Service) => runsBuilt(s, inputs, lock.edge?.ref, EDGE_DOCKERFILE) === "yes";
-  const isStore = (s: Service) =>
-    inputs.env !== "prod" &&
-    s.name === "objects" &&
-    runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
-  const isAdmin = (s: Service) =>
-    inputs.env !== "prod" &&
-    s.name === "pds-admin" &&
-    runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
-  const exempt = new Map([
-    [STORE_NETWORK, isStore],
-    [ADMIN_NETWORK, isAdmin],
-  ]);
+  const exempt = new Map(
+    EXEMPT.map(({ network, service, dockerfile }) => [
+      network,
+      (s: Service) =>
+        inputs.env !== "prod" && s.name === service && runsBuilt(s, inputs, lock[service]?.ref, dockerfile) === "yes",
+    ]),
+  );
   const allowed = (s: Service, network: string) =>
     !pds.networks.includes(network) || (exempt.get(network) ?? isEdge)(s);
   const problems = services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
-  const pairOnly = (network: string, other: string) => {
+  for (const { network, label } of EXEMPT) {
     const on = services.filter((s) => s.networks.includes(network));
     if (on.length > 0 && !(on.length === 2 && on.includes(pds))) {
-      problems.push(`${network} holds a service other than the pds and ${other}`);
+      problems.push(`${network} holds a service other than the pds and ${label}`);
     }
-  };
-  pairOnly(STORE_NETWORK, "the store");
-  pairOnly(ADMIN_NETWORK, "pds-admin");
+  }
   return problems;
 }
 
-/** The one PDS network pds-admin may join, every network it may join, and the Dockerfile it is built from (P2.09e). */
-const ADMIN_NETWORK = "pds_admin_pds";
-const ADMIN_JOINS = ["pds_admin", ADMIN_NETWORK];
-const PDS_ADMIN_DOCKERFILE = "deployment/images/pds-admin.Dockerfile";
+/**
+ * The PDS networks C17 exempts, under local and dev only: each holds exactly the PDS and the service named here, run
+ * from the lock's image for that name or built from its Dockerfile. The store's (P2.18p) and pds-admin's (P2.09e).
+ */
+const EXEMPT: readonly { network: string; service: string; dockerfile: string; label: string }[] = [
+  {
+    network: "objects_pds",
+    service: "objects",
+    dockerfile: "deployment/images/objects.Dockerfile",
+    label: "the store",
+  },
+  {
+    network: "pds_admin_pds",
+    service: "pds-admin",
+    dockerfile: "deployment/images/pds-admin.Dockerfile",
+    label: "pds-admin",
+  },
+  {
+    network: "indexer_pds",
+    service: "indexer",
+    dockerfile: "deployment/images/indexer.Dockerfile",
+    label: "the indexer",
+  },
+];
 
-/** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */
-const STORE_NETWORK = "objects_pds";
-const OBJECTS_DOCKERFILE = "deployment/images/objects.Dockerfile";
+/** The exempt networks that must be internal, and every network their service may join (P2.09e). */
+const PINNED: readonly { network: string; service: string; joins: readonly string[] }[] = [
+  { network: "pds_admin_pds", service: "pds-admin", joins: ["pds_admin", "pds_admin_pds"] },
+  { network: "indexer_pds", service: "indexer", joins: ["db", "indexer_pds", "indexer_egress"] },
+];
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The Dockerfile a built PDS runs from (compose.local.yaml and compose.dev.source.yaml). */
