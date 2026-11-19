@@ -25,10 +25,12 @@ import {
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
+  createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
   oauthSessionExists,
   type Pool,
+  type PublicProfileStore,
   ping,
   withClient,
   withTransaction,
@@ -101,6 +103,8 @@ export type Services = {
   readonly email: EmailRefresher;
   /** Caches the member's email answer on this browser's session row. */
   readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
+  /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
+  readonly publicProfiles: PublicProfileStore;
 };
 
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
@@ -263,6 +267,7 @@ async function build(): Promise<Services> {
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
     email,
     setEmailConfirmed,
+    publicProfiles: createPublicProfileStore(pool),
   };
 }
 
