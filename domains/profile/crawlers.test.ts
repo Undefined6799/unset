@@ -7,10 +7,29 @@ describe("robotsTxt", () => {
   test("training_blocked_everywhere_ai_search_only_where_allowed", () => {
     const text = robotsTxt(ORIGIN, ["/@ann.unset.im", "/@did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"]);
     expect(text).toContain(
-      "User-agent: GPTBot\nUser-agent: Google-Extended\nUser-agent: Applebot-Extended\nUser-agent: CCBot\nDisallow: /\n",
+      [
+        "User-agent: GPTBot",
+        "User-agent: ClaudeBot",
+        "User-agent: Google-Extended",
+        "User-agent: Applebot-Extended",
+        "User-agent: meta-externalagent",
+        "User-agent: Amazonbot",
+        "User-agent: CCBot",
+        "User-agent: AI2Bot",
+        "Disallow: /\n",
+      ].join("\n"),
     );
     expect(text).toContain(
-      "User-agent: OAI-SearchBot\nUser-agent: PerplexityBot\nAllow: /@ann.unset.im$\nAllow: /@did:plc:aaaaaaaaaaaaaaaaaaaaaaaa$\nDisallow: /@\n",
+      [
+        "User-agent: OAI-SearchBot",
+        "User-agent: PerplexityBot",
+        "User-agent: Claude-SearchBot",
+        "User-agent: meta-webindexer",
+        "User-agent: Amzn-SearchBot",
+        "Allow: /@ann.unset.im$",
+        "Allow: /@did:plc:aaaaaaaaaaaaaaaaaaaaaaaa$",
+        "Disallow: /@\n",
+      ].join("\n"),
     );
     expect(text).toContain("User-agent: *\nAllow: /\n");
     expect(text).toContain("Sitemap: https://unset.sh/sitemap.xml");

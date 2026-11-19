@@ -64,9 +64,9 @@ export const SEARCH_AI_SETTINGS = {
     "Google, Bing and others may show your page in results, and it joins our sitemap. Search engines decide what to show, and after you turn this off it can take days to leave their results.",
   aiSearch: "AI search may show my page",
   aiSearchHint:
-    "ChatGPT search and Perplexity may show your page. It takes about a day to apply. Your page's address is then listed in our public robots.txt file. When someone pastes your link into ChatGPT or Perplexity, those tools read it anyway.",
+    "The AI search crawlers of ChatGPT, Perplexity, Claude, Meta AI and Amazon may then show your page. It takes about a day to apply. Your page's address is then listed in our public robots.txt file. When someone pastes your link into an AI tool, it reads the page anyway.",
   training:
-    "AI training is blocked for the whole site: we ask the known training crawlers not to read any page. That is a request, not a lock.",
+    "AI training is blocked for the whole site: our robots.txt asks every training crawler whose maker publishes its name (OpenAI, Anthropic, Google, Apple, Meta, Amazon, Common Crawl and Ai2) not to read any page. That is a request, not a lock: a crawler that ignores robots.txt, or whose name we do not know, can still read public pages.",
   searchTitle: "Search title",
   searchTitleHint: (n: number) => `Optional. Replaces your name as the title in results. Up to ${n} characters.`,
   searchDescription: "Search description",
