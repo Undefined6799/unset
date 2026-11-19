@@ -87,7 +87,10 @@ not reachable through it either.
   over a new writer process, which would add a service, an image and a network for one call, while the indexer
   already follows the events that trigger every write.
 - `.im` is unsigned at the root (IANA, above), so no registrar can publish a DS record and the delegation is unsigned;
-  deSEC signs the zone, but resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
+  deSEC signs the zone, but resolvers cannot validate it. Handle verification already does not rely on DNSSEC. For
+  staging this is accepted. For production it is an open question for Alex before the first member: without DNSSEC, an
+  attacker who can spoof answers to another app's resolver can make that app show their account under a member's
+  handle (our own app is covered by Decision 7). A signed TLD for production handles would need its own ADR.
 
 ## Compliance
 SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone. Pointing a
