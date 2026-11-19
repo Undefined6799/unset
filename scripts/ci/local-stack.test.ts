@@ -1,5 +1,5 @@
 // P1.35t: the local-stack workflow's pure parts. Docker, sudo and openssl are unmanaged and run only in the workflow.
-import { createPublicKey, ECDH, generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, createPublicKey, ECDH, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -60,6 +60,9 @@ describe("generated values (D2)", () => {
     expect(extraKeys).toEqual([]);
     expect(webKey).toMatchObject({ kid: "web-ci", iss: "web", verbs: ["invite.issue"] });
     expect(createPublicKey(webKey.publicKeyPem).asymmetricKeyType).toBe("ed25519");
+    // P2.10: web's private half is the pair of that public key, so pds-admin accepts what web signs.
+    const half = createPublicKey(createPrivateKey(v.webPdsAdminKey)).export({ type: "spki", format: "pem" });
+    expect(half).toBe(webKey.publicKeyPem);
     // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
     expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
     expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);

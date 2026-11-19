@@ -42,6 +42,11 @@ export type Inputs = WalkInputs & {
   serviceEnv: ReadonlyMap<string, SecretMap>;
   /** Each service's env-file names only, in file order with any repeat kept; never a value (C30). */
   envFileNames: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The names the Compose files interpolate that the interpolation env file leaves out or empty, sorted (C34). Names
+   * only, from the committed Compose files; never a value.
+   */
+  emptyInterpolated: readonly string[];
   /** Absolute paths of every file Compose itself reads for values: env files and the project's `.env`. */
   secretPaths: string[];
   /** Every top-level file secret, by absolute path, with the services that mount it (P1.30o). */

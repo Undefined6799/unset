@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = {
   "mod.decision": "mod",
   "report.submitted": "sec",
   "age_gate.blocked": "sec",
+  "invite.denied": "sec",
   "index.account_state": "sec",
   "account.erased": "sec",
   "pii.review_play": "mod",
