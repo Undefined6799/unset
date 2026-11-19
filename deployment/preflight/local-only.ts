@@ -21,6 +21,19 @@ export const LOCAL_ONLY_NETWORKS: ReadonlyMap<string, { internal: boolean; membe
 export const DEV_ONLY_SERVICES: ReadonlySet<string> = new Set(["newt"]);
 export const DEV_ONLY_NETWORKS: ReadonlySet<string> = new Set(["newt_edge", "newt_egress"]);
 
+/**
+ * Services only the stacks built from the checkout run (local, and dev with --source), with their own networks. Alex,
+ * 2026-11-19T00:43Z: "i dont think we should make image it for everything, lets build the next image when we are ready
+ * to push something to prod" and "for now deploy from source". So a new service joins compose.local.yaml and
+ * compose.dev.source.yaml with a build and no published digest, and stays out of compose.dev.yaml until its image is
+ * locked for production. Under dev without --source, C17 leaves these networks' rows out of networks.dev.json and these
+ * services out of every row, so the image stack is judged as if they did not exist and fails if it runs one. Every other
+ * preflight check judges them as it judges any built service. compose.dev.source.test.ts holds the source file to the
+ * dev file plus exactly these.
+ */
+export const SOURCE_ONLY_SERVICES: ReadonlySet<string> = new Set(["pds-admin"]);
+export const SOURCE_ONLY_NETWORKS: ReadonlySet<string> = new Set(["pds_admin", "pds_admin_pds"]);
+
 /** Whether a network belongs to the local stack alone: on the list, or named like the PLC's. */
 export const isLocalOnlyNetwork = (name: string): boolean => LOCAL_ONLY_NETWORKS.has(name) || name.startsWith("plc_");
 

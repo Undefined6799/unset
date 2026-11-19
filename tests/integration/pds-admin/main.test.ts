@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net"; // guard-allow: egress test, finds a free local port
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { PROBE_DID } from "../../../interfaces/pds-admin/pds.ts";
 import { type FakePds, fakePds, PASSWORD, PDS_DID, payloadFor, signed, tempDir, webKey } from "./harness.ts";
 
 const MAIN = join(import.meta.dirname, "../../../interfaces/pds-admin/main.ts");
@@ -27,7 +28,7 @@ function secrets(key: ReturnType<typeof webKey>, omit?: string): string {
   const files: Record<string, string> = {
     pds_admin_password: PASSWORD,
     pds_admin_log_key: randomBytes(32).toString("base64"),
-    "pds_admin_keys.json": JSON.stringify([
+    pds_admin_keys: JSON.stringify([
       {
         kid: key.kid,
         iss: "web",
@@ -56,6 +57,11 @@ function env(url: URL, secretsDir: string, stateDir: string, port: number): Node
 async function start(environment: NodeJS.ProcessEnv): Promise<string> {
   const child = spawn(process.execPath, [MAIN], { env: environment, stdio: "ignore" });
   children.push(child);
+  return up(environment);
+}
+
+/** The service's base URL once its health answers. */
+async function up(environment: NodeJS.ProcessEnv): Promise<string> {
   const base = `http://127.0.0.1:${environment.PORT}`;
   for (let i = 0; i < 100; i++) {
     const up = await fetch(`${base}/health`).then(
@@ -87,7 +93,7 @@ describe("boot", () => {
     expect(readFileSync(join(environment.STATE_DIR as string, "log.jsonl"), "utf8")).toContain('"reason":"replay"');
   });
 
-  test.each(["pds_admin_password", "pds_admin_keys.json", "pds_admin_log_key"])(
+  test.each(["pds_admin_password", "pds_admin_keys", "pds_admin_log_key"])(
     "boot.missing_secret: no %s → exit 1, and no secret on stderr",
     (omit) => {
       const key = webKey();
@@ -110,5 +116,110 @@ describe("boot", () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toBe("pds-admin: PDS_INTERNAL_URL resolves to a public address\n");
+  });
+
+  describe("the admin password (P2.09e)", () => {
+    const WRONG = "secret pds_admin_password is not the PDS's admin password";
+    /** Runs main to its exit while this process keeps serving the fake PDS; its exit code and stderr. */
+    const exited = (child: ChildProcess) => {
+      let stderr = "";
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      return new Promise<{ code: number | null; stderr: string }>((resolve) =>
+        child.on("exit", (code) => resolve({ code, stderr })),
+      );
+    };
+    const run = (environment: NodeJS.ProcessEnv) => {
+      const child = spawn(process.execPath, [MAIN], { env: environment, stdio: ["ignore", "ignore", "pipe"] });
+      children.push(child);
+      return child;
+    };
+
+    test("boot.password_refused: a 401 to the probe → exit 1 naming the secret, never its value", async () => {
+      pds = await fakePds();
+      pds.password = "the-pds-has-another-password";
+      const result = await exited(run(env(pds.url, secrets(webKey()), tempDir(), await freePort())));
+      expect(result).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}\n` });
+      expect(pds.seen.map((s) => s.path)).toEqual([
+        `/xrpc/com.atproto.admin.getAccountInfo?did=${encodeURIComponent(PROBE_DID)}`,
+      ]);
+    });
+
+    test("boot.password_accepted: the probe's NotFound means the password works, and it starts", async () => {
+      pds = await fakePds();
+      pds.password = PASSWORD;
+      pds.account = "not_found";
+      await start(env(pds.url, secrets(webKey()), tempDir(), await freePort()));
+      expect(pds.seen.map((s) => s.path)).toContain(
+        `/xrpc/com.atproto.admin.getAccountInfo?did=${encodeURIComponent(PROBE_DID)}`,
+      );
+    });
+
+    const issue = (base: string, key: ReturnType<typeof webKey>) =>
+      fetch(`${base}/v1/invite.issue`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(signed(key, payloadFor())),
+      });
+    const reasons = (environment: NodeJS.ProcessEnv) =>
+      readFileSync(join(environment.STATE_DIR as string, "log.jsonl"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => (JSON.parse(line) as { reason?: string }).reason);
+
+    test("boot.pds_unreachable: it starts, issues nothing until the probe passes, then issues", async () => {
+      pds = await fakePds();
+      pds.password = PASSWORD;
+      pds.down = true;
+      const key = webKey();
+      const environment = env(pds.url, secrets(key), tempDir(), await freePort());
+      const base = await start(environment);
+      // The replay guard is not reached: the same signed request is refused and may be sent again.
+      expect((await issue(base, key)).status).toBe(503);
+      expect(reasons(environment)).toEqual(["password_unproven"]);
+      pds.down = false;
+      let status = 503;
+      for (let i = 0; i < 100 && status === 503; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        status = (await issue(base, key)).status;
+      }
+      expect(status).toBe(200);
+    });
+
+    test("boot.pds_unreachable_then_refused: the first answer, a 401, stops it with a log line", async () => {
+      pds = await fakePds();
+      pds.password = "the-pds-has-another-password";
+      pds.down = true;
+      const environment = env(pds.url, secrets(webKey()), tempDir(), await freePort());
+      const child = run(environment);
+      const done = exited(child);
+      await up(environment);
+      pds.down = false;
+      expect(await done).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}; stopping\n` });
+      expect(reasons(environment)).toEqual(["admin_password_refused"]);
+    });
+
+    test.each(["getSubjectStatus", "createInviteCode"] as const)(
+      "password.refused_later: a 401 on %s stops it with a log line",
+      async (method) => {
+        pds = await fakePds();
+        pds.password = PASSWORD;
+        const key = webKey();
+        const environment = env(pds.url, secrets(key), tempDir(), await freePort());
+        const child = run(environment);
+        const done = exited(child);
+        const base = await up(environment);
+        pds.refuse = method;
+        await issue(base, key).catch(() => undefined);
+        expect(await done).toEqual({ code: 1, stderr: `pds-admin: ${WRONG}; stopping\n` });
+        expect(reasons(environment)).toContain("admin_password_refused");
+      },
+    );
+
+    test("boot.pds_name_unresolved: a PDS name that does not resolve yet is not a refusal; it starts", async () => {
+      const environment = env(new URL("http://pds.invalid"), secrets(webKey()), tempDir(), await freePort());
+      expect(await start(environment)).toMatch(/^http:/);
+    });
   });
 });

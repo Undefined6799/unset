@@ -1,5 +1,5 @@
 // P1.35t: the local-stack workflow's pure parts. Docker, sudo and openssl are unmanaged and run only in the workflow.
-import { ECDH, generateKeyPairSync } from "node:crypto";
+import { createPublicKey, ECDH, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -54,6 +54,12 @@ describe("generated values (D2)", () => {
     expect(v.jwtSecret).toMatch(/^[0-9a-f]{64}$/);
     expect(v.adminPassword).toMatch(/^[0-9a-f]{64}$/);
     expect(v.rotationKey).toMatch(/^[0-9a-f]{64}$/);
+    // pds-admin's inputs (P2.09e): a 32-byte log key and one web key with one verb, as its config.ts reads them.
+    expect(Buffer.from(v.pdsAdminLogKey, "base64")).toHaveLength(32);
+    const [webKey, ...extraKeys] = JSON.parse(v.pdsAdminKeys);
+    expect(extraKeys).toEqual([]);
+    expect(webKey).toMatchObject({ kid: "web-ci", iss: "web", verbs: ["invite.issue"] });
+    expect(createPublicKey(webKey.publicKeyPem).asymmetricKeyType).toBe("ed25519");
     // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
     expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
     expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
@@ -145,12 +151,13 @@ describe("the one bounded wait (D4)", () => {
     { Service: "edge", State: "running", Health: "" },
     { Service: "web", State: "running", Health: "" },
     { Service: "objects", State: "running", Health: "healthy" },
+    { Service: "pds-admin", State: "running", Health: "" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
 
   test("wait_passes_only_when_every_service_is_up", () => {
-    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects"]);
+    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin"]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");
     expect(servicesVerdict(swap("migrate", { State: "exited", ExitCode: 1 }))).toBe("failed: migrate exited");
