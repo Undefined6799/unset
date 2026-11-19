@@ -2,9 +2,9 @@
 // A card editor's plain form read into the object the JSON editor sends (ADR 0037 point 7, ADR 0051).
 import { AppError } from "@unset/shared-errors";
 import { describe, expect, test } from "vitest";
-import { CARD_FORM_MAX_FIELDS, cardForm } from "./card-form.server.ts";
+import { CARD_FORM_MAX_FIELDS, readCardForm } from "./card-form.server.ts";
 
-const read = (pairs: [string, string][]) => cardForm(new URLSearchParams(pairs));
+const read = (pairs: [string, string][]) => readCardForm(new URLSearchParams(pairs)).body;
 const code = (pairs: [string, string][]) => {
   try {
     read(pairs);
@@ -14,7 +14,7 @@ const code = (pairs: [string, string][]) => {
   }
 };
 
-describe("cardForm", () => {
+describe("readCardForm", () => {
   test("a README form is its kind, width and text", () => {
     expect(
       read([
