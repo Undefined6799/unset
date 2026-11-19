@@ -3046,7 +3046,10 @@ As built (SvelteKit, PR 1 of 2): `interfaces/web/src/routes/invite/` (form actio
   `routes/join/` (its form action is the book's `POST /signup`, at the sign-in limit), the rule in
   `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0031_app_invite.sql`
   (column grants, row DELETE, `invite.denied` audit action, `core.erase_did` covering `app.invite.inviter_did`). The
-  list shows issued codes only (a pending row holds none). Web mounts `web_pds_admin_key` in every stack and joins
+  list shows issued codes of the last 7 days only (a pending row holds none). Expiry (Alex 2026-11-19: used, or 7 days):
+  hiding and web's `sweep.invite` at 7 days delete our copy of the code and leave the row `cleared`; a code is single
+  use on the PDS, and pds-admin disabling unused codes there after 7 days is a follow-up updating ADR 0060. Preflight
+  C34 refuses an env file that leaves an interpolated name empty. Web mounts `web_pds_admin_key` in every stack and joins
   `pds_admin` under `--source` and local. PR 2: the Share panel (copy button, share sheet, `sms:` link, QR) and the
   plus-menu row.
 
