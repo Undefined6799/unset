@@ -36,6 +36,8 @@ const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
 const D = "did:plc:dddddddddddddddddddddddd";
 /** Hidden as deactivated, and reactivated while the stream's events were lost. */
 const R = "did:plc:rrrrrrrrrrrrrrrrrrrrrrrr";
+/** Hidden; our PDS calls it active yet keeps refusing its repo (a PDS fault, or a race inside it). */
+const L = "did:plc:llllllllllllllllllllllll";
 const CID = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5xzrgnw3hj6aoqe";
 const REV = "3kaaaaaaaaa22";
 const profile: Extract<IndexChange, { kind: "put" }> = {
@@ -54,7 +56,7 @@ const readRepo = async (did: string): Promise<RepoSnapshot> => {
   return { rev: "3kaaaaaaaaa23", records: [profile] };
 };
 const readStatus = async (did: string): Promise<RepoStatus> =>
-  did === A || did === R
+  did === A || did === R || did === L
     ? { kind: "active" }
     : did === B
       ? { kind: "inactive", status: "deactivated" }
@@ -114,5 +116,20 @@ describe("recovery after missed events", () => {
       `${R}|t`,
     ]);
     expect(lines("SELECT count(*) FROM idx.account_job WHERE due_at <= now()")).toEqual(["0"]);
+  });
+
+  test("recovery.status_and_a_refused_repo_do_not_feed_each_other", async () => {
+    // confirm_status reveals L and queues a backfill; getRepo refuses it, which queues confirm_status; L is shown by
+    // then, so that confirmation queues nothing more (accountStore.ts confirmStatus: only a reveal queues a backfill).
+    lines(
+      `INSERT INTO idx.account (did, pds_active, pds_status, updated_at) VALUES ('${L}', false, 'deactivated', now())`,
+    );
+    await deps.index.missedEvents();
+    for (let round = 0; round < 4; round += 1) {
+      await backfill();
+      await confirm();
+    }
+    expect(lines(`SELECT pds_active FROM idx.account WHERE did = '${L}'`)).toEqual(["t"]);
+    expect(lines(`SELECT count(*) FROM idx.account_job WHERE did = '${L}'`)).toEqual(["0"]);
   });
 });
