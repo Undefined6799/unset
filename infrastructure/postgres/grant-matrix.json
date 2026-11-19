@@ -228,6 +228,20 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.invite": {
+      "web": {
+        "columns": {
+          "id": ["SELECT", "INSERT"],
+          "inviter_did": ["SELECT", "INSERT"],
+          "submission_id": ["SELECT", "INSERT"],
+          "state": ["SELECT", "INSERT", "UPDATE"],
+          "sealed_code": ["SELECT", "UPDATE"],
+          "created_at": ["SELECT", "INSERT"],
+          "hidden_at": ["SELECT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "idx.account": {
       "indexer": {
         "columns": {

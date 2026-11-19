@@ -35,7 +35,9 @@ for (const fixture of ALL_PAGES) {
       try {
         const response = await page.goto(`${originOf(fixture)}${fixture.path}`);
         expect(response?.status()).toBe(200);
-        expect(new URL(page.url()).pathname).toBe(fixture.path);
+        // Path and query: /join's fixture carries its invite code in the query (P2.10).
+        const opened = new URL(page.url());
+        expect(opened.pathname + opened.search).toBe(fixture.path);
         await page.waitForLoadState("networkidle");
         await expectTheme(page, fixture, cell);
         const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
