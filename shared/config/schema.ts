@@ -12,6 +12,8 @@ export type Field<T> = {
   readonly kind: Kind;
   readonly parse: (raw: string) => T | undefined;
   readonly default?: T;
+  /** The values that parse, in words, for the generated settings pages (scripts/docs/settings.ts). Data only. */
+  readonly allowed?: string;
   readonly holds?: (config: Readonly<Record<string, unknown>>) => boolean;
 };
 
@@ -55,19 +57,19 @@ export function int(options: { min: number; max: number; default?: number }): Fi
     const value = Number(raw);
     return Number.isSafeInteger(value) && value >= options.min && value <= options.max ? value : undefined;
   };
-  return withDefault({ kind: "int", parse }, options.default);
+  return withDefault({ kind: "int", parse, allowed: `${options.min} to ${options.max}` }, options.default);
 }
 
 /** `true` or `false`, exactly. */
 export function bool(options: { default?: boolean } = {}): Field<boolean> {
   const parse = (raw: string): boolean | undefined => (raw === "true" ? true : raw === "false" ? false : undefined);
-  return withDefault({ kind: "bool", parse }, options.default);
+  return withDefault({ kind: "bool", parse, allowed: "true or false" }, options.default);
 }
 
 /** One of a fixed set of strings. */
 export function oneOf<const V extends string>(values: readonly V[], options: { default?: V } = {}): Field<V> {
   const parse = (raw: string): V | undefined => values.find((v) => v === raw);
-  return withDefault({ kind: "oneOf", parse }, options.default);
+  return withDefault({ kind: "oneOf", parse, allowed: values.join(", ") }, options.default);
 }
 
 type Protocols = readonly ("https:" | "http:")[];
@@ -90,7 +92,7 @@ export function url(options: { protocols: Protocols; default?: string }): Field<
     const href = parseUrl(raw, options.protocols)?.href;
     return href === raw || href === `${raw}/` ? href : undefined;
   };
-  return withDefault({ kind: "url", parse }, options.default);
+  return withDefault({ kind: "url", parse, allowed: options.protocols.join(" or ") }, options.default);
 }
 
 /** Scheme, host and optional port, written exactly as the origin serialises (no path, not even `/`). */
@@ -101,7 +103,7 @@ export function origin(options: { protocols?: Protocols; default?: string } = {}
     // A trailing dot names a different origin for the same host; refuse it rather than guess.
     return parsed?.origin === raw && !parsed.hostname.endsWith(".") ? raw : undefined;
   };
-  return withDefault({ kind: "origin", parse }, options.default);
+  return withDefault({ kind: "origin", parse, allowed: protocols.join(" or ") }, options.default);
 }
 
 /** Comma-separated values of one kind; an empty or space-padded item is invalid. A list never holds a secret. */
@@ -113,7 +115,8 @@ export function list<T>(item: Field<T>, options: { default?: readonly T[] } = {}
     const values = parts.map((part) => item.parse(part));
     return values.every((v) => v !== undefined) ? (values as T[]) : undefined;
   };
-  return withDefault({ kind: "list", parse }, options.default);
+  const allowed = `comma-separated ${item.kind}${item.allowed === undefined ? "" : ` (${item.allowed})`}`;
+  return withDefault({ kind: "list", parse, allowed }, options.default);
 }
 
 /** `never` keeps a default out at compile time; the runtime check keeps it out of untyped callers. */
@@ -123,7 +126,7 @@ function secretField(kind: "secret" | "secretFile", options: SecretOptions): Fie
   if ("default" in options) throw new Error(`${kind} has no default`);
   const parse = (raw: string): Secret | undefined =>
     Buffer.byteLength(raw, "utf8") >= options.minBytes ? new Secret(raw) : undefined;
-  return { kind, parse };
+  return { kind, parse, allowed: `at least ${options.minBytes} bytes` };
 }
 
 /** A secret read from the environment variable itself; loads only when `UNSET_ENV` is exactly `test` (else use `secretFile`). No default exists. */

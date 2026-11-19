@@ -8,5 +8,6 @@ unset is an AT Protocol identity and profile app. These pages are how to underst
 - [Architecture](architecture/)
 - [Areas](areas/)
 - [Endpoints](endpoints/)
+- [Settings](settings/)
 - [Operate](operate/)
 - [Contribute](contribute/)
