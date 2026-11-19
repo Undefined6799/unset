@@ -57,6 +57,9 @@ export const PROFILE_SETTINGS = {
 export const SEARCH_AI_SETTINGS = {
   title: "Search and AI",
   lead: "Who may find your public page. Both are off until you turn them on.",
+  siteOffTitle: "Search and AI listing is switched off on this site",
+  siteOff:
+    "No page here is listed by search engines or AI search, whatever you choose below. Your choices are kept, and they apply if listing is switched on.",
   searchEngines: "Search engines may list my page",
   searchEnginesHint:
     "Google, Bing and others may show your page in results, and it joins our sitemap. Search engines decide what to show, and after you turn this off it can take days to leave their results.",

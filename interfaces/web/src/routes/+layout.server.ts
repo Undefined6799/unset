@@ -11,6 +11,7 @@ import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
 import { policyOf } from "../lib/server/route-table.ts";
+import { config } from "../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
 import type { ShellData } from "../lib/shell.ts";
 
@@ -56,5 +57,15 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
   // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
   // shows so its dismiss records that one and no newer.
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
-  return { signedIn: member, account, appOpen: open, prefs, privacyNotice, signInHref: signInHref(url.pathname) };
+  // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
+  const siteNoindex = config.SEARCH_LISTING !== "on";
+  return {
+    signedIn: member,
+    account,
+    appOpen: open,
+    prefs,
+    privacyNotice,
+    signInHref: signInHref(url.pathname),
+    siteNoindex,
+  };
 };
