@@ -1,6 +1,7 @@
 // P1.39b (ADR 0046 decision 3): the edge's rules on Caddy's adapted config. Each reviewed config in adapted/ passes
 // with real values in place of the sentinels, and each rule has a red built by changing one of them. No container:
 // the configs themselves are proved against the built image in adapted.image.test.ts.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -15,6 +16,7 @@ import {
   type EdgeMode,
   type EnvName,
   type Json,
+  PAGE_CSP,
 } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
@@ -741,9 +743,12 @@ const TOO_MANY_TRIES: Red[] = [
     NOT_THE_PAGE("PDS_HOST"),
   ],
   [
-    "a page style the CSP does not allow",
+    "a page CSP that allows a script",
     "local",
-    (c) => editPage(c, APP_LOCAL, (body) => body.replace("max-width:26rem", "max-width:30rem")),
+    (c) => {
+      const set = o(o(o(a(pageRoutes(c, APP_LOCAL)[1]?.handle).at(-1)).response).set);
+      set["Content-Security-Policy"] = [`${String(a(set["Content-Security-Policy"])[0])}; script-src 'self'`];
+    },
     NOT_THE_PAGE("APP_HOST"),
   ],
   [
@@ -1121,6 +1126,22 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     expect(words).toContain("Wait a few minutes, then try again.");
     expect(words).toContain("Go to the home page");
     expect(words).not.toMatch(/[0-9]/);
+  });
+
+  test("too_many_tries_csp_allows_exactly_the_page_style", () => {
+    // The rules judge the CSP's shape; here its hash is the SHA-256 of the reviewed page's one style (CSP Level 3,
+    // "hash-source"), so the browser applies that style and nothing else, on every site of every env.
+    for (const mode of ["shipped", "local", "dev"] as const) {
+      const config = adapted(mode);
+      for (const route of errorRoutes(config)) {
+        const host = String(a(o(a(o(route).match)[0]).host)[0]);
+        const body = String(page(config, host).body);
+        const set = o(o(o(a(pageRoutes(config, host)[1]?.handle).at(-1)).response).set);
+        const hash = PAGE_CSP.exec(String(a(set["Content-Security-Policy"])[0]))?.[1];
+        const style = /<style>([^<]*)<\/style>/.exec(body)?.[1] ?? "";
+        expect(hash, `${mode} ${host}`).toBe(createHash("sha256").update(style).digest("base64"));
+      }
+    }
   });
 
   test("rules_pass_whatever_order_caddy_gives_the_two_sites", () => {

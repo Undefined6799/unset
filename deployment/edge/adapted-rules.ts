@@ -10,8 +10,6 @@
 // and the preflight's certificateProblems); ADR 0046's table maps them.
 //
 // The value shapes and the dev stack's ruled addresses are written here, their only copy since P1.39e.
-import { createHash } from "node:crypto";
-
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Obj = { [key: string]: Json };
 
@@ -234,13 +232,14 @@ const cspAppend = (host: string): Json => ({
 /**
  * (too-many-tries) as adapted for one site (snippets/too-many-tries.caddy): on a 429 from a zone, the security headers,
  * the page's CSP and no-store on every response, and the page itself, still a 429, only for a browser navigation; a
- * fetch or a stream gets Caddy's empty 429. `body` is the page, which pageProblems judges; the CSP names its style's
- * hash, so the page can load nothing else.
+ * fetch or a stream gets Caddy's empty 429. `body` is the page, which pageProblems judges, and `csp` its policy:
+ * nothing but one style by its SHA-256 hash, so the page can load nothing else. The rules import nothing (no
+ * dependency-cruiser row for the edge), so adapted-rules.test.ts proves the hash is the reviewed style's.
  */
 const NAVIGATE: Json = [{ header: { "Sec-Fetch-Mode": ["navigate"] } }];
-const pageCsp = (hash: string): string =>
-  `default-src 'none'; style-src 'sha256-${hash}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`;
-const tooManyTries = (host: string, body: string): Json => ({
+export const PAGE_CSP =
+  /^default-src 'none'; style-src 'sha256-([A-Za-z0-9+/]{43}=)'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'$/;
+const tooManyTries = (host: string, body: string, csp: string): Json => ({
   match: [{ host: [host] }],
   handle: [
     {
@@ -261,7 +260,7 @@ const tooManyTries = (host: string, body: string): Json => ({
                     {
                       handler: "headers",
                       response: {
-                        set: { "Cache-Control": ["no-store"], "Content-Security-Policy": [pageCsp(styleHash(body))] },
+                        set: { "Cache-Control": ["no-store"], "Content-Security-Policy": [csp] },
                       },
                     },
                   ],
@@ -550,9 +549,9 @@ function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
   const found = unknownKeys(errors, ["routes"], "the error handling");
   for (const host of hostsOf(mode)) {
     const own = routes.filter((route) => same(route.match, [{ host: [env[host] as string] }]));
-    const body = own.length === 1 ? pageOf(own[0] as Obj) : "";
+    const [body, csp] = own.length === 1 ? pageOf(own[0] as Obj) : ["", ""];
     const page = pageProblems(body);
-    if (page.length > 0 || !same(own[0], tooManyTries(env[host] as string, body))) {
+    if (page.length > 0 || !PAGE_CSP.test(csp) || !same(own[0], tooManyTries(env[host] as string, body, csp))) {
       found.push(`{$${host}}: the error route is not the ruled too-many-tries page`);
     }
     found.push(...page.map((problem) => `{$${host}}: the too-many-tries page ${problem}`));
@@ -561,18 +560,15 @@ function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
   return found;
 }
 
-/** The page a too-many-tries route answers with, or "" when the route is not shaped like one. */
-function pageOf(route: Obj): string {
+/** The page and the CSP a too-many-tries route sends, each "" when the route is not shaped like one. */
+function pageOf(route: Obj): [body: string, csp: string] {
   const status = obj(arr(obj(arr(obj(arr(route.handle)[0]).routes)[0]).handle)[0]);
-  const respond = obj(arr(obj(arr(status.routes)[2]).handle)[0]);
-  return typeof respond.body === "string" ? respond.body : "";
+  const routes = arr(status.routes).map(obj);
+  const respond = obj(arr(routes[2]?.handle)[0]);
+  const headers = obj(arr(routes[1]?.handle).at(-1));
+  const csp = arr(obj(obj(headers.response).set)["Content-Security-Policy"])[0];
+  return [typeof respond.body === "string" ? respond.body : "", typeof csp === "string" ? csp : ""];
 }
-
-/** The base64 SHA-256 of the page's one inline style: the hash its CSP allows (CSP Level 3, "hash-source"). */
-const styleHash = (body: string): string =>
-  createHash("sha256")
-    .update(/<style>([^<]*)<\/style>/.exec(body)?.[1] ?? "")
-    .digest("base64");
 
 /**
  * Why the page is not fixed text that loads nothing: one printable-ASCII document with no Caddy placeholder (Caddy
