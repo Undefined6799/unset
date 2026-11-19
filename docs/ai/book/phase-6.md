@@ -2984,16 +2984,17 @@ reachable, and chat stays at the end of onboarding.
   chat is being set up, and an operator alert fires when any active member has been `chat_pending` for over 1 hour
   (hypothesis); a permanent failure opens a held case in `admin`. This replaces "onboarding completes only when the
   seed is done": the mechanism that catches it is the runner plus that alert.
-- **[ALEX] Open for P6.00: the app's browser as the chat device.** Alex (2026-11-19 05:07Z): wherever the app is
-  open, chat is open, so that browser should count as the member's approved Matrix device as soon as they sign in
-  to the app. The plan so far makes the device only when the member signs in to chat on its own origin, and four
-  accepted decisions shape that: chat runs on its own origin so its keys and sessions are isolated from the app
-  (§5.6); MAS shows its consent screen once and cannot skip it (MAS 1.26); seeding never makes a device, token or key for a
-  member (§5.6), and the MAS admin power that could stays boxed in `chat-admin` (decision 13); and a device is trusted only once cross-signed,
-  which needs the recovery key (MSC4153 isolation mode). Recommended: keep those, and start chat's sign-in in the
-  same browser right after onboarding, so in practice that browser becomes the device at signup with one consent
-  click and the recovery-key step, which can wait ("Later"). Making it silent at app sign-in would change those
-  decisions and needs an ADR and Alex's typed line.
+- **Chat sign-in rides on app sign-in (Alex, 2026-11-19 05:07Z and 05:11Z; built at P6.00 with an ADR).** The
+  app is the chat server's sign-in (MAS's upstream provider), so a member never signs in to chat by hand. When a
+  member signs in to the app, the browser makes an automatic round trip through the chat origin and MAS and back,
+  and comes out with a chat device. The device and its keys live on the chat origin only, so origin isolation
+  (§5.6) holds; seeding still makes no device, token or key, and the MAS admin power stays in `chat-admin`
+  (decision 13). MAS shows its consent screen once per browser and cannot skip it (MAS 1.26): the first one is the
+  onboarding chat step; a new browser later sees one consent click. The member's first device bootstraps
+  cross-signing and is trusted on its own; every later device is approved by an earlier device or the recovery key
+  (MSC4153 isolation mode). Our server never holds members' chat keys, so later devices are never approved
+  silently. P6.00 checks the round trip against MAS's and the pinned matrix-js-sdk's current docs (prompt
+  handling, what happens when the MAS session already exists) before the ADR is written.
 - **Accounts that exist before Phase 6 (answer 3):** staging accounts are for testing only and nothing there is
   permanent. They keep using the app; their chat is set up by P6.05's backfill CLI, or the accounts are deleted and
   signed up again to test the flow. No migration is planned for them.
