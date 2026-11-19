@@ -1,4 +1,5 @@
-// The web image carries every workspace its server reaches (P2.06). node_modules/@unset/* are links into the
+// The web image carries every workspace its server reaches (P2.06), and the indexer image every workspace its process
+// reaches (P3.05s). node_modules/@unset/* are links into the
 // workspace folders, so a folder the runtime stage does not copy leaves a dangling link and the server exits at
 // startup with ERR_MODULE_NOT_FOUND. web_image_boots_to_config_check sees that only after a CI image build; this reads
 // the Dockerfile and the package manifests, so `npm run check` sees it first.
@@ -34,11 +35,14 @@ function runtimeClosure(from: string, folders: Map<string, string>): Set<string>
   return seen;
 }
 
+/** The folders a Dockerfile's runtime stage copies from its deps or build stage. */
+const copiedBy = (dockerfile: string): string[] =>
+  [
+    ...readFileSync(join(ROOT, dockerfile), "utf8").matchAll(/^COPY --from=(?:deps|build) \/app\/(\S+) \/app\/\1$/gm),
+  ].map((match) => String(match[1]));
+
 test("web_image_copies_every_workspace_the_server_reaches", () => {
-  const dockerfile = readFileSync(join(ROOT, "deployment/images/node-app.Dockerfile"), "utf8");
-  const copied = [...dockerfile.matchAll(/^COPY --from=(?:deps|build) \/app\/(\S+) \/app\/\1$/gm)].map(
-    (match) => match[1],
-  );
+  const copied = copiedBy("deployment/images/node-app.Dockerfile");
   const needed = runtimeClosure("interfaces/web", workspaceFolders());
   expect(copied.length).toBeGreaterThan(0);
   expect(needed.size).toBeGreaterThan(1);
@@ -46,5 +50,13 @@ test("web_image_copies_every_workspace_the_server_reaches", () => {
     .filter((folder) => folder !== "apps/web") // SvelteKit's build bundles its components; the source stays out
     .filter((folder) => folder !== "interfaces/web") // copied file by file (images.test.ts prod_image_has_ssr_build_only)
     .filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
+  expect(missing).toEqual([]);
+});
+
+test("indexer_image_copies_every_workspace_the_process_reaches", () => {
+  const copied = copiedBy("deployment/images/indexer.Dockerfile");
+  const needed = runtimeClosure("interfaces/indexer", workspaceFolders());
+  expect(needed.size).toBeGreaterThan(1);
+  const missing = [...needed].filter((folder) => !copied.some((dir) => folder === dir || folder.startsWith(`${dir}/`)));
   expect(missing).toEqual([]);
 });

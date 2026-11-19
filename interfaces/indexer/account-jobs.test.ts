@@ -13,7 +13,7 @@ function fakeStore(due: AccountJob[]) {
   const confirmed: [string, ConfirmedStatus][] = [];
   const failed: string[] = [];
   const asked: string[] = [];
-  const store: AccountStore = {
+  const store: Pick<AccountStore, "dueJobs" | "confirmed" | "failed"> = {
     dueJobs: async (kind) => {
       asked.push(kind);
       return due.filter((job) => job.kind === kind);
@@ -42,10 +42,31 @@ describe("confirmPass", () => {
       [C]: { kind: "not_found" },
     };
     const readStatus: RepoStatusReader = async (did) => answers[did] ?? { kind: "unavailable" };
-    const pass = await confirmPass({ store: fake.store, readStatus, timeoutMs: 1000 });
+    const pass = await confirmPass({
+      store: fake.store,
+      readStatus,
+      timeoutMs: 1000,
+      signal: new AbortController().signal,
+    });
     expect(fake.asked).toEqual(["confirm_status", "confirm_deletion"]);
     expect(fake.confirmed).toEqual([[A, { kind: "active" }]]);
     expect(fake.failed).toEqual([B]);
     expect(pass).toEqual({ confirmed: 1, unavailable: 1, failed: 1 });
+  });
+
+  test("indexer.confirm_stop_records_no_failure", async () => {
+    // A status read cut short by SIGTERM reads as unavailable; recording that would back the job off for nothing.
+    const fake = fakeStore([
+      { did: A, kind: "confirm_status", attempts: 0, claim: "c" },
+      { did: B, kind: "confirm_status", attempts: 0, claim: "c" },
+    ]);
+    const stop = new AbortController();
+    const readStatus: RepoStatusReader = async () => {
+      stop.abort();
+      return { kind: "unavailable" };
+    };
+    const pass = await confirmPass({ store: fake.store, readStatus, timeoutMs: 1000, signal: stop.signal });
+    expect(pass).toEqual({ confirmed: 0, unavailable: 0, failed: 0 });
+    expect(fake.failed).toEqual([]);
   });
 });
