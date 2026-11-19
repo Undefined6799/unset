@@ -375,7 +375,7 @@
       },
       "search-ai-form.svelte": {
         "origin": "ours",
-        "purpose": "Settings › Profile's Search and AI form: two switches, search title and description, and their honest limits, posted to /settings/search-and-ai (ADR 0062)."
+        "purpose": "Settings › Profile's Search and AI form: two switches, search title and description, and their honest limits, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
       }
     }
   }
