@@ -20,6 +20,19 @@ export {
 } from "./auth/gates.ts";
 export type { FetchRequest, FetchTarget, HttpOutcome, IdentityNetwork, TxtOutcome } from "./contract.ts";
 export type { ResolvedDid } from "./did-doc.ts";
+export {
+  type InviteClaim,
+  type InviteId,
+  type InviteIssue,
+  type InviteOutcome,
+  type InvitePorts,
+  type InviteRefusal,
+  issueMemberInvite,
+  joinCode,
+  parseInviteId,
+  parseSubmissionId,
+  type SubmissionId,
+} from "./invites.ts";
 export { PRIVACY_VERSION, TERMS_VERSION } from "./legal/versions.ts";
 export {
   type Consistency,

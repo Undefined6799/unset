@@ -43,7 +43,9 @@ function seedApp(did: string, fill: string): void {
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');
      INSERT INTO app.single_use (id, purpose, bind_did, expires_at)
        VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');
-     INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());`,
+     INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());
+     INSERT INTO app.invite (id, inviter_did, submission_id, state, created_at)
+       VALUES (gen_random_uuid(), '${did}', gen_random_uuid(), 'pending', now());`,
   );
 }
 
@@ -174,6 +176,7 @@ describe("core.erase_did", () => {
     expect(result.outcome).toBe("erased");
     expect(result.counts).toMatchObject({
       "app.account": 1,
+      "app.invite": 1,
       "app.session": 1,
       "app.oauth_session": 1,
       "app.single_use": 1,
@@ -208,6 +211,7 @@ describe("core.erase_did", () => {
     const result = await erase(X, "user_request");
     expect(result.counts).toEqual({
       "app.account": 0,
+      "app.invite": 0,
       "app.session": 0,
       "app.oauth_session": 0,
       "app.single_use": 0,
