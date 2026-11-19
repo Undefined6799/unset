@@ -1,10 +1,11 @@
 // The member's profile cards: sh.unset.section records in their own repo (ADR 0051), over pdsCall. Values are
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
-// createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts); record keys: atproto.com/specs/record-key.
+// createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
+// record keys: atproto.com/specs/record-key.
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
-import { type BuiltRecord, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
+import { type BuiltRecord, isXrpcError, type PdsCall, type SaveOutcome, saveRecord } from "./repo-record.ts";
 
 export const CARD_COLLECTION = "sh.unset.section";
 
@@ -21,8 +22,16 @@ const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_CARDS = 100;
 
 export type StoredCard = { readonly key: string; readonly value: unknown; readonly cid: string };
-/** The cards read, and whether that is all of them. */
-export type CardList = { readonly cards: readonly StoredCard[]; readonly complete: boolean };
+/**
+ * The cards read, whether that is all of them, and whether more than MAX_CARDS are stored (`overflow`: a writer
+ * outside this app can pass the cap; the list then holds the first MAX_CARDS and is not complete). A list cut short by
+ * the budget below has `overflow` false: how many cards remain is unknown.
+ */
+export type CardList = {
+  readonly cards: readonly StoredCard[];
+  readonly complete: boolean;
+  readonly overflow: boolean;
+};
 
 /** The record key of `uri` when it names a card in `did`'s own repo, else null. */
 function ownCardKey(uri: string, did: Did): string | null {
@@ -98,8 +107,7 @@ export async function listCardRecords(
     single = Math.max(0, single - 1);
     cards.push(...page.value.records);
     bytes += page.value.bytes;
-    if (page.value.cursor === undefined)
-      return { kind: "ok", value: { cards: cards.slice(0, MAX_CARDS), complete: cards.length <= MAX_CARDS } };
+    if (page.value.cursor === undefined) return listed(cards, cards.length <= MAX_CARDS);
     cursor = page.value.cursor;
     // One page past MAX_CARDS is read, so exactly MAX_CARDS cards still end with an empty last page and count as all.
     if (cards.length > MAX_CARDS || bytes > MAX_BYTES) break;
@@ -107,30 +115,58 @@ export async function listCardRecords(
   return partial(cards);
 }
 
-const partial = (cards: readonly StoredCard[]): PdsResult<CardList> => ({
+const listed = (cards: readonly StoredCard[], complete: boolean): PdsResult<CardList> => ({
   kind: "ok",
-  value: { cards: cards.slice(0, MAX_CARDS), complete: false },
+  value: { cards: cards.slice(0, MAX_CARDS), complete, overflow: cards.length > MAX_CARDS },
 });
+const partial = (cards: readonly StoredCard[]) => listed(cards, false);
 
-/** Creates a card; the PDS picks its key (a TID). Not retried: a retry could create it twice. */
+/**
+ * The CID of the member's repo head (com.atproto.sync.getLatestCommit), for a create that must land on the repo state
+ * a count was read from. The PDS accepts the member's own OAuth token here without a scope check
+ * (@atproto/pds 0.5.51 api/com/atproto/sync/getLatestCommit.ts, authorizationOrAdminTokenOptional).
+ */
+export function latestCommit(pdsCall: PdsCall, ctx: PdsContext | null, did: Did): Promise<PdsResult<string>> {
+  return pdsCall(ctx, did, async (agent) => (await agent.com.atproto.sync.getLatestCommit({ did })).data.cid, {
+    idempotent: true,
+  });
+}
+
+export type CreateOutcome =
+  | { readonly kind: "created"; readonly key: string }
+  /** The repo's head was no longer `swapCommit`: something else was written first, and nothing was created. */
+  | { readonly kind: "changed" };
+
+/**
+ * Creates a card, only if the repo's head is still `swapCommit` (compare-and-swap on the whole repo: createRecord
+ * `swapCommit`; @atproto/pds 0.5.51 checks it inside the repo's write transaction, processWrites, and answers
+ * InvalidSwap, writing nothing). The PDS picks the key (a TID). Not retried: a retry could create it twice.
+ */
 export function createCardRecord(
   pdsCall: PdsCall,
   ctx: PdsContext | null,
   did: Did,
   record: Readonly<Record<string, unknown>>,
-): Promise<PdsResult<{ readonly key: string }>> {
+  swapCommit: string,
+): Promise<PdsResult<CreateOutcome>> {
   return pdsCall(
     ctx,
     did,
-    async (agent) => {
-      const { data } = await agent.com.atproto.repo.createRecord({
-        repo: did,
-        collection: CARD_COLLECTION,
-        record: { ...record },
-      });
-      const key = ownCardKey(data.uri, did);
-      if (key === null) throw new Error("createRecord returned a record outside this repo");
-      return { key };
+    async (agent): Promise<CreateOutcome> => {
+      try {
+        const { data } = await agent.com.atproto.repo.createRecord({
+          repo: did,
+          collection: CARD_COLLECTION,
+          record: { ...record },
+          swapCommit,
+        });
+        const key = ownCardKey(data.uri, did);
+        if (key === null) throw new Error("createRecord returned a record outside this repo");
+        return { kind: "created", key };
+      } catch (error: unknown) {
+        if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };
+        throw error;
+      }
     },
     { idempotent: false },
   );

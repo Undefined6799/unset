@@ -157,6 +157,8 @@ export type PdsFixture = {
   readonly writesFile: string;
   /** XRPC methods that answer 503, to play an unavailable PDS. */
   readonly failing?: readonly string[];
+  /** XRPC methods (com.atproto.repo.*) whose answer is held this many milliseconds, to line up two requests' calls. */
+  readonly slow?: Readonly<Record<string, number>>;
   /** With it the stand-in answers com.atproto.server.getSession for `did` with this email state. */
   readonly session?: { readonly emailConfirmed: boolean };
 };
