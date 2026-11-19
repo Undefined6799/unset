@@ -1966,6 +1966,7 @@ Depth: **detail by risk; P5.00 refines** (contract parts in full, algorithms a r
 |---|---|---|---|---|
 | P5.00 | Refine Phase 5 | [STOP] | P4.28 | `phase-5.md` |
 | P5.01 | Hosting and backup storage decision | [STOP] [ALEX] | P5.00 | `phase-5.md` |
+| P5.01o | Object store operations on the chosen provider | [SEC] | P5.01 | `phase-5.md` |
 | P5.02g | `backup` role grants (SE-6) | [SEC] | P5.00, P1.12 | `phase-5.md` |
 | P5.02 | Production compose with profiles, per-container egress and own-host flows | [SEC] | P5.02g, P5.01 | `phase-5.md` |
 | P5.04q | Backup-freshness workflow (check part of P5.04; SE-6 `q`) | [SEC] | P5.02 | `phase-5.md` |
