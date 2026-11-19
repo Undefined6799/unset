@@ -221,6 +221,23 @@ describe("index store", () => {
     expect(health.counters).toMatchObject({ ingest_dead_letter: 1, ingest_replayed: 2, ingest_erased: 2 });
   });
 
+  test("index.health_shows_how_long_jobs_have_waited_and_failed", async () => {
+    // A backfill due two minutes ago that no pass took, and a confirmation failing for an hour (backed off, so not due).
+    const J = "did:plc:jjjjjjjjjjjjjjjjjjjjjjjj";
+    track(J, true);
+    postgres.sql(
+      "unset",
+      `DELETE FROM idx.account_job WHERE did = '${J}';
+       INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at) VALUES
+         ('${J}', 'backfill', now() - interval '2 minutes', 0, now() - interval '2 minutes'),
+         ('${J}', 'confirm_status', now() + interval '1 hour', 3, now() - interval '1 hour')`,
+    );
+    const { jobs } = await store.health();
+    expect(jobs.backfill?.oldestDueS).toBeGreaterThanOrEqual(120);
+    expect(jobs.confirm_status?.oldestFailingS).toBeGreaterThanOrEqual(3600);
+    postgres.sql("unset", `DELETE FROM idx.account WHERE did = '${J}'`);
+  });
+
   test("index.dead_letter_keeps_no_did_of_an_erased_or_untracked_account", async () => {
     const firstSeen = new Date("2026-11-18T00:00:00Z");
     const jobs = () => lines("SELECT did, kind FROM idx.account_job ORDER BY did, kind");

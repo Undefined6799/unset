@@ -20,6 +20,10 @@ export type RunDeps = {
   readonly passes: Passes;
   /** Milliseconds between the end of one tick and the start of the next. */
   readonly intervalMs: number;
+  /** How long a pass may go without finishing once before health calls it overdue (INDEXER_PASS_OVERDUE_MS). */
+  readonly overdueAfterMs: number;
+  /** A monotonic clock in milliseconds; performance.now by default. */
+  readonly now?: () => number;
 };
 
 /** What the loop has seen since the process started; no DID, handle or content. */
@@ -31,6 +35,13 @@ export type RunHealth = {
   readonly lastPass: Readonly<Partial<Record<PassName, Readonly<Record<string, number>>>>>;
   /** Each pass's counts added up over every run since start, so a count that keeps rising (confirm's failed) shows. */
   readonly totals: Readonly<Record<PassName, Readonly<Record<string, number>>>>;
+  /** Milliseconds since each pass last finished without throwing, or since start if it never has. */
+  readonly sinceSuccessMs: Readonly<Record<PassName, number>>;
+  /**
+   * Passes past overdueAfterMs: their work is not getting done (the database refusing, a pass stuck), whatever the
+   * stream does. Health is unhealthy while this is not empty.
+   */
+  readonly overdue: readonly PassName[];
 };
 
 export type Runner = { readonly done: Promise<void>; readonly health: () => RunHealth };
@@ -40,6 +51,14 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
   const passFailures: Record<PassName, number> = { track: 0, backfill: 0, confirm: 0, handles: 0 };
   const lastPass: Partial<Record<PassName, Readonly<Record<string, number>>>> = {};
   const totals: Record<PassName, Record<string, number>> = { track: {}, backfill: {}, confirm: {}, handles: {} };
+  const now = deps.now ?? performance.now.bind(performance);
+  const started = now();
+  const lastSuccess: Record<PassName, number> = {
+    track: started,
+    backfill: started,
+    confirm: started,
+    handles: started,
+  };
 
   const tick = async (): Promise<void> => {
     for (const name of PASS_ORDER) {
@@ -47,6 +66,7 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
       try {
         const result = await deps.passes[name](signal);
         lastPass[name] = result;
+        lastSuccess[name] = now();
         for (const [key, value] of Object.entries(result)) totals[name][key] = (totals[name][key] ?? 0) + value;
       } catch {
         passFailures[name] += 1;
@@ -68,12 +88,21 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
   const done = Promise.all([stream, looping]).then(() => undefined);
   return {
     done,
-    health: () => ({
-      ticks,
-      passFailures: { ...passFailures },
-      lastPass: { ...lastPass },
-      totals: Object.fromEntries(PASS_ORDER.map((name) => [name, { ...totals[name] }])) as RunHealth["totals"],
-    }),
+    health: () => {
+      const at = now();
+      const sinceSuccessMs = Object.fromEntries(PASS_ORDER.map((name) => [name, at - lastSuccess[name]])) as Record<
+        PassName,
+        number
+      >;
+      return {
+        ticks,
+        passFailures: { ...passFailures },
+        lastPass: { ...lastPass },
+        totals: Object.fromEntries(PASS_ORDER.map((name) => [name, { ...totals[name] }])) as RunHealth["totals"],
+        sinceSuccessMs,
+        overdue: PASS_ORDER.filter((name) => sinceSuccessMs[name] > deps.overdueAfterMs),
+      };
+    },
   };
 }
 

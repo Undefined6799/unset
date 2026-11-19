@@ -42,6 +42,10 @@ alert on it before production. A failed read answers 503 with no body. One read 
 (`HEALTH_CACHE_MS`), so callers on the internal network cannot starve the pool. A stream that keeps stopping with no
 frame applied for `INDEXER_STREAM_UNHEALTHY_MS` (5 min) makes health 503 with the counts, so the image's HEALTHCHECK
 fails (`stream-watch.ts`; a quiet PDS after one stop is not a fault).
+A pass that has not finished without throwing for `INDEXER_PASS_OVERDUE_MS` (30 min; a round can take minutes, so
+not a multiple of the 10 s interval) is listed in `loop.overdue` and also makes health 503 (`run.ts`). `index.jobs`
+gives, per job kind, the oldest due job's wait and the oldest failing job's age in seconds: for an outside alert only,
+since our PDS being down is not the indexer's fault and a restart would not help (outside review, 2026-11-19).
 
 **Handles (P3.08s).** `handles.ts` is the rule: verifyHandle fresh (both directions), and for a handle under
 `HOSTED_HANDLE_SUFFIXES` (compose sets it from `PDS_SERVICE_HANDLE_DOMAINS`, the PDS's own list) also our PDS's word: the DID document names `PDS_PUBLIC_URL`, getRepoStatus is active, and
