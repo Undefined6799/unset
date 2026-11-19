@@ -1,5 +1,5 @@
 ---
-version: 2026-10-17
+version: 2026-11-19
 ---
 
 # Privacy notice
@@ -14,7 +14,7 @@ The operator of unset.sh decides why this notice's personal information is used.
 
 ## What we hold
 
-We hold your account DID, session records, drafts, invites, sealed sign-in tokens and onboarding timestamps. We never hold your password. You type a password only on the sign-in server, {{pdsHost}}.
+We hold your account DID, session records, drafts, invites, sealed sign-in tokens and onboarding timestamps. We never hold your password. You type a password only on the sign-in server, {{pdsHost}}. When your account is on our PDS, we also keep a copy of the public profile and sections you publish there, with your handle and your account's status, so your profile page loads from our own database.
 
 <!-- P3 -->
 
@@ -37,6 +37,7 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 | What | How long |
 | --- | --- |
 | Account, profile and onboarding timestamps | Until the account is deleted, then erased, including from backups within 30 days |
+| Copy of your public profile and sections | Until you delete the record, or the account is deleted, then erased, including from backups within 30 days. We keep only a keyed hash of your account identifier, so we never copy your profile again |
 | Sessions | Until you sign out, or 7 days idle, or 30 days at most |
 | Sealed sign-in tokens | Until you sign out or the grant ends |
 | Invites | Until the account is deleted |
@@ -74,3 +75,4 @@ Public profiles and posts are copied by relays and by other apps. We cannot eras
 ## Changes
 
 - 2026-10-17: First placeholder. Not reviewed by a lawyer. Not legal advice.
+- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, and the keyed hash we keep after erasure.
