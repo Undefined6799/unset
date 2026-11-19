@@ -77,8 +77,15 @@ const { handler } = await import("#kit/handler").catch((error: unknown): never =
   process.exit(1);
 });
 
-/** Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). */
-const BASE_HEADERS = headerSets(config).static;
+/**
+ * Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). With Search and AI listing off
+ * on the whole site (SEARCH_LISTING, P1.21b) every response, files and refusals included, also says noindex; a page
+ * that sets its own X-Robots-Tag sets the same value.
+ */
+const BASE_HEADERS = {
+  ...headerSets(config).static,
+  ...(config.SEARCH_LISTING === "on" ? {} : { "x-robots-tag": "noindex" }),
+};
 
 const METHODS: readonly NonNullable<LogFields["method"]>[] = [
   "GET",

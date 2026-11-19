@@ -4642,6 +4642,22 @@ shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/route
 
 ---
 
+### P1.21b — Site-wide switch for search and AI listing (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — (builds on ADR 0062, merged in #1731) · **Plan:** §5.1
+
+Alex asked on 2026-11-19 for one line that turns search and AI listing off for the whole app, so staging is never
+listed. The web setting `SEARCH_LISTING` (`on` or `off`) defaults to `off`. Off: every response carries
+`X-Robots-Tag: noindex` (server.ts) and every page `<meta name="robots" content="noindex">` (root layout),
+robots.txt refuses the training and AI search crawlers every path, lets `User-agent: *` fetch every page (a page it
+blocks never shows its noindex, and a linked address could still be listed: ADR 0031 Decision 1), and names no
+sitemap; the sitemap lists nothing; neither reads members' choices. The switch takes a restart, and a copy cached
+before it may live five minutes. Members' stored choices are untouched, and Settings › Profile › Search and AI says listing is
+off on this site. On: ADR 0062 exactly. Both staging compose files and the local one set `off` as a literal; turning
+it on for production is a later step that needs Alex's word. Fits inside ADR 0062, which decides what a member's
+choice does on a listed site; it adds no data and no crawler rule. The letter does not belong to the token pipeline
+below; it was the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
@@ -4657,7 +4673,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
-P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: l, m, q.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: b (search listing switch), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's

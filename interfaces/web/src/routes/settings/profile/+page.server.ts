@@ -41,5 +41,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
     // The Search and AI section (ADR 0062), kept in our database, so it shows even when the PDS did not answer.
     discoverability,
     discoverabilityLimits: DISCOVERABILITY_LIMITS,
+    // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
+    searchListingOff: config.SEARCH_LISTING !== "on",
   };
 };
