@@ -9,11 +9,11 @@ and the security-lane audit rows that name them as subject or actor. It writes o
 the reason and no DID. That is not every row that ever named the person; the limits are listed next.
 
 What it does not remove, and who does:
-- **The PDS account** (repository, blobs, email, password). Delete it in the PDS yourself (step 5).
+- **The PDS account** (repository, blobs, email, password). Delete it in the PDS yourself (step 6).
 - **Moderation audit rows** about the person. They keep the DID by design until their retention class ends (admin
   design 8).
 - **A sign-in in progress.** Its state row (`app.oauth_state`) holds no DID column; it leaves with the hourly sweep,
-  and a sign-in that completes after the run creates new rows. That is why step 5 says to run the function again.
+  and a sign-in that completes after the run creates new rows. That is why step 6 says to run the function again.
 - **Files in the object store.** The app stores none per person today. When it does, that part of erasure is gated on
   the store's forced vacuum (ADR 0041 Decision 7).
 - **Indexed network data and legal holds.** Neither exists yet. When the indexer stores records (Phase 3) and holds
@@ -29,34 +29,38 @@ column type only: a DID kept in a plain text column is invisible to it. The othe
 and the coverage test, which run before merge.
 
 ## Steps
-1. Confirm the request and the DID. Resolve the handle to its DID in both directions; never erase by handle.
-2. Open `psql` on the `unset` database, logged in as `migrator` itself (the credentials the `migrate` service uses).
+1. When the person asks us to delete their account (not a takedown or a PDS deletion they made themselves), first
+   deactivate the account in the PDS and note the date with the request. Run the steps below 30 days later, and only
+   if the account is still deactivated; if the person reactivated it, the request is withdrawn (ADR 0067 rule 2;
+   P5.08b automates this).
+2. Confirm the request and the DID. Resolve the handle to its DID in both directions; never erase by handle.
+3. Open `psql` on the `unset` database, logged in as `migrator` itself (the credentials the `migrate` service uses).
    No other role may run the function, and a superuser who switches with `SET ROLE migrator` is refused at the audit
    step: the audit records the login role, and only `migrator` may write this record.
-3. Keep the DID out of the shell history, the `psql` history and the server log (SE-7). Type these three lines; the
+4. Keep the DID out of the shell history, the `psql` history and the server log (SE-7). Type these three lines; the
    second asks for the DID, so paste it at the prompt and never on a command line:
    `\set HISTFILE /dev/null`
    `\prompt 'DID: ' did`
    `SHOW log_statement; SHOW log_parameter_max_length_on_error;`
    The last line must answer `none` and `0` (the defaults). If it does not, stop: the server would log the DID.
-4. Run it with one of the reasons `user_request`, `account_deleted`, `moderator_foreign`, `legal_hold_closed`:
+5. Run it with one of the reasons `user_request`, `account_deleted`, `moderator_foreign`, `legal_hold_closed`:
    `SELECT core.erase_did($1, $2) \bind :did user_request \g`
    The DID travels as a bound parameter, so the statement text the server logs when a call fails holds only `$1`.
    Never write the DID into the statement as a literal: a failed call would copy the whole statement, DID included,
    into the server log, and `migrator` may not turn that logging off for its session.
    It answers with `"outcome": "erased"` and the number of rows removed per table. Any error removes nothing. A second
    run is safe and answers with zeros (it writes a second audit record).
-5. Delete the account in the PDS. Do this after step 4, so a session cannot recreate rows in between; if the person
-   signs in again before the PDS account is gone, or was part-way through a sign-in, run step 4 again.
-6. If the handle is one of ours (under `unset.name`, or `staging.unset.name` on staging), an owner logged in to deSEC
+6. Delete the account in the PDS. Do this after step 5, so a session cannot recreate rows in between; if the person
+   signs in again before the PDS account is gone, or was part-way through a sign-in, run step 5 again.
+7. If the handle is one of ours (under `unset.name`, or `staging.unset.name` on staging), an owner logged in to deSEC
    removes its `_atproto.<name>` TXT record by hand, until the ADR 0063 writer does it (ADR 0067). Resolvers may
    serve the old record until its TTL runs out; the indexer's check on our PDS covers that time. Do the same when an
    account is taken down; write it again if the takedown is reversed. Do not tombstone the DID unless the person
    explicitly asked for their identity to be ended (ADR 0067 decision 4).
-7. Add the name, lower-cased, to the burned-name file: a file of its own outside the repository, holding bare names
+8. Add the name, lower-cased, to the burned-name file: a file of its own outside the repository, holding bare names
    only, with no DID, no date and no link to the privacy request records, until P3.08n builds the list. Before
    writing any new TXT record by hand, check the name is not there: a used name is never issued again.
-8. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
+9. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
    repository, in a PR or in a log. Close `psql` when done.
 
 ## If it fails
