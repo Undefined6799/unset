@@ -3049,7 +3049,7 @@ Where: `interfaces/http/routes/{invite.ts, join.ts, signup.ts}`, `apps/web/scree
 Size: ~210 source lines, ~240 test lines
 As built (SvelteKit, PR 1 of 2): `interfaces/web/src/routes/invite/` (form actions `issue` and `hide`) and
   `routes/join/` (its form action is the book's `POST /signup`, at the sign-in limit), the rule in
-  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0032_app_invite.sql`
+  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0033_app_invite.sql`
   (column grants, row DELETE, `invite.denied` audit action, `core.erase_did` covering `app.invite.inviter_did`). The
   list shows issued codes of the last 7 days only (a pending row holds none). Expiry (Alex 2026-11-19: used, or 7 days):
   hiding and web's `sweep.invite` at 7 days delete our copy of the code and leave the row `cleared`; a code is single
