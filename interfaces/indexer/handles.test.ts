@@ -52,19 +52,32 @@ describe("handle rule", () => {
     expect(await checkHandle(deps({ pdsOf: async () => null }), DID, signal())).toEqual({ status: "invalid" });
   });
 
+  test("outage-names-the-claimed-handle", async () => {
+    // P3.08s review B1: when only the claimed handle's lookup is down, the outcome carries the claim, so the store can
+    // stop showing an older verified handle the document no longer names. A document outage carries none.
+    const claims = deps({
+      verifyHandle: async () => ({ status: "unavailable", claimed: "new.example.org" }) as HandleVerdict,
+    });
+    expect(await checkHandle(claims, DID, signal())).toEqual({ status: "unresolved", claimed: "new.example.org" });
+    const unread = deps({ verifyHandle: async () => ({ status: "unavailable" }) });
+    expect(await checkHandle(unread, DID, signal())).toEqual({ status: "unresolved" });
+  });
+
   test("our-pds-down-is-unresolved", async () => {
-    expect(await checkHandle(deps({ readStatus: async () => ({ kind: "unavailable" }) }), DID, signal())).toEqual({
-      status: "unresolved",
-    });
-    expect(await checkHandle(deps({ resolveOnPds: async () => ({ kind: "unavailable" }) }), DID, signal())).toEqual({
-      status: "unresolved",
-    });
+    // verifyHandle confirmed the claim before our PDS was asked, so the outage keeps that claim (review B1).
+    const outage = { status: "unresolved", claimed: "alice.hosted.test" };
+    expect(await checkHandle(deps({ readStatus: async () => ({ kind: "unavailable" }) }), DID, signal())).toEqual(
+      outage,
+    );
+    expect(await checkHandle(deps({ resolveOnPds: async () => ({ kind: "unavailable" }) }), DID, signal())).toEqual(
+      outage,
+    );
     const unreachable = deps({
       pdsOf: async () => {
         throw new Error("timeout");
       },
     });
-    expect(await checkHandle(unreachable, DID, signal())).toEqual({ status: "unresolved" });
+    expect(await checkHandle(unreachable, DID, signal())).toEqual(outage);
   });
 
   test("verify-handle-truth-table", async () => {

@@ -5,8 +5,10 @@
 // (com.atproto.sync.getRepoStatus), and our PDS must map the handle back to the same DID
 // (com.atproto.identity.resolveHandle). Without those, anyone could point a DNS-less claim at one of our names.
 //
-// Three outcomes. `invalid` clears the stored handle. `unresolved` keeps what is stored, because an outage on our
-// side or theirs says nothing about the handle. `verified` names the handle to store.
+// Three outcomes. `invalid` clears the stored handle. `unresolved` is an outage on our side or theirs: it keeps what is
+// stored, but only while the DID document still claims the stored handle, so it names the claim when the document was
+// read (review B1 on #1728: a member could otherwise keep an old verified handle by claiming a new one whose lookup
+// they make fail). `verified` names the handle to store.
 import type { HandleVerdict } from "@unset/domains-identity";
 import type { HandleOnPds, RepoStatus } from "@unset/infrastructure-firehose";
 import type { HandleStore } from "@unset/infrastructure-postgres";
@@ -15,7 +17,7 @@ import { withDeadline } from "./track.ts";
 export type HandleCheck =
   | { readonly status: "verified"; readonly handle: string }
   | { readonly status: "invalid" }
-  | { readonly status: "unresolved" };
+  | { readonly status: "unresolved"; readonly claimed?: string };
 
 export type HandleCheckDeps = {
   /** domains/identity's verifier, asked fresh; it never throws. */
@@ -41,14 +43,18 @@ export function isHostedHandle(handle: string, suffixes: readonly string[]): boo
 
 export async function checkHandle(deps: HandleCheckDeps, did: string, signal: AbortSignal): Promise<HandleCheck> {
   const verdict = await deps.verifyHandle(did, signal);
-  if (verdict.status === "unavailable") return UNRESOLVED;
+  if (verdict.status === "unavailable") {
+    return verdict.claimed === undefined ? UNRESOLVED : { status: "unresolved", claimed: verdict.claimed };
+  }
   if (verdict.status === "invalid") return INVALID;
   const verified: HandleCheck = { status: "verified", handle: verdict.handle };
   if (!isHostedHandle(verdict.handle, deps.hostedSuffixes)) return verified;
+  // The document claims the handle verifyHandle just confirmed, so any outage below keeps it as the claim.
+  const outage: HandleCheck = { status: "unresolved", claimed: verdict.handle };
   try {
-    return await checkHostedHandle(deps, did, verdict.handle, signal, verified);
+    return await checkHostedHandle(deps, did, verdict.handle, signal, verified, outage);
   } catch {
-    return UNRESOLVED;
+    return outage;
   }
 }
 
@@ -59,14 +65,15 @@ async function checkHostedHandle(
   handle: string,
   signal: AbortSignal,
   verified: HandleCheck,
+  outage: HandleCheck,
 ): Promise<HandleCheck> {
   const pds = await deps.pdsOf(did, signal);
   if (pds === null || pds.origin !== deps.ownPds.origin) return INVALID;
   const status = await deps.readStatus(did, signal);
-  if (status.kind === "unavailable") return UNRESOLVED;
+  if (status.kind === "unavailable") return outage;
   if (status.kind !== "active") return INVALID;
   const onPds = await deps.resolveOnPds(handle, signal);
-  if (onPds.kind === "unavailable") return UNRESOLVED;
+  if (onPds.kind === "unavailable") return outage;
   return onPds.kind === "did" && onPds.did === did ? verified : INVALID;
 }
 

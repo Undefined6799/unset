@@ -23,7 +23,7 @@ export type HandleJob = {
 export type HandleOutcome =
   | { readonly status: "verified"; readonly handle: string }
   | { readonly status: "invalid" }
-  | { readonly status: "unresolved" };
+  | { readonly status: "unresolved"; readonly claimed?: string };
 
 export type HandleStore = {
   /**
@@ -68,7 +68,7 @@ async function writeOutcome(tx: PoolClient, job: HandleJob, outcome: HandleOutco
   const account = (await isErased(tx, job.did)) ? null : await lockAccount(tx, job.did);
   if (!(await endJob(tx, job))) return count(tx, "account_job_superseded");
   if (account === null) return count(tx, "account_job_skipped");
-  if (outcome.status === "unresolved") return askAgainLater(tx, job.did);
+  if (outcome.status === "unresolved") return askAgainLater(tx, job.did, outcome.claimed);
   if (outcome.status === "invalid") {
     await tx.query(
       `UPDATE idx.account SET handle = NULL, handle_status = 'invalid', handle_checked_at = now(), updated_at = now()
@@ -98,8 +98,20 @@ async function moveOtherHolders(tx: PoolClient, did: string, handle: string): Pr
   if (rows.length > 0) await count(tx, "handle_moved", rows.length);
 }
 
-/** An outage says nothing about the handle: what is stored stays, and the check is due again later. */
-async function askAgainLater(tx: PoolClient, did: string): Promise<void> {
+/**
+ * An outage says nothing about the handle, so the check is due again later. What is stored stays verified only while
+ * the DID document still claims it: when the document was read and claims another handle, the stored one is no longer
+ * verified (the public page then shows the DID), and the next check decides (review B1 on #1728).
+ */
+async function askAgainLater(tx: PoolClient, did: string, claimed: string | undefined): Promise<void> {
+  if (claimed !== undefined) {
+    const { rowCount } = await tx.query(
+      `UPDATE idx.account SET handle_status = 'unresolved', updated_at = now()
+       WHERE did = $1 AND handle_status = 'verified' AND handle IS DISTINCT FROM $2`,
+      [did, claimed.toLowerCase()],
+    );
+    if ((rowCount ?? 0) > 0) await count(tx, "handle_unclaimed");
+  }
   await tx.query(
     `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
      VALUES ($1, 'handle_check', now() + make_interval(secs => $2), 0, now())

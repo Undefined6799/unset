@@ -140,4 +140,18 @@ describe("handle store", () => {
     await handles.checked(await claim(P), { status: "invalid" });
     expect(shown()).toEqual(["-"]);
   });
+
+  test("handle.outage_keeps_the_handle_only_while_the_document_still_claims_it", async () => {
+    // P3.08s review B1: a member whose document now claims another handle, whose lookup they make fail, must not keep
+    // showing the old verified one. An outage with the same claim, or with the document unread, keeps it.
+    const C = "did:plc:cccccccccccccccccccccccc";
+    account(C, "old.example.org", "verified", "now()");
+    await handles.checked(await claim(C), { status: "unresolved", claimed: "old.example.org" });
+    expect(stored(C)).toEqual(["old.example.org|verified|t"]);
+    await handles.checked(await claim(C), { status: "unresolved" });
+    expect(stored(C)).toEqual(["old.example.org|verified|t"]);
+    await handles.checked(await claim(C), { status: "unresolved", claimed: "new.example.org" });
+    expect(stored(C)).toEqual(["old.example.org|unresolved|t"]);
+    expect(jobs(C)).toEqual(["handle_check"]);
+  });
 });
