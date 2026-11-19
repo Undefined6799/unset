@@ -70,8 +70,18 @@ export function planCommit(account: IndexAccount, rev: string | null, changes: r
   for (const change of changes) {
     if (!isIndexed(change.collection)) continue;
     const write = change.kind === "delete" ? deleteOf(change.collection, change.rkey) : putOf(change);
-    if (write === null) skipped += 1;
-    else writes.push(write);
+    if (write !== null) {
+      writes.push(write);
+      continue;
+    }
+    skipped += 1;
+    // A put we refuse under a key we index replaces the record in the repo: an older version indexed under that key
+    // goes, as a backfill of the repo would remove it, so the stream and a rebuild show the same (outside review,
+    // 2026-11-19). The store's rev guard keeps a newer row.
+    if (change.kind === "put") {
+      const removal = deleteOf(change.collection, change.rkey);
+      if (removal !== null) writes.push(removal);
+    }
   }
   return { kind: "apply", rev, writes, skipped };
 }
