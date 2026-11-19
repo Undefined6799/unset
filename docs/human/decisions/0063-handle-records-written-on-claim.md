@@ -54,6 +54,10 @@ not reachable through it either.
    and stays visible as a count, not retried in silence; the erasure is not reported complete until it succeeds.
 6. **Erasure of the queue itself.** The queue row holds a DID. `eraseDid` enqueues the removal and deletes the row
    once deSEC has confirmed the record gone, so no DID stays in the queue after an erasure completes.
+7. **A stronger check for our own handles, added by the implementing step.** Today `verifyHandle` compares public
+   resolution with the DID document only (`domains/identity/verify-handle.ts`). For a handle under our handle domain,
+   the step adds two conditions in web and the indexer: the DID document's PDS is ours, and our PDS's
+   `com.atproto.identity.resolveHandle` returns the same DID. The writer is not deployed without them.
 
 ## Alternatives
 - Wildcard `*.staging.unset.im` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
@@ -85,11 +89,12 @@ not reachable through it either.
 SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone. Pointing a
 member's handle at the attacker's own DID, whose document lists that handle in `alsoKnownAs`, passes the two-way check
 (https://atproto.com/specs/handle, "Handle Resolution"), so other atproto apps would show the attacker's account under
-the member's handle: impersonation, not only invalidation. Our own app and indexer additionally require, for a handle
-under our handle domain, that the DID's PDS is ours and that our PDS's `com.atproto.identity.resolveHandle` returns
-the same DID, so they keep showing the real owner; outside apps cannot be protected this way, which is why the token
-is limited to this one zone and record type, held only by the indexer, and rotated on any suspicion. A stolen token
-can also delete records, turning every handle `handle.invalid` until they are rewritten. Recovery: revoke and replace
-the token in deSEC, then re-enqueue every account; the queue rebuilds the whole zone from Postgres, which is the
-source of truth (DA-1). SE-7 logging. DA-4: the queue row is the concurrency mechanism, no network I/O inside a
-transaction. GDPR: erasure through `eraseDid` (Decision 3), ROPA row, notice sentence.
+the member's handle: impersonation, not only invalidation. With Decision 7, our own app and indexer require, for a
+handle under our handle domain, that the DID's PDS is ours and that our PDS's `com.atproto.identity.resolveHandle`
+returns the same DID, so they keep showing the real owner (without it, the real owner's handle would read invalid);
+outside apps cannot be protected this way, which is why the token is limited to this one zone and record type, held
+only by the indexer, and rotated on any suspicion. A stolen token can also delete records, turning every handle
+`handle.invalid` until they are rewritten. Recovery: revoke and replace the token in deSEC, then re-enqueue every
+account; the queue rebuilds the whole zone from Postgres, which is the source of truth (DA-1). SE-7 logging. DA-4: the
+queue row is the concurrency mechanism, no network I/O inside a transaction. GDPR: erasure through `eraseDid`
+(Decision 3), ROPA row, notice sentence.
