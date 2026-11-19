@@ -51,7 +51,7 @@ function secret(dir: string, name: string): string {
 
 /** The key file: one entry per key, issuer `web`, an Ed25519 public key, and only the verb `invite.issue`. */
 function serviceKeys(text: string): ServiceKey[] {
-  const bad = new BootError("secret pds_admin_keys.json is malformed");
+  const bad = new BootError("secret pds_admin_keys is malformed");
   let entries: unknown;
   try {
     entries = JSON.parse(text);
@@ -98,6 +98,6 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
     commit: env.COMMIT ?? "unknown",
     password: secret(secrets, "pds_admin_password"),
     logKey,
-    keys: serviceKeys(secret(secrets, "pds_admin_keys.json")),
+    keys: serviceKeys(secret(secrets, "pds_admin_keys")),
   };
 }

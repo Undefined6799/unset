@@ -28,7 +28,7 @@ function secrets(key: ReturnType<typeof webKey>, omit?: string): string {
   const files: Record<string, string> = {
     pds_admin_password: PASSWORD,
     pds_admin_log_key: randomBytes(32).toString("base64"),
-    "pds_admin_keys.json": JSON.stringify([
+    pds_admin_keys: JSON.stringify([
       {
         kid: key.kid,
         iss: "web",
@@ -93,7 +93,7 @@ describe("boot", () => {
     expect(readFileSync(join(environment.STATE_DIR as string, "log.jsonl"), "utf8")).toContain('"reason":"replay"');
   });
 
-  test.each(["pds_admin_password", "pds_admin_keys.json", "pds_admin_log_key"])(
+  test.each(["pds_admin_password", "pds_admin_keys", "pds_admin_log_key"])(
     "boot.missing_secret: no %s → exit 1, and no secret on stderr",
     (omit) => {
       const key = webKey();

@@ -167,7 +167,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P2.04 | sealed OAuth token store `app.oauth_session` |
 | P2.04s | `app.end_sessions_for_did` (its migration); `destroyAllForDid`, which calls it |
 | P2.06 | callback creates the session in one transaction (this phase adds one insert there, P3.02) |
-| P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys.json`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
+| P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
 | P2.18 | object-storage client (draft prefixes) |
 | P2.19 | minimal `media` entrypoint serving signed draft URLs; `mediaSandboxHeaders()` |
 | P2.20 | `ProfileView(props)`: pure, `escape`, markdown subset; links through P1.24's `safeHref` |
@@ -2180,7 +2180,7 @@ Outputs (contract):
     Result   = {ok:true, jti, seq, hash, result?} | {ok:false, error: ErrorCode}
     ```
   - **Key model (F2):** envelope keys live **only** in the signed roster's `service_keys`; `KEYS_PATH` and P2.09's
-    `/run/secrets/pds_admin_keys.json` are retired. Load rules (any violation → the whole roster is Deny):
+    `/run/secrets/pds_admin_keys` are retired. Load rules (any violation → the whole roster is Deny):
     exactly one key of kind `roster` (admin's); a `service` key lists only verbs marked `service_allowed` in the
     verb table; kids unique. Step 8 branches on the key's `kind`, never on a caller name. Rotating `web`'s key is a
     roster change signed by an owner (Notes).
@@ -3408,7 +3408,7 @@ legal-hold key question is `P4a-A1`.
 - **P1.30 / P5.02a**: the moderation-mailer preflight check (PI-6).
 - **P2.04s**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
 - **P2.09**: its route, key file and log format are migrated by P3.16 (expand, then contract); the P2.09 writer
-  should know its `/run/secrets/pds_admin_keys.json` is retired in favour of the roster's `service_keys`.
+  should know its `/run/secrets/pds_admin_keys` is retired in favour of the roster's `service_keys`.
 - **Phase 4 part 1**: "the `P3.16a` verbs" (lines 41, 703, 1326 and the P4.07 deps) should read **P3.16c**; P4.07's
   `Where` drops `apps/pds-admin/verbs/preserve.ts`; `preserve.create` gains `subject_did` (P3-B3); the review
   `review_egress` and `retention` keys are added to the roster's `service_keys` (P3.16 key model).
