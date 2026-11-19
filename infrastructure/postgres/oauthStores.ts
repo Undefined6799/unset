@@ -11,12 +11,13 @@ import { sealedContext } from "./sealedColumns.ts";
 
 /**
  * `get`'s second argument is `GetOptions` from @atproto-labs/simple-store 0.5.1 (`dist/simple-store.d.ts`):
- * `{ signal?: AbortSignal }`. `set` and `del` take no options. The signal is the caller's deadline.
+ * `{ signal?: AbortSignal }`. The library passes `set` and `del` no options; `del`'s optional signal is ours, for a
+ * caller outside the library with a deadline (sign-out's fallback delete, P2.08). The signal is the caller's deadline.
  */
 export type SealedStore<V> = {
   get(key: string, options?: { readonly signal?: AbortSignal }): Promise<V | undefined>;
   set(key: string, value: V): Promise<void>;
-  del(key: string): Promise<void>;
+  del(key: string, options?: { readonly signal?: AbortSignal }): Promise<void>;
 };
 type Options = { readonly pool: Pool; readonly sealer: Sealer; readonly log: Logger };
 
@@ -41,8 +42,8 @@ export function createOAuthStateStore<V>(options: Options): OAuthStateStore<V> {
   const context = (key: string) => sealedContext("app.oauth_state.sealed", key);
   const run = <T>(fn: Parameters<typeof withClient<T>>[2], signal?: AbortSignal) =>
     withClient(options.pool, signal ?? null, fn);
-  const del = async (key: string) => {
-    await run((db) => db.query("DELETE FROM app.oauth_state WHERE key = $1", [key]));
+  const del = async (key: string, options?: { readonly signal?: AbortSignal }) => {
+    await run((db) => db.query("DELETE FROM app.oauth_state WHERE key = $1", [key]), options?.signal);
   };
   return {
     async get(key, read) {
@@ -89,8 +90,8 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
   const context = (did: string) => sealedContext("app.oauth_session.sealed", did);
   const run = <T>(fn: Parameters<typeof withClient<T>>[2], signal?: AbortSignal) =>
     withClient(options.pool, signal ?? null, fn);
-  const del = async (did: string) => {
-    await run((db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did]));
+  const del = async (did: string, options?: { readonly signal?: AbortSignal }) => {
+    await run((db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did]), options?.signal);
   };
   return {
     async get(did, read) {

@@ -80,14 +80,14 @@ export type OAuthServices = {
   readonly signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   /** sign-in-lock.ts `exclusive`: runs `fn` holding `did`'s lock (the last browser's sign-out, sign-out everywhere). */
   readonly lockDid: <T>(did: Did, fn: () => Promise<T>) => Promise<T>;
+  /** The token store's own delete, outside the lock and the library, within `deadline` (sign-out's fallback, P2.08). */
+  readonly dropTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
 };
 
 export type Services = {
   readonly log: Logger;
   readonly pool: Pool;
   readonly sessions: SessionStore;
-  /** The store's limits, one object, so the sign-out count reads the same idle limit (P2.08c). */
-  readonly sessionLimits: SessionLimits;
   readonly limiter: RateLimiter;
   readonly health: ReturnType<typeof createHealth>;
   readonly oauth: OAuthServices;
@@ -285,12 +285,12 @@ async function build(): Promise<Services> {
     client,
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
+    dropTokenSet: (did, deadline) => tokenSets.del(did, { signal: deadline }),
   };
   return {
     log,
     pool,
     sessions,
-    sessionLimits,
     limiter,
     health,
     oauth,

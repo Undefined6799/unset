@@ -21,7 +21,6 @@ import { createSessionStore, type SessionLimits } from "@unset/infrastructure-se
 import { scopeString } from "@unset/shared-lexicons";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, test } from "vitest";
-import { remainingSessions } from "../../../interfaces/web/src/lib/server/session-count.ts";
 import { createSignInLock } from "../../../interfaces/web/src/lib/server/sign-in-lock.ts";
 import { asAuditor } from "../setup/pg.setup.ts";
 import {
@@ -345,7 +344,7 @@ describe("the count against the store", () => {
     log: quiet,
   });
   const giveTokenSet = (did: Did) => tokenSets.set(did, { authMethod: { method: "private_key_jwt", kid: "A" } });
-  const count = (did: Did) => withTransaction(pool, null, (tx) => remainingSessions(tx, did, LIMITS.idleS));
+  const count = (did: Did) => withTransaction(pool, null, (tx) => store.countLive(tx, did));
 
   test("a_session_needs_a_token_set_and_ends_with_it", async () => {
     // P2.03t (migration 0024, ADR 0049): a session cannot be written before its token set and is deleted with it.
@@ -388,8 +387,8 @@ describe("the count against the store", () => {
             "now() + make_interval(secs => $3) + make_interval(secs => $5))",
           [createHash("sha256").update(cookie).digest(), owner, createdS, seenS, LIMITS.absoluteS],
         );
-        const counted = await remainingSessions(tx, owner, LIMITS.idleS);
         const sameInstant = createSessionStore({ withDb: (_deadline, fn) => fn(tx), limits: LIMITS, log: quiet });
+        const counted = await sameInstant.countLive(tx, owner);
         const read = await sameInstant.read({ key: {}, cookieValue: cookie.toString("base64url"), deadline: null });
         return { edge, counted, accepted: read.session !== null };
       });

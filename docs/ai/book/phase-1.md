@@ -4733,6 +4733,19 @@ boots. (2) `pds-failure.ts` returns only the sign-in redirect its four callers u
 threaded through for it. (3) The indexer's backfill queue uses the shared `claimJobs` and `endJob`, which move to
 `infrastructure/postgres/jobs.ts`. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21d — Sign-out asks the session store which browsers are live (added step, 2026-11-19)
+
+**Tags:** trusted · **Depends on:** — · **Plan:** §5.3 "Logout"
+
+From the 2026-11-19 refactor pass (finding 3), which Alex approved that day. The web process's sign-out ran two
+queries of its own: a copy of the session store's lifetime rule, to count the browsers still signed in (P2.08c), and
+a delete of the token set when the revoke fails. The session store gains `countLive(db, did)`, and its read and the
+count share one SQL fragment for the idle and absolute limits, so the last browser's count cannot drift from what
+signs a browser in. The fallback delete calls the token store's `del`, which takes an optional deadline like `get`.
+`interfaces/web/src/lib/server/session-count.ts` is deleted. No behaviour changes: the same order, the same
+transaction and lock, the same outcome for the last browser and for one of several; the existing sign-out integration
+tests pin it. The letter does not belong to the token pipeline below; it was the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
@@ -4748,7 +4761,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
-P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch), c (dead and duplicated code), l, m, q.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
+c (dead and duplicated code), d (sign-out live count), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
