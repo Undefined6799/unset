@@ -41,7 +41,7 @@ test("a_profile_save_stays_on_settings_and_says_it_saved", async ({ page }) => {
   const typed = await headline.inputValue();
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toBeVisible();
-  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(page).toHaveURL(/\/settings\/profile\?saved$/);
   await expect(headline).toHaveValue(typed);
 });
 
@@ -70,13 +70,19 @@ test.describe("no script", () => {
     await expect(page.getByText(/browser's Back button/)).toBeVisible();
   });
 
-  test("a_profile_save_without_script_comes_back_to_settings", async ({ page }) => {
+  // P1.20o's sweep found this save silent: the 303 came back to an unchanged form, though the header above promised
+  // "with and without script". It now comes back with ?saved (P1.20p), as /invite?left= does, and says it saved.
+  test("a_profile_save_without_script_comes_back_to_settings_and_says_it_saved", async ({ page }) => {
     expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    const headline = page.getByRole("textbox", { name: "Headline" });
+    const typed = await headline.inputValue();
+    await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toHaveCount(0);
     const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/profile"));
     await page.getByRole("button", { name: "Save profile" }).click();
     expect((await saved).status()).toBe(303);
-    await expect(page).toHaveURL(/\/settings\/profile$/);
-    await expect(page.getByRole("button", { name: "Save profile" })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/profile\?saved$/);
+    await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toBeVisible();
+    await expect(headline).toHaveValue(typed);
   });
 
   test("the_readme_text_area_stops_at_the_lexicon_limit", async ({ page }) => {

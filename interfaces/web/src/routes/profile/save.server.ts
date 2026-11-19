@@ -28,8 +28,13 @@ export type SaveProfile = (did: Did, fields: ProfileEdit) => Promise<ProfileSave
  */
 export type SaveResult = { readonly location: string } | { readonly code: ErrorCode; readonly field?: ProfileField };
 
-/** Where a saved form returns: Settings › Profile when it came from there, else the member's own page. */
+/** The form's `next` when it came from Settings › Profile. */
 const SETTINGS_PROFILE = "/settings/profile";
+/**
+ * Where a save from Settings › Profile returns: the page with `saved`, so a plain form with no script is told it
+ * saved, as /invite?left= tells an invite's (P1.20p). A save from the member's own page returns there.
+ */
+export const SETTINGS_PROFILE_SAVED = "/settings/profile?saved";
 
 /**
  * Each field's one value; a field left out is not sent, so it keeps what the record holds. A repeated field is
@@ -54,7 +59,8 @@ export async function saveProfileForm(form: FormData, did: Did, save: SaveProfil
   const parsed = parseProfileFields(input);
   if (!parsed.ok) return { code: parsed.code, field: parsed.field };
   const saved = await save(did, parsed.fields);
-  if (saved.kind === "saved") return { location: form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE : `/${did}` };
+  if (saved.kind === "saved")
+    return { location: form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE_SAVED : `/${did}` };
   if (saved.kind === "redirect") return { location: saved.location };
   if (saved.kind === "conflict") return { code: "profile.conflict" };
   if (saved.kind === "refused") return { code: saved.code };
