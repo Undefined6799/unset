@@ -155,7 +155,13 @@ export type CompletedSignIn = {
  * oauth-provider.js:291-305) and gives the state back, so the route can ask once more, with a page.
  */
 export type SilentRefusal = { readonly ok: false; readonly reason: "interaction_required"; readonly appState: string };
-export type CallbackResult = CompletedSignIn | SilentRefusal | { readonly ok: false; readonly reason: CallbackFailure };
+/** A cancellation carries only our stored state, so the starting browser can retain its return path. */
+export type ConsentDenied = { readonly ok: false; readonly reason: "consent_denied"; readonly appState: string };
+export type CallbackResult =
+  | CompletedSignIn
+  | SilentRefusal
+  | ConsentDenied
+  | { readonly ok: false; readonly reason: Exclude<CallbackFailure, "consent_denied"> };
 
 /** The OIDC prompt=none errors (https://openid.net/specs/openid-connect-core-1_0.html#AuthError). */
 const NEEDS_A_PAGE: ReadonlySet<string> = new Set([
@@ -179,13 +185,16 @@ export async function completeAuthorization(
   try {
     completed = await client.callback(query);
   } catch (error) {
-    // The library spent the state before throwing (oauth-client.js:169-178), so this flow is over either way.
-    if (
-      error instanceof OAuthCallbackError &&
-      error.state !== undefined &&
-      NEEDS_A_PAGE.has(error.params.get("error") ?? "")
-    ) {
-      return { ok: false, reason: "interaction_required", appState: error.state };
+    // @atproto/oauth-client-node 0.5.16 inherits oauth-client 0.9.3's callback (dist/oauth-client.js:146-221):
+    // it spends stored state, then attaches its appState to error responses, access_denied included. The callback
+    // query never supplies this value (https://atproto.com/specs/oauth, Authorization Requests).
+    if (error instanceof OAuthCallbackError && error.state !== undefined) {
+      if (error.params.get("error") === "access_denied") {
+        return { ok: false, reason: "consent_denied", appState: error.state };
+      }
+      if (NEEDS_A_PAGE.has(error.params.get("error") ?? "")) {
+        return { ok: false, reason: "interaction_required", appState: error.state };
+      }
     }
     const reason = callbackReason(error);
     // A grant for an account on another PDS is a refusal worth seeing, logged by its fixed kind only (SE-7).
@@ -221,12 +230,11 @@ export async function completeAuthorization(
   return { ok: true, did, issuer: session.serverMetadata.issuer, appState: state, scope, revoke };
 }
 
-function callbackReason(error: unknown): CallbackFailure {
+function callbackReason(error: unknown): Exclude<CallbackFailure, "consent_denied"> {
   if (error instanceof OAuthCallbackError) {
     // No stored state for this `state` (unknown, expired or already spent): the library throws before it has an
     // appState to attach (oauth-client.js:165-175); every later failure carries ours.
     if (error.state === undefined) return "expired";
-    if (error.params.get("error") === "access_denied") return "consent_denied";
   }
   const chain = causes(error);
   if (chain.some((cause) => cause instanceof AccountElsewhereError)) return "account_elsewhere";
