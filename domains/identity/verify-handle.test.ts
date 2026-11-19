@@ -159,6 +159,17 @@ describe("verifyHandle", () => {
     expect(w.calls.plc).toBe(2);
   });
 
+  test("handle_unavailable_names_the_handle_the_document_claims", async () => {
+    // P3.08s review B1: an outage resolving the handle still read the DID document, so the verdict says which handle
+    // it claims; a caller holding an older verified handle can then tell an outage from a changed claim.
+    const w = world();
+    w.answers.txt["_atproto.alice.example.com"] = { kind: "unavailable" };
+    expect(await w.verifier().verifyHandle(A)).toEqual({ status: "unavailable", claimed: "alice.example.com" });
+    // A DID document that could not be read claims nothing we know of.
+    w.answers.plc = status(503);
+    expect(await w.verifier().verifyHandle(A)).toEqual({ status: "unavailable" });
+  });
+
   test("handle_unavailable_not_cached", async () => {
     const w = world();
     w.answers.txt["_atproto.alice.example.com"] = { kind: "unavailable" };
