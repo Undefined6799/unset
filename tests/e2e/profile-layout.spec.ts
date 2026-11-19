@@ -4,6 +4,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
+import { phone } from "./phone.ts";
 
 const OWN_PAGE: PageFixture = {
   path: `/${ACCOUNT.did}`,
@@ -54,6 +55,7 @@ test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", asy
     await page.mouse.move(0, 0);
     await expect(card).toHaveCSS("opacity", "1");
     await expect(edit).toBeVisible();
+    await expect(edit).toHaveCSS("height", "32px");
     await expect(card.getByRole("button", { name: "More for README card" })).toBeVisible();
     const editBox = await edit.boundingBox();
     expect(editBox !== null && readme !== null && editBox.x > readme.x).toBe(true);
@@ -63,13 +65,31 @@ test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", asy
 });
 
 test.describe("phone", () => {
-  test.use({ viewport: { width: 320, height: 800 } });
+  test.use(phone({ width: 320, height: 800 }));
+
+  test("the_phone_context_has_a_coarse_pointer_and_touch", async ({ page }) => {
+    const coarse = await page.evaluate(() => {
+      const view = globalThis as unknown as { matchMedia: (query: string) => { matches: boolean } };
+      return view.matchMedia("(pointer: coarse)").matches;
+    });
+    expect(coarse).toBe(true);
+    await page.setContent(
+      '<meta name="viewport" content="width=device-width,initial-scale=1"><button type="button">Touch target</button>',
+    );
+    const target = page.getByRole("button", { name: "Touch target" });
+    await target.evaluate((element) => {
+      element.addEventListener("touchstart", () => element.setAttribute("data-touched", "true"), { once: true });
+    });
+    await target.tap();
+    await expect(target).toHaveAttribute("data-touched", "true");
+  });
 
   test("the_side_column_sits_above_the_cards_and_nothing_scrolls_sideways", async ({ page }) => {
     expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
-    await withReadme(page);
+    const card = await withReadme(page);
     try {
+      await expect(card.getByRole("link", { name: "Edit" })).toHaveCSS("height", "44px");
       const name = await page.getByRole("heading", { level: 1 }).boundingBox();
       const readme = await page.getByText("README.md", { exact: true }).boundingBox();
       expect(name !== null && readme !== null && name.y + name.height <= readme.y).toBe(true);
