@@ -65,6 +65,8 @@ On a development or staging stack, with an account on our own PDS, you can:
 - add, edit, reorder and remove profile cards: a README in markdown, links, a collection and buttons, each a
   `sh.unset.section` record in your repository;
 - change your theme and open the profile and account settings;
+- invite someone with a one-use sign-up code and share the join link;
+- choose whether search engines may list your public page, and whether AI search may show it;
 - read the terms, privacy notice and domains pages;
 - open a public profile at `/@<handle>` or `/@<DID>`. The page is served from the index.
 

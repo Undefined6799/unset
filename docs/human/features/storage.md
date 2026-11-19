@@ -20,7 +20,7 @@ The PDS is the caller that runs today. In the compose files its blob store is th
 
 [`deployment/preflight/objects-buckets.ts`](../../../deployment/preflight/objects-buckets.ts) creates two buckets, `unset-pds` and `unset-private`, through the store's own shell. The one secret is `objects_s3`. It holds no admin identity (ADR 0050).
 
-`unset-private` is the drafts bucket. It waits for the later media work (Phase 2 and Phase 4). The `web` service joins `db`, `app` and `web_egress`.
+`unset-private` is the drafts bucket. It waits for the later media work (Phase 2 and Phase 4). The `web` service joins `db`, `app` and `web_egress`, and `pds_admin` on the source stacks.
 
 ## Tables and grants
 

@@ -4,9 +4,11 @@ The indexer copies our members' published profiles into Postgres. The public pag
 
 ## Route
 
-[`interfaces/web/src/routes/@[actor]/+page.server.ts`](../../../interfaces/web/src/routes/@[actor]/+page.server.ts) serves `GET /@<handle>` and `GET /@<DID>`. It asks [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts), which reads only the views `idx.public_profile` and `idx.public_section` (migration 0030).
+[`interfaces/web/src/routes/@[actor]/+page.server.ts`](../../../interfaces/web/src/routes/@[actor]/+page.server.ts) serves `GET /@<handle>` and `GET /@<DID>`. It asks [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts). The profile and its cards come from the views `idx.public_profile` and `idx.public_section` (migration 0030). The same statement also left-joins `app.discoverability` (migration 0034) for the member's search and AI choices. No row means both switches are off.
 
-An unknown actor, a path that is not an actor, and a hidden, deactivated, deleted, erased, delisted or suspended account all answer 404. The views show only `idx.visible_account`. A found account under any other path is redirected to its canonical one: the verified handle, or else the DID. The page is kept out of search results.
+An unknown actor, a path that is not an actor, and a hidden, deactivated, deleted, erased, delisted or suspended account all answer 404. The views show only `idx.visible_account`. A found account under any other path is redirected to its canonical one: the verified handle, or else the DID.
+
+The page stays out of search results until the member turns on "Search engines may list my page" ([ADR 0062](../decisions/0062-member-search-and-ai-choices.md)). With it on, the load drops `noindex` from the shell and omits the `X-Robots-Tag` header. [`robots.txt/+server.ts`](../../../interfaces/web/src/routes/robots.txt/+server.ts) lists the pages whose members turned on AI search. [`sitemap.xml/+server.ts`](../../../interfaces/web/src/routes/sitemap.xml/+server.ts) lists the pages whose members turned on search engines. Settings › Profile posts the choices to [`settings/search-and-ai/`](../../../interfaces/web/src/routes/settings/search-and-ai), which saves them and returns to the settings page.
 
 ## Operation
 
@@ -21,11 +23,13 @@ The process is [`interfaces/indexer/`](../../../interfaces/indexer) ([ADR 0052](
 
 [`domains/profile/index-plan.ts`](../../../domains/profile/index-plan.ts) decides what the index keeps from one verified commit. It keeps `sh.unset.profile` and `sh.unset.section`, checks each record against its lexicon, and ignores every other collection in the commit.
 
+[`discoverability.ts`](../../../domains/profile/discoverability.ts) checks the search and AI choices. Both switches start off. The title is at most 70 characters and the description at most 200. [`crawlers.ts`](../../../domains/profile/crawlers.ts) builds `robots.txt` and the sitemap from those choices.
+
 ## Adapter
 
 [`infrastructure/firehose/`](../../../infrastructure/firehose) reads the PDS stream and the repos: [`reader.ts`](../../../infrastructure/firehose/reader.ts), [`frames.ts`](../../../infrastructure/firehose/frames.ts), [`repo.ts`](../../../infrastructure/firehose/repo.ts), [`repoStatus.ts`](../../../infrastructure/firehose/repoStatus.ts) and [`handleOnPds.ts`](../../../infrastructure/firehose/handleOnPds.ts).
 
-[`infrastructure/postgres/indexStore.ts`](../../../infrastructure/postgres/indexStore.ts) applies a commit. [`trackStore.ts`](../../../infrastructure/postgres/trackStore.ts) takes the track queue. [`handleStore.ts`](../../../infrastructure/postgres/handleStore.ts) stores a verified handle. The public page uses [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts) and no other store.
+[`infrastructure/postgres/indexStore.ts`](../../../infrastructure/postgres/indexStore.ts) applies a commit. [`trackStore.ts`](../../../infrastructure/postgres/trackStore.ts) takes the track queue. [`handleStore.ts`](../../../infrastructure/postgres/handleStore.ts) stores a verified handle. The public page uses [`publicProfileStore.ts`](../../../infrastructure/postgres/publicProfileStore.ts) and no other store. That read joins `app.discoverability` as well as the two `idx` views. [`discoverabilityStore.ts`](../../../infrastructure/postgres/discoverabilityStore.ts) saves the member's own choices.
 
 ## Tables and grants
 
@@ -38,16 +42,17 @@ The process is [`interfaces/indexer/`](../../../interfaces/indexer) ([ADR 0052](
 - `idx.erase_deleted_account` (0029) lets the indexer erase an account the PDS has confirmed deleted.
 - One verified handle has one holder (0031), a partial unique index on `idx.account`.
 - `idx.public_profile` and `idx.public_section` (0030) are the only `idx` objects `web` may read. Both show accounts in `idx.visible_account` and run as their owner, so `web` needs no grant on the tables underneath.
+- `app.discoverability` (0034) holds the search-engine switch, the AI-search switch, and an optional title and description. `web` may select, insert and update `did`, `search_engines`, `ai_search`, `search_title`, `search_description` and `updated_at`, and may delete a row. No other role has a grant ([`grant-matrix.json`](../../../infrastructure/postgres/grant-matrix.json)).
 
 ## Tests
 
-Unit tests sit beside the files in [`interfaces/indexer/`](../../../interfaces/indexer) and [`infrastructure/firehose/`](../../../infrastructure/firehose).
+Unit tests sit beside the files in [`interfaces/indexer/`](../../../interfaces/indexer), [`infrastructure/firehose/`](../../../infrastructure/firehose) and [`domains/profile/`](../../../domains/profile) (`discoverability.test.ts`, `crawlers.test.ts`).
 
-Integration: [`tests/integration/indexer/compose.test.ts`](../../../tests/integration/indexer/compose.test.ts), [`recovery.test.ts`](../../../tests/integration/indexer/recovery.test.ts), [`tests/integration/postgres/idx-schema.test.ts`](../../../tests/integration/postgres/idx-schema.test.ts), [`index-store.test.ts`](../../../tests/integration/postgres/index-store.test.ts), [`track-store.test.ts`](../../../tests/integration/postgres/track-store.test.ts), [`handle-store.test.ts`](../../../tests/integration/postgres/handle-store.test.ts), [`public-profile-store.test.ts`](../../../tests/integration/postgres/public-profile-store.test.ts), [`indexer-app-access.test.ts`](../../../tests/integration/postgres/indexer-app-access.test.ts), [`erase-did.test.ts`](../../../tests/integration/postgres/erase-did.test.ts), [`tests/integration/web/public/public-profile.test.ts`](../../../tests/integration/web/public/public-profile.test.ts).
+Integration: [`tests/integration/indexer/compose.test.ts`](../../../tests/integration/indexer/compose.test.ts), [`recovery.test.ts`](../../../tests/integration/indexer/recovery.test.ts), [`tests/integration/postgres/idx-schema.test.ts`](../../../tests/integration/postgres/idx-schema.test.ts), [`index-store.test.ts`](../../../tests/integration/postgres/index-store.test.ts), [`track-store.test.ts`](../../../tests/integration/postgres/track-store.test.ts), [`handle-store.test.ts`](../../../tests/integration/postgres/handle-store.test.ts), [`public-profile-store.test.ts`](../../../tests/integration/postgres/public-profile-store.test.ts), [`indexer-app-access.test.ts`](../../../tests/integration/postgres/indexer-app-access.test.ts), [`erase-did.test.ts`](../../../tests/integration/postgres/erase-did.test.ts), [`tests/integration/web/public/public-profile.test.ts`](../../../tests/integration/web/public/public-profile.test.ts), [`search-and-ai.test.ts`](../../../tests/integration/web/public/search-and-ai.test.ts).
 
 ## When it is off or replaced
 
-`INDEXER_ENABLED` defaults to off ([`config.ts`](../../../interfaces/indexer/config.ts)). Off, [`compose.ts`](../../../interfaces/indexer/compose.ts) builds nothing: the process opens no pool, reads nothing and serves only its health endpoint, which reports the process disabled. The public page still reads the views, so it keeps showing the last indexed copy. A member who finishes onboarding is still inserted into `idx.track_request`, and nothing reads that queue until a process with the flag on is running, so that member does not appear yet.
+`INDEXER_ENABLED` defaults to off ([`config.ts`](../../../interfaces/indexer/config.ts)). Off, [`compose.ts`](../../../interfaces/indexer/compose.ts) builds nothing: the process opens no pool, reads nothing and serves only its health endpoint, which reports the process disabled. The public page still reads the views and `app.discoverability`, so it keeps showing the last indexed copy. A member who finishes onboarding is still inserted into `idx.track_request`, and nothing reads that queue until a process with the flag on is running, so that member does not appear yet.
 
 The source stacks turn the flag on. [`deployment/preflight/local-only.ts`](../../../deployment/preflight/local-only.ts) names `pds-admin` and `indexer` as `SOURCE_ONLY_SERVICES`, with the networks `pds_admin`, `pds_admin_pds`, `indexer_pds` and `indexer_egress`. The owner decided on 2026-11-19 to deploy from source for now, and to publish an image only when a service is ready for production. Those two services are built from the checkout in [`deployment/compose.local.yaml`](../../../deployment/compose.local.yaml) and [`deployment/compose.dev.source.yaml`](../../../deployment/compose.dev.source.yaml), and they are absent from [`deployment/compose.dev.yaml`](../../../deployment/compose.dev.yaml).
 

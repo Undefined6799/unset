@@ -45,4 +45,4 @@ The page scrolls as one document. The header and main share a column with `min-h
 
 Below the `sm` breakpoint the search field and the Create, Messages and Notifications buttons are hidden. A search button and a More actions button take their place and open the same panels. On a coarse pointer the icon controls use a larger target (`pointer-coarse:size-11`).
 
-Links, forms and these popovers work with no script. The member's own page, settings, the welcome steps, confirm-email and the signed-out page set `csr` to true and add the client on top. The theme picker then saves in place and leaves the menu open. The form still posts when that save does not come back as the usual redirect.
+Links, forms and these popovers work with no script. The member's own page, settings, the welcome steps, confirm-email, the invite page and the signed-out page set `csr` to true and add the client on top. The theme picker then saves in place and leaves the menu open. The form still posts when that save does not come back as the usual redirect.
