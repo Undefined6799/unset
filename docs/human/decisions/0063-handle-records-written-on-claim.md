@@ -27,12 +27,15 @@ a fourth file mount under C18 and a new SAN on the dev leaf. Pangolin's raw reso
 not reachable through it either.
 
 ## Decision
-1. **`unset.im` and `staging.unset.im` are two zones at deSEC** (desec.io, a nonprofit, free, open-source DNS host).
-   `unset.im`'s name servers move from Namecheap BasicDNS to deSEC (Alex, 2026-11-19 01:33Z, "yea lets do that",
-   answering whether to move all of `unset.im` tonight); Namecheap stays the registrar. `staging.unset.im` is its own
-   zone, delegated from `unset.im` by NS records, so a token can be limited to one environment's zone. Alex owns the
+1. **`unset.im` is a zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host). Its name servers move
+   from Namecheap BasicDNS to deSEC (Alex, 2026-11-19 01:33Z, "yea lets do that", answering whether to move all of
+   `unset.im` tonight); Namecheap stays the registrar. deSEC allows a new account one domain until a domain is
+   delegated with DNSSEC, and `.im` has no DNSSEC through Namecheap, so `staging.unset.im` starts inside the
+   `unset.im` zone. Token policies match exact subnames only (no patterns), so a token that can write staging
+   handle records could also write production ones: the writer is not deployed until `staging.unset.im` is its own
+   zone (deSEC raises the limit on request) and each environment's token is limited to its own zone. Alex owns the
    deSEC account; its password and recovery are his. The move drops Namecheap's parking page, `@` redirect and email
-   forwarding for `unset.im`, which nothing used.
+   forwarding for `unset.im`.
 2. **One key, restricted.** A deSEC token whose token policies allow writes only to TXT RRsets in
    `staging.unset.im` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies");
    production gets its own token, limited the same way to TXT in `unset.im`, created only when production's writer
@@ -91,10 +94,11 @@ member's handle at the attacker's own DID, whose document lists that handle in `
 (https://atproto.com/specs/handle, "Handle Resolution"), so other atproto apps would show the attacker's account under
 the member's handle: impersonation, not only invalidation. With Decision 7, our own app and indexer require, for a
 handle under our handle domain, that the DID's PDS is ours and that our PDS's `com.atproto.identity.resolveHandle`
-returns the same DID, so they keep showing the real owner (without it, the real owner's handle would read invalid);
-outside apps cannot be protected this way, which is why the token is limited to this one zone and record type, held
-only by the indexer, and rotated on any suspicion. A stolen token can also delete records, turning every handle
-`handle.invalid` until they are rewritten. Recovery: revoke and replace the token in deSEC, then re-enqueue every
-account; the queue rebuilds the whole zone from Postgres, which is the source of truth (DA-1). SE-7 logging. DA-4: the
-queue row is the concurrency mechanism, no network I/O inside a transaction. GDPR: erasure through `eraseDid`
-(Decision 3), ROPA row, notice sentence.
+returns the same DID, so the impersonator is never shown under that handle in our app; the real owner's handle still
+reads invalid until the record is restored, because public resolution no longer returns their DID; outside apps cannot
+be protected this way, which is why the token is limited to this one zone and record type, held only by the indexer,
+and rotated on any suspicion. A stolen token can also delete records, turning every handle `handle.invalid` until they
+are rewritten. Recovery: revoke and replace the token in deSEC, then re-enqueue every account; the queue rebuilds the
+whole zone from Postgres, which is the source of truth (DA-1). SE-7 logging. DA-4: the queue row is the concurrency
+mechanism, no network I/O inside a transaction. GDPR: erasure through `eraseDid` (Decision 3), ROPA row, notice
+sentence.
