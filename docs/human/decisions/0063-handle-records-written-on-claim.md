@@ -27,12 +27,16 @@ a fourth file mount under C18 and a new SAN on the dev leaf. Pangolin's raw reso
 not reachable through it either.
 
 ## Decision
-1. **`staging.unset.im` is its own zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host), delegated by
-   NS records at Namecheap. Namecheap keeps the rest of `unset.im`. Alex owns the deSEC account; its password and
-   recovery are his.
+1. **`unset.im` and `staging.unset.im` are two zones at deSEC** (desec.io, a nonprofit, free, open-source DNS host).
+   `unset.im`'s name servers move from Namecheap BasicDNS to deSEC (Alex, 2026-11-19 01:33Z, "yea lets do that",
+   answering whether to move all of `unset.im` tonight); Namecheap stays the registrar. `staging.unset.im` is its own
+   zone, delegated from `unset.im` by NS records, so a token can be limited to one environment's zone. Alex owns the
+   deSEC account; its password and recovery are his. The move drops Namecheap's parking page, `@` redirect and email
+   forwarding for `unset.im`, which nothing used.
 2. **One key, restricted.** A deSEC token whose token policies allow writes only to TXT RRsets in
-   `staging.unset.im` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies").
-   It is a file secret of the one process in Decision 4, never in web, never in a log.
+   `staging.unset.im` and nothing else (https://desec.readthedocs.io/en/latest/auth/tokens.html, "Token Policies");
+   production gets its own token, limited the same way to TXT in `unset.im`, created only when production's writer
+   is deployed. It is a file secret of the one process in Decision 4, never in web, never in a log.
 3. **When a record is written.** A member's `_atproto.<handle>` record (`did=<DID>`) is added once our app has seen
    both a confirmed email for that account (the email gate, `interfaces/web/src/lib/server/app-gate.ts`) and a
    handle under the configured handle domain whose DID document names it (`alsoKnownAs`, read through the existing
@@ -55,7 +59,7 @@ not reachable through it either.
 - Wildcard `*.staging.unset.im` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
   the Pangolin host and an edge site; rejected, as in ADR 0025.
 - Our own authoritative DNS on the Pangolin host (Knot or PowerDNS): no outside organisation, but a new public port
-  (53) and a service to keep patched, and one server only. Not now; reconsidered for production.
+  (53) and a service to keep patched, and one server only. Not now; reconsidered in Phase 5 as a second server.
 - Records kept at Namecheap by API: the key would control every domain on the account; rejected.
 - Records added by hand (ADR 0025): stays the fallback, and is how the first two accounts get theirs tonight.
 
@@ -63,8 +67,10 @@ not reachable through it either.
 - What deSEC learns: each member's handle and DID, both already public through the PDS and the PLC directory, and
   when they change. No content, email or address. It is still a new processor of an identifier, so the ROPA gains a
   row and the privacy notice a sentence before the first invite.
-- Production: `<name>.unset.im` sits at the apex of `unset.im`, so the same shape means moving `unset.im`'s name
-  servers to deSEC (or to our own DNS) in Phase 5; that choice is made there, with a second server.
+- Production is decided now: `<name>.unset.im` sits at the apex of `unset.im`, so the whole zone is at deSEC. One
+  provider then answers for every handle; deSEC runs several anycast servers, and a second, independent provider or
+  our own server is a Phase 5 choice. Switching back is a name-server change at Namecheap. No production handle
+  record or token exists until production's writer is deployed.
 - The indexer now holds a credential and has a second outside destination. Until now it held none, and its only
   way out was the guarded egress to the PLC directory; that was the basis for its private network with the PDS. A
   compromised indexer can now, beyond what it could already do, rewrite or delete TXT records in
