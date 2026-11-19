@@ -194,7 +194,7 @@ never a value, fix that, then start the stack again through the wrapper. Its sta
 request sent twice.
 
 **Reserved handles.** This lists, for each reserved label, whether it is already taken on our PDS:
-`docker compose ... exec -e HANDLE_DOMAIN=staging.unset.im pds-admin node interfaces/pds-admin/cli.ts check-reserved`.
+`docker compose ... exec -e HANDLE_DOMAIN=staging.unset.name pds-admin node interfaces/pds-admin/cli.ts check-reserved`.
 
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
