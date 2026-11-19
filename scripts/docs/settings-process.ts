@@ -10,7 +10,7 @@ import { parse as parseYaml } from "yaml";
 
 export const STACKS = [
   { name: "local", file: "deployment/compose.local.yaml" },
-  { name: "staging", file: "deployment/compose.dev.yaml" },
+  { name: "staging", file: "deployment/compose.dev.source.yaml" },
 ] as const;
 const SECRET_KINDS = new Set(["secret", "secretFile"]);
 const SECRET_NAME = /SECRET|PASSWORD|TOKEN|PRIVATE|CREDENTIAL|(^|_)KEY(S)?$/;
@@ -187,7 +187,10 @@ export function loadStacks(root: string, problems: string[]): Stack[] {
     const services = new Map<string, Service>();
     const raw = isObject(doc) && isObject(doc.services) ? doc.services : {};
     for (const [service, value] of Object.entries(raw)) {
-      if (!isObject(value)) continue;
+      if (!isObject(value)) {
+        problems.push(`${file}: service ${service} is not a map`);
+        continue;
+      }
       const env = value.environment ?? {};
       if (!isObject(env)) problems.push(`${file}: ${service} environment is not a map`);
       const asEnv = (o: Record<string, unknown>) =>

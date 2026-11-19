@@ -17,11 +17,11 @@ Settings that turn something on or off or pick a mode. All are configurable per 
 | `web` | `OAUTH_ALLOW_HTTP` | bool | true or false | `false` | not set | not set | `infrastructure/pds/oauth/oauth-client.ts` |
 | `web` | `INVITE_COUNTRY_RULE` | oneOf | on, off | `on` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `web` | `TEST_ROUTES` | bool | true or false | `false` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `indexer` | `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | not in this stack | `shared/config/schema.ts` |
-| `indexer` | `UNSET_SERVICE` | oneOf | http, admin, api, indexer, media, review, jobs, audit-verify, chat-auth | required | `indexer` | not in this stack | `shared/config/schema.ts` |
-| `indexer` | `PG_SSLMODE` | oneOf | disable, verify-full | required | `disable` | not in this stack | `infrastructure/postgres/config.ts` |
-| `indexer` | `NETGUARD_ALLOW_LOOPBACK` | bool | true or false | `false` | not set | not in this stack | `shared/config/netGuard.ts` |
-| `indexer` | `INDEXER_ENABLED` | bool | true or false | `false` | `true` | not in this stack | `interfaces/indexer/config.ts` |
+| `indexer` | `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | `dev` | `shared/config/schema.ts` |
+| `indexer` | `UNSET_SERVICE` | oneOf | http, admin, api, indexer, media, review, jobs, audit-verify, chat-auth | required | `indexer` | `indexer` | `shared/config/schema.ts` |
+| `indexer` | `PG_SSLMODE` | oneOf | disable, verify-full | required | `disable` | `disable` | `infrastructure/postgres/config.ts` |
+| `indexer` | `NETGUARD_ALLOW_LOOPBACK` | bool | true or false | `false` | not set | not set | `shared/config/netGuard.ts` |
+| `indexer` | `INDEXER_ENABLED` | bool | true or false | `false` | `true` | `true` | `interfaces/indexer/config.ts` |
 | `migrate` | `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | `dev` | `infrastructure/postgres/migrate-cli.ts` |
 | `migrate` | `PG_SSLMODE` | oneOf | disable, verify-full | required | `disable` | `disable` | `infrastructure/postgres/config.ts` |
 | `rewrap` | `UNSET_ENV` | oneOf | dev, test, prod | required | not in this stack | not in this stack | `infrastructure/postgres/rewrap-cli.ts` |

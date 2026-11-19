@@ -76,42 +76,42 @@ Every environment setting, by process. "not set" means the default applies.
 
 | Key | Kind | Allowed | Default | local | staging | Defined in |
 | --- | --- | --- | --- | --- | --- | --- |
-| `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | not in this stack | `shared/config/schema.ts` |
-| `UNSET_SERVICE` | oneOf | http, admin, api, indexer, media, review, jobs, audit-verify, chat-auth | required | `indexer` | not in this stack | `shared/config/schema.ts` |
-| `UNSET_COMMIT` | str | text (pattern in source) | required | `0000000000000000000000000000000000000000` | not in this stack | `shared/config/schema.ts` |
-| `LISTEN_PORT` | int | 1024 to 65535 | required | `8081` | not in this stack | `shared/config/schema.ts` |
-| `PG_HOST` | str | text (pattern in source) | required | `postgres` | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_PORT` | int | 1 to 65535 | `5432` | not set | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_DATABASE` | str | text (pattern in source) | required | `unset` | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_USER` | str | text (pattern in source) | required | `indexer` | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_PASSWORD` | secretFile | at least 16 bytes | required | secret file | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_SSLMODE` | oneOf | disable, verify-full | required | `disable` | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_SSLROOTCERT` | str | text (pattern in source) | (empty) | not set | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_POOL_MAX` | int | 1 to 50 | required | `3` | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_CONNECT_TIMEOUT_MS` | int | 100 to 10000 | `2000` | not set | not in this stack | `infrastructure/postgres/config.ts` |
-| `PG_MAX_REPLICAS` | int | 1 to 4 | `3` | not set | not in this stack | `infrastructure/postgres/config.ts` |
-| `NETGUARD_INTERNAL_HOSTS` | list | comma-separated str | (empty list) | not set | not in this stack | `shared/config/netGuard.ts` |
-| `NETGUARD_ALLOW_LOOPBACK` | bool | true or false | `false` | not set | not in this stack | `shared/config/netGuard.ts` |
-| `PLC_URL` | url | https: | required | `https://plc.directory` | not in this stack | `interfaces/indexer/config.ts` |
-| `IDENTITY_HTTP_TIMEOUT_MS` | int | 500 to 10000 | `3000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `IDENTITY_DNS_TIMEOUT_MS` | int | 500 to 10000 | `2000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `DID_DOC_CACHE_TTL_S` | int | 1 to 3600 | `300` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `DID_DOC_CACHE_MAX` | int | 1 to 100000 | `10000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_ENABLED` | bool | true or false | `false` | `true` | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_PDS_URL` | url | http: or https: | required | `http://pds:3000` | not in this stack | `interfaces/indexer/config.ts` |
-| `PDS_PUBLIC_URL` | url | https: | required | from env file: `PDS_PUBLIC_URL` | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_PASS_INTERVAL_MS` | int | 1000 to 300000 | `10000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_PASS_OVERDUE_MS` | int | 300000 to 86400000 | `1800000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_TIMEOUT_MS` | int | 500 to 30000 | `5000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_REPO_TIMEOUT_MS` | int | 1000 to 120000 | `30000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_REPO_MAX_BYTES` | int | 1048576 to 67108864 | `33554432` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_RESTART_DELAY_MS` | int | 100 to 60000 | `1000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_MAX_RESTART_DELAY_MS` | int | 1000 to 600000 | `60000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `HEALTH_PORT` | int | 1024 to 65535 | `8081` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_STREAM_UNHEALTHY_MS` | int | 60000 to 3600000 | `300000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `INDEXER_SHUTDOWN_GRACE_MS` | int | 1000 to 9000 | `8000` | not set | not in this stack | `interfaces/indexer/config.ts` |
-| `HOSTED_HANDLE_SUFFIXES` | list | comma-separated str | required | from env file: `PDS_SERVICE_HANDLE_DOMAINS` | not in this stack | `interfaces/indexer/config.ts` |
-| `HANDLE_RECHECK_S` | int | 600 to 604800 | `86400` | not set | not in this stack | `interfaces/indexer/config.ts` |
+| `UNSET_ENV` | oneOf | dev, test, prod | required | `dev` | `dev` | `shared/config/schema.ts` |
+| `UNSET_SERVICE` | oneOf | http, admin, api, indexer, media, review, jobs, audit-verify, chat-auth | required | `indexer` | `indexer` | `shared/config/schema.ts` |
+| `UNSET_COMMIT` | str | text (pattern in source) | required | `0000000000000000000000000000000000000000` | `0000000000000000000000000000000000000000` | `shared/config/schema.ts` |
+| `LISTEN_PORT` | int | 1024 to 65535 | required | `8081` | `8081` | `shared/config/schema.ts` |
+| `PG_HOST` | str | text (pattern in source) | required | `postgres` | `postgres` | `infrastructure/postgres/config.ts` |
+| `PG_PORT` | int | 1 to 65535 | `5432` | not set | not set | `infrastructure/postgres/config.ts` |
+| `PG_DATABASE` | str | text (pattern in source) | required | `unset` | `unset` | `infrastructure/postgres/config.ts` |
+| `PG_USER` | str | text (pattern in source) | required | `indexer` | `indexer` | `infrastructure/postgres/config.ts` |
+| `PG_PASSWORD` | secretFile | at least 16 bytes | required | secret file | secret file | `infrastructure/postgres/config.ts` |
+| `PG_SSLMODE` | oneOf | disable, verify-full | required | `disable` | `disable` | `infrastructure/postgres/config.ts` |
+| `PG_SSLROOTCERT` | str | text (pattern in source) | (empty) | not set | not set | `infrastructure/postgres/config.ts` |
+| `PG_POOL_MAX` | int | 1 to 50 | required | `3` | `3` | `infrastructure/postgres/config.ts` |
+| `PG_CONNECT_TIMEOUT_MS` | int | 100 to 10000 | `2000` | not set | not set | `infrastructure/postgres/config.ts` |
+| `PG_MAX_REPLICAS` | int | 1 to 4 | `3` | not set | not set | `infrastructure/postgres/config.ts` |
+| `NETGUARD_INTERNAL_HOSTS` | list | comma-separated str | (empty list) | not set | not set | `shared/config/netGuard.ts` |
+| `NETGUARD_ALLOW_LOOPBACK` | bool | true or false | `false` | not set | not set | `shared/config/netGuard.ts` |
+| `PLC_URL` | url | https: | required | `https://plc.directory` | `https://plc.directory` | `interfaces/indexer/config.ts` |
+| `IDENTITY_HTTP_TIMEOUT_MS` | int | 500 to 10000 | `3000` | not set | not set | `interfaces/indexer/config.ts` |
+| `IDENTITY_DNS_TIMEOUT_MS` | int | 500 to 10000 | `2000` | not set | not set | `interfaces/indexer/config.ts` |
+| `DID_DOC_CACHE_TTL_S` | int | 1 to 3600 | `300` | not set | not set | `interfaces/indexer/config.ts` |
+| `DID_DOC_CACHE_MAX` | int | 1 to 100000 | `10000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_ENABLED` | bool | true or false | `false` | `true` | `true` | `interfaces/indexer/config.ts` |
+| `INDEXER_PDS_URL` | url | http: or https: | required | `http://pds:3000` | `http://pds:3000` | `interfaces/indexer/config.ts` |
+| `PDS_PUBLIC_URL` | url | https: | required | from env file: `PDS_PUBLIC_URL` | from env file: `PDS_PUBLIC_URL` | `interfaces/indexer/config.ts` |
+| `INDEXER_PASS_INTERVAL_MS` | int | 1000 to 300000 | `10000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_PASS_OVERDUE_MS` | int | 300000 to 86400000 | `1800000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_TIMEOUT_MS` | int | 500 to 30000 | `5000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_REPO_TIMEOUT_MS` | int | 1000 to 120000 | `30000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_REPO_MAX_BYTES` | int | 1048576 to 67108864 | `33554432` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_RESTART_DELAY_MS` | int | 100 to 60000 | `1000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_MAX_RESTART_DELAY_MS` | int | 1000 to 600000 | `60000` | not set | not set | `interfaces/indexer/config.ts` |
+| `HEALTH_PORT` | int | 1024 to 65535 | `8081` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_STREAM_UNHEALTHY_MS` | int | 60000 to 3600000 | `300000` | not set | not set | `interfaces/indexer/config.ts` |
+| `INDEXER_SHUTDOWN_GRACE_MS` | int | 1000 to 9000 | `8000` | not set | not set | `interfaces/indexer/config.ts` |
+| `HOSTED_HANDLE_SUFFIXES` | list | comma-separated str | required | from env file: `PDS_SERVICE_HANDLE_DOMAINS` | from env file: `PDS_SERVICE_HANDLE_DOMAINS` | `interfaces/indexer/config.ts` |
+| `HANDLE_RECHECK_S` | int | 600 to 604800 | `86400` | not set | not set | `interfaces/indexer/config.ts` |
 
 ## migrate
 
@@ -146,20 +146,20 @@ Every environment setting, by process. "not set" means the default applies.
 
 | Key | Kind | Allowed | Default | local | staging | Defined in |
 | --- | --- | --- | --- | --- | --- | --- |
-| `PDS_ADMIN_ENV` | str | text | required | `dev` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `PDS_DID` | str | text | required | from env file: `PDS_DID` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `PDS_INTERNAL_URL` | str | text | required | `http://pds:3000` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `SIGNUPS_OPEN` | str | text | required | `true` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `PDS_ADMIN_SECRETS_DIR` | str | text | `/run/secrets` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `pds_admin_log_key` | secretFile | file | required | secret file | not in this stack | `interfaces/pds-admin/config.ts` |
-| `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `STATE_DIR` | str | text | required | `/app/state` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `PORT` | int | 1 to 65535 | `8080` | `8080` | not in this stack | `interfaces/pds-admin/config.ts` |
-| `COMMIT` | str | text | `unknown` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `pds_admin_password` | secretFile | file | required | secret file | not in this stack | `interfaces/pds-admin/config.ts` |
-| `pds_admin_keys` | secretFile | file | required | secret file | not in this stack | `interfaces/pds-admin/config.ts` |
+| `PDS_ADMIN_ENV` | str | text | required | `dev` | `dev` | `interfaces/pds-admin/config.ts` |
+| `PDS_DID` | str | text | required | from env file: `PDS_DID` | from env file: `PDS_DID` | `interfaces/pds-admin/config.ts` |
+| `PDS_INTERNAL_URL` | str | text | required | `http://pds:3000` | `http://pds:3000` | `interfaces/pds-admin/config.ts` |
+| `SIGNUPS_OPEN` | str | text | required | `true` | `true` | `interfaces/pds-admin/config.ts` |
+| `PDS_ADMIN_SECRETS_DIR` | str | text | `/run/secrets` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `pds_admin_log_key` | secretFile | file | required | secret file | secret file | `interfaces/pds-admin/config.ts` |
+| `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `STATE_DIR` | str | text | required | `/app/state` | `/app/state` | `interfaces/pds-admin/config.ts` |
+| `PORT` | int | 1 to 65535 | `8080` | `8080` | `8080` | `interfaces/pds-admin/config.ts` |
+| `COMMIT` | str | text | `unknown` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `pds_admin_password` | secretFile | file | required | secret file | secret file | `interfaces/pds-admin/config.ts` |
+| `pds_admin_keys` | secretFile | file | required | secret file | secret file | `interfaces/pds-admin/config.ts` |
 
 ## Other services
 

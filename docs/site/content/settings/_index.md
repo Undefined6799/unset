@@ -12,7 +12,7 @@ Two kinds of value:
 - **Configurable**: read from the environment at start, set per stack in a compose file. A bad value stops the process at boot.
 - **Fixed in code**: a constant; changing it is a code change in a PR.
 
-Stacks: **local** is `deployment/compose.local.yaml`, **staging** is `deployment/compose.dev.yaml` (the source-built staging file is derived from it). There is no production stack yet (step P5.00). "from env file" names a variable in the stack's interpolation file, which lives outside the checkout. Secrets show only their name and that they are required.
+Stacks: **local** is `deployment/compose.local.yaml`, **staging** is `deployment/compose.dev.source.yaml` (the stack staging runs, built from source). There is no production stack yet (step P5.00). "from env file" names a variable in the stack's interpolation file, which lives outside the checkout. Secrets show only their name and that they are required.
 
 | Page | What it lists |
 | --- | --- |

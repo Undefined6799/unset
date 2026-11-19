@@ -56,9 +56,9 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | Process | Key | Kind | Allowed | Default | local | staging | Defined in |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `web` | `INVITE_COUNTRY_RULE` | oneOf | on, off | `on` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
-| `pds-admin` | `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `pds-admin` | `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
-| `pds-admin` | `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not in this stack | `interfaces/pds-admin/config.ts` |
+| `pds-admin` | `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `pds-admin` | `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not set | `interfaces/pds-admin/config.ts` |
+| `pds-admin` | `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not set | `interfaces/pds-admin/config.ts` |
 
 ## Container limits
 
@@ -67,12 +67,12 @@ Configurable per stack in the compose files.
 | Service | local | staging |
 | --- | --- | --- |
 | `edge` | 256m memory, 0.5 CPU, 128 processes | 256m memory, 0.5 CPU, 128 processes |
-| `indexer` | 512m memory, 0.5 CPU, 64 processes | not in this stack |
+| `indexer` | 512m memory, 0.5 CPU, 64 processes | 512m memory, 0.5 CPU, 64 processes |
 | `migrate` | 256m memory, 0.5 CPU, 64 processes | 256m memory, 0.5 CPU, 64 processes |
 | `newt` | not in this stack | 128m memory, 0.5 CPU, 64 processes |
 | `objects` | 512m memory, 0.5 CPU, 256 processes | 512m memory, 0.5 CPU, 256 processes |
 | `pds` | 1g memory, 1 CPU, 256 processes | 1g memory, 1 CPU, 256 processes |
-| `pds-admin` | 128m memory, 0.25 CPU, 32 processes | not in this stack |
+| `pds-admin` | 128m memory, 0.25 CPU, 32 processes | 128m memory, 0.25 CPU, 32 processes |
 | `pds-token-reader` | 128m memory, 0.25 CPU, 32 processes | not in this stack |
 | `postgres` | 1g memory, 1 CPU, 256 processes | 1g memory, 1 CPU, 256 processes |
 | `web` | 512m memory, 1 CPU, 128 processes | 512m memory, 1 CPU, 128 processes |

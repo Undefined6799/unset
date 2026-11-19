@@ -1,9 +1,11 @@
 // The settings pages match the generator (P1.21a). A setting, limit or header change that does not regenerate the
 // pages fails here, and this file is part of npm test.
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { checkSettings, loadSettingsModel, memberPages, readPdsAdminSettings, stackCell } from "./settings.ts";
+import { loadStacks } from "./settings-process.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 
@@ -68,4 +70,23 @@ test("a_member_page_without_a_note_or_a_note_without_a_page_fails", () => {
     "docs/site/data/settings.yaml: /settings/gone is not a page",
     "docs/site/data/settings.yaml: no note for /prefs/theme",
   ]);
+});
+
+test("a_compose_service_that_is_not_a_map_fails", () => {
+  const root = mkdtempSync(join(tmpdir(), "settings-"));
+  try {
+    mkdirSync(join(root, "deployment"));
+    const compose = "services:\n  web: just-a-string\n  pds:\n    environment:\n      A: b\n";
+    for (const file of ["compose.local.yaml", "compose.dev.source.yaml"])
+      writeFileSync(join(root, "deployment", file), compose);
+    const problems: string[] = [];
+    const stacks = loadStacks(root, problems);
+    expect(problems).toEqual([
+      "deployment/compose.local.yaml: service web is not a map",
+      "deployment/compose.dev.source.yaml: service web is not a map",
+    ]);
+    expect(stacks[0]?.services.get("pds")?.env).toEqual({ A: "b" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
