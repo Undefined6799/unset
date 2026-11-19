@@ -146,8 +146,6 @@ export const BUTTONS_EDIT = {
 export const OWN_PAGE = {
   /** The tab's title when the page has no name to show (no display name, and a handle that did not verify). */
   title: "Your page",
-  privacyNoticeTitle: "Privacy notice",
-  privacyNotice: "The privacy notice has changed.",
   handleUnavailable: "We could not check your handle just now.",
   profileUnavailable: "We could not load your profile just now.",
   cardsIncomplete: "Some of your cards could not be loaded just now. Reload to try again.",

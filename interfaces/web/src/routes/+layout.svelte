@@ -257,6 +257,21 @@ const row =
 {/snippet}
 
 {#snippet content()}
+  {#if data.privacyNotice !== null}
+    <!-- The changed privacy notice (P2.12b): on whatever app page the member opens, until they dismiss it or accept
+         newer terms. The dismiss is a plain form, so it works with no script; a GET never records it. -->
+    <Alert.Root class="mb-6">
+      <Alert.Title>{T.privacyNoticeTitle}</Alert.Title>
+      <Alert.Description class="flex flex-wrap items-center justify-between gap-2">
+        <a href="/legal/privacy">{T.privacyNotice}</a>
+        <form method="post" action="/privacy-notice/seen">
+          <input type="hidden" name="version" value={data.privacyNotice} />
+          <input type="hidden" name="return" value={prefs?.returnTo ?? "/me"} />
+          <Button type="submit" variant="outline" size="sm">{T.privacyNoticeDismiss}</Button>
+        </form>
+      </Alert.Description>
+    </Alert.Root>
+  {/if}
   {#if message !== undefined}
     <Alert.Root variant="destructive" class="mb-6"><Alert.Description>{message}</Alert.Description></Alert.Root>
   {/if}

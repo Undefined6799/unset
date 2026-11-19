@@ -32,12 +32,6 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
 
 <ProfileLayout>
   {#snippet notices()}
-    {#if data.privacyNotice}
-      <Alert.Root>
-        <Alert.Title>{OWN_PAGE.privacyNoticeTitle}</Alert.Title>
-        <Alert.Description><a href="/legal/privacy">{OWN_PAGE.privacyNotice}</a></Alert.Description>
-      </Alert.Root>
-    {/if}
     {#if form?.message && data.cardPanel === null}
       <Alert.Root variant="destructive" role="alert">
         <Alert.Description>{form.message}</Alert.Description>

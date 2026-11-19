@@ -8,7 +8,12 @@ import { type AppOpenDeps, appOpen } from "./app-open.ts";
 const DID = `did:plc:${"a".repeat(24)}` as Did;
 const SIGNAL = new AbortController().signal;
 const VERSIONS = { terms: "t1", privacy: "p1" };
-const DONE: OnboardingAccount = { onboarding: "done", termsVersion: "t1", privacyVersion: "p1" };
+const DONE: OnboardingAccount = {
+  onboarding: "done",
+  termsVersion: "t1",
+  privacyVersion: "p1",
+  privacyNoticeSeenVersion: null,
+};
 
 function deps(account: OnboardingAccount | null | Error) {
   const lines: Record<string, unknown>[] = [];
