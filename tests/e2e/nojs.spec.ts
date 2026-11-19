@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
 import { AXE_TAGS, openPage, pageNoise, watch } from "./observe.ts";
 import { ALL_PAGES, type PageFixture } from "./pages.ts";
+import { phone } from "./phone.ts";
 
 const today = new Date().toISOString().slice(0, 10);
 const SETTINGS: PageFixture = {
@@ -26,14 +27,17 @@ test.describe("javascript disabled", () => {
     });
   }
 
-  // Staging walkthrough 2026-11-19: on a phone the search icon was disabled and said nothing to a finger; it opens a
-  // panel that says search is coming, as Messages and Notifications do, with no script.
-  test("the_phone_search_button_says_search_is_coming", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 800 });
-    await page.goto("/");
-    await page.locator('header button[popovertarget="search-menu"]').click();
-    await expect(page.locator("#search-menu")).toBeVisible();
-    await expect(page.locator("#search-menu")).toContainText("Search is coming soon.");
+  test.describe("phone search", () => {
+    test.use(phone({ width: 375, height: 800 }));
+
+    // Staging walkthrough 2026-11-19: on a phone the search icon was disabled and said nothing to a finger; it opens a
+    // panel that says search is coming, as Messages and Notifications do, with no script.
+    test("the_phone_search_button_says_search_is_coming", async ({ page }) => {
+      await page.goto("/");
+      await page.locator('header button[popovertarget="search-menu"]').tap();
+      await expect(page.locator("#search-menu")).toBeVisible();
+      await expect(page.locator("#search-menu")).toContainText("Search is coming soon.");
+    });
   });
 
   // Outside audit of staging, 2026-11-19: after an empty submit, a real date's confirm view still said "That date is
@@ -97,7 +101,7 @@ test.describe("javascript disabled", () => {
   // menu, with no script, and nothing scrolls sideways. A native popover closes on Escape and gives focus back to the
   // button that opened it (HTML "hide popover algorithm", focusPreviousElement).
   test.describe("phone", () => {
-    test.use({ viewport: { width: 320, height: 800 } });
+    test.use(phone({ width: 320, height: 800 }));
 
     test("navigation_popover_without_js", async ({ page }) => {
       await page.goto("/");

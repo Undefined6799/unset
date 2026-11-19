@@ -2,10 +2,15 @@
 // routes give today, with the same cookies (names, SameSite, Max-Age, host-only). Postgres as `web` (TE-2). The only
 // stand-ins are the network the server may not reach in a test (TE-1): PLC, and our PDS's authorization server, both
 // answered by stand-in-server.ts from the fixture below. Everything else, the OAuth client included, is real.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { createPool } from "@unset/infrastructure-postgres";
+import type { SavedState } from "@unset/infrastructure-pds";
+import { createOAuthStateStore, createPool } from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { scopeString } from "@unset/shared-lexicons";
+import { createLogger } from "@unset/shared-log";
 import { afterAll, afterEach, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   buildOnce,
@@ -27,6 +32,19 @@ const pool = createPool({
   max: 2,
   connectTimeoutMs: 5000,
 });
+
+// The malformed-state cases use the real sealed store with the same per-run key as the built server.
+const KEYRING = JSON.stringify({ active: "k1", keys: { k1: randomBytes(32).toString("base64") } });
+const keyring = parseKeyring(KEYRING);
+if (keyring === undefined) throw new Error("test keyring did not parse");
+const states = createOAuthStateStore<SavedState>({
+  pool,
+  sealer: createSealer(keyring),
+  log: createLogger({ service: "web", commit: "c".repeat(40), env: "test", write: () => undefined }),
+});
+const secrets = mkdtempSync(join(tmpdir(), "web-sign-in-"));
+const keyringFile = join(secrets, "seal_keyring");
+writeFileSync(keyringFile, KEYRING);
 
 const PDS = `https://${PDS_HOST}`;
 const DID = `did:plc:${"s".repeat(24)}`;
@@ -90,12 +108,13 @@ let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
   // The shortest deadline config allows, so a store held below stops the request in 5 seconds, not 30.
-  web = await startWeb(pg, { REQUEST_DEADLINE_MS: "5000" }, fixture);
+  web = await startWeb(pg, { REQUEST_DEADLINE_MS: "5000", SEAL_KEYRING_FILE: keyringFile }, fixture);
 }, 120_000);
 afterEach(() => web.setStandIns(fixture));
 afterAll(async () => {
   await web?.stop();
   await pool.end();
+  rmSync(secrets, { recursive: true, force: true });
 });
 
 const headers = (extra: Record<string, string> = {}) => ({ "x-forwarded-for": clientAddress(), ...extra });
@@ -136,8 +155,8 @@ function expectHostOnly(line: string | undefined, sameSite: "Lax" | "Strict", ma
 }
 
 /** POST /login with the chooser, as the one button does; returns the nonce and target cookies. */
-async function startSignIn(extra: Record<string, string> = {}) {
-  const response = await post("/login", "intent=chooser&next=%2Fsettings", extra);
+async function startSignIn(extra: Record<string, string> = {}, next = "/settings") {
+  const response = await post("/login", new URLSearchParams({ intent: "chooser", next }).toString(), extra);
   const cookies = setCookies(response);
   return { response, nonce: cookies.get("__Host-oauth_nonce"), target: cookies.get("__Host-login_target") };
 }
@@ -153,7 +172,7 @@ async function newestState(): Promise<string> {
 /** The callback for the newest sign-in, as our PDS sends the browser back: `params` replace the code. */
 async function callBack(nonce: string | undefined, params: Record<string, string> = { code: "code-1" }, cookie = "") {
   const query = new URLSearchParams({ state: await newestState(), iss: PDS, ...params });
-  const jar = [`__Host-oauth_nonce=${value(nonce)}`, cookie].filter(Boolean).join("; ");
+  const jar = [nonce === undefined ? "" : `__Host-oauth_nonce=${value(nonce)}`, cookie].filter(Boolean).join("; ");
   return web.fetch(`/oauth/callback?${query}`, { headers: headers({ cookie: jar }) });
 }
 
@@ -459,6 +478,74 @@ describe("typed accounts", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`/login?error=${code}`);
     expect(setCookies(response).has("__Host-oauth_nonce")).toBe(false);
+  });
+});
+
+describe("cancelled sign-ins", () => {
+  test("cancel_keeps_next_in_the_login_form_without_spending_the_nonce", async () => {
+    const { nonce } = await startSignIn({}, "/settings/profile");
+    const before = web.logs().length;
+    const response = await callBack(nonce, { error: "access_denied", next: "/about" });
+    expect(response.status).toBe(303);
+    const target = response.headers.get("location");
+    expect(target).toBe("/login?error=login.consent_denied&next=%2Fsettings%2Fprofile");
+    const form = await web.fetch(target ?? "", { headers: headers() });
+    expect(form.status).toBe(200);
+    expect(await form.text()).toContain('name="next" value="/settings/profile"');
+    expect(setCookies(response).size).toBe(0);
+    const tokenHash = createHash("sha256")
+      .update(Buffer.from(value(nonce), "base64url"))
+      .digest();
+    const { rows } = await pool.query<{ consumed_at: Date | null }>(
+      "SELECT consumed_at FROM app.single_use WHERE purpose = 'login.nonce' AND id = $1",
+      [tokenHash],
+    );
+    expect(rows).toEqual([{ consumed_at: null }]);
+    expect(
+      web
+        .logs()
+        .slice(before)
+        .filter((line) => line.event === "auth.login_denied"),
+    ).toEqual([expect.objectContaining({ code: "login.consent_denied" })]);
+  });
+
+  test.each([undefined, `__Host-oauth_nonce=${"x".repeat(43)}`])(
+    "cancel_from_another_browser_drops_next_%s",
+    async (nonce) => {
+      await startSignIn({}, "/settings/profile");
+      const response = await callBack(nonce, { error: "access_denied", next: "/about" });
+      expect(response.headers.get("location")).toBe("/login?error=login.consent_denied");
+      expect(setCookies(response).size).toBe(0);
+    },
+  );
+
+  test.each(["//evil.example", "https://evil.example/x", "/\\evil.example", "/\t/evil.example", "/settings\u0000"])(
+    "cancel_drops_a_hostile_next_from_sealed_state_%s",
+    async (next) => {
+      const { nonce } = await startSignIn();
+      const key = await newestState();
+      const saved = await states.get(key);
+      if (saved?.appState === undefined) throw new Error("sign-in state missing");
+      await states.set(key, { ...saved, appState: JSON.stringify({ ...JSON.parse(saved.appState), next }) });
+      const response = await callBack(nonce, { error: "access_denied", next: "/about" });
+      expect(response.headers.get("location")).toBe("/login?error=login.consent_denied");
+    },
+  );
+
+  test.each(["not json", "{}"])("cancel_drops_an_unparsable_app_state_%s", async (appState) => {
+    const { nonce } = await startSignIn();
+    const key = await newestState();
+    const saved = await states.get(key);
+    if (saved === undefined) throw new Error("sign-in state missing");
+    await states.set(key, { ...saved, appState });
+    const response = await callBack(nonce, { error: "access_denied", next: "/about" });
+    expect(response.headers.get("location")).toBe("/login?error=login.consent_denied");
+  });
+
+  test("other_refusals_still_drop_next", async () => {
+    const { nonce } = await startSignIn({}, "/settings/profile");
+    const response = await callBack(nonce, { error: "server_error", next: "/about" });
+    expect(response.headers.get("location")).toBe("/login?error=login.failed");
   });
 });
 

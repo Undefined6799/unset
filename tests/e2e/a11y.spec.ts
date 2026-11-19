@@ -3,6 +3,7 @@ import { type Browser, expect, type Page, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
 import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch } from "./observe.ts";
 import { ALL_PAGES, cellName, colorSchemeOf, originOf, type PageFixture, type ThemeCell, themeCells } from "./pages.ts";
+import { phone } from "./phone.ts";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -61,10 +62,10 @@ test("axe_detects_violation", async ({ page }) => {
   expect(results.violations.some((violation) => violation.id === "label")).toBe(true);
 });
 
-test.describe("once per page", () => {
+test.describe("phone reflow", () => {
+  test.use(phone({ width: 320, height: 640 }));
   for (const fixture of ALL_PAGES) {
     test(`reflow_320 ${fixture.path}`, async ({ page }) => {
-      await page.setViewportSize({ width: 320, height: 640 });
       const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);
       const overflow = await page.evaluate(() => {
@@ -75,7 +76,11 @@ test.describe("once per page", () => {
       });
       expect(overflow).toBeLessThanOrEqual(0);
     });
+  }
+});
 
+test.describe("once per page", () => {
+  for (const fixture of ALL_PAGES) {
     test(`target_size ${fixture.path}`, async ({ page }) => {
       const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);

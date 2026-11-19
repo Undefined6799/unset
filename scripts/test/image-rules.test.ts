@@ -163,7 +163,10 @@ function tree(files: Record<string, string>): string {
 afterAll(removeFixtures);
 
 describe("image tests", () => {
-  test("image_builds_only_in_image_tests", async () => {
+  // The first check cruises the whole tree (every import, at any depth, of every test file): about 2.5 s alone, and it
+  // passed Vitest's default 5 s on one CI run and timed out on the next under the full suite's load (P1.20o, run
+  // 44536079955). It gets the time its work takes rather than a re-run; depcruise.test.ts met the same limit (P1.28z).
+  test("image_builds_only_in_image_tests", { timeout: 30_000 }, async () => {
     expect((await imageBuildProblems(ROOT)).problems).toEqual([]);
     const root = tree({
       "a/spawn.test.ts": `spawnSync("docker", ${JSON.stringify(["buildx", BUILD_WORD, "."])});\n`,

@@ -15,6 +15,7 @@ import type { Did } from "@unset/domains-identity";
 import { type CallbackResult, completeAuthorization, grantCovers } from "@unset/infrastructure-pds";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { ErrorCode } from "@unset/shared-errors";
+import type { SafePath } from "@unset/shared-http";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
 import { putSessionCookie, sessionCookieValue } from "./session.ts";
@@ -30,9 +31,9 @@ function sameNonce(a: string, b: string): boolean {
 const className = (error: unknown): string => (error instanceof Error ? error.constructor.name : "unknown");
 
 /** Back to the sign-in form with `code`, counted. Throws SvelteKit's 303 (cookies already set go with it). */
-function deny(code: ErrorCode): never {
+function deny(code: ErrorCode, next: SafePath | null = null): never {
   services().log.info("auth.login_denied", { code });
-  redirect(303, `/login?error=${code}`);
+  redirect(303, `/login?error=${code}${next === null ? "" : `&next=${encodeURIComponent(next)}`}`);
 }
 
 /** The nonce cookie matches the appState's: this is the browser that started the flow. */
@@ -109,6 +110,11 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
   const { request, cookies, deadline } = event;
   if (!completed.ok) {
     if (completed.reason === "interaction_required") return askWithPage(request, completed.appState, deadline);
+    if (completed.reason === "consent_denied") {
+      // Only the starting browser may reuse the sealed state's path, revalidated by parseAppState; never the query.
+      const state = parseAppState(completed.appState);
+      deny("login.consent_denied", state !== null && startedHere(request, state.nonce) ? state.next : null);
+    }
     deny(`login.${completed.reason}`);
   }
   const state = parseAppState(completed.appState);
