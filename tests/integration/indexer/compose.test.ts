@@ -5,6 +5,7 @@
 // stopped in time, and exits 1 after an unhandled rejection.
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError, loadConfig } from "@unset/shared-config";
@@ -79,6 +80,24 @@ function runMain(
   return exit.finally(() => clearTimeout(timer)).then((code) => ({ code, lines }));
 }
 
+/**
+ * A port for main.ts's health server that is free now and outside Linux's ephemeral range (32768 to 60999 by default,
+ * net.ipv4.ip_local_port_range, kernel ip-sysctl docs; read on this runner image), where the test Postgres containers' published ports and outbound sockets land. A random
+ * port up to 40000 once met one of those, and main.ts then exited on EADDRINUSE before it logged indexer.started.
+ * Bound as main.ts binds it (no host), then released.
+ */
+async function freePort(): Promise<number> {
+  for (;;) {
+    const port = 20_000 + Math.floor(Math.random() * 12_000);
+    const free = await new Promise<boolean>((resolve) => {
+      const probe = createServer();
+      probe.once("error", () => resolve(false));
+      probe.listen(port, () => probe.close(() => resolve(true)));
+    });
+    if (free) return port;
+  }
+}
+
 const event = (line: string): { event?: string; kind?: string } => {
   try {
     return JSON.parse(line) as { event?: string; kind?: string };
@@ -117,7 +136,7 @@ describe("indexer composition root", () => {
   });
 
   test("indexer.process_listens_before_it_says_started_and_stops_cleanly", async () => {
-    const port = String(20_000 + Math.floor(Math.random() * 20_000));
+    const port = String(await freePort());
     let health: { status: number; body: unknown } | null = null;
     const run = await runMain(
       { INDEXER_ENABLED: "false", HEALTH_PORT: port },
@@ -144,7 +163,7 @@ describe("indexer composition root", () => {
   });
 
   test("indexer.process_exits_1_after_an_unhandled_rejection", async () => {
-    const port = String(20_000 + Math.floor(Math.random() * 20_000));
+    const port = String(await freePort());
     const preload = 'setTimeout(() => { Promise.reject(new Error("planted")); }, 500);';
     const run = await runMain({ INDEXER_ENABLED: "false", HEALTH_PORT: port }, { preload });
     expect(run.code).toBe(1);
