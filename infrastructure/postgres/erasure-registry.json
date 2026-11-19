@@ -68,5 +68,9 @@
   "idx.track_request.did": {
     "strategy": "delete_row",
     "reason": "the request to index a member who signed in; it goes when they are erased"
+  },
+  "app.discoverability.did": {
+    "strategy": "delete_row",
+    "reason": "the member's Search and AI choices for their public page (ADR 0062); they go when they are erased"
   }
 }

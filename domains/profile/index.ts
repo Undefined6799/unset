@@ -23,6 +23,14 @@ export {
   shownCards,
 } from "./cards.ts";
 export {
+  DISCOVERABILITY_LIMITS,
+  DISCOVERABILITY_OFF,
+  type Discoverability,
+  type DiscoverabilityField,
+  type ParsedDiscoverability,
+  parseDiscoverabilityForm,
+} from "./discoverability.ts";
+export {
   type BlobRef,
   INDEXED_COLLECTIONS,
   type IndexAccount,

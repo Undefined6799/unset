@@ -43,7 +43,8 @@ function seedApp(did: string, fill: string): void {
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');
      INSERT INTO app.single_use (id, purpose, bind_did, expires_at)
        VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');
-     INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());`,
+     INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());
+     INSERT INTO app.discoverability (did, search_engines, updated_at) VALUES ('${did}', true, now());`,
   );
 }
 
@@ -178,6 +179,7 @@ describe("core.erase_did", () => {
       "app.oauth_session": 1,
       "app.single_use": 1,
       "idx.track_request": 1,
+      "app.discoverability": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -212,6 +214,7 @@ describe("core.erase_did", () => {
       "app.oauth_session": 0,
       "app.single_use": 0,
       "idx.track_request": 0,
+      "app.discoverability": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,
