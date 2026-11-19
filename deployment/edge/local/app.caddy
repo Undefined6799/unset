@@ -8,6 +8,7 @@
 	import tls
 	import access-log
 	import security-headers
+	import too-many-tries
 	route {
 		import pds-ratelimit
 		import upstream {$APP_UPSTREAM}

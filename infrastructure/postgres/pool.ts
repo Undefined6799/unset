@@ -41,6 +41,13 @@ export function createPool(options: PoolOptions): Pool {
   });
   // An idle client's dropped connection is reported here; the pool already discards that client.
   driver.on("error", () => undefined);
+  // A checked-out client has no pool listener (pg-pool 3.14.0 index.js:344 removes it until release, :385), and pg
+  // 8.23.1 emits "error" on the client when its socket drops between statements (lib/client.js:203-222, :416-423); with
+  // no listener that is an uncaught exception, which ends the process. The node-postgres Client docs advise a client
+  // error listener (https://node-postgres.com/apis/client, "error" event). Nothing is lost by not logging here: the
+  // client is no longer queryable, so its holder's query in flight or next query rejects (lib/client.js:765-769), and
+  // release drops it (pg-pool index.js:391). The same pattern as migrate.ts and roles.ts for their own clients.
+  driver.on("connect", (client) => client.on("error", () => undefined));
   const { onStatement } = options;
   if (onStatement !== undefined) driver.on("connect", (client) => countStatements(client, onStatement));
   return driver;

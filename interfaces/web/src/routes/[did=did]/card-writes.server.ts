@@ -16,13 +16,16 @@ import {
   withAvatarShape,
   withCardOrder,
 } from "@unset/domains-profile";
-import type { BuiltRecord, CardList, PdsResult, SaveOutcome } from "@unset/infrastructure-pds";
+import type { BuiltRecord, CardList, CreateOutcome, PdsResult, SaveOutcome } from "@unset/infrastructure-pds";
 import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
 
 /** The member's own card and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {
   readonly list: () => Promise<PdsResult<CardList>>;
-  readonly create: (record: Readonly<Record<string, unknown>>) => Promise<PdsResult<{ readonly key: string }>>;
+  /** The CID of the repo's head commit, read before a count the create depends on. */
+  readonly head: () => Promise<PdsResult<string>>;
+  /** Creates the card only if the repo's head is still `swapCommit`. */
+  readonly create: (record: Readonly<Record<string, unknown>>, swapCommit: string) => Promise<PdsResult<CreateOutcome>>;
   readonly save: (
     key: CardKey,
     build: (existing: unknown) => BuiltRecord<CardError>,
@@ -38,6 +41,8 @@ export type CardFailure =
   | ProfileError
   | "card.missing"
   | "card.too_many"
+  | "card.overflow"
+  | "card.cards_changed"
   | "card.list_incomplete"
   | "card.conflict"
   | "card.pds_unavailable"
@@ -60,6 +65,8 @@ export type CardWrites = {
 };
 
 const SAVED: CardWrite = { kind: "saved" };
+/** The first try and one more after a refused swap; never a third, so a busy repo cannot hold the request. */
+const CREATE_ATTEMPTS = 2;
 const failed = (code: CardFailure): CardWrite => ({ kind: "failed", code });
 
 export function cardWrites(store: CardStore, pdsHost: string, now: () => string): CardWrites {
@@ -76,19 +83,26 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
   };
 
   return {
-    // The page reads CARDS_MAX cards, so one past it would be stored and never shown. Counted before the write with no
-    // lock (DA-4): two tabs adding at once could both pass and store one more, which the page then leaves out until a
-    // card is deleted; a member editing their own page makes that rare, and nothing is lost. A list cut short by the
-    // read budget (card-records.ts) is not a count: the add is refused rather than taken as under the cap.
+    // The page reads CARDS_MAX cards, so one past it would be stored and never shown. The count and the create are tied
+    // to one repo state (DA-4: compare-and-swap at the PDS): the head is read first, and the create swaps on it, so
+    // a card added elsewhere meanwhile (another tab) makes the PDS refuse it and nothing is written. Counted once more
+    // then, since an unrelated write to the repo also moves the head; a second refusal asks the member to save again.
+    // A list cut short by the read budget (card-records.ts) is not a count: the add is refused.
     create: async (content, width) => {
       const built = toCardRecord(content, width, null, now());
       if (!built.ok) return failed(built.code);
-      const listed = await store.list();
-      if (listed.kind !== "ok") return pdsFailure(listed);
-      if (!listed.value.complete) return failed("card.list_incomplete");
-      if (listed.value.cards.length >= CARDS_MAX) return failed("card.too_many");
-      const created = await store.create(built.record);
-      return created.kind === "ok" ? SAVED : pdsFailure(created);
+      for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
+        const head = await store.head();
+        if (head.kind !== "ok") return pdsFailure(head);
+        const listed = await store.list();
+        if (listed.kind !== "ok") return pdsFailure(listed);
+        if (listed.value.overflow || listed.value.cards.length >= CARDS_MAX) return failed("card.too_many");
+        if (!listed.value.complete) return failed("card.list_incomplete");
+        const created = await store.create(built.record, head.value);
+        if (created.kind !== "ok") return pdsFailure(created);
+        if (created.value.kind === "created") return SAVED;
+      }
+      return failed("card.cards_changed");
     },
     save: async (key, content, width) =>
       outcome(await store.save(key, (existing) => toCardRecord(content, width, existing, now()))),
@@ -98,10 +112,11 @@ export function cardWrites(store: CardStore, pdsHost: string, now: () => string)
     },
     // The order names the cards the page shows (domains/profile `shownCards`, as the page reads them), so a hidden card never
     // makes a correct order look stale. A card added in another tab meanwhile fails the check; the editor reloads.
-    // An incomplete list cannot check an order, so the move is refused.
+    // An incomplete list cannot check an order, so the move is refused; past the cap the member deletes a card first.
     reorder: async (requested) => {
       const listed = await store.list();
       if (listed.kind !== "ok") return pdsFailure(listed);
+      if (listed.value.overflow) return failed("card.overflow");
       if (!listed.value.complete) return failed("card.list_incomplete");
       const order = reorderCards(
         requested,

@@ -120,8 +120,8 @@ export type CardEditLimits = {
 /**
  * The part of SvelteKit's SubmitFunction (kit 3.2.0 types/index.d.ts) a card editor uses: `cancel` stops a submit
  * before it is sent; after the action answers, `result` is its ActionResult and `update` does what `enhance` does by
- * default. apps/web imports nothing from the
- * framework (ADR 0056), so the page passes kit's `enhance` in as an Enhance.
+ * default. Still written out until the card editors move to kit's own types beside their route (P1.20s did the
+ * settings profile form); the page passes kit's `enhance` in as an Enhance.
  */
 export type SubmitHandler = (input: {
   cancel: () => void;
@@ -130,10 +130,6 @@ export type SubmitHandler = (input: {
   update: () => Promise<void>;
 }) => Promise<void>;
 
-/**
- * The page's form enhancement as a Svelte action, `use:enhance` or `use:enhance={handler}`; the default does nothing
- * (no script). Written out rather than as svelte/action's Action, which a .ts file here may not import (ADR 0056).
- */
 /** Which editor the page was opened with in place (no script; lib/profile/panel.ts), as its load read the query. */
 export type CardPanelRequest =
   | { readonly kind: "edit" | "remove"; readonly key: string }
@@ -155,4 +151,9 @@ export type CardPanelState = {
   readonly values?: Readonly<Record<string, string>>;
 };
 
+/**
+ * The page's form enhancement as a Svelte action, `use:enhance` or `use:enhance={handler}`; the default does nothing
+ * (no script). apps/web may import svelte and kit types: ADR 0056 decision 3 and the `sveltekit-web-only` rule keep
+ * the framework out of domains, infrastructure and shared only.
+ */
 export type Enhance = (form: HTMLFormElement, handler?: SubmitHandler) => { destroy?: () => void } | undefined;

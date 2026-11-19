@@ -537,13 +537,15 @@ describe("local stack files (P1.34c)", () => {
   test("local_app_site_has_the_pds_sites_shared_snippets", () => {
     // TLS, the access log and the security headers as every public host has them; the zones first, then the upstream
     // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3). Unlike the
-    // PDS site it has no pds-route-class or xrpc-guard: those are the PDS's routes.
+    // PDS site it has no pds-route-class or xrpc-guard: those are the PDS's routes. A refused browser gets the
+    // too-many-tries page, as on every site.
     expect(local("app.caddy")).toBe(
       [
         "{$APP_HOST} {",
         "\timport tls",
         "\timport access-log",
         "\timport security-headers",
+        "\timport too-many-tries",
         "\troute {",
         "\t\timport pds-ratelimit",
         "\t\timport upstream {$APP_UPSTREAM}",

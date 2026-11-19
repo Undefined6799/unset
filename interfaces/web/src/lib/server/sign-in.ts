@@ -14,7 +14,7 @@ import { type SafePath, safeReturnPath } from "@unset/shared-http";
 import { type HrefScheme, type SafeHref, safeHref } from "@unset/shared-safe-href";
 import { services } from "./compose.ts";
 import { config } from "./runtime.ts";
-import { appStateOf, putCookie, signedOutFrom, targetFromCookies } from "./sign-in-state.ts";
+import { appStateOf, encodeTarget, putCookie, signedOutFrom, targetFromCookies } from "./sign-in-state.ts";
 
 /** Where the authorization server is chosen from: a handle or DID, or our PDS's own sign-in page. */
 type Account = { readonly input: string; readonly expectedDid: Did | null };
@@ -22,6 +22,22 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 export type AuthorizationTarget =
   | { readonly ok: true; readonly target: SafeHref }
   | { readonly ok: false; readonly code: ErrorCode };
+
+/** A started authorization: the nonce for this browser's cookie and where to send it, or the refusal code. */
+export type StartedAuthorization =
+  | { readonly ok: true; readonly nonce: string; readonly target: SafeHref }
+  | { readonly ok: false; readonly code: ErrorCode };
+
+/** What a caller decides for its own sign-in: the account, who must come back, where to, how the PDS asks, by when. */
+export type AuthorizationRequest = {
+  /** A handle, a DID or our PDS's own URL, as the library takes it. */
+  readonly input: string;
+  /** The account the callback must get back, or null when the PDS's chooser decides. */
+  readonly expectedDid: Did | null;
+  readonly next: SafePath | null;
+  readonly prompt: "login" | "none" | "consent";
+  readonly deadline: AbortSignal;
+};
 
 /** A local stack (OAUTH_ALLOW_HTTP) may send the browser to plain HTTP; nothing else may. */
 const schemes = (): readonly HrefScheme[] => (config.OAUTH_ALLOW_HTTP ? ["https:", "http:"] : ["https:"]);
@@ -53,6 +69,24 @@ export async function authorizationTarget(
   return { ok: true, target };
 }
 
+/**
+ * The one way a sign-in starts (P1.20t): issues the single-use login nonce (P1.16), seals it with the expected DID and
+ * the return path into the appState, and asks the library for the authorization target. The caller sets the nonce
+ * and target cookies and redirects; nothing is stored in the browser here. The appState is silent exactly when the
+ * PDS is asked with prompt=none, so the callback knows it may ask once more without a prompt (P2.05s).
+ */
+export async function startAuthorization(request: AuthorizationRequest): Promise<StartedAuthorization> {
+  const { input, expectedDid, next, prompt, deadline } = request;
+  const { pool, nonces } = services();
+  const nonce = await withClient(pool, deadline, (db) =>
+    nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] }),
+  );
+  const appState = appStateOf({ nonce, expectedDid, next, silent: prompt === "none" });
+  const sent = await authorizationTarget(input, { appState, prompt, deadline });
+  // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
+  return sent.ok ? { ok: true, nonce, target: sent.target } : sent;
+}
+
 /** Steps 3 to 5 of the book's algorithm: the account to authorize, or the code to send the form back with. */
 async function chooseAccount(form: FormData): Promise<Account | ErrorCode> {
   const typed = (single(form, "handle") ?? "").trim();
@@ -82,19 +116,14 @@ export async function startSignIn(request: Request, cookies: Cookies, deadline: 
   const next = safeReturnPath(single(form, "next"));
   const account = await chooseAccount(form);
   if (typeof account === "string") back(account, next);
-  const { pool, nonces } = services();
-  const nonce = await withClient(pool, deadline, (db) =>
-    nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] }),
-  );
   // P2.05s: silent first, so a browser signed in at the PDS that allowed unset before sees no PDS page. After a
   // sign-out the server asks for the password instead, until "No thanks" or the next sign-in clears the marker.
   const signedOut = signedOutFrom(request.headers.get("cookie"));
-  const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next, silent: !signedOut });
-  const sent = await authorizationTarget(account.input, { appState, prompt: signedOut ? "login" : "none", deadline });
-  // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
+  const { input, expectedDid } = account;
+  const sent = await startAuthorization({ input, expectedDid, next, prompt: signedOut ? "login" : "none", deadline });
   if (!sent.ok) back(sent.code, next);
-  putCookie(cookies, "nonce", nonce);
-  putCookie(cookies, "target", Buffer.from(sent.target).toString("base64url"));
+  putCookie(cookies, "nonce", sent.nonce);
+  putCookie(cookies, "target", encodeTarget(sent.target));
   redirect(303, "/login/continue");
 }
 
