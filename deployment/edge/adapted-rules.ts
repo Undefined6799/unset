@@ -78,6 +78,7 @@ const SERVER_KEYS = [
   "trusted_proxies_strict",
   "client_ip_headers",
   "automatic_https",
+  "errors",
 ];
 const TRUST_KEYS = ["trusted_proxies", "trusted_proxies_strict", "client_ip_headers"];
 
@@ -228,6 +229,99 @@ const cspAppend = (host: string): Json => ({
     require: { headers: { "Content-Type": ["text/html*"] } },
   },
 });
+/**
+ * (too-many-tries) as adapted for one site (snippets/too-many-tries.caddy): on a 429 from a zone, the security headers,
+ * the page's CSP and no-store on every response, and the page itself, still a 429, only for a browser navigation; a
+ * fetch or a stream gets Caddy's empty 429. `body` is the page, which pageProblems judges, and `csp` its policy:
+ * nothing but one style by its SHA-256 hash, so the page can load nothing else. A 5xx is raised again (LOG_5XX). The rules import nothing (no
+ * dependency-cruiser row for the edge), so adapted-rules.test.ts proves the hash is the reviewed style's.
+ */
+const NAVIGATE: Json = [{ header: { "Sec-Fetch-Mode": ["navigate"] } }];
+/**
+ * The second route: a 5xx fails again, so Caddy still logs the edge's own 5xx at ERROR and sends the first error's
+ * status with no body, as before the error routes existed (Caddy v2.11.9 server.go:747-776).
+ */
+const LOG_5XX: Json = {
+  handle: [
+    { handler: "subroute", routes: [{ handle: [{ handler: "error", error: "edge error", status_code: 500 }] }] },
+  ],
+  match: [{ expression: "{http.error.status_code} >= 500 && {http.error.status_code} <= 599" }],
+};
+export const PAGE_CSP =
+  /^default-src 'none'; style-src 'sha256-([A-Za-z0-9+/]{43}=)'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'$/;
+const tooManyTries = (host: string, body: string, csp: string): Json => ({
+  match: [{ host: [host] }],
+  handle: [
+    {
+      handler: "subroute",
+      routes: [
+        {
+          handle: [
+            {
+              handler: "subroute",
+              routes: [
+                {
+                  handle: [{ handler: "headers", response: { set: { "Content-Type": ["text/html; charset=utf-8"] } } }],
+                  match: NAVIGATE,
+                },
+                {
+                  handle: [
+                    ...SECURITY_HEADERS,
+                    {
+                      handler: "headers",
+                      response: {
+                        set: { "Cache-Control": ["no-store"], "Content-Security-Policy": [csp] },
+                      },
+                    },
+                  ],
+                },
+                { handle: [{ handler: "static_response", status_code: 429, body }], match: NAVIGATE },
+              ],
+            },
+          ],
+          match: [{ expression: "{http.error.status_code} in [429]" }],
+        },
+        LOG_5XX,
+      ],
+    },
+  ],
+  terminal: true,
+});
+/**
+ * The page's tags, each written exactly so, attributes included: a document, its charset and viewport, a title, a
+ * heading, text and the one link home. <style> and </style> are judged on their own, once each.
+ */
+const PAGE_TAGS = [
+  "<!doctype html>",
+  '<html lang="en">',
+  "</html>",
+  "<head>",
+  "</head>",
+  '<meta charset="utf-8">',
+  '<meta name="viewport" content="width=device-width, initial-scale=1">',
+  "<title>",
+  "</title>",
+  "<body>",
+  "</body>",
+  "<main>",
+  "</main>",
+  "<h1>",
+  "</h1>",
+  "<p>",
+  "</p>",
+  '<a href="/">',
+  "</a>",
+];
+/** The page's words: letters, digits, spaces and plain punctuation; no brace, entity, backslash or angle bracket. */
+const PAGE_TEXT = /^[A-Za-z0-9 .,'!?\n-]*$/;
+/** The style's characters: lower-case CSS with no quote, slash, backslash, at-rule or escape. */
+const STYLE_TEXT = /^[a-z0-9 #:;,.()%{}-]*$/;
+/**
+ * What may sit between a `{` and the next `}` in the style. Caddy reads exactly that span as a placeholder key
+ * (v2.11.9 replacer.go:219-240), and every key it knows has a dotted prefix (file., env., http., system., time.) or
+ * no colon; a CSS block opens with a property name and a colon, so it can be neither.
+ */
+const STYLE_BLOCK = /^[a-z-]+:[^{}]*$/;
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
 type Host = "PDS_HOST" | "APP_HOST";
@@ -255,6 +349,7 @@ const named = (handlers: Obj[], name: string): Obj[] => handlers.filter((handler
  *   upstream, removing the client address headers and setting X-Forwarded-Host from the request alone;
  * - a trusted proxy only under dev: exactly Newt's address, read right to left from X-Forwarded-For; every server keeps
  *   the shared timeouts;
+ * - the error routes: exactly the too-many-tries page on each site, the page fixed text that loads nothing;
  * - certificates: Let's Encrypt for the PDS host under prod, the env's own leaf files under dev and local, nothing else;
  * - under dev the security headers, noindex, the admin guard and blob routes shut on the PDS, the sign-in files
  *   read-only on the app;
@@ -277,6 +372,7 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   if (server === undefined || others.length > 0) return [...found, "not exactly one public server"];
   const hosts = hostsOf(mode).map((host) => env[host] as string);
   found.push(...serverProblems(server, mode, env), ...logProblems(top, server, hosts));
+  found.push(...errorProblems(server, mode, env));
   found.push(...tlsProblems(top, server, mode, env));
   for (const host of hostsOf(mode)) {
     const route = siteRoute(server, env[host] as string);
@@ -487,6 +583,66 @@ function trustProblems(server: Obj, mode: EdgeMode): string[] {
   return found;
 }
 
+/**
+ * The error routes (snippets/too-many-tries.caddy): one per site, each exactly the ruled too-many-tries route, so a
+ * refused browser gets the page, a fetch keeps Caddy's empty 429, and every other error Caddy's default.
+ */
+function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
+  const errors = obj(server.errors);
+  const routes = arr(errors.routes).map(obj);
+  const found = unknownKeys(errors, ["routes"], "the error handling");
+  for (const host of hostsOf(mode)) {
+    const own = routes.filter((route) => same(route.match, [{ host: [env[host] as string] }]));
+    const [body, csp] = own.length === 1 ? pageOf(own[0] as Obj) : ["", ""];
+    const page = pageProblems(body);
+    if (page.length > 0 || !PAGE_CSP.test(csp) || !same(own[0], tooManyTries(env[host] as string, body, csp))) {
+      found.push(`{$${host}}: the error route is not the ruled too-many-tries page`);
+    }
+    found.push(...page.map((problem) => `{$${host}}: the too-many-tries page ${problem}`));
+  }
+  if (routes.length !== hostsOf(mode).length) found.push("an error route other than the sites' own");
+  return found;
+}
+
+/** The page and the CSP a too-many-tries route sends, each "" when the route is not shaped like one. */
+function pageOf(route: Obj): [body: string, csp: string] {
+  const status = obj(arr(obj(arr(obj(arr(route.handle)[0]).routes)[0]).handle)[0]);
+  const routes = arr(status.routes).map(obj);
+  const respond = obj(arr(routes[2]?.handle)[0]);
+  const headers = obj(arr(routes[1]?.handle).at(-1));
+  const csp = arr(obj(obj(headers.response).set)["Content-Security-Policy"])[0];
+  return [typeof respond.body === "string" ? respond.body : "", typeof csp === "string" ? csp : ""];
+}
+
+/**
+ * Why the page is not fixed text that loads nothing, judged by allow-list. Caddy v2.11.9 replaces known placeholders
+ * in a static_response body at run time (staticresp.go:208), {file.*} and {env.*} among them (replacer.go:364-373),
+ * so a brace in the page could serve an edge file, a secret or the request. Outside the style: only the ruled tags,
+ * each exact, and words with no brace. The style: once, lower-case CSS with no quote, slash, at-rule or URL, and
+ * every brace a CSS block.
+ */
+function pageProblems(body: string): string[] {
+  const found: string[] = [];
+  if (!body.startsWith("<!doctype html>\n") || !body.endsWith("</html>")) found.push("is not one document");
+  const [head, rest, ...moreStyles] = body.split("<style>");
+  const [style, tail, ...moreEnds] = (rest ?? "").split("</style>");
+  if (rest === undefined || tail === undefined || moreStyles.length > 0 || moreEnds.length > 0) {
+    return [...found, "does not hold exactly one style"];
+  }
+  const outside = `${head}${tail}`;
+  if (!(outside.match(/<[^>]*>/g) ?? []).every((tag) => PAGE_TAGS.includes(tag))) {
+    found.push("holds a tag outside the ruled ones");
+  }
+  const words = outside.replace(/<[^>]*>/g, "");
+  if (/[{}]/.test(words)) found.push("holds a placeholder");
+  else if (!PAGE_TEXT.test(words)) found.push("holds text outside the ruled characters");
+  const blocks = [...(style ?? "").matchAll(/\{([^}]*)\}?/g)].map((match) => match[1] as string);
+  if (!blocks.every((block) => STYLE_BLOCK.test(block))) found.push("holds a placeholder");
+  if (!STYLE_TEXT.test(style ?? "")) found.push("styles with something outside the ruled characters");
+  if (/url\(|image|expression/.test(style ?? "")) found.push("loads or runs something");
+  return [...new Set(found)];
+}
+
 const siteRoute = (server: Obj, host: string): Obj | null =>
   arr(server.routes)
     .map(obj)
@@ -642,7 +798,12 @@ const PDS_ZONES: readonly Zone[] = [
 const APP_ZONES: readonly Zone[] = [
   ["app_burst", 20, 10],
   ["app_global", 1200, 300],
-  ["app_signin", 5, 300, [{ method: ["POST"], path: ["/login", "/verify-email"] }, { path: ["/oauth/callback"] }]],
+  [
+    "app_signin",
+    5,
+    300,
+    [{ method: ["POST"], path: ["/login", "/verify-email", "/join"] }, { path: ["/oauth/callback"] }],
+  ],
 ];
 /** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64. */
 const limiter = (zones: readonly Zone[]): Json => ({
@@ -868,7 +1029,8 @@ function positionsBlanked(top: Obj, append: Json): Json {
     const server = obj(value);
     const routes = arr(server.routes).map((each) => ({ ...obj(route(each)), match: null }));
     const logs = { ...obj(server.logs), logger_names: null };
-    return [name, { ...server, routes, logs, tls_connection_policies: null }];
+    const errorRoutes = arr(obj(server.errors).routes).map((each) => ({ ...obj(each), match: null }));
+    return [name, { ...server, routes, logs, errors: { routes: errorRoutes }, tls_connection_policies: null }];
   });
   return { ...top, apps: { ...obj(top.apps), tls: null, http: { servers: Object.fromEntries(servers) } } };
 }

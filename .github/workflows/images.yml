@@ -149,6 +149,11 @@ jobs:
             const { generateKeyPairSync } = require("node:crypto");
             const jwk = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" });
             process.stdout.write(JSON.stringify([{ ...jwk, kid: "ci", alg: "ES256" }]));' > "$secrets/oauth_client_keys"
+          # P2.10: web's pds-admin signing key, Ed25519 PKCS#8 PEM; no pds-admin answers here, and none is asked.
+          docker run --rm --network none --entrypoint node "$APP_IMAGE" -e '
+            const { generateKeyPairSync } = require("node:crypto");
+            const key = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" });
+            process.stdout.write(key);' > "$secrets/pds_admin_web_key"
           # Readable by the containers' own users (postgres, 65532); the runner is thrown away after the job.
           chmod 644 "$secrets"/*
           docker network create health > /dev/null
@@ -164,7 +169,8 @@ jobs:
             --env-file "deployment/images/$APP.test.env"
             -e PG_HOST=postgres -e PG_DATABASE=unset -e PG_USER=web -e PG_SSLMODE=disable
             -e PG_PASSWORD_FILE=/run/secrets/pg_password -e SEAL_KEYRING_FILE=/run/secrets/seal_keyring
-            -e OAUTH_CLIENT_KEYS_FILE=/run/secrets/oauth_client_keys -e OAUTH_ACTIVE_KID=ci)
+            -e OAUTH_CLIENT_KEYS_FILE=/run/secrets/oauth_client_keys -e OAUTH_ACTIVE_KID=ci
+            -e PDS_ADMIN_WEB_KEY_FILE=/run/secrets/pds_admin_web_key)
           id="$(docker run -d "${app[@]}" "$APP_IMAGE")"
           for _ in $(seq 20); do
             status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"

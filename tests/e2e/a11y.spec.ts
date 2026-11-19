@@ -3,6 +3,7 @@ import { type Browser, expect, type Page, test } from "@playwright/test";
 import { AXE_ALLOWANCE, expiredAllowances, unallowedViolations } from "./allow.ts";
 import { AXE_TAGS, addPageCookies, openPage, pageNoise, undersizedTargets, watch } from "./observe.ts";
 import { ALL_PAGES, cellName, colorSchemeOf, originOf, type PageFixture, type ThemeCell, themeCells } from "./pages.ts";
+import { phone } from "./phone.ts";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -35,7 +36,9 @@ for (const fixture of ALL_PAGES) {
       try {
         const response = await page.goto(`${originOf(fixture)}${fixture.path}`);
         expect(response?.status()).toBe(200);
-        expect(new URL(page.url()).pathname).toBe(fixture.path);
+        // Path and query: /join's fixture carries its invite code in the query (P2.10).
+        const opened = new URL(page.url());
+        expect(opened.pathname + opened.search).toBe(fixture.path);
         await page.waitForLoadState("networkidle");
         await expectTheme(page, fixture, cell);
         const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
@@ -59,10 +62,10 @@ test("axe_detects_violation", async ({ page }) => {
   expect(results.violations.some((violation) => violation.id === "label")).toBe(true);
 });
 
-test.describe("once per page", () => {
+test.describe("phone reflow", () => {
+  test.use(phone({ width: 320, height: 640 }));
   for (const fixture of ALL_PAGES) {
     test(`reflow_320 ${fixture.path}`, async ({ page }) => {
-      await page.setViewportSize({ width: 320, height: 640 });
       const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);
       const overflow = await page.evaluate(() => {
@@ -73,7 +76,11 @@ test.describe("once per page", () => {
       });
       expect(overflow).toBeLessThanOrEqual(0);
     });
+  }
+});
 
+test.describe("once per page", () => {
+  for (const fixture of ALL_PAGES) {
     test(`target_size ${fixture.path}`, async ({ page }) => {
       const response = await openPage(page, fixture);
       expect(response?.status()).toBe(200);

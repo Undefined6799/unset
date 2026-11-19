@@ -5,6 +5,8 @@
 // P1.20e: the OAuth client and what stands on it, as interfaces/http/compose.ts `composeOAuth` builds them (P2.04c,
 // P1.36y, P2.13): the lock pool, the sealer, net-guard, the identity network, the handle check, the PDS call, the
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
+// P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
+import { createPrivateKey, type KeyObject } from "node:crypto";
 import {
   type AccountRepository,
   createDidResolver,
@@ -16,11 +18,20 @@ import {
   TERMS_VERSION,
 } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
-import { createIdentityNetwork, createOAuthClient, createPdsCall, type SavedSession } from "@unset/infrastructure-pds";
+import {
+  createIdentityNetwork,
+  createInviteIssuer,
+  createOAuthClient,
+  createPdsCall,
+  type IssueInviteResult,
+  type SavedSession,
+} from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
+  createDiscoverabilityStore,
+  createInviteStore,
   createLockPool,
   createOAuthSessionStore,
   createOAuthStateStore,
@@ -28,6 +39,8 @@ import {
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type DiscoverabilityStore,
+  type InviteStore,
   oauthSessionExists,
   type Pool,
   type PublicProfileStore,
@@ -42,6 +55,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
+import { recordInviteDenied } from "./invite-audit.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
 import { config, shutdown } from "./runtime.ts";
@@ -62,8 +76,6 @@ type SavedState = NonNullable<Awaited<ReturnType<Parameters<typeof createOAuthCl
 /** The one OAuth client and the account lock around its token sets (P2.04c, P1.36y). */
 export type OAuthServices = {
   readonly client: OAuthClient;
-  /** The library's token sets, sealed in app.oauth_session; a read never refreshes. */
-  readonly sessionStore: ReturnType<typeof createOAuthSessionStore<SavedSession>>;
   /** sign-in-lock.ts `during`: a sign-in holds the account's lock from storing its token set to its session row. */
   readonly signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   /** sign-in-lock.ts `exclusive`: runs `fn` holding `did`'s lock (the last browser's sign-out, sign-out everywhere). */
@@ -86,7 +98,6 @@ export type Services = {
   readonly issuerOf: (did: Did, signal?: AbortSignal) => Promise<string | null>;
   /** PLC, DNS and handle domains, through net-guard. */
   readonly network: IdentityNetwork;
-  readonly resolveDid: ReturnType<typeof createDidResolver>;
   /** P2.02's handle check, both directions (CLAUDE.md "Identity"). */
   readonly handles: ReturnType<typeof createHandleVerifier>;
   /** P1.16's single-use store (`login.nonce`). */
@@ -103,9 +114,24 @@ export type Services = {
   readonly email: EmailRefresher;
   /** Caches the member's email answer on this browser's session row. */
   readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
+  /** P2.10: a member's invites (sealed codes), the request that issues one, and the audit row for a refusal. */
+  readonly invites: {
+    readonly store: InviteStore;
+    readonly issue: (did: Did, deadline?: AbortSignal) => Promise<IssueInviteResult>;
+    readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
+  };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
+  /** The signed-in member's own Search and AI choices (ADR 0062). */
+  readonly discoverability: DiscoverabilityStore;
 };
+
+/** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
+function webAdminKey(pem: string): KeyObject {
+  const key = createPrivateKey(pem);
+  if (key.asymmetricKeyType !== "ed25519") throw new Error("PDS_ADMIN_WEB_KEY is not an Ed25519 private key");
+  return key;
+}
 
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
 function standInsOf(): NonNullable<ReturnType<typeof publishedNote>>["standIns"] {
@@ -217,12 +243,25 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     now: () => performance.now(),
   });
+  const invites = {
+    store: createInviteStore({ pool, sealer, log }),
+    issue: createInviteIssuer(guard, {
+      origin: config.PDS_ADMIN_URL,
+      env: config.UNSET_ENV === "prod" ? "prod" : "dev",
+      pdsDid: config.PDS_DID,
+      key: { kid: config.PDS_ADMIN_WEB_KID, privateKey: webAdminKey(config.PDS_ADMIN_WEB_KEY.reveal()) },
+    }),
+    denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
+  };
+
   // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
   const stopSweeps = startSweeps({
     sweeps: [
       { job: "sweep.session", run: () => withClient(pool, null, (db) => sessions.sweep(db)) },
       { job: "sweep.oauth_state", run: () => stateStore.sweep() },
       { job: "sweep.single_use", run: () => withClient(pool, null, (db) => nonces.sweep(db)) },
+      // P2.10: an invite's code is deleted from our row 7 days after it was made (Alex 2026-11-19).
+      { job: "sweep.invite", run: () => invites.store.clearExpired() },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -244,7 +283,6 @@ async function build(): Promise<Services> {
   );
   const oauth: OAuthServices = {
     client,
-    sessionStore: tokenSets,
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
   };
@@ -258,7 +296,6 @@ async function build(): Promise<Services> {
     oauth,
     issuerOf,
     network,
-    resolveDid,
     handles,
     nonces,
     pds,
@@ -267,7 +304,9 @@ async function build(): Promise<Services> {
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
     email,
     setEmailConfirmed,
+    invites,
     publicProfiles: createPublicProfileStore(pool),
+    discoverability: createDiscoverabilityStore(pool),
   };
 }
 

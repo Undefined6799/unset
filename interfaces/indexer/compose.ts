@@ -181,20 +181,24 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
           }),
       },
       intervalMs: config.INDEXER_PASS_INTERVAL_MS,
+      overdueAfterMs: config.INDEXER_PASS_OVERDUE_MS,
     },
     signal,
   );
-  const health = sharedRead(
-    async () => ({
-      healthy: watch.healthy(),
+  // Unhealthy when the stream has been failing too long or a pass has not finished for INDEXER_PASS_OVERDUE_MS. How long
+  // jobs have waited or failed (index.jobs) is shown for an outside alert only: our PDS being down is not the
+  // indexer's fault, and restarting it would not help.
+  const health = sharedRead(async () => {
+    const loop = runner.health();
+    return {
+      healthy: watch.healthy() && loop.overdue.length === 0,
       enabled: true,
       stream: { ...consumer.health(), lastStop, stops, retries: streamRetries, failingForMs: watch.failingForMs() },
-      loop: runner.health(),
+      loop,
       index: await index.health(),
       accounts: await accounts.health(),
-    }),
-    HEALTH_CACHE_MS,
-  );
+    };
+  }, HEALTH_CACHE_MS);
   return {
     health,
     done: runner.done.finally(() => pool.end()),

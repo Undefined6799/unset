@@ -393,6 +393,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     .filter((name) => name === NODE_OPTIONS || name.startsWith(COMPOSE_PREFIX));
   if (inFile !== undefined) throw new CannotRun(`${inFile} is set in the env file`);
   const interpolation = new Map(interpolationFile);
+  const emptyInterpolated = [...interpolated].filter((name) => (interpolation.get(name) ?? "") === "").sort();
   const resolveValue = (value: EnvValue): string =>
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
   const serviceEnv = new Map<string, SecretMap>();
@@ -417,6 +418,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     compose,
     serviceEnv,
     envFileNames,
+    emptyInterpolated,
     secretPaths: [...new Set(secretPaths)],
     envReads: envFiles.ids,
     mountedSecrets,

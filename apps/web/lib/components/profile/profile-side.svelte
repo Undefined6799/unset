@@ -89,7 +89,7 @@ const detail = "m-0 min-w-0 [overflow-wrap:anywhere]";
       {#if website !== null}
         <div class={row}>
           <dt class={term}>{PROFILE_SIDE.web}</dt>
-          <dd class={detail}><a href={website.href} rel="me noopener noreferrer">{website.text}</a></dd>
+          <dd class={detail}><a href={website.href} rel="me nofollow ugc noopener noreferrer">{website.text}</a></dd>
         </div>
       {/if}
       <div class={row}>

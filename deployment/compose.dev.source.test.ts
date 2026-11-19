@@ -109,7 +109,8 @@ describe("compose.dev.source.yaml against compose.dev.yaml (P1.37y)", () => {
       ).toEqual([]);
     }
     // The stripped source file is the dev file, so each source-only service has nothing left behind there.
-    expect(withoutSourceOnly(read(SOURCE))).not.toContain("pds_admin");
+    // Whole names only: web's own secret web_pds_admin_key belongs to web, which both stacks run.
+    expect(withoutSourceOnly(read(SOURCE))).not.toMatch(/\bpds_admin(?:_pds)?\b/);
   });
 
   test("source_services_build_or_run_the_dev_image", () => {

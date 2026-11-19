@@ -15,6 +15,10 @@
     "strategy": "delete_row",
     "reason": "the person's app account, including onboarding and the privacy notice version they dismissed (P2.12b); the row goes when they are erased"
   },
+  "app.invite.inviter_did": {
+    "strategy": "delete_row",
+    "reason": "the invites the person asked for, with their sealed codes; they go when the person is erased"
+  },
   "audit.event_body.subject": {
     "strategy": "audit_redact",
     "class": "mod",
@@ -68,5 +72,9 @@
   "idx.track_request.did": {
     "strategy": "delete_row",
     "reason": "the request to index a member who signed in; it goes when they are erased"
+  },
+  "app.discoverability.did": {
+    "strategy": "delete_row",
+    "reason": "the member's Search and AI choices for their public page (ADR 0062); they go when they are erased"
   }
 }
