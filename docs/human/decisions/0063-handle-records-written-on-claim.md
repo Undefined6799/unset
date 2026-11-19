@@ -46,7 +46,10 @@ not reachable through it either.
    dependency-free and PDS-only (ADR 0060).
 5. **Failure.** A failed or refused write is retried with backoff from the queue; until it succeeds the handle reads
    `handle.invalid`, as today. Sign-up, sign-in and the email gate never wait on it. Logs carry the outcome and a
-   count, never the handle or DID (SE-7).
+   count, never the handle or DID (SE-7). A removal that has failed for 24 hours raises the indexer's health signal
+   and stays visible as a count, not retried in silence; the erasure is not reported complete until it succeeds.
+6. **Erasure of the queue itself.** The queue row holds a DID. `eraseDid` enqueues the removal and deletes the row
+   once deSEC has confirmed the record gone, so no DID stays in the queue after an erasure completes.
 
 ## Alternatives
 - Wildcard `*.staging.unset.im` through Pangolin with a wildcard certificate: needs Enterprise Edition, a DNS key on
@@ -62,11 +65,20 @@ not reachable through it either.
   row and the privacy notice a sentence before the first invite.
 - Production: `<name>.unset.im` sits at the apex of `unset.im`, so the same shape means moving `unset.im`'s name
   servers to deSEC (or to our own DNS) in Phase 5; that choice is made there, with a second server.
+- The indexer now holds a credential and has a second outside destination. Until now it held none, and its only
+  way out was the guarded egress to the PLC directory; that was the basis for its private network with the PDS. A
+  compromised indexer can now, beyond what it could already do, rewrite or delete TXT records in
+  `staging.unset.im`, and nothing else: the token's policies grant no other zone, type or account action. It was
+  still chosen over web, which faces the internet and would put the token one request away from any attacker, and
+  over a new writer process, which would add a service, an image and a network for one call, while the indexer
+  already follows the events that trigger every write.
 - `.im` has no DNSSEC at the registry through Namecheap, so the delegation is unsigned; deSEC signs the zone, but
   resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
 
 ## Compliance
 SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone (make a
 handle point to another DID); our two-way check still requires the DID document to name the handle, so it cannot
-verify a handle for the wrong account. SE-7 logging. DA-4: the queue row is the concurrency mechanism, no network I/O
+verify a handle for the wrong account. A stolen token can also delete records, turning every handle
+`handle.invalid` until they are rewritten. Recovery: revoke and replace the token in deSEC, then re-enqueue every
+account; the queue rebuilds the whole zone from Postgres, which is the source of truth (DA-1). SE-7 logging. DA-4: the queue row is the concurrency mechanism, no network I/O
 inside a transaction. GDPR: erasure through `eraseDid` (Decision 3), ROPA row, notice sentence.
