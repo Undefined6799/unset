@@ -85,6 +85,24 @@ test.describe("once per page", () => {
   }
 });
 
+// Staging walkthrough 2026-11-19: a focused link drew the browser's own outline while a focused button drew the
+// design's 3px ring; a link draws the same 3px ring now.
+test("a_focused_link_draws_the_design_ring", async ({ page }) => {
+  await page.goto("/");
+  await page.keyboard.press("Tab");
+  const focus = await page.evaluate(() => {
+    const view = globalThis as unknown as {
+      document: { activeElement: { tagName: string } | null };
+      getComputedStyle: (element: object) => { outlineStyle: string; outlineWidth: string };
+    };
+    const element = view.document.activeElement;
+    if (element === null) return null;
+    const style = view.getComputedStyle(element);
+    return { tag: element.tagName, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+  });
+  expect(focus).toEqual({ tag: "A", outlineStyle: "solid", outlineWidth: "3px" });
+});
+
 test.describe("forced colours", () => {
   test.use({ forcedColors: "active" });
   for (const fixture of ALL_PAGES) {
