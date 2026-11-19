@@ -67,3 +67,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0058](0058-read-the-stream-without-the-firehose-class.md) | Read our PDS's stream with `@atproto/sync`'s parsers, not its `Firehose` class; supersedes one phrase of 0052 (P3.05s) | Accepted 2026-11-17 |
 | [0059](0059-narrow-typed-lines-and-group-updates.md) | Alex's typed line only for security loosenings and ADRs; grouped Renovate updates; drafts run the cheap checks; merges tested on main's tip; amends 0019 (P0.07l) | Accepted 2026-11-18 |
 | [0060](0060-pds-admin-issues-member-invites.md) | `pds-admin`, the one holder of the PDS admin password, issues member invites (P2.09) | Proposed (awaiting Alex) |
+| [0065](0065-resend-sends-account-mail-from-the-us.md) | Resend sends account mail for now, with its data in the United States; drops answer 21's Canada or EU hosting (P2.25) | Proposed (awaiting Alex) |
