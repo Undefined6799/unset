@@ -2977,12 +2977,23 @@ reachable, and chat stays at the end of onboarding.
   https://spec.matrix.org/v1.18/client-server-api/#post_matrixclientv3roomsroomidinvite). P6.00 item (Alex: "something
   to look into"): whether a member with no device yet can still be told about a new request. Matrix push needs a
   pusher, which a client registers for a device, so this is likely a notice from unset.sh itself, not Matrix push.
-- **A chat outage never blocks signup (answer 2: option b):** normally the seed finishes in seconds and the step
-  waits for it. If it is still pending after 60 s (hypothesis), or has failed, the member may continue: onboarding
-  completes and the account is marked `chat_pending`. A repair runner keeps retrying (P6.05's runner), `/me` says
+- **Chat never makes signup wait (answer 2: option b; Alex 2026-11-19 05:07Z: no one-minute wait either):** the
+  chat step explains chat and the member agrees; onboarding then completes at once. If the seed has not landed
+  yet, or has failed, the account is marked `chat_pending` and chat is set up in the background while they use the
+  app. A repair runner keeps retrying (P6.05's runner), `/me` says
   chat is being set up, and an operator alert fires when any active member has been `chat_pending` for over 1 hour
   (hypothesis); a permanent failure opens a held case in `admin`. This replaces "onboarding completes only when the
   seed is done": the mechanism that catches it is the runner plus that alert.
+- **[ALEX] Open for P6.00: the app's browser as the chat device.** Alex (2026-11-19 05:07Z): wherever the app is
+  open, chat is open, so that browser should count as the member's approved Matrix device as soon as they sign in
+  to the app. The plan so far makes the device only when the member signs in to chat on its own origin, and four
+  accepted decisions shape that: chat runs on its own origin so its keys and sessions are isolated from the app
+  (§5.6); MAS shows its consent screen once and cannot skip it (MAS 1.26); seeding never makes a device, token or key for a
+  member (§5.6), and the MAS admin power that could stays boxed in `chat-admin` (decision 13); and a device is trusted only once cross-signed,
+  which needs the recovery key (MSC4153 isolation mode). Recommended: keep those, and start chat's sign-in in the
+  same browser right after onboarding, so in practice that browser becomes the device at signup with one consent
+  click and the recovery-key step, which can wait ("Later"). Making it silent at app sign-in would change those
+  decisions and needs an ADR and Alex's typed line.
 - **Accounts that exist before Phase 6 (answer 3):** staging accounts are for testing only and nothing there is
   permanent. They keep using the app; their chat is set up by P6.05's backfill CLI, or the accounts are deleted and
   signed up again to test the flow. No migration is planned for them.
@@ -3001,16 +3012,15 @@ Outputs:
   - `/me` card "Finish setting up chat" while `chat_step = later` (`opened` shows "Continue chat setup"; `chat_pending`
     shows "Chat is being set up" until the seed lands, then "Finish setting up chat").
 Algorithm (`web`; reviewed hypothesis for the screens; the consistent states below are full detail):
-  1. Entering the step: `chat.accountStatus(did)` is `pending` → `waiting_for_seed`: screen "Setting up chat…" with a
-     `<meta http-equiv="refresh" content="5">` (the adapter runs a due seed; closing the tab loses nothing, the seed
-     row is durable); after 60 s pending, a Continue button appears. `unavailable` → `unavailable`: "Chat isn't
-     available yet. We'll set it up for you and tell you when it's ready." and Continue. `ready` → `ready`.
+  1. Entering the step: `chat.accountStatus(did)` is `pending` → `waiting_for_seed`: the chat explanation screen with
+     Continue ("Chat is being set up in the background; we'll show you when it's ready"); the seed row is durable,
+     so nothing is lost. `unavailable` → `unavailable`: the same words and Continue. `ready` → `ready`.
   2. "Set up chat" (POST, CSRF gate) → complete onboarding (step 4), set `opened` → 303 `https://chat.unset.sh/onboarding`.
   3. "Later" (POST, on `ready`) → complete onboarding (step 4), set `later` → 303 `/onboarding/next`. "Continue"
-     (POST, on `waiting_for_seed` after 60 s, or `unavailable`) → complete onboarding (step 4) as `chat_pending`.
-  4. Completing onboarding: `decideCompletion(facts) → "activate" | "activate_chat_pending" | "already_active" | "wait_for_chat" | "refuse"`, a
+     (POST, on `waiting_for_seed` or `unavailable`) → complete onboarding (step 4) as `chat_pending`.
+  4. Completing onboarding: `decideCompletion(facts) → "activate" | "activate_chat_pending" | "already_active" | "refuse"`, a
      small pure function in `domains/identity` (no SQL, no Matrix, no clock), from the account's state (age, terms,
-     blocked or erased) and the chat facts (seed state, how long it has been pending, and that the linked mapping is
+     blocked or erased) and the chat facts (seed state, and that the linked mapping is
      this DID's). `activate` and `activate_chat_pending` write: `finishChat`'s conditional
      `UPDATE … WHERE onboarding = 'chat'` (for `activate` also requiring the `seeded` `app.chat_seed` row and the
      `module_account` link for this DID; for `activate_chat_pending` requiring the `app.chat_seed` row to exist, so the
@@ -3027,7 +3037,7 @@ Edge cases and failures (the consistent states):
   - Closed after login, before bootstrap → device exists, no cross-signing; next chat open → `new_account` → step 3 of P6.08.
   - Closed after cross-signing and backup → `recovery_pending` with the nag (the plan's named state).
   - Closed after the key was shown, before confirmation → `recovery_unconfirmed` with "I have it".
-  - Seeding pending for over 60 s → the member may continue as `chat_pending`; the runner keeps retrying; the
+  - Seeding still pending at the chat step → the member continues as `chat_pending`; the runner keeps retrying; the
     1-hour alert catches a member left without chat.
   - Seeding never succeeds (`failed_permanent`) → `unavailable`; the member continues as `chat_pending`; a held case
     opens in `admin`. No second chat identity is made (decision 42: ids never change).
@@ -3036,10 +3046,10 @@ Edge cases and failures (the consistent states):
     the link, so P6.04a's `lock` can find the account, and `decideCompletion` refuses.
   - Under-age deactivation → the step is never reached.
 Done when (tests):
-  - `step-waits-for-seed-with-refresh`; `continue-appears-after-60s-pending`; `step-unavailable-continues-chat-pending`;
+  - `step-never-waits-for-seed`; `step-pending-continues-chat-pending`; `step-unavailable-continues-chat-pending`;
     `open-marks-opened-and-redirects`; `later-marks-and-continues`; `me-card-shown-until-opened`;
     `chat-pending-alert-after-1h`; `chat-pending-cleared-when-seed-lands`.
-  - `decideCompletion` table tests: pending under 60 s → wait; pending over 60 s or failed → activate chat pending;
+  - `decideCompletion` table tests: pending or failed → activate chat pending;
     seeded for this DID → activate; already done → already active; blocked, erased, or a mapping for another DID →
     refuse.
   - Real Postgres: `concurrent-completion-one-activation-one-queue-row`;
@@ -3057,7 +3067,7 @@ stateDiagram-v2
   [*] --> waiting_for_seed: terms accepted (row pending)
   waiting_for_seed --> ready: seed succeeded, mapping verified
   waiting_for_seed --> unavailable: seed failed permanently
-  waiting_for_seed --> chat_pending: Continue after 60 s
+  waiting_for_seed --> chat_pending: Continue
   unavailable --> chat_pending: Continue
   chat_pending --> [*]: onboarding complete, runner and alert finish chat
   ready --> later: Later
