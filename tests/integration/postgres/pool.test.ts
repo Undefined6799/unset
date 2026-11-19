@@ -4,6 +4,8 @@
 // ruling 2026-10-06 (b)). Creating roles needs migrator, which the shared integration setup no longer hands to test
 // files (P1.12t), so this file starts its own container through the one test helper, as migrate.test.ts does.
 import { randomBytes } from "node:crypto";
+import { once } from "node:events";
+import { connect, createServer, type Socket } from "node:net"; // guard-allow: egress writes raw bytes to the loopback test Postgres only
 import { join } from "node:path";
 import {
   acquire,
@@ -179,6 +181,32 @@ describe("pool", () => {
     expect(pool.waitingCount).toBe(0);
   });
 
+  test("a_held_clients_dropped_connection_fails_its_next_query_not_the_process", async () => {
+    // A client checked out between two statements has no pool error listener (pg-pool 3.14.0 index.js:344 removes it
+    // until release), and pg 8.23.1 lib/client.js:203-222 emits "error" on the client when its socket ends. Without a
+    // listener of ours that error is an uncaught exception, which ends the process (web died mid-request, P1.20q).
+    const { port, cut, close } = await relay(postgres.port);
+    const pool = poolOf({ ...connection, port }, { max: 1 });
+    const uncaught: unknown[] = [];
+    const record = (error: unknown) => uncaught.push(error);
+    process.on("uncaughtException", record);
+    try {
+      const second = withClient(pool, null, async (client) => {
+        await client.query("SELECT 1");
+        cut();
+        // A wait, not events.once(client, "end"), which would add an error listener of its own.
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return client.query("SELECT 1");
+      });
+      await expect(second).rejects.toThrow(/not queryable|terminated/);
+      expect(uncaught).toEqual([]);
+      expect(pool.totalCount).toBe(0); // the dead client is dropped, never handed out again
+    } finally {
+      process.off("uncaughtException", record);
+      close();
+    }
+  });
+
   test("connection_budget", async () => {
     const limited = await setup({ connectionLimit: 40 });
     await withClient(limited, null, async (client) => {
@@ -190,3 +218,29 @@ describe("pool", () => {
     await withClient(unlimited, null, (client) => checkConnectionBudget(client, [50, 50], 4));
   });
 });
+
+/** A loopback relay to Postgres; `cut` drops every open connection through it, as a network outage would. */
+async function relay(target: number) {
+  const sockets = new Set<Socket>();
+  const server = createServer((client) => {
+    const upstream = connect(target, "127.0.0.1");
+    for (const socket of [client, upstream]) {
+      socket.on("error", () => undefined);
+      sockets.add(socket);
+    }
+    client.pipe(upstream).pipe(client);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("relay has no port");
+  const cut = () => {
+    for (const socket of sockets) socket.destroy();
+    sockets.clear();
+  };
+  const close = () => {
+    cut();
+    server.close();
+  };
+  return { port: address.port, cut, close };
+}

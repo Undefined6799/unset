@@ -4,7 +4,7 @@ import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { createCardRecord, deleteCardRecord, listCardRecords, saveCardRecord } from "./card-records.ts";
+import { createCardRecord, deleteCardRecord, latestCommit, listCardRecords, saveCardRecord } from "./card-records.ts";
 import { createPdsCall } from "./pds-call.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
@@ -62,13 +62,19 @@ function holding(count: number, refuse: (n: number, limit: number) => boolean = 
   };
 }
 const keys = (result: Awaited<ReturnType<typeof listCardRecords>>) =>
-  result.kind === "ok" ? { keys: result.value.cards.map((c) => c.key), complete: result.value.complete } : result;
+  result.kind === "ok"
+    ? { keys: result.value.cards.map((c) => c.key), complete: result.value.complete, overflow: result.value.overflow }
+    : result;
 
 describe("listCardRecords", () => {
   test("reads the member's own section records page by page, keyed by record key", async () => {
     const { pdsCall, ctx, calls } = pds(holding(23));
     const result = await listCardRecords(pdsCall, ctx, DID);
-    expect(keys(result)).toEqual({ keys: Array.from({ length: 23 }, (_, n) => rkey(n)), complete: true });
+    expect(keys(result)).toEqual({
+      keys: Array.from({ length: 23 }, (_, n) => rkey(n)),
+      complete: true,
+      overflow: false,
+    });
     expect(result.kind === "ok" && result.value.cards[0]).toEqual({ key: rkey(0), cid: CID, value: card });
     expect(calls.map(params)).toEqual([
       { repo: DID, collection: "sh.unset.section", limit: "10" },
@@ -78,13 +84,14 @@ describe("listCardRecords", () => {
     ]);
   });
 
-  test("exactly the most cards a page shows is all of them; one more is not", async () => {
+  test("exactly the most cards a page shows is all of them; one more is an overflow, not a cut-short read", async () => {
     expect(keys(await listCardRecords(pds(holding(100)).pdsCall, pds(holding(100)).ctx, DID))).toMatchObject({
       complete: true,
+      overflow: false,
     });
     const over = pds(holding(101));
     const result = keys(await listCardRecords(over.pdsCall, over.ctx, DID));
-    expect(result).toMatchObject({ complete: false });
+    expect(result).toMatchObject({ complete: false, overflow: true });
     expect("keys" in result && result.keys).toHaveLength(100);
   });
 
@@ -94,6 +101,7 @@ describe("listCardRecords", () => {
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
       keys: Array.from({ length: 15 }, (_, n) => rkey(n)),
       complete: true,
+      overflow: false,
     });
     expect(calls.map((c) => c.url.searchParams.get("limit"))).toEqual(["10", "10", "1", "1", "1", "1", "1", "1"]);
   });
@@ -104,6 +112,7 @@ describe("listCardRecords", () => {
     expect(keys(await listCardRecords(pdsCall, ctx, DID))).toEqual({
       keys: Array.from({ length: 12 }, (_, n) => rkey(n)),
       complete: false,
+      overflow: false,
     });
   });
 
@@ -111,13 +120,13 @@ describe("listCardRecords", () => {
     // Every other card is large, so each page needs a retry and the budget runs out first.
     const slow = pds(holding(100, (n, limit) => n % 2 === 1 && limit > 1));
     const result = keys(await listCardRecords(slow.pdsCall, slow.ctx, DID));
-    expect(result).toMatchObject({ complete: false });
+    expect(result).toMatchObject({ complete: false, overflow: false });
     expect(slow.calls.length).toBeLessThanOrEqual(24);
     const late = pds(holding(30));
     const done = new AbortController();
     done.abort();
     const ended = await listCardRecords(late.pdsCall, { ...late.ctx, deadline: done.signal }, DID);
-    expect(keys(ended)).toEqual({ keys: [], complete: false });
+    expect(keys(ended)).toEqual({ keys: [], complete: false, overflow: false });
     expect(late.calls).toEqual([]);
   });
 
@@ -138,6 +147,7 @@ describe("listCardRecords", () => {
     expect(keys(await listCardRecords(flaky.pdsCall, flaky.ctx, DID))).toEqual({
       keys: Array.from({ length: 10 }, (_, n) => rkey(n)),
       complete: false,
+      overflow: false,
     });
   });
 
@@ -150,7 +160,10 @@ describe("listCardRecords", () => {
         ],
       }),
     );
-    expect(await listCardRecords(pdsCall, ctx, DID)).toEqual({ kind: "ok", value: { cards: [], complete: true } });
+    expect(await listCardRecords(pdsCall, ctx, DID)).toEqual({
+      kind: "ok",
+      value: { cards: [], complete: true, overflow: false },
+    });
   });
 });
 
@@ -159,10 +172,30 @@ describe("createCardRecord", () => {
     const { pdsCall, ctx, calls } = pds(() =>
       Response.json({ uri: `at://${DID}/sh.unset.section/3jzfcijpj2z2c`, cid: CID }),
     );
-    expect(await createCardRecord(pdsCall, ctx, DID, card)).toEqual({ kind: "ok", value: { key: "3jzfcijpj2z2c" } });
+    expect(await createCardRecord(pdsCall, ctx, DID, card, CID2)).toEqual({
+      kind: "ok",
+      value: { kind: "created", key: "3jzfcijpj2z2c" },
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.createRecord");
-    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.section", record: card });
+    expect(calls[0]?.body).toEqual({ repo: DID, collection: "sh.unset.section", record: card, swapCommit: CID2 });
+  });
+
+  test("a repo whose commit moved on is reported as changed, and nothing is retried here", async () => {
+    const { pdsCall, ctx, calls } = pds(() =>
+      Response.json({ error: "InvalidSwap", message: "Commit was at bafy" }, { status: 400 }),
+    );
+    expect(await createCardRecord(pdsCall, ctx, DID, card, CID2)).toEqual({ kind: "ok", value: { kind: "changed" } });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("latestCommit", () => {
+  test("is the CID of the member's own repo head", async () => {
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ cid: CID2, rev: "3jzfcijpj2z2c" }));
+    expect(await latestCommit(pdsCall, ctx, DID)).toEqual({ kind: "ok", value: CID2 });
+    expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.sync.getLatestCommit");
+    expect(params(calls[0])).toEqual({ did: DID });
   });
 });
 

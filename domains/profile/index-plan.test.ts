@@ -81,17 +81,31 @@ describe("planCommit", () => {
   test.each([
     ["a profile not at self", { ...profile(), rkey: TID }],
     ["a section key that is not a TID", section("self")],
+    ["a delete under a bad key", { kind: "delete", collection: "sh.unset.profile", rkey: TID } as IndexChange],
+  ])("index.skips_%s", (_name, change) => {
+    expect(planCommit(active, "3jzfcijpj2z2c", [change, section()])).toMatchObject({
+      kind: "apply",
+      writes: [{ kind: "section", rkey: TID }],
+      skipped: 1,
+    });
+  });
+
+  // The repo now holds this record in a form we do not index, so any older version indexed under its key goes, as a
+  // backfill of the same repo would remove it (trackStore.ts applySnapshot): the stream and a rebuild agree.
+  test.each([
     ["a record of another type", { ...profile(), record: { $type: "sh.unset.section", createdAt: T } }],
     ["a record the lexicon refuses", profile({ displayName: 7 })],
     ["a record over the size cap", profile({ note: "x".repeat(MAX_RECORD_BYTES) })],
     ["a record with a NUL character", profile({ displayName: "A\0da" })],
     ["a record with a lone surrogate", profile({ displayName: "A\uD800da" })],
     ["a record with a NUL in a key", profile({ "a\0b": 1 })],
-    ["a delete under a bad key", { kind: "delete", collection: "sh.unset.profile", rkey: TID } as IndexChange],
-  ])("index.skips_%s", (_name, change) => {
+  ])("index.skips_and_removes_the_older_version_of_%s", (_name, change) => {
     expect(planCommit(active, "3jzfcijpj2z2c", [change, section()])).toMatchObject({
       kind: "apply",
-      writes: [{ kind: "section", rkey: TID }],
+      writes: [
+        { kind: "delete", collection: "sh.unset.profile", rkey: "self" },
+        { kind: "section", rkey: TID },
+      ],
       skipped: 1,
     });
   });

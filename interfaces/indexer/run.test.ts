@@ -22,7 +22,10 @@ describe("indexer loop", () => {
       confirm: counts(0),
       handles: counts(0),
     };
-    const runner = runIndexer({ stream: async () => undefined, passes, intervalMs: 60_000 }, stop.signal);
+    const runner = runIndexer(
+      { stream: async () => undefined, passes, intervalMs: 60_000, overdueAfterMs: 60_000 },
+      stop.signal,
+    );
     await runner.done;
     expect(ran).toEqual(["track"]);
     expect(runner.health().lastPass).toEqual({ track: { cut: 1 } });
@@ -51,6 +54,7 @@ describe("indexer loop", () => {
         },
         passes,
         intervalMs: 10,
+        overdueAfterMs: 60_000,
       },
       stop.signal,
     );
@@ -75,7 +79,10 @@ describe("indexer loop", () => {
         return { n: 0 };
       },
     };
-    const runner = runIndexer({ stream: () => Promise.resolve(), passes, intervalMs: 1 }, stop.signal);
+    const runner = runIndexer(
+      { stream: () => Promise.resolve(), passes, intervalMs: 1, overdueAfterMs: 60_000 },
+      stop.signal,
+    );
     await runner.done;
     const health = runner.health();
     expect(health.passFailures).toEqual({ track: 0, backfill: 2, confirm: 0, handles: 0 });
@@ -90,6 +97,7 @@ describe("indexer loop", () => {
         stream: (signal) => new Promise((resolve) => signal.addEventListener("abort", () => resolve())),
         passes: { track: counts(0), backfill: counts(0), confirm: counts(0), handles: counts(0) },
         intervalMs: 60_000,
+        overdueAfterMs: 60_000,
       },
       stop.signal,
     );
@@ -112,9 +120,40 @@ describe("indexer loop", () => {
       },
       handles: counts(0),
     };
-    const runner = runIndexer({ stream: () => Promise.resolve(), passes, intervalMs: 1 }, stop.signal);
+    const runner = runIndexer(
+      { stream: () => Promise.resolve(), passes, intervalMs: 1, overdueAfterMs: 60_000 },
+      stop.signal,
+    );
     await runner.done;
     // The last run failed 2, but 4 failed since start: a confirm pass that keeps failing shows in the total.
     expect(runner.health().totals.confirm).toEqual({ confirmed: 3, failed: 4 });
+  });
+
+  test("run.a_pass_with_no_success_past_the_limit_is_overdue", async () => {
+    // backfill throws on every tick: the stream may be fine, but the loop's work is not getting done.
+    const stop = new AbortController();
+    let clock = 0;
+    let ticks = 0;
+    const passes: Passes = {
+      track: counts(0),
+      backfill: async () => {
+        throw new Error("database unavailable");
+      },
+      confirm: counts(0),
+      handles: async () => {
+        ticks += 1;
+        clock += 1000;
+        if (ticks === 3) stop.abort();
+        return {};
+      },
+    };
+    const runner = runIndexer(
+      { stream: () => Promise.resolve(), passes, intervalMs: 1, overdueAfterMs: 2500, now: () => clock },
+      stop.signal,
+    );
+    await runner.done;
+    const health = runner.health();
+    expect(health.sinceSuccessMs).toEqual({ track: 1000, backfill: 3000, confirm: 1000, handles: 0 });
+    expect(health.overdue).toEqual(["backfill"]);
   });
 });

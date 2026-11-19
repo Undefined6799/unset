@@ -96,7 +96,7 @@ function tryLock(path: string): boolean {
   }
 }
 
-async function freePort(): Promise<number> {
+export async function freePort(): Promise<number> {
   return await new Promise((done, fail) => {
     const probe = createServer();
     probe.once("error", fail);
@@ -157,6 +157,8 @@ export type PdsFixture = {
   readonly writesFile: string;
   /** XRPC methods that answer 503, to play an unavailable PDS. */
   readonly failing?: readonly string[];
+  /** XRPC methods (com.atproto.repo.*) whose answer is held this many milliseconds, to line up two requests' calls. */
+  readonly slow?: Readonly<Record<string, number>>;
   /** With it the stand-in answers com.atproto.server.getSession for `did` with this email state. */
   readonly session?: { readonly emailConfirmed: boolean };
 };
@@ -195,6 +197,31 @@ export async function startWeb(
   pg: Postgres,
   env: Record<string, string> = {},
   standIns?: StandInFixture,
+  options: { pickPort?: () => Promise<number> } = {},
+): Promise<RunningWeb> {
+  // A caller may pin the port (the browser harness, tests/e2e/fixtures/servers.ts); a pinned port is never swapped.
+  if (env.LISTEN_PORT !== undefined) return await startOn(Number(env.LISTEN_PORT), pg, env, standIns);
+  // A port freePort released can be taken before the child binds it; then the start is tried again on a new one.
+  const pickPort = options.pickPort ?? freePort;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await startOn(await pickPort(), pg, env, standIns);
+    } catch (error) {
+      if (!(error instanceof PortTaken) || attempt === PORT_TRIES) throw error;
+    }
+  }
+}
+
+const PORT_TRIES = 3;
+
+/** The child could not bind its port, because another process took it after freePort released it. */
+class PortTaken extends Error {}
+
+async function startOn(
+  port: number,
+  pg: Postgres,
+  env: Record<string, string>,
+  standIns: StandInFixture | undefined,
 ): Promise<RunningWeb> {
   const secrets = mkdtempSync(join(tmpdir(), "web-kit-"));
   const secret = (name: string, text: string): string => {
@@ -211,8 +238,8 @@ export async function startWeb(
   };
   // web's key for pds-admin (P2.10): a fresh Ed25519 pair; a test that plays pds-admin passes PDS_ADMIN_URL.
   const adminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
-  // A caller may pin the port (the browser harness, tests/e2e/fixtures/servers.ts); otherwise any free one.
-  const port = env.LISTEN_PORT === undefined ? await freePort() : Number(env.LISTEN_PORT);
+  // This child's own commit, so the readiness probe knows its answer from another process's on the same port.
+  const commit = env.UNSET_COMMIT ?? randomBytes(20).toString("hex");
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
   const fixture =
     standIns === undefined
@@ -228,8 +255,7 @@ export async function startWeb(
       PATH: process.env.PATH ?? "",
       UNSET_ENV: "test",
       UNSET_SERVICE: "http",
-      UNSET_COMMIT: "c".repeat(40),
-      LISTEN_PORT: String(port),
+      UNSET_COMMIT: commit,
       PUBLIC_ORIGIN: ORIGIN,
       HTTP_ALLOWED_HOSTS: HOST,
       MEDIA_ORIGIN: "https://unset-media.test",
@@ -257,6 +283,7 @@ export async function startWeb(
       ...LEGAL_ENV,
       ...fixture,
       ...env,
+      LISTEN_PORT: String(port),
     },
   });
   let out = "";
@@ -268,7 +295,14 @@ export async function startWeb(
   });
   const exited = new Promise<number | null>((done) => child.once("exit", (code) => done(code)));
   const fetchWeb = (path: string, init: WebRequest = {}) => send(port, path, init);
-  await waitUntilListening(fetchWeb, exited, () => out);
+  try {
+    await waitUntilListening(fetchWeb, commit, exited, () => out);
+  } catch (error) {
+    child.kill("SIGKILL");
+    await exited;
+    rmSync(secrets, { recursive: true, force: true });
+    throw error;
+  }
   return {
     port,
     fetch: fetchWeb,
@@ -293,8 +327,14 @@ export async function startWeb(
   };
 }
 
+/**
+ * Waits until /health on the port answers with this child's commit. The port was free when freePort released it, but
+ * another process on the runner can bind it before the child does; the child then exits on EADDRINUSE, and an answer
+ * from that process must never count (#1731 code job, 2026-11-19: every later request went to it, a 404 in 17 ms).
+ */
 async function waitUntilListening(
   fetchWeb: RunningWeb["fetch"],
+  commit: string,
   exited: Promise<number | null>,
   output: () => string,
 ): Promise<void> {
@@ -303,13 +343,19 @@ async function waitUntilListening(
     gone = true;
   });
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (gone) throw new Error(`web server exited before listening:\n${output()}`);
-    try {
-      await fetchWeb("/health");
-      return;
-    } catch {
-      await new Promise((done) => setTimeout(done, 50));
+    if (gone) {
+      const message = `web server exited before listening:\n${output()}`;
+      // server.ts logs no error code (rule SE-7); on a port above 1024 a failed listen means the port is taken.
+      throw output().includes('"event":"http.listen_failed"') ? new PortTaken(message) : new Error(message);
     }
+    try {
+      const response = await fetchWeb("/health");
+      const body = (await response.json().catch(() => null)) as { commit?: unknown } | null;
+      if (body?.commit === commit) return;
+    } catch {
+      // Not listening yet.
+    }
+    await new Promise((done) => setTimeout(done, 50));
   }
   throw new Error(`web server did not listen:\n${output()}`);
 }
