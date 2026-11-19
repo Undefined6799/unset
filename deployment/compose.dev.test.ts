@@ -920,6 +920,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_indexer_password: 65532,
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
+    web_pds_admin_key: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
     objects_s3: 1000,
@@ -1027,7 +1028,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(inputs.compose.services.find((s) => s.name === "pds")?.build).not.toBeNull();
     expect(pdsNeighbours(inputs)).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
+      text.replace("    networks: [db, app, web_egress, pds_admin]\n", "    networks: [db, app, web_egress, pds_admin, edge]\n");
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
     expect(pdsNeighbours(sourceInputs((text) => webOnEdge(renamed(text))))).toEqual([
@@ -1076,7 +1077,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 12 mounted secrets" },
+      { pass: true, reason: "3 files, 13 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

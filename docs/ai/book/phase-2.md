@@ -3042,6 +3042,13 @@ Tags: [SEC] (E3)            Depends on: P2.09d, P2.09, P2.05, P1.14, P1.14d (inv
 Where: `interfaces/http/routes/{invite.ts, join.ts, signup.ts}`, `apps/web/screens/{Invite.tsx, Join.tsx}`,
   `apps/web/islands/CopyButton.tsx`, migration `0204_app_invite.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), catalogs
 Size: ~210 source lines, ~240 test lines
+As built (SvelteKit, PR 1 of 2): `interfaces/web/src/routes/invite/` (form actions `issue` and `hide`) and
+  `routes/join/` (its form action is the book's `POST /signup`, at the sign-in limit), the rule in
+  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0032_app_invite.sql`
+  (column grants, row DELETE, `invite.denied` audit action, `core.erase_did` covering `app.invite.inviter_did`). The
+  list shows issued codes only (a pending row holds none). Web mounts `web_pds_admin_key` in every stack and joins
+  `pds_admin` under `--source` and local. PR 2: the Share panel (copy button, share sheet, `sms:` link, QR) and the
+  plus-menu row.
 
 Goal: A signed-in member issues one-use invite codes through `pds-admin` under the invite-country rule, and an invitee
 lands on `/join?invite=` that explains the code, offers copy-to-clipboard and starts sign-up with `prompt=create`.

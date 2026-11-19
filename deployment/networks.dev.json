@@ -8,6 +8,6 @@
   "objects_pds": { "internal": true, "members": ["pds", "objects"] },
   "web_egress": { "internal": false, "members": ["web"] },
   "objects": { "internal": true, "members": ["objects"] },
-  "pds_admin": { "internal": true, "members": ["pds-admin"] },
+  "pds_admin": { "internal": true, "members": ["web", "pds-admin"] },
   "pds_admin_pds": { "internal": true, "members": ["pds", "pds-admin"] }
 }
