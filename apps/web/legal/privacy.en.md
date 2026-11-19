@@ -26,7 +26,7 @@ We do not store IP addresses or browser details. From Phase 5, the connection da
 
 ## Who else receives it
 
-The Canadian Centre for Child Protection receives fingerprints only, never the photo or video. The hosting provider is named in Phase 5. When posting opens, automated review of posts and comments you submit for publication runs on our own servers and sends nothing to another company.
+Resend, a company in the United States, sends the account emails from our sign-in server, such as confirmation and password reset codes. It receives your email address and those messages, and keeps them for 30 days in the United States. The Canadian Centre for Child Protection receives fingerprints only, never the photo or video. The hosting provider is named in Phase 5. When posting opens, automated review of posts and comments you submit for publication runs on our own servers and sends nothing to another company.
 
 <!-- P5 -->
 
@@ -75,4 +75,4 @@ Public profiles and posts are copied by relays and by other apps. We cannot eras
 ## Changes
 
 - 2026-10-17: First placeholder. Not reviewed by a lawyer. Not legal advice.
-- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, and the keyed hash we keep after erasure.
+- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, the keyed hash we keep after erasure, and Resend, which sends our account emails from the United States.
