@@ -79,6 +79,23 @@ const routeNamed = (config: Json, host: string, text: string): number =>
 
 type Red = readonly [what: string, mode: EdgeMode, change: (config: Json) => void, reason: string];
 
+// The too-many-tries error route of a site (snippets/too-many-tries.caddy), and the three routes inside it: the
+// navigation's Content-Type, the headers every 429 gets, and the page.
+const errorRoutes = (config: Json): Json[] => a(o(publicServer(config).errors).routes);
+const errorRoute = (config: Json, host: string): Obj =>
+  errorRoutes(config)
+    .map(o)
+    .find((route) => JSON.stringify(route.match) === JSON.stringify([{ host: [host] }])) as Obj;
+const pageRoutes = (config: Json, host: string): Obj[] =>
+  a(o(a(o(a(o(a(errorRoute(config, host).handle)[0]).routes)[0]).handle)[0]).routes).map(o);
+const page = (config: Json, host: string): Obj => o(a(pageRoutes(config, host)[2]?.handle)[0]);
+const editPage = (config: Json, host: string, edit: (body: string) => string): void => {
+  const respond = page(config, host);
+  respond.body = edit(String(respond.body));
+};
+const NOT_THE_PAGE = (host: string) => `{$${host}}: the error route is not the ruled too-many-tries page`;
+const PAGE = (host: string, problem: string) => `{$${host}}: the too-many-tries page ${problem}`;
+
 const SHAPE: Red[] = [
   [
     "a top-level key",
@@ -684,6 +701,95 @@ const FONTS: Red[] = [
 ];
 
 const header = (value: string): Json => ({ handler: "headers", response: { set: { "X-Test": [value] } } });
+/** The too-many-tries page (snippets/too-many-tries.caddy): on every site, the ruled route, fixed text loading nothing. */
+const TOO_MANY_TRIES: Red[] = [
+  [
+    "a site without the page",
+    "local",
+    (c) => void errorRoutes(c).splice(errorRoutes(c).indexOf(errorRoute(c, APP_LOCAL)), 1),
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  [
+    "an error route of its own",
+    "shipped",
+    (c) => void errorRoutes(c).push({ handle: [respond(200)], terminal: true }),
+    "an error route other than the sites' own",
+  ],
+  [
+    "an error handling key",
+    "shipped",
+    (c) => void Object.assign(o(publicServer(c).errors), { strict: true }),
+    "the error handling holds a key the rules do not read",
+  ],
+  [
+    "the page on every error",
+    "dev",
+    (c) => void delete o(a(errorRoute(c, APP_DEV).handle)[0]).routes,
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  ["the page for a fetch", "dev", (c) => void delete pageRoutes(c, APP_DEV)[2]?.match, NOT_THE_PAGE("APP_HOST")],
+  [
+    "the page as a 200",
+    "shipped",
+    (c) => void Object.assign(page(c, P), { status_code: 200 }),
+    NOT_THE_PAGE("PDS_HOST"),
+  ],
+  [
+    "the page without the security headers",
+    "dev",
+    (c) => void a(pageRoutes(c, P)[1]?.handle).shift(),
+    NOT_THE_PAGE("PDS_HOST"),
+  ],
+  [
+    "a page style the CSP does not allow",
+    "local",
+    (c) => editPage(c, APP_LOCAL, (body) => body.replace("max-width:26rem", "max-width:30rem")),
+    NOT_THE_PAGE("APP_HOST"),
+  ],
+  [
+    "a page that runs a script",
+    "dev",
+    (c) => editPage(c, APP_DEV, (body) => body.replace("</main>", "<script>alert(1)</script></main>")),
+    PAGE("APP_HOST", "holds a tag outside the ruled ones"),
+  ],
+  [
+    "a page with a handler",
+    "dev",
+    (c) => editPage(c, APP_DEV, (body) => body.replace("<main>", '<main onclick="x()">')),
+    PAGE("APP_HOST", "loads or runs something"),
+  ],
+  [
+    "a page that loads an image",
+    "local",
+    (c) => editPage(c, P, (body) => body.replace("body{margin:0;", "body{background:url(/x.png);margin:0;")),
+    PAGE("PDS_HOST", "loads or runs something"),
+  ],
+  [
+    "a page that echoes the request",
+    "dev",
+    (c) => editPage(c, APP_DEV, (body) => body.replace("Too many tries</h1>", "{http.request.uri}</h1>")),
+    PAGE("APP_HOST", "holds a placeholder"),
+  ],
+  [
+    "a page that links elsewhere",
+    "shipped",
+    (c) => editPage(c, P, (body) => body.replace('href="/"', 'href="https://example.org/"')),
+    PAGE("PDS_HOST", "links somewhere other than /"),
+  ],
+  [
+    "a page with a second style",
+    "shipped",
+    (c) => editPage(c, P, (body) => body.replace("</head>", "<style>p{}</style></head>")),
+    PAGE("PDS_HOST", "does not hold exactly one style"),
+  ],
+  [
+    "a page outside ASCII",
+    "shipped",
+    (c) => editPage(c, P, (body) => body.replace("Too many tries</h1>", "Too many tries\u2026</h1>")),
+    PAGE("PDS_HOST", "is not one ASCII document"),
+  ],
+];
+
 const STRAY: Red[] = [
   [
     "the PDS host in a header",
@@ -983,6 +1089,7 @@ const REDS: readonly Red[] = [
   ...UPSTREAMS,
   ...DEV_SHAPE,
   ...FONTS,
+  ...TOO_MANY_TRIES,
   ...STRAY,
 ];
 const changed = ([, mode, change]: Red): string[] => {
@@ -996,6 +1103,24 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     for (const mode of ["shipped", "local", "dev"] as const) {
       expect(adaptedProblems(adapted(mode), mode, ENVS[mode]), mode).toEqual([]);
     }
+  });
+
+  test("too_many_tries_page_says_wait_and_names_no_limit", () => {
+    // The page's words (Alex 2026-11-19, "yes good idea with adding a page"): wait a few minutes, a way home, and no
+    // number, so it tells nobody a zone's size or window. The same page on every site of every env.
+    const bodies = (["shipped", "local", "dev"] as const).flatMap((mode) =>
+      errorRoutes(adapted(mode)).map((route) =>
+        String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
+      ),
+    );
+    expect(bodies.length).toBe(5);
+    expect(new Set(bodies).size).toBe(1);
+    const words = String(bodies[0])
+      .replace(/<style>[^<]*<\/style>/, "")
+      .replace(/<[^>]*>/g, " ");
+    expect(words).toContain("Wait a few minutes, then try again.");
+    expect(words).toContain("Go to the home page");
+    expect(words).not.toMatch(/[0-9]/);
   });
 
   test("rules_pass_whatever_order_caddy_gives_the_two_sites", () => {

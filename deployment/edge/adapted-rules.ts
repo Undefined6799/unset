@@ -10,6 +10,8 @@
 // and the preflight's certificateProblems); ADR 0046's table maps them.
 //
 // The value shapes and the dev stack's ruled addresses are written here, their only copy since P1.39e.
+import { createHash } from "node:crypto";
+
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type Obj = { [key: string]: Json };
 
@@ -78,6 +80,7 @@ const SERVER_KEYS = [
   "trusted_proxies_strict",
   "client_ip_headers",
   "automatic_https",
+  "errors",
 ];
 const TRUST_KEYS = ["trusted_proxies", "trusted_proxies_strict", "client_ip_headers"];
 
@@ -228,6 +231,54 @@ const cspAppend = (host: string): Json => ({
     require: { headers: { "Content-Type": ["text/html*"] } },
   },
 });
+/**
+ * (too-many-tries) as adapted for one site (snippets/too-many-tries.caddy): on a 429 from a zone, the security headers,
+ * the page's CSP and no-store on every response, and the page itself, still a 429, only for a browser navigation; a
+ * fetch or a stream gets Caddy's empty 429. `body` is the page, which pageProblems judges; the CSP names its style's
+ * hash, so the page can load nothing else.
+ */
+const NAVIGATE: Json = [{ header: { "Sec-Fetch-Mode": ["navigate"] } }];
+const pageCsp = (hash: string): string =>
+  `default-src 'none'; style-src 'sha256-${hash}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`;
+const tooManyTries = (host: string, body: string): Json => ({
+  match: [{ host: [host] }],
+  handle: [
+    {
+      handler: "subroute",
+      routes: [
+        {
+          handle: [
+            {
+              handler: "subroute",
+              routes: [
+                {
+                  handle: [{ handler: "headers", response: { set: { "Content-Type": ["text/html; charset=utf-8"] } } }],
+                  match: NAVIGATE,
+                },
+                {
+                  handle: [
+                    ...SECURITY_HEADERS,
+                    {
+                      handler: "headers",
+                      response: {
+                        set: { "Cache-Control": ["no-store"], "Content-Security-Policy": [pageCsp(styleHash(body))] },
+                      },
+                    },
+                  ],
+                },
+                { handle: [{ handler: "static_response", status_code: 429, body }], match: NAVIGATE },
+              ],
+            },
+          ],
+          match: [{ expression: "{http.error.status_code} in [429]" }],
+        },
+      ],
+    },
+  ],
+  terminal: true,
+});
+/** The page's tags: a document, its one style, a heading, text and a link. */
+const PAGE_TAGS = ["!doctype", "html", "head", "meta", "title", "style", "body", "main", "h1", "p", "a"];
 const ACME_DIRECTORY = "https://acme-v02.api.letsencrypt.org/directory";
 
 type Host = "PDS_HOST" | "APP_HOST";
@@ -255,6 +306,7 @@ const named = (handlers: Obj[], name: string): Obj[] => handlers.filter((handler
  *   upstream, removing the client address headers and setting X-Forwarded-Host from the request alone;
  * - a trusted proxy only under dev: exactly Newt's address, read right to left from X-Forwarded-For; every server keeps
  *   the shared timeouts;
+ * - the error routes: exactly the too-many-tries page on each site, the page fixed text that loads nothing;
  * - certificates: Let's Encrypt for the PDS host under prod, the env's own leaf files under dev and local, nothing else;
  * - under dev the security headers, noindex, the admin guard and blob routes shut on the PDS, the sign-in files
  *   read-only on the app;
@@ -277,6 +329,7 @@ export function adaptedProblems(config: Json, mode: EdgeMode, env: AdaptedEnv): 
   if (server === undefined || others.length > 0) return [...found, "not exactly one public server"];
   const hosts = hostsOf(mode).map((host) => env[host] as string);
   found.push(...serverProblems(server, mode, env), ...logProblems(top, server, hosts));
+  found.push(...errorProblems(server, mode, env));
   found.push(...tlsProblems(top, server, mode, env));
   for (const host of hostsOf(mode)) {
     const route = siteRoute(server, env[host] as string);
@@ -483,6 +536,60 @@ function trustProblems(server: Obj, mode: EdgeMode): string[] {
   if (server.trusted_proxies_strict !== 1) found.push(`${DEV_LISTENER} does not read right to left`);
   if (!same(server.client_ip_headers, ["X-Forwarded-For"])) {
     found.push(`${DEV_LISTENER} reads a header other than X-Forwarded-For`);
+  }
+  return found;
+}
+
+/**
+ * The error routes (snippets/too-many-tries.caddy): one per site, each exactly the ruled too-many-tries route, so a
+ * refused browser gets the page, a fetch keeps Caddy's empty 429, and every other error Caddy's default.
+ */
+function errorProblems(server: Obj, mode: EdgeMode, env: AdaptedEnv): string[] {
+  const errors = obj(server.errors);
+  const routes = arr(errors.routes).map(obj);
+  const found = unknownKeys(errors, ["routes"], "the error handling");
+  for (const host of hostsOf(mode)) {
+    const own = routes.filter((route) => same(route.match, [{ host: [env[host] as string] }]));
+    const body = own.length === 1 ? pageOf(own[0] as Obj) : "";
+    const page = pageProblems(body);
+    if (page.length > 0 || !same(own[0], tooManyTries(env[host] as string, body))) {
+      found.push(`{$${host}}: the error route is not the ruled too-many-tries page`);
+    }
+    found.push(...page.map((problem) => `{$${host}}: the too-many-tries page ${problem}`));
+  }
+  if (routes.length !== hostsOf(mode).length) found.push("an error route other than the sites' own");
+  return found;
+}
+
+/** The page a too-many-tries route answers with, or "" when the route is not shaped like one. */
+function pageOf(route: Obj): string {
+  const status = obj(arr(obj(arr(obj(arr(route.handle)[0]).routes)[0]).handle)[0]);
+  const respond = obj(arr(obj(arr(status.routes)[2]).handle)[0]);
+  return typeof respond.body === "string" ? respond.body : "";
+}
+
+/** The base64 SHA-256 of the page's one inline style: the hash its CSP allows (CSP Level 3, "hash-source"). */
+const styleHash = (body: string): string =>
+  createHash("sha256")
+    .update(/<style>([^<]*)<\/style>/.exec(body)?.[1] ?? "")
+    .digest("base64");
+
+/**
+ * Why the page is not fixed text that loads nothing: one printable-ASCII document with no Caddy placeholder (Caddy
+ * v2.11.9 replaces known placeholders in a static_response body at run time, staticresp.go:208, so one could echo the
+ * request), only the ruled tags, exactly one style, no handler, source, URL or import, and links only to "/".
+ */
+function pageProblems(body: string): string[] {
+  const found: string[] = [];
+  if (!/^<!doctype html>\n[\x20-\x7e\n]*<\/html>$/.test(body)) found.push("is not one ASCII document");
+  if (/\{[A-Za-z0-9_.>$-]+\}/.test(body)) found.push("holds a placeholder");
+  const tags = [...body.matchAll(/<\/?([!a-z0-9]+)/gi)].map((match) => (match[1] as string).toLowerCase());
+  if (!tags.every((tag) => PAGE_TAGS.includes(tag))) found.push("holds a tag outside the ruled ones");
+  if (tags.filter((tag) => tag === "style").length !== 2) found.push("does not hold exactly one style");
+  if (/\son[a-z]+\s*=|\ssrc\s*=|url\s*\(|@import|javascript:/i.test(body)) found.push("loads or runs something");
+  const links = [...body.matchAll(/\shref="([^"]*)"/gi)].map((match) => match[1]);
+  if ((body.match(/href/gi) ?? []).length !== links.length || links.some((link) => link !== "/")) {
+    found.push("links somewhere other than /");
   }
   return found;
 }
@@ -868,7 +975,8 @@ function positionsBlanked(top: Obj, append: Json): Json {
     const server = obj(value);
     const routes = arr(server.routes).map((each) => ({ ...obj(route(each)), match: null }));
     const logs = { ...obj(server.logs), logger_names: null };
-    return [name, { ...server, routes, logs, tls_connection_policies: null }];
+    const errorRoutes = arr(obj(server.errors).routes).map((each) => ({ ...obj(each), match: null }));
+    return [name, { ...server, routes, logs, errors: { routes: errorRoutes }, tls_connection_policies: null }];
   });
   return { ...top, apps: { ...obj(top.apps), tls: null, http: { servers: Object.fromEntries(servers) } } };
 }

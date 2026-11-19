@@ -770,6 +770,7 @@
                                     "/etc/caddy/snippets/route-class.caddy",
                                     "/etc/caddy/snippets/security-headers.caddy",
                                     "/etc/caddy/snippets/tls.caddy",
+                                    "/etc/caddy/snippets/too-many-tries.caddy",
                                     "/etc/caddy/snippets/upstream.caddy",
                                     "/etc/caddy/snippets/xrpc-guard.caddy"
                                   ],
@@ -853,6 +854,216 @@
               "terminal": true
             }
           ],
+          "errors": {
+            "routes": [
+              {
+                "match": [
+                  {
+                    "host": ["app-host.invalid"]
+                  }
+                ],
+                "handle": [
+                  {
+                    "handler": "subroute",
+                    "routes": [
+                      {
+                        "handle": [
+                          {
+                            "handler": "subroute",
+                            "routes": [
+                              {
+                                "handle": [
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "set": {
+                                        "Content-Type": ["text/html; charset=utf-8"]
+                                      }
+                                    }
+                                  }
+                                ],
+                                "match": [
+                                  {
+                                    "header": {
+                                      "Sec-Fetch-Mode": ["navigate"]
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "handle": [
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "deferred": true,
+                                      "delete": ["Server", "Via"],
+                                      "set": {
+                                        "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
+                                        "X-Content-Type-Options": ["nosniff"]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "require": {
+                                        "headers": {
+                                          "Referrer-Policy": null
+                                        }
+                                      },
+                                      "set": {
+                                        "Referrer-Policy": ["no-referrer"]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "set": {
+                                        "Cache-Control": ["no-store"],
+                                        "Content-Security-Policy": [
+                                          "default-src 'none'; style-src 'sha256-10GIk0mkNEBTY+WMfgI9xqFf1JOIf0M+jhovmIShbyQ='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "handle": [
+                                  {
+                                    "body": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Too many tries</title>\n<style>:root{color-scheme:light dark;--bg:#f0edee;--fg:#0a090c;--muted:#5a575b;--card:#fbfafa;--line:#d6d2d4}@media (prefers-color-scheme:dark){:root{--bg:#17161b;--fg:#f0edee;--muted:#a19ea2;--card:#232227;--line:#312f36}}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>\n</head>\n<body>\n<main>\n<h1>Too many tries</h1>\n<p>Wait a few minutes, then try again.</p>\n<p><a href=\"/\">Go to the home page</a></p>\n</main>\n</body>\n</html>",
+                                    "handler": "static_response",
+                                    "status_code": 429
+                                  }
+                                ],
+                                "match": [
+                                  {
+                                    "header": {
+                                      "Sec-Fetch-Mode": ["navigate"]
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ],
+                        "match": [
+                          {
+                            "expression": "{http.error.status_code} in [429]"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "terminal": true
+              },
+              {
+                "match": [
+                  {
+                    "host": ["pds-host.invalid"]
+                  }
+                ],
+                "handle": [
+                  {
+                    "handler": "subroute",
+                    "routes": [
+                      {
+                        "handle": [
+                          {
+                            "handler": "subroute",
+                            "routes": [
+                              {
+                                "handle": [
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "set": {
+                                        "Content-Type": ["text/html; charset=utf-8"]
+                                      }
+                                    }
+                                  }
+                                ],
+                                "match": [
+                                  {
+                                    "header": {
+                                      "Sec-Fetch-Mode": ["navigate"]
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "handle": [
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "deferred": true,
+                                      "delete": ["Server", "Via"],
+                                      "set": {
+                                        "Strict-Transport-Security": ["max-age=63072000; includeSubDomains"],
+                                        "X-Content-Type-Options": ["nosniff"]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "require": {
+                                        "headers": {
+                                          "Referrer-Policy": null
+                                        }
+                                      },
+                                      "set": {
+                                        "Referrer-Policy": ["no-referrer"]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "handler": "headers",
+                                    "response": {
+                                      "set": {
+                                        "Cache-Control": ["no-store"],
+                                        "Content-Security-Policy": [
+                                          "default-src 'none'; style-src 'sha256-10GIk0mkNEBTY+WMfgI9xqFf1JOIf0M+jhovmIShbyQ='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "handle": [
+                                  {
+                                    "body": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Too many tries</title>\n<style>:root{color-scheme:light dark;--bg:#f0edee;--fg:#0a090c;--muted:#5a575b;--card:#fbfafa;--line:#d6d2d4}@media (prefers-color-scheme:dark){:root{--bg:#17161b;--fg:#f0edee;--muted:#a19ea2;--card:#232227;--line:#312f36}}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>\n</head>\n<body>\n<main>\n<h1>Too many tries</h1>\n<p>Wait a few minutes, then try again.</p>\n<p><a href=\"/\">Go to the home page</a></p>\n</main>\n</body>\n</html>",
+                                    "handler": "static_response",
+                                    "status_code": 429
+                                  }
+                                ],
+                                "match": [
+                                  {
+                                    "header": {
+                                      "Sec-Fetch-Mode": ["navigate"]
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ],
+                        "match": [
+                          {
+                            "expression": "{http.error.status_code} in [429]"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "terminal": true
+              }
+            ]
+          },
           "tls_connection_policies": [
             {
               "match": {

@@ -1,0 +1,43 @@
+# The page a person sees when a zone refuses them (snippets/ratelimit.caddy), in place of an empty 429. Every site
+# imports it. caddy-ratelimit sets Retry-After and returns a 429 handler error (5625512f24f6 handler.go:301 and 334),
+# so Caddy runs the server's error routes (Caddy v2.11.9 modules/caddyhttp/server.go:745-747); `handle_errors 429`
+# adapts to one such route per site, matched on the status (httpcaddyfile/builtins.go:832-894). Retry-After is on the
+# response's own header map, so it stays, and the status stays 429.
+#
+# The site's own deferred headers never ran (no response was written inside the route), so the security headers are
+# applied here again; noindex is not deferred and is already set. A browser navigation (Sec-Fetch-Mode: navigate,
+# w3c.github.io/webappsec-fetch-metadata, section 2.3) gets the page; anything else, a fetch or a stream, falls
+# through to Caddy's own empty 429 (modules/caddyhttp/caddyhttp.go:104-111, errorEmptyHandler), as before. Any other
+# error keeps Caddy's default too: the route matches 429 alone.
+#
+# The page is fixed text: no placeholder, nothing from the request, no limit number, no script. Its one inline style
+# is allowed by hash alone (adapted-rules.ts checks the hash against the body), and nothing else may load.
+(too-many-tries) {
+	handle_errors 429 {
+		import security-headers
+		header {
+			Content-Security-Policy "default-src 'none'; style-src 'sha256-10GIk0mkNEBTY+WMfgI9xqFf1JOIf0M+jhovmIShbyQ='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+			Cache-Control no-store
+		}
+		@navigate header Sec-Fetch-Mode navigate
+		header @navigate Content-Type "text/html; charset=utf-8"
+		respond @navigate <<HTML
+			<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>Too many tries</title>
+			<style>:root{color-scheme:light dark;--bg:#f0edee;--fg:#0a090c;--muted:#5a575b;--card:#fbfafa;--line:#d6d2d4}@media (prefers-color-scheme:dark){:root{--bg:#17161b;--fg:#f0edee;--muted:#a19ea2;--card:#232227;--line:#312f36}}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:26rem;margin:1rem;padding:2rem;background:var(--card);border:1px solid var(--line);border-radius:4px}h1{margin:0 0 .5rem;font-size:1.5rem;line-height:1.2}p{margin:0 0 1rem;color:var(--muted)}a{color:var(--fg)}</style>
+			</head>
+			<body>
+			<main>
+			<h1>Too many tries</h1>
+			<p>Wait a few minutes, then try again.</p>
+			<p><a href="/">Go to the home page</a></p>
+			</main>
+			</body>
+			</html>
+			HTML 429
+	}
+}
