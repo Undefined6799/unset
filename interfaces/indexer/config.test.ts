@@ -22,7 +22,7 @@ const ENV = {
   PLC_URL: "https://plc.directory",
   PDS_PUBLIC_URL: "https://pds.example.test",
   INDEXER_PDS_URL: "http://pds:3000",
-  HOSTED_HANDLE_SUFFIXES: ".unset.im,.staging.unset.im",
+  HOSTED_HANDLE_SUFFIXES: ".hosted.test,.staging.hosted.test",
 };
 
 const problems = (env: Record<string, string>): unknown => {
@@ -62,7 +62,7 @@ describe("indexer config", () => {
   test("config.hosted_suffixes_are_required_dotted_names", () => {
     const { HOSTED_HANDLE_SUFFIXES: _, ...without } = ENV;
     expect(problems(without)).toEqual([{ key: "HOSTED_HANDLE_SUFFIXES", reason: "missing" }]);
-    for (const bad of ["unset.im", ".UNSET.im", ".im", ".unset.im,"]) {
+    for (const bad of ["hosted.test", ".HOSTED.test", ".test", ".hosted.test,"]) {
       expect(problems({ ...ENV, HOSTED_HANDLE_SUFFIXES: bad }), bad).toEqual([
         { key: "HOSTED_HANDLE_SUFFIXES", reason: "invalid" },
       ]);

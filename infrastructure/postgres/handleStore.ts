@@ -37,8 +37,11 @@ export type HandleStore = {
   readonly checked: (job: HandleJob, outcome: HandleOutcome) => Promise<void>;
 };
 
-/** How long a claimed check is left alone; above the check's own deadlines (three reads of INDEXER_TIMEOUT_MS). */
-export const HANDLE_LEASE_SECONDS = 120;
+/**
+ * How long a claimed check is left alone: above the longest check, four reads of INDEXER_TIMEOUT_MS (handles.ts), at
+ * most 4 x 30 s = 120 s, so a slow check never runs twice at once.
+ */
+export const HANDLE_LEASE_SECONDS = 150;
 /** An unresolved check asks again after this, rather than on every pass until the outage ends. */
 export const HANDLE_RETRY_SECONDS = 600;
 
