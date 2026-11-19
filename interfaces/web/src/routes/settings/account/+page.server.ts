@@ -11,7 +11,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   const view = await accountView(services(), locals.did, locals.issuerOrigin, locals.deadline);
   return {
     ...view,
-    shell: settingsShell(locals, request, "/settings/account"),
+    shell: settingsShell(request, "/settings/account"),
     // The one-time banner after a privacy notice change (P2.12), as the gate decided it.
     privacyNotice: locals.privacyNotice,
   };
