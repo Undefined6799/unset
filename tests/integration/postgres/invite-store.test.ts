@@ -56,7 +56,15 @@ describe("invite store", () => {
     );
     expect(row?.state).toBe("issued");
     expect(row?.sealed_code).not.toContain("abcde");
-    expect(await store.list(did)).toEqual([{ id, code: "pds-test-abcde-fghij", createdAt: expect.any(Date) }]);
+    const [item] = await store.list(did);
+    expect(item).toEqual({
+      id,
+      code: "pds-test-abcde-fghij",
+      createdAt: expect.any(Date),
+      expiresAt: expect.any(Date),
+    });
+    // Alex 2026-11-19: an invite expires 7 days after it was made.
+    expect((item?.expiresAt.getTime() ?? 0) - (item?.createdAt.getTime() ?? 0)).toBe(7 * 24 * 3600 * 1000);
   });
 
   test("invite.double_submit: the same submission is one row, and says whether it was issued", async () => {
@@ -81,15 +89,15 @@ describe("invite store", () => {
     expect((await store.claim(did, same)).kind).toBe("claimed");
   });
 
-  test("invite.list_scoped: a member sees only their own issued invites, newest first, last 30 days, at most 20", async () => {
+  test("invite.list_scoped: a member sees only their own unexpired invites, newest first, at most 20", async () => {
     const { store } = setup();
     const alice = nextDid();
     const bob = nextDid();
-    // An invite of 31 days ago, written as web writes one (web may set created_at only when it inserts).
+    // An invite of 8 days ago, past its 7, written as web writes one (web may set created_at only when it inserts).
     const old = crypto.randomUUID() as InviteId;
     await sql(
       "INSERT INTO app.invite (id, inviter_did, submission_id, state, created_at) " +
-        "VALUES ($1, $2, $3, 'pending', now() - interval '31 days')",
+        "VALUES ($1, $2, $3, 'pending', now() - interval '8 days')",
       [old, alice, submission()],
     );
     await store.store(alice, old, "pds-old");
@@ -114,6 +122,41 @@ describe("invite store", () => {
     expect(await store.hide(alice, mine)).toBe(true);
     expect(await store.list(alice)).toEqual([]);
     expect((await store.list(bob)).map((item) => item.code)).toEqual(["pds-theirs"]);
+    // Hiding deletes our copy of the code; the row stays, with no code, until erasure.
+    expect(await sql("SELECT state, sealed_code FROM app.invite WHERE id = $1", [mine])).toEqual([
+      { state: "cleared", sealed_code: null },
+    ]);
+    expect(await store.hide(alice, mine)).toBe(false);
+  });
+
+  test("invite.expire_sweep: a code 7 days old is deleted from its row; younger codes and pending rows stay", async () => {
+    const { store } = setup();
+    const did = nextDid();
+    const backdated = async (age: string, code: string | null) => {
+      const id = crypto.randomUUID() as InviteId;
+      await sql(
+        "INSERT INTO app.invite (id, inviter_did, submission_id, state, created_at) " +
+          "VALUES ($1, $2, $3, 'pending', now() - $4::interval)",
+        [id, did, submission(), age],
+      );
+      if (code !== null) await store.store(did, id, code);
+      return id;
+    };
+    const expired = await backdated("7 days 1 minute", "pds-expired");
+    const young = await backdated("6 days 23 hours", "pds-young");
+    const pending = await backdated("8 days", null);
+    expect(await store.clearExpired()).toBeGreaterThanOrEqual(1);
+    const state = async (id: InviteId) =>
+      (
+        await sql<{ state: string; sealed: boolean }>(
+          "SELECT state, sealed_code IS NOT NULL AS sealed FROM app.invite WHERE id = $1",
+          [id],
+        )
+      )[0];
+    expect(await state(expired)).toEqual({ state: "cleared", sealed: false });
+    expect(await state(young)).toEqual({ state: "issued", sealed: true });
+    expect(await state(pending)).toEqual({ state: "pending", sealed: false });
+    expect((await store.list(did)).map((item) => item.code)).toEqual(["pds-young"]);
   });
 
   test("invite.store_scoped: a code is never stored onto another member's row", async () => {

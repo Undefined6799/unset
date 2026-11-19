@@ -5,11 +5,14 @@
 -- rule DA-2). The inviter's DID is personal data, so every grant is a column list; web deletes only the pending row a
 -- failed request leaves (DELETE is row-level, as on app.oauth_session). The app keeps no record of who used a code:
 -- the PDS keeps that (plan, invite-chain takedown P5.08e).
+-- An invite expires 7 days after it is made (Alex 2026-11-19): web's sweep then deletes our copy of the code, and
+-- hiding deletes it at once; the row stays `cleared`, with no code, until erasure. The PDS honours a code until
+-- pds-admin disables it there (the follow-up to ADR 0060).
 CREATE TABLE app.invite (
   id uuid PRIMARY KEY,
   inviter_did types.did NOT NULL,
   submission_id uuid NOT NULL,
-  state text NOT NULL CHECK (state IN ('pending', 'issued')),
+  state text NOT NULL CHECK (state IN ('pending', 'issued', 'cleared')),
   sealed_code types.sealed,
   created_at timestamptz NOT NULL,
   hidden_at timestamptz,

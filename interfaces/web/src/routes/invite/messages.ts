@@ -6,8 +6,10 @@ export const INVITE = {
     n === 1 ? "1 invite left in the next 24 hours." : `${n} invites left in the next 24 hours.`,
   country: "The person I invite does not live in the EU, the UK or Australia",
   create: "Create an invite",
-  yours: "Your invites from the last 30 days",
-  none: "You have no invites from the last 30 days.",
+  yours: "Your invites from the last 7 days",
+  none: "You have no invites from the last 7 days.",
+  // Says what our app does, not what the PDS honours: until pds-admin disables old codes there, it may not be true.
+  shownUntil: "Shown here until",
   linkLabel: "Invite link",
   unavailable: "This invite can no longer be shown.",
   hide: "Hide",

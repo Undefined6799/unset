@@ -10,16 +10,32 @@ import { type Pool, withClient } from "./pool.ts";
 import { sealedContext } from "./sealedColumns.ts";
 
 /** One issued invite as the Invite page shows it; `code` is null when its seal does not open (a rotated-out key). */
-export type InviteListItem = { readonly id: InviteId; readonly code: string | null; readonly createdAt: Date };
+export type InviteListItem = {
+  readonly id: InviteId;
+  readonly code: string | null;
+  readonly createdAt: Date;
+  readonly expiresAt: Date;
+};
+
+/** How long an invite lasts (Alex 2026-11-19); the list and the sweep both count from `created_at`. */
+const LIFETIME = "interval '7 days'";
 
 type Options = { readonly pool: Pool; readonly sealer: Sealer; readonly log: Logger };
 
-/** The book's list: the last 30 days, newest first, at most 20; pending rows hold no code and are not listed. */
+/** Unexpired invites, newest first, at most 20; pending rows hold no code, cleared ones no longer, and neither shows. */
 const LIST = `
-  SELECT id, sealed_code, created_at FROM app.invite
-   WHERE inviter_did = $1 AND state = 'issued' AND hidden_at IS NULL AND created_at > now() - interval '30 days'
+  SELECT id, sealed_code, created_at, created_at + ${LIFETIME} AS expires_at FROM app.invite
+   WHERE inviter_did = $1 AND state = 'issued' AND created_at > now() - ${LIFETIME}
    ORDER BY created_at DESC, id
    LIMIT 20`;
+
+/**
+ * The expiry sweep: every member's codes past their 7 days are deleted from our rows. It has no DID predicate because
+ * it acts for no member; like the session sweeps it is one fixed, idempotent statement, safe on every replica.
+ */
+const CLEAR_EXPIRED = `
+  UPDATE app.invite SET state = 'cleared', sealed_code = NULL
+   WHERE state = 'issued' AND created_at <= now() - ${LIFETIME}`;
 
 export function createInviteStore({ pool, sealer, log }: Options) {
   const context = (id: InviteId) => sealedContext("app.invite.sealed_code", id);
@@ -78,20 +94,32 @@ export function createInviteStore({ pool, sealer, log }: Options) {
 
     async list(did: Did, deadline?: AbortSignal): Promise<InviteListItem[]> {
       const { rows } = await run(deadline, (db) =>
-        db.query<{ id: InviteId; sealed_code: string; created_at: Date }>(LIST, [did]),
+        db.query<{ id: InviteId; sealed_code: string; created_at: Date; expires_at: Date }>(LIST, [did]),
       );
-      return rows.map((row) => ({ id: row.id, code: opened(row.id, row.sealed_code), createdAt: row.created_at }));
+      return rows.map((row) => ({
+        id: row.id,
+        code: opened(row.id, row.sealed_code),
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      }));
     },
 
-    /** Hides the caller's own row `id` from their list; false when they have no such row. */
+    /** Hides the caller's own issued row `id` and deletes our copy of its code; false when they have no such row. */
     async hide(did: Did, id: InviteId, deadline?: AbortSignal): Promise<boolean> {
       const updated = await run(deadline, (db) =>
-        db.query("UPDATE app.invite SET hidden_at = now() WHERE id = $1 AND inviter_did = $2 AND hidden_at IS NULL", [
-          id,
-          did,
-        ]),
+        db.query(
+          "UPDATE app.invite SET state = 'cleared', sealed_code = NULL, hidden_at = now() " +
+            "WHERE id = $1 AND inviter_did = $2 AND state = 'issued'",
+          [id, did],
+        ),
       );
       return updated.rowCount === 1;
+    },
+
+    /** Deletes every code past its 7 days from its row (web's sweep); returns how many. */
+    async clearExpired(): Promise<number> {
+      const updated = await run(undefined, (db) => db.query(CLEAR_EXPIRED));
+      return updated.rowCount ?? 0;
     },
   };
 }

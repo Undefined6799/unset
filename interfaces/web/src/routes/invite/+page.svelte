@@ -1,5 +1,5 @@
 <!--
-  The Invite page (book P2.10): a form that asks for one invite, and the member's invites of the last 30 days, each as
+  The Invite page (book P2.10): a form that asks for one invite, and the member's invites of the last 7 days, each as
   a read-only join link to select and copy. Plain forms, so it works with no script.
 -->
 <script lang="ts">
@@ -44,6 +44,7 @@ let { data } = $props();
             <Input id="invite-{invite.id}" readonly value={invite.link} />
           {/if}
           <time datetime={invite.createdAt}>{invite.createdAt.slice(0, 10)}</time>
+          <p>{T.shownUntil} <time datetime={invite.expiresAt}>{invite.expiresAt.slice(0, 10)}</time></p>
           <form method="POST" action="?/hide">
             <input type="hidden" name="id" value={invite.id} />
             <Button type="submit" variant="ghost" aria-label={T.hideLabel}>{T.hide}</Button>

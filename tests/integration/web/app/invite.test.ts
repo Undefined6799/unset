@@ -53,8 +53,11 @@ function nextDid(): Did {
   return parsed;
 }
 
-/** A signed-in, onboarded member with a confirmed email; returns the DID and the session cookie. */
-async function signedIn(): Promise<{ did: Did; cookie: string }> {
+/**
+ * A signed-in member, by default onboarded with a confirmed email (`ready`); "new" has not onboarded, "unconfirmed" has
+ * but its email is not confirmed. Returns the DID and the session cookie.
+ */
+async function signedIn(stage: "ready" | "new" | "unconfirmed" = "ready"): Promise<{ did: Did; cookie: string }> {
   const did = nextDid();
   await tokenSets.set(did, {
     dpopJwk: { kty: "EC", crv: "P-256", x: "x", y: "y", d: "d", kid: "dpop", alg: "ES256" } as SavedSession["dpopJwk"],
@@ -69,7 +72,7 @@ async function signedIn(): Promise<{ did: Did; cookie: string }> {
     },
   });
   const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did, { issuerOrigin: PDS }));
-  await readyMember(pool, did);
+  if (stage !== "new") await readyMember(pool, did, stage === "ready");
   return { did, cookie: `__Host-sid=${created.cookieValue}` };
 }
 
@@ -143,13 +146,13 @@ afterAll(async () => {
 });
 
 const form = (fields: Record<string, string>) => new URLSearchParams(fields).toString();
-const post = (path: string, body: string, cookie?: string) =>
+const post = (path: string, body: string, cookie?: string, origin = ORIGIN) =>
   web.fetch(path, {
     method: "POST",
     body,
     headers: {
       "x-forwarded-for": clientAddress(),
-      origin: ORIGIN,
+      origin,
       accept: "text/html",
       "content-type": "application/x-www-form-urlencoded",
       ...(cookie === undefined ? {} : { cookie }),
@@ -173,6 +176,25 @@ describe("the Invite page", () => {
     expect(response.headers.get("location")).toBe("/login?next=%2Finvite");
   });
 
+  test("invite.cross_site: a POST from another site is refused and asks pds-admin nothing", async () => {
+    const { cookie } = await signedIn();
+    const fields = form({ submissionId: await submissionOf(cookie), countryAck: "yes" });
+    expect((await post("/invite?/issue", fields, cookie, "https://evil.test")).status).toBe(403);
+    expect(received).toHaveLength(0);
+  });
+
+  test("invite.gate: a member who has not onboarded, or whose email is unconfirmed, cannot ask for one", async () => {
+    for (const stage of ["new", "unconfirmed"] as const) {
+      const { cookie } = await signedIn(stage);
+      const fields = form({ submissionId: crypto.randomUUID(), countryAck: "yes" });
+      const response = await post("/invite?/issue", fields, cookie);
+      expect(response.status, stage).toBe(303);
+      expect(response.headers.get("location"), stage).not.toMatch(/^\/invite/);
+      expect((await get("/invite", cookie)).status, stage).toBe(303);
+    }
+    expect(received).toHaveLength(0);
+  });
+
   test("invite.issue_ok: one signed request for the member, then the join link is listed", async () => {
     const { did, cookie } = await signedIn();
     const response = await post(
@@ -191,6 +213,9 @@ describe("the Invite page", () => {
     const page = await (await get("/invite?left=4", cookie)).text();
     expect(page).toMatch(/value="https:\/\/unset\.test\/join\?invite=pds-test-code-\d+"/);
     expect(page).toContain("4 invites left in the next 24 hours.");
+    // The page says how long our app shows the code (Alex 2026-11-19: 7 days), no more than that.
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    expect([day(7), day(8)].some((date) => page.includes(`Shown here until <time datetime="${date}`))).toBe(true);
   });
 
   test("invite.double_submit: the same form sent twice is one request and one invite", async () => {

@@ -1,5 +1,5 @@
 // GET and POST /invite (book P2.10; plan §5.3 "Login and signup"): a member asks for a one-use sign-up code for our
-// PDS, sees the codes of the last 30 days as join links, and hides the ones they no longer need. The gate has checked
+// PDS, sees the codes of the last 7 days as join links, and hides the ones they no longer need. The gate has checked
 // the session, onboarding, the confirmed email, the Origin and the invite limit. pds-admin issues the code (ADR 0060);
 // the identity domain's rule makes one form submission one request and one row.
 import { randomUUID } from "node:crypto";
@@ -38,6 +38,7 @@ export const load: ServerLoad = async (event) => {
       id: item.id,
       link: item.code === null ? null : joinLink(item.code),
       createdAt: item.createdAt.toISOString(),
+      expiresAt: item.expiresAt.toISOString(),
     })),
   };
 };

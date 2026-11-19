@@ -242,17 +242,6 @@ async function build(): Promise<Services> {
     setEmailConfirmed,
     now: () => performance.now(),
   });
-  // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
-  const stopSweeps = startSweeps({
-    sweeps: [
-      { job: "sweep.session", run: () => withClient(pool, null, (db) => sessions.sweep(db)) },
-      { job: "sweep.oauth_state", run: () => stateStore.sweep() },
-      { job: "sweep.single_use", run: () => withClient(pool, null, (db) => nonces.sweep(db)) },
-    ],
-    everyMs: EXPIRY_SWEEP_MS,
-    log,
-  });
-
   const invites = {
     store: createInviteStore({ pool, sealer, log }),
     issue: createInviteIssuer(guard, {
@@ -263,6 +252,19 @@ async function build(): Promise<Services> {
     }),
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
   };
+
+  // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
+  const stopSweeps = startSweeps({
+    sweeps: [
+      { job: "sweep.session", run: () => withClient(pool, null, (db) => sessions.sweep(db)) },
+      { job: "sweep.oauth_state", run: () => stateStore.sweep() },
+      { job: "sweep.single_use", run: () => withClient(pool, null, (db) => nonces.sweep(db)) },
+      // P2.10: an invite's code is deleted from our row 7 days after it was made (Alex 2026-11-19).
+      { job: "sweep.invite", run: () => invites.store.clearExpired() },
+    ],
+    everyMs: EXPIRY_SWEEP_MS,
+    log,
+  });
 
   const health = createHealth({
     service: config.UNSET_SERVICE,
