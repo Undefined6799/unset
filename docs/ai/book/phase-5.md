@@ -312,6 +312,15 @@ names as "assumed":
 - `eraseDid`'s held-row behaviour.
 
 Also the plan's latest revision and its open plan issues, and Alex's answers to P5-A1–P5-A5 (Notes).
+
+**Open before the first prod deploy: how invites reach the production PDS.** Preflight C17 lets `pds-admin` share
+`pds_admin_pds` with the PDS under local and dev only (P2.09e, `deployment/preflight/checks/networks.ts`
+`pdsNeighbours`). Alex, 2026-11-19T00:55Z, typing the line that allowed it: "Allow pds-admin on its own private network
+with the PDS -> we need in memory somewhere that this must be removed on production". So a prod stack with `pds-admin`
+beside the PDS fails C17, and ADR 0060 Decision 1 ("on the internal network only, in every environment") needs a
+follow-up record before prod. This step asks Alex how `pds-admin` reaches the production PDS (for example through the
+edge on an internal route), records his answer in that ADR, and changes C17 to match; nothing ships to prod before.
+
 Outputs: a revised `phase-5.md`, with every "assumed" interface replaced by the real name and shape (file:line); a review
 report in `reviews/`; a short list of steps whose size or order changed.
 

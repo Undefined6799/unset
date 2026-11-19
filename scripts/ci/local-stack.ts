@@ -31,7 +31,7 @@ export const HEALTH_WAIT_MS = 180_000;
 const POLL_MS = 3_000;
 const PROBE_MS = 15_000;
 /** The services `up` starts; pds-token-reader is a tools profile and never starts. */
-export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects"] as const;
+export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin"] as const;
 const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -117,6 +117,17 @@ export function generate() {
     recoveryDidKey: p256DidKey(ec().publicKey),
     rootKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
     leafKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
+    // pds-admin (P2.09e): its request log's key, and web's Ed25519 public key with its one verb. Web's private half
+    // is not written until P2.10 gives web a reader for it.
+    pdsAdminLogKey: randomBytes(32).toString("base64"),
+    pdsAdminKeys: JSON.stringify([
+      {
+        kid: "web-ci",
+        iss: "web",
+        publicKeyPem: generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }),
+        verbs: ["invite.issue"],
+      },
+    ]),
   };
 }
 
@@ -144,6 +155,7 @@ function folders(): void {
       `APP_HOST=${APP_HOST}`,
       `PDS_HOSTNAME=${PDS_HOST}`,
       `PDS_SERVICE_HANDLE_DOMAINS=.${PDS_HOST}`,
+      `PDS_DID=did:web:${PDS_HOST}`,
       "EDGE_ACME_EMAIL=edge@example.test",
       "WEB_OAUTH_ACTIVE_KID=web-ci",
       "",
@@ -176,6 +188,10 @@ function folders(): void {
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
   secret(1000, "objects_s3", objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret));
+  // pds-admin's copy of the PDS admin password is pds.env's, so its boot probe passes (runbook "pds-admin's files").
+  secret(65532, "pds_admin_password", v.adminPassword);
+  secret(65532, "pds_admin_keys", v.pdsAdminKeys);
+  secret(65532, "pds_admin_log_key", v.pdsAdminLogKey);
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });
   writeFileSync(at("unset-dev-ca/leaf.key"), v.leafKey);
   const ca = (name: string): string => at(`unset-dev-ca/${name}`);

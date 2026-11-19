@@ -3,7 +3,13 @@
 // directions, so no service joins a network, and no network opens up, without a reviewed change to the table. The
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
-import { DEV_ONLY_NETWORKS, isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
+import {
+  DEV_ONLY_NETWORKS,
+  isLocalOnlyNetwork,
+  LOCAL_ONLY_NETWORKS,
+  SOURCE_ONLY_NETWORKS,
+  SOURCE_ONLY_SERVICES,
+} from "../local-only.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
 import { readBases, readLock } from "./lock.ts";
@@ -78,15 +84,43 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
  *
  * One exemption, as narrow as it can be (P2.18p, ADR 0041 Decision 5): under local and dev only, the service named
- * objects that runs the lock's objects image (or, under local, builds deployment/images/objects.Dockerfile) may share
+ * objects that runs the lock's objects image (or, under local and dev --source, builds
+ * deployment/images/objects.Dockerfile) may share
  * objects_pds, and that network alone, with the PDS, so the PDS reaches the store's S3 port. Prod has no exemption,
  * as C33 pins no S3 setting there until P5.01 picks the production store. objects_pds holds exactly those two; the edge, a third
  * member, or the store on any other PDS network fails. The PDS still trusts the store as a proxy, because @atproto/pds
  * 0.5.51 hard-codes the private ranges in `trust proxy` and listens on every interface (packages/pds/src/index.ts at
  * atproto fb16c8e0): a compromised store could call the PDS's API without the edge's limits, claiming any client
  * address.
+ *
+ * A second, under local and dev only (P2.09e; ADR 0060 Decision 1): the service named pds-admin that runs the lock's
+ * pds-admin image (or, under local and dev --source, builds deployment/images/pds-admin.Dockerfile) may share
+ * pds_admin_pds, and that network alone, with the PDS, so it reaches the PDS's internal URL. Prod has no exemption:
+ * Alex, 2026-11-19T00:55Z, typing the line that allowed it, "Allow pds-admin on its own private network with the PDS
+ * -> we need in memory somewhere that this must be removed on production". How invites reach the production PDS is
+ * open until the first prod deploy (step book P5.00). pds_admin_pds is internal and holds exactly those two, and pds-admin joins no network but it
+ * and pds_admin, web's way in; both are pinned here as well as in the table (adminNetworkProblems). The PDS trusts it
+ * as a proxy too, but pds-admin already holds the admin password, which is more than a forged client address could
+ * give it.
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
+  return [...adminNetworkProblems(inputs.compose), ...neighbourProblems(inputs)];
+}
+
+/** pds_admin_pds is internal, and the service named pds-admin joins only it and pds_admin (P2.09e). */
+function adminNetworkProblems({ services, networks }: Inputs["compose"]): string[] {
+  const problems: string[] = [];
+  if (networks.some((network) => network.name === ADMIN_NETWORK && !network.internal)) {
+    problems.push(`${ADMIN_NETWORK} is not internal`);
+  }
+  const admin = services.find((s) => s.name === "pds-admin");
+  if (admin !== undefined && !admin.networks.every((network) => ADMIN_JOINS.includes(network))) {
+    problems.push(`pds-admin joins a network other than ${ADMIN_JOINS.join(" and ")}`);
+  }
+  return problems;
+}
+
+function neighbourProblems(inputs: Inputs): string[] {
   const { services } = inputs.compose;
   const bases = readBases(inputs) ?? {};
   const lock = inputs.env === "local" ? {} : (readLock(inputs) ?? {});
@@ -103,17 +137,34 @@ export function pdsNeighbours(inputs: Inputs): string[] {
     inputs.env !== "prod" &&
     s.name === "objects" &&
     runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
+  const isAdmin = (s: Service) =>
+    inputs.env !== "prod" &&
+    s.name === "pds-admin" &&
+    runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
+  const exempt = new Map([
+    [STORE_NETWORK, isStore],
+    [ADMIN_NETWORK, isAdmin],
+  ]);
   const allowed = (s: Service, network: string) =>
-    !pds.networks.includes(network) || (network === STORE_NETWORK ? isStore(s) : isEdge(s));
+    !pds.networks.includes(network) || (exempt.get(network) ?? isEdge)(s);
   const problems = services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
-  const onStoreNetwork = services.filter((s) => s.networks.includes(STORE_NETWORK));
-  if (onStoreNetwork.length > 0 && !(onStoreNetwork.length === 2 && onStoreNetwork.includes(pds))) {
-    problems.push(`${STORE_NETWORK} holds a service other than the pds and the store`);
-  }
+  const pairOnly = (network: string, other: string) => {
+    const on = services.filter((s) => s.networks.includes(network));
+    if (on.length > 0 && !(on.length === 2 && on.includes(pds))) {
+      problems.push(`${network} holds a service other than the pds and ${other}`);
+    }
+  };
+  pairOnly(STORE_NETWORK, "the store");
+  pairOnly(ADMIN_NETWORK, "pds-admin");
   return problems;
 }
+
+/** The one PDS network pds-admin may join, every network it may join, and the Dockerfile it is built from (P2.09e). */
+const ADMIN_NETWORK = "pds_admin_pds";
+const ADMIN_JOINS = ["pds_admin", ADMIN_NETWORK];
+const PDS_ADMIN_DOCKERFILE = "deployment/images/pds-admin.Dockerfile";
 
 /** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */
 const STORE_NETWORK = "objects_pds";
@@ -207,7 +258,7 @@ export const c17: Check = {
     }
     const local = localOnlyProblems(compose, env);
     if (local !== null) return fail(local);
-    const expected = withLocalOnly(table, env);
+    const expected = withLocalOnly(table, env, inputs.source);
     if (typeof expected === "string") return fail(expected);
     const problems = [
       ...pdsNeighbours(inputs),
@@ -227,13 +278,27 @@ function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string
 }
 
 /**
- * Under local, the table without the dev-only networks and plus the local-only ones, matched as one. The table never
+ * Under local, the table without the dev-only networks and plus the local-only ones, matched as one; under dev without
+ * --source, the table without what only a built stack runs. The table never
  * lists a local-only network, listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no
  * local-only rows; verify-903 S3).
  */
-function withLocalOnly(table: NetworkTable, env: Env): NetworkTable | string {
+export function withLocalOnly(table: NetworkTable, env: Env, source: boolean): NetworkTable | string {
   const clash = [...table.keys()].find(isLocalOnlyNetwork);
   if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
+  if (env === "dev" && !source) return withoutSourceOnly(table);
   if (env !== "local") return table;
   return new Map([...[...table].filter(([name]) => !DEV_ONLY_NETWORKS.has(name)), ...LOCAL_ONLY_NETWORKS]);
+}
+
+/**
+ * The table as the dev image stack must match it: no source-only network's row, and no source-only service in any
+ * row (local-only.ts SOURCE_ONLY_SERVICES), so that stack running one, or joining one of their networks, fails.
+ */
+function withoutSourceOnly(table: NetworkTable): NetworkTable {
+  return new Map(
+    [...table]
+      .filter(([name]) => !SOURCE_ONLY_NETWORKS.has(name))
+      .map(([name, row]) => [name, { ...row, members: row.members.filter((s) => !SOURCE_ONLY_SERVICES.has(s)) }]),
+  );
 }

@@ -97,7 +97,7 @@ as not found.
 | P3.06e | `GRANT EXECUTE ON FUNCTION core.erase_did` to `indexer` and the audit writer admission it needs, in the narrowest form; as built (migration 0029): one definer `idx.erase_deleted_account(did)` with the reason fixed, only for an account held hidden as deleted, capped at 20 `account_deleted` erasures an hour (past it, NULL and the job asks again in an hour); `indexer` gets EXECUTE on it only, nothing in `core`, and joins the audit writers of `account.erased` only; `confirm_deletion` erases, and the dead letters P3.06s left are asked about again | trusted-base PR (SE-6) with Alex's line; required before production |
 | P3.07s | tombstone and its key (migration 0028), `idx.is_erased`, `core.erase_did` covering `idx` (done by 0025 and 0026) and writing the tombstone | no Tap untrack hook and no outbox until Tap or per-DID storage exists (0022's header already defers the object-store part); the key is generated in Postgres by the migration, not written from a secret file (a backup holds key and hashes either way, as P3.07 records); the check is `idx.is_erased`, EXECUTE to `indexer` only, not `core.is_erased` (`indexer` has no USAGE on `core`, and one function in a schema it already uses is narrower); `web` gets it in its own PR when something needs it; `core.allow_retrack` comes with the admin process |
 | P3.08s | handle rule for hosted handles | only `verifyHandle` for our PDS's members; foreign hosts wait for the relay slice |
-| P3.12s | public `/@handle` in `interfaces/http`, rendering the profile and cards from `idx.visible_account` | no images until P3.09 (the media proxy): the page shows the avatar's fallback; card rendering reuses the cards views built by the "Build profile cards for staging" thread (PRs 1645 to 1647) |
+| P3.12s | public `/@handle` in `interfaces/http`, rendering the profile and cards from `idx.visible_account` | no images until P3.09 (the media proxy): the page shows the avatar's fallback; card rendering reuses the cards views built by the "Build profile cards for staging" thread (PRs 1645 to 1647); as built: SvelteKit route `interfaces/web/src/routes/@[actor]`, public CSP group (its `img-src` gains the media origin with P3.09), migration 0030 gives `web` SELECT only on two migrator-owned views (`idx.public_profile`, `idx.public_section`) over `idx.visible_account`, never on an idx table; always `noindex` until the "Search and AI" switches (ADR 0062) land; no ETag, 304, `?lang`, receipt, Report link or `profileHref` yet (nothing links to a profile); a signed-in owner sees the visitor's page |
 
 **Not in the slice:** P3.01 (no Tap; its measurements apply when Tap arrives), the public relay and `tap-relay`,
 P3.08k/P3.08d discovery (ADR 0040 stays as accepted, off), P3.09 media proxy, P3.10/P3.11 `api`, P3.13, P3.14, P3.15
@@ -169,7 +169,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P2.04 | sealed OAuth token store `app.oauth_session` |
 | P2.04s | `app.end_sessions_for_did` (its migration); `destroyAllForDid`, which calls it |
 | P2.06 | callback creates the session in one transaction (this phase adds one insert there, P3.02) |
-| P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys.json`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
+| P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
 | P2.18 | object-storage client (draft prefixes) |
 | P2.19 | minimal `media` entrypoint serving signed draft URLs; `mediaSandboxHeaders()` |
 | P2.20 | `ProfileView(props)`: pure, `escape`, markdown subset; links through P1.24's `safeHref` |
@@ -2182,7 +2182,7 @@ Outputs (contract):
     Result   = {ok:true, jti, seq, hash, result?} | {ok:false, error: ErrorCode}
     ```
   - **Key model (F2):** envelope keys live **only** in the signed roster's `service_keys`; `KEYS_PATH` and P2.09's
-    `/run/secrets/pds_admin_keys.json` are retired. Load rules (any violation → the whole roster is Deny):
+    `/run/secrets/pds_admin_keys` are retired. Load rules (any violation → the whole roster is Deny):
     exactly one key of kind `roster` (admin's); a `service` key lists only verbs marked `service_allowed` in the
     verb table; kids unique. Step 8 branches on the key's `kind`, never on a caller name. Rotating `web`'s key is a
     roster change signed by an owner (Notes).
@@ -3410,7 +3410,7 @@ legal-hold key question is `P4a-A1`.
 - **P1.30 / P5.02a**: the moderation-mailer preflight check (PI-6).
 - **P2.04s**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
 - **P2.09**: its route, key file and log format are migrated by P3.16 (expand, then contract); the P2.09 writer
-  should know its `/run/secrets/pds_admin_keys.json` is retired in favour of the roster's `service_keys`.
+  should know its `/run/secrets/pds_admin_keys` is retired in favour of the roster's `service_keys`.
 - **Phase 4 part 1**: "the `P3.16a` verbs" (lines 41, 703, 1326 and the P4.07 deps) should read **P3.16c**; P4.07's
   `Where` drops `apps/pds-admin/verbs/preserve.ts`; `preserve.create` gains `subject_did` (P3-B3); the review
   `review_egress` and `retention` keys are added to the roster's `service_keys` (P3.16 key model).

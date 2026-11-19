@@ -69,6 +69,10 @@ keeps every other host account out:
 | `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
 | `objects_s3` | `1000:1000` | objects | the object store's identities, with no Admin identity (P2.18s) |
+| `pds_admin_password` | `65532:65532` | pds-admin | the same value as `PDS_ADMIN_PASSWORD` in `pds.env` (P2.09e) |
+| `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
+| `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
+| `web_pds_admin_key` | `65532:65532` | web (from P2.10) | the private key web signs invite requests with |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -113,6 +117,84 @@ file holds no identity at all, so the store denies every request:
 Never add an identity with the `Admin` action: buckets are created by the stack wrapper through the store's own shell
 (`deployment/preflight/objects-buckets.ts`), and removal goes through that shell too (ADR 0050 Decision 1). A file
 that is missing or empty stops the store at start; one with no identities starts it and refuses every request.
+
+## pds-admin's files (P2.09e; ADR 0060)
+
+pds-admin is the only service that holds the PDS's admin password, and it runs as `65532`. It reads three files; a
+fourth, web's half of their key pair, is made with them. Each is installed `0400`, owned by `65532:65532`, as in
+"Creating or rotating a file" below. pds-admin never prints a value: a missing, empty or malformed file stops it at
+start with one line naming the file. Run these from the folder that holds your checkout, so `unset-dev-secrets/` and
+`unset-dev-env/` are beside you, under `umask 077`; no value reaches your terminal or a command line.
+
+pds-admin runs only in the stacks built from the checkout, `npm run dev:source:up` on staging and the local stack, until
+its image is locked for production (Alex, 2026-11-19: deploy from source). `npm run dev:up` runs no pds-admin. Both
+stacks need `PDS_DID` in `unset-dev-env/dev-public.env`: `did:web:` and the PDS host, `did:web:staging.unset.ac` on
+staging.
+
+**The admin password**, `pds_admin_password`, is exactly `PDS_ADMIN_PASSWORD` in `pds.env`. The preflight cannot
+compare the two (it cannot read a 0400 file it does not own), so pds-admin checks it itself. It asks the PDS about an
+account no one can have: NotFound opens issuing, and a 401 stops it with `secret pds_admin_password is not the PDS's
+admin password`, logged as `admin_password_refused`. While the PDS does not answer, it keeps asking and refuses every
+invite as unavailable. Write both copies from one value; the awk line fails, and changes nothing, if `pds.env` has no
+`PDS_ADMIN_PASSWORD` line:
+
+```sh
+umask 077
+openssl rand -hex 32 | tr -d '\n' > unset-dev-secrets/.new
+awk -v f=unset-dev-secrets/.new 'BEGIN { getline v < f } /^PDS_ADMIN_PASSWORD=/ { $0 = "PDS_ADMIN_PASSWORD=" v; n++ } 1
+  END { if (n != 1) { print "pds.env has no single PDS_ADMIN_PASSWORD line" > "/dev/stderr"; exit 1 } }' \
+  unset-dev-env/pds.env > unset-dev-env/pds.env.new \
+  && mv unset-dev-env/pds.env.new unset-dev-env/pds.env \
+  && sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/pds_admin_password
+rm -f unset-dev-secrets/.new unset-dev-env/pds.env.new
+```
+
+**The log key**, `pds_admin_log_key`, 32 random bytes in base64. The request log keeps DIDs and codes only as HMACs
+under it, so lines stay linkable for an investigation; after a rotation, old and new lines no longer link for the same
+member, and the hash chain still holds (`docker compose ... exec pds-admin node interfaces/pds-admin/cli.ts verify-log
+/app/state/log.jsonl`).
+
+```sh
+umask 077
+openssl rand -base64 32 | tr -d '\n' > unset-dev-secrets/.new
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/pds_admin_log_key
+rm unset-dev-secrets/.new
+```
+
+**The web key pair.** `pds_admin_keys` holds the public half and its one verb; `web_pds_admin_key` holds the
+private half, which web signs invite requests with (P2.10 mounts it). With Node 26 (`web-2026-11` is the kid):
+
+```sh
+umask 077
+node -e 'const c = require("node:crypto"), fs = require("node:fs");
+  const { publicKey, privateKey } = c.generateKeyPairSync("ed25519");
+  fs.writeFileSync("unset-dev-secrets/.new-key", privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
+  fs.writeFileSync("unset-dev-secrets/.new-keys", JSON.stringify([{ kid: process.argv[1], iss: "web",
+    verbs: ["invite.issue"], publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }]), { mode: 0o600 });' \
+  web-2026-11
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secrets/web_pds_admin_key
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-secrets/pds_admin_keys
+rm unset-dev-secrets/.new-key unset-dev-secrets/.new-keys
+```
+
+The key file holds one key, so a new pair means writing both files and restarting the stack; a request signed in
+between is refused, never accepted.
+
+**Rotating the admin password** changes both copies together, as above, then restarts the stack through the wrapper
+(on staging `npm run dev:source:down`, then `npm run dev:source:up`; on a local stack `npm run local:down`, then
+`npm run local:up`), so both services start with the same value. `dev:up` runs no pds-admin. Each reads its copy only when it
+starts. If only pds-admin's file changes, it stops at its next start; if only `pds.env` changes, it stops at its next
+call to the PDS after the PDS restarts. Either way, by design.
+
+**When it stops on purpose.** pds-admin exits 1 on a refused password, as above, or when a state file under its volume
+is in an unknown state (ADR 0060, "durability lost"), and Compose restarts it (`restart: unless-stopped`). A restart
+loop is the alert: read its last log line (`docker compose ... logs --tail 5 pds-admin`), which names the cause and
+never a value, fix that, then start the stack again through the wrapper. Its state lives in the named volume
+`pdsadmindata`, at `/app/state`; never delete it to stop a loop, because the replay record it keeps is what refuses a
+request sent twice.
+
+**Reserved handles.** This lists, for each reserved label, whether it is already taken on our PDS:
+`docker compose ... exec -e HANDLE_DOMAIN=staging.unset.im pds-admin node interfaces/pds-admin/cli.ts check-reserved`.
 
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 

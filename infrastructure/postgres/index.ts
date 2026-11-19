@@ -66,6 +66,12 @@ export {
   ping,
   withClient,
 } from "./pool.ts";
+export {
+  createPublicProfileStore,
+  type PublicActor,
+  type PublicProfile,
+  type PublicProfileStore,
+} from "./publicProfileStore.ts";
 export { checkExit, type KidCounts, kidCounts, rewrapAll } from "./rewrapAll.ts";
 export {
   type PasswordSyncOptions,

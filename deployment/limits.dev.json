@@ -5,6 +5,7 @@
   "edge": { "mem_limit": "256m", "cpus": 0.5, "pids_limit": 128 },
   "web": { "mem_limit": "512m", "cpus": 1, "pids_limit": 128 },
   "objects": { "mem_limit": "512m", "cpus": 0.5, "pids_limit": 256 },
+  "pds-admin": { "mem_limit": "128m", "cpus": 0.25, "pids_limit": 32 },
   "newt": { "mem_limit": "128m", "cpus": 0.5, "pids_limit": 64 },
   "pds-token-reader": { "mem_limit": "128m", "cpus": 0.25, "pids_limit": 32 }
 }

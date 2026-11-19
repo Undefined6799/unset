@@ -2867,10 +2867,10 @@ Goal: A dependency-free internal service that alone holds the PDS admin password
 accepting only an Ed25519-signed, single-use, short-lived envelope from `web`'s key for the verb `invite.issue`.
 
 Inputs: P1.34 PDS reachable on the internal network (`PDS_INTERNAL_URL`, for example `http://pds:3000`); secrets as
-  files (never env dumps): `/run/secrets/pds_admin_password`, `/run/secrets/pds_admin_keys.json`
+  files (never env dumps): `/run/secrets/pds_admin_password`, `/run/secrets/pds_admin_keys`
   (`[{kid, iss: 'web', publicKeyPem, verbs: ['invite.issue']}]`). **The key file is a Phase 2 stand-in, retired by P3.16:**
   there, envelope keys live only in the signed roster's `service_keys` (`web`'s key as kind `service`, verbs
-  `["invite.issue"]`), `pds_admin_keys.json` is deleted, and this step's route and log format are migrated by expand,
+  `["invite.issue"]`), `pds_admin_keys` is deleted, and this step's route and log format are migrated by expand,
   then contract (P3.16 "migration"). Nothing in Phase 2 may grow the file (one key, one verb). Config (env, validated at
   boot, missing → exit 1):
   `PDS_ADMIN_ENV` (`dev` | `prod`), `PDS_DID` (the PDS's service DID), `PDS_INTERNAL_URL`, `INVITE_WINDOW_HOURS` (24),

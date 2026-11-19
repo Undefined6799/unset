@@ -5332,6 +5332,37 @@ networks:
     );
   });
 
+  test("local_pds_admin_beside_the_pds_is_built_from_its_dockerfile", async () => {
+    // P2.09e: under local pds-admin is known by its build of deployment/images/pds-admin.Dockerfile, the only way it
+    // may share pds_admin_pds with the PDS; an image under its name, or another Dockerfile, is refused.
+    const ADMIN = "deployment/images/pds-admin.Dockerfile";
+    const withAdmin = (admin: string) => (text: string) =>
+      text
+        .replace(
+          "    env_file: ../../unset-dev-env/pds.env\n",
+          "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, pds_admin_pds]\n",
+        )
+        .replace("networks:\n  back: {}\n", `networks:\n  back: {}\n  pds_admin_pds:\n    internal: true\n`)
+        .replace("secrets:\n  db_password:", `${admin}secrets:\n  db_password:`);
+    const built = (dockerfile: string) =>
+      `  pds-admin:\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n    networks: [pds_admin_pds]\n`;
+    const files = { [ADMIN]: "FROM scratch\n", "deployment/images/other.Dockerfile": "FROM scratch\n" };
+    const c17 = async (admin: string) =>
+      (
+        await local(withAdmin(admin), {
+          files: { ...LOCAL_FILES, ...files },
+          networks: { ...TABLE, pds_admin_pds: { internal: true, members: ["pds", "pds-admin"] } },
+        })
+      ).lines.find((l) => / C17 /.test(l));
+    expect(await c17(built(ADMIN))).toBe("PASS C17 ok");
+    expect(await c17(built("deployment/images/other.Dockerfile"))).toBe(
+      "FAIL C17 pds-admin shares a network with the pds",
+    );
+    expect(await c17("  pds-admin:\n    image: a\n    networks: [pds_admin_pds]\n")).toBe(
+      "FAIL C17 pds-admin shares a network with the pds",
+    );
+  });
+
   test("local_any_smtp_key_refused", async () => {
     // So local cannot half-configure mail: any mail key, even a valid or empty value, fails its check.
     const keys = [
@@ -5697,6 +5728,32 @@ describe("--source builds staging from the checkout (P1.37y)", () => {
     expect(ok.lines).toContain("PASS C18 ok");
     const other = await source((dev) => dev.replace(`    image: ${EDGE}\n`, BUILD), ["--source"], DOCKERFILE);
     expect(other.lines).toContain("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  test("source_judges_a_built_pds_admin_by_its_dockerfile", async () => {
+    // P2.09e: under --source pds-admin may build from the checkout; built from deployment/images/pds-admin.Dockerfile it
+    // may share pds_admin_pds with the PDS, and from another scanned Dockerfile it may not.
+    const ADMIN = "deployment/images/pds-admin.Dockerfile";
+    const c17 = async (dockerfile: string) => {
+      const admin = `  pds-admin:\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n    networks: [pds_admin_pds]\n`;
+      const { root, file } = stack({
+        compose: DEV.replace(
+          "    env_file: ../../unset-dev-env/pds.env\n",
+          "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, pds_admin_pds]\n",
+        )
+          .replace("networks:\n  back: {}\n", "networks:\n  back: {}\n  pds_admin_pds:\n    internal: true\n")
+          .replace("secrets:\n  db_password:", `${admin}secrets:\n  db_password:`),
+        pdsEnv: DEV_ENV,
+        report: PART_A_DONE,
+        networks: { ...DEV_TABLE, pds_admin_pds: { internal: true, members: ["pds", "pds-admin"] } },
+        files: { [ADMIN]: "FROM scratch\n", ...DOCKERFILE },
+      });
+      const run = { root, run: fakeRun().run, ...fakeFs(root) };
+      const { lines } = await runPreflight(["--env", "dev", "--compose", file, "--source"], run);
+      return lines.find((line) => / C17 /.test(line));
+    };
+    expect(await c17(ADMIN)).toBe("PASS C17 ok");
+    expect(await c17("deployment/images/node-app.Dockerfile")).toBe("FAIL C17 pds-admin shares a network with the pds");
   });
 
   test("source_refuses_a_build_beside_an_image", async () => {
