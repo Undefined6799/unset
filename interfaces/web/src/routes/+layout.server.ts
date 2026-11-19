@@ -1,11 +1,13 @@
 // The root layout's server load (P1.20k): what the shell needs on a page that does not pass it, which is every page
 // for the theme form and the error page for the session (+error.svelte gets only layout data). It adds no session or
 // cookie read of its own: locals.did is what the gate (hooks.server.ts) already read for this route's policy, none on a
-// public route unless its session is `optional` (home, legal). The theme form and the member's own profile link are
-// on app pages and on pages rendered for a member, which the gate sends private and uncached; a visitor's public page
-// follows the system theme, so its bytes stay the same for every visitor.
+// public route unless its session is `optional` (home, legal), and the account button's handle is the verifier's
+// cached verdict, never a check (account.ts shellAccount; staging walkthrough 2026-11-19). The theme form and
+// the member's own profile link are on app pages and on pages rendered for a member, which the gate sends private and
+// uncached; a visitor's public page follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
 import { safeReturnPath } from "@unset/shared-http";
+import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
 import { policyOf } from "../lib/server/route-table.ts";
@@ -40,7 +42,7 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
           returnTo: themeReturnTo(SIGN_IN_PATHS.has(url.pathname) ? url.pathname + url.search : url.pathname),
         }
       : undefined;
-  const account: ShellData["account"] = member ? { path: `/${locals.did}` } : undefined;
+  const account: ShellData["account"] = locals.did === undefined ? undefined : shellAccount(services(), locals.did);
   // Whether an error page may offer the app's menus (app-open.ts); a path no route matches has no policy row.
   const open =
     locals.did === undefined
@@ -51,5 +53,8 @@ export const load: ServerLoad = async ({ locals, request, route, url }) => {
           route.id === null ? null : (policyOf(route.id) ?? null),
           locals.deadline,
         );
-  return { signedIn: member, account, appOpen: open, prefs, signInHref: signInHref(url.pathname) };
+  // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
+  // shows so its dismiss records that one and no newer.
+  const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
+  return { signedIn: member, account, appOpen: open, prefs, privacyNotice, signInHref: signInHref(url.pathname) };
 };

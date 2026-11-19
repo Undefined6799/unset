@@ -37,14 +37,16 @@ function seedApp(did: string, fill: string): void {
   // The token set before the session: a session needs one (session_did_token_set, migration 0024).
   postgres.sql(
     "unset",
-    `INSERT INTO app.account (did, first_seen_at) VALUES ('${did}', now());
+    `INSERT INTO app.account (did, first_seen_at, privacy_notice_seen_version) VALUES ('${did}', now(), '2026-11-19');
      INSERT INTO app.oauth_session (did, sealed, client_kid, updated_at) VALUES ('${did}', 's1.k1.made-up', 'kid', now());
      INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at)
        VALUES (${id}, '${did}', now(), now(), now() + interval '1 day');
      INSERT INTO app.single_use (id, purpose, bind_did, expires_at)
        VALUES (${id}, 'login.nonce', '${did}', now() + interval '1 hour');
      INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());
-     INSERT INTO app.discoverability (did, search_engines, updated_at) VALUES ('${did}', true, now());`,
+     INSERT INTO app.discoverability (did, search_engines, updated_at) VALUES ('${did}', true, now());
+     INSERT INTO app.invite (id, inviter_did, submission_id, state, created_at)
+       VALUES (gen_random_uuid(), '${did}', gen_random_uuid(), 'pending', now());`,
   );
 }
 
@@ -175,6 +177,7 @@ describe("core.erase_did", () => {
     expect(result.outcome).toBe("erased");
     expect(result.counts).toMatchObject({
       "app.account": 1,
+      "app.invite": 1,
       "app.session": 1,
       "app.oauth_session": 1,
       "app.single_use": 1,
@@ -210,6 +213,7 @@ describe("core.erase_did", () => {
     const result = await erase(X, "user_request");
     expect(result.counts).toEqual({
       "app.account": 0,
+      "app.invite": 0,
       "app.session": 0,
       "app.oauth_session": 0,
       "app.single_use": 0,

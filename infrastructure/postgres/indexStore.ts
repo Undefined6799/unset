@@ -52,7 +52,10 @@ export type IndexStore = {
   /** The last sequence number applied from this source, or null before the first. */
   readonly cursor: () => Promise<number | null>;
   readonly apply: (frame: IndexFrame) => Promise<void>;
-  /** Events may have been missed: every tracked account is queued for a backfill. Repeating it changes nothing. */
+  /**
+   * Events may have been missed: every tracked account is queued for a backfill and a status confirmation, since the
+   * lost events may have changed either. Repeating it changes nothing.
+   */
   readonly missedEvents: () => Promise<void>;
   /**
    * Gives up on a frame that kept failing: records it in idx.dead_letter, queues its account for a backfill (which
@@ -122,10 +125,14 @@ export function createIndexStore(pool: Pool, options: IndexStoreOptions): IndexS
     missedEvents: () =>
       inTx(async (tx) => {
         // Like queueJob, a job already queued becomes due now, which also breaks the claim of a read in flight: its
-        // snapshot may predate the lost events. Rows are taken in DID order so two recoveries cannot deadlock.
+        // snapshot may predate the lost events. A lost #account event (a deactivation, a deletion, a reactivation) is
+        // recovered by confirm_status, the same job a live active status queues: a backfill alone never changes whether
+        // an account is shown. Rows are taken in DID order, and within a DID confirm_status before backfill, the order
+        // every path that touches both takes them in (trackOne, backfillFailed, confirmStatus), so none can deadlock.
         await tx.query(
           `INSERT INTO idx.account_job (did, kind, due_at, attempts, first_queued_at)
-           SELECT did, 'backfill', now(), 0, now() FROM idx.account ORDER BY did
+           SELECT a.did, k.kind, now(), 0, now() FROM idx.account a
+             CROSS JOIN (VALUES (1, 'confirm_status'), (2, 'backfill')) AS k(ord, kind) ORDER BY a.did, k.ord
            ON CONFLICT (did, kind) DO UPDATE SET due_at = LEAST(idx.account_job.due_at, excluded.due_at)`,
         );
       }),

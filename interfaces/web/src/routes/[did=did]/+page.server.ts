@@ -99,7 +99,6 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
   return {
     shell,
     account,
-    privacyNotice: locals.privacyNotice,
     name,
     letter: avatarLetter(name),
     profile:

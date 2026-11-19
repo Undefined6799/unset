@@ -186,6 +186,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C31",
   "C32",
   "C33",
+  "C34",
 ]);
 
 type Stack = {
@@ -1703,7 +1704,9 @@ describe("preflight", () => {
       expect(await only(DEV.replace(line, `      ${name}: "1"\n`)), name).toBe(
         `FAIL C31 ${name} is not its reviewed literal in the newt service`,
       );
-      expect(await only(DEV.replace(line, `      ${name}: \${FLAG}\n`)), name).toBe(
+      // An interpolated value is not the literal either; the env file gives it one, so C34 passes.
+      const flagged = { ...dev, compose: DEV.replace(line, `      ${name}: \${FLAG}\n`), dotEnv: "FLAG=true\n" };
+      expect(await expectOnly("C31", flagged, "dev"), name).toBe(
         `FAIL C31 ${name} is not its reviewed literal in the newt service`,
       );
     }
@@ -2930,9 +2933,10 @@ describe("preflight C17 (P1.30t)", () => {
     const hosts = (text: string) =>
       text.replace("      FINGERPRINT_CHECK: arachnid\n", "$&      NETGUARD_INTERNAL_HOSTS: pds.example.test\n");
     expect(failed((await check({ ...dev, compose: DEV, networks: table }, "dev")).lines)).not.toContain("C17");
-    expect(await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable }, "dev")).toBe(
-      "FAIL C17 the edge carries a network alias",
-    );
+    const hostNames = "APP_HOST=app.example.test\nPDS_HOSTNAME=pds.example.test\n";
+    expect(
+      await expectOnly("C17", { ...dev, compose: aliased(DEV), networks: aliasTable, dotEnv: hostNames }, "dev"),
+    ).toBe("FAIL C17 the edge carries a network alias");
     expect(await expectOnly("C17", { ...dev, compose: hosts(DEV), networks: table }, "dev")).toBe(
       "FAIL C17 a service names an internal host for net-guard",
     );
@@ -3473,6 +3477,31 @@ describe("preflight C32 (P1.38d)", () => {
 
 // P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
 // stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
+// P2.10 (review N1 of #1733): Compose makes a name its env file leaves out an empty string, so a new setting would reach
+// its service empty and stop it at boot, after the old containers went. C34 fails first, naming the variables only.
+describe("preflight C34 every interpolated name has a value", () => {
+  const withKid = COMPOSE.replace(
+    "      FINGERPRINT_CHECK: arachnid\n",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    "$&      ADMIN_KID: ${WEB_KID}\n      OTHER: ${A_NAME}\n",
+  );
+
+  test("c34_missing_or_empty_name_fails", async () => {
+    expect(withKid).not.toBe(COMPOSE);
+    expect(await expectOnly("C34", { compose: withKid })).toBe(
+      "FAIL C34 the interpolation env file gives no value for A_NAME, WEB_KID",
+    );
+    expect(await expectOnly("C34", { compose: withKid, dotEnv: "WEB_KID=\nA_NAME=x\n" })).toBe(
+      "FAIL C34 the interpolation env file gives no value for WEB_KID",
+    );
+  });
+
+  test("c34_every_name_set_passes", async () => {
+    const result = await check({ compose: withKid, dotEnv: "WEB_KID=web-1\nA_NAME=x\n" });
+    expect(result.lines.find((l) => / C34 /.test(l))).toBe("PASS C34 ok");
+  });
+});
+
 describe("preflight C33 the PDS's blobs in the object store (P2.18p)", () => {
   const dev = (pdsEnv: Record<string, string | null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...pdsEnv } });
 

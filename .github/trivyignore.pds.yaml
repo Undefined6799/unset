@@ -112,3 +112,15 @@ vulnerabilities:
       - "pkg:npm/zod@3.25.76"
     statement: "sha256:cca85fd07701ea3370ff5a3a0f38a4c108d45d49aa75944e38f45c186d9528cf: 0.4.5049 re-pin, local stack only, accepted by Alex 2026-10-28T03:36:24Z, removed on the next re-pin or before P1.34"
     expired_at: 2026-11-27
+  # P1.38q: goat v0.2.7, which the 0.4.5051 image (8e58b797) builds with golang:1.27.3-alpine3.23
+  # (bluesky-social/pds Dockerfile at ca6b5f0), as the images job's scan pds reported it on 2026-11-19
+  # (run 44437851827). Fixed in Go 1.27.4; no newer PDS image exists, and ADR 0027 keeps every file outside
+  # the UI directory unchanged. The PDS never runs goat (the image starts node), and goat v0.2.7 starts no
+  # HTTP server, the code the CVE is in. Alex's line 2026-11-19T02:00:23Z; expires 2026-12-19, 30 days.
+  - id: CVE-2026-97054
+    paths:
+      - "usr/local/bin/goat"
+    purls:
+      - "pkg:golang/stdlib@v1.27.3"
+    statement: "sha256:8e58b79746da8a0e85698aa7ba9b53e508b94db2021d963653b6d1bfc14889c6: 0.4.5051's goat v0.2.7 is built with Go 1.27.3; the PDS never runs goat and goat has no HTTP server; accepted by Alex 2026-11-19T02:00:23Z, removed on the next re-pin"
+    expired_at: 2026-12-19

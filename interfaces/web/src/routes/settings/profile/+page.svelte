@@ -16,7 +16,6 @@ let {
   data,
 }: {
   data: {
-    privacyNotice: boolean;
     profile: Values | null;
     limits: { displayName: number; headline: number; location: number };
     pagePath: string;
@@ -33,12 +32,6 @@ const messageFor = (code: string | undefined): string | undefined =>
   <title>{SETTINGS.profile}</title>
 </svelte:head>
 
-{#if data.privacyNotice}
-  <Alert.Root>
-    <Alert.Title>{SETTINGS.privacyNoticeTitle}</Alert.Title>
-    <Alert.Description><a href="/legal/privacy">{SETTINGS.privacyNotice}</a></Alert.Description>
-  </Alert.Root>
-{/if}
 <h1>{SETTINGS.profile}</h1>
 {#if data.profile === null}
   <Alert.Root>

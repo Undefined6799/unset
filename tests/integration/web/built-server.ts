@@ -234,6 +234,8 @@ async function startOn(
     kid: "A",
     alg: "ES256",
   };
+  // web's key for pds-admin (P2.10): a fresh Ed25519 pair; a test that plays pds-admin passes PDS_ADMIN_URL.
+  const adminKey = generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string;
   // This child's own commit, so the readiness probe knows its answer from another process's on the same port.
   const commit = env.UNSET_COMMIT ?? randomBytes(20).toString("hex");
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
@@ -271,6 +273,10 @@ async function startOn(
       OAUTH_ACTIVE_KID: "A",
       PDS_HOSTNAME: PDS_HOST,
       HANDLE_SUFFIX: `.${PDS_HOST}`,
+      PDS_ADMIN_URL: "http://pds-admin.test:8080",
+      PDS_ADMIN_WEB_KEY_FILE: secret("web_pds_admin_key", adminKey),
+      PDS_ADMIN_WEB_KID: "web-test",
+      PDS_DID: `did:web:${PDS_HOST}`,
       TEST_ROUTES: "true",
       ...LEGAL_ENV,
       ...fixture,

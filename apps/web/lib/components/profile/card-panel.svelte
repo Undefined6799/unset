@@ -5,7 +5,7 @@
   actions as the dialogs do, keeping the query, so a refusal shows the panel again with the reason and what was typed.
 -->
 <script lang="ts">
-import { ADD_CARD, BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
+import { ADD_CARD, BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, cardName, LINKS_EDIT } from "../../profile/messages.ts";
 import { PANEL_ANCHOR } from "../../profile/panel.ts";
 import type {
   AvatarShape,
@@ -81,7 +81,7 @@ const panelState = (stay: string): CardPanelState => ({
 {:else if request.kind === "remove" && card !== undefined}
   <Card.Root id={PANEL_ANCHOR} class="gap-4 rounded-sm">
     <Card.Header>
-      <Card.Title><h2 class="text-xl font-semibold">{CARD_EDIT.removeTitle}</h2></Card.Title>
+      <Card.Title><h2 class="text-xl font-semibold">{CARD_EDIT.removeTitle(cardName(card.content))}</h2></Card.Title>
       <Card.Description>{CARD_EDIT.removeBody}</Card.Description>
     </Card.Header>
     {#if refusal != null}

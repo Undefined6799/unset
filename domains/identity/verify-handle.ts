@@ -143,6 +143,14 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
       return awaitFlight(shared, opts.signal, () => UNAVAILABLE.verdict);
     },
     /**
+     * The handle a live cached verdict verified, or null: a read of what an earlier check left, never a check, so a
+     * page that only names the member (the shell's account button) never waits on the network.
+     */
+    verifiedHandle(did: Did): Handle | null {
+      const hit = cached(did);
+      return hit?.status === "verified" ? hit.handle : null;
+    },
+    /**
      * Drops the cached verdict and any check in flight, so the next call resolves again (identity events, P3.05; after
      * login, P2.06).
      */

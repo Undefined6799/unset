@@ -1,5 +1,5 @@
 // P1.35t: the local-stack workflow's pure parts. Docker, sudo and openssl are unmanaged and run only in the workflow.
-import { createPublicKey, ECDH, generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, createPublicKey, ECDH, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -60,6 +60,9 @@ describe("generated values (D2)", () => {
     expect(extraKeys).toEqual([]);
     expect(webKey).toMatchObject({ kid: "web-ci", iss: "web", verbs: ["invite.issue"] });
     expect(createPublicKey(webKey.publicKeyPem).asymmetricKeyType).toBe("ed25519");
+    // P2.10: web's private half is the pair of that public key, so pds-admin accepts what web signs.
+    const half = createPublicKey(createPrivateKey(v.webPdsAdminKey)).export({ type: "spki", format: "pem" });
+    expect(half).toBe(webKey.publicKeyPem);
     // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
     expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
     expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
@@ -152,16 +155,20 @@ describe("the one bounded wait (D4)", () => {
     { Service: "web", State: "running", Health: "" },
     { Service: "objects", State: "running", Health: "healthy" },
     { Service: "pds-admin", State: "running", Health: "" },
+    { Service: "indexer", State: "running", Health: "healthy" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
 
   test("wait_passes_only_when_every_service_is_up", () => {
-    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin"]);
+    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin", "indexer"]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");
     expect(servicesVerdict(swap("migrate", { State: "exited", ExitCode: 1 }))).toBe("failed: migrate exited");
     expect(servicesVerdict(swap("pds", { State: "exited", ExitCode: 0 }))).toBe("failed: pds exited");
+    // The indexer restart-looping on a missing config key (staging 2026-11-19, #1736) never reads as up.
+    expect(servicesVerdict(swap("indexer", { State: "restarting" }))).toBe("starting");
+    expect(servicesVerdict(swap("indexer", { State: "exited", ExitCode: 78 }))).toBe("failed: indexer exited");
     expect(servicesVerdict(swap("objects", { State: "running", Health: "starting" }))).toBe("starting");
     expect(servicesVerdict(swap("postgres", { State: "running", Health: "unhealthy" }))).toBe(
       "failed: postgres unhealthy",

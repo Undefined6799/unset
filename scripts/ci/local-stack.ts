@@ -31,7 +31,7 @@ export const HEALTH_WAIT_MS = 180_000;
 const POLL_MS = 3_000;
 const PROBE_MS = 15_000;
 /** The services `up` starts; pds-token-reader is a tools profile and never starts. */
-export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin"] as const;
+export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin", "indexer"] as const;
 const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -95,6 +95,16 @@ export function secp256k1PrivateHex(bytes: Buffer): string {
   return bytes.toString("hex");
 }
 
+/** web's key for pds-admin and the roster that names its public half (runbook "The web key pair"). */
+function webAdminPair(): { pdsAdminKeys: string; webPdsAdminKey: string } {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const publicKeyPem = publicKey.export({ type: "spki", format: "pem" });
+  return {
+    pdsAdminKeys: JSON.stringify([{ kid: "web-ci", iss: "web", publicKeyPem, verbs: ["invite.issue"] }]),
+    webPdsAdminKey: privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+  };
+}
+
 /** The generated values, by the runbook's shapes. Nothing is written yet. */
 export function generate() {
   const password = (): string => randomBytes(32).toString("base64");
@@ -117,17 +127,10 @@ export function generate() {
     recoveryDidKey: p256DidKey(ec().publicKey),
     rootKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
     leafKey: ec().privateKey.export({ format: "pem", type: "pkcs8" }) as string,
-    // pds-admin (P2.09e): its request log's key, and web's Ed25519 public key with its one verb. Web's private half
-    // is not written until P2.10 gives web a reader for it.
+    // pds-admin (P2.09e, P2.10): its request log's key, and web's Ed25519 pair: the public half with its one verb in
+    // pds-admin's roster, the private half for web to sign with.
     pdsAdminLogKey: randomBytes(32).toString("base64"),
-    pdsAdminKeys: JSON.stringify([
-      {
-        kid: "web-ci",
-        iss: "web",
-        publicKeyPem: generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }),
-        verbs: ["invite.issue"],
-      },
-    ]),
+    ...webAdminPair(),
   };
 }
 
@@ -159,6 +162,7 @@ function folders(): void {
       `PDS_PUBLIC_URL=https://${PDS_HOST}`,
       "EDGE_ACME_EMAIL=edge@example.test",
       "WEB_OAUTH_ACTIVE_KID=web-ci",
+      "WEB_PDS_ADMIN_KID=web-ci",
       "",
     ].join("\n"),
   );
@@ -193,6 +197,7 @@ function folders(): void {
   secret(65532, "pds_admin_password", v.adminPassword);
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);
   secret(65532, "pds_admin_log_key", v.pdsAdminLogKey);
+  secret(65532, "web_pds_admin_key", v.webPdsAdminKey);
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });
   writeFileSync(at("unset-dev-ca/leaf.key"), v.leafKey);
   const ca = (name: string): string => at(`unset-dev-ca/${name}`);

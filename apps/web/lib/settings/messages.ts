@@ -14,8 +14,6 @@ export const SETTINGS = {
   signOut: "Sign out",
   signOutEverywhereNote: "Signs out every browser, this one too. You will sign in again.",
   signOutEverywhere: "Sign out everywhere",
-  privacyNoticeTitle: "Privacy notice",
-  privacyNotice: "The privacy notice has changed.",
   accountInterstitial: "You are going to {pdsHost}, our sign-in server; it is the only place you type your password.",
   accountOurs: "Your account on {pdsHost}",
   accountForeign: "Your sign-in server ({pdsHost})",
