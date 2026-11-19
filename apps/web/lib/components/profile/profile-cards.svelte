@@ -116,7 +116,7 @@ const count = "font-mono text-xs text-muted-foreground";
             {#each links.items as link, i (i)}
               <li class={links.layout === "list" ? row : tile}>
                 <div class="min-w-0">
-                  <a class="font-medium" href={link.href} rel="me noopener noreferrer">{link.text}</a>
+                  <a class="font-medium" href={link.href} rel="me nofollow ugc noopener noreferrer">{link.text}</a>
                   {#if link.description !== ""}<p class="text-sm text-muted-foreground">{link.description}</p>{/if}
                 </div>
                 {#if link.site !== ""}<span class={site}>{link.site}</span>{/if}
@@ -138,7 +138,7 @@ const count = "font-mono text-xs text-muted-foreground";
               <li class={entries.layout === "list" ? `${row} flex-col gap-1` : tile}>
                 {#if entry.tag !== ""}<span class={label}>{entry.tag}</span>{/if}
                 <h3 class="font-semibold">
-                  {#if entry.href === null}{entry.title}{:else}<a href={entry.href} rel="noopener noreferrer"
+                  {#if entry.href === null}{entry.title}{:else}<a href={entry.href} rel="nofollow ugc noopener noreferrer"
                       >{entry.title}</a
                     >{/if}
                 </h3>
@@ -165,7 +165,7 @@ const count = "font-mono text-xs text-muted-foreground";
           {#if contact.text !== ""}<p class="mt-2 text-muted-foreground">{contact.text}</p>{/if}
           <div class="mt-4 flex flex-wrap items-center gap-2.5">
             {#each contact.buttons as button, i (i)}
-              <Button href={button.href} variant={i === 0 ? "default" : "outline"}>{button.label}</Button>
+              <Button href={button.href} rel="nofollow ugc noopener noreferrer" variant={i === 0 ? "default" : "outline"}>{button.label}</Button>
             {/each}
           </div>
           {#if addresses.length > 0}<p class="mt-3 font-mono text-xs text-muted-foreground">{addresses.join(" · ")}</p>{/if}

@@ -51,3 +51,24 @@ export const PROFILE_SETTINGS = {
   unavailableTitle: "Your profile could not be loaded",
   unavailable: "Your sign-in server did not answer just now. Reload the page to try again.",
 } as const;
+
+/** Settings › Profile › Search and AI (ADR 0062; review plan 2026-11-18 §7.2): each switch says what it does and what
+ * it cannot do. */
+export const SEARCH_AI_SETTINGS = {
+  title: "Search and AI",
+  lead: "Who may find your public page. Both are off until you turn them on.",
+  searchEngines: "Search engines may list my page",
+  searchEnginesHint:
+    "Google, Bing and others may show your page in results, and it joins our sitemap. Search engines decide what to show, and after you turn this off it can take days to leave their results.",
+  aiSearch: "AI search may show my page",
+  aiSearchHint:
+    "The AI search crawlers of ChatGPT, Perplexity, Claude, Meta AI and Amazon may then show your page. It takes about a day to apply. Your page's address is then listed in our public robots.txt file. When someone pastes your link into an AI tool, it reads the page anyway.",
+  training:
+    "AI training is blocked for the whole site: our robots.txt asks every training crawler whose maker publishes its name (OpenAI, Anthropic, Google, Apple, Meta, Amazon, Common Crawl and Ai2) not to read any page. That is a request, not a lock: a crawler that ignores robots.txt, or whose name we do not know, can still read public pages.",
+  searchTitle: "Search title",
+  searchTitleHint: (n: number) => `Optional. Replaces your name as the title in results. Up to ${n} characters.`,
+  searchDescription: "Search description",
+  searchDescriptionHint: (n: number) =>
+    `Optional. Replaces your headline under the title. Up to ${n} characters. Search engines may rewrite both.`,
+  save: "Save search and AI",
+} as const;

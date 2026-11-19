@@ -217,6 +217,19 @@
         }
       }
     },
+    "app.discoverability": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "search_engines": ["SELECT", "INSERT", "UPDATE"],
+          "ai_search": ["SELECT", "INSERT", "UPDATE"],
+          "search_title": ["SELECT", "INSERT", "UPDATE"],
+          "search_description": ["SELECT", "INSERT", "UPDATE"],
+          "updated_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

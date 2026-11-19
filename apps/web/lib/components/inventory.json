@@ -372,6 +372,10 @@
       "profile-form.svelte": {
         "origin": "ours",
         "purpose": "Settings › Profile's form: name, headline, place and website, posted to /profile, inline refusal with script."
+      },
+      "search-ai-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Profile's Search and AI form: two switches, search title and description, and their honest limits, posted to /settings/search-and-ai (ADR 0062)."
       }
     }
   }
