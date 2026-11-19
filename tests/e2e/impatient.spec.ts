@@ -67,7 +67,7 @@ async function press(page: Page, path: string): Promise<void> {
 /** The member sees `path`'s real page: its URL, its heading, and none of the error page's words. */
 async function landedOn(page: Page, path: string): Promise<void> {
   const target = PAGES.find((candidate) => candidate.path === path);
-  await expect(page).toHaveURL(new RegExp(`^${TEST_ORIGIN}${path}(#[a-z-]+)?$`));
+  await expect(page).toHaveURL(new RegExp(`^${TEST_ORIGIN}${path}(\\?saved)?(#[a-z-]+)?$`));
   await expect(page.locator("main h1").first()).toContainText(target?.heading ?? "");
   await expect(page.locator("body")).not.toContainText(/Internal Error|Something went wrong|Not Found/i);
 }
@@ -161,6 +161,7 @@ test("saving_the_profile_three_times_fast_says_saved_once_and_stays", async ({ p
   const seen = trouble(page);
   const save = page.getByRole("button", { name: "Save profile" });
   await save.click({ clickCount: 3, delay: 20 });
+  await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toHaveCount(1);
   await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await landedOn(page, SETTINGS.path);
@@ -188,6 +189,11 @@ test("pressing_each_theme_fast_leaves_the_last_one_chosen", async ({ page }) => 
   }
   await page.waitForLoadState("networkidle");
   await landedOn(page, SETTINGS.path);
+  // The last press wins, in the picker now and in what the server kept (P1.20o review).
+  await expect(menu.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await page.locator('header button[popovertarget="account-menu"]').click();
+  await expect(menu.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
   expect(seen).toEqual([]);
 });
 

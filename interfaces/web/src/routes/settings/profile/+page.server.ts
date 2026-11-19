@@ -17,7 +17,7 @@ import { respondToPdsFailure } from "../../../lib/server/pds-failure.ts";
 import { config } from "../../../lib/server/runtime.ts";
 import { settingsShell } from "../shell.server.ts";
 
-export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
+export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => {
   setHeaders({ "x-robots-tag": "noindex" });
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
@@ -41,6 +41,8 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
     // The Search and AI section (ADR 0062), kept in our database, so it shows even when the PDS did not answer.
     discoverability,
     discoverabilityLimits: DISCOVERABILITY_LIMITS,
+    // The profile save's 303 back here (routes/profile/save.server.ts): with no script, the page says it saved.
+    saved: url.searchParams.has("saved"),
     // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
     searchListingOff: config.SEARCH_LISTING !== "on",
   };

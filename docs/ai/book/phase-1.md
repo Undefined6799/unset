@@ -4693,6 +4693,17 @@ step:
 
 ---
 
+### P1.21a — Settings overview pages (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6.1 (docs site)
+
+Alex asked on 2026-11-19 for one place where a person, and later an agent, sees every value the app can change,
+with the settings staying where they live. `scripts/docs/settings.ts` generates `docs/site/content/settings/` from the
+process config schemas, pds-admin's config, the compose files, the edge's limits and headers, web's limits and
+security headers, a named list of constants fixed in code, and the member settings pages; `settings.test.ts` fails on
+drift. `shared/config` fields gain a data-only `allowed` string for the pages. Secrets show only their name. No
+setting, limit or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
+
 ### P1.21b — Site-wide switch for search and AI listing (added step, 2026-11-19)
 
 **Tags:** — · **Depends on:** — (builds on ADR 0062, merged in #1731) · **Plan:** §5.1
@@ -4724,7 +4735,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
-P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: b (search listing switch), l, m, q.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
