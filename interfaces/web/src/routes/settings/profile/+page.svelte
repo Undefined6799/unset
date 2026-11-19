@@ -1,8 +1,7 @@
 <!--
   Settings › Profile (P2.13c): the profile's fields, as the member's PDS holds them, in the settings form that posts to
-  /profile, the one profile save; its browser submit handler sits beside this page (submit.ts, P1.20s). Then the
-  Search and AI choices (ADR 0062), which post to /settings/search-and-ai. When the PDS could not be read the page says
-  so and offers no form, so a save never starts from fields that were not loaded.
+  /profile, the one profile save (submit handler: submit.ts, P1.20s), then Search and AI (ADR 0062). When the PDS
+  could not be read the page says so and offers no form, so a save never starts from fields that were not loaded.
 -->
 <script lang="ts">
 import ProfileForm from "@unset/apps-web/lib/components/settings/profile-form.svelte";

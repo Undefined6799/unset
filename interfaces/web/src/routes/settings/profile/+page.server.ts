@@ -2,8 +2,7 @@
 // (routes/profile, the one profile save; it comes back here). The gate has already sent a signed-out visitor to
 // /login (policy.ts) and set the app page's private, no-store and Vary: Cookie. The DID is the session's, never the
 // request's (SE-2). Every stored field is checked on the way in (domains/profile readProfileRecord): one another client
-// wrote badly reads as empty. The Search and AI choices (ADR 0062) come from our own database and post to
-// /settings/search-and-ai. A dead grant sends the member to sign in; any other failed read shows no form.
+// wrote badly reads as empty. A dead grant sends the member to sign in; any other failed read shows no form.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import {
   APP_LIMITS,
