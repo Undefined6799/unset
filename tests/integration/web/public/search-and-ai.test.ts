@@ -165,3 +165,31 @@ describe("search and AI", () => {
     expect(await (await get("/robots.txt")).text()).not.toContain(PAGE);
   });
 });
+
+describe("search and AI when the read fails", () => {
+  // The choices are read in the page's own query (a LEFT JOIN), so a failed read is no page at all: the error page
+  // keeps noindex, and robots.txt and the sitemap answer 5xx, which RFC 9309 section 2.3.1.4 says crawlers read as
+  // "disallow all". The read is made to fail by holding the index locked past a 5 s request deadline (the floor).
+  test("a_failed_read_keeps_noindex_and_robots_fails_closed", async () => {
+    await save({ searchEngines: "on", aiSearch: "on" });
+    const short = await startWeb(pg, { REQUEST_DEADLINE_MS: "5000" });
+    try {
+      const fetchShort = (path: string) => short.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
+      const [page, robots, sitemap] = await withClient(indexer, null, async (c) => {
+        await c.query("BEGIN");
+        await c.query("LOCK TABLE idx.account IN ACCESS EXCLUSIVE MODE");
+        try {
+          return await Promise.all([fetchShort(PAGE), fetchShort("/robots.txt"), fetchShort("/sitemap.xml")]);
+        } finally {
+          await c.query("ROLLBACK");
+        }
+      });
+      expect(page?.status).toBeGreaterThanOrEqual(500);
+      expect(await page?.text()).toContain('<meta name="robots" content="noindex"');
+      expect(robots?.status).toBeGreaterThanOrEqual(500);
+      expect(sitemap?.status).toBeGreaterThanOrEqual(500);
+    } finally {
+      await short.stop();
+    }
+  }, 60_000);
+});

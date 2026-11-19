@@ -16,7 +16,16 @@ each vendor's own page):
   token only, separate from Search (developers.google.com/search/docs/crawling-indexing/google-common-crawlers).
   Apple documents `Applebot-Extended` the same way (support.apple.com/en-us/119829), and Common Crawl `CCBot`
   (commoncrawl.org/ccbot).
-- Fetchers a person triggers (`ChatGPT-User`, `Perplexity-User`) say robots.txt may not apply to them.
+- More vendors split training from search the same way: Anthropic `ClaudeBot` (training) and `Claude-SearchBot`
+  (support.claude.com/en/articles/8896518), Meta `meta-externalagent` (training) and `meta-webindexer` (Meta AI search)
+  (developers.facebook.com/docs/sharing/webmasters/web-crawlers), Amazon `Amazonbot` ("may be used to train Amazon AI
+  models") and `Amzn-SearchBot` (developer.amazon.com/amazonbot). Ai2 documents `AI2Bot` as a training crawler
+  (allenai.org/crawler) but does not say it reads robots.txt. Cohere and ByteDance publish no vendor page naming a
+  token (searched 2026-11-19), so they are not named.
+- An AI search crawler we do not name follows the `*` group. Amazon says `Amzn-SearchBot`, unnamed, follows the rules
+  for other search bots, so naming each one is what makes the member's switch apply to it.
+- Fetchers a person triggers (`ChatGPT-User`, `Perplexity-User`, `Claude-User`, `meta-externalfetcher`, `Amzn-User`)
+  say robots.txt may not apply to them.
 - robots.txt rules are per path, and the longest match wins (RFC 9309 section 2.2.2), so one file can carry a
   per-member choice as one `Allow` line per page.
 
@@ -35,14 +44,22 @@ turns indexing on.
    `on`; text has no control characters and is counted in code points; unknown or repeated fields are refused.
 3. **Search engines:** when `search_engines` is on, the public page drops `noindex` (header and meta tag) and joins
    `/sitemap.xml`. Every other page keeps today's `noindex`.
-4. **AI search:** when `ai_search` is on, `/robots.txt` gives `OAI-SearchBot` and `PerplexityBot` an `Allow: /@...$`
-   line for that page; every other `/@` path stays disallowed for them.
-5. **AI training is blocked for the whole site**: `GPTBot`, `Google-Extended`, `Applebot-Extended` and `CCBot` get
-   `Disallow: /`. There is no member switch.
+4. **AI search:** when `ai_search` is on, `/robots.txt` gives `OAI-SearchBot`, `PerplexityBot`, `Claude-SearchBot`,
+   `meta-webindexer` and `Amzn-SearchBot` an `Allow: /@...$` line for that page; every other `/@` path stays
+   disallowed for them. With AI search on and search engines off, the page still says `noindex`; none of these
+   vendors says whether its AI search crawler reads `noindex`, so the page may or may not appear there. Either way
+   it fails toward less exposure, never more: search engines still do not list it.
+5. **AI training is blocked for the whole site**: `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`,
+   `meta-externalagent`, `Amazonbot`, `CCBot` and `AI2Bot` get `Disallow: /`. There is no member switch. This is
+   what robots.txt can do: ask each crawler whose maker publishes its name. It cannot stop a crawler that ignores
+   robots.txt, one whose name we do not know, or a person who copies a page, and the settings page says so. The list
+   is every training token with a vendor page as of 2026-11-19; `domains/profile/crawlers.ts` cites each one.
 6. **robots.txt and the sitemap are built on request** from `app.discoverability` joined with the visible-account
    view, so a hidden, deactivated, taken-down or erased member drops out at the next fetch. Both are capped (10,000
-   AI search lines, 50,000 sitemap URLs, the sitemaps.org per-file limit) and cached for 60 seconds. Only paths of the
-   form `/@` plus handle or DID characters are written, so a record cannot inject a directive.
+   AI search lines, 50,000 sitemap URLs, the sitemaps.org per-file limit) and sent with `public, max-age=300`, the
+   same five minutes as every public page (P1.25v): the vendors re-read robots.txt about daily, so a shorter time
+   buys nothing, and a member's opt-out still leaves our copies within five minutes. Only paths of the form `/@` plus
+   handle or DID characters are written, so a record cannot inject a directive.
 7. **The public page's title and description** use the member's override if set, else their name and headline; plus
    a canonical link, OpenGraph tags and a `summary` card, each escaped by the page's one HTML encoder. No JSON-LD:
    the public page runs no script and ships no script element.
@@ -68,13 +85,19 @@ turns indexing on.
   lawful basis (the member's consent, given by turning a switch on and withdrawn by turning it off), erasure through
   `core.erase_did`, and export with P4.26. The privacy notice gains a line.
 - robots.txt grows one line per member who opted into AI search; the file is public by design and lists only them.
+- Each fetch of robots.txt or the sitemap runs one query, bounded by its cap, under the `default` rate limit (60 at
+  once and 300 a minute per address, 3,000 a minute site-wide). `app.discoverability` holds rows only for members
+  with a choice on, so today the query reads a handful of rows. Before the opted-in count reaches the thousands, a
+  later change keeps the built file in memory for its max-age, so a flood of fetches costs one query per process
+  every five minutes. It is not built now: at our size it would only add a cache to reason about.
 - Turning a switch off is immediate on our side; search engines and AI services can take hours to days to act.
-- Adding a crawler token later is a code change to `domains/profile/crawlers.ts` with its vendor page cited.
+- Adding a crawler token later is a code change to `domains/profile/crawlers.ts` with its vendor page cited. The list
+  goes stale as vendors add crawlers, so it is rechecked when this ADR's step is revisited.
 
 ## Compliance
 - `tests/integration/web/public/search-and-ai.test.ts`: off by default, a signed-out save is refused, saving on drops
   `noindex` and fills robots.txt and the sitemap, a hidden account drops out, bad forms are refused, off restores
-  `noindex`.
+  `noindex`, and a read that fails keeps `noindex` while robots.txt and the sitemap answer 5xx.
 - `domains/profile/crawlers.test.ts` and `discoverability.test.ts`: directives, caps, unsafe paths and form parsing.
 - `tests/integration/postgres/erase-did.test.ts` and the grant matrix: erasure covers the table and `web` holds only
   the listed columns.
