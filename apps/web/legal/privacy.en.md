@@ -38,6 +38,7 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 | --- | --- |
 | Account, profile and onboarding timestamps | Until the account is deleted, then erased, including from backups within 30 days |
 | Copy of your public profile and sections | Until you delete the record, or the account is deleted, then erased, including from backups within 30 days. We keep only a keyed hash of your account identifier, so we never copy your profile again |
+| Names you held under our domain | While the service runs. We never give a name to anyone else once it was used, so we keep a keyed hash of each name, with no account identifier |
 | Search and AI choices and search title and description | Until you turn them all off or the account is deleted, then erased, including from backups within 30 days |
 | Sessions | Until you sign out, or 7 days idle, or 30 days at most |
 | Sealed sign-in tokens | Until you sign out or the grant ends |
@@ -65,7 +66,7 @@ You can ask for a copy of the information we hold (an export), for erasure and f
 
 ## Federation
 
-Public profiles and posts are copied by relays and by other apps. We cannot erase every copy.
+Public profiles and posts are copied by relays and by other apps. We cannot erase every copy. Your account identifier (DID) and every handle it has had are written to the public PLC directory, which keeps that history forever, even after your account is deleted. Nobody, including us, can remove it.
 
 <!-- P8 -->
 
@@ -76,4 +77,4 @@ Public profiles and posts are copied by relays and by other apps. We cannot eras
 ## Changes
 
 - 2026-10-17: First placeholder. Not reviewed by a lawyer. Not legal advice.
-- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, the keyed hash we keep after erasure, and your Search and AI choices.
+- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, the keyed hash we keep after erasure, your Search and AI choices, the names we never issue again, and the public PLC history of your identifier.

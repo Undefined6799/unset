@@ -2233,11 +2233,12 @@ Algorithm:
   3. **By kind:**
      - **Access** → `dsar.export`. The requester gets a single-use link; the moderator never sees it.
      - **Erasure, account on our PDS:**
-       1. Create a GDPR hold (the account is deactivated).
-       2. After 7 days, with an owner's approval, execute it. `pds-admin` `deleteAccount` returns success.
+       1. Create a GDPR hold (the account is deactivated, with `deleteAfter` 30 days later; ADR 0067).
+       2. After 30 days, with an owner's approval, execute it. `pds-admin` `deleteAccount` returns success.
        3. **Then `admin` calls `eraseDid(did)` directly** (round 1 F2). The later `#account deleted` event, from
           `tap-own` or the relay, is an idempotent no-op.
-       4. The erasure runbook (P5.08c) signs the PLC tombstone.
+       4. The DNS record is removed and the name burned (ADR 0067; P3.08n). The PLC tombstone is signed only when
+          the member asked for their identity to be ended (P5.08c's runbook); never by default.
        5. If the user reactivates during the hold → the case is withdrawn.
      - **Erasure, foreign DID** → a held DB action that erases our index and app rows only. It refuses DIDs our PDS
        hosts.
@@ -2281,7 +2282,7 @@ Done when (tests):
     `erasure_removes_sec_lane_side_rows_keeps_mod_lane`.
 
 Reuse: none beyond the steps named.
-Not in this step: the PLC tombstone procedure (P5.08c); the hold mechanics (P4.07).
+Not in this step: the PLC tombstone procedure, on a member's request only (P5.08c); the hold mechanics (P4.07).
 Diagram: none.
 
 ### P5.08c — Phase 5 runbooks
@@ -2294,7 +2295,9 @@ Goal: every operational procedure the admin design requires by Phase 5 exists in
 Inputs: admin design §11.2; P1.37; P5.03–P5.08b.
 Outputs: runbooks, each with the sections `When`, `Who`, `Steps`, `Verify`, `Record` and `Last drilled`:
 - takedown with statement;
-- **erasure with PLC tombstone**: build the operation, Alex signs offline, submit, verify;
+- **PLC tombstone on a member's request** (ADR 0067; never by default, after the deletion is final, with the
+  warning that it is final after 72 hours and does not clear the public log): build the operation, Alex signs
+  offline, submit, verify;
 - legal orders and holds, **including how to ask for a hold's retention to be extended or why it cannot be shortened**;
 - DSA Art. 18 notification;
 - moderator onboarding;

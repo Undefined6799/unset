@@ -1550,6 +1550,28 @@ Diagram: none.
 
 ---
 
+### P3.08n — Burn every hosted name a member held
+Tags: [SEC]            Depends on: P3.08, P3.07            Plan: §5.2 "The 'PDS isn't ours' rule"; ADR 0067
+Where: a migration for the list and its key; `interfaces/indexer` (adds names); the ADR 0063 writer and the web claim
+form (check them)
+Size: ~120 source lines, ~200 test lines
+
+Goal: a name under our handle domain that a member ever held is never issued again (ADR 0067 decision 6).
+
+Inputs: the stored verified handle (P3.08) when the indexer sees an account's `deleted` event (before P3.06e's erasure
+removes it) or a verified handle change away from one of our names; a claim or record write for a hosted name.
+Outputs: a row in an app-owned table holding a keyed HMAC-SHA256 of the lower-cased name, no DID and no date, the key
+generated in Postgres like the P3.07s tombstone's; `eraseDid` leaves it.
+
+Algorithm: on deletion or a change away, add the name's hash, idempotently, in the same transaction that clears the
+handle. On a claim, the web form refuses a burned name with a plain message. The ADR 0063 writer refuses to write a
+record for one, so a name taken directly on the PDS never verifies.
+
+Threats (SE-1): a backup reader with the key can test a guessed name, which the public PLC log already shows for any
+DID they know; a writer that skips the check reissues a name (test: a burned name never gets a record).
+Done when: a deleted member's name and a changed-away name are refused at claim and at write, an unrelated name is
+not, and erasure keeps the list. Waits on ADR 0067 being accepted and the ADR 0063 writer's step.
+
 ### P3.09 — Media proxy for published blobs
 Tags: [SEC]            Depends on: P3.06, P2.19            Plan: §2 rule 9, §5.2 "Media proxy", §6.1 images; vault `atproto-blob-serving-security`
 Where: `interfaces/media/src/published.ts`, `interfaces/indexer/purge.ts`, migration for the `media` role

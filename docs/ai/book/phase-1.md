@@ -4669,6 +4669,17 @@ it on for production is a later step that needs Alex's word. Fits inside ADR 006
 choice does on a listed site; it adds no data and no crawler rule. The letter does not belong to the token pipeline
 below; it was the next free id.
 
+### P1.21e — Record the account lifecycle and burned names (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Docs only. Alex decided on 2026-11-19 (22:40Z) how deactivation, deletion, takedown and moving away treat a member's
+DID, DNS record, PDS account and name, after research into how atproto means them to work. Proposed ADR 0067 records
+it; the privacy notice's 2026-11-19 version gains the permanent PLC history and the burned names (no member has
+accepted that version yet), the RoPA gains a "Burned names" row, the erasure runbook gains the manual DNS and name
+steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
+No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
