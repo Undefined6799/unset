@@ -29,11 +29,11 @@ column type only: a DID kept in a plain text column is invisible to it. The othe
 and the coverage test, which run before merge.
 
 ## Steps
-1. When the person asks us to delete their account (not a takedown or a PDS deletion they made themselves), first
+1. Confirm the request and the DID. Resolve the handle to its DID in both directions; never erase by handle.
+2. When the person asked us to delete their account (not a takedown or a PDS deletion they made themselves),
    deactivate the account in the PDS and note the date with the request. Run the steps below 30 days later, and only
    if the account is still deactivated; if the person reactivated it, the request is withdrawn (ADR 0067 rule 2;
    P5.08b automates this).
-2. Confirm the request and the DID. Resolve the handle to its DID in both directions; never erase by handle.
 3. Open `psql` on the `unset` database, logged in as `migrator` itself (the credentials the `migrate` service uses).
    No other role may run the function, and a superuser who switches with `SET ROLE migrator` is refused at the audit
    step: the audit records the login role, and only `migrator` may write this record.

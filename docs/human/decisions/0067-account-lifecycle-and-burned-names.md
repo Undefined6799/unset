@@ -75,6 +75,9 @@ effect) or **ours** (our policy). Irreversible steps are marked **final**.
    checked where a hosted name is claimed (our claim form, for a clear refusal) and where its DNS record is written
    (the ADR 0063 writer, which refuses a burned name), so a name taken directly on the PDS still never verifies. It is
    kept while the service runs and is not part of an erasure, because erasing it would let the name be reissued.
+   While the account exists, the name it holds is recorded by DID outside the index, because the indexer's re-check
+   clears the index's handle as soon as an account is inactive, which would lose the name during the 30 days; erasure
+   turns that record into the hash.
 7. **Moving away** (not offered today). A member who moves keeps their hosted name until they change it (ours). We
    keep its DNS record, so the new PDS accepts it like any domain handle; we alone serve that proof, so we alone can
    revoke it by removing the record. When their DID document stops claiming the name, the record is removed and the
