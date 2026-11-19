@@ -382,7 +382,7 @@ describe("completeAuthorization", () => {
   test("callback_consent_denied", async () => {
     const { started, complete, posts } = await setup();
     const query = await started({ error: "access_denied", iss: PDS });
-    expect(await complete(query)).toEqual({ ok: false, reason: "consent_denied" });
+    expect(await complete(query)).toEqual({ ok: false, reason: "consent_denied", appState: APP_STATE });
     expect(posts).toEqual([]);
   });
 
