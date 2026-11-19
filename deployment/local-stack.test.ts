@@ -73,22 +73,22 @@ describe("running local stack (P1.29t)", () => {
   test("pds_device_row_has_no_client_ip", () => {
     const seen = inspect(EDGE_IP);
     expect(edgeAddressFromInspect(seen)).toBe(EDGE_IP);
-    expect(deviceRowVerdict({ env: "local", handle: "alice.unset.im", deviceIp: EDGE_IP, inspect: seen })).toEqual({
+    expect(deviceRowVerdict({ env: "local", handle: "alice.unset.name", deviceIp: EDGE_IP, inspect: seen })).toEqual({
       ok: true,
     });
-    expect(deviceRowVerdict({ env: "local", handle: "bob.unset.im", deviceIp: EDGE_IP, inspect: seen })).toEqual({
+    expect(deviceRowVerdict({ env: "local", handle: "bob.unset.name", deviceIp: EDGE_IP, inspect: seen })).toEqual({
       ok: true,
     });
     const leaked = deviceRowVerdict({
       env: "local",
-      handle: "alice.unset.im",
+      handle: "alice.unset.name",
       deviceIp: CLIENT_IP,
       inspect: seen,
     });
     expect(leaked).toEqual({ ok: false, reason: "pds.device_row_has_client_ip" });
     expect(JSON.stringify(leaked)).not.toContain(CLIENT_IP);
     expect(JSON.stringify(leaked)).not.toContain("alice");
-    expect(deviceRowVerdict({ env: "local", handle: "carol.unset.im", deviceIp: EDGE_IP, inspect: seen })).toEqual({
+    expect(deviceRowVerdict({ env: "local", handle: "carol.unset.name", deviceIp: EDGE_IP, inspect: seen })).toEqual({
       ok: false,
       reason: "probe.handle_not_local_test_account",
     });

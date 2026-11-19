@@ -14,7 +14,7 @@ export const PROJECT = "unset-local";
 export const EDGE_NETWORK = "edge";
 export const PDS_UID = 1000;
 export const CLIENT_ID_PATH = "/oauth-client-metadata.json";
-export const LOCAL_HANDLES = ["alice.unset.im", "bob.unset.im"] as const;
+export const LOCAL_HANDLES = ["alice.unset.name", "bob.unset.name"] as const;
 export type LocalHandle = (typeof LOCAL_HANDLES)[number];
 
 export type ProbeReason =
