@@ -1,7 +1,10 @@
 // P1.20d: the web process's copy of the legal parser (apps/web/src/legal/markdown.ts until P1.20k deletes it) parses
 // the three committed documents, refuses every link outside its allowlist, and refuses an unknown hole. The documents'
 // own contents (markers, versions) stay tested in apps/web/src/legal/documents.test.tsx until then; escaping is
-// checked on the built server (tests/integration/web/public/public-pages.test.ts).
+// checked on the built server (tests/integration/web/public/public-pages.test.ts). P1.20k deleted that file, so the
+// version check it held (a document's front matter is the version P2.12 compares, and every version has its line
+// under "Changes") is here.
+import { PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
 import { describe, expect, test } from "vitest";
 import domains from "../../../../../apps/web/legal/domains.en.md?raw";
 import privacy from "../../../../../apps/web/legal/privacy.en.md?raw";
@@ -39,5 +42,15 @@ describe("legal markdown", () => {
     expect(() => parseLegal("# T\n\n{{nope}}\n")).toThrow(/unknown hole/);
     const doc = parseLegal("# T\n\nSee <b>no</b>.\n");
     expect(doc.blocks[1]).toEqual({ kind: "p", children: [{ kind: "text", text: "See <b>no</b>." }] });
+  });
+
+  test("versions_match_the_gate_and_have_a_changelog_line", () => {
+    for (const [source, version] of [
+      [terms, TERMS_VERSION],
+      [privacy, PRIVACY_VERSION],
+    ] as const) {
+      expect(parseLegal(source).version).toBe(version);
+      expect(source).toContain(`\n- ${version}: `);
+    }
   });
 });

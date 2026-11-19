@@ -115,6 +115,8 @@ onward (reports, `pds-admin`, admin console).
    retention table at version 2026-10-17), so P3.03s adds a RoPA row "Indexing members' public profiles" and the
    notice gains one "What we hold" sentence and one retention row (until the record is deleted or the account is
    erased). Whether that notice change needs a new version and re-consent is Alex's call before P3.03s merges.
+   Settled by Alex (2026-11-19 00:17Z): a new version, 2026-11-19, shown as the one-time banner, no re-consent; the
+   row also says that only a keyed hash of the DID stays after erasure (the P3.07s tombstone).
 4. Members hosted elsewhere who sign in here are not indexed until the relay slice (their `/@handle` reads as not
    found).
 5. Tap facts re-checked (book algorithm step 3) at indigo `a39b2f94d516d6d450b840bd4ca68cb7e3edaf4c`: the identity

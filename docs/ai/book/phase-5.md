@@ -777,6 +777,10 @@ missed or failed run, from inside and from outside the host.
 
 Settled by Alex (2026-10-03 16:45Z, P5.01 Q5): backup retention N = 30 days.
 
+Promised to members (privacy notice version 2026-11-19, approved by Alex 2026-11-19 00:17Z): erased accounts and
+the public profile copies in `idx` leave every backup within 30 days. No backup exists today; this step must deliver
+that expiry, with a test, before the first real member signs up.
+
 Inputs:
 - From P5.01: the buckets, the per-bucket host keys (PutObject only), N.
 - From P5.02:
