@@ -30,7 +30,8 @@ not reachable through it either.
 1. **`unset.im` is a zone at deSEC** (desec.io, a nonprofit, free, open-source DNS host). Its name servers move
    from Namecheap BasicDNS to deSEC (Alex, 2026-11-19 01:33Z, "yea lets do that", answering whether to move all of
    `unset.im` tonight); Namecheap stays the registrar. deSEC allows a new account one domain until a domain is
-   delegated with DNSSEC, and `.im` has no DNSSEC through Namecheap, so `staging.unset.im` starts inside the
+   delegated with DNSSEC, and `.im` itself is unsigned at the root
+   (https://www.iana.org/domains/root/db/im.html, checked 2026-11-19), so `staging.unset.im` starts inside the
    `unset.im` zone. Token policies match exact subnames only (no patterns), so a token that can write staging
    handle records could also write production ones: the writer is not deployed until `staging.unset.im` is its own
    zone (deSEC raises the limit on request) and each environment's token is limited to its own zone. Alex owns the
@@ -85,8 +86,8 @@ not reachable through it either.
   still chosen over web, which faces the internet and would put the token one request away from any attacker, and
   over a new writer process, which would add a service, an image and a network for one call, while the indexer
   already follows the events that trigger every write.
-- `.im` has no DNSSEC at the registry through Namecheap, so the delegation is unsigned; deSEC signs the zone, but
-  resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
+- `.im` is unsigned at the root (IANA, above), so no registrar can publish a DS record and the delegation is unsigned;
+  deSEC signs the zone, but resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
 
 ## Compliance
 SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone. Pointing a
