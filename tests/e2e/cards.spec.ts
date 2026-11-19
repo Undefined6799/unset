@@ -4,10 +4,11 @@
 // that opened it, and cannot be sent twice while on its way; editing a stored card saves in place. A card moved from
 // its three-dot menu keeps focus on that menu's button (Alex 2026-11-18: actions behind three dots, always shown).
 // The cards added are deleted again, so the member page is as the other specs expect it.
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE } from "./cards.ts";
 import { openPage } from "./observe.ts";
+import { phoneContext } from "./phone.ts";
 
 test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
@@ -347,31 +348,61 @@ test("the_card_menu_works_by_keyboard", async ({ page }) => {
 });
 
 // Alex 2026-11-18: on a large screen with a mouse a card is dragged by its top bar onto another to take its place.
-test("a_card_is_dragged_into_place_on_a_large_screen", async ({ page }) => {
+test("a_card_is_dragged_into_place_on_a_large_screen", async ({ browser, browserName, page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   for (const title of ["Alpha", "Beta", "Gamma"]) await addCard(page, linksCard(title));
   await page.reload();
   await page.waitForLoadState("networkidle");
   const titles = page.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta|Gamma)$/ });
+  let failed = false;
+  let failure: unknown;
   try {
     await page
       .getByRole("heading", { level: 2, name: "Gamma" })
       .dragTo(page.getByRole("heading", { level: 2, name: "Alpha" }));
     await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
-    // On a phone-width screen nothing drags: the menu's Move up and Move down do the reordering there.
-    await page.setViewportSize({ width: 390, height: 900 });
-    const bar = page.getByRole("group", { name: "Beta card" }).locator("xpath=..");
-    await expect(bar).toHaveAttribute("draggable", "false");
-    await page
-      .getByRole("heading", { level: 2, name: "Beta" })
-      .dragTo(page.getByRole("heading", { level: 2, name: "Gamma" }));
-    await expect(titles).toHaveText(["Gamma", "Alpha", "Beta"]);
-  } finally {
+    // The same cards on a touch phone do not drag; their menu reorders them with a tap.
+    const context = await browser.newContext(phoneContext(browserName, { width: 390, height: 900 }));
+    try {
+      const phonePage = await context.newPage();
+      expect((await openPage(phonePage, OWN_PAGE))?.status()).toBe(200);
+      await phonePage.waitForLoadState("networkidle");
+      const beta = phonePage.getByRole("group", { name: "Beta card" });
+      const phoneTitles = phonePage.getByRole("heading", { level: 2 }).filter({ hasText: /^(Alpha|Beta|Gamma)$/ });
+      await expect(beta.locator("xpath=..")).toHaveAttribute("draggable", "false");
+      await phonePage
+        .getByRole("heading", { level: 2, name: "Beta" })
+        .dragTo(phonePage.getByRole("heading", { level: 2, name: "Gamma" }));
+      await expect(phoneTitles).toHaveText(["Gamma", "Alpha", "Beta"]);
+      await beta.getByRole("button", { name: "More for Beta card" }).tap();
+      await phonePage.getByRole("menuitem", { name: "Move up" }).tap();
+      await expect(phoneTitles).toHaveText(["Gamma", "Beta", "Alpha"]);
+    } finally {
+      await context.close();
+    }
+    // The desktop page shows the old order until it reloads; the server kept the phone's move.
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await expect(titles).toHaveText(["Gamma", "Beta", "Alpha"]);
+  } catch (error) {
+    failed = true;
+    failure = error;
+  }
+  // Cleanup starts from a fresh document whatever step failed: the page may show an old order, and in Playwright
+  // 1.64.1's WebKit the first press after a drag fires mousedown but no pointerdown (reproduced 2026-11-19), while
+  // Bits UI 2.20.6 opens a menu on pointerdown only (dist/bits/menu/menu.svelte.js DropdownMenuTriggerState).
+  // A cleanup failure never hides the test's own.
+  try {
+    await page.reload();
+    await page.waitForLoadState("networkidle");
     for (const name of ["Alpha card", "Beta card", "Gamma card"]) {
       if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
     }
+  } catch (cleanup) {
+    if (!failed) throw cleanup;
   }
+  if (failed) throw failure;
 });
 
 // Finding 5: a carousel with more entries than fit is a named stop the keyboard reaches and scrolls, and says so.
