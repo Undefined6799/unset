@@ -71,6 +71,17 @@ export function robotsTxt(origin: string, aiSearchPaths: readonly string[]): str
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * robots.txt when Search and AI listing is off on the whole site (P1.21b): one `*` group that every crawler reads when
+ * no group names it, refusing every path, and no sitemap. Members' choices are not read.
+ */
+export const CLOSED_ROBOTS_TXT = [
+  "# Search and AI listing is switched off on this site: no crawler may fetch any page.",
+  "User-agent: *",
+  "Disallow: /",
+  "",
+].join("\n");
+
 const XML_ESCAPES: Readonly<Record<string, string>> = {
   "&": "&amp;",
   "<": "&lt;",

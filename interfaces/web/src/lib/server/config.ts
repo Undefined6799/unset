@@ -83,6 +83,15 @@ const inviteConfig = {
   PDS_DID: str({ pattern: /did:(?:plc|web):[A-Za-z0-9._:%-]{1,256}/ }),
 };
 
+/**
+ * Search and AI listing for the whole site (P1.21b, within ADR 0062). Off, the default, so a stack that leaves it unset
+ * is never listed: every response says noindex, robots.txt refuses every crawler and the sitemap lists nothing,
+ * whatever members chose; their choices are kept. On, each member's own choices decide, as ADR 0062 describes.
+ */
+const searchConfig = {
+  SEARCH_LISTING: oneOf(["on", "off"], { default: "off" }),
+};
+
 /** Our PDS's issuer, from PDS_HOSTNAME, with no switch to widen it (interfaces/http/config.ts `pdsIssuerOf`). */
 export const pdsIssuerOf = (cfg: { PDS_HOSTNAME: string; OAUTH_ALLOW_HTTP: boolean }): string =>
   `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
@@ -108,6 +117,7 @@ export const schema = defineEntrypointConfig({
   ...pdsConfig,
   ...onboardingConfig,
   ...inviteConfig,
+  ...searchConfig,
   ...legalConfig,
   ...testRoutesConfig,
 });

@@ -1,6 +1,7 @@
 // ADR 0062: a member's Search and AI choices on the built web server, from the settings save to what crawlers and the
 // public page see: robots.txt, the sitemap, `noindex`, and the title and description. Postgres as `web` (TE-2); the
-// index written as `indexer`. No network: none of these pages reads a PDS.
+// index written as `indexer`. No network: none of these pages reads a PDS. The site-wide switch (P1.21b) is on for
+// these servers, as production will have it, and off (its default) for the last block's.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
@@ -36,6 +37,7 @@ const ISSUER = "https://pds.unset.test";
 const MEMBER = parseDid(`did:plc:${"v".repeat(24)}`) as Did;
 const HANDLE = "vera.unset.org";
 const PAGE = `/@${HANDLE}`;
+const LISTING_ON = { SEARCH_LISTING: "on" };
 
 /** A signed-in, onboarded member with a stored grant, as public-pages.test.ts makes one. */
 async function memberCookie(did: Did): Promise<string> {
@@ -84,7 +86,7 @@ beforeAll(async () => {
   buildOnce(provided.port);
   cookie = await memberCookie(MEMBER);
   await indexed(MEMBER);
-  web = await startWeb(pg);
+  web = await startWeb(pg, LISTING_ON);
 }, 120_000);
 afterAll(async () => {
   await web?.stop();
@@ -140,6 +142,9 @@ describe("search and AI", () => {
     expect(html).toContain('<meta property="og:title" content="Vera &lt;the maker>"');
     expect(await (await get("/robots.txt")).text()).toContain(`Allow: ${PAGE}$`);
     expect(await (await get("/sitemap.xml")).text()).toContain(`<loc>${ORIGIN}${PAGE}</loc>`);
+    const home = await get("/");
+    expect(home.headers.get("x-robots-tag")).toBeNull();
+    expect(await home.text()).not.toContain('content="noindex"');
   });
 
   test("a_hidden_account_leaves_robots_and_the_sitemap", async () => {
@@ -172,7 +177,7 @@ describe("search and AI when the read fails", () => {
   // "disallow all". The read is made to fail by holding the index locked past a 5 s request deadline (the floor).
   test("a_failed_read_keeps_noindex_and_robots_fails_closed", async () => {
     await save({ searchEngines: "on", aiSearch: "on" });
-    const short = await startWeb(pg, { REQUEST_DEADLINE_MS: "5000" });
+    const short = await startWeb(pg, { ...LISTING_ON, REQUEST_DEADLINE_MS: "5000" });
     try {
       const fetchShort = (path: string) => short.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
       const [page, robots, sitemap] = await withClient(indexer, null, async (c) => {
@@ -192,4 +197,45 @@ describe("search and AI when the read fails", () => {
       await short.stop();
     }
   }, 60_000);
+});
+
+describe("search and AI switched off on the whole site", () => {
+  // P1.21b: SEARCH_LISTING off, its default, as on staging. A member who turned both choices on is still kept out:
+  // every response says noindex, robots.txt refuses every crawler, and the sitemap lists nothing. Their choices stay.
+  let closed: RunningWeb;
+  const getClosed = (path: string) => closed.fetch(path, { headers: { "x-forwarded-for": clientAddress() } });
+  beforeAll(async () => {
+    closed = await startWeb(pg);
+  }, 120_000);
+  afterAll(async () => {
+    await closed?.stop();
+  });
+
+  test("an_opted_in_page_and_home_still_say_noindex", async () => {
+    expect((await save({ searchEngines: "on", aiSearch: "on" })).status).toBe(303);
+    expect((await get(PAGE)).headers.get("x-robots-tag")).toBeNull(); // the choice holds where listing is on
+    for (const path of [PAGE, "/"]) {
+      const page = await getClosed(path);
+      expect(page.status).toBe(200);
+      expect(page.headers.get("x-robots-tag")).toBe("noindex");
+      expect(await page.text()).toContain('<meta name="robots" content="noindex"');
+    }
+  });
+
+  test("robots_refuses_every_crawler_and_names_no_member", async () => {
+    const robots = await getClosed("/robots.txt");
+    expect(robots.status).toBe(200);
+    const text = await robots.text();
+    expect(text).toMatch(/^User-agent: \*\nDisallow: \/\n$/m);
+    expect(text).not.toMatch(/^(Allow|Sitemap):/m);
+    expect(text).not.toContain(HANDLE);
+  });
+
+  test("the_sitemap_lists_nothing", async () => {
+    const sitemap = await getClosed("/sitemap.xml");
+    expect(sitemap.status).toBe(200);
+    const xml = await sitemap.text();
+    expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    expect(xml).not.toContain("<url>");
+  });
 });

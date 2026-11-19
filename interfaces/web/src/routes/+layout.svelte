@@ -228,7 +228,7 @@ const row =
   <link rel="preload" as="font" type="font/woff2" crossorigin="anonymous" href="/fonts/JetBrainsMono-Variable.woff2" />
   <link rel="icon" href={favicon} sizes="32x32" type="image/png" />
   <link rel="apple-touch-icon" href={appleTouchIcon} />
-  {#if shell.noindex}<meta name="robots" content="noindex" />{/if}
+  {#if shell.noindex || data.siteNoindex}<meta name="robots" content="noindex" />{/if}
 </svelte:head>
 
 {#snippet themeForm()}
