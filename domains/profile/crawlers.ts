@@ -1,29 +1,17 @@
 // What we tell crawlers (ADR 0062): robots.txt and the sitemap, built from the members' own choices. robots.txt follows
 // RFC 9309 (https://www.rfc-editor.org/rfc/rfc9309.html, read 2026-11-19): a crawler obeys the group naming its
 // product token, else the `*` group; within a group the longest matching path wins, and an equal Allow wins; `$`
-// ends a pattern; crawlers must read at least 500 KiB; product tokens match case-insensitively. A robots.txt line is a
-// request: it binds only crawlers that honour it, and only those we name here. The tokens, read 2026-11-19 from each
-// vendor's own page:
-// - Training, blocked for the whole site with no member switch (decision D11):
-//   GPTBot (https://developers.openai.com/api/docs/bots);
-//   ClaudeBot ("could potentially contribute to their training", honours robots.txt,
-//   https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web);
-//   Google-Extended ("does not impact a site's inclusion in Google Search",
-//   developers.google.com/search/docs/crawling-indexing/google-common-crawlers);
-//   Applebot-Extended ("does not crawl webpages", support.apple.com/en-us/119829);
-//   meta-externalagent ("training foundation AI models",
-//   https://developers.facebook.com/docs/sharing/webmasters/web-crawlers);
-//   Amazonbot ("may be used to train Amazon AI models", https://developer.amazon.com/amazonbot);
-//   CCBot (commoncrawl.org/ccbot);
-//   AI2Bot ("used to train open language models", https://allenai.org/crawler; the page does not say it reads
-//   robots.txt).
-//   Not named: crawlers with no vendor page giving a token (Cohere's, ByteDance's Bytespider, searched 2026-11-19).
-// - AI search, per member (D12): OAI-SearchBot (ChatGPT search, same OpenAI page), PerplexityBot (Perplexity search,
-//   "not used to crawl content for AI foundation models", docs.perplexity.ai/guides/bots), Claude-SearchBot ("improve
-//   search result quality", Anthropic's page above), meta-webindexer ("improve Meta AI search result quality", Meta's
-//   page above), Amzn-SearchBot ("does not crawl content for generative AI model training"; unnamed, it follows the
-//   rules for other search bots, Amazon's page above). Named, each reads only the member pages allowed below instead
-//   of the `*` group's `Allow: /`.
+// ends a pattern; crawlers must read at least 500 KiB; tokens match case-insensitively. A line is a request that binds
+// only crawlers that honour it and that we name. Tokens read 2026-11-19 from each vendor's page (quoted in ADR 0062):
+// - Training, blocked site-wide (D11), each with its vendor's search token where one exists: GPTBot and OAI-SearchBot
+//   (developers.openai.com/api/docs/bots); ClaudeBot and Claude-SearchBot (support.claude.com/en/articles/8896518);
+//   Google-Extended (developers.google.com/search/docs/crawling-indexing/google-common-crawlers); Applebot-Extended
+//   (support.apple.com/en-us/119829); meta-externalagent and meta-webindexer
+//   (developers.facebook.com/docs/sharing/webmasters/web-crawlers); Amazonbot and Amzn-SearchBot
+//   (developer.amazon.com/amazonbot); CCBot (commoncrawl.org/ccbot); AI2Bot (allenai.org/crawler, silent on
+//   robots.txt). Cohere and ByteDance publish no page naming a token, so they are not guessed.
+// - AI search, per member (D12): the search tokens above and PerplexityBot (docs.perplexity.ai/guides/bots). Unnamed,
+//   they would follow the `*` group's `Allow: /`; named, each reads only the pages members allowed.
 // - Fetchers a person triggers (ChatGPT-User, Perplexity-User, Claude-User, meta-externalfetcher, Amzn-User) are not
 //   named: their vendors say robots.txt may not apply to them.
 // Search engines are not named: a page they may not list says `noindex` itself, which they can only read if robots.txt

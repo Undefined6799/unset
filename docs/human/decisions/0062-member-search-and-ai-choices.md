@@ -22,8 +22,8 @@ each vendor's own page):
   models") and `Amzn-SearchBot` (developer.amazon.com/amazonbot). Ai2 documents `AI2Bot` as a training crawler
   (allenai.org/crawler) but does not say it reads robots.txt. Cohere and ByteDance publish no vendor page naming a
   token (searched 2026-11-19), so they are not named.
-- An AI search crawler we do not name follows the `*` group. Amazon says `Amzn-SearchBot`, unnamed, follows the rules
-  for other search bots, so naming each one is what makes the member's switch apply to it.
+- An AI search crawler we do not name follows the `*` group (Amazon says so for `Amzn-SearchBot`), so naming it is
+  what makes the member's switch apply.
 - Fetchers a person triggers (`ChatGPT-User`, `Perplexity-User`, `Claude-User`, `meta-externalfetcher`, `Amzn-User`)
   say robots.txt may not apply to them.
 - robots.txt rules are per path, and the longest match wins (RFC 9309 section 2.2.2), so one file can carry a
@@ -50,10 +50,9 @@ turns indexing on.
    vendors says whether its AI search crawler reads `noindex`, so the page may or may not appear there. Either way
    it fails toward less exposure, never more: search engines still do not list it.
 5. **AI training is blocked for the whole site**: `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`,
-   `meta-externalagent`, `Amazonbot`, `CCBot` and `AI2Bot` get `Disallow: /`. There is no member switch. This is
-   what robots.txt can do: ask each crawler whose maker publishes its name. It cannot stop a crawler that ignores
-   robots.txt, one whose name we do not know, or a person who copies a page, and the settings page says so. The list
-   is every training token with a vendor page as of 2026-11-19; `domains/profile/crawlers.ts` cites each one.
+   `meta-externalagent`, `Amazonbot`, `CCBot` and `AI2Bot` (every training token with a vendor page on 2026-11-19)
+   get `Disallow: /`, with no member switch. robots.txt only asks: it cannot stop a crawler that ignores it, one we
+   cannot name, or a person who copies a page, and the settings page says so.
 6. **robots.txt and the sitemap are built on request** from `app.discoverability` joined with the visible-account
    view, so a hidden, deactivated, taken-down or erased member drops out at the next fetch. Both are capped (10,000
    AI search lines, 50,000 sitemap URLs, the sitemaps.org per-file limit) and sent with `public, max-age=300`, the
@@ -85,14 +84,12 @@ turns indexing on.
   lawful basis (the member's consent, given by turning a switch on and withdrawn by turning it off), erasure through
   `core.erase_did`, and export with P4.26. The privacy notice gains a line.
 - robots.txt grows one line per member who opted into AI search; the file is public by design and lists only them.
-- Each fetch of robots.txt or the sitemap runs one query, bounded by its cap, under the `default` rate limit (60 at
-  once and 300 a minute per address, 3,000 a minute site-wide). `app.discoverability` holds rows only for members
-  with a choice on, so today the query reads a handful of rows. Before the opted-in count reaches the thousands, a
-  later change keeps the built file in memory for its max-age, so a flood of fetches costs one query per process
-  every five minutes. It is not built now: at our size it would only add a cache to reason about.
+- Each fetch of robots.txt or the sitemap runs one capped query under the `default` rate limit; the table holds only
+  opted-in members, so today that is a handful of rows. Before they number in the thousands, a later change keeps the
+  built file in memory for its max-age; not now, as at our size it would only add a cache to reason about.
 - Turning a switch off is immediate on our side; search engines and AI services can take hours to days to act.
-- Adding a crawler token later is a code change to `domains/profile/crawlers.ts` with its vendor page cited. The list
-  goes stale as vendors add crawlers, so it is rechecked when this ADR's step is revisited.
+- Adding a crawler token later is a code change to `domains/profile/crawlers.ts` with its vendor page cited; the list
+  goes stale as vendors add crawlers.
 
 ## Compliance
 - `tests/integration/web/public/search-and-ai.test.ts`: off by default, a signed-out save is refused, saving on drops
