@@ -1005,6 +1005,11 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
         `PDS_HOSTNAME=${PDS}`,
         `PDS_SERVICE_HANDLE_DOMAINS=.${PDS}`,
         "EDGE_ACME_EMAIL=edge@example.test",
+        // Web's key ids and the PDS's DID: C34 refuses a stack that interpolates a name the file leaves out.
+        "WEB_OAUTH_ACTIVE_KID=web-local",
+        "WEB_PDS_ADMIN_KID=web-local",
+        "PDS_DID=did:web:pds.example.net",
+        `PDS_PUBLIC_URL=https://${PDS}`,
         "",
       ].join("\n"),
     );

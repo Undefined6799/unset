@@ -26,6 +26,7 @@
     "https://unset.test:8443/@did:plc:pppppppppppppppppppppppp",
     "https://unset.test:8443/login",
     "https://unset.test:8443/signed-out",
-    "https://unset.test:8443/welcome/blocked"
+    "https://unset.test:8443/welcome/blocked",
+    "https://unset.test:8443/join?invite=pds-test-abcde-fghij"
   ]
 }

@@ -990,6 +990,12 @@ const REVIEW: Red[] = [
     (c) => void Object.assign(o(zones(c, APP_DEV).app_signin), { window: 1 }),
     "{$APP_HOST}: the zones are not the ruled ones",
   ],
+  [
+    "sign-up outside the sign-in zone",
+    "dev",
+    (c) => void Object.assign(o(a(o(zones(c, APP_DEV).app_signin).match)[0]), { path: ["/login", "/verify-email"] }),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
   ["a zone removed", "local", (c) => void delete zones(c, P).signup, "{$PDS_HOST}: the zones are not the ruled ones"],
   [
     "a narrower zone matcher",

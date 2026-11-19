@@ -144,6 +144,18 @@ describe("index store", () => {
     expect(stat("ingest_invalid")).toBe("1");
   });
 
+  test("index.invalid_replacement_removes_the_older_version", async () => {
+    // A rebuild of this repo would index nothing under the key (trackStore.ts applySnapshot), so the stream does the
+    // same: the member's older version does not stay public.
+    await commit(A, rev(6), [profile({ displayName: "Ada" }), section(CARD_1)]);
+    await commit(A, rev(7), [
+      profile({ displayName: 7 }),
+      { kind: "put", collection: "sh.unset.section", rkey: CARD_1, cid: CID, record: { $type: "x" } },
+    ]);
+    expect(lines(`SELECT count(*) FROM idx.profile WHERE did = '${A}'`)).toEqual(["0"]);
+    expect(lines(`SELECT count(*) FROM idx.section WHERE did = '${A}' AND rkey = '${CARD_1}'`)).toEqual(["0"]);
+  });
+
   test("index.inactive_account_keeps_nothing_new", async () => {
     track(B, false);
     await commit(B, rev(3), [profile()]);
@@ -184,6 +196,8 @@ describe("index store", () => {
     await store.missedEvents();
     await store.missedEvents();
     expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'backfill'")).toEqual(["3"]);
+    // A lost #account event is recovered by asking our PDS for each account's status (book P3.06).
+    expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'confirm_status'")).toEqual(["3"]);
   });
 
   test("index.record_jsonb_refuses_is_skipped_not_retried", async () => {

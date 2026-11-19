@@ -3,7 +3,7 @@
 import type { Did, HandleVerdict } from "@unset/domains-identity";
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { type AccountDeps, accountView } from "./account.ts";
+import { type AccountDeps, accountView, shellAccount } from "./account.ts";
 
 const DID = `did:plc:${"a".repeat(24)}` as Did;
 const OURS = "https://pds.unset.test";
@@ -109,5 +109,22 @@ describe("accountView", () => {
     ["not a URL", "not a url"],
   ])("a token-set issuer with %s gives no link", async (_name, issuer) => {
     expect((await view({ issuer })).accountLink).toBeNull();
+  });
+});
+
+// Staging walkthrough 2026-11-19: the account button showed the member's letter on their own page and a generic icon
+// on settings, home and legal pages; every page's button now names the member the same way, from the cache only.
+describe("shellAccount", () => {
+  const handles = (handle: string | null) => ({ verifiedHandle: () => handle }) as unknown as AccountDeps["handles"];
+
+  test("a member whose handle a check verified is named by it", () => {
+    expect(shellAccount({ handles: handles("alice.pds.unset.test") }, DID)).toEqual({
+      path: `/${DID}`,
+      name: "alice.pds.unset.test",
+    });
+  });
+
+  test("with no verified handle cached the button names nothing and keeps its icon", () => {
+    expect(shellAccount({ handles: handles(null) }, DID)).toEqual({ path: `/${DID}` });
   });
 });

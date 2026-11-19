@@ -72,7 +72,7 @@ keeps every other host account out:
 | `pds_admin_password` | `65532:65532` | pds-admin | the same value as `PDS_ADMIN_PASSWORD` in `pds.env` (P2.09e) |
 | `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
-| `web_pds_admin_key` | `65532:65532` | web (from P2.10) | the private key web signs invite requests with |
+| `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -162,7 +162,9 @@ rm unset-dev-secrets/.new
 ```
 
 **The web key pair.** `pds_admin_keys` holds the public half and its one verb; `web_pds_admin_key` holds the
-private half, which web signs invite requests with (P2.10 mounts it). With Node 26 (`web-2026-11` is the kid):
+private half, which web signs invite requests with. Web mounts it under every stack, `dev:up` included, so the file
+must exist before web starts; set `WEB_PDS_ADMIN_KID` in `dev-public.env` to the same kid. With Node 26
+(`web-2026-11` is the kid):
 
 ```sh
 umask 077

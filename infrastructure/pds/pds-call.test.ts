@@ -299,6 +299,55 @@ describe("pdsCall", () => {
     expect(calls).toBe(1);
   });
 
+  test("pdsCall.spent_deadline_never_dispatches", async () => {
+    // A request past its deadline has already answered 503: no write may start after that.
+    let calls = 0;
+    const { pdsCall, ctx } = harness();
+    const result = await pdsCall(
+      ctx(far(), AbortSignal.abort()),
+      DID,
+      async () => {
+        calls += 1;
+      },
+      { idempotent: false },
+    );
+    expect(result).toEqual({ kind: "transient", code: "pds_unavailable" });
+    expect(calls).toBe(0);
+  });
+
+  test("pdsCall.deadline_during_restore_never_dispatches", async () => {
+    // The deadline fires while the session is restored (a token refresh, a contended lock). The write must not start,
+    // and nothing it could reject with may go unobserved: web treats an unhandled rejection as fatal (server.ts).
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      let calls = 0;
+      const timer = new AbortController();
+      const { pdsCall, ctx } = harness({
+        restore: async () => {
+          timer.abort();
+          return { fetchHandler: async () => Response.json({}) };
+        },
+      });
+      const result = await pdsCall(
+        ctx(far(), timer.signal),
+        DID,
+        () => {
+          calls += 1;
+          return new Promise((_, reject) => setTimeout(() => reject(httpError(500)), 5));
+        },
+        { idempotent: false },
+      );
+      await new Promise((done) => setTimeout(done, 30));
+      expect(result).toEqual({ kind: "transient", code: "pds_unavailable" });
+      expect(calls).toBe(0);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   test("pdsCall.never_throws", async () => {
     const { pdsCall, lines } = harness();
     const result = await pdsCall(

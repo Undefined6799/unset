@@ -222,7 +222,7 @@
                                       "match": [
                                         {
                                           "method": ["POST"],
-                                          "path": ["/login", "/verify-email"]
+                                          "path": ["/login", "/verify-email", "/join"]
                                         },
                                         {
                                           "path": ["/oauth/callback"]

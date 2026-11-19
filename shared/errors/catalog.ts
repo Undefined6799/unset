@@ -69,6 +69,14 @@ export const ERROR_CODES = {
   "welcome.date_invalid": { status: 400, public: true },
   "welcome.terms_required": { status: 400, public: true },
   "welcome.country_required": { status: 400, public: true },
+  // P2.10, invites. Shown on /invite from a redirect (`error=`).
+  "invite.country_ack_required": { status: 400, public: true },
+  "invite.bad_submission": { status: 400, public: true },
+  "invite.in_progress": { status: 409, public: true },
+  "invite.quota": { status: 429, public: true },
+  "invite.closed": { status: 409, public: true },
+  "invite.denied": { status: 403, public: true },
+  "invite.unavailable": { status: 503, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 

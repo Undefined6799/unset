@@ -146,6 +146,7 @@
 # callback: 29 requests warm as counted at P1.36b, 33 with no cache at all. 1200 is about 36 such uncached visits per
 # address per 5 minutes: room for a few testers behind one address. app_burst (20 per 10s) already holds one address
 # to 600 per 5 minutes, so app_global binds only if app_burst is loosened.
+# app_signin counts POST /join too (P2.10): it starts a sign-up at our PDS, as POST /login starts a sign-in.
 # app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
 # (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
 (app-ratelimit) {
@@ -153,7 +154,7 @@
 		zone app_signin {
 			match {
 				method POST
-				path /login /verify-email
+				path /login /verify-email /join
 			}
 			match {
 				path /oauth/callback

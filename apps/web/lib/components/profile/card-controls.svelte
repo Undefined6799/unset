@@ -27,7 +27,7 @@ function focusAfterRemove(at: number) {
 </script>
 
 <script lang="ts">
-import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
+import { BUTTONS_EDIT, CARD_EDIT, COLLECTION_EDIT, cardName, LINKS_EDIT } from "../../profile/messages.ts";
 import { tick } from "svelte";
 import type { CardContent, CardEditLimits, CardView, Enhance, SubmitHandler } from "../../profile/types.ts";
 import { opensHere, PANEL_ANCHOR } from "../../profile/panel.ts";
@@ -66,20 +66,6 @@ function swapped(from: number, to: number): string[] {
   const order = [...keys];
   [order[from], order[to]] = [order[to] as string, order[from] as string];
   return order;
-}
-
-/** The name a card's controls are grouped under, for assistive tech. */
-function cardName(content: CardContent): string {
-  switch (content.kind) {
-    case "readme":
-      return CARD_EDIT.readme;
-    case "links":
-      return content.title || "Links";
-    case "collection":
-      return content.title || "Collection";
-    case "buttons":
-      return content.heading;
-  }
 }
 
 const EDIT_TITLE = {
@@ -298,7 +284,7 @@ $effect(() => {
       {/if}
       <Dialog.Content onCloseAutoFocus={backToRemove}>
         <Dialog.Header>
-          <Dialog.Title>{CARD_EDIT.removeTitle}</Dialog.Title>
+          <Dialog.Title>{CARD_EDIT.removeTitle(cardName(card.content))}</Dialog.Title>
           <Dialog.Description>{CARD_EDIT.removeBody}</Dialog.Description>
         </Dialog.Header>
         {#if removeRefused !== undefined}

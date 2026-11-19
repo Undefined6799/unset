@@ -798,7 +798,12 @@ const PDS_ZONES: readonly Zone[] = [
 const APP_ZONES: readonly Zone[] = [
   ["app_burst", 20, 10],
   ["app_global", 1200, 300],
-  ["app_signin", 5, 300, [{ method: ["POST"], path: ["/login", "/verify-email"] }, { path: ["/oauth/callback"] }]],
+  [
+    "app_signin",
+    5,
+    300,
+    [{ method: ["POST"], path: ["/login", "/verify-email", "/join"] }, { path: ["/oauth/callback"] }],
+  ],
 ];
 /** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64. */
 const limiter = (zones: readonly Zone[]): Json => ({
