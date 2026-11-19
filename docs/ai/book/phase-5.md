@@ -594,7 +594,7 @@ Size: ~80 source lines, ~120 test lines, one runbook section
 
 Goal: S3 is settled (Alex, 2026-11-19: keep it, for what it enables later). Make the object store's operations
 explicit for the provider P5.01 chooses, so S3 compatibility is not mistaken for identical administration. From the
-architecture review of 2026-11-19 (`/mnt/project-files/reviews/2026-11-19-codex-architecture/plan.md`, A7).
+architecture review of 2026-11-19 (A7; reasons in the description of #1744, which added this step).
 
 Checks, each written down in the runbook with who owns it, and the testable ones as tests against the provider or
 its CI stand-in:

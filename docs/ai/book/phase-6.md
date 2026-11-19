@@ -914,7 +914,7 @@ Inputs: P2.12 hook `onTermsAccepted(did, tx)`; P2.14 `mintModuleAssertion` (modu
   https://spec.matrix.org/v1.18/appendices/#user-identifiers (to P6.01: URL; localpart characters, 255-byte limit);
   vault `peer-provisioning-needs-mas-not-synapse`.
 Outputs:
-  - Table `app.chat_seed(did text PK, state text NOT NULL CHECK in ('pending','seeded','failed_permanent'), localpart
+  - Table `app.chat_seed(did text PK, state text NOT NULL CHECK in ('pending','seeded','failed_permanent','erasing'), localpart
     text UNIQUE NOT NULL /* opaque, CSPRNG, set on insert, never updated */, external_id text NULL /* MAS user ULID */,
     attempts int NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL, lease_token uuid NULL, lease_until
     timestamptz NULL, last_error text NULL, created_at, updated_at)`. Erasure-registry rows for `did` and `localpart` (P1.13; strategy `delete_row`, run by P6.04a's last
@@ -952,8 +952,10 @@ Algorithm (full detail for the mapping, steps 3b–3e and 4; reviewed hypothesis
         timeout 6 s (hypothesis), inside the 8 s budget of step 2. The call is idempotent on the stored localpart and the DID
         (P6.04), so a lost reply is retried with the same id and never creates a second account.
      d. **Conditional completion**, in a short transaction that first re-reads the row `FOR UPDATE` and goes on only
-        if `lease_token` still equals ours and `state = 'pending'`, and the account is neither blocked nor erased
-        (a stale worker, or an erasure or block during the call, writes nothing and returns the current state):
+        if `lease_token` still equals ours and `state = 'pending'` (a stale worker writes nothing; an erasure that
+        began during the call has set `state = 'erasing'`, so this writes nothing either, and P6.04a step 3 removes
+        whatever the call created remotely, found by the stored localpart, which the row keeps). A suspension during
+        the call does not stop completion: the link is written so P6.04a's `lock` can find the account.
         - 200 → `moduleAccounts.link(tx, 'chat', did, mxid)`; set `state = 'seeded'`, `external_id = mas_user_id`,
           clear the lease; `appendAudit(tx, { action: "chat.seeded", outcome: "succeeded", actorDid: did, target: did })`
           (new action `chat.seeded`, writer `web`; the member's terms acceptance is what triggers the seed). The
@@ -1005,8 +1007,8 @@ Done when (tests):
   - DA-4: `seed-no-connection-held-during-call` (the pool has no checked-out connection while the fake `chat-admin`
     is answering); `stale-lease-holder-cannot-write` (a worker whose lease expired and was re-claimed writes
     nothing); `seed-same-did-concurrent` (two `runSeedFor` for one DID → one claim, one call, one link);
-    `seed-lost-reply-retries-same-localpart`; `seed-erased-or-blocked-during-call-writes-nothing`;
-    `seed-lease-longer-than-timeout` (config test).
+    `seed-lost-reply-retries-same-localpart`; `seed-erased-during-call-writes-nothing`;
+    `seed-lease-longer-than-timeout` (config test). Erasure while a seed is in flight is tested in P6.04a.
   - `seed-skips-erased-did`; `backfill-idempotent`.
   - `terms-hook-inserts-row-in-same-transaction` (rollback leaves no row).
   - `login-path-never-seeds` (static: no import of the seed module from login/callback routes; runtime: login with
@@ -2865,8 +2867,20 @@ Algorithm (full detail: suspension, erasure and session ending):
      member signs in to chat again). `lock` is a queued MAS job: poll `GET /users/{id}` until `locked_at` is set
      (timeout 2 min, then retry). A locked user's existing tokens stop at Synapse's next introspection (cached at
      most 2 minutes, `S:synapse/api/auth/mas.py:140-146`); `end_sessions` closes that window.
-  3. Erasure (full detail: GDPR): `eraseDid` → `chat.erase(did)` inserts `app.chat_erasure` at `deactivate` and returns
+  3. Erasure (full detail: GDPR): `eraseDid` → `chat.erase(did)` inserts `app.chat_erasure` at `stop_seed` and returns
      `"pending"`; the job then runs, each step idempotent and retried with backoff:
+     0. `stop_seed` (added 2026-11-19 after the architecture review: a seed in flight can create the MAS user, or the
+        user without its DID link, after erasure began, and rejecting its late database write removes nothing
+        remotely). In a short transaction set the `app.chat_seed` row, if any, to `state = 'erasing'`, so no runner
+        claims it again; keep the row, whose stored `localpart` is the verified identity used to clean up. If its
+        lease is still live, wait until `lease_until` has passed, so any in-flight call has ended. Then find the remote
+        account: first by the DID link, as every verb does. If there is no link, the seed may have stopped between
+        MAS's user create and link create (P6.04 steps 6 and 7), leaving a user with no link. Only for that case,
+        `deactivate` and `delete_link` also accept the stored localpart inside web's signed assertion and act on the
+        MAS user with that username only if it has no upstream link at all (the same `getUserByUsername` and
+        `findLinksByUser` check P6.04 step 6 uses to adopt such an orphan). A user with that username linked to another DID → stop, alert, held case, never touched. No row and
+        no remote user → skip to `purge_chat_auth`. This narrows, for one signed case, the "never by localpart" rule
+        below; P6.00 reviews it (security mechanism, D8 ADR with the phase).
      a. `deactivate` → `chat-admin` `deactivate` (with Synapse erase: display name and avatar removed, account marked
         erased).
      b. `wait_deactivated` → poll `GET /users/{id}` until `deactivated_at` is set (queued job).
@@ -2876,6 +2890,7 @@ Algorithm (full detail: suspension, erasure and session ending):
      e. `purge_chat_auth` → `chat-auth` `/internal/purge`.
      f. `delete_mapping` → delete `module_account` (`chat`) and `app.chat_seed` for the DID, then the erasure row
         itself, then `core.erase_hook_mark(did, 'chat', 'done')` (P3.07 `hooks.chat`); `eraseDid`'s report changes "chat pending" to "chat erased".
+        Chat erasure never reports done while a seed for the DID can still create remote state (step 0).
      Any step failing 24 times → alert and a held case in `admin`; the core erasure has already completed.
   4. No app action ends every chat session except a freeze, takedown, erasure or a revoked grant (auth_dead, P2.11a;
      architecture 05:01Z, book edit 2026-10-19-drop-sign-out-everywhere). A grant revoked at the PDS: `auth_dead` only
@@ -2917,6 +2932,9 @@ Done when (tests):
   - `lock-on-account-inactive-ends-sessions`, `unlock-on-reactivate`, `lock-waits-for-job`,
     `deactivate-waits-for-job`, `erase-deletes-user-media`, `erase-deletes-upstream-link`, `erase-purges-chat-auth`,
     `erase-deletes-mapping-last`, `erase-report-pending-then-erased`,
+    `erase-waits-for-live-seed-lease`, `erase-after-late-seed-200-deactivates-user`,
+    `erase-after-lost-seed-reply-deactivates-user`, `erase-finds-user-created-before-link`,
+    `erase-never-touches-user-linked-to-other-did`, `erase-not-done-while-seed-can-create`,
     `job-retries-and-alerts`, `lookup-by-subject-not-localpart`, `mas-path-allowlist-grows-only-by-these`,
     `end-sessions-finishes-all-three-kinds` (fake MAS: a session created during the first round is finished in the
     second), `end-sessions-round-cap-errors`,
@@ -2948,11 +2966,17 @@ activated account must have the chat capability needed to be reachable, and chat
 real prerequisite. So onboarding is complete, and the member queued for the index (ADR 0053), only once the seed is
 done and the `did↔mxid` mapping is verified for this DID (P6.05 `accountStatus = ready`). The earlier text, which let
 onboarding complete whatever the chat state, is replaced. "Later" (P6-A8) stays, for the member's own chat sign-in,
-device and recovery key, which never block activation. The email gate stays a separate check.
+device and recovery key, which under the recommended reading (a) below do not block activation; that part is
+provisional until Alex answers. The email gate stays a separate check.
 
 > **[ALEX] Open question, not decided:** does "reachable" mean (a) a seeded chat account with a verified
 > `did↔mxid` mapping, which can receive an authorized message request, or (b) also a first device with its
-> encryption and recovery set up? Recommended: (a). PLAN §5.6 says seeding creates the account only, with no
+> encryption and recovery set up? Recommended: (a), stated as the promise "every activated member can receive an
+> authorized chat invitation; device and recovery setup wait until they first use chat". It does not promise that
+> they can read a message at once: encryption needs a device's keys
+> (https://spec.matrix.org/v1.18/client-server-api/#tracking-the-device-list-for-a-user), so until the recipient
+> accepts and sets up a device, the sender sees the request as waiting (an invite only,
+> https://spec.matrix.org/v1.18/client-server-api/#post_matrixclientv3roomsroomidinvite). PLAN §5.6 says seeding creates the account only, with no
 > device or key, and a message request is the invite alone because a seeded account has no devices (decision 12),
 > so (a) is already reachable. (b) would reverse P6-A8's "Later" and make every member finish chat's key setup
 > before using unset.sh. P6.00 confirms (a) against the pinned Synapse and MAS before this step is built. The steps

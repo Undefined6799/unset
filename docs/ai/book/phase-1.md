@@ -4640,18 +4640,20 @@ shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/route
 - P1.20j Switch-over: image, compose, edge and the scheduled sweeps; staging on Alex's word.
 - P1.20k Delete the React UI, `interfaces/http`, Hono and their packages.
 
-### P1.20l–P1.20p — Follow-ups from the architecture review (added steps, 2026-11-19)
+### P1.20l, P1.20s–P1.20v — Follow-ups from the architecture review (added steps, 2026-11-19)
 
 **Tags:** — · **Depends on:** P1.20k · **Plan:** §5.1, §6.1
 
 An outside architecture review of a7676f6 (Codex, handed over by Alex on 2026-11-19) and Alex's direction in it:
 use the framework's real form types with controllers beside their routes, narrow what routes can reach, measure
 before changing the bundle or edge rules, and make feature ownership readable. Verdicts against main e8afe10 and the
-reasons for each slice: `/mnt/project-files/reviews/2026-11-19-codex-architecture/plan.md`. One PR per step:
+reasons for each slice: the description of the PR that added these steps (P1.20l, #1744). P1.20m to P1.20r went to
+other threads' fixes from the same review. One PR per step:
 - P1.20l These steps, and the P6.05, P6.17 and P5.01o book edits.
-- P1.20m **Real Svelte form types in one route-owned controller.** The settings profile form only. Its submit
-  handler moves beside its route in `interfaces/web/src/routes/profile/`, typed with kit's own `SubmitFunction` and
-  `ActionResult`; `apps/web/lib/components/settings/profile-form.svelte` takes the ready action as svelte/action's
+- P1.20s **Real Svelte form types in one route-owned controller.** The settings profile form only. It spans two
+  routes: `/settings/profile` renders it and `/profile` saves it (`routes/profile/save.server.ts`). Its browser
+  submit handler moves beside the rendering route, `interfaces/web/src/routes/settings/profile/`, with a comment
+  naming `/profile` as the action it posts to; it is typed with kit's own `SubmitFunction` and `ActionResult`; `apps/web/lib/components/settings/profile-form.svelte` takes the ready action as svelte/action's
   `Action` (apps/web declares `svelte`, not `@sveltejs/kit`; no new package) plus typed values, errors and pending
   state. Correct the comments that say apps/web may import nothing from the framework (`apps/web/lib/profile/types.ts`
   above `SubmitHandler` and `Enhance`, and `profile-form.svelte`): ADR 0056 decision 3 and the `sveltekit-web-only`
@@ -4659,23 +4661,27 @@ reasons for each slice: `/mnt/project-files/reviews/2026-11-19-codex-architectur
   or ActionResult is left in that flow; svelte-check and typecheck pass; success, a refusal with its field blamed and
   focused, and a PDS failure behave as before; a save with JavaScript off still works. The card and avatar editors
   move only in a later step, and only if this one reads clearer.
-- P1.20n **Reconsent as one operation in `lib/server`.** One function in `interfaces/web/src/lib/server/sign-in.ts`
-  issues the login nonce and asks for the authorization target, and returns the target or a refusal code;
-  `startSignIn` and the verify-email `reconsent` action both call it. The route keeps cookies and redirects and no
-  longer imports `@unset/infrastructure-postgres` or takes `pool` and `nonces`. `Services.resolveDid` and
+- P1.20t **Reconsent as one operation in `lib/server`.** One function in `interfaces/web/src/lib/server/sign-in.ts`
+  issues the login nonce and asks for the authorization target, and returns both the nonce and the target (the
+  caller still sets the two cookies), or the refusal code; `startSignIn` and the verify-email `reconsent` action
+  both call it, each passing its own expected DID, prompt (`consent`, `login` or `none`) and deadline. The route
+  keeps cookies and redirects and no longer imports `@unset/infrastructure-postgres` or takes `pool` and `nonces`.
+  This removes the duplication and the route's database access; it does not narrow the whole services container. `Services.resolveDid` and
   `OAuthServices.sessionStore`, which nothing outside `compose.ts` reads, leave the public types. Request deadline,
   expected DID, refusal codes and the account lock are unchanged. Optional: a dependency-cruiser rule that route
   files never import `infrastructure-postgres` (a tightening). Done when: the reconsent cases in
   `tests/integration/web/welcome/onboarding.test.ts` and the sign-in tests pass unchanged against real Postgres; no
   DI framework, command bus or new folder. The rest of `Services` narrows a field at a time when a route is touched.
-- P1.20o **Experiment: single versus split client bundle through the staging app edge.** Build the same commit with
+- P1.20u **Experiment: single versus split client bundle through the staging app edge.** Build the same commit with
   `bundleStrategy` `single` and `split`, load the owner page, settings and the card editor cold and warm, and two
-  tabs at once, from one client address through staging's `app-ratelimit` (not the e2e proxy). Record requests per
+  tabs at once, from one client address through a local edge running staging's own `app-ratelimit` snippet and
+  limits (not the e2e proxy; staging itself is not touched). The value to measure is not page weight alone: also
+  failed asset loads (429s) and what a new deploy makes a returning browser download again. Record requests per
   route, the peak per 10 s, 429s, compressed JS and CSS per route, the lazy editor's transfer and time to
   interactive, in `docs/ai/notes/`. Changes no rule, no budget and no config. A later edge change (a bounded bucket
   for hashed `/_app/immutable/` files only) loosens a security control: it needs Alex's typed line, and keeps the
   single bundle if the numbers show no clear gain.
-- P1.20p **Feature maps and stale docs.** Fix `docs/human/features/core-shell.md`, which still describes the React
+- P1.20v **Feature maps and stale docs.** Fix `docs/human/features/core-shell.md`, which still describes the React
   shell deleted in P1.20k, and the README line saying public profiles wait for the indexer (live since P3.12s).
   Add four short maps under `docs/human/features/`: profile and cards, sign-in and onboarding, public indexing, and
   storage. Each names the route, the `lib/server` operation, the domain rules, the adapter, the tables and grants,
