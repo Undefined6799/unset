@@ -48,13 +48,14 @@ and the coverage test, which run before merge.
    run is safe and answers with zeros (it writes a second audit record).
 5. Delete the account in the PDS. Do this after step 4, so a session cannot recreate rows in between; if the person
    signs in again before the PDS account is gone, or was part-way through a sign-in, run step 4 again.
-6. If the handle is one of ours (under `unset.name`), remove its `_atproto.<name>` TXT record at deSEC by hand, until
-   the ADR 0063 writer does it (ADR 0067). Do the same when an account is taken down; write it again if the takedown
-   is reversed. Do not tombstone the DID unless the person explicitly asked for their identity to be ended (ADR 0067
-   decision 4).
-7. Add the name to the burned names kept with the privacy request records, outside the repository, until P3.08n
-   builds the list. Before writing any new TXT record by hand, check the name is not there: a used name is never
-   issued again.
+6. If the handle is one of ours (under `unset.name`, or `staging.unset.name` on staging), an owner logged in to deSEC
+   removes its `_atproto.<name>` TXT record by hand, until the ADR 0063 writer does it (ADR 0067). Resolvers may
+   serve the old record until its TTL runs out; the indexer's check on our PDS covers that time. Do the same when an
+   account is taken down; write it again if the takedown is reversed. Do not tombstone the DID unless the person
+   explicitly asked for their identity to be ended (ADR 0067 decision 4).
+7. Add the name, lower-cased, to the burned-name file: a file of its own outside the repository, holding bare names
+   only, with no DID, no date and no link to the privacy request records, until P3.08n builds the list. Before
+   writing any new TXT record by hand, check the name is not there: a used name is never issued again.
 8. Record the request, the date and the reason where privacy requests are tracked. Do not record the DID in the
    repository, in a PR or in a log. Close `psql` when done.
 

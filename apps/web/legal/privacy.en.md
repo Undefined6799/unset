@@ -38,7 +38,7 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 | --- | --- |
 | Account, profile and onboarding timestamps | Until the account is deleted, then erased, including from backups within 30 days |
 | Copy of your public profile and sections | Until you delete the record, or the account is deleted, then erased, including from backups within 30 days. We keep only a keyed hash of your account identifier, so we never copy your profile again |
-| Names you held under our domain | While the service runs. We never give a name to anyone else once it was used, so we keep a keyed hash of each name, with no account identifier |
+| Names you held under our domain | While the service runs. We never issue a name again once it was used, to you or anyone else, so we keep each name with no account identifier: as a keyed hash once that is built, and until then the name alone |
 | Search and AI choices and search title and description | Until you turn them all off or the account is deleted, then erased, including from backups within 30 days |
 | Sessions | Until you sign out, or 7 days idle, or 30 days at most |
 | Sealed sign-in tokens | Until you sign out or the grant ends |
@@ -61,6 +61,8 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 ## Your rights
 
 You can ask for a copy of the information we hold (an export), for erasure and for a correction. Raise it with us first, at {{privacyOfficerContact}}. You can complain to the [Office of the Privacy Commissioner of Canada](https://www.priv.gc.ca/en/report-a-concern/) and to [Quebec's Commission d'accès à l'information](https://www.cai.gouv.qc.ca/english/).
+
+When you ask us to delete your account, we hide it at once and delete it 30 days later; until then you can change your mind. Deleting it yourself on the sign-in server, {{pdsHost}}, takes effect at once. Backups then age out within their 30 days.
 
 <!-- P7 -->
 

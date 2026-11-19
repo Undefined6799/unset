@@ -52,11 +52,13 @@ effect) or **ours** (our policy). Irreversible steps are marked **final**.
    (protocol). The DID is not touched (protocol). The DNS record stays, so the handle stays valid and they can return
    (protocol model, ours to keep the record). The indexer hides the account (protocol; `idx.visible_account`). The
    name stays held, since the PDS row stays (protocol).
-2. **Delete, asked of us.** We deactivate at once and set `deleteAfter` to 30 days later (ours; the field is
-   protocol, its meaning is ours). Reactivating in that time withdraws the request. After 30 days, `pds-admin` deletes
-   the account (ours to run; the PDS has no sweeper), which removes the repo and emits `deleted` (protocol, **final**
-   for the repo). Then the DNS record is removed (practice), `eraseDid` runs (ours; PIPEDA), and the name joins the
-   burned list (ours). The 30 days match the backup schedule.
+2. **Delete, asked of us.** We deactivate at once (open point for Alex: his decision set the 30 days, not whether the
+   account is hidden during them; hiding is the reading taken here) and set `deleteAfter` to 30 days later (ours; the
+   field is protocol, its meaning is ours). Reactivating in that time withdraws the request. After 30 days,
+   `pds-admin` deletes the account (ours to run; the PDS has no sweeper), which removes the repo and emits `deleted`
+   (protocol, **final** for the repo). Then the DNS record is removed (practice), `eraseDid` runs (ours; PIPEDA), and
+   the name joins the burned list (ours). Backups then age out on their own stated period (30 days in the privacy
+   notice), so data can persist up to about 60 days after the request.
 3. **Delete, done by the member on the PDS.** Immediate; we cannot add a grace period without changing the PDS, and
    the PDS already asks for the password and an emailed code. On the `deleted` event the same three things follow: DNS
    record removed, `eraseDid` (the indexer already does this, P3.06e), name burned.
@@ -87,12 +89,16 @@ effect) or **ours** (our policy). Irreversible steps are marked **final**.
 ## Not built yet, and what happens until then
 - The DNS writer (ADR 0063, Proposed): until it exists, an owner removes the `_atproto.<name>` record at deSEC by hand
   on deletion or takedown (`docs/human/runbooks/erasure.md`).
-- The burned-name list (P3.08n): until it exists, the owner who writes TXT records by hand checks a new name against
-  the names of deleted accounts, kept with the privacy request records outside the repository.
+- The burned-name list (P3.08n): until it exists, burned names are kept as bare lower-cased names in a file of
+  their own outside the repository, with no DID, no date and no link to the privacy request records; the owner who
+  writes TXT records by hand checks a new name against it. The privacy notice says so.
 - The 30-day deletion (P5.08b): until then, deletion is the manual runbook.
 - The tombstone on request (P5.08c's runbook) and moving away: not built, not offered.
 
 ## Consequences
+- This record covers members' accounts. It does not change ADR 0001 decision 24 (the prototype `0x40.space`
+  accounts, deactivated and tombstoned) or P2-A3 and the P2.25 test-track wipe (test DIDs deleted and tombstoned
+  before launch); those identities were never members' and their tombstones stay.
 - The book's P5.08b waits 30 days, not 7, and signs a tombstone only on request; P5.08c's runbook says the same.
 - A burned name is personal data we keep after erasure; the RoPA and the privacy notice list it.
 - Members cannot get a hosted name back after deleting; they keep their DID and may come back with a new name.
