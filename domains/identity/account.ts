@@ -16,6 +16,11 @@ export type AccountRepository = {
   acceptTerms(did: Did, terms: string, privacy: string, deadline: AbortSignal): Promise<"chat" | "done" | null>;
   finishChat(did: Did, deadline: AbortSignal): Promise<boolean>;
   /**
+   * Records that a finished account dismissed the changed-notice banner for this privacy version (P2.12b). A seen
+   * record, never an acceptance: `privacyVersion` is not touched. False when no finished account matched.
+   */
+  markPrivacyNoticeSeen(did: Did, privacy: string, deadline: AbortSignal): Promise<boolean>;
+  /**
    * Blocks the account and writes its audit row, together or not at all. Null means this call did not change the
    * record (it was already past the age step), so no second audit row exists.
    */
