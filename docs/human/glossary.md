@@ -10,7 +10,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **DID** | A permanent account identifier (`did:plc:…` or `did:web:…`); it never changes when the handle changes. |
 | **DID document** | The public record a DID resolves to: the account's handle claim (`alsoKnownAs`), signing key and PDS address. |
 | **PLC** | The directory that stores `did:plc` documents; changes are signed operations; read replicas may lag. |
-| **handle** | A human-readable name (`alice.unset.im`) that must be verified both ways: handle → DID and DID → handle. |
+| **handle** | A human-readable name (`alice.unset.name`) that must be verified both ways: handle → DID and DID → handle. |
 | **`verifyHandle`** | Our one function that does that two-way check; nothing else reads `alsoKnownAs`. |
 | **PDS** | Personal Data Server: hosts accounts and their repos, runs sign-in. Ours is `unset.ac` (production) and `staging.unset.ac` (development). |
 | **repo** | An account's public, signed data store on its PDS; everything in it is public and copied by relays. |
