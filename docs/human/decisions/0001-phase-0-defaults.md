@@ -644,9 +644,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   Renovate groups non-major updates weekly and the verifier may merge the test and lint tools group; drafts run the
   cheap checks; the required checks are the file's list; a merge is tested on main's current tip. ADR 0019 and one
   sentence of ADR 0044 are amended.
-- **Edge app_burst raised from 20 to 60 per 10 seconds (Alex, 2026-11-19 13:17:24Z, "increase it from 20 to 60"; P1.20r):**
-  a member pressing Settings and Profile about twice a second met the dev app site's `app_burst` zone, set at 20 per
-  10 seconds by ADR 0031 Decision 1. It is now 60 per 10 seconds; `app_signin`, `app_global` and every PDS zone are
-  unchanged. ADR 0031's reason for 20 (staying under web's per-address refill) changed with ADR 0042, which made web's
-  buckets site-wide behind the edge; `app_global` now bounds a client's average at 4 a second. The value in ADR 0031
-  Decision 1 is superseded by this entry.
+- **Edge app_burst raised from 20 to 60 per 10 seconds (P1.20r, 2026-11-19; own record:
+  [0066](0066-edge-app-burst-sixty.md)):** Alex asked for it on 2026-11-19 13:17:24Z ("increase it from 20 to 60")
+  after members pressing Settings and Profile fast met the dev app site's `app_burst` zone. It supersedes the value 20
+  and its reason in ADR 0031 Decision 1, ADR 0042 Decision 1's "unchanged" for that zone, and ADR 0042 Decision 2's
+  "25 clients" sizing of `default` (now about 13 sustained, and 50 at once where it took 150). `app_signin`,
+  `app_global` and every PDS zone are unchanged. 0031 and 0042 are not edited. Proposed, awaiting Alex.
