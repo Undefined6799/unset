@@ -258,6 +258,7 @@ services:
       UNSET_ENV: dev
       UNSET_SERVICE: indexer
       UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8081"
       PG_HOST: postgres
       PG_DATABASE: unset
       PG_USER: indexer
