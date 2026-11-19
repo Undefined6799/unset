@@ -26,8 +26,6 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   }
   return {
     shell: settingsShell(locals, request, "/settings/profile"),
-    // The one-time banner after a privacy notice change (P2.12), as the gate decided it.
-    privacyNotice: locals.privacyNotice,
     profile,
     limits: APP_LIMITS,
     pagePath: `/${did}`,

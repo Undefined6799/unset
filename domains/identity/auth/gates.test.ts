@@ -64,22 +64,54 @@ describe("onboarding gate", () => {
   });
 
   test("onboarded.done_passes", () => {
-    const account = { onboarding: "done" as const, termsVersion: VERSIONS.terms, privacyVersion: VERSIONS.privacy };
+    const account = {
+      onboarding: "done" as const,
+      termsVersion: VERSIONS.terms,
+      privacyVersion: VERSIONS.privacy,
+      privacyNoticeSeenVersion: null,
+    };
     expect(requireOnboarded(account, VERSIONS)).toEqual({ outcome: "pass", privacyNotice: false });
   });
 
   test("terms.version_bump", () => {
-    const account = { onboarding: "done" as const, termsVersion: "2020-01-01", privacyVersion: VERSIONS.privacy };
+    const account = {
+      onboarding: "done" as const,
+      termsVersion: "2020-01-01",
+      privacyVersion: VERSIONS.privacy,
+      privacyNoticeSeenVersion: null,
+    };
     expect(requireOnboarded(account, VERSIONS)).toEqual({ outcome: "terms" });
   });
 
   test("terms.privacy_bump_notice_only", () => {
-    const account = { onboarding: "done" as const, termsVersion: VERSIONS.terms, privacyVersion: "2020-01-01" };
+    const account = {
+      onboarding: "done" as const,
+      termsVersion: VERSIONS.terms,
+      privacyVersion: "2020-01-01",
+      privacyNoticeSeenVersion: null,
+    };
     expect(requireOnboarded(account, VERSIONS)).toEqual({ outcome: "pass", privacyNotice: true });
   });
 
+  test("terms.privacy_bump_notice_until_dismissed", () => {
+    const seen = { onboarding: "done" as const, termsVersion: VERSIONS.terms, privacyVersion: "2020-01-01" };
+    expect(requireOnboarded({ ...seen, privacyNoticeSeenVersion: "2020-01-01" }, VERSIONS)).toEqual({
+      outcome: "pass",
+      privacyNotice: true,
+    });
+    expect(requireOnboarded({ ...seen, privacyNoticeSeenVersion: VERSIONS.privacy }, VERSIONS)).toEqual({
+      outcome: "pass",
+      privacyNotice: false,
+    });
+  });
+
   test("blocked.signin_again", () => {
-    const account = { onboarding: "blocked_underage" as const, termsVersion: null, privacyVersion: null };
+    const account = {
+      onboarding: "blocked_underage" as const,
+      termsVersion: null,
+      privacyVersion: null,
+      privacyNoticeSeenVersion: null,
+    };
     expect(requireOnboarded(account, VERSIONS)).toEqual({ outcome: "blocked" });
   });
 });
