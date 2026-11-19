@@ -11,8 +11,8 @@
  * process's stop, so a stop ends the pass after the item in hand instead of after its whole batch.
  */
 export type Passes = Readonly<Record<PassName, (signal: AbortSignal) => Promise<Readonly<Record<string, number>>>>>;
-export type PassName = "track" | "backfill" | "confirm";
-const PASS_ORDER: readonly PassName[] = ["track", "backfill", "confirm"];
+export type PassName = "track" | "backfill" | "confirm" | "handles";
+const PASS_ORDER: readonly PassName[] = ["track", "backfill", "confirm", "handles"];
 
 export type RunDeps = {
   /** Starts the stream reader and resolves when it has stopped for good (the signal aborted). */
@@ -37,9 +37,9 @@ export type Runner = { readonly done: Promise<void>; readonly health: () => RunH
 
 export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
   let ticks = 0;
-  const passFailures: Record<PassName, number> = { track: 0, backfill: 0, confirm: 0 };
+  const passFailures: Record<PassName, number> = { track: 0, backfill: 0, confirm: 0, handles: 0 };
   const lastPass: Partial<Record<PassName, Readonly<Record<string, number>>>> = {};
-  const totals: Record<PassName, Record<string, number>> = { track: {}, backfill: {}, confirm: {} };
+  const totals: Record<PassName, Record<string, number>> = { track: {}, backfill: {}, confirm: {}, handles: {} };
 
   const tick = async (): Promise<void> => {
     for (const name of PASS_ORDER) {
@@ -72,7 +72,7 @@ export function runIndexer(deps: RunDeps, signal: AbortSignal): Runner {
       ticks,
       passFailures: { ...passFailures },
       lastPass: { ...lastPass },
-      totals: { track: { ...totals.track }, backfill: { ...totals.backfill }, confirm: { ...totals.confirm } },
+      totals: Object.fromEntries(PASS_ORDER.map((name) => [name, { ...totals[name] }])) as RunHealth["totals"],
     }),
   };
 }

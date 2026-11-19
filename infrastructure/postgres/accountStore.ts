@@ -60,24 +60,8 @@ export const confirmDelaySeconds = (attempts: number): number => [60, 300, 1500]
 export function createAccountStore(pool: Pool, options: { readonly timeoutMs: number }): AccountStore {
   const deadline = () => AbortSignal.timeout(options.timeoutMs);
   return {
-    // Locks only job rows and never waits on the erasure lock (SKIP LOCKED), so it cannot deadlock with erasure.
     dueJobs: (kind, limit) =>
-      withClient(pool, deadline(), async (client) => {
-        const { rows } = await client.query(
-          `UPDATE idx.account_job j SET due_at = now() + make_interval(secs => $3)
-             FROM (SELECT did FROM idx.account_job WHERE kind = $1 AND due_at <= now()
-                    ORDER BY due_at, did LIMIT $2 FOR UPDATE SKIP LOCKED) due
-            WHERE j.did = due.did AND j.kind = $1
-           RETURNING j.did, j.attempts, j.due_at::text AS claim`,
-          [kind, limit, CONFIRM_LEASE_SECONDS],
-        );
-        return rows.map((row) => ({
-          did: String(row.did),
-          kind,
-          attempts: Number(row.attempts),
-          claim: String(row.claim),
-        }));
-      }),
+      withClient(pool, deadline(), (client) => claimJobs(client, kind, limit, CONFIRM_LEASE_SECONDS)),
     confirmed: (job, answer) => withTransaction(pool, deadline(), (tx) => applyConfirmation(tx, job, answer)),
     failed: (job) => withTransaction(pool, deadline(), (tx) => confirmFailed(tx, job)),
     health: () =>
@@ -200,8 +184,32 @@ async function confirmFailed(tx: PoolClient, job: AccountJob): Promise<void> {
   await count(tx, "account_job_dead_letter");
 }
 
+/**
+ * Claims due jobs of one kind for `leaseSeconds` by moving their due time; the new due time, as text to the
+ * microsecond, is the claim. Locks only job rows and skips locked ones, so it never waits on erasure.
+ */
+export async function claimJobs<K extends string>(
+  client: PoolClient,
+  kind: K,
+  limit: number,
+  leaseSeconds: number,
+): Promise<{ did: string; kind: K; attempts: number; claim: string }[]> {
+  const { rows } = await client.query(
+    `UPDATE idx.account_job j SET due_at = now() + make_interval(secs => $3)
+       FROM (SELECT did FROM idx.account_job WHERE kind = $1 AND due_at <= now()
+              ORDER BY due_at, did LIMIT $2 FOR UPDATE SKIP LOCKED) due
+      WHERE j.did = due.did AND j.kind = $1
+     RETURNING j.did, j.attempts, j.due_at::text AS claim`,
+    [kind, limit, leaseSeconds],
+  );
+  return rows.map((row) => ({ did: String(row.did), kind, attempts: Number(row.attempts), claim: String(row.claim) }));
+}
+
 /** Ends the claimed job; false when the claim no longer matches. */
-async function endJob(tx: PoolClient, job: AccountJob): Promise<boolean> {
+export async function endJob(
+  tx: PoolClient,
+  job: { readonly did: string; readonly kind: string; readonly claim: string },
+): Promise<boolean> {
   const { rowCount } = await tx.query(
     "DELETE FROM idx.account_job WHERE did = $1 AND kind = $2 AND due_at = $3::timestamptz",
     [job.did, job.kind, job.claim],

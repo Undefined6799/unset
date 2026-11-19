@@ -563,6 +563,19 @@ describe("compose.dev.yaml (P1.29)", () => {
 const envOf = (s: Service): Map<string, string> =>
   new Map(s.environment.map(([key, value]) => [key, "ref" in value ? `\${${value.ref}}` : value.literal]));
 
+test("indexer_hosted_suffixes_are_the_pds_handle_domains", () => {
+  // P3.08s review N2: the indexer takes our PDS's word only for the names the PDS serves, so both read one variable,
+  // the one preflight C15 pins; no domain is written here.
+  for (const [file, compose] of [
+    [LOCAL, local()],
+    [SOURCE_FILE, parseCompose(read(SOURCE_FILE), SOURCE_FILE)],
+  ] as const) {
+    const pds = envOf(service(compose, "pds")).get("PDS_SERVICE_HANDLE_DOMAINS");
+    expect(pds, file).toBe("${PDS_SERVICE_HANDLE_DOMAINS}");
+    expect(envOf(service(compose, "indexer")).get("HOSTED_HANDLE_SUFFIXES"), file).toBe(pds);
+  }
+});
+
 /** The settings an env template writes, comments and blank lines left out. */
 const envSettings = (text: string): [string, string][] =>
   text

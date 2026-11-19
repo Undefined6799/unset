@@ -43,6 +43,22 @@ alert on it before production. A failed read answers 503 with no body. One read 
 frame applied for `INDEXER_STREAM_UNHEALTHY_MS` (5 min) makes health 503 with the counts, so the image's HEALTHCHECK
 fails (`stream-watch.ts`; a quiet PDS after one stop is not a fault).
 
+**Handles (P3.08s).** `handles.ts` is the rule: verifyHandle fresh (both directions), and for a handle under
+`HOSTED_HANDLE_SUFFIXES` (compose sets it from `PDS_SERVICE_HANDLE_DOMAINS`, the PDS's own list) also our PDS's word: the DID document names `PDS_PUBLIC_URL`, getRepoStatus is active, and
+resolveHandle on our PDS maps it back to the same DID. An outage on either side is `unresolved` and keeps what is
+stored, but only while the DID document still claims the stored handle (review B1 on #1728): verifyHandle's
+`unavailable` names the claim when it read the document, and a different claim ends the verified status. Nor
+does a verified handle outlast its last answer by more than `HANDLE_RECHECK_S` plus one day (HANDLE_OUTAGE_GRACE_SECONDS),
+so a DID document its holder keeps unreadable cannot keep one for ever; the page then shows the DID. Only an
+explicit answer makes a handle invalid, and a 404 from the handle's host counts as one (resolve-handle.ts), so a host
+answering 404 during a restart clears the handle until the next check (HANDLE_RECHECK_S, or an identity event). The identity frame never writes a handle, only queues the
+check. `handleStore.ts` writes it in a short transaction; migration 0031's unique partial index allows one verified
+holder per handle, and a new holder moves the old one to unresolved and queues its check. If a race still hits the
+index, the write fails, is counted as failed and the job comes back after its 150 s lease (the book's step 6 re-runs
+the collision step at once instead; this is simpler and never stalls the stream, which runs apart from the passes). A sweep every 10 minutes
+queues accounts never checked or checked more than `HANDLE_RECHECK_S` ago. The book's step 7 (`pds_endpoint`) waits
+for a column to hold it.
+
 **Image.** `deployment/images/indexer.Dockerfile`, its own image because the preflight's compose subset refuses
 `entrypoint` and `command`. The compose service and its egress network come in a later PR, once publish-images has
 produced a digest to pin.
