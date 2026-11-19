@@ -8,7 +8,7 @@
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { canonicalActorPath, type Did, parseActor, parseDid, parseHandle } from "@unset/domains-identity";
-import { pageCards, readAvatarShape, readProfileRecord } from "@unset/domains-profile";
+import { CARDS_MAX, pageCards, readAvatarShape, readProfileRecord } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
@@ -48,6 +48,8 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     location: fields.location,
     website: websiteLink(fields.website),
     avatarShape: readAvatarShape(found.record),
-    cards: cardViews(pageCards(found.record, found.sections)),
+    // At most what the owner's own page reads (infrastructure/pds card-records.ts MAX_CARDS): the index may hold up to
+    // twice that (MAX_SECTIONS_PER_ACCOUNT), and a visitor never sees more cards than the member does.
+    cards: cardViews(pageCards(found.record, found.sections).slice(0, CARDS_MAX)),
   };
 };

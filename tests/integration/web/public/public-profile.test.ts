@@ -3,7 +3,7 @@
 // network: the page never reads a PDS. Decision 35 D7 and rule SE-2: every account the page may not show, and every
 // path that is no actor, gets one 404 with the same bytes and headers.
 import { relative } from "node:path";
-import { toCardRecord } from "@unset/domains-profile";
+import { CARDS_MAX, toCardRecord } from "@unset/domains-profile";
 import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import { buildOnce, clientAddress, ORIGIN, type RunningWeb, startWeb } from "../built-server.ts";
@@ -25,6 +25,7 @@ const NAMED = `did:plc:${"q".repeat(24)}`;
 const HIDDEN = `did:plc:${"r".repeat(24)}`;
 const BARE = `did:plc:${"s".repeat(24)}`;
 const UNVERIFIED = `did:plc:${"t".repeat(24)}`;
+const MANY = `did:plc:${"u".repeat(24)}`;
 
 /** An account as the indexer leaves it once our PDS confirmed it, with a profile and one README card unless told. */
 async function indexed(
@@ -57,6 +58,22 @@ async function indexed(
   });
 }
 
+/** `count` more README cards for `did`, keys after the first card's, each saying "Extra card". */
+async function moreCards(did: string, count: number) {
+  const card = toCardRecord({ kind: "readme", text: "Extra card" }, "full", null, NOW);
+  if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
+  await withClient(indexer, null, async (c) => {
+    for (let i = 0; i < count; i += 1) {
+      const rkey = `extra${String(i).padStart(3, "0")}`;
+      await c.query(
+        `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+         VALUES ($1, $2, $3, 'cid-s', '3l', $4, NULL, now())`,
+        [`at://${did}/sh.unset.section/${rkey}`, did, rkey, card.record],
+      );
+    }
+  });
+}
+
 let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
@@ -65,6 +82,8 @@ beforeAll(async () => {
   await indexed(HIDDEN, { active: false, name: "Hidden Member" });
   await indexed(BARE, { profile: false, name: "Bare Member" });
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
+  await indexed(MANY, { name: "Many" });
+  await moreCards(MANY, CARDS_MAX);
   web = await startWeb(pg);
 }, 120_000);
 afterAll(async () => {
@@ -149,6 +168,12 @@ describe("public profile", () => {
     expect(withCookies.headers.get("set-cookie")).toBeNull();
     expect(kept(withCookies)).toEqual(kept(plain));
     expect(await withCookies.text()).toBe(await plain.text());
+  });
+
+  test("never_more_cards_than_the_owner_page_reads", async () => {
+    const html = await (await get(`/@${MANY}`)).text();
+    const shown = (html.match(/Card of Many/g) ?? []).length + (html.match(/Extra card/g) ?? []).length;
+    expect(shown).toBe(CARDS_MAX);
   });
 
   test("only_reads", async () => {
