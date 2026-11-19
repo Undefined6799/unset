@@ -296,7 +296,7 @@ services:
       PG_USER: indexer
       PG_PASSWORD_FILE: /run/secrets/pg_indexer_password
       PG_SSLMODE: disable
-      PG_POOL_MAX: "4"
+      PG_POOL_MAX: "3"
       PLC_URL: https://plc.directory
       INDEXER_ENABLED: "true"
       INDEXER_PDS_URL: http://pds:3000
