@@ -48,6 +48,7 @@ const baseEnv = (): Record<string, string> => ({
   // Nothing listens there: the library retries the dial (reader.ts onRetry), which is all this test needs of it.
   INDEXER_PDS_URL: "http://localhost:1",
   INDEXER_ENABLED: "true",
+  HOSTED_HANDLE_SUFFIXES: ".hosted.test",
 });
 const configWith = (env: Record<string, string>) =>
   loadConfig(schema, { ...baseEnv(), ...env }, { onUnknownKeys: () => undefined });

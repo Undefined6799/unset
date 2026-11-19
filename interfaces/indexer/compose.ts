@@ -2,14 +2,20 @@
 // place its adapters are built. With INDEXER_ENABLED off it builds nothing, so the process opens no pool and reads
 // nothing (ADR 0052 decision 7). On, the pool's connection budget is checked first: a pool the role's connection limit
 // cannot hold across PG_MAX_REPLICAS is a ConfigError, which main.ts turns into exit 78 as web does.
-import { createDidResolver, type Did, IdentityError } from "@unset/domains-identity";
-import { createRepoReader, createRepoStatusReader, readFirehose } from "@unset/infrastructure-firehose";
+import { createDidResolver, createHandleVerifier, type Did, IdentityError } from "@unset/domains-identity";
+import {
+  createHandleOnPdsReader,
+  createRepoReader,
+  createRepoStatusReader,
+  readFirehose,
+} from "@unset/infrastructure-firehose";
 import { createNetGuard } from "@unset/infrastructure-net-guard";
 import { createIdentityNetwork } from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
   createAccountStore,
+  createHandleStore,
   createIndexStore,
   createPool,
   createTrackStore,
@@ -19,6 +25,7 @@ import type { Logger } from "@unset/shared-log";
 import { confirmPass } from "./account-jobs.ts";
 import type { IndexerConfig } from "./config.ts";
 import { indexConsumer } from "./consumer.ts";
+import { handlePass } from "./handles.ts";
 import { HEALTH_CACHE_MS, type HealthRead, sharedRead } from "./health.ts";
 import { runIndexer } from "./run.ts";
 import { streamWatch } from "./stream-watch.ts";
@@ -92,6 +99,28 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
     maxBytes: config.INDEXER_REPO_MAX_BYTES,
   });
   const readStatus = createRepoStatusReader({ service, guard, timeoutMs });
+  const handles = createHandleStore(pool, { timeoutMs });
+  // Every check asks fresh (book P3.08 step 2), so the verifier's cache only shares a check asked twice at once.
+  const { verifyHandle } = createHandleVerifier({
+    network,
+    resolveDid,
+    verifyTtlS: config.DID_DOC_CACHE_TTL_S,
+    invalidTtlS: config.DID_DOC_CACHE_TTL_S,
+    cacheMax: config.DID_DOC_CACHE_MAX,
+    onUnexpected: (error) => log.logError(error),
+  });
+  const pdsOf = async (did: string, abort: AbortSignal) =>
+    (await resolveDid(did as Did, { consistency: "fresh", signal: abort })).pds;
+  const handleCheck = {
+    verifyHandle: (did: string, abort: AbortSignal) =>
+      verifyHandle(did as Did, { consistency: "fresh", signal: abort }),
+    pdsOf,
+    readStatus,
+    resolveOnPds: createHandleOnPdsReader({ service, guard, timeoutMs }),
+    ownPds: new URL(config.PDS_PUBLIC_URL),
+    hostedSuffixes: config.HOSTED_HANDLE_SUFFIXES,
+  };
+  const sweep = { lastAt: null as number | null };
   const retries: TrackRetries = new Map();
   let lastStop: string | null = null;
   let stops = 0;
@@ -130,7 +159,7 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
         track: (stop) =>
           trackPass({
             store: tracks,
-            pdsOf: async (did, abort) => (await resolveDid(did as Did, { consistency: "fresh", signal: abort })).pds,
+            pdsOf,
             ownPds: new URL(config.PDS_PUBLIC_URL),
             timeoutMs,
             retries,
@@ -140,6 +169,16 @@ export async function compose(config: IndexerConfig, log: Logger, signal: AbortS
         backfill: (stop) =>
           backfillPass({ store: tracks, readRepo, timeoutMs: config.INDEXER_REPO_TIMEOUT_MS, signal: stop }),
         confirm: (stop) => confirmPass({ store: accounts, readStatus, timeoutMs, signal: stop }),
+        handles: (stop) =>
+          handlePass({
+            store: handles,
+            check: handleCheck,
+            timeoutMs: 4 * timeoutMs,
+            recheckSeconds: config.HANDLE_RECHECK_S,
+            sweep,
+            now: () => performance.now(),
+            signal: stop,
+          }),
       },
       intervalMs: config.INDEXER_PASS_INTERVAL_MS,
     },

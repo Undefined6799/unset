@@ -43,6 +43,15 @@ alert on it before production. A failed read answers 503 with no body. One read 
 frame applied for `INDEXER_STREAM_UNHEALTHY_MS` (5 min) makes health 503 with the counts, so the image's HEALTHCHECK
 fails (`stream-watch.ts`; a quiet PDS after one stop is not a fault).
 
+**Handles (P3.08s).** `handles.ts` is the rule: verifyHandle fresh (both directions), and for a handle under
+`HOSTED_HANDLE_SUFFIXES` also our PDS's word: the DID document names `PDS_PUBLIC_URL`, getRepoStatus is active, and
+resolveHandle on our PDS maps it back to the same DID. An outage on either side is `unresolved` and keeps what is
+stored; only an explicit answer makes a handle invalid. The identity frame never writes a handle, only queues the
+check. `handleStore.ts` writes it in a short transaction; migration 0031's unique partial index allows one verified
+holder per handle, and a new holder moves the old one to unresolved and queues its check. A sweep every 10 minutes
+queues accounts never checked or checked more than `HANDLE_RECHECK_S` ago. The book's step 7 (`pds_endpoint`) waits
+for a column to hold it.
+
 **Image.** `deployment/images/indexer.Dockerfile`, its own image because the preflight's compose subset refuses
 `entrypoint` and `command`. The compose service and its egress network come in a later PR, once publish-images has
 produced a digest to pin.
