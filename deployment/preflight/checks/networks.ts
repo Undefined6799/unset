@@ -102,6 +102,16 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * and pds_admin, web's way in; both are pinned here as well as in the table (adminNetworkProblems). The PDS trusts it
  * as a proxy too, but pds-admin already holds the admin password, which is more than a forged client address could
  * give it.
+ *
+ * A third, under local and dev only (P3.05s; ADR 0052 Decision 2, "reads our PDS's subscribeRepos at its internal
+ * URL"): the service named indexer that runs the lock's indexer image (or, under local and dev --source, builds
+ * deployment/images/indexer.Dockerfile) may share indexer_pds, and that network alone, with the PDS, for the stream,
+ * getRepo, getRepoStatus and resolveHandle. Prod has no exemption: Alex, 2026-11-19T01:04Z, typing the line that
+ * allowed it, "Allow the indexer on its own private network with the PDS on staging only". How the indexer reaches the
+ * production PDS is open until the first prod deploy (step book P5.00). indexer_pds is internal and holds exactly those
+ * two, and the indexer joins no network but it, db and indexer_egress, its net-guarded way out. The PDS trusts it as a
+ * proxy too, so a compromised indexer could call the PDS without the edge's limits, claiming any client address; it
+ * holds no PDS credential (the doors compared: docs/ai/notes/area/indexer.md, "How the indexer reaches the PDS").
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
   return [...adminNetworkProblems(inputs.compose), ...neighbourProblems(inputs)];
@@ -171,11 +181,18 @@ const EXEMPT: readonly { network: string; service: string; dockerfile: string; l
     dockerfile: "deployment/images/pds-admin.Dockerfile",
     label: "pds-admin",
   },
+  {
+    network: "indexer_pds",
+    service: "indexer",
+    dockerfile: "deployment/images/indexer.Dockerfile",
+    label: "the indexer",
+  },
 ];
 
 /** The exempt networks that must be internal, and every network their service may join (P2.09e). */
 const PINNED: readonly { network: string; service: string; joins: readonly string[] }[] = [
   { network: "pds_admin_pds", service: "pds-admin", joins: ["pds_admin", "pds_admin_pds"] },
+  { network: "indexer_pds", service: "indexer", joins: ["db", "indexer_pds", "indexer_egress"] },
 ];
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";

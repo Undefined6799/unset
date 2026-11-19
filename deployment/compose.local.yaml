@@ -106,7 +106,7 @@ services:
       LOG_ENABLED: "false"
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=768
-    networks: [edge, pds_egress, objects_pds, pds_admin_pds]
+    networks: [edge, pds_egress, objects_pds, pds_admin_pds, indexer_pds]
     mem_limit: 1g
     cpus: 1
     pids_limit: 256
@@ -239,6 +239,48 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
+  # The indexer (P3.05s; ADR 0052): reads our PDS's stream and repos into idx for the public pages. Built from the
+  # checkout only, until its image is locked for production (local-only.ts SOURCE_ONLY_SERVICES). It reaches the PDS's
+  # internal URL on indexer_pds, the one network C17 lets it share with the PDS, under local and dev only (Alex,
+  # 2026-11-19T01:04Z); Postgres as its own role on db; and the PLC directory and other hosts' DID documents and
+  # handles through indexer_egress and net-guard. It publishes nothing; its health port answers inside the container.
+  indexer:
+    build:
+      context: ..
+      dockerfile: deployment/images/indexer.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: indexer
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: indexer
+      PG_PASSWORD_FILE: /run/secrets/pg_indexer_password
+      PG_SSLMODE: disable
+      PG_POOL_MAX: "4"
+      PLC_URL: https://plc.directory
+      INDEXER_ENABLED: "true"
+      INDEXER_PDS_URL: http://pds:3000
+      PDS_PUBLIC_URL: ${PDS_PUBLIC_URL}
+      NODE_OPTIONS: --max-old-space-size=384
+    secrets: [pg_indexer_password]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      pds:
+        condition: service_started
+    networks: [db, indexer_pds, indexer_egress]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 64
+    restart: unless-stopped
+
   # pds-admin (P2.09e; ADR 0060): the one holder of the PDS admin password, issuing member invites for web. Built from
   # the checkout only, until its image is locked for production (local-only.ts SOURCE_ONLY_SERVICES). It reaches the PDS
   # on pds_admin_pds, the one network C17 lets it share with the PDS, and web reaches it on pds_admin from P2.10; it has
@@ -321,6 +363,13 @@ networks:
   # else but the edge, share a network with the PDS, on this one network (deployment/preflight/checks/networks.ts).
   pds_admin_pds:
     internal: true
+  # The indexer's way to the PDS's internal URL (P3.05s; ADR 0052): internal, the two of them only. C17 lets the
+  # indexer, and nothing else but the edge, share a network with the PDS, on this one network, under local and dev only.
+  indexer_pds:
+    internal: true
+  # The indexer's own way out (ADR 0052 Decision 2, the shape of web_egress): the PLC directory, did:web documents and
+  # handle resolution, every request through net-guard. Only the indexer joins it.
+  indexer_egress:
 
 volumes:
   pgdata:

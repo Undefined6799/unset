@@ -195,6 +195,78 @@ describe("pds-admin beside the PDS (P2.09e; ADR 0060 Decision 1)", () => {
   });
 });
 
+describe("the indexer beside the PDS (P3.05s; ADR 0052 Decision 2)", () => {
+  // The indexer reads our PDS's stream, repos, repo status and handles at its internal URL, so under local and dev it
+  // may share one internal network with the PDS, indexer_pds, which holds exactly the two. Prod has no exemption
+  // (Alex, 2026-11-19T01:04Z: "Allow the indexer on its own private network with the PDS on staging only").
+  const LOCK = JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" }, indexer: { ref: "i" } });
+  const check = (yaml: string, env: Inputs["env"] = "dev", lock = LOCK) =>
+    pdsNeighbours({
+      env,
+      source: false,
+      root: "/repo",
+      lockPath: "/repo/lock",
+      compose: compose(yaml),
+      readText: (path: string) => (path === "/repo/lock" ? lock : null),
+    } as Inputs);
+  const stack = (indexer: string, extra = "", pds = "[edge, indexer_pds]") =>
+    `services:\n  edge:\n    image: e\n    networks: [edge]\n  pds:\n    image: p\n    networks: ${pds}\n${indexer}${extra}` +
+    "networks:\n  edge: {}\n  db:\n    internal: true\n  indexer_pds:\n    internal: true\n  indexer_egress: {}\n";
+  const INDEXER = "  indexer:\n    image: i\n    networks: [db, indexer_pds, indexer_egress]\n";
+  const refused = ["indexer shares a network with the pds"];
+  const joins = "indexer joins a network other than db and indexer_pds and indexer_egress";
+
+  test("indexer_network_admits_only_the_locked_indexer", () => {
+    expect(check(stack(INDEXER))).toEqual([]);
+    // Another image under its name, or its image under another name.
+    expect(check(stack("  indexer:\n    image: x\n    networks: [indexer_pds]\n"))).toEqual(refused);
+    expect(check(stack("  reader:\n    image: i\n    networks: [indexer_pds]\n"))).toEqual([
+      "reader shares a network with the pds",
+    ]);
+    // A lock with no indexer entry admits none.
+    expect(check(stack(INDEXER), "dev", JSON.stringify({ edge: { ref: "e" }, pds: { ref: "p" } }))).toEqual(refused);
+  });
+
+  test("indexer_exemption_does_not_hold_in_prod", () => {
+    // Alex, 2026-11-19T01:04Z: "on staging only". A prod stack with the locked indexer beside the PDS fails, until a
+    // decision says how the indexer reaches the production PDS.
+    expect(check(stack(INDEXER), "prod")).toEqual(refused);
+    expect(check(stack(INDEXER, "", "[edge]"), "prod")).toEqual([
+      "indexer_pds holds a service other than the pds and the indexer",
+    ]);
+  });
+
+  test("indexer_network_is_internal_and_the_indexer_joins_only_its_three", () => {
+    const open = stack(INDEXER).replace("indexer_pds:\n    internal: true\n", "indexer_pds: {}\n");
+    expect(check(open)).toEqual(["indexer_pds is not internal"]);
+    // The edge's network is a PDS network too, so it is refused twice; the app network and web's way out once.
+    expect(check(stack("  indexer:\n    image: i\n    networks: [db, indexer_pds, edge]\n"))).toEqual([
+      joins,
+      ...refused,
+    ]);
+    for (const extra of ["app", "web_egress", "objects"]) {
+      const wider = stack(
+        `  indexer:\n    image: i\n    networks: [db, indexer_pds, indexer_egress, ${extra}]\n`,
+      ).replace("networks:\n  edge: {}\n", `networks:\n  edge: {}\n  ${extra}: {}\n`);
+      expect(check(wider), extra).toEqual([joins]);
+    }
+  });
+
+  test("indexer_network_holds_only_the_pds_and_the_indexer", () => {
+    const third = "indexer_pds holds a service other than the pds and the indexer";
+    expect(check(stack(INDEXER, "  web:\n    image: w\n    networks: [indexer_pds]\n"))).toEqual([
+      "web shares a network with the pds",
+      third,
+    ]);
+    // pds-admin's exemption is for its own network only.
+    expect(check(stack(INDEXER, "  pds-admin:\n    image: a\n    networks: [indexer_pds]\n"))).toEqual([
+      "pds-admin joins a network other than pds_admin and pds_admin_pds",
+      "pds-admin shares a network with the pds",
+      third,
+    ]);
+  });
+});
+
 describe("the dev edge's tunnel (P1.36i; ADR 0031 Decision 3)", () => {
   // Under dev both staging names resolve through public DNS to Pangolin, so the edge answers to no name inside the
   // stack, and net-guard keeps no internal-host exception.
