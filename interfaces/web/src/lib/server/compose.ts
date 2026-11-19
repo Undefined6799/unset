@@ -35,11 +35,13 @@ import {
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
+  createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
   type InviteStore,
   oauthSessionExists,
   type Pool,
+  type PublicProfileStore,
   ping,
   withClient,
   withTransaction,
@@ -119,6 +121,8 @@ export type Services = {
     readonly issue: (did: Did) => Promise<IssueInviteResult>;
     readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
   };
+  /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
+  readonly publicProfiles: PublicProfileStore;
 };
 
 /** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
@@ -300,6 +304,7 @@ async function build(): Promise<Services> {
     email,
     setEmailConfirmed,
     invites,
+    publicProfiles: createPublicProfileStore(pool),
   };
 }
 

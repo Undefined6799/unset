@@ -347,6 +347,26 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "idx.public_profile": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
+          "handle": ["SELECT"],
+          "cid": ["SELECT"],
+          "record": ["SELECT"]
+        }
+      }
+    },
+    "idx.public_section": {
+      "web": {
+        "columns": {
+          "did": ["SELECT"],
+          "rkey": ["SELECT"],
+          "cid": ["SELECT"],
+          "record": ["SELECT"]
+        }
+      }
+    },
     "idx.track_request": {
       "web": {
         "columns": {

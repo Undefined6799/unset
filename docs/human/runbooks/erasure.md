@@ -19,6 +19,9 @@ What it does not remove, and who does:
 - **Indexed network data and legal holds.** Neither exists yet. When the indexer stores records (Phase 3) and holds
   exist (Phase 4), their steps extend the function; until then it knows nothing about them.
 - **Backups.** They age out on the backup schedule.
+- **Copies of the public page.** `/@handle` reads as not found as soon as the account is erased, taken down,
+  delisted or deactivated, but a visitor's browser or a cache may keep the last copy for up to 60 seconds
+  (`Cache-Control: public, max-age=60`, P3.12s). Nothing purges it; wait the minute.
 
 The function refuses to run (`erase_uncovered_did_column`) while the database has a column of the DID or AT-URI type
 it has no statement for, so it never reports a person erased while a newer table still names them. That check goes by
