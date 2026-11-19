@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { canonicalActorPath, parseActor } from "./profile-path.ts";
 import { type Did, type Handle, parseDid, parseHandle } from "./syntax.ts";
 
-const SUFFIX = ".unset.im";
+const SUFFIX = ".unset.name";
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 
 describe("parseActor", () => {
@@ -14,7 +14,7 @@ describe("parseActor", () => {
   });
 
   test("handle_lowercased_and_suffixed", () => {
-    expect(parseActor("Alice", SUFFIX)).toEqual({ handle: "alice.unset.im" });
+    expect(parseActor("Alice", SUFFIX)).toEqual({ handle: "alice.unset.name" });
     expect(parseActor("alice.example.com", SUFFIX)).toEqual({ handle: "alice.example.com" });
   });
 
@@ -27,7 +27,7 @@ describe("parseActor", () => {
 describe("canonicalActorPath", () => {
   const did = parseDid(DID) as Did;
   test("verified_handle_else_did", () => {
-    expect(canonicalActorPath(parseHandle("alice.unset.im") as Handle, did)).toBe("/@alice.unset.im");
+    expect(canonicalActorPath(parseHandle("alice.unset.name") as Handle, did)).toBe("/@alice.unset.name");
     expect(canonicalActorPath(null, did)).toBe(`/@${DID}`);
   });
 });
