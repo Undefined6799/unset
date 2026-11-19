@@ -3044,7 +3044,7 @@ Where: `interfaces/http/routes/{invite.ts, join.ts, signup.ts}`, `apps/web/scree
 Size: ~210 source lines, ~240 test lines
 As built (SvelteKit, PR 1 of 2): `interfaces/web/src/routes/invite/` (form actions `issue` and `hide`) and
   `routes/join/` (its form action is the book's `POST /signup`, at the sign-in limit), the rule in
-  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0032_app_invite.sql`
+  `domains/identity/invites.ts`, the rows in `infrastructure/postgres/inviteStore.ts`, migration `0031_app_invite.sql`
   (column grants, row DELETE, `invite.denied` audit action, `core.erase_did` covering `app.invite.inviter_did`). The
   list shows issued codes only (a pending row holds none). Web mounts `web_pds_admin_key` in every stack and joins
   `pds_admin` under `--source` and local. PR 2: the Share panel (copy button, share sheet, `sms:` link, QR) and the
