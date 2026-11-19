@@ -211,6 +211,8 @@ export async function startWeb(
   };
   // A caller may pin the port (the browser harness, tests/e2e/fixtures/servers.ts); otherwise any free one.
   const port = env.LISTEN_PORT === undefined ? await freePort() : Number(env.LISTEN_PORT);
+  // This child's own commit, so the readiness probe knows its answer from another process's on the same port.
+  const commit = env.UNSET_COMMIT ?? randomBytes(20).toString("hex");
   const entry = standIns === undefined ? "server.ts" : join(import.meta.dirname, "stand-in-server.ts");
   const fixture =
     standIns === undefined
@@ -226,7 +228,7 @@ export async function startWeb(
       PATH: process.env.PATH ?? "",
       UNSET_ENV: "test",
       UNSET_SERVICE: "http",
-      UNSET_COMMIT: "c".repeat(40),
+      UNSET_COMMIT: commit,
       LISTEN_PORT: String(port),
       PUBLIC_ORIGIN: ORIGIN,
       HTTP_ALLOWED_HOSTS: HOST,
@@ -262,7 +264,7 @@ export async function startWeb(
   });
   const exited = new Promise<number | null>((done) => child.once("exit", (code) => done(code)));
   const fetchWeb = (path: string, init: WebRequest = {}) => send(port, path, init);
-  await waitUntilListening(fetchWeb, exited, () => out);
+  await waitUntilListening(fetchWeb, commit, exited, () => out);
   return {
     port,
     fetch: fetchWeb,
@@ -287,8 +289,14 @@ export async function startWeb(
   };
 }
 
+/**
+ * Waits until /health on the port answers with this child's commit. The port was free when freePort released it, but
+ * another process on the runner can bind it before the child does; the child then exits on EADDRINUSE, and an answer
+ * from that process must never count (#1731 code job, 2026-11-19: every later request went to it, a 404 in 17 ms).
+ */
 async function waitUntilListening(
   fetchWeb: RunningWeb["fetch"],
+  commit: string,
   exited: Promise<number | null>,
   output: () => string,
 ): Promise<void> {
@@ -299,11 +307,13 @@ async function waitUntilListening(
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (gone) throw new Error(`web server exited before listening:\n${output()}`);
     try {
-      await fetchWeb("/health");
-      return;
+      const response = await fetchWeb("/health");
+      const body = (await response.json().catch(() => null)) as { commit?: unknown } | null;
+      if (body?.commit === commit) return;
     } catch {
-      await new Promise((done) => setTimeout(done, 50));
+      // Not listening yet.
     }
+    await new Promise((done) => setTimeout(done, 50));
   }
   throw new Error(`web server did not listen:\n${output()}`);
 }
