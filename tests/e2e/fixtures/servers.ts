@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { type Did, PRIVACY_VERSION, parseDid, TERMS_VERSION } from "@unset/domains-identity";
+import { toCardRecord } from "@unset/domains-profile";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import type { SavedSession } from "@unset/infrastructure-pds";
 import {
@@ -37,6 +38,7 @@ import { randomPassword, startPostgres, stopAllPostgres } from "../../support/po
 import {
   ACCOUNT,
   HOST,
+  INDEXED,
   INNER,
   LISTEN,
   type MemberName,
@@ -66,8 +68,8 @@ function scratch(): string {
   return dir;
 }
 
-/** Postgres with the migrations applied, connected to as `web` with a password set for this run. */
-async function database(): Promise<Postgres> {
+/** Postgres with the migrations applied, then `seed` run as the superuser, connected to as `web` for this run. */
+async function database(seed = ""): Promise<Postgres> {
   process.on("exit", () => stopAllPostgres());
   const migratorPassword = randomPassword();
   const postgres = await startPostgres({
@@ -90,6 +92,7 @@ async function database(): Promise<Postgres> {
     retryDelaysMs: [],
   });
   if (!result.ok) throw new Error(`migration failed: ${result.reason}`);
+  if (seed !== "") postgres.sql("unset", seed);
   const password = randomPassword();
   postgres.sql("unset", `ALTER ROLE web PASSWORD '${password}'`);
   return { host: "127.0.0.1", port: postgres.port, database: "unset", user: "web", password };
@@ -209,8 +212,34 @@ function connectProxy(): Promise<void> {
   return new Promise((done) => proxy.listen(Number(new URL(PROXY).port), "127.0.0.1", () => done()));
 }
 
+/**
+ * INDEXED as the indexer leaves a member with a profile and one card (P3.12s), so the public profile page at /@did
+ * is a page under test. Constants only; the records are dollar-quoted JSON.
+ */
+function indexedMember(): string {
+  const at = "2026-11-19T00:00:00.000Z";
+  const card = toCardRecord({ kind: "readme", text: "A card on a public page." }, "full", null, at);
+  if (!card.ok) throw new Error(`e2e card did not build: ${card.code}`);
+  const profile = {
+    $type: "sh.unset.profile",
+    displayName: "Public Member",
+    headline: "On the open web",
+    createdAt: at,
+  };
+  const did = INDEXED.did;
+  return `
+    INSERT INTO idx.account (did, handle_status, pds_active, track_requested_at, updated_at)
+      VALUES ('${did}', 'unresolved', true, now(), now());
+    INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+      VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid-p', '3l', $j$${JSON.stringify(profile)}$j$,
+        'Public Member', false, now());
+    INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
+      VALUES ('at://${did}/sh.unset.section/3jzfcijpj2z2a', '${did}', '3jzfcijpj2z2a', 'cid-s', '3l',
+        $j$${JSON.stringify(card.record)}$j$, 0, now());`;
+}
+
 async function serveProd(): Promise<void> {
-  const pg = await database();
+  const pg = await database(indexedMember());
   const dir = scratch();
   const web = await startWeb(pg, { UNSET_ENV: "dev", TEST_ROUTES: "false", ...frontedEnv("prod") });
   await tlsFront(dir, LISTEN.prod, INNER.prod);

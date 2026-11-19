@@ -25,6 +25,8 @@ export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 export type MemberName = "age" | "terms" | "chat" | "verify" | "account";
 /** The finished member, whose repo the stand-in PDS holds. */
 export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
+/** A member the indexer has copied (fixtures/servers.ts seeds it on the production server), shown at /@did. */
+export const INDEXED = { did: `did:plc:${"p".repeat(24)}` } as const;
 /**
  * The test server writes each member's session cookie here once it listens; the specs read it. Outside test-results,
  * which Playwright empties when a run starts (outputDir).
@@ -71,6 +73,7 @@ export const PAGES: readonly PageFixture[] = [
   signedOut("/legal/terms", "public", "/legal/:document"),
   signedOut("/legal/privacy", "public", "/legal/:document"),
   signedOut("/legal/domains", "public", "/legal/:document"),
+  signedOut(`/@${INDEXED.did}`, "public", "/@:actor"),
   // The sign-in page and the blocked page run no script, as on Hono: nothing on them needs it (lighthouserc.json's
   // zero-script row).
   signedOut("/login", "app", "/login", false),
@@ -150,12 +153,15 @@ export type KitRoute = { readonly route: string; readonly document: boolean; rea
 
 const ROUTES = join(import.meta.dirname, "../../interfaces/web/src/routes");
 
-/** A route folder name as a path segment: `[did]` → `:did`, `[document=legal]` → `:document`, `[x+2e]` → `.`. */
+/**
+ * A route folder name as a path segment: `[did]` → `:did`, `[document=legal]` → `:document`, `@[actor]` → `@:actor`,
+ * `[x+2e]` → `.`.
+ */
 function segment(name: string): string {
   const decoded = name.replace(/\[x\+([0-9a-f]{2})\]/g, (_, hex: string) =>
     String.fromCharCode(Number.parseInt(hex, 16)),
   );
-  return decoded.replace(/^\[([a-z]+)(=[a-z]+)?\]$/, ":$1");
+  return decoded.replace(/\[([a-z]+)(=[a-z]+)?\]$/, ":$1");
 }
 
 /** interfaces/web's routes, read from its route folders: a +page.svelte is a document, a +server.ts is not. */
