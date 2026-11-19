@@ -1,7 +1,7 @@
 // The public profile page's one read (book P3.12s; migration 0030). It reads only the two views 0030 grants `web`,
 // which show visible accounts alone, so every state that hides an account (deactivated, deleted, erased, delisted,
 // suspended) reads here as no row. The profile and its cards come back in one statement, so the page never shows
-// cards from a different moment than the profile. The member's Search and AI choices (migration 0032) come with it. Records come back as stored; domains/profile reads them again.
+// cards from a different moment than the profile. The member's Search and AI choices (migration 0034) come with it. Records come back as stored; domains/profile reads them again.
 import { type Discoverability, MAX_SECTIONS_PER_ACCOUNT } from "@unset/domains-profile";
 import { type Pool, withClient } from "./pool.ts";
 
