@@ -1,8 +1,8 @@
 // Endpoint pages for the Hugo docs (P0.09, issue #1161 section 3).
 //
-// Generated columns come from interfaces/<process>/routes.manifest.json and, for buckets, from
-// interfaces/<process>/limits.ts. The policies export is imported, not parsed as text, the same way
-// scripts/guards/route-policy.ts reads it. Prose columns come from docs/site/data/endpoints/<process>.yaml.
+// Generated columns come from web route files, their policy.ts exports and lib/server/limits.ts.
+// Only policy modules are imported; handlers are parsed without executing their dependencies.
+// Optional prose comes from docs/site/data/endpoints/web.yaml.
 // A security fact those files do not state is the cell "not recorded".
 //
 // YAML is yaml 2.9.1 (node_modules/yaml/package.json). parseDocument uses the YAML 1.2 core schema,
@@ -12,67 +12,46 @@
 // at https://imfing.github.io/hextra/docs/guide/organize-files/ (read 2026-10-21).
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseSync } from "vite";
 import { parseDocument } from "yaml";
 
 export const NOT_RECORDED = "not recorded";
 
 const CONTENT_DIR = "docs/site/content/endpoints";
 const DATA_DIR = "docs/site/data/endpoints";
-const MANIFEST = "routes.manifest.json";
-const LIMITS = "limits.ts";
-/** Outline order (issue #1161). Any other process follows, alphabetically. */
-const PROCESS_ORDER = ["http", "admin", "api", "indexer", "media", "review"];
+const ROUTES = "interfaces/web/src/routes";
+const LIMITS = "interfaces/web/src/lib/server/limits.ts";
+const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const KNOWN_FIELDS = new Set([
-  "method",
-  "path",
   "group",
-  "accepts",
-  "bodyLimit",
-  "rateLimit",
-  "mutates",
-  "requiresSession",
-  "handlerSession",
-  "middleware",
+  "limit",
+  "writeLimit",
+  "session",
+  "returnTo",
+  "maxBody",
   "deadlineMs",
+  "probe",
+  "testOnly",
 ]);
 const NOTE_FIELDS = new Set(["why", "input", "output", "errors", "auth"]);
 const PROSE_FIELDS = ["why", "input", "output", "errors", "auth"] as const;
 const PROSE = /^[^\n|]{0,500}$/;
 const SCOPES = new Set(["ip", "did", "global"]);
-/**
- * Meanings taken from shared/http/server.ts middlewareOf and the checks it names. A name that is not
- * in this map stays "not recorded" rather than gaining a description from memory.
- */
-const MIDDLEWARE: Readonly<Record<string, string>> = {
-  requestId: "Request id, assigned before the route (shared/http/server.ts).",
-  hostCheck: "Host is present and allowed. Not applied to /health (shared/http/server.ts).",
-  trustedProxy: "Client address from the trusted proxy. Not applied to /health (shared/http/server.ts).",
-  methodCheck: "Method is GET, HEAD or POST, and it matches the route (shared/http/server.ts).",
-  contentTypeCheck: "A POST media type is one of accepts (shared/http/server.ts).",
-  bodyLimit: "A POST body is capped (shared/http/server.ts).",
-  rateLimitIp: "IP bucket of the named policy. Omitted when rateLimit is exempt (shared/http/server.ts).",
-  csrf: "POST same-origin gate. The kit adds it for every POST (shared/http/server.ts).",
-  session: "Present only when requiresSession is true (shared/http/server.ts).",
-  rateLimitDid: "DID bucket. Present only when requiresSession is true (shared/http/server.ts).",
-};
-
 export type Bucket = { readonly scope: string; readonly capacity: number; readonly refillPerSec: number };
 
 export type RouteRecord = {
   readonly method: string;
   readonly path: string;
   readonly group: string | null;
-  readonly requiresSession: true | null;
-  /** The handler reads the session and sends a signed-out visitor to /login; the kit does not (#1279). */
-  readonly handlerSession: true | null;
-  readonly middleware: readonly string[] | null;
+  readonly session: string | null;
   readonly rateLimit: string | null;
-  readonly accepts: readonly string[] | null;
+  readonly writeLimit: string | null;
   readonly bodyLimit: number | null;
-  readonly mutates: boolean | null;
   readonly deadlineMs: number | null;
+  readonly testOnly: boolean | null;
+  readonly probe: boolean | null;
   readonly why: string;
   readonly input: string;
   readonly output: string;
@@ -95,7 +74,7 @@ export type LoadResult =
   | { readonly ok: true; readonly model: EndpointModel }
   | { readonly ok: false; readonly problems: readonly string[] };
 
-const EMPTY_NOTE: HandNote = { why: "", input: "", output: "", errors: "", auth: "" };
+const EMPTY_NOTE: HandNote = Object.fromEntries(PROSE_FIELDS.map((field) => [field, NOT_RECORDED])) as HandNote;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -105,30 +84,9 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 
 const formatNum = (n: number): string => (Object.is(n, -0) ? "0" : String(n));
 const routeKey = (method: string, path: string): string => `${method} ${path}`;
-const processRank = (name: string): number => {
-  const index = PROCESS_ORDER.indexOf(name);
-  return index === -1 ? PROCESS_ORDER.length : index;
-};
-
 function problemLine(error: unknown): string {
   const message = error instanceof Error ? error.message : "unreadable";
   return message.replaceAll("\n", " ").slice(0, 200);
-}
-
-function interfaceNames(root: string): { names: string[]; problems: string[] } {
-  const dir = join(root, "interfaces");
-  const names = existsSync(dir)
-    ? readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && existsSync(join(dir, entry.name, MANIFEST)))
-        .map((entry) => entry.name)
-        .sort((a, b) => processRank(a) - processRank(b) || a.localeCompare(b))
-    : [];
-  return {
-    names,
-    problems: names
-      .filter((name) => !/^[a-z][a-z0-9-]*$/.test(name))
-      .map((name) => `interfaces/${name}: process name cannot be a page slug`),
-  };
 }
 
 function readField<T>(
@@ -151,84 +109,95 @@ const oneLine = (value: unknown): string | undefined =>
 const flag = (value: unknown): boolean | undefined => (typeof value === "boolean" ? value : undefined);
 const count = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
-const nameList =
-  (allowed: RegExp) =>
-  (value: unknown): string[] | undefined =>
-    Array.isArray(value) && value.every((item) => typeof item === "string" && allowed.test(item)) ? value : undefined;
-const sessionFlag = (value: unknown): true | undefined => (value === true ? true : undefined);
-
-function readDraft(file: string, value: unknown, index: number): { draft: Draft | null; problems: string[] } {
+function readDraft(
+  file: string,
+  value: unknown,
+  method: string,
+  path: string,
+): { draft: Draft | null; problems: string[] } {
   const problems: string[] = [];
-  if (!isPlainObject(value)) return { draft: null, problems: [`${file}: route ${index} is not an object`] };
-  const where = `${file}: route ${index}`;
+  if (!isPlainObject(value)) return { draft: null, problems: [`${file}: no policy object exported`] };
+  if (oneLine(path) === undefined)
+    return { draft: null, problems: [`${file}: route id cannot be rendered as a table cell`] };
   for (const field of Object.keys(value)) {
-    if (!KNOWN_FIELDS.has(field)) problems.push(`${where} has unknown field ${field}`);
-  }
-  const method = typeof value.method === "string" && !/\s/.test(value.method) ? value.method : "";
-  const path =
-    typeof value.path === "string" && value.path.startsWith("/") && !/[\s`|]/.test(value.path) ? value.path : "";
-  if (method === "") problems.push(`${where} has no method`);
-  if (path === "") problems.push(`${where} has no path`);
-  if (method === "" || path === "") return { draft: null, problems };
-  // Field problems still keep the draft, so a bad cell does not also look like a missing route.
-  const at = `${file}: ${routeKey(method, path)}`;
-  // The kit sets at most one of them (shared/http/routes.ts), so both at once is a hand-edited manifest.
-  if (value.requiresSession === true && value.handlerSession === true) {
-    problems.push(`${at} sets both requiresSession and handlerSession`);
+    if (!KNOWN_FIELDS.has(field)) problems.push(`${file}: unknown field ${field}`);
   }
   return {
     draft: {
       method,
       path,
-      group: readField(value, "group", at, problems, oneLine, "group is not a single-line string"),
-      rateLimit: readField(value, "rateLimit", at, problems, oneLine, "rateLimit is not a single-line string"),
-      requiresSession: readField(value, "requiresSession", at, problems, sessionFlag, "requiresSession is not true"),
-      handlerSession: readField(value, "handlerSession", at, problems, sessionFlag, "handlerSession is not true"),
-      middleware: readField(
-        value,
-        "middleware",
-        at,
-        problems,
-        nameList(/^[^\n`|]+$/),
-        "middleware is not a list of names",
-      ),
-      accepts: readField(
-        value,
-        "accepts",
-        at,
-        problems,
-        nameList(/^[^\n|,`]*$/),
-        "accepts is not a list of media types",
-      ),
-      bodyLimit: readField(value, "bodyLimit", at, problems, count, "bodyLimit is not a positive integer"),
-      mutates: readField(value, "mutates", at, problems, flag, "mutates is not a boolean"),
-      deadlineMs: readField(value, "deadlineMs", at, problems, count, "deadlineMs is not a positive integer"),
+      group: readField(value, "group", file, problems, oneLine, "group is not a single-line string"),
+      rateLimit: readField(value, "limit", file, problems, oneLine, "limit is not a single-line string"),
+      writeLimit: readField(value, "writeLimit", file, problems, oneLine, "writeLimit is not a single-line string"),
+      session: readField(value, "session", file, problems, oneLine, "session is not a single-line string"),
+      bodyLimit: readField(value, "maxBody", file, problems, count, "maxBody is not a positive integer"),
+      deadlineMs: readField(value, "deadlineMs", file, problems, count, "deadlineMs is not a positive integer"),
+      testOnly: readField(value, "testOnly", file, problems, flag, "testOnly is not a boolean"),
+      probe: readField(value, "probe", file, problems, flag, "probe is not a boolean"),
     },
     problems,
   };
 }
 
-function readManifest(root: string, name: string): { drafts: Draft[]; problems: string[] } {
-  const file = `interfaces/${name}/${MANIFEST}`;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(join(root, file), "utf8"));
-  } catch (error) {
-    return { drafts: [], problems: [`${file}: ${problemLine(error)}`] };
+/** Vite 8.3.5 re-exports parseSync (dist/node/index.d.ts); rolldown 1.2.15's StaticExportEntry
+ * records exportName and isType. Parse syntax, never comments or handler dependencies. */
+function exportedNames(file: string): Set<string> {
+  const parsed = parseSync(file, readFileSync(file, "utf8"), { lang: "ts", sourceType: "module" });
+  if (parsed.errors.length > 0) throw new Error(`cannot parse exports: ${parsed.errors[0]?.message}`);
+  const names = new Set<string>();
+  for (const entry of parsed.module.staticExports.flatMap((item) => item.entries)) {
+    if (entry.isType) continue;
+    if (entry.exportName.name === null) throw new Error("export * needs explicit names for endpoint documentation");
+    names.add(entry.exportName.name);
   }
-  if (!Array.isArray(parsed)) return { drafts: [], problems: [`${file}: routes manifest is not an array`] };
+  return names;
+}
+
+/** SvelteKit 3.2.0 src/core/sync/create_manifest_data/index.js recognises +page/+server files;
+ * src/runtime/server/page/actions.js dispatches actions on POST; endpoint.js dispatches named methods.
+ * These are declared methods, not an execution trace (no implicit HEAD/OPTIONS or handler success claim). */
+function routeMethods(root: string, folder: string, files: readonly string[]): string {
+  const methods = new Set<string>();
+  if (files.some((file) => /^\+page(?:\.server)?\.(?:svelte|ts|js)$/.test(file))) methods.add("GET");
+  for (const file of files.filter((file) => /^\+(?:server|page\.server)\.[tj]s$/.test(file))) {
+    const names = exportedNames(join(root, folder, file));
+    if (file.startsWith("+server")) {
+      for (const method of METHODS.filter((method) => names.has(method))) methods.add(method);
+      if (names.has("fallback")) throw new Error("fallback handler needs explicit methods for endpoint documentation");
+    } else if (names.has("actions")) methods.add("POST");
+  }
+  return METHODS.filter((method) => methods.has(method)).join(", ") || NOT_RECORDED;
+}
+
+async function readRoutes(root: string): Promise<{ drafts: Draft[]; problems: string[] }> {
   const drafts: Draft[] = [];
   const problems: string[] = [];
-  const seen = new Set<string>();
-  for (const [index, value] of parsed.entries()) {
-    const read = readDraft(file, value, index);
-    problems.push(...read.problems);
-    if (read.draft === null) continue;
-    const key = routeKey(read.draft.method, read.draft.path);
-    if (seen.has(key)) problems.push(`${file}: duplicate ${key}`);
-    seen.add(key);
-    drafts.push(read.draft);
+  const entries = existsSync(join(root, ROUTES))
+    ? readdirSync(join(root, ROUTES), { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+    : [];
+  const folders = [...new Set(entries.map((entry) => entry.parentPath))].sort();
+  for (const folder of folders) {
+    const files = entries.filter((entry) => entry.parentPath === folder).map((entry) => entry.name);
+    const file = `${relative(root, folder)}/policy.ts`;
+    const isRoute = files.some((name) => /^\+(?:server|page(?:\.server)?)\.(?:svelte|ts|js)$/.test(name));
+    if (isRoute && !files.includes("policy.ts")) problems.push(`${file}: missing`);
+    if (!files.includes("policy.ts")) continue;
+    try {
+      const imported: unknown = await import(pathToFileURL(join(root, file)).href);
+      const path = `/${relative(join(root, ROUTES), folder)}`;
+      const read = readDraft(
+        file,
+        isPlainObject(imported) ? imported.policy : undefined,
+        routeMethods(root, relative(root, folder), files),
+        path,
+      );
+      problems.push(...read.problems);
+      if (read.draft !== null) drafts.push(read.draft);
+    } catch (error) {
+      problems.push(`${file}: ${problemLine(error)}`);
+    }
   }
+  if (drafts.length === 0) problems.push(`${ROUTES}: no route policies found`);
   return { drafts, problems };
 }
 
@@ -244,7 +213,7 @@ function readNote(file: string, key: string, value: unknown): { note: HandNote; 
     const text = value[field];
     if (typeof text !== "string" || !PROSE.test(text)) {
       problems.push(`${file}: "${key}" ${field} must be one line without a pipe`);
-    } else note[field] = text;
+    } else note[field] = text || NOT_RECORDED;
   }
   return { note, problems };
 }
@@ -252,7 +221,7 @@ function readNote(file: string, key: string, value: unknown): { note: HandNote; 
 function readNotes(root: string, name: string): { notes: Map<string, HandNote>; problems: string[] } {
   const file = `${DATA_DIR}/${name}.yaml`;
   const abs = join(root, file);
-  if (!existsSync(abs)) return { notes: new Map(), problems: [`${file}: missing`] };
+  if (!existsSync(abs)) return { notes: new Map(), problems: [] };
   let parsed: unknown;
   try {
     const doc = parseDocument(readFileSync(abs, "utf8"), {
@@ -263,15 +232,16 @@ function readNotes(root: string, name: string): { notes: Map<string, HandNote>; 
     });
     if (doc.errors.length > 0)
       return { notes: new Map(), problems: doc.errors.map((error) => `${file}: ${problemLine(error)}`) };
-    parsed = doc.toJS({ maxAliasCount: 0 });
+    parsed = doc.toJS({ maxAliasCount: 0 }) ?? {};
   } catch (error) {
     return { notes: new Map(), problems: [`${file}: ${problemLine(error)}`] };
   }
-  if (!isPlainObject(parsed)) return { notes: new Map(), problems: [`${file}: expected a mapping of "METHOD path"`] };
+  if (!isPlainObject(parsed))
+    return { notes: new Map(), problems: [`${file}: expected a mapping of "METHOD[, METHOD] route id"`] };
   const notes = new Map<string, HandNote>();
   const problems: string[] = [];
   for (const [key, value] of Object.entries(parsed)) {
-    if (!/^[A-Z]+ \/\S*$/.test(key)) problems.push(`${file}: bad key "${key}"`);
+    if (!/^[A-Z]+(?:, [A-Z]+)* \/\S*$/.test(key)) problems.push(`${file}: bad key "${key}"`);
     const read = readNote(file, key, value);
     problems.push(...read.problems);
     notes.set(key, read.note);
@@ -296,9 +266,8 @@ function isBucket(value: unknown): value is Bucket {
 
 async function readPolicies(
   root: string,
-  name: string,
 ): Promise<{ policies: ReadonlyMap<string, readonly Bucket[]> | null; problems: string[] }> {
-  const file = `interfaces/${name}/${LIMITS}`;
+  const file = LIMITS;
   if (!existsSync(join(root, file))) return { policies: null, problems: [] };
   let imported: unknown;
   try {
@@ -326,22 +295,21 @@ async function readPolicies(
   return { policies, problems };
 }
 
-function policyProblem(name: string, draft: Draft, policies: ProcessModel["policies"]): string | null {
-  if (draft.rateLimit === null || draft.rateLimit === "exempt") return null;
-  const file = `interfaces/${name}/${LIMITS}`;
+function policyProblems(draft: Draft, policies: ProcessModel["policies"]): string[] {
   const key = routeKey(draft.method, draft.path);
-  if (policies === null) return `${file}: ${key} names "${draft.rateLimit}" but the file does not exist`;
-  if (!policies.has(draft.rateLimit))
-    return `${file}: ${key} names "${draft.rateLimit}" but no such policy is exported`;
-  return null;
+  return [draft.rateLimit, draft.writeLimit].flatMap((name) => {
+    if (name === null) return [];
+    if (policies === null) return [`${LIMITS}: ${key} names "${name}" but the file does not exist`];
+    return policies.has(name) ? [] : [`${LIMITS}: ${key} names "${name}" but no such policy is exported`];
+  });
 }
 
-/** A data-file key with no manifest route. A key that already failed the key pattern is not also an orphan. */
+/** A data-file key with no route. A key that already failed the key pattern is not also an orphan. */
 function orphanProblems(file: string, notes: ReadonlyMap<string, HandNote>, seen: ReadonlySet<string>): string[] {
   const problems: string[] = [];
   for (const key of notes.keys()) {
     if (seen.has(key)) continue;
-    if (!/^[A-Z]+ \/\S*$/.test(key)) continue;
+    if (!/^[A-Z]+(?:, [A-Z]+)* \/\S*$/.test(key)) continue;
     problems.push(`${file}: orphan key "${key}"`);
   }
   return problems;
@@ -361,9 +329,7 @@ function assemble(
     const key = routeKey(draft.method, draft.path);
     seen.add(key);
     const noted = notes.get(key);
-    if (noted === undefined) problems.push(`${file}: missing key "${key}"`);
-    const limit = policyProblem(name, draft, policies);
-    if (limit !== null) problems.push(limit);
+    problems.push(...policyProblems(draft, policies));
     routes.push({ ...draft, ...(noted ?? EMPTY_NOTE) });
   }
   return { process: { name, routes, policies }, problems: [...problems, ...orphanProblems(file, notes, seen)] };
@@ -371,19 +337,12 @@ function assemble(
 
 /** The pages the committed tree must match, or the problems that stop a write. */
 export async function loadEndpointModel(root: string): Promise<LoadResult> {
-  const found = interfaceNames(root);
-  const problems = [...found.problems];
-  const processes: ProcessModel[] = [];
-  for (const name of found.names) {
-    if (!/^[a-z][a-z0-9-]*$/.test(name)) continue;
-    const manifest = readManifest(root, name);
-    const notes = readNotes(root, name);
-    const policies = await readPolicies(root, name);
-    problems.push(...manifest.problems, ...notes.problems, ...policies.problems);
-    const built = assemble(name, manifest.drafts, notes.notes, policies.policies);
-    problems.push(...built.problems);
-    processes.push(built.process);
-  }
+  const routes = await readRoutes(root);
+  const notes = readNotes(root, "web");
+  const policies = await readPolicies(root);
+  const built = assemble("web", routes.drafts, notes.notes, policies.policies);
+  const problems = [...routes.problems, ...notes.problems, ...policies.problems, ...built.problems];
+  const processes = [built.process];
   if (problems.length > 0) return { ok: false, problems: [...new Set(problems)].sort() };
   return { ok: true, model: { processes } };
 }
@@ -396,45 +355,29 @@ const bucketText = (buckets: readonly Bucket[]): string =>
     )
     .join("; ");
 
-function sessionCell(route: RouteRecord): string {
-  if (route.requiresSession === true) return "required";
-  return route.handlerSession === true ? "required (handler)" : NOT_RECORDED;
-}
-
-function csrfCell(route: RouteRecord): string {
-  if (route.middleware === null) return NOT_RECORDED;
-  return route.middleware.includes("csrf") ? "yes" : "no";
-}
-
-function bucketCell(route: RouteRecord, policies: ProcessModel["policies"]): string {
-  if (route.rateLimit === null || policies === null) return NOT_RECORDED;
-  const buckets = policies.get(route.rateLimit);
+function bucketCell(name: string | null, policies: ProcessModel["policies"]): string {
+  if (name === null || policies === null) return NOT_RECORDED;
+  const buckets = policies.get(name);
   return buckets === undefined ? NOT_RECORDED : bucketText(buckets);
-}
-
-function acceptsCell(route: RouteRecord): string {
-  if (route.accepts === null) return NOT_RECORDED;
-  return route.accepts.length === 0 ? "none" : route.accepts.join(", ");
 }
 
 const yn = (value: boolean | null): string => (value === null ? NOT_RECORDED : value ? "yes" : "no");
 
-function row(route: RouteRecord, policies: ProcessModel["policies"], deadline: boolean): string {
+function row(route: RouteRecord, policies: ProcessModel["policies"]): string {
   const cells = [
     route.method,
     `\`${route.path}\``,
-    "built",
     route.group ?? NOT_RECORDED,
-    sessionCell(route),
-    csrfCell(route),
+    route.session ?? NOT_RECORDED,
     route.rateLimit ?? NOT_RECORDED,
-    bucketCell(route, policies),
-    acceptsCell(route),
+    bucketCell(route.rateLimit, policies),
+    route.writeLimit ?? NOT_RECORDED,
+    bucketCell(route.writeLimit, policies),
     route.bodyLimit === null ? NOT_RECORDED : String(route.bodyLimit),
-    yn(route.mutates),
-    route.middleware === null ? NOT_RECORDED : route.middleware.join(" → "),
+    route.deadlineMs === null ? NOT_RECORDED : String(route.deadlineMs),
+    yn(route.testOnly),
+    yn(route.probe),
   ];
-  if (deadline) cells.push(route.deadlineMs === null ? NOT_RECORDED : String(route.deadlineMs));
   cells.push(route.why, route.input, route.output, route.errors, route.auth);
   return `| ${cells.join(" | ")} |`;
 }
@@ -443,53 +386,43 @@ function table(headers: readonly string[], rows: readonly string[]): string[] {
   return ["", `| ${headers.join(" | ")} |`, `| ${headers.map(() => "---").join(" | ")} |`, ...rows, ""];
 }
 
-/** Known processes use the outline order. Any other process follows, in sorted order. */
-function pageWeight(name: string, names: readonly string[]): number {
-  const rank = processRank(name);
-  if (rank < PROCESS_ORDER.length) return rank + 1;
-  return 50 + names.filter((item) => processRank(item) === PROCESS_ORDER.length).indexOf(name);
-}
-
-function processPage(process: ProcessModel, names: readonly string[]): string {
-  const rows = process.routes;
-  const deadline = rows.some((route) => route.deadlineMs !== null);
+function processPage(process: ProcessModel): string {
   const headers = [
     "Method",
-    "Path",
-    "Status",
+    "Path (route id)",
     "Group",
     "Session",
-    "CSRF",
     "Rate limit",
     "Buckets",
-    "Accepts",
-    "Body limit",
-    "Mutates",
-    "Middleware",
+    "Write limit",
+    "Write buckets",
+    "Body limit (bytes)",
+    "Deadline (ms)",
+    "Test only",
+    "Probe",
+    "Why",
+    "Input",
+    "Output",
+    "Errors",
+    "Auth",
   ];
-  if (deadline) headers.push("Deadline");
-  headers.push("Why", "Input", "Output", "Errors", "Auth");
-  const onlyHealth =
-    process.routes.length === 1 && process.routes[0]?.method === "GET" && process.routes[0]?.path === "/health";
   const lines = [
     "---",
     `title: ${process.name}`,
-    `weight: ${pageWeight(process.name, names)}`,
+    "weight: 1",
     "---",
     "",
     "Generated by `scripts/docs/endpoints.ts`. Do not edit.",
     "",
-    `Routes recorded in \`interfaces/${process.name}/${MANIFEST}\`. Prose is from \`${DATA_DIR}/${process.name}.yaml\`.`,
-    "Column rules are on the Endpoints section page. A security cell is `not recorded` when the manifest or `limits.ts` does not state it.",
-  ];
-  if (onlyHealth) lines.push("This manifest records only `GET /health`.");
-  if (process.policies === null) lines.push(`This process has no \`interfaces/${process.name}/${LIMITS}\`.`);
-  lines.push(
+    `One row per route id under \`${ROUTES}/\`. Each row's policy source is that folder's \`policy.ts\`.`,
+    `Buckets are from \`${LIMITS}\`; optional prose is from \`${DATA_DIR}/${process.name}.yaml\`.`,
+    "Column rules and request-gate sources are on the Endpoints section page. An absent fact is `not recorded`.",
+    "These are the app's own buckets. The edge has separate limits in `deployment/edge/`, not read here.",
     ...table(
       headers,
-      rows.map((route) => row(route, process.policies, deadline)),
+      process.routes.map((route) => row(route, process.policies)),
     ),
-  );
+  ];
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
@@ -504,14 +437,6 @@ function policyTable(policies: ReadonlyMap<string, readonly Bucket[]>): string[]
 }
 
 function indexPage(model: EndpointModel): string {
-  const middleware = new Set<string>();
-  const groups = new Set<string>();
-  for (const process of model.processes) {
-    for (const route of process.routes) {
-      for (const name of route.middleware ?? []) middleware.add(name);
-      if (route.group !== null) groups.add(route.group);
-    }
-  }
   const lines = [
     "---",
     "title: Endpoints",
@@ -519,40 +444,30 @@ function indexPage(model: EndpointModel): string {
     "",
     "Generated by `scripts/docs/endpoints.ts`. Do not edit.",
     "",
-    "One page per interface process that has a `routes.manifest.json`.",
+    "The web process's declared routes, read from the SvelteKit route tree.",
     "",
     ...model.processes.map((process) => `- [${process.name}](${process.name}/)`),
     "",
     "## How a cell is filled",
     "",
-    "- **Method, path, group, accepts, body limit, mutates, middleware** are copied from the manifest. An absent field is `not recorded`. An empty `accepts` array is `none`.",
-    '- **Session** is the manifest, unchanged: `required` when `requiresSession` is true (the kit checks it), and `required (handler)` when `handlerSession` is true (the handler sends a signed-out visitor to /login, and the kit only records it). `shared/http/routes.ts` omits both fields otherwise, and these pages do not read that omission as "no session". A manifest session of none is not a claim that the handler does no auth.',
-    "- **Auth** is the data file, from the handler, not the manifest. `gate: openApp` when the handler calls `openApp`. `reads session` when it calls `readSession`. `none` otherwise.",
-    "- **CSRF** is `yes` when `middleware` includes `csrf`, and `no` when the array is present and does not include it. A missing array is `not recorded`.",
-    "- **Rate limit** is the manifest `rateLimit` string. **Buckets** are that name's entries in `interfaces/<process>/limits.ts`. `exempt` is not a key of that table, so its buckets cell is `not recorded`.",
-    "- **Status** is `built` for a manifest route.",
-    "- **Why, input, output, errors** are the data file. They are prose, not a second copy of the security columns.",
+    `- **Path** is the route id relative to \`${ROUTES}\`, including SvelteKit parameters, encoded characters and layout groups. It is a route pattern, not a concrete request URL.`,
+    "- **Method** lists exports of `+server.ts`/`+server.js`, GET for `+page` files, and POST for an exported `actions` in `+page.server.ts`/`+page.server.js`. SvelteKit 3.2.0 sources: `src/core/sync/create_manifest_data/index.js`, `src/runtime/server/endpoint.js` and `src/runtime/server/page/actions.js` in `interfaces/web/node_modules/@sveltejs/kit`. Implicit HEAD/OPTIONS are omitted; a handler may still refuse a method.",
+    "- **Group, session, rate limit, write limit, body limit, deadline, test only, probe** copy `group`, `session`, `limit`, `writeLimit`, `maxBody`, `deadlineMs`, `testOnly`, `probe` from that route's `policy.ts`. Missing fields are `not recorded`, not a claim that the runtime has no session, limit or deadline.",
+    `- **Buckets, write buckets** copy the named entries of \`${LIMITS}\`'s \`policies\` export. These are the app's configured buckets, not the edge limits in \`deployment/edge/\` (not read here). \`policiesFor\` in the same file removes IP entries in socket mode and adds the login global ceiling.`,
+    `- **Why, input, output, errors, auth** come only from \`${DATA_DIR}/web.yaml\`. Absent or empty prose is \`not recorded\`.`,
     "",
-    "## Groups",
+    "## Request gate sources",
     "",
-    "The manifest field `group` is copied as recorded. `shared/http/csp/headers.ts` uses that same value when it sets `content-security-policy`. The manifest has no separate CSP-group field, so these pages do not name one.",
+    "`interfaces/web/src/lib/server/policy.ts` defines session modes. `interfaces/web/src/hooks.server.ts` applies them: `requestProblem` allows GET/HEAD and form POST with a declared body cap; `limitOf` chooses `writeLimit` for POST when present; `sessionProblem` reads sessions for explicit session modes or the app group, requires them for required/onboarding and for writes on non-read methods, and applies member buckets for required/onboarding/writes sessions. A probe skips the address and member limits. `withDeadline` falls back to `REQUEST_DEADLINE_MS` when the route has no deadline. Test-only routes require `TEST_ROUTES`.",
     "",
-    [...groups]
-      .sort()
-      .map((group) => `\`${group}\``)
-      .join(", "),
+    "The same hook accepts only form media types for POST. SvelteKit's Origin check runs before the hook (`interfaces/web/node_modules/@sveltejs/kit/src/runtime/server/respond.js`, 3.2.0). These pages do not infer handler authorization from the session column.",
     "",
-    "## Middleware",
-    ...table(
-      ["Name", "Recorded meaning"],
-      [...middleware].sort().map((name) => `| \`${name}\` | ${MIDDLEWARE[name] ?? NOT_RECORDED} |`),
-    ),
     "## Rate-limit policies",
     "",
-    "Every policy a process's `limits.ts` exports is listed, including one no current route names.",
+    `Every entry of \`${LIMITS}\`'s \`policies\` export is listed, including names no route uses.`,
   ];
   for (const process of model.processes) {
-    lines.push("", `### ${process.name}`, "", `\`${`interfaces/${process.name}/${LIMITS}`}\``);
+    lines.push("", `### ${process.name}`);
     if (process.policies === null) lines.push("", "No such file.");
     else lines.push(...policyTable(process.policies));
   }
@@ -561,9 +476,8 @@ function indexPage(model: EndpointModel): string {
 
 /** Repo-relative path to generated text. The map order is the section page, then each process. */
 export function renderEndpointFiles(model: EndpointModel): Map<string, string> {
-  const names = model.processes.map((process) => process.name);
   const files = new Map<string, string>([[`${CONTENT_DIR}/_index.md`, indexPage(model)]]);
-  for (const process of model.processes) files.set(`${CONTENT_DIR}/${process.name}.md`, processPage(process, names));
+  for (const process of model.processes) files.set(`${CONTENT_DIR}/${process.name}.md`, processPage(process));
   return files;
 }
 
