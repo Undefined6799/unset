@@ -28,7 +28,7 @@ const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, com
   loadOwnProfile(
     {
       profile: async () => p,
-      cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete } } : c),
+      cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete, overflow: false } } : c),
     },
     "pds.example",
   );

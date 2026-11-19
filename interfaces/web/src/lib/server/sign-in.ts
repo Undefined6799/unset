@@ -56,7 +56,7 @@ export function back(code: ErrorCode, next: SafePath | null): never {
 /** The authorization URL for `input`, as a link of an allowed kind, or the code the sign-in form shows. */
 export async function authorizationTarget(
   input: string,
-  options: { appState: string; prompt?: "login" | "none" | "consent"; deadline: AbortSignal },
+  options: { appState: string; prompt?: "login" | "none" | "consent" | "create"; deadline: AbortSignal },
 ): Promise<AuthorizationTarget> {
   const { oauth, pdsIssuer, log } = services();
   const result = await authorize(oauth.client, input, { ...options, ownIssuer: pdsIssuer, log });
@@ -124,6 +124,26 @@ export async function startSignIn(request: Request, cookies: Cookies, deadline: 
   if (!sent.ok) back(sent.code, next);
   putCookie(cookies, "nonce", sent.nonce);
   putCookie(cookies, "target", encodeTarget(sent.target));
+  redirect(303, "/login/continue");
+}
+
+/**
+ * POST /join (book P2.10, `POST /signup`): a new account at our PDS. The same nonce, appState and cookies as a
+ * sign-in, with no expected account and `prompt=create`, so the PDS shows its create-account form, where the invite
+ * code is entered (OIDC Core §3.1.2.1 and the Initiating User Registration spec, `create`; @atproto/oauth-types
+ * 0.7.7 lists it). The callback then signs the new account in like any other, and onboarding starts.
+ */
+export async function startSignUp(cookies: Cookies, deadline: AbortSignal, failed: string): Promise<never> {
+  const { pool, nonces } = services();
+  const nonce = await withClient(pool, deadline, (db) =>
+    nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] }),
+  );
+  const appState = appStateOf({ nonce, expectedDid: null, next: null, silent: false });
+  const input = `https://${config.PDS_HOSTNAME}`;
+  const sent = await authorizationTarget(input, { appState, prompt: "create", deadline });
+  if (!sent.ok) redirect(303, withErrorParam(failed, sent.code));
+  putCookie(cookies, "nonce", nonce);
+  putCookie(cookies, "target", Buffer.from(sent.target).toString("base64url"));
   redirect(303, "/login/continue");
 }
 

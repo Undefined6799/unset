@@ -87,13 +87,16 @@ function withValues(value: Json, env: AdaptedEnv): Json {
 const byText = (a: Json, b: Json): number => (canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0);
 
 /**
- * `config` with the two orders Caddy derives from the host names made fixed: a server's site routes, sorted by their
- * matcher, and the names of a connection policy's SNI matcher. Caddy v2.11.7 puts the longer host first
+ * `config` with the orders Caddy derives from the host names made fixed: a server's site routes and error routes, each
+ * sorted by their matcher, and the names of a connection policy's SNI matcher. Caddy v2.11.7 puts the longer host first
  * (caddyconfig/httpcaddyfile/httptype.go, the specificity sort in serversFromPairings), so the same files adapt in
  * another order for another pair of host names. Each site route is terminal and matched by its one host, and the SNI
  * names are a set, so neither order decides anything; a route that is not a terminal host route keeps its place, and
  * then the comparison fails unless the reviewed file holds it there too.
  */
+const terminalHostRoute = (route: Json): boolean =>
+  obj(route).terminal === true && "host" in obj(arr(obj(route).match)[0]);
+
 function hostOrdered(config: Json): Json {
   const top = obj(config);
   if (!("apps" in top)) return top;
@@ -102,8 +105,14 @@ function hostOrdered(config: Json): Json {
     const server = obj(value);
     const ordered: Obj = { ...server };
     const routes = arr(server.routes);
-    const sites = routes.every((route) => obj(route).terminal === true && "host" in obj(arr(obj(route).match)[0]));
+    const sites = routes.every(terminalHostRoute);
     if (sites) ordered.routes = [...routes].sort(byText);
+    // The error routes (snippets/too-many-tries.caddy) follow the same site order (httptype.go:879-895 appends each
+    // site's in that order), and each is terminal and matched by its one host too.
+    const errors = arr(obj(server.errors).routes);
+    if (errors.length > 0 && errors.every(terminalHostRoute)) {
+      ordered.errors = { ...obj(server.errors), routes: [...errors].sort(byText) };
+    }
     if ("tls_connection_policies" in server) {
       ordered.tls_connection_policies = arr(server.tls_connection_policies).map((policy) => {
         const match = obj(obj(policy).match);

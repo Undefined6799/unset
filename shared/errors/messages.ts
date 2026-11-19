@@ -52,6 +52,9 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.order_invalid": "Your cards changed since you opened the page. Reload, then move them again.",
   "card.missing": "That card is gone. Reload to see your cards.",
   "card.too_many": "You have the most cards a page can hold. Delete one to add another.",
+  "card.overflow": "You have more cards than your page can show. Delete one to bring a hidden card back.",
+  "card.cards_changed":
+    "Your cards changed somewhere else while you were adding this one. Nothing was saved. Save again to add it.",
   "card.list_incomplete":
     "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
@@ -59,4 +62,11 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "welcome.date_invalid": "That date is not a real calendar date.",
   "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
   "welcome.country_required": "Tick the box about where you live.",
+  "invite.country_ack_required": "Tick the box about where the person you invite lives.",
+  "invite.bad_submission": "The form expired. Reload the page and try again.",
+  "invite.in_progress": "Your invite is still being made. Reload the page in a moment.",
+  "invite.quota": "You have used all your invites for now.",
+  "invite.closed": "Invites are closed for now.",
+  "invite.denied": "Invites are only for accounts on our own server.",
+  "invite.unavailable": "Invites are unavailable right now. Try again soon.",
 };
