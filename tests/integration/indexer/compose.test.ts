@@ -81,9 +81,10 @@ function runMain(
 }
 
 /**
- * A port for main.ts's health server that is free now and outside Linux's ephemeral range (32768 to 60999 by default,
- * net.ipv4.ip_local_port_range, kernel ip-sysctl docs; read on this runner image), where the test Postgres containers' published ports and outbound sockets land. A random
- * port up to 40000 once met one of those, and main.ts then exited on EADDRINUSE before it logged indexer.started.
+ * A port for main.ts's health server that is free now and outside Linux's ephemeral range (net.ipv4.ip_local_port_range,
+ * 32768 to 60999 in the dev container on 2026-11-19), where the test Postgres containers' published ports and outbound
+ * sockets land. A random port up to 40000 once met one of those, and main.ts then exited on EADDRINUSE before it
+ * logged indexer.started.
  * Bound as main.ts binds it (no host), then released.
  */
 async function freePort(): Promise<number> {
