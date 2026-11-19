@@ -338,7 +338,6 @@
         "columns": {
           "did": ["SELECT"],
           "handle": ["SELECT"],
-          "moderation_version": ["SELECT"],
           "cid": ["SELECT"],
           "record": ["SELECT"]
         }

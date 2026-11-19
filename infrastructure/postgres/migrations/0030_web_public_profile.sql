@@ -15,7 +15,7 @@
 CREATE VIEW idx.public_profile WITH (security_barrier) AS
   SELECT v.did,
          CASE WHEN v.handle_status = 'verified' THEN v.handle END AS handle,
-         v.moderation_version, p.cid, p.record
+         p.cid, p.record
     FROM idx.visible_account v
     JOIN idx.profile p USING (did);
 
@@ -25,5 +25,5 @@ CREATE VIEW idx.public_section WITH (security_barrier) AS
     JOIN idx.profile p USING (did)
     JOIN idx.section s USING (did);
 
-GRANT SELECT (did, handle, moderation_version, cid, record) ON idx.public_profile TO web;
+GRANT SELECT (did, handle, cid, record) ON idx.public_profile TO web;
 GRANT SELECT (did, rkey, cid, record) ON idx.public_section TO web;

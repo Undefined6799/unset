@@ -12,8 +12,6 @@ export type PublicProfile = {
   readonly did: string;
   /** The verified handle, or null when the indexer has not verified one. */
   readonly handle: string | null;
-  /** Bumped by moderation (book P3.06); text, as Postgres sends a bigint. */
-  readonly moderationVersion: string;
   readonly cid: string;
   readonly record: unknown;
   /** The member's cards, at most MAX_SECTIONS_PER_ACCOUNT, by record key; `pageCards` sets the page's order. */
@@ -28,7 +26,6 @@ export type PublicProfileStore = {
 type Row = {
   did: string;
   handle: string | null;
-  moderation_version: string;
   cid: string;
   record: unknown;
   sections: PublicProfile["sections"];
@@ -37,7 +34,7 @@ type Row = {
 // Two rows for one handle would be the indexer's error (P3.08s keeps a verified handle on one account): the page
 // then shows neither rather than guess, so the query asks for two to see it.
 const SELECT = `
-  SELECT p.did, p.handle, p.moderation_version, p.cid, p.record,
+  SELECT p.did, p.handle, p.cid, p.record,
          coalesce((SELECT json_agg(json_build_object('key', s.rkey, 'cid', s.cid, 'value', s.record) ORDER BY s.rkey)
                      FROM (SELECT rkey, cid, record FROM idx.public_section
                             WHERE did = p.did ORDER BY rkey LIMIT $2) s), '[]'::json) AS sections
@@ -56,7 +53,6 @@ export function createPublicProfileStore(pool: Pool): PublicProfileStore {
         return {
           did: row.did,
           handle: row.handle,
-          moderationVersion: row.moderation_version,
           cid: row.cid,
           record: row.record,
           sections: row.sections,

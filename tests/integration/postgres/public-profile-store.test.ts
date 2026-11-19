@@ -88,7 +88,6 @@ describe("public profile store", () => {
     expect(byDid).toEqual({
       did: SHOWN,
       handle: "alice.unset.test",
-      moderationVersion: "0",
       cid: "cid-p",
       record: { displayName: "N" },
       sections: [{ key: "3k", cid: "cid-s", value: { type: "x" } }],
