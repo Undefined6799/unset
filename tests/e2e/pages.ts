@@ -22,7 +22,7 @@ export const PROD_ORIGIN = `https://${HOST}:${LISTEN.prod}`;
 export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 
 /** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
-export type MemberName = "age" | "terms" | "chat" | "verify" | "account";
+export type MemberName = "age" | "terms" | "chat" | "verify" | "account" | "notice";
 /** The finished member, whose repo the stand-in PDS holds. */
 export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
 /** A member the indexer has copied (fixtures/servers.ts seeds it on the production server), shown at /@did. */
