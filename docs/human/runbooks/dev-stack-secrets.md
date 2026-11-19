@@ -181,7 +181,8 @@ The key file holds one key, so a new pair means writing both files and restartin
 between is refused, never accepted.
 
 **Rotating the admin password** changes both copies together, as above, then restarts the stack through the wrapper
-(`npm run dev:down`, `npm run dev:up`), so both services start with the same value. Each reads its copy only when it
+(on staging `npm run dev:source:down`, then `npm run dev:source:up`; on a local stack `npm run local:down`, then
+`npm run local:up`), so both services start with the same value. `dev:up` runs no pds-admin. Each reads its copy only when it
 starts. If only pds-admin's file changes, it stops at its next start; if only `pds.env` changes, it stops at its next
 call to the PDS after the PDS restarts. Either way, by design.
 
