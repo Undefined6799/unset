@@ -1,10 +1,11 @@
 <!--
   Settings › Profile (P2.13c): the profile's fields, as the member's PDS holds them, in the settings form that posts to
-  /profile, the one profile save. When the PDS could not be read the page says so and offers no form, so a save never
+  /profile, the one profile save, then the Search and AI choices (ADR 0062), which post to /settings/search-and-ai. When the PDS could not be read the page says so and offers no form, so a save never
   starts from fields that were not loaded.
 -->
 <script lang="ts">
 import ProfileForm from "@unset/apps-web/lib/components/settings/profile-form.svelte";
+import SearchAiForm from "@unset/apps-web/lib/components/settings/search-ai-form.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { PROFILE_SETTINGS, SETTINGS } from "@unset/apps-web/lib/settings/messages.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
@@ -19,6 +20,8 @@ let {
     profile: Values | null;
     limits: { displayName: number; headline: number; location: number };
     pagePath: string;
+    discoverability: { searchEngines: boolean; aiSearch: boolean; title: string; description: string };
+    discoverabilityLimits: { title: number; description: number };
   };
 } = $props();
 
@@ -45,3 +48,4 @@ const messageFor = (code: string | undefined): string | undefined =>
 {:else}
   <ProfileForm values={data.profile} limits={data.limits} pagePath={data.pagePath} {messageFor} {enhance} />
 {/if}
+<SearchAiForm values={data.discoverability} limits={data.discoverabilityLimits} />

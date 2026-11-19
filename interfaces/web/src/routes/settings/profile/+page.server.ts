@@ -2,9 +2,16 @@
 // (routes/profile, the one profile save; it comes back here). The gate has already sent a signed-out visitor to
 // /login (policy.ts) and set the app page's private, no-store and Vary: Cookie. The DID is the session's, never the
 // request's (SE-2). Every stored field is checked on the way in (domains/profile readProfileRecord): one another client
-// wrote badly reads as empty. A dead grant sends the member to sign in; any other failed read shows no form.
+// wrote badly reads as empty. The Search and AI choices (ADR 0062) come from our own database and post to
+// /settings/search-and-ai. A dead grant sends the member to sign in; any other failed read shows no form.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
-import { APP_LIMITS, EMPTY_PROFILE, type ProfileFields, readProfileRecord } from "@unset/domains-profile";
+import {
+  APP_LIMITS,
+  DISCOVERABILITY_LIMITS,
+  EMPTY_PROFILE,
+  type ProfileFields,
+  readProfileRecord,
+} from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { respondToPdsFailure } from "../../../lib/server/pds-failure.ts";
@@ -16,7 +23,10 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
-  const read = await loadProfileRecord(services().pds.pdsCall, ctx, did);
+  const [read, discoverability] = await Promise.all([
+    loadProfileRecord(services().pds.pdsCall, ctx, did),
+    services().discoverability.get(did, locals.deadline),
+  ]);
   let profile: ProfileFields | null = null;
   if (read.kind === "ok") {
     profile = read.value === null ? EMPTY_PROFILE : readProfileRecord(read.value.value);
@@ -31,5 +41,8 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
     profile,
     limits: APP_LIMITS,
     pagePath: `/${did}`,
+    // The Search and AI section (ADR 0062), kept in our database, so it shows even when the PDS did not answer.
+    discoverability,
+    discoverabilityLimits: DISCOVERABILITY_LIMITS,
   };
 };

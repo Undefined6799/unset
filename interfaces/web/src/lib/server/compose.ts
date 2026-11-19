@@ -21,6 +21,7 @@ import {
   checkConnectionBudget,
   connectionOf,
   createAccountRepository,
+  createDiscoverabilityStore,
   createLockPool,
   createOAuthSessionStore,
   createOAuthStateStore,
@@ -28,6 +29,7 @@ import {
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type DiscoverabilityStore,
   oauthSessionExists,
   type Pool,
   type PublicProfileStore,
@@ -105,6 +107,8 @@ export type Services = {
   readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
+  /** The signed-in member's own Search and AI choices (ADR 0062). */
+  readonly discoverability: DiscoverabilityStore;
 };
 
 /** The test entry's stand-ins, refused outside the test profile (note.ts `StandIns`). */
@@ -268,6 +272,7 @@ async function build(): Promise<Services> {
     email,
     setEmailConfirmed,
     publicProfiles: createPublicProfileStore(pool),
+    discoverability: createDiscoverabilityStore(pool),
   };
 }
 
