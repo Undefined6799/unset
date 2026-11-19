@@ -20,6 +20,7 @@ describe("indexer loop", () => {
         return {};
       },
       confirm: counts(0),
+      handles: counts(0),
     };
     const runner = runIndexer({ stream: async () => undefined, passes, intervalMs: 60_000 }, stop.signal);
     await runner.done;
@@ -41,6 +42,7 @@ describe("indexer loop", () => {
         return {};
       },
       confirm: counts(0),
+      handles: counts(0),
     };
     const runner = runIndexer(
       {
@@ -66,15 +68,18 @@ describe("indexer loop", () => {
       },
       confirm: async () => {
         ticks += 1;
-        if (ticks === 2) stop.abort();
         return { confirmed: ticks };
+      },
+      handles: async () => {
+        if (ticks === 2) stop.abort();
+        return { n: 0 };
       },
     };
     const runner = runIndexer({ stream: () => Promise.resolve(), passes, intervalMs: 1 }, stop.signal);
     await runner.done;
     const health = runner.health();
-    expect(health.passFailures).toEqual({ track: 0, backfill: 2, confirm: 0 });
-    expect(health.lastPass).toEqual({ track: { n: 1 }, confirm: { confirmed: 2 } });
+    expect(health.passFailures).toEqual({ track: 0, backfill: 2, confirm: 0, handles: 0 });
+    expect(health.lastPass).toEqual({ track: { n: 1 }, confirm: { confirmed: 2 }, handles: { n: 0 } });
     expect(health.ticks).toBe(2);
   });
 
@@ -83,7 +88,7 @@ describe("indexer loop", () => {
     const runner = runIndexer(
       {
         stream: (signal) => new Promise((resolve) => signal.addEventListener("abort", () => resolve())),
-        passes: { track: counts(0), backfill: counts(0), confirm: counts(0) },
+        passes: { track: counts(0), backfill: counts(0), confirm: counts(0), handles: counts(0) },
         intervalMs: 60_000,
       },
       stop.signal,
@@ -105,6 +110,7 @@ describe("indexer loop", () => {
         if (runs === 3) stop.abort();
         return { confirmed: 1, failed: runs === 2 ? 0 : 2 };
       },
+      handles: counts(0),
     };
     const runner = runIndexer({ stream: () => Promise.resolve(), passes, intervalMs: 1 }, stop.signal);
     await runner.done;

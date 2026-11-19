@@ -2,7 +2,17 @@
 // process, so a bad value exits 78 before anything starts. Indexing is off unless INDEXER_ENABLED says otherwise: off,
 // the process serves only its health endpoint and reads nothing.
 import { poolFields, postgresFields } from "@unset/infrastructure-postgres";
-import { bool, type Config, defineEntrypointConfig, int, netGuardFields, url, withRule } from "@unset/shared-config";
+import {
+  bool,
+  type Config,
+  defineEntrypointConfig,
+  int,
+  list,
+  netGuardFields,
+  str,
+  url,
+  withRule,
+} from "@unset/shared-config";
 import { streakEndsAfterMs } from "./stream-watch.ts";
 
 /** What the indexer reads and from where. */
@@ -60,6 +70,18 @@ function isInStackOrHttps(raw: string): boolean {
   return parsed.protocol === "https:" || /^[a-z0-9-]+$/i.test(parsed.hostname);
 }
 
+/** The handle check (book P3.08s, handles.ts). */
+const handleConfig = {
+  /**
+   * The suffixes our PDS hands out (its PDS_SERVICE_HANDLE_DOMAINS), each starting with a dot, lower case. A handle
+   * under one is accepted only when our PDS confirms the account and maps the handle back to the same DID. Required:
+   * an empty list would let any account the bidirectional check passes hold one of our names on a foreign PDS's say.
+   */
+  HOSTED_HANDLE_SUFFIXES: list(str({ pattern: /\.[a-z0-9-]+(?:\.[a-z0-9-]+)+/ })),
+  /** A verified handle is checked again after this many seconds (book P3.08 "expiry"). */
+  HANDLE_RECHECK_S: int({ min: 600, max: 604_800, default: 86_400 }),
+};
+
 /** The identity lookups the passes and the stream need: the PLC directory, its timeouts and the DID document cache. */
 const identityConfig = {
   PLC_URL: url({ protocols: ["https:"] }),
@@ -76,6 +98,7 @@ export const schema = defineEntrypointConfig(
     ...netGuardFields,
     ...identityConfig,
     ...indexerConfig,
+    ...handleConfig,
   },
   // The process connects as its own role and no other (plan §5.5), so its grants are the least it needs; any other
   // user is refused at boot rather than left to the compose file.
