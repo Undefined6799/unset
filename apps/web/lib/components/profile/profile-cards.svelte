@@ -99,8 +99,9 @@ const count = "font-mono text-xs text-muted-foreground";
         <Card.Root class="group/card {card} {span}">
           <div class="{head} min-h-12 items-center border-b px-5 py-2">
             <p class="flex min-w-0 items-center gap-2 font-mono text-sm text-muted-foreground">
+              <!-- The handle gives way on a narrow card, never the file name (staging walkthrough 2026-11-19). -->
               {#if handle !== null}<span class="truncate">{handle}</span><span aria-hidden="true">/</span>{/if}
-              <span class="font-medium text-foreground">README.md</span>
+              <span class="shrink-0 font-medium whitespace-nowrap text-foreground">README.md</span>
             </p>
             {@render controls?.(index)}
           </div>

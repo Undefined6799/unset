@@ -14,11 +14,14 @@ let { data } = $props();
 <Card.Root>
   <Card.Header>
     <Card.Title><h1>{T.termsTitle}</h1></Card.Title>
-    <Card.Description>
-      {T.termsLead} <a href="/legal/terms">{T.termsLink}</a> <a href="/legal/privacy">{T.privacyLink}</a>
-    </Card.Description>
+    <Card.Description>{T.termsLead}</Card.Description>
   </Card.Header>
   <Card.Content>
+    <!-- A list of their own, so the two links do not run into the sentence before them (staging audit 2026-11-19). -->
+    <ul>
+      <li><a href="/legal/terms">{T.termsLink}</a></li>
+      <li><a href="/legal/privacy">{T.privacyLink}</a></li>
+    </ul>
     <form method="POST" id="terms">
       <input type="hidden" name="terms_version" value={data.termsVersion} />
       <input type="hidden" name="privacy_version" value={data.privacyVersion} />

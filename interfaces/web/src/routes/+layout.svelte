@@ -126,6 +126,21 @@ const saveInPlace: SubmitFunction = ({ submitter, formElement }) => {
   };
 };
 
+// A panel opened from More actions sits on top of it, and Chromium gives focus back to the opener only for the first
+// panel of a stack (seen in a test on Chromium 1243, staging audit 2026-11-19): Escape closed the panel, More actions
+// stayed open, and focus was left in the hidden panel, so the next Tab went behind the menu. Once the client runs,
+// focus goes back to the row that opened the panel, unless it already moved elsewhere. A page with no script (the
+// public group) keeps the browser's own behaviour.
+function backToActions(event: ToggleEvent): void {
+  if (event.newState !== "closed") return;
+  const actions = document.getElementById(ACTIONS);
+  const panel = event.currentTarget as HTMLElement;
+  const focused = document.activeElement;
+  if (!actions?.matches(":popover-open")) return;
+  if (focused !== document.body && !panel.contains(focused)) return;
+  actions.querySelector<HTMLElement>(`[popovertarget="${panel.id}"]`)?.focus();
+}
+
 // A page the back-forward cache restores keeps the theme it was left with; this tab's last save replaces it.
 function restoreSaved(event: PageTransitionEvent): void {
   const last = event.persisted ? rememberedTheme() : null;
@@ -140,13 +155,15 @@ const ACTIONS = "actions-menu";
 const CREATE = "create-menu";
 const MESSAGES = "messages-menu";
 const NOTIFICATIONS = "notifications-menu";
+const SEARCH = "search-menu";
 // The core header's main destinations (Clean tabs): those that run today are links.
 const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as const;
 // Coming soon (Alex, 2026-11-18: "still have them in a nav bar ... show them inactive, and then make a note somewhere
 // so we don't forget"). Each is drawn greyed and disabled: not a link, not focusable, its name read with "coming soon".
 // The list, and what each needs when its feature lands:
-// - Search (header field; an icon on narrow screens): a search page or palette, its route and policy (policy.ts),
-//   honest results (only what it really searches), then make the field a form and add it to the e2e and axe pages.
+// - Search (header field; on narrow screens an icon whose panel says it is coming): a search page or palette, its
+//   route and policy (policy.ts), honest results (only what it really searches), then make the field a form and add it
+//   to the e2e and axe pages.
 // - The menu panel's Saved, Your communities and Help; the Create panel's New post, Share a link and Ask a question:
 //   each a real flow or page with its route and policy; then make its row a link and add tests for it.
 // - The Messages and Notifications panels: real lists with counts, loading and error states (never a hard-coded "all
@@ -177,8 +194,6 @@ const SOON_TABS = [
   { label: T.community, icon: "community" },
   { label: T.explore, icon: "explore" },
 ] as const;
-// A coming-soon control: the stock disabled look (opacity) with no hover; disabled buttons are skipped by Tab.
-const soon = "disabled:opacity-60";
 // The header's icon controls: 34px on a mouse, a 44px target on touch (Clean tabs handoff).
 const control = "pointer-coarse:size-11";
 // Every header panel: a native popover under the header, the popover surface, a title row, then rows.
@@ -190,7 +205,7 @@ const letter = $derived(account?.name === undefined ? undefined : accountLetter(
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
 afterNavigate(() => {
-  for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS]) {
+  for (const id of [MENU, ACCOUNT, ACTIONS, CREATE, MESSAGES, NOTIFICATIONS, SEARCH]) {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
@@ -316,7 +331,15 @@ const row =
         <span class="sr-only">{T.search}, {T.comingSoon}</span>
       </button>
       <div class="flex items-center gap-2 max-sm:ml-auto max-sm:gap-1.5">
-        <Button variant="outline" size="icon-sm" disabled class="{control} {soon} sm:hidden">
+        <!-- On a phone a disabled icon says nothing to a finger, so it opens a panel that says search is coming
+             (staging walkthrough 2026-11-19), as Messages and Notifications do. -->
+        <Button
+          variant="outline"
+          size="icon-sm"
+          popovertarget={SEARCH}
+          popovertargetaction="toggle"
+          class="{control} sm:hidden"
+        >
           <Icon name="search" size={20} label="{T.search}, {T.comingSoon}" />
         </Button>
         <Button
@@ -420,7 +443,7 @@ const row =
       {#each SOON_MENU as item (item.label)}{@render soonRow(item)}{/each}
     </ul>
   </section>
-  <section id={CREATE} popover="auto" aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+  <section id={CREATE} popover="auto" ontoggle={backToActions} aria-labelledby="{CREATE}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
     {@render panelTitle(CREATE, T.create, false)}
     <ul class="flex flex-col gap-1">
       {#each SOON_CREATE as item (item.label)}{@render soonRow(item)}{/each}
@@ -435,12 +458,16 @@ const row =
     </ul>
   </section>
   {#each PANEL_BUTTONS as button (button.id)}
-    <section id={button.id} popover="auto" aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
+    <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
       {@render panelTitle(button.id, button.label, true)}
       <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
       <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
     </section>
   {/each}
+  <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
+    {@render panelTitle(SEARCH, T.search, true)}
+    <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{T.searchSoon}</p>
+  </section>
   <section id={ACTIONS} popover="auto" aria-labelledby="{ACTIONS}-title" class="{panel} right-2 left-2 w-auto">
     {@render panelTitle(ACTIONS, T.moreActions, false)}
     <ul class="flex flex-col gap-1">

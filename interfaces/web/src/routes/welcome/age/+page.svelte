@@ -1,5 +1,7 @@
 <script lang="ts">
 // The age step (P2.12). The confirm view only repeats the date the person sent; it lives only in this page's form.
+// Both forms post to the step's own path, never to the URL they were shown at: a refused date comes back as
+// ?error=, and posting there kept the old error above the next answer's confirm view (staging audit 2026-11-19).
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { Input } from "@unset/apps-web/lib/components/ui/input";
@@ -19,7 +21,7 @@ const confirm = $derived(form?.confirm);
   {#if confirm === undefined}
     <Card.Header><Card.Title><h1>{T.ageTitle}</h1></Card.Title></Card.Header>
     <Card.Content>
-      <form method="POST" id="age">
+      <form method="POST" action="/welcome/age" id="age">
         {#each [["day", T.day], ["month", T.month], ["year", T.year]] as [name, label] (name)}
           <Label for={name}>{label}</Label>
           <Input id={name} {name} type="text" inputmode="numeric" autocomplete="off" />
@@ -35,7 +37,7 @@ const confirm = $derived(form?.confirm);
       </Card.Description>
     </Card.Header>
     <Card.Footer>
-      <form method="POST">
+      <form method="POST" action="/welcome/age">
         <input type="hidden" name="day" value={confirm.day} />
         <input type="hidden" name="month" value={confirm.month} />
         <input type="hidden" name="year" value={confirm.year} />
