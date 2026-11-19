@@ -107,15 +107,15 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   return [...adminNetworkProblems(inputs.compose), ...neighbourProblems(inputs)];
 }
 
-/** pds_admin_pds is internal, and the service named pds-admin joins only it and pds_admin (P2.09e). */
+/** Each exempt PDS network is internal, and its service joins only the networks pinned for it (P2.09e). */
 function adminNetworkProblems({ services, networks }: Inputs["compose"]): string[] {
   const problems: string[] = [];
-  if (networks.some((network) => network.name === ADMIN_NETWORK && !network.internal)) {
-    problems.push(`${ADMIN_NETWORK} is not internal`);
-  }
-  const admin = services.find((s) => s.name === "pds-admin");
-  if (admin !== undefined && !admin.networks.every((network) => ADMIN_JOINS.includes(network))) {
-    problems.push(`pds-admin joins a network other than ${ADMIN_JOINS.join(" and ")}`);
+  for (const { network, service, joins } of PINNED) {
+    if (networks.some((n) => n.name === network && !n.internal)) problems.push(`${network} is not internal`);
+    const found = services.find((s) => s.name === service);
+    if (found !== undefined && !found.networks.every((n) => joins.includes(n))) {
+      problems.push(`${service} joins a network other than ${joins.join(" and ")}`);
+    }
   }
   return problems;
 }
@@ -133,42 +133,50 @@ function neighbourProblems(inputs: Inputs): string[] {
   const [pds] = pdses;
   if (pds === undefined) return [];
   const isEdge = (s: Service) => runsBuilt(s, inputs, lock.edge?.ref, EDGE_DOCKERFILE) === "yes";
-  const isStore = (s: Service) =>
-    inputs.env !== "prod" &&
-    s.name === "objects" &&
-    runsBuilt(s, inputs, lock.objects?.ref, OBJECTS_DOCKERFILE) === "yes";
-  const isAdmin = (s: Service) =>
-    inputs.env !== "prod" &&
-    s.name === "pds-admin" &&
-    runsBuilt(s, inputs, lock["pds-admin"]?.ref, PDS_ADMIN_DOCKERFILE) === "yes";
-  const exempt = new Map([
-    [STORE_NETWORK, isStore],
-    [ADMIN_NETWORK, isAdmin],
-  ]);
+  const exempt = new Map(
+    EXEMPT.map(({ network, service, dockerfile }) => [
+      network,
+      (s: Service) =>
+        inputs.env !== "prod" && s.name === service && runsBuilt(s, inputs, lock[service]?.ref, dockerfile) === "yes",
+    ]),
+  );
   const allowed = (s: Service, network: string) =>
     !pds.networks.includes(network) || (exempt.get(network) ?? isEdge)(s);
   const problems = services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
-  const pairOnly = (network: string, other: string) => {
+  for (const { network, label } of EXEMPT) {
     const on = services.filter((s) => s.networks.includes(network));
     if (on.length > 0 && !(on.length === 2 && on.includes(pds))) {
-      problems.push(`${network} holds a service other than the pds and ${other}`);
+      problems.push(`${network} holds a service other than the pds and ${label}`);
     }
-  };
-  pairOnly(STORE_NETWORK, "the store");
-  pairOnly(ADMIN_NETWORK, "pds-admin");
+  }
   return problems;
 }
 
-/** The one PDS network pds-admin may join, every network it may join, and the Dockerfile it is built from (P2.09e). */
-const ADMIN_NETWORK = "pds_admin_pds";
-const ADMIN_JOINS = ["pds_admin", ADMIN_NETWORK];
-const PDS_ADMIN_DOCKERFILE = "deployment/images/pds-admin.Dockerfile";
+/**
+ * The PDS networks C17 exempts, under local and dev only: each holds exactly the PDS and the service named here, run
+ * from the lock's image for that name or built from its Dockerfile. The store's (P2.18p) and pds-admin's (P2.09e).
+ */
+const EXEMPT: readonly { network: string; service: string; dockerfile: string; label: string }[] = [
+  {
+    network: "objects_pds",
+    service: "objects",
+    dockerfile: "deployment/images/objects.Dockerfile",
+    label: "the store",
+  },
+  {
+    network: "pds_admin_pds",
+    service: "pds-admin",
+    dockerfile: "deployment/images/pds-admin.Dockerfile",
+    label: "pds-admin",
+  },
+];
 
-/** The one PDS network the store may join, and the Dockerfile the store is built from (P2.18p). */
-const STORE_NETWORK = "objects_pds";
-const OBJECTS_DOCKERFILE = "deployment/images/objects.Dockerfile";
+/** The exempt networks that must be internal, and every network their service may join (P2.09e). */
+const PINNED: readonly { network: string; service: string; joins: readonly string[] }[] = [
+  { network: "pds_admin_pds", service: "pds-admin", joins: ["pds_admin", "pds_admin_pds"] },
+];
 
 const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The Dockerfile a built PDS runs from (compose.local.yaml and compose.dev.source.yaml). */
