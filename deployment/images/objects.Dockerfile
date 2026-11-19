@@ -1,4 +1,4 @@
-# The object store (accepted ADR 0041; P2.18s): SeaweedFS 4.53's own image (deployment/images/bases.lock.json, a
+# The object store (accepted ADR 0041; P2.18s): SeaweedFS 4.54's own image (deployment/images/bases.lock.json, a
 # VENDOR_BASES entry), pulled from our GHCR mirror by its digest, one stage, run as the base's seaweed user
 # (1000:1000, which already owns /data). Only the weed binary and its Alpine base ship.
 # The upstream image starts through /entrypoint.sh, which drops root with su-exec and can mount FUSE through the
@@ -11,7 +11,7 @@
 # (glog.Fatalf), and a file that yields no identity turns authentication on with nobody allowed. Pinned by
 # objects.image.test.ts.
 
-FROM ghcr.io/undefined6799/mirror/seaweedfs@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+FROM ghcr.io/undefined6799/mirror/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 RUN apk del --no-network curl fuse fuse-common su-exec \

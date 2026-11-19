@@ -7,9 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { docker } from "./docker.ts";
 
-/** chrislusf/seaweedfs 4.53 by index digest (Docker Hub, published 2026-11-08; Apache-2.0). */
+/** chrislusf/seaweedfs 4.54 by index digest (Docker Hub, published 2026-11-16; Apache-2.0). */
 export const OBJECTS_IMAGE =
-  "docker.io/chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0";
+  "docker.io/chrislusf/seaweedfs:4.54@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15";
 
 const CALL_MS = 60_000;
 const OWNER_LABEL = "sh.unset.test-owner";
