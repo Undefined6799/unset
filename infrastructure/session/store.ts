@@ -1,9 +1,9 @@
 // The browser session store (P2.03; plan section 2 rule 7, section 5.3 "Sessions"). A cookie is 32 random bytes in
 // base64url, and app.session keys a session by sha256 of those bytes, so a stolen row is not a cookie. Every expiry
 // is judged by the database's now(), one clock for every replica. A session lasts only while its DID has a stored
-// OAuth token set (P2.04s). create, destroy, destroyAllForDid and setEmailConfirmed run on the client the caller passes
-// (its transaction, so a sign-in commits with the rest of its work); read takes its own connections through `withDb`,
-// outside any transaction the handler holds (a GET handler's is read-only, P1.07).
+// OAuth token set (P2.04s). create, destroy, destroyAllForDid, countLive and setEmailConfirmed run on the client the
+// caller passes (its transaction, so a sign-in commits with the rest of its work); read takes its own connections
+// through `withDb`, outside any transaction the handler holds (a GET handler's is read-only, P1.07).
 // Like infrastructure/audit, this workspace never imports the driver or infrastructure/postgres (architecture matrix
 // row `infrastructure`): the composition root passes postgres's withClient over the web pool as `withDb`.
 // It moved here from infrastructure/postgres/session/ (P2.03c). The comment in migration 0011 still names the old
@@ -74,6 +74,7 @@ export type SessionStore = {
   read(request: SessionRequest): Promise<SessionRead>;
   destroy(db: Db, idHash: Buffer): Promise<void>;
   destroyAllForDid(tx: Db, did: Did, why: EndSessionsReason): Promise<number>;
+  countLive(db: Db, did: Did): Promise<number>;
   setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
@@ -96,6 +97,13 @@ const COOKIE_VALUE = /^[A-Za-z0-9_-]{43}$/;
 const STORABLE_ORIGIN = /^https:\/\/[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
 const storableOrigin = (origin: string | null | undefined): string | null =>
   origin != null && STORABLE_ORIGIN.test(origin) ? origin : null;
+/**
+ * The one rule for a row's lifetimes, as SQL over `s` (app.session) with the idle limit bound as $2: not past its
+ * absolute expiry and seen within the idle limit, both by the database's now(). `lookup` and `countLive` both read it,
+ * so the last browser's count cannot drift from what signs a browser in (P2.08c). The columns are NOT NULL
+ * (migration 0011), so `NOT` of it is exactly "expired".
+ */
+const WITHIN_LIFETIMES = "now() <= s.absolute_expires_at AND now() <= s.last_seen_at + make_interval(secs => $2)";
 const NONE: SessionRead = { session: null, clearCookie: false };
 const CLEAR: SessionRead = { session: null, clearCookie: true };
 
@@ -193,7 +201,7 @@ export function createSessionStore(options: {
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(
       "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, s.issuer_origin, " +
-        "now() > s.absolute_expires_at OR now() > s.last_seen_at + make_interval(secs => $2) AS expired, " +
+        `NOT (${WITHIN_LIFETIMES}) AS expired, ` +
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
         "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +
         "FROM app.session s WHERE s.id_hash = $1",
@@ -224,6 +232,22 @@ export function createSessionStore(options: {
     return (rows[0] as { ended: number }).ended;
   }
 
+  /**
+   * How many of `did`'s sessions can still sign a browser in (P2.08c): within both lifetimes and with a stored token
+   * set, as `read` judges them. On the caller's client, so inside a transaction it counts that transaction's own
+   * delete. A count that is not a whole number throws, so a broken read never passes for "no browser left".
+   */
+  async function countLive(db: Db, did: Did) {
+    const { rows } = await db.query<{ n: unknown }>(
+      `SELECT count(*)::int AS n FROM app.session s WHERE s.did = $1 AND ${WITHIN_LIFETIMES} ` +
+        "AND EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did)",
+      [did, limits.idleS],
+    );
+    const n = rows[0]?.n;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0) throw new Error("session count missing");
+    return n;
+  }
+
   /** P2.11's cache, for one session or for every session of a DID. */
   async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean) {
     const set = "UPDATE app.session SET email_confirmed = $2, email_checked_at = now()";
@@ -242,7 +266,7 @@ export function createSessionStore(options: {
     return count;
   }
 
-  return { create, read, destroy, destroyAllForDid, setEmailConfirmed, sweep };
+  return { create, read, destroy, destroyAllForDid, countLive, setEmailConfirmed, sweep };
 }
 
 function unavailable(error: unknown): never {
