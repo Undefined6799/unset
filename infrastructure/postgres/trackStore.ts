@@ -175,6 +175,7 @@ async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: Backfil
   if (failure === "gone") {
     // getRepo refuses a deactivated, taken-down or deleted repo (400), so the account's status changed, perhaps in an
     // event the stream lost. Only getRepoStatus says which, and only for an account still tracked and not erased.
+    // confirm_status before the backfill row, as missedEvents takes them (indexStore.ts).
     if (!erased && (await lockAccount(tx, job.did)) !== null) await queueJob(tx, job.did, "confirm_status");
     await endJob(tx, job);
     return count(tx, "backfill_failed");
