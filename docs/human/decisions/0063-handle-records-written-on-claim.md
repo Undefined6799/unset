@@ -76,9 +76,13 @@ not reachable through it either.
   resolvers cannot validate it. Handle verification already does not rely on DNSSEC.
 
 ## Compliance
-SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone (make a
-handle point to another DID); our two-way check still requires the DID document to name the handle, so it cannot
-verify a handle for the wrong account. A stolen token can also delete records, turning every handle
+SE-1 Threats with the implementing step: a stolen token can rewrite handle TXT records in this one zone. Pointing a
+member's handle at the attacker's own DID, whose document lists that handle in `alsoKnownAs`, passes the two-way check
+(https://atproto.com/specs/handle, "Handle Resolution"), so other atproto apps would show the attacker's account under
+the member's handle: impersonation, not only invalidation. Our own app and indexer additionally require, for a handle
+under our handle domain, that the DID's PDS is ours and that our PDS's `com.atproto.identity.resolveHandle` returns
+the same DID, so they keep showing the real owner; outside apps cannot be protected this way, which is why the token
+is limited to this one zone and record type, held only by the indexer, and rotated on any suspicion. A stolen token can also delete records, turning every handle
 `handle.invalid` until they are rewritten. Recovery: revoke and replace the token in deSEC, then re-enqueue every
 account; the queue rebuilds the whole zone from Postgres, which is the source of truth (DA-1). SE-7 logging. DA-4: the queue row is the concurrency mechanism, no network I/O
 inside a transaction. GDPR: erasure through `eraseDid` (Decision 3), ROPA row, notice sentence.
