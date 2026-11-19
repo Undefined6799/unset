@@ -1,4 +1,4 @@
-// A member's invites (book P2.10; migration 0031): the rows behind the invite rule's ports (domains/identity
+// A member's invites (book P2.10; migration 0032): the rows behind the invite rule's ports (domains/identity
 // invites.ts) and the Invite page's list. Each code is sealed to its own row (sealed-columns.json), so a dump yields
 // no usable code and a value moved to another row does not open. Every statement carries the caller's DID, so no id
 // a form sends reaches another member's row (rule SE-2). Each call is one statement; none holds a transaction open.

@@ -1,4 +1,4 @@
-// P2.10 (infrastructure/postgres/inviteStore.ts, migration 0031): a member's invites against real Postgres, connected
+// P2.10 (infrastructure/postgres/inviteStore.ts, migration 0032): a member's invites against real Postgres, connected
 // as `web` (TE-2). A submission is one row; a code is sealed to its row; every read and write is scoped to the caller.
 import { relative } from "node:path";
 import { type Did, type InviteId, parseSubmissionId, type SubmissionId } from "@unset/domains-identity";
