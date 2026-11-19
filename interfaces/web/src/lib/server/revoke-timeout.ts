@@ -6,14 +6,15 @@ const REVOKE_MS = 10_000;
 
 /**
  * `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. Sign-out and the under-age
- * block (welcome.ts) both revoke a grant through it.
+ * block (welcome.ts) both revoke a grant through it. `work` is already running, so it is always observed: a late
+ * rejection must not be an unhandled one, which drains web (server.ts).
  */
 export function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
   const limit = AbortSignal.any([deadline, AbortSignal.timeout(REVOKE_MS)]);
-  if (limit.aborted) return Promise.reject(new Error("revoke timed out"));
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(new Error("revoke timed out"));
-    limit.addEventListener("abort", onAbort, { once: true });
     work.then(resolve, reject).finally(() => limit.removeEventListener("abort", onAbort));
+    if (limit.aborted) onAbort();
+    else limit.addEventListener("abort", onAbort, { once: true });
   });
 }
