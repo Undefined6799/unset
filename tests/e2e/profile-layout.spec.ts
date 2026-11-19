@@ -32,6 +32,8 @@ async function removeReadme(page: Page) {
   const card = page.getByRole("group", { name: "README card" });
   await card.getByRole("button", { name: "More for README card" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
+  // Staging audit 2026-11-19: the confirm names the card it deletes.
+  await expect(page.getByRole("dialog").getByRole("heading")).toHaveText("Delete README card?");
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(card).toHaveCount(0);
 }
