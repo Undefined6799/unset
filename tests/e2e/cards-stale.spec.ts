@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE } from "./cards.ts";
 import { openPage } from "./observe.ts";
 
+/** The card writes this test makes: two adds, one move, two deletes. */
+const WRITES_USED = 5;
+
 const linksCard = (title: string) => ({
   kind: "links",
   width: "full",
@@ -50,5 +53,9 @@ test("a_stale_tab_still_deletes_a_card_after_another_tab_reordered", async ({ pa
       if ((await page.getByRole("group", { name }).count()) > 0) await deleteCard(page, name);
     }
   }
+  // This test runs first of the card specs and uses five of the member's writes (two adds, a move, two deletes). The
+  // bucket refills one write every two seconds (limits.ts `profile`, 30 a minute), so waiting for those five to come
+  // back hands cards.spec.ts the full bucket it has on its own; without it, its last test was refused (#1811 CI).
+  await page.waitForTimeout(WRITES_USED * 2_000 + 1_000);
   if (failure !== undefined) throw failure;
 });
