@@ -10,7 +10,7 @@
 - unset.name is where handles live, as name.unset.name.
 - The media site is its own domain. Its name is not chosen yet.
 
-A development system uses the same four domains with the label staging in front.
+A development system uses the same domains with the label staging in front.
 
 ## Nothing else
 

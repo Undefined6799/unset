@@ -11,6 +11,6 @@ export const load: ServerLoad = async ({ locals, request, setHeaders }) => {
   const view = await accountView(services(), locals.did, locals.issuerOrigin, locals.deadline);
   return {
     ...view,
-    shell: settingsShell(locals, request, "/settings/account"),
+    shell: settingsShell(request, "/settings/account"),
   };
 };

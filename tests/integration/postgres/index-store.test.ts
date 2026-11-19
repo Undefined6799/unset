@@ -184,6 +184,8 @@ describe("index store", () => {
     await store.missedEvents();
     await store.missedEvents();
     expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'backfill'")).toEqual(["3"]);
+    // A lost #account event is recovered by asking our PDS for each account's status (book P3.06).
+    expect(lines("SELECT count(*) FROM idx.account_job WHERE kind = 'confirm_status'")).toEqual(["3"]);
   });
 
   test("index.record_jsonb_refuses_is_skipped_not_retried", async () => {
