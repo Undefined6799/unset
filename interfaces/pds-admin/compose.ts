@@ -49,7 +49,9 @@ function probeUntilAnswered(pds: Pds, log: RequestLog, accepted: () => void): vo
     setTimeout(() => run(Math.min(wait * 2, PROBE_MAX_MS)), wait).unref();
   };
   // probePassword turns every PDS failure into "unknown"; anything else it throws is a fault here, so stop.
-  const run = (wait: number) => void attempt(wait).catch(() => halt("the password probe failed"));
+  const run = (wait: number): void => {
+    attempt(wait).catch(() => halt("the password probe failed"));
+  };
   run(PROBE_FIRST_MS);
 }
 
