@@ -70,7 +70,7 @@ keeps every other host account out:
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
 | `objects_s3` | `1000:1000` | objects | the object store's identities, with no Admin identity (P2.18s) |
 | `pds_admin_password` | `65532:65532` | pds-admin | the same value as `PDS_ADMIN_PASSWORD` in `pds.env` (P2.09e) |
-| `pds_admin_keys.json` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
+| `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
 | `web_pds_admin_key` | `65532:65532` | web (from P2.10) | the private key web signs invite requests with |
 
@@ -126,6 +126,11 @@ fourth, web's half of their key pair, is made with them. Each is installed `0400
 start with one line naming the file. Run these from the folder that holds your checkout, so `unset-dev-secrets/` and
 `unset-dev-env/` are beside you, under `umask 077`; no value reaches your terminal or a command line.
 
+pds-admin runs only in the stacks built from the checkout, `npm run dev:source:up` on staging and the local stack, until
+its image is locked for production (Alex, 2026-11-19: deploy from source). `npm run dev:up` runs no pds-admin. Both
+stacks need `PDS_DID` in `unset-dev-env/dev-public.env`: `did:web:` and the PDS host, `did:web:staging.unset.ac` on
+staging.
+
 **The admin password**, `pds_admin_password`, is exactly `PDS_ADMIN_PASSWORD` in `pds.env`. The preflight cannot
 compare the two (it cannot read a 0400 file it does not own), so pds-admin checks it itself. It asks the PDS about an
 account no one can have: NotFound opens issuing, and a 401 stops it with `secret pds_admin_password is not the PDS's
@@ -156,7 +161,7 @@ sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/
 rm unset-dev-secrets/.new
 ```
 
-**The web key pair.** `pds_admin_keys.json` holds the public half and its one verb; `web_pds_admin_key` holds the
+**The web key pair.** `pds_admin_keys` holds the public half and its one verb; `web_pds_admin_key` holds the
 private half, which web signs invite requests with (P2.10 mounts it). With Node 26 (`web-2026-11` is the kid):
 
 ```sh
@@ -168,7 +173,7 @@ node -e 'const c = require("node:crypto"), fs = require("node:fs");
     verbs: ["invite.issue"], publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }]), { mode: 0o600 });' \
   web-2026-11
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secrets/web_pds_admin_key
-sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-secrets/pds_admin_keys.json
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-secrets/pds_admin_keys
 rm unset-dev-secrets/.new-key unset-dev-secrets/.new-keys
 ```
 

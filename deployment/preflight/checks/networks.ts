@@ -3,7 +3,13 @@
 // directions, so no service joins a network, and no network opens up, without a reviewed change to the table. The
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
-import { DEV_ONLY_NETWORKS, isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
+import {
+  DEV_ONLY_NETWORKS,
+  isLocalOnlyNetwork,
+  LOCAL_ONLY_NETWORKS,
+  SOURCE_ONLY_NETWORKS,
+  SOURCE_ONLY_SERVICES,
+} from "../local-only.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
 import { readBases, readLock } from "./lock.ts";
@@ -248,7 +254,7 @@ export const c17: Check = {
     }
     const local = localOnlyProblems(compose, env);
     if (local !== null) return fail(local);
-    const expected = withLocalOnly(table, env);
+    const expected = withLocalOnly(table, env, inputs.source);
     if (typeof expected === "string") return fail(expected);
     const problems = [
       ...pdsNeighbours(inputs),
@@ -268,13 +274,27 @@ function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string
 }
 
 /**
- * Under local, the table without the dev-only networks and plus the local-only ones, matched as one. The table never
+ * Under local, the table without the dev-only networks and plus the local-only ones, matched as one; under dev without
+ * --source, the table without what only a built stack runs. The table never
  * lists a local-only network, listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no
  * local-only rows; verify-903 S3).
  */
-function withLocalOnly(table: NetworkTable, env: Env): NetworkTable | string {
+export function withLocalOnly(table: NetworkTable, env: Env, source: boolean): NetworkTable | string {
   const clash = [...table.keys()].find(isLocalOnlyNetwork);
   if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
+  if (env === "dev" && !source) return withoutSourceOnly(table);
   if (env !== "local") return table;
   return new Map([...[...table].filter(([name]) => !DEV_ONLY_NETWORKS.has(name)), ...LOCAL_ONLY_NETWORKS]);
+}
+
+/**
+ * The table as the dev image stack must match it: no source-only network's row, and no source-only service in any
+ * row (local-only.ts SOURCE_ONLY_SERVICES), so that stack running one, or joining one of their networks, fails.
+ */
+function withoutSourceOnly(table: NetworkTable): NetworkTable {
+  return new Map(
+    [...table]
+      .filter(([name]) => !SOURCE_ONLY_NETWORKS.has(name))
+      .map(([name, row]) => [name, { ...row, members: row.members.filter((s) => !SOURCE_ONLY_SERVICES.has(s)) }]),
+  );
 }

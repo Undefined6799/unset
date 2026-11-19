@@ -28,6 +28,8 @@ import {
   isLocalOnlyNetwork,
   LOCAL_ONLY_NETWORKS,
   LOCAL_ONLY_SERVICES,
+  SOURCE_ONLY_NETWORKS,
+  SOURCE_ONLY_SERVICES,
 } from "./preflight/local-only.ts";
 import { type VirtualEntry, virtualCheckout } from "./preflight/virtual-checkout.ts";
 
@@ -213,7 +215,7 @@ function serviceDrift(dev: Service, local: Service): string[] {
     networks: () =>
       same(
         dev.networks.filter((n) => !DEV_ONLY_NETWORKS.has(n)),
-        without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)]),
+        without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name), ...SOURCE_ONLY_NETWORKS]),
       )
         ? []
         : [`${dev.name}: networks differs`],
@@ -418,16 +420,18 @@ function drift(dev: Compose, local: Compose): string[] {
   const problems: string[] = [];
   for (const s of local.services) {
     const twin = dev.services.find((d) => d.name === s.name);
-    if (twin === undefined && !LOCAL_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is only in the local file`);
+    const listed = LOCAL_ONLY_SERVICES.has(s.name) || SOURCE_ONLY_SERVICES.has(s.name);
+    if (twin === undefined && !listed) problems.push(`${s.name} is only in the local file`);
     if (twin !== undefined) problems.push(...serviceDrift(twin, s));
   }
   for (const s of dev.services) {
-    if (LOCAL_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is in the dev file`);
+    if (LOCAL_ONLY_SERVICES.has(s.name) || SOURCE_ONLY_SERVICES.has(s.name))
+      problems.push(`${s.name} is in the dev file`);
     else if (DEV_ONLY_SERVICES.has(s.name)) continue;
     else if (!local.services.some((l) => l.name === s.name)) problems.push(`${s.name} is only in the dev file`);
   }
   for (const s of local.services) if (DEV_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is in the local file`);
-  const shared = local.networks.filter(({ name }) => !LOCAL_ONLY_NETWORKS.has(name));
+  const shared = local.networks.filter(({ name }) => !LOCAL_ONLY_NETWORKS.has(name) && !SOURCE_ONLY_NETWORKS.has(name));
   const devShared = dev.networks.filter(({ name }) => !DEV_ONLY_NETWORKS.has(name));
   if (!same(devShared, shared)) problems.push("the networks or their internal flags differ");
   for (const { name } of local.networks) if (DEV_ONLY_NETWORKS.has(name)) problems.push(`${name} is in the local file`);
