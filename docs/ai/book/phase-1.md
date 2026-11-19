@@ -4647,9 +4647,8 @@ shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/route
 An outside architecture review of a7676f6 (Codex, handed over by Alex on 2026-11-19) and Alex's direction in it:
 use the framework's real form types with controllers beside their routes, narrow what routes can reach, measure
 before changing the bundle or edge rules, and make feature ownership readable. Verdicts against main e8afe10 and the
-reasons for each slice: the description of the PR that added these steps (P1.20l, #1744). P1.20m (#1743, the outage
-503), P1.20n (#1746, the card limit) and P1.20q (#1756, the pool client error) are
-other threads' fixes; P1.20o, P1.20p and P1.20r are unused. Order (Alex, 2026-11-19 05:01Z: the current app first, not the future):
+reasons for each slice: the description of the PR that added these steps (P1.20l, #1744). The other P1.20 letters
+from P1.20m on, apart from s to v, are other threads' fixes from the same days, named in their own PRs. Order (Alex, 2026-11-19 05:01Z: the current app first, not the future):
 P1.20t, P1.20s, P1.20v, P1.20u; the Phase 5 and 6 edits only keep the plan right and build nothing now. One PR per
 step:
 - P1.20l These steps, and the P6.05, P6.17 and P5.01o book edits.
