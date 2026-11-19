@@ -106,7 +106,7 @@ services:
       LOG_ENABLED: "false"
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=768
-    networks: [edge, pds_egress, objects_pds]
+    networks: [edge, pds_egress, objects_pds, pds_admin_pds]
     mem_limit: 1g
     cpus: 1
     pids_limit: 256
@@ -239,6 +239,38 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
+  # pds-admin (P2.09e; ADR 0060): the one holder of the PDS admin password, issuing member invites for web. Built from
+  # the checkout only, until its image is locked for production (local-only.ts SOURCE_ONLY_SERVICES). It reaches the PDS
+  # on pds_admin_pds, the one network C17 lets it share with the PDS, and web reaches it on pds_admin from P2.10; it has
+  # no way out. Its replay guard and request log live on pdsadmindata, which takes the image's 0700 65532 state folder.
+  # At boot it proves the admin password against the PDS and exits on a refusal (docs/human/runbooks/dev-stack-secrets.md).
+  pds-admin:
+    build:
+      context: ..
+      dockerfile: deployment/images/pds-admin.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - pdsadmindata:/app/state
+    environment:
+      PDS_ADMIN_ENV: dev
+      PDS_DID: ${PDS_DID}
+      PDS_INTERNAL_URL: http://pds:3000
+      SIGNUPS_OPEN: "true"
+      STATE_DIR: /app/state
+      PORT: "8080"
+      NODE_OPTIONS: --max-old-space-size=96
+    secrets: [pds_admin_password, pds_admin_keys, pds_admin_log_key]
+    networks: [pds_admin, pds_admin_pds]
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 32
+    restart: unless-stopped
+
   # The local email inbox stand-in (P1.29h; architecture record 2026-10-13-p129h-local-token-reader and its Amendment
   # 1), moved here from compose.dev.yaml (local-plc Amendment 6, Q2): tests/support/pds-email-token.ts runs it as
   # `docker compose --profile tools run --rm pds-token-reader /reader/read.ts <did>`, and `up` never starts it. It reads
@@ -282,6 +314,13 @@ networks:
   # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
   objects_pds:
     internal: true
+  # web's way to pds-admin (P2.10) and nothing else: internal. pds-admin only until then.
+  pds_admin:
+    internal: true
+  # pds-admin's way to the PDS's internal URL (P2.09e): internal, the two of them only. C17 lets pds-admin, and nothing
+  # else but the edge, share a network with the PDS, on this one network (deployment/preflight/checks/networks.ts).
+  pds_admin_pds:
+    internal: true
 
 volumes:
   pgdata:
@@ -289,6 +328,7 @@ volumes:
   edgedata:
   edgeconfig:
   objectsdata:
+  pdsadmindata:
 
 secrets:
   pg_superuser_password:
@@ -317,3 +357,10 @@ secrets:
   # identity; read by objects (uid 1000) only.
   objects_s3:
     file: ../../unset-dev-secrets/objects_s3
+  # pds-admin's files (P2.09e), read by 65532 only: the PDS admin password, web's public key, the request log's key.
+  pds_admin_password:
+    file: ../../unset-dev-secrets/pds_admin_password
+  pds_admin_keys:
+    file: ../../unset-dev-secrets/pds_admin_keys
+  pds_admin_log_key:
+    file: ../../unset-dev-secrets/pds_admin_log_key

@@ -10,7 +10,13 @@ import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { c18, edgeZones } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
-import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
+import {
+  type NetworkTable,
+  networkTableProblems,
+  parseNetworkTable,
+  pdsNeighbours,
+  withLocalOnly,
+} from "./preflight/checks/networks.ts";
 import { c32 } from "./preflight/checks/placeholders.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import { switchesProtectionOff } from "./preflight/checks/settings.ts";
@@ -36,6 +42,8 @@ const NEWT_SUBNET = "10.250.37.0/29";
 const NEWT_ADDRESS = "10.250.37.2";
 const EDGE_ADDRESS = "10.250.37.3";
 const LOCAL = "compose.local.yaml";
+/** The staging stack built from the checkout (P1.37y). */
+const SOURCE_FILE = "compose.dev.source.yaml";
 /** The staging file built from the checkout (P1.37y, ADR 0036): dev's services, five of them built, the rest dev's images. */
 const SOURCE = "compose.dev.source.yaml";
 const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
@@ -322,7 +330,19 @@ describe("compose.dev.yaml (P1.29)", () => {
   test("compose_dev_networks_match_table", () => {
     // P1.30t's comparison, so this test and the deploy gate's C17 judge alike.
     const table = parseNetworkTable(read("networks.dev.json"), "networks.dev.json");
-    expect(networkTableProblems(dev(), table)).toEqual([]);
+    // The image stack without what only a built stack runs (local-only.ts SOURCE_ONLY_SERVICES), as C17 judges it under
+    // --env dev; the source stack, which staging runs (Alex, 2026-11-19T00:43Z), against the whole table.
+    const imageTable = withLocalOnly(table, "dev", false);
+    expect(typeof imageTable).not.toBe("string");
+    expect(networkTableProblems(dev(), imageTable as NetworkTable)).toEqual([]);
+    expect(networkTableProblems(parseCompose(read(SOURCE_FILE), SOURCE_FILE), table)).toEqual([]);
+    // The image stack running a source-only service fails, so it can only run once that service is locked.
+    const admin = parseCompose(read(SOURCE_FILE), SOURCE_FILE).services.find((s) => s.name === "pds-admin");
+    expect(admin).toBeDefined();
+    const withAdmin = { ...dev(), services: [...dev().services, { ...(admin as Service), networks: ["db"] }] };
+    expect(networkTableProblems(withAdmin, imageTable as NetworkTable)).toEqual([
+      "pds-admin is on db, the table says not",
+    ]);
   });
 
   test("compose_dev_hardening", () => {
@@ -372,6 +392,7 @@ describe("compose.dev.yaml (P1.29)", () => {
     const table = readLimits();
     expect(limitsDrift(table, dev()), FILE).toEqual([]);
     expect(limitsDrift(table, local()), LOCAL).toEqual([]);
+    expect(limitsDrift(table, parseCompose(read(SOURCE_FILE), SOURCE_FILE)), SOURCE_FILE).toEqual([]);
     const services = new Set([...dev().services, ...local().services].map((s) => s.name));
     expect(Object.keys(table).filter((name) => !services.has(name))).toEqual([]);
   });

@@ -21,6 +21,8 @@ export type HandlerDeps = {
   readonly now: () => number;
   /** Stops the process: called when a state file's on-disk state is unknown, so a restart rereads it. */
   readonly stop: () => void;
+  /** Whether the PDS has accepted our admin password yet (P2.09e); until it has, nothing is issued. */
+  readonly ready: () => boolean;
 };
 
 const ROUTE = "/v1/invite.issue";
@@ -82,6 +84,11 @@ export function createHandler(deps: HandlerDeps): (req: IncomingMessage, res: Se
     // Step 1: the one route, by method and exact path, as JSON.
     if (req.method === "GET" && req.url === "/health") return { status: 200, body: { ok: true, commit: deps.commit } };
     if (req.method !== "POST" || req.url !== ROUTE) return fail(404);
+    // Before the body and the replay guard: a request refused here burns no jti and spends no slot, so web may retry.
+    if (!deps.ready()) {
+      record({ outcome: "error", reason: "password_unproven" });
+      return fail(503);
+    }
     if (req.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") return deny(400, "content_type");
     // Steps 2 and 3: a capped body, parsed, of the exact shape.
     const raw = await readBody(req);
