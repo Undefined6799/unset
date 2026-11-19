@@ -4648,7 +4648,9 @@ An outside architecture review of a7676f6 (Codex, handed over by Alex on 2026-11
 use the framework's real form types with controllers beside their routes, narrow what routes can reach, measure
 before changing the bundle or edge rules, and make feature ownership readable. Verdicts against main e8afe10 and the
 reasons for each slice: the description of the PR that added these steps (P1.20l, #1744). P1.20m to P1.20r went to
-other threads' fixes from the same review. One PR per step:
+other threads' fixes from the same review. Order (Alex, 2026-11-19 05:01Z: the current app first, not the future):
+P1.20t, P1.20s, P1.20v, P1.20u; the Phase 5 and 6 edits only keep the plan right and build nothing now. One PR per
+step:
 - P1.20l These steps, and the P6.05, P6.17 and P5.01o book edits.
 - P1.20s **Real Svelte form types in one route-owned controller.** The settings profile form only. It spans two
   routes: `/settings/profile` renders it and `/profile` saves it (`routes/profile/save.server.ts`). Its browser
@@ -4678,9 +4680,10 @@ other threads' fixes from the same review. One PR per step:
   limits (not the e2e proxy; staging itself is not touched). The value to measure is not page weight alone: also
   failed asset loads (429s) and what a new deploy makes a returning browser download again. Record requests per
   route, the peak per 10 s, 429s, compressed JS and CSS per route, the lazy editor's transfer and time to
-  interactive, in `docs/ai/notes/`. Changes no rule, no budget and no config. A later edge change (a bounded bucket
-  for hashed `/_app/immutable/` files only) loosens a security control: it needs Alex's typed line, and keeps the
-  single bundle if the numbers show no clear gain.
+  interactive, in `docs/ai/notes/`. Changes no rule, no budget and no config. Alex wants the split bundle for
+  caching and scale (2026-11-19 05:01Z), so if the numbers hold, the next PR switches to `split` with the bucket
+  below; if they do not, it reports why and keeps `single`. That edge change (a bounded bucket
+  for hashed `/_app/immutable/` files only) loosens a security control, so it needs Alex's typed line.
 - P1.20v **Feature maps and stale docs.** Fix `docs/human/features/core-shell.md`, which still describes the React
   shell deleted in P1.20k, and the README line saying public profiles wait for the indexer (live since P3.12s).
   Add four short maps under `docs/human/features/`: profile and cards, sign-in and onboarding, public indexing, and

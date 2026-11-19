@@ -917,7 +917,7 @@ Outputs:
   - Table `app.chat_seed(did text PK, state text NOT NULL CHECK in ('pending','seeded','failed_permanent','erasing'), localpart
     text UNIQUE NOT NULL /* opaque, CSPRNG, set on insert, never updated */, external_id text NULL /* MAS user ULID */,
     attempts int NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL, lease_token uuid NULL, lease_until
-    timestamptz NULL, last_error text NULL, created_at, updated_at)`. Erasure-registry rows for `did` and `localpart` (P1.13; strategy `delete_row`, run by P6.04a's last
+    timestamptz NULL, first_claimed_at timestamptz NULL /* set at the first claim, never cleared */, last_error text NULL, created_at, updated_at)`. Erasure-registry rows for `did` and `localpart` (P1.13; strategy `delete_row`, run by P6.04a's last
     erasure step); an export entry (P4.26 `EXPORT_POLICY`: the member's own MXID); **granted by column list only**
     (`web`: the columns it reads and writes; personal data, so no `wholeTable` and no default privileges, plan §5.2 at
     `9c54e52`). The same holds for the chat rows of P2.14's `app.module_account` (registry, export, column-list
@@ -943,7 +943,7 @@ Algorithm (full detail for the mapping, steps 3b–3e and 4; reviewed hypothesis
      a. **Claim**, in a short transaction: select the row `FOR UPDATE SKIP LOCKED` where `state = 'pending'`,
         `next_attempt_at ≤ now` and (`lease_until` is null or past); none → return its current state. Set
         `lease_token = gen_random_uuid()`, `lease_until = now + 30 s` (longer than the call's timeout below; a config
-        test checks it), and commit. The transaction and the pool connection are released before step c.
+        test checks it), `first_claimed_at` if still null, and commit. The transaction and the pool connection are released before step c.
      b. `lp` = the claimed row's stored `localpart` (decision 42; no handle is read, `verifyHandle` is not called here).
         `isValidLocalpart(lp)` (P6.03) must hold; it always does for `newLocalpart`'s alphabet, so a failure is a
         code fault → complete as `failed_permanent` (step d), alert.
@@ -2878,14 +2878,13 @@ Algorithm (full detail: suspension, erasure and session ending):
         caller's timeout), so fence it at `chat-admin` instead: a signed `fence` verb records the DID in
         `chat-admin`'s refused list (fsynced, like `seeds.log`), so any later or queued `seed` for it is refused before
         a MAS call, and answers only after any `seed` already running for that DID has returned (`chat-admin` runs
-        seeds for one DID one at a time). Only after `fence` answers is the remote account looked up. Then find the remote
-        account: first by the DID link, as every verb does. If there is no link, the seed may have stopped between
-        MAS's user create and link create (P6.04 steps 6 and 7), leaving a user with no link. Only for that case,
-        `deactivate` and `delete_link` also accept the stored localpart inside web's signed assertion and act on the
-        MAS user with that username only if it has no upstream link at all (the same `getUserByUsername` and
-        `findLinksByUser` check P6.04 step 6 uses to adopt such an orphan). A user with that username linked to another DID → stop, alert, held case, never touched. No row and
-        no remote user → skip to `purge_chat_auth`. This narrows, for one signed case, the "never by localpart" rule
-        below; P6.00 reviews it (security mechanism, D8 ADR with the phase).
+        seeds for one DID one at a time). Only after `fence` answers is the remote account looked up, by the DID link
+        only, as every verb does (Alex, 2026-11-19 05:01Z, answer 4: no lookup by the random name). MAS creates the
+        user and its link in two calls (P6.04 steps 6 and 7), so a seed that stopped between them can leave a user
+        with no link; P6.04's retry adopts it, but erasure may come first. So: link found → steps a to f. No link and
+        the row was never claimed (`first_claimed_at` null) → nothing remote; skip to `purge_chat_auth`. No link but
+        the row was claimed and never `seeded` → open a held case in `admin` naming the stored localpart for a person to check
+        and remove, and report chat erasure as "pending, needs a person", never done, until they close it.
      a. `deactivate` → `chat-admin` `deactivate` (with Synapse erase: display name and avatar removed, account marked
         erased).
      b. `wait_deactivated` → poll `GET /users/{id}` until `deactivated_at` is set (queued job).
@@ -2939,8 +2938,8 @@ Done when (tests):
     `erase-deletes-mapping-last`, `erase-report-pending-then-erased`,
     `erase-fences-seed-before-lookup` (a fake MAS that writes the user after the caller's lease expired: the lookup
     runs only after that write, and a later seed for the DID is refused), `erase-waits-for-live-seed-lease`, `erase-after-late-seed-200-deactivates-user`,
-    `erase-after-lost-seed-reply-deactivates-user`, `erase-finds-user-created-before-link`,
-    `erase-never-touches-user-linked-to-other-did`, `erase-not-done-while-seed-can-create`,
+    `erase-after-lost-seed-reply-deactivates-user`, `erase-holds-case-for-possible-unlinked-user`,
+    `erase-never-looks-up-by-localpart`, `erase-not-done-while-seed-can-create`,
     `job-retries-and-alerts`, `lookup-by-subject-not-localpart`, `mas-path-allowlist-grows-only-by-these`,
     `end-sessions-finishes-all-three-kinds` (fake MAS: a session created during the first round is finished in the
     second), `end-sessions-round-cap-errors`,
@@ -2967,55 +2966,56 @@ leaving (tab closed, Later, consent declined) ending in a consistent state and a
 
 Settled by Alex (2026-10-03 16:49Z, P6-A8): "Later" is allowed on the onboarding chat step.
 
-**Reachability gate (Alex's direction in the architecture review handoff, 2026-11-19):** every
-activated account must have the chat capability needed to be reachable, and chat stays at the end of onboarding as a
-real prerequisite. So onboarding is complete, and the member queued for the index (ADR 0053), only once the seed is
-done and the `did↔mxid` mapping is verified for this DID (P6.05 `accountStatus = ready`). The earlier text, which let
-onboarding complete whatever the chat state, is replaced. "Later" (P6-A8) stays, for the member's own chat sign-in,
-device and recovery key, which under the recommended reading (a) below do not block activation; that part is
-provisional until Alex answers. The email gate stays a separate check.
-
-> **[ALEX] Open question, not decided:** does "reachable" mean (a) a seeded chat account with a verified
-> `did↔mxid` mapping, which can receive an authorized message request, or (b) also a first device with its
-> encryption and recovery set up? Recommended: (a), stated as the promise "every activated member can receive an
-> authorized chat invitation; device and recovery setup wait until they first use chat". It does not promise that
-> they can read a message at once: encryption needs a device's keys
-> (https://spec.matrix.org/v1.18/client-server-api/#tracking-the-device-list-for-a-user), so until the recipient
-> accepts and sets up a device, the sender sees the request as waiting (an invite only,
-> https://spec.matrix.org/v1.18/client-server-api/#post_matrixclientv3roomsroomidinvite). PLAN §5.6 says seeding creates the account only, with no
-> device or key, and a message request is the invite alone because a seeded account has no devices (decision 12),
-> so (a) is already reachable. (b) would reverse P6-A8's "Later" and make every member finish chat's key setup
-> before using unset.sh. P6.00 confirms (a) against the pinned Synapse and MAS before this step is built. The steps
-> below are written for (a). Also for P6.00: whether members activated before Phase 6 (staging) keep their access
-> while P6.05's backfill seeds them, or wait at this step.
+**Reachability (Alex's direction in the architecture review handoff, 2026-11-19, then his answers the same day,
+2026-11-19 05:01Z, in the review thread):** every activated account gets the chat capability needed to be
+reachable, and chat stays at the end of onboarding.
+- **What "reachable" promises (answer 1: option a):** every activated member can receive an authorized chat
+  invitation; their device and recovery key wait until they first open chat ("Later", P6-A8, stays). It does not
+  promise they can read a message at once: encryption needs a device's keys
+  (https://spec.matrix.org/v1.18/client-server-api/#tracking-the-device-list-for-a-user), so until the recipient
+  accepts and sets up a device the sender sees the request as waiting (an invite only,
+  https://spec.matrix.org/v1.18/client-server-api/#post_matrixclientv3roomsroomidinvite). P6.00 item (Alex: "something
+  to look into"): whether a member with no device yet can still be told about a new request. Matrix push needs a
+  pusher, which a client registers for a device, so this is likely a notice from unset.sh itself, not Matrix push.
+- **A chat outage never blocks signup (answer 2: option b):** normally the seed finishes in seconds and the step
+  waits for it. If it is still pending after 60 s (hypothesis), or has failed, the member may continue: onboarding
+  completes and the account is marked `chat_pending`. A repair runner keeps retrying (P6.05's runner), `/me` says
+  chat is being set up, and an operator alert fires when any active member has been `chat_pending` for over 1 hour
+  (hypothesis); a permanent failure opens a held case in `admin`. This replaces "onboarding completes only when the
+  seed is done": the mechanism that catches it is the runner plus that alert.
+- **Accounts that exist before Phase 6 (answer 3):** staging accounts are for testing only and nothing there is
+  permanent. They keep using the app; their chat is set up by P6.05's backfill CLI, or the accounts are deleted and
+  signed up again to test the flow. No migration is planned for them.
 
 Inputs: P2.12 onboarding machine with the `chat` placeholder; P6.05 `chat.accountStatus`; P6.07 login; P6.08 classify.
   Reference: `E:stores/InitialCryptoSetupStore.ts` (`doSetup` `:92`, `createCrossSigning` `:105`, `resetKeyBackup`
   `:110`) and Element issue #29232 (prompt later, toast and red dot); vault `chat-first-party-consent-friction`.
 Outputs:
-  - `web` onboarding field `chat_step ∈ { waiting_for_seed, ready, opened, later, unavailable }` (derived from
+  - `web` onboarding field `chat_step ∈ { waiting_for_seed, ready, opened, later, unavailable, chat_pending }` (derived from
     `chat.accountStatus(did)` plus the member's choice; the onboarding code imports only the chat contract).
   - Chat step screen (zero JS): what chat is, that it is end-to-end encrypted, that the next screen is our chat sign-in
     server's consent page (screenshot, EN/FR, both themes) where they press Continue, that a recovery key must be
     saved; buttons "Set up chat" and "Later".
   - Chat client route `/onboarding`: P6.07 then P6.08 with onboarding copy; on `ready` → `location.assign("https://unset.sh/onboarding/next")`
     (a fixed URL; no return parameter is accepted).
-  - `/me` card "Finish setting up chat" while `chat_step = later` (`opened` shows "Continue chat setup"); a member
-    still at `waiting_for_seed` or `unavailable` has not finished onboarding and does not reach `/me`.
+  - `/me` card "Finish setting up chat" while `chat_step = later` (`opened` shows "Continue chat setup"; `chat_pending`
+    shows "Chat is being set up" until the seed lands, then "Finish setting up chat").
 Algorithm (`web`; reviewed hypothesis for the screens; the consistent states below are full detail):
   1. Entering the step: `chat.accountStatus(did)` is `pending` → `waiting_for_seed`: screen "Setting up chat…" with a
-     `<meta http-equiv="refresh" content="5">` and no Continue (the adapter runs a due seed; closing the tab loses
-     nothing, the seed row is durable). `unavailable` → `unavailable`: "Chat isn't available yet. We've been told.
-     You can come back here; your account is kept." and no Continue; the alert from P6.05 starts the operator's
-     recovery. `ready` → `ready`.
+     `<meta http-equiv="refresh" content="5">` (the adapter runs a due seed; closing the tab loses nothing, the seed
+     row is durable); after 60 s pending, a Continue button appears. `unavailable` → `unavailable`: "Chat isn't
+     available yet. We'll set it up for you and tell you when it's ready." and Continue. `ready` → `ready`.
   2. "Set up chat" (POST, CSRF gate) → complete onboarding (step 4), set `opened` → 303 `https://chat.unset.sh/onboarding`.
-  3. "Later" (POST, shown only on `ready`) → complete onboarding (step 4), set `later` → 303 `/onboarding/next`.
-  4. Completing onboarding: `decideCompletion(facts) → "activate" | "already_active" | "wait_for_chat" | "refuse"`, a
+  3. "Later" (POST, on `ready`) → complete onboarding (step 4), set `later` → 303 `/onboarding/next`. "Continue"
+     (POST, on `waiting_for_seed` after 60 s, or `unavailable`) → complete onboarding (step 4) as `chat_pending`.
+  4. Completing onboarding: `decideCompletion(facts) → "activate" | "activate_chat_pending" | "already_active" | "wait_for_chat" | "refuse"`, a
      small pure function in `domains/identity` (no SQL, no Matrix, no clock), from the account's state (age, terms,
-     blocked or erased) and the chat facts (seed state, and that the linked mapping is this DID's). Only `activate`
-     writes: `finishChat`'s conditional `UPDATE … WHERE onboarding = 'chat'`, now also requiring the `seeded`
-     `app.chat_seed` row and the `module_account` link for this DID in the same statement or transaction, plus the
-     `idx.track_request` insert, in one transaction (ADR 0053). The function explains the policy; the conditional
+     blocked or erased) and the chat facts (seed state, how long it has been pending, and that the linked mapping is
+     this DID's). `activate` and `activate_chat_pending` write: `finishChat`'s conditional
+     `UPDATE … WHERE onboarding = 'chat'` (for `activate` also requiring the `seeded` `app.chat_seed` row and the
+     `module_account` link for this DID; for `activate_chat_pending` requiring the `app.chat_seed` row to exist, so the
+     runner will finish it), plus the `idx.track_request` insert, in one transaction (ADR 0053). A mapping for another
+     DID always refuses. The function explains the policy; the conditional
      write still decides races, so a decision made from stale facts can never activate. No state-machine framework.
   5. `GET /onboarding/next` (read-only) → the next onboarding step, or `/me` when onboarding is complete. Login and
      the OAuth callback never seed or complete chat (P6.05 step 7).
@@ -3027,19 +3027,21 @@ Edge cases and failures (the consistent states):
   - Closed after login, before bootstrap → device exists, no cross-signing; next chat open → `new_account` → step 3 of P6.08.
   - Closed after cross-signing and backup → `recovery_pending` with the nag (the plan's named state).
   - Closed after the key was shown, before confirmation → `recovery_unconfirmed` with "I have it".
-  - Seeding pending or failing for a while → the member waits at this step; the account is not activated and not
-    queued for the index; leaving and coming back resumes here.
-  - Seeding never succeeds (`failed_permanent`) → `unavailable`; onboarding does not complete; the operator alert from
-    P6.05 starts recovery. No second chat identity is made (decision 42: ids never change).
+  - Seeding pending for over 60 s → the member may continue as `chat_pending`; the runner keeps retrying; the
+    1-hour alert catches a member left without chat.
+  - Seeding never succeeds (`failed_permanent`) → `unavailable`; the member continues as `chat_pending`; a held case
+    opens in `admin`. No second chat identity is made (decision 42: ids never change).
   - Terms re-accepted after a version bump → `requestAccount` finds the existing row; no second chat identity.
   - Blocked or erased while the seed runs → P6.05 step 3d writes nothing and `decideCompletion` refuses.
   - Under-age deactivation → the step is never reached.
 Done when (tests):
-  - `step-waits-for-seed-with-refresh`; `step-unavailable-does-not-complete`; `open-marks-opened-and-redirects`;
-    `later-marks-and-continues`; `later-refused-while-pending`; `me-card-shown-until-opened`.
-  - `decideCompletion` table tests: pending → wait; seeded for this DID → activate; already done → already active;
-    blocked, erased, or a mapping for another DID → refuse.
-  - Real Postgres: `pending-or-failed-never-activates`; `concurrent-completion-one-activation-one-queue-row`;
+  - `step-waits-for-seed-with-refresh`; `continue-appears-after-60s-pending`; `step-unavailable-continues-chat-pending`;
+    `open-marks-opened-and-redirects`; `later-marks-and-continues`; `me-card-shown-until-opened`;
+    `chat-pending-alert-after-1h`; `chat-pending-cleared-when-seed-lands`.
+  - `decideCompletion` table tests: pending under 60 s → wait; pending over 60 s or failed → activate chat pending;
+    seeded for this DID → activate; already done → already active; blocked, erased, or a mapping for another DID →
+    refuse.
+  - Real Postgres: `concurrent-completion-one-activation-one-queue-row`;
     `queue-insert-failure-rolls-back-completion`; `mapping-for-other-did-refused`; `erased-during-seed-not-activated`;
     `resume-after-close-while-pending`.
   - `onboarding-next-is-fixed` (a `return` parameter is ignored); `chat-onboarding-redirects-only-on-ready`.
@@ -3054,7 +3056,9 @@ stateDiagram-v2
   [*] --> waiting_for_seed: terms accepted (row pending)
   waiting_for_seed --> ready: seed succeeded, mapping verified
   waiting_for_seed --> unavailable: seed failed permanently
-  unavailable --> waiting_for_seed: operator recovery
+  waiting_for_seed --> chat_pending: Continue after 60 s
+  unavailable --> chat_pending: Continue
+  chat_pending --> [*]: onboarding complete, runner and alert finish chat
   ready --> later: Later
   ready --> opened: Set up chat (POST)
   later --> opened: Finish setting up chat (from /me)
