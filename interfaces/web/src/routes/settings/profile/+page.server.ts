@@ -43,5 +43,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
     discoverabilityLimits: DISCOVERABILITY_LIMITS,
     // The profile save's 303 back here (routes/profile/save.server.ts): with no script, the page says it saved.
     saved: url.searchParams.has("saved"),
+    // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
+    searchListingOff: config.SEARCH_LISTING !== "on",
   };
 };
