@@ -35,7 +35,7 @@
 			<body>
 			<main>
 			<h1>Too many tries</h1>
-			<p>Wait a few minutes, then try again.</p>
+			<p>Wait a moment, then try again. If this page comes back, wait a few minutes.</p>
 			<p><a href="/">Go to the home page</a></p>
 			</main>
 			</body>

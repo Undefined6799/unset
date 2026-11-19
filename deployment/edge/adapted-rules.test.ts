@@ -1165,8 +1165,9 @@ describe("edge rules on the adapted config (P1.39b)", () => {
   });
 
   test("too_many_tries_page_says_wait_and_names_no_limit", () => {
-    // The page's words (Alex 2026-11-19, "yes good idea with adding a page"): wait a few minutes, a way home, and no
-    // number, so it tells nobody a zone's size or window. The same page on every site of every env.
+    // The page's words (Alex 2026-11-19, "yes good idea with adding a page"): wait, a way home, and no number, so it
+    // tells nobody a zone's size or window. The same page on every site of every env, so the words fit every zone:
+    // app_burst frees in seconds (P1.20o: a member pressing Settings and Profile fast met it), app_signin in minutes.
     const bodies = (["shipped", "local", "dev"] as const).flatMap((mode) =>
       errorRoutes(adapted(mode)).map((route) =>
         String(page(adapted(mode), String(a(o(a(o(route).match)[0]).host)[0])).body),
@@ -1177,7 +1178,9 @@ describe("edge rules on the adapted config (P1.39b)", () => {
     const words = String(bodies[0])
       .replace(/<style>[^<]*<\/style>/, "")
       .replace(/<[^>]*>/g, " ");
-    expect(words).toContain("Wait a few minutes, then try again.");
+    expect(words).toContain("Wait a moment, then try again.");
+    expect(words).toContain("If this page comes back, wait a few minutes.");
+    expect(words).not.toContain("Wait a few minutes, then try again.");
     expect(words).toContain("Go to the home page");
     expect(words).not.toMatch(/[0-9]/);
   });
