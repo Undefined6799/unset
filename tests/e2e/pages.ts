@@ -24,6 +24,8 @@ export const TEST_ORIGIN = `https://${HOST}:${LISTEN.test}`;
 /** The signed-in members the test server seeds, by where each stands (fixtures/servers.ts MEMBERS). */
 export type MemberName = "age" | "terms" | "chat" | "verify" | "account";
 /** The finished member, whose repo the stand-in PDS holds. */
+/** A code of the PDS's shape for /join; nothing ever redeems it. */
+export const JOIN_CODE = "pds-test-abcde-fghij";
 export const ACCOUNT = { did: `did:plc:${"a".repeat(24)}` } as const;
 /** A member the indexer has copied (fixtures/servers.ts seeds it on the production server), shown at /@did. */
 export const INDEXED = { did: `did:plc:${"p".repeat(24)}` } as const;
@@ -79,6 +81,8 @@ export const PAGES: readonly PageFixture[] = [
   signedOut("/login", "app", "/login", false),
   signedOut("/signed-out", "app"),
   signedOut("/welcome/blocked", "app", "/welcome/blocked", false),
+  // P2.10: the page an invite link opens, with a well-formed code (it never checks or spends it).
+  signedOut(`/join?invite=${JOIN_CODE}`, "public", "/join"),
 ];
 
 /** Documents that need a session, at their real paths on the test server, each as a member who belongs there. */
@@ -90,6 +94,7 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn(`/${ACCOUNT.did}`, "account", "/:did"),
   signedIn("/settings/profile", "account"),
   signedIn("/settings/account", "account"),
+  signedIn("/invite", "account"),
 ];
 
 /** Every page under test, each once. */
