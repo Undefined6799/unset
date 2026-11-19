@@ -1,4 +1,4 @@
-// A member's own "Search and AI" choices (ADR 0062; migration 0031), read and saved for Settings › Profile. Every
+// A member's own "Search and AI" choices (ADR 0062; migration 0032), read and saved for Settings › Profile. Every
 // statement names the signed-in member's DID, the only row web touches here. A save that leaves everything off and
 // empty deletes the row: no row is the same as all off, so nothing is kept that says nothing.
 import { DISCOVERABILITY_OFF, type Discoverability } from "@unset/domains-profile";

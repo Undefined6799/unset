@@ -1,7 +1,7 @@
 // A member's "Search and AI" choices (ADR 0062): may search engines list their public page, may AI search show it,
 // and an optional title and description for search results. Both switches are off until the member turns them on.
 // The overrides are plain text, one line each, counted in code points as Postgres's char_length counts them, so the
-// check here and the table's CHECK (migration 0031) agree.
+// check here and the table's CHECK (migration 0032) agree.
 import type { ProfileError } from "./profile.ts";
 
 export type Discoverability = {
