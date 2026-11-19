@@ -7,7 +7,6 @@
 // /verify-email/reconsent) starts a new authorization with prompt=consent for the same account.
 import { type Actions, redirect, type ServerLoad } from "@sveltejs/kit";
 import { requireOnboarded } from "@unset/domains-identity";
-import { PURPOSES, withClient } from "@unset/infrastructure-postgres";
 import type { Session } from "@unset/infrastructure-session";
 import { withErrorParam } from "@unset/shared-errors";
 import { safeReturnPath } from "@unset/shared-http";
@@ -16,8 +15,8 @@ import { redirectFor } from "../../lib/server/app-gate.ts";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { dropSessionCookie } from "../../lib/server/session.ts";
-import { authorizationTarget } from "../../lib/server/sign-in.ts";
-import { appStateOf, encodeTarget, putCookie } from "../../lib/server/sign-in-state.ts";
+import { startAuthorization } from "../../lib/server/sign-in.ts";
+import { encodeTarget, putCookie } from "../../lib/server/sign-in-state.ts";
 import { member, stepPage } from "../welcome/onboarding.server.ts";
 
 type State = "confirmed" | "unconfirmed" | "needs_consent" | "unavailable";
@@ -59,19 +58,15 @@ export const actions: Actions = {
     const session = member(event);
     const { deadline } = event.locals;
     await onboarded(session, deadline);
-    const { pool, nonces } = services();
-    const nonce = await withClient(pool, deadline, (db) =>
-      nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] }),
-    );
-    const appState = appStateOf({
-      nonce,
+    const sent = await startAuthorization({
+      input: session.did,
       expectedDid: session.did,
       next: safeReturnPath("/verify-email"),
-      silent: false,
+      prompt: "consent",
+      deadline,
     });
-    const sent = await authorizationTarget(session.did, { appState, prompt: "consent", deadline });
     if (!sent.ok) redirect(303, withErrorParam("/verify-email", sent.code));
-    putCookie(event.cookies, "nonce", nonce);
+    putCookie(event.cookies, "nonce", sent.nonce);
     putCookie(event.cookies, "target", encodeTarget(sent.target));
     redirect(303, "/login/continue");
   },
