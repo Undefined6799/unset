@@ -2,7 +2,9 @@
 // self-asserted, so it is shown only when the handle resolves back to the same DID: https://atproto.com/specs/did
 // ("DID Documents") and https://atproto.com/specs/handle, read from github.com/bluesky-social/atproto-website at
 // 7937e9c. The claimed handle is the first syntactically valid `at://` handle in alsoKnownAs; later ones are ignored.
-// An outage is `unavailable` and never cached, so it neither blocks a login nor sticks. Callers asking about the same
+// An outage is `unavailable` and never cached, so it neither blocks a login nor sticks. When the DID document was read
+// but the handle it claims could not be resolved, `unavailable` names that claim, so a caller holding an older verified
+// handle can tell an outage from a changed claim (P3.08s). Callers asking about the same
 // DID at once share one check (P1.32b, in-flight.ts).
 import type { IdentityNetwork } from "./contract.ts";
 import type { ResolvedDid } from "./did-doc.ts";
@@ -14,7 +16,7 @@ import { type Did, type Handle, isHandleSyntax, parseHandle } from "./syntax.ts"
 export type HandleVerdict =
   | { readonly status: "verified"; readonly handle: Handle; readonly checkedAt: number }
   | { readonly status: "invalid"; readonly checkedAt: number }
-  | { readonly status: "unavailable" };
+  | { readonly status: "unavailable"; readonly claimed?: Handle };
 
 export type HandleVerifierOptions = {
   readonly network: IdentityNetwork;
@@ -97,7 +99,7 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
     const handle = claimedHandle(resolved);
     if (handle === null) return invalid();
     const resolution = await resolveHandle(options.network, handle);
-    if (resolution.status === "unavailable") return UNAVAILABLE;
+    if (resolution.status === "unavailable") return { verdict: { status: "unavailable", claimed: handle }, ttlS: null };
     if (resolution.status === "not_found" || resolution.did !== did) return invalid();
     return { verdict: { status: "verified", handle, checkedAt: now() }, ttlS: options.verifyTtlS };
   }
