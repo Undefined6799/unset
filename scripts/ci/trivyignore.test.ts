@@ -210,11 +210,23 @@ describe(".github/trivyignore.yaml holds no waiver", () => {
 });
 
 const SEAWEEDFS_FILE = join(ROOT, ".github", "trivyignore.seaweedfs.yaml");
-/** P2.18s: SeaweedFS 4.54 (4b42c212) is built with x/net v0.62.0, so the 4.53 x/net waiver is gone. */
-const SEAWEEDFS_ENTRIES: IgnoreEntry[] = [];
+/** P2.18s: Trivy v0.76.1's one finding in SeaweedFS 4.53 (ccad23e1), Alex's "yes waiver" 2026-11-15T23:08:12Z. */
+const SEAWEEDFS_ENTRIES = [
+  {
+    id: "CVE-2026-78661",
+    paths: ["usr/bin/weed"],
+    purls: ["pkg:golang/golang.org/x/net@v0.61.0"],
+    statement: [
+      "sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0:",
+      "SeaweedFS 4.53, newest upstream release, no fixed build yet;",
+      "removed on the re-pin to a release with x/net v0.62.0 or later",
+    ].join(" "),
+    expired_at: "2026-12-15",
+  },
+];
 
 describe(".github/trivyignore.seaweedfs.yaml", () => {
-  test("seaweedfs_ignorefile_holds_no_waiver", () => {
+  test("seaweedfs_ignorefile_is_the_one_reviewed_entry", () => {
     expect(SEAWEEDFS_MAX_DAYS).toBe(30);
     const text = readFileSync(SEAWEEDFS_FILE, "utf8");
     expect(trivyIgnoreProblems(text, new Date(), SEAWEEDFS_MAX_DAYS, "shape")).toEqual([]);
