@@ -32,6 +32,12 @@ const indexerConfig = {
   PDS_PUBLIC_URL: url({ protocols: ["https:"] }),
   /** Milliseconds between the end of one round of passes and the start of the next (book P3.06: every 10 s). */
   INDEXER_PASS_INTERVAL_MS: int({ min: 1000, max: 300_000, default: 10_000 }),
+  /**
+   * How long a pass may go without finishing once before health says unhealthy (run.ts). Well above one round's worst
+   * case, which is minutes rather than the interval: a round reads up to 10 repos at INDEXER_REPO_TIMEOUT_MS each and
+   * resolves up to 100 DIDs at INDEXER_TIMEOUT_MS each, so a slow but working round never reads as stuck.
+   */
+  INDEXER_PASS_OVERDUE_MS: int({ min: 300_000, max: 86_400_000, default: 1_800_000 }),
   /** The deadline of one network read (a DID document, a repo status) and of one store transaction. */
   INDEXER_TIMEOUT_MS: int({ min: 500, max: 30_000, default: 5000 }),
   /** The deadline of one getRepo read, which downloads the whole repo. */

@@ -74,8 +74,6 @@ type SavedState = NonNullable<Awaited<ReturnType<Parameters<typeof createOAuthCl
 /** The one OAuth client and the account lock around its token sets (P2.04c, P1.36y). */
 export type OAuthServices = {
   readonly client: OAuthClient;
-  /** The library's token sets, sealed in app.oauth_session; a read never refreshes. */
-  readonly sessionStore: ReturnType<typeof createOAuthSessionStore<SavedSession>>;
   /** sign-in-lock.ts `during`: a sign-in holds the account's lock from storing its token set to its session row. */
   readonly signInScope: <T>(fn: () => Promise<T>) => Promise<T>;
   /** sign-in-lock.ts `exclusive`: runs `fn` holding `did`'s lock (the last browser's sign-out, sign-out everywhere). */
@@ -98,7 +96,6 @@ export type Services = {
   readonly issuerOf: (did: Did, signal?: AbortSignal) => Promise<string | null>;
   /** PLC, DNS and handle domains, through net-guard. */
   readonly network: IdentityNetwork;
-  readonly resolveDid: ReturnType<typeof createDidResolver>;
   /** P2.02's handle check, both directions (CLAUDE.md "Identity"). */
   readonly handles: ReturnType<typeof createHandleVerifier>;
   /** P1.16's single-use store (`login.nonce`). */
@@ -282,7 +279,6 @@ async function build(): Promise<Services> {
   );
   const oauth: OAuthServices = {
     client,
-    sessionStore: tokenSets,
     signInScope: signIn.during,
     lockDid: signIn.exclusive,
   };
@@ -296,7 +292,6 @@ async function build(): Promise<Services> {
     oauth,
     issuerOf,
     network,
-    resolveDid,
     handles,
     nonces,
     pds,

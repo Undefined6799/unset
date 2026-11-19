@@ -33,10 +33,11 @@ route group at a time (step book P1.20b to P1.20k); until the switch-over (P1.20
    - `maxBody`: the largest form body in bytes; without it the route takes no POST.
    A route with no `policy.ts` is refused, and `tests/integration/web/gate.test.ts` fails.
 3. Server code (`+page.server.ts`, `+server.ts`, `src/lib/server/`) may import domains and infrastructure; a `.svelte`
-   file or a universal `+page.ts` may not (dependency-cruiser `svelte-screens-no-core`). Services come from
-   `services()` in `src/lib/server/compose.ts` (built once by the `init` hook, before the server listens): `log`,
-   `pool`, `sessions`, `oauth` (`client`, `sessionStore`, `signInScope`, `lockDid`), `issuerOf`, `handles`, `pds`,
-   `pdsIssuer`, `network`, `resolveDid`, `nonces`. A new one is built there.
+   file or a universal `+page.ts` may not (dependency-cruiser `svelte-screens-no-core`). A route never imports
+   `infrastructure/postgres`; it calls an operation in `src/lib/server/` (`web-routes-no-postgres`). Services come
+   from `services()` in `src/lib/server/compose.ts` (built once by the `init` hook, before the server listens): `log`,
+   `pool`, `sessions`, `oauth` (`client`, `signInScope`, `lockDid`), `issuerOf`, `handles`, `pds`, `pdsIssuer`,
+   `network`, `nonces`. A new one is built there.
 4. Read `locals.did` (the signed-in DID or undefined), `locals.issuerOrigin` (see `src/lib/server/locals.d.ts`),
    `locals.deadline` (pass it to every call), `locals.deadlineAt` and `locals.reqId`. An `app` page and its data are sent `private, no-store` with
    `Vary: Cookie` by the gate; a page sets no cache header itself.
