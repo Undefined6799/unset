@@ -26,6 +26,33 @@ test.describe("javascript disabled", () => {
     });
   }
 
+  // Staging walkthrough 2026-11-19: on a phone the search icon was disabled and said nothing to a finger; it opens a
+  // panel that says search is coming, as Messages and Notifications do, with no script.
+  test("the_phone_search_button_says_search_is_coming", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/");
+    await page.locator('header button[popovertarget="search-menu"]').click();
+    await expect(page.locator("#search-menu")).toBeVisible();
+    await expect(page.locator("#search-menu")).toContainText("Search is coming soon.");
+  });
+
+  // Outside audit of staging, 2026-11-19: after an empty submit, a real date's confirm view still said "That date is
+  // not a real calendar date", because the form posted back to the URL that carried the error.
+  test("the_age_step_drops_an_old_error_once_the_date_is_real", async ({ page }) => {
+    const age = ALL_PAGES.find((fixture) => fixture.path === "/welcome/age");
+    expect(age).toBeDefined();
+    await openPage(page, age as PageFixture);
+    const error = page.getByText("That date is not a real calendar date.");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(error).toBeVisible();
+    await page.getByLabel("Day").fill("1");
+    await page.getByLabel("Month").fill("2");
+    await page.getByLabel("Year").fill("1990");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("heading", { name: "Is this date right?" })).toBeVisible();
+    await expect(error).toHaveCount(0);
+  });
+
   // P2.12b: the changed privacy notice banner's Dismiss is a plain form; once posted, the banner is gone for good.
   test("privacy_notice_dismiss_without_js", async ({ page }) => {
     const fixture: PageFixture = {

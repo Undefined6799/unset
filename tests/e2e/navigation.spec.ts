@@ -78,6 +78,23 @@ test.describe("phone", () => {
     await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
     await expect(drawer).toBeHidden();
   });
+
+  // Outside audit of staging, 2026-11-19: More actions, then one of its panels, then Escape left More actions open
+  // with focus on the page, so the next Tab went behind the menu. Focus goes back to the row that opened the panel
+  // once the client runs (an app page; the public pages run no script).
+  for (const name of ["Create", "Messages", "Notifications"]) {
+    test(`escape_from_${name.toLowerCase()}_returns_focus_to_more_actions`, async ({ page }) => {
+      expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+      await page.waitForLoadState("networkidle");
+      await page.locator('header button[popovertarget="actions-menu"]').click();
+      const actions = page.locator("#actions-menu");
+      const row = actions.getByRole("button", { name, exact: true });
+      await row.click();
+      await page.keyboard.press("Escape");
+      await expect(actions).toBeVisible();
+      await expect(row).toBeFocused();
+    });
+  }
 });
 
 // P1.20k: home reads the member's session, so its header has their account menu, not Sign in.

@@ -225,6 +225,27 @@ describe("verifyHandle", () => {
     expect(w.calls.txt).toEqual(["_atproto.alice.example.com", "_atproto.bob.example.com"]);
   });
 
+  // The shell names the member on every page from what an earlier check left, never by checking again (staging
+  // walkthrough 2026-11-19): a page must not wait on the network for the account button.
+  test("verified_handle_reads_only_the_cache", async () => {
+    const w = world();
+    w.answers.txt["_atproto.alice.example.com"] = records(`did=${A}`);
+    const verify = w.verifier();
+    expect(verify.verifiedHandle(A)).toBeNull();
+    expect(w.calls.plc).toBe(0);
+    await verify.verifyHandle(A);
+    expect(verify.verifiedHandle(A)).toBe("alice.example.com");
+    w.clock.now += 600_000;
+    expect(verify.verifiedHandle(A)).toBeNull();
+    expect(w.calls.plc).toBe(1);
+
+    const v = world();
+    v.answers.txt["_atproto.alice.example.com"] = records(`did=${B}`);
+    const invalid = v.verifier();
+    await invalid.verifyHandle(A);
+    expect(invalid.verifiedHandle(A)).toBeNull();
+  });
+
   test("cache_evicts_least_recently_used", async () => {
     const w = world();
     w.answers.txt["_atproto.alice.example.com"] = records(`did=${A}`);
