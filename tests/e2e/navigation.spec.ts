@@ -5,6 +5,7 @@
 import { expect, test } from "@playwright/test";
 import { addPageCookies, openPage, watch } from "./observe.ts";
 import { ACCOUNT, type PageFixture, TEST_ORIGIN } from "./pages.ts";
+import { phone } from "./phone.ts";
 
 const HOME_SIGNED_IN: PageFixture = { path: "/", route: "/", group: "public", expectJs: false, member: "account" };
 const SETTINGS: PageFixture = {
@@ -65,16 +66,16 @@ test("a_legal_page_shows_the_member_signed_in", async ({ page }) => {
 // Outside review of f5cab2f, finding 3: from one settings page to the other the settings layout stays too, and the
 // account menu that took the visitor there is closed on arrival, on a phone as on a desktop.
 test.describe("phone", () => {
-  test.use({ viewport: { width: 375, height: 800 } });
+  test.use(phone({ width: 375, height: 800 }));
 
   test("the_account_menu_closes_after_settings_to_settings_on_a_phone", async ({ page }) => {
     const account: PageFixture = { ...SETTINGS, path: "/settings/account", route: "/settings/account" };
     expect((await openPage(page, account))?.status()).toBe(200);
     await page.waitForLoadState("networkidle");
-    await page.locator('header button[popovertarget="account-menu"]').click();
+    await page.locator('header button[popovertarget="account-menu"]').tap();
     const drawer = page.locator("#account-menu");
     await expect(drawer).toBeVisible();
-    await drawer.getByRole("link", { name: "Settings" }).click();
+    await drawer.getByRole("link", { name: "Settings" }).tap();
     await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/profile`);
     await expect(drawer).toBeHidden();
   });
