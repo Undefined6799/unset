@@ -22,7 +22,6 @@ import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
 import { LIMITS } from "@unset/shared-lexicons";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
-import { config } from "../../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm } from "./card-form.server.ts";
@@ -79,10 +78,10 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
   const ctx = pdsContext(locals);
   const [account, own] = await Promise.all([
     accountView(services(), did, locals.issuerOrigin, locals.deadline),
-    loadOwnProfile(
-      { profile: () => loadProfileRecord(pdsCall, ctx, did), cards: () => listCardRecords(pdsCall, ctx, did) },
-      config.PDS_HOSTNAME,
-    ),
+    loadOwnProfile({
+      profile: () => loadProfileRecord(pdsCall, ctx, did),
+      cards: () => listCardRecords(pdsCall, ctx, did),
+    }),
   ]);
   if (own.kind === "redirect") redirect(303, own.location);
   const profile = own.kind === "ok" ? own.profile : null;
@@ -134,7 +133,7 @@ function writesFor(did: Did, locals: App.Locals) {
     remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
-  return cardWrites(store, config.PDS_HOSTNAME, () => new Date().toISOString());
+  return cardWrites(store, () => new Date().toISOString());
 }
 
 /** The body as URL-encoded form text within the card cap, or card.form_too_large. */

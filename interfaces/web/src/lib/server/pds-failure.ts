@@ -4,29 +4,12 @@
 import type { PdsResult } from "@unset/infrastructure-pds";
 import { withErrorParam } from "@unset/shared-errors";
 
-export type PdsFailure =
-  | { readonly action: "notice"; readonly status: 200 | 503; readonly text: string }
-  | { readonly action: "redirect"; readonly location: string }
-  | { readonly action: "rejected"; readonly xrpcError: string; readonly status: number };
-
-/** A dropped grant or a missing scope goes to the sign-in pages; an outage is a notice that keeps the session. */
-export function respondToPdsFailure(
-  method: "GET" | "POST",
-  result: Exclude<PdsResult<unknown>, { kind: "ok" }>,
-  pdsHost: string,
-): PdsFailure {
-  if (result.kind === "transient") {
-    return {
-      action: "notice",
-      status: method === "POST" ? 503 : 200,
-      text: `${pdsHost} is not answering; your session is kept`,
-    };
-  }
-  if (result.kind === "scope_missing") {
-    return { action: "redirect", location: withErrorParam("/verify-email", "login.scope_insufficient") };
-  }
-  if (result.kind === "auth_dead") {
-    return { action: "redirect", location: withErrorParam("/login", "login.session_ended") };
-  }
-  return { xrpcError: result.xrpcError, status: result.status, action: "rejected" };
+/**
+ * Where a dropped grant or a missing scope sends the member: the sign-in pages. Null for any other failure (an outage,
+ * a refused record), which each caller answers in its own page and which keeps the session.
+ */
+export function pdsSignInRedirect(result: Exclude<PdsResult<unknown>, { kind: "ok" }>): string | null {
+  if (result.kind === "scope_missing") return withErrorParam("/verify-email", "login.scope_insufficient");
+  if (result.kind === "auth_dead") return withErrorParam("/login", "login.session_ended");
+  return null;
 }
