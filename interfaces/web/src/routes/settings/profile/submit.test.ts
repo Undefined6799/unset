@@ -38,7 +38,7 @@ const detachedForm = () => ({}) as Parameters<SubmitFunction>[0]["formElement"];
 
 describe("profileSubmit", () => {
   test("a save that comes back to settings says it saved, keeping what was typed", async () => {
-    const { statuses, updates } = await submit({ type: "redirect", status: 303, location: "/settings/profile" });
+    const { statuses, updates } = await submit({ type: "redirect", status: 303, location: "/settings/profile?saved" });
     expect(statuses).toEqual([{ kind: "saving" }, { kind: "editing" }, { kind: "saved" }]);
     expect(updates).toEqual([{ reset: false }]);
   });
