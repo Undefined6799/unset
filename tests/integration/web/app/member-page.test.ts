@@ -83,7 +83,16 @@ function readme(text: string) {
 }
 
 /** The owner's DID document, naming their PDS. It claims no handle, so the page shows none (identity's tests own that). */
-function fixture(writesFile: string, failing?: readonly string[]): StandInFixture {
+function fixture(
+  writesFile: string,
+  failing?: readonly string[],
+  cards: Record<string, unknown> = {
+    [CARD_A]: readme("First card"),
+    [CARD_B]: readme("Second card"),
+    [CARD_C]: storedCollection(100),
+  },
+  slow?: Record<string, number>,
+): StandInFixture {
   return {
     http: {
       [`https://plc.directory/${OWNER}`]: {
@@ -102,14 +111,11 @@ function fixture(writesFile: string, failing?: readonly string[]): StandInFixtur
       did: OWNER,
       records: {
         "sh.unset.profile": { self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW } },
-        "sh.unset.section": {
-          [CARD_A]: readme("First card"),
-          [CARD_B]: readme("Second card"),
-          [CARD_C]: storedCollection(100),
-        },
+        "sh.unset.section": cards,
       },
       writesFile,
       ...(failing === undefined ? {} : { failing }),
+      ...(slow === undefined ? {} : { slow }),
     },
   };
 }
@@ -140,14 +146,21 @@ async function signedIn(owner: Did): Promise<string> {
 
 type Member = { web: RunningWeb; writes: () => PdsWrite[]; stop: () => Promise<void> };
 
-/** A server with the stand-in PDS; `failing` names XRPC methods that answer 503. */
-async function memberServer(failing?: readonly string[]): Promise<Member> {
+/**
+ * A server with the stand-in PDS; `failing` names XRPC methods that answer 503, `cards` replaces the stored cards and
+ * `slow` holds named methods' answers.
+ */
+async function memberServer(
+  failing?: readonly string[],
+  cards?: Record<string, unknown>,
+  slow?: Record<string, number>,
+): Promise<Member> {
   const dir = mkdtempSync(join(tmpdir(), "web-member-"));
   const writesFile = join(dir, "writes.jsonl");
   writeFileSync(writesFile, "");
   const keyringFile = join(dir, "seal_keyring");
   writeFileSync(keyringFile, KEYRING);
-  const web = await startWeb(pg, { SEAL_KEYRING_FILE: keyringFile }, fixture(writesFile, failing));
+  const web = await startWeb(pg, { SEAL_KEYRING_FILE: keyringFile }, fixture(writesFile, failing, cards, slow));
   const writes = () =>
     readFileSync(writesFile, "utf8")
       .split("\n")
@@ -493,5 +506,63 @@ describe("what the page makes of member text", () => {
     expect(html).not.toContain("<b>");
     expect(html).toContain("&lt;b>");
     expect(html).toContain('href="mailto:a.b%2Bc%40x.example"');
+  });
+});
+
+// C3 (outside review 2026-11-19): two tabs adding at once must never store more cards than the page shows, and a
+// member whose repo already holds more (written outside this app) is told how to bring the hidden ones back.
+/** `count` README cards under TID-shaped keys. */
+const manyCards = (count: number) =>
+  Object.fromEntries(
+    Array.from({ length: count }, (_, n) => [`3jzfcijpj3${String(n).padStart(3, "a")}`, readme(`Card ${n}`)]),
+  );
+
+describe("the card limit", () => {
+  test("two_adds_at_once_at_99_cards_store_one_and_refuse_the_other", async () => {
+    // Each listing is held, and the second tab starts while the first waits on its own: both count 99 before either
+    // creates, as two tabs pressing Save together do. The second create then lands on a repo that moved.
+    const full = await memberServer(undefined, manyCards(99), { listRecords: 400 });
+    try {
+      const add = () =>
+        full.web.fetch(`/${OWNER}?/create`, {
+          method: "POST",
+          body: "kind=readme&width=full&text=Same+time",
+          headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
+        });
+      const first = add();
+      await new Promise((done) => setTimeout(done, 200));
+      const answers = await Promise.all([first, add()]);
+      expect(answers.map((answer) => answer.status).sort()).toEqual([303, 409]);
+      const refused = answers.find((answer) => answer.status === 409);
+      expect(await refused?.text()).toContain("card.too_many");
+      expect(full.writes().filter((write) => write.method === "createRecord")).toHaveLength(1);
+    } finally {
+      await full.stop();
+    }
+  });
+
+  test("more_cards_than_the_page_shows_says_delete_one_and_a_delete_still_works", async () => {
+    const over = manyCards(101);
+    const crowded = await memberServer(undefined, over);
+    try {
+      const html = await (
+        await crowded.web.fetch(`/${OWNER}`, { headers: { accept: HTML, "x-forwarded-for": clientAddress(), cookie } })
+      ).text();
+      expect(html).toContain("You have more cards than your page can show.");
+      expect(html).not.toContain("could not be loaded");
+      const key = Object.keys(over)[0] ?? "";
+      const removed = await crowded.web.fetch(`/${OWNER}?/remove`, {
+        method: "POST",
+        body: `key=${key}`,
+        headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
+      });
+      expect(removed.status).toBe(303);
+      const after = await (
+        await crowded.web.fetch(`/${OWNER}`, { headers: { accept: HTML, "x-forwarded-for": clientAddress(), cookie } })
+      ).text();
+      expect(after).not.toContain("You have more cards than your page can show.");
+    } finally {
+      await crowded.stop();
+    }
   });
 });

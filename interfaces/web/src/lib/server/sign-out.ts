@@ -10,14 +10,13 @@ import type { Did } from "@unset/domains-identity";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { Session } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
+import { withRevokeTimeout } from "./revoke-timeout.ts";
 import { dropSessionCookie } from "./session.ts";
 import { remainingSessions } from "./session-count.ts";
 import { dropCookie, encodeIssuer, issuerOrigin, putCookie } from "./sign-in-state.ts";
 
 /** The issuer read's own deadline (P2.08h): well below PG_CONNECT_TIMEOUT_MS's 2000, so a hung store cannot hold us. */
 export const ISSUER_READ_MS = 250;
-/** Book P2.08: the revocation call gets 10 seconds. */
-const REVOKE_MS = 10_000;
 /**
  * How often sign-out everywhere tries to end the sessions, and the pause between (P2.08j). Once the revoke has deleted
  * the token set, only this request still knows whose sessions to end; rows left behind would be valid again at the
@@ -30,20 +29,6 @@ const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(do
 const className = (cause: unknown): string => (cause instanceof Error && cause.name !== "" ? cause.name : "Error");
 /** A retryable 503 with the catalog's code (shared/errors catalog.ts `logout.failed`); the cookie stays for the retry. */
 const failed = (): never => error(503, { message: "logout.failed" });
-
-/**
- * `work`, or a rejection after 10 seconds or when `deadline` aborts, whichever comes first. Sign-out and the under-age
- * block (welcome.ts) both revoke a grant through it.
- */
-export function withRevokeTimeout(work: Promise<void>, deadline: AbortSignal): Promise<void> {
-  const limit = AbortSignal.any([deadline, AbortSignal.timeout(REVOKE_MS)]);
-  if (limit.aborted) return Promise.reject(new Error("revoke timed out"));
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(new Error("revoke timed out"));
-    limit.addEventListener("abort", onAbort, { once: true });
-    work.then(resolve, reject).finally(() => limit.removeEventListener("abort", onAbort));
-  });
-}
 
 /** Revoke the grant. On any failure the stored set is deleted here, so no grant remains on our side. */
 async function revokeOrDrop(did: Did, deadline: AbortSignal): Promise<void> {

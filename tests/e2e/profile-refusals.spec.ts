@@ -1,6 +1,7 @@
 // Staging walkthrough 2026-11-18, round two: the profile save names the field it refuses, with and without script; the
 // avatar's link reads as the shape choice it is and does not underline the letter; the tab names the member; the
-// README's text area stops at the lexicon's limit, so a no-script save cannot outgrow the form's body cap.
+// README's text area stops at the lexicon's limit, so a no-script save cannot outgrow the form's body cap. P1.20s moved
+// the settings form's submit handler beside its route: a save still says it saved, with and without script.
 import { expect, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
@@ -33,6 +34,17 @@ test("a_headline_that_is_too_long_is_named_under_its_field", async ({ page }) =>
   await expect(headline).toHaveValue(TOO_LONG_HEADLINE);
 });
 
+test("a_profile_save_stays_on_settings_and_says_it_saved", async ({ page }) => {
+  expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const headline = page.getByRole("textbox", { name: "Headline" });
+  const typed = await headline.inputValue();
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Profile saved." })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(headline).toHaveValue(typed);
+});
+
 test("the_avatar_link_names_the_shape_and_leaves_the_letter_plain", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   const avatar = page.getByRole("link", { name: "Change picture shape" });
@@ -56,6 +68,15 @@ test.describe("no script", () => {
     await page.getByRole("button", { name: "Save profile" }).click();
     await expect(page.getByText("Check Headline.")).toBeVisible();
     await expect(page.getByText(/browser's Back button/)).toBeVisible();
+  });
+
+  test("a_profile_save_without_script_comes_back_to_settings", async ({ page }) => {
+    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/profile"));
+    await page.getByRole("button", { name: "Save profile" }).click();
+    expect((await saved).status()).toBe(303);
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(page.getByRole("button", { name: "Save profile" })).toBeVisible();
   });
 
   test("the_readme_text_area_stops_at_the_lexicon_limit", async ({ page }) => {

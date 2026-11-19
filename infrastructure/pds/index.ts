@@ -5,8 +5,10 @@ export { createInviteIssuer, type InviteIssuerSettings, type IssueInviteResult }
 export {
   CARD_COLLECTION,
   type CardList,
+  type CreateOutcome,
   createCardRecord,
   deleteCardRecord,
+  latestCommit,
   listCardRecords,
   type StoredCard,
   saveCardRecord,

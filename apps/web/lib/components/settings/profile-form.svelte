@@ -1,16 +1,18 @@
 <!--
   Settings › Profile's form: the four fields of sh.unset.profile that the save can write today (domains/profile
   PROFILE_FIELDS: name, headline, place, website), posted to /profile, the one profile save, which comes back here
-  (next=/settings/profile). It works as a plain form with no script; with script the page's `enhance` keeps the member
-  on the page, shows a refusal inline with what they typed, and says when it saved. A refusal that blames a field
+  (next=/settings/profile). It works as a plain form with no script; with script the page passes its ready
+  `enhance` action and the status its submit handler sets (routes/settings/profile/submit.ts), so the member stays on
+  the page, sees a refusal inline with what they typed, and is told when it saved. A refusal that blames a field
   (the save names it) sits under that field, marks it invalid and takes the focus, as the card editors do (staging
   walkthrough 2026-11-18 round two, finding 5). The limits come from the server (domains/profile APP_LIMITS) and are
   only shown: the save counts graphemes, and maxlength counts UTF-16 code units, so a maxlength at the limit would
   refuse a valid name of emoji or accented letters (https://html.spec.whatwg.org/multipage/input.html#attr-input-maxlength).
 -->
 <script lang="ts">
-import { tick } from "svelte";
+import type { Action } from "svelte/action";
 import { PROFILE_SETTINGS as T } from "../../settings/messages.ts";
+import type { ProfileFormStatus } from "../../settings/profile-form.ts";
 import { Icon } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button } from "../ui/button/index.ts";
@@ -24,19 +26,8 @@ type Values = {
   readonly location: string;
   readonly website: string;
 };
-/**
- * The part of SvelteKit's SubmitFunction and ActionResult (kit 3.2.0 types/index.d.ts) this form uses: after the
- * action answers, `result` says how, and `update` does what `enhance` does by default. apps/web imports nothing from
- * the framework (ADR 0056), so the page passes kit's `enhance` in.
- */
-type SubmitFunction = () => (outcome: {
-  result:
-    | { type: "success" | "failure"; status: number }
-    | { type: "redirect"; status: number; location: string }
-    | { type: "error"; error: { message?: unknown; field?: unknown } | undefined };
-  update: (options?: { reset?: boolean }) => Promise<void>;
-}) => Promise<void>;
-type Enhance = (form: HTMLFormElement, submit?: SubmitFunction) => { destroy?: () => void } | undefined;
+type Field = keyof Values;
+const FIELDS: readonly string[] = ["displayName", "headline", "location", "website"] satisfies readonly Field[];
 
 let {
   values,
@@ -44,6 +35,7 @@ let {
   pagePath,
   messageFor,
   enhance = () => undefined,
+  status = { kind: "editing" },
 }: {
   values: Values;
   limits: { readonly displayName: number; readonly headline: number; readonly location: number };
@@ -51,49 +43,32 @@ let {
   pagePath: string;
   /** The catalog's words for a refusal code, or undefined for a code it does not know. */
   messageFor: (code: string | undefined) => string | undefined;
-  enhance?: Enhance;
+  /** The page's kit `enhance`, with its submit handler, as a Svelte action; the default leaves the plain form. */
+  enhance?: Action<HTMLFormElement>;
+  status?: ProfileFormStatus;
 } = $props();
 
 const id = $props.id();
-let refused: string | undefined = $state();
-/** The refused field and the words under it. */
-let blamed: { field: string; message: string } | undefined = $state();
-let saved = $state(false);
-let pending = $state(false);
+const pending = $derived(status.kind === "saving");
+const saved = $derived(status.kind === "saved");
+/** The refused field and the words under it; a refusal the form has no field for shows below the fields. */
+const blamed = $derived(
+  status.kind === "refused" && status.field !== undefined && FIELDS.includes(status.field)
+    ? { field: status.field, message: fieldMessage(status.code, status.field) }
+    : undefined,
+);
+const refused = $derived(
+  status.kind === "refused" && blamed === undefined ? (messageFor(status.code) ?? T.refused) : undefined,
+);
 const first = $derived(values.displayName === "");
 
-const submit: SubmitFunction = () => {
-  refused = undefined;
-  blamed = undefined;
-  saved = false;
-  pending = true;
-  return async ({ result, update }) => {
-    pending = false;
-    if (result.type === "error" || result.type === "failure") {
-      // What the member typed stays in the fields; the words say what to fix.
-      const error = result.type === "error" ? result.error : undefined;
-      const code = typeof error?.message === "string" ? error.message : undefined;
-      const field = typeof error?.field === "string" ? error.field : undefined;
-      await showRefusal(code, field);
-      return;
-    }
-    await update({ reset: false });
-    if (result.type === "redirect" && result.location === "/settings/profile") saved = true;
-  };
-};
-
-/** The refusal under its field, which takes the focus; one the form has no field for shows below the fields. */
-async function showRefusal(code: string | undefined, field: string | undefined) {
-  const input = field === undefined ? null : document.getElementById(`${id}-${field}`);
-  if (field === undefined || !(input instanceof HTMLInputElement)) {
-    refused = messageFor(code) ?? T.refused;
-    return;
-  }
-  blamed = { field, message: fieldMessage(code, field) };
-  await tick();
-  input.focus();
-  input.scrollIntoView({ block: "center" });
-}
+// The blamed field takes the focus once its error is drawn (effects run after the DOM is updated).
+$effect(() => {
+  if (blamed === undefined) return;
+  const input = document.getElementById(`${id}-${blamed.field}`);
+  input?.focus();
+  input?.scrollIntoView({ block: "center" });
+});
 
 function fieldMessage(code: string | undefined, field: string): string {
   if (code === "profile.too_long" && field in limits) return T.tooLong(limits[field as keyof typeof limits]);
@@ -133,7 +108,7 @@ const fields = $derived([
     <Card.Description>{first ? T.firstLead : T.lead}</Card.Description>
   </Card.Header>
   <Card.Content>
-    <form method="post" action="/profile" class="grid gap-6" aria-describedby={refused === undefined ? undefined : `${id}-refused`} use:enhance={submit}>
+    <form method="post" action="/profile" class="grid gap-6" aria-describedby={refused === undefined ? undefined : `${id}-refused`} use:enhance>
       <input type="hidden" name="next" value="/settings/profile" />
       {#each fields as field (field.name)}
         <div class="grid gap-2">

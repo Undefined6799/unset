@@ -227,6 +227,13 @@ services:
       OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
       PDS_HOSTNAME: ${PDS_HOSTNAME}
       HANDLE_SUFFIX: ${PDS_SERVICE_HANDLE_DOMAINS}
+      # Member invites (P2.10; ADR 0060): pds-admin's internal origin, web's Ed25519 key for it and that key's id in
+      # pds-admin's roster (runbook "The web key pair"), and our PDS's DID, which each request is bound to. Under
+      # dev:up no pds-admin runs, so the Invite page answers that invites are unavailable.
+      PDS_ADMIN_URL: http://pds-admin:8080
+      PDS_ADMIN_WEB_KEY_FILE: /run/secrets/web_pds_admin_key
+      PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
+      PDS_DID: ${PDS_DID}
       # Legal contacts (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
       # and these are not secrets. Alex's values for staging (2026-10-20T23:09:25Z); compose.local.yaml keeps the
       # tokens. security.txt points at the privacy page.
@@ -237,11 +244,11 @@ services:
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key]
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app, web_egress]
+    networks: [db, app, web_egress, pds_admin]
     mem_limit: 512m
     cpus: 1
     pids_limit: 128
@@ -414,7 +421,7 @@ networks:
   # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
   objects_pds:
     internal: true
-  # web's way to pds-admin (P2.10) and nothing else: internal. pds-admin only until then.
+  # web's way to pds-admin (P2.10) and nothing else: internal, web and pds-admin only.
   pds_admin:
     internal: true
   # pds-admin's way to the PDS's internal URL (P2.09e): internal, the two of them only. C17 lets pds-admin, and nothing
@@ -456,6 +463,8 @@ secrets:
     file: ../../unset-dev-secrets/web_seal_keyring
   web_oauth_client_keys:
     file: ../../unset-dev-secrets/web_oauth_client_keys
+  web_pds_admin_key:
+    file: ../../unset-dev-secrets/web_pds_admin_key
   # The dev edge's self-signed leaf and its key (P1.36c; ADR 0032), made on the host by the runbook's OpenSSL command;
   # the edge alone reads them.
   dev_tls_cert:

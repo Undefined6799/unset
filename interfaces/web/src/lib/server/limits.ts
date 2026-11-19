@@ -15,6 +15,13 @@ export const policies = definePolicies({
     { capacity: 30, refillPerSec: 30 / 60, scope: "did" },
   ],
   login: [{ capacity: 10, refillPerSec: 10 / 60, scope: "ip" }],
+  // Asking for an invite (book P2.10): the page limits, and 10 an hour for one member; pds-admin's own quota (5 a day
+  // per member, 100 a day for the server) is the real cap.
+  invite: [
+    { capacity: 60, refillPerSec: 300 / 60, scope: "ip" },
+    { capacity: 3000, refillPerSec: 3000 / 60, scope: "global" },
+    { capacity: 10, refillPerSec: 10 / 3600, scope: "did" },
+  ],
 });
 
 export type PolicyName = keyof typeof policies & string;

@@ -93,6 +93,10 @@ const EVENTS = [
   // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
   // menus, so it offers none. `kind` is the class name. No DID.
   "shell.account_read_failed",
+  // P2.10, invites: a stored code whose seal did not open (listed as unavailable; no field), and a code pds-admin
+  // issued that could not be stored (`kind` the error class), which the member's quota absorbs. No DID or code.
+  "invite.unseal_failed",
+  "invite.store_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",
   // "deadline" or "failed"), and its stream reader stopped and
   // will dial again (`reason` the StopReason, `count` the stops since start). No DID, handle or record.

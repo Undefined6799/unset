@@ -14,6 +14,8 @@ import {
   int,
   netGuardFields,
   oneOf,
+  origin,
+  secretFile,
   str,
   url,
   withRule,
@@ -69,6 +71,18 @@ const onboardingConfig = {
   INVITE_COUNTRY_RULE: oneOf(["on", "off"], { default: "on" }),
 };
 
+/**
+ * Member invites (book P2.10; ADR 0060): pds-admin's internal origin, the Ed25519 private key web signs each request
+ * with (PKCS#8 PEM, the runbook's `web_pds_admin_key`) and its key id in pds-admin's roster, and our PDS's DID, which
+ * every request is bound to. pds-admin refuses a request whose PDS DID is not its own.
+ */
+const inviteConfig = {
+  PDS_ADMIN_URL: origin({ protocols: ["http:", "https:"] }),
+  PDS_ADMIN_WEB_KEY: secretFile({ minBytes: 64 }),
+  PDS_ADMIN_WEB_KID: str({ pattern: /[A-Za-z0-9._-]{1,64}/ }),
+  PDS_DID: str({ pattern: /did:(?:plc|web):[A-Za-z0-9._:%-]{1,256}/ }),
+};
+
 /** Our PDS's issuer, from PDS_HOSTNAME, with no switch to widen it (interfaces/http/config.ts `pdsIssuerOf`). */
 export const pdsIssuerOf = (cfg: { PDS_HOSTNAME: string; OAUTH_ALLOW_HTTP: boolean }): string =>
   `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
@@ -93,6 +107,7 @@ export const schema = defineEntrypointConfig({
   ...oauthFields,
   ...pdsConfig,
   ...onboardingConfig,
+  ...inviteConfig,
   ...legalConfig,
   ...testRoutesConfig,
 });

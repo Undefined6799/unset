@@ -62,14 +62,22 @@ function fits(deadlineAt: number, timeoutMs: number, waitMs: number): boolean {
   return deadlineAt - performance.now() > waitMs + timeoutMs;
 }
 
-/** Rejects when `signal` aborts. The work may keep running; the caller has already stopped waiting. */
+/**
+ * Rejects when `signal` aborts. The work may keep running; the caller has already stopped waiting. `work` is always
+ * observed, so its late rejection is never an unhandled one, which drains web (interfaces/web/server.ts).
+ */
 function untilAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason instanceof Error ? signal.reason : new Error("AbortError"));
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error("AbortError"));
-    signal.addEventListener("abort", onAbort, { once: true });
     work.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/** The request's deadline has fired. A function, so TypeScript keeps no narrowing of `aborted` across an await. */
+function spent(ctx: PdsContext | null): boolean {
+  return ctx?.deadline.aborted === true;
 }
 
 function delay(ms: number, deadline: AbortSignal): Promise<void> {
@@ -112,6 +120,9 @@ export function createPdsCall(deps: PdsCallDeps) {
     op: (xrpc: Agent) => Promise<T>,
     opts: CallOpts,
   ): Promise<PdsResult<T>> {
+    // A request past its deadline has already answered 503, so nothing may start for it (before restore, which can
+    // refresh tokens and wait on the lock, and again before each attempt).
+    if (spent(ctx)) return unavailable;
     const key = `pds:${did}`;
     let xrpc = ctx?.memo.get(key) as Agent | undefined;
     if (xrpc === undefined) {
@@ -132,12 +143,13 @@ export function createPdsCall(deps: PdsCallDeps) {
     let attempt = 0;
     while (attempt < 2) {
       attempt += 1;
+      if (spent(ctx)) return unavailable;
       const timer = AbortSignal.timeout(timeoutMs);
       const signal = ctx === null ? timer : AbortSignal.any([timer, ctx.deadline]);
       try {
         return { kind: "ok", value: await untilAbort(op(xrpc), signal) };
       } catch (error: unknown) {
-        if (ctx?.deadline.aborted === true) return unavailable;
+        if (spent(ctx)) return unavailable;
         const failure = opFailure(error);
         if (failure.kind === "handshake") {
           if (attempt === 1) continue;

@@ -1,0 +1,50 @@
+# NOT A PROPOSAL AND NEVER DEPLOYED. The bundle experiment's what-if edge (P1.20u): edge.caddy, except that hashed
+# build files under /_app/immutable/ count in one zone of their own, app_assets, instead of app_burst and app_global,
+# so the split bundle's numbers (bytes, hydration, redeploy) can be read without the 429s today's zones give it. The
+# value, 200 per 10 s, is a measuring ceiling, not a recommendation; the note reports the peak actually reached.
+# Fonts (/fonts/) and documents stay in app-ratelimit, as in edge.caddy.
+{
+	admin off
+	persist_config off
+	servers {
+		timeouts {
+			read_body 30s
+			write 135s
+			idle 2m
+		}
+	}
+}
+
+import ../../../deployment/edge/snippets/ratelimit.caddy
+import ../../../deployment/edge/snippets/security-headers.caddy
+import ../../../deployment/edge/snippets/signin-files.caddy
+import ../../../deployment/edge/snippets/upstream.caddy
+
+https://unset.test:9444 {
+	bind 127.0.0.1
+	tls internal
+	log {
+		output file {$BUNDLE_EDGE_LOG}
+		format json
+	}
+	import security-headers
+	import noindex
+	@hashed path /_app/immutable/*
+	route @hashed {
+		rate_limit {
+			zone app_assets {
+				key {client_ip}
+				ipv6_prefix 64
+				events 200
+				window 10s
+			}
+			disable_metrics
+		}
+		import upstream 127.0.0.1:8091
+	}
+	route {
+		import app-ratelimit
+		import signin-files
+		import upstream 127.0.0.1:8091
+	}
+}

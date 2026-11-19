@@ -62,6 +62,10 @@ export const ERROR_CODES = {
   "card.order_invalid": { status: 409, public: true },
   "card.missing": { status: 404, public: true },
   "card.too_many": { status: 409, public: true },
+  // More cards stored than a page shows (written outside this app): moving waits until the member deletes one.
+  "card.overflow": { status: 409, public: true },
+  // A new card's repo changed twice while it was being added (createRecord swapCommit refused); nothing was written.
+  "card.cards_changed": { status: 409, public: true },
   "card.list_incomplete": { status: 503, public: true },
   "card.conflict": { status: 409, public: true },
   "card.pds_unavailable": { status: 503, public: true },
@@ -69,6 +73,14 @@ export const ERROR_CODES = {
   "welcome.date_invalid": { status: 400, public: true },
   "welcome.terms_required": { status: 400, public: true },
   "welcome.country_required": { status: 400, public: true },
+  // P2.10, invites. Shown on /invite from a redirect (`error=`).
+  "invite.country_ack_required": { status: 400, public: true },
+  "invite.bad_submission": { status: 400, public: true },
+  "invite.in_progress": { status: 409, public: true },
+  "invite.quota": { status: 429, public: true },
+  "invite.closed": { status: 409, public: true },
+  "invite.denied": { status: 403, public: true },
+  "invite.unavailable": { status: 503, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 
