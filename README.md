@@ -65,10 +65,11 @@ On a development or staging stack, with an account on our own PDS, you can:
 - add, edit, reorder and remove profile cards: a README in markdown, links, a collection and buttons, each a
   `sh.unset.section` record in your repository;
 - change your theme and open the profile and account settings;
-- read the terms, privacy notice and domains pages.
+- read the terms, privacy notice and domains pages;
+- open a public profile at `/@<handle>` or `/@<DID>`. The page is served from the index.
 
-Your profile page is visible only to you for now. Public profiles at `/@handle` wait for the indexer, which has its
-schema and queue on `main` but does not yet run as its own process.
+The indexer runs as its own process, [`interfaces/indexer/`](interfaces/indexer/), in the stacks built from this
+checkout.
 
 ## How it is built
 
@@ -84,10 +85,10 @@ apps/web  →  interfaces/web   →  domains/identity  →  infrastructure/pds  
 | Path | What lives there |
 | --- | --- |
 | `apps/` | Screens and styles only. Today `web`; `admin` and `chat` come later |
-| `interfaces/` | Entry points, one process and container each. Today `web`, the SvelteKit server; `admin`, `api`, `indexer`, `media` and `review` come with their phase |
+| `interfaces/` | Entry points, one process and container each. Today `web` (the SvelteKit server), `indexer` and `pds-admin`; `admin`, `api`, `media`, `review` and `chat-admin` come with their phase |
 | `domains/` | Product rules in product words. Today `identity` and `profile`; `content`, `social`, `feed`, `messaging`, `moderation` and `privacy` come with their phase |
-| `infrastructure/` | External systems behind small contracts: `postgres`, `pds`, `storage` (S3-compatible objects) and `session`, plus `net-guard` (the one egress check), `seal` and `audit` |
-| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `http`, `config`, `errors`, `log`, `host-pin` |
+| `infrastructure/` | External systems behind small contracts: `postgres`, `pds`, `firehose`, `storage` (S3-compatible objects) and `session`, plus `net-guard` (the one egress check), `seal` and `audit` |
+| `shared/` | Generic code with no product meaning, MIT licensed: `lexicons`, `ui`, `ui-build`, `http`, `config`, `errors`, `log`, `host-pin`, `admin-envelope` and `safe-href` |
 | `deployment/` | Compose files, the Caddy edge, container images, the PDS build, Postgres bootstrap and the preflight that checks a stack before it starts |
 | `tests/` | Integration and end-to-end tests; unit tests sit beside their file |
 | `docs/` | `human/` for guides, runbooks, decisions and the engineering guidelines; `ai/` for the plan and step book; `site/` for the Hugo docs site |
