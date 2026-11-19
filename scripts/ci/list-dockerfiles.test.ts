@@ -78,10 +78,13 @@ describe("list dockerfiles", () => {
     // two app images read the app file, which holds only the zod finding.
     // P2.18s (Alex's "yes seaweedfs waiver", 2026-11-15T23:36:23Z): the objects image ships upstream's weed binary,
     // so its scan reads the SeaweedFS file, whose one entry names usr/bin/weed and x/net v0.61.0 only.
+    // P3.05s (Alex's "Add the indexer image to the zod waiver as proposed", 2026-11-19T00:11:22Z): the indexer image
+    // reads the app file too, for its one zod entry.
     expect(SEAWEEDFS_IGNOREFILE).toBe(".github/trivyignore.seaweedfs.yaml");
     expect(IGNOREFILES).toStrictEqual({
       "node-app": APP_IGNOREFILE,
       migrate: APP_IGNOREFILE,
+      indexer: APP_IGNOREFILE,
       objects: SEAWEEDFS_IGNOREFILE,
     });
     for (const image of listed) {

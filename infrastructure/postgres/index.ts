@@ -3,6 +3,7 @@
 // sealed column registry and rewrapAll (P1.14d).
 export { type AccountRepositoryOptions, type BlockTransaction, createAccountRepository } from "./accountRepository.ts";
 export {
+  type AccountHealth,
   type AccountJob,
   type AccountJobKind,
   type AccountStore,

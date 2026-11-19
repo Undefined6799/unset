@@ -31,6 +31,8 @@ export type TrackDeps = {
   readonly ownPds: URL;
   readonly timeoutMs: number;
   readonly retries: TrackRetries;
+  /** The process's stop: the pass ends after the DID in hand and records nothing about a read the stop cut short. */
+  readonly signal: AbortSignal;
   readonly now: () => number;
 };
 
@@ -46,7 +48,9 @@ export async function trackPass(deps: TrackDeps): Promise<TrackPass> {
   let unresolved = 0;
   const waiting = [...deps.retries].filter(([, retry]) => retry.dueAt > deps.now()).map(([did]) => did);
   for (const did of await deps.store.pendingTracks(TRACK_BATCH, waiting)) {
-    const pds = await deps.pdsOf(did, AbortSignal.timeout(deps.timeoutMs)).catch(() => undefined);
+    if (deps.signal.aborted) break;
+    const pds = await deps.pdsOf(did, withDeadline(deps.signal, deps.timeoutMs)).catch(() => undefined);
+    if (deps.signal.aborted) break;
     if (pds === undefined) {
       unresolved += 1;
       await unresolvedOnce(deps, did);
@@ -74,6 +78,8 @@ export type BackfillDeps = {
   readonly store: TrackStore;
   readonly readRepo: RepoReader;
   readonly timeoutMs: number;
+  /** The process's stop: a read it cuts short is not counted as the job's failure. */
+  readonly signal: AbortSignal;
 };
 
 export type BackfillPass = { readonly applied: number; readonly failed: number };
@@ -83,11 +89,13 @@ export async function backfillPass(deps: BackfillDeps): Promise<BackfillPass> {
   let applied = 0;
   let failed = 0;
   for (const job of await deps.store.dueBackfills(BACKFILL_BATCH)) {
+    if (deps.signal.aborted) break;
     try {
-      const snapshot = await deps.readRepo(job.did, AbortSignal.timeout(deps.timeoutMs));
+      const snapshot = await deps.readRepo(job.did, withDeadline(deps.signal, deps.timeoutMs));
       await deps.store.applySnapshot(job, snapshot.rev, snapshot.records);
       applied += 1;
     } catch (error) {
+      if (deps.signal.aborted) break;
       failed += 1;
       const gone = error instanceof RepoReadError && error.reason === "not_found";
       await deps.store.backfillFailed(job, gone ? "gone" : "failed");
@@ -95,6 +103,10 @@ export async function backfillPass(deps: BackfillDeps): Promise<BackfillPass> {
   }
   return { applied, failed };
 }
+
+/** One read's deadline inside the process's stop: whichever comes first aborts it. */
+export const withDeadline = (stop: AbortSignal, timeoutMs: number): AbortSignal =>
+  AbortSignal.any([stop, AbortSignal.timeout(timeoutMs)]);
 
 /** The collections a backfill asks the repo reader for. */
 export const BACKFILL_COLLECTIONS: readonly string[] = INDEXED_COLLECTIONS;
