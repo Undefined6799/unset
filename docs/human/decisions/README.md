@@ -70,4 +70,5 @@ one-paragraph entry; new decisions also get their own file.
 | [0062](0062-member-search-and-ai-choices.md) | Members choose whether search engines and AI search may show their public page; AI training is blocked site-wide (P3.12s) | Proposed (awaiting Alex) |
 | [0063](0063-handle-records-written-on-claim.md) | Each member's handle record is written to DNS when they claim it, in zones at deSEC (unset.name and staging.unset.name); supersedes 0025's hand-added staging records (P3.08s) | Proposed (awaiting Alex) |
 | [0064](0064-handles-move-to-unset-name.md) | Handles move from unset.im to unset.name, a DNSSEC-signed domain; supersedes 0025's handle rows | Proposed (awaiting Alex) |
+| [0065](0065-resend-sends-account-mail-from-the-us.md) | Resend sends account mail for now, with its data in the United States; drops answer 21's Canada or EU hosting (P2.25) | Proposed (awaiting Alex) |
 | [0067](0067-account-lifecycle-and-burned-names.md) | Deactivation, deletion after 30 days, takedown and moving away follow atproto's account model; no PLC tombstone by default; every hosted name is burned (P1.21e) | Proposed (awaiting Alex) |

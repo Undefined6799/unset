@@ -587,6 +587,32 @@ Reuse:
 Not in this step: backup code (P5.04); compose (P5.02); the Law 25 PIA (P5.12).
 Diagram: "Backup and restore flow" above.
 
+### P5.01o — Object store operations on the chosen provider (added 2026-11-19)
+Tags: [SEC]            Depends on: P5.01            Plan: §5.8, §6 (backups, erasure); ADRs 0041, 0050
+Where: `deployment/preflight/` (bucket provisioning), `docs/human/runbooks/object-store.md`, `deployment/hosting.md`
+Size: ~80 source lines, ~120 test lines, one runbook section
+
+Goal: S3 is settled (Alex, 2026-11-19: keep it, for what it enables later). Make the object store's operations
+explicit for the provider P5.01 chooses, so S3 compatibility is not mistaken for identical administration. From the
+architecture review of 2026-11-19 (A7; reasons in the description of #1744, which added this step).
+
+Checks, each written down in the runbook with who owns it, and the testable ones as tests against the provider or
+its CI stand-in:
+  - bucket and prefix isolation; separate keys for the app and the PDS, each limited to its own bucket;
+  - put, get, list with pagination, and tags (the `lifecycle=expire` tag of P5.01) behave as the adapter expects;
+  - retries and partial failure on a multi-object operation;
+  - bucket provisioning and physical clean-up on that provider: today they run through SeaweedFS's own shell with
+    no S3 admin key (ADR 0050, `deployment/preflight/objects-buckets.ts`), which a hosted provider does not have.
+    The provider's way is checked, not assumed, and written as a new ADR that supersedes the parts of 0050 it
+    replaces (Alex accepts it);
+  - a logical delete is told apart from the provider's physical reclamation; SQL erasure is never described as
+    erasing object bytes (ADR 0041);
+  - restore brings back PDS metadata and blobs together, then replays the erasure history;
+  - capacity, key rotation, backup and upgrade each have a named owner.
+Not in this step: dropping the object store or the `infrastructure/storage` adapter (S3 is settled; the adapter has
+no runtime consumer yet and stays as the declared contract); the `STORAGE_MODE` `disk` option in P5.01, which should
+go when P5.01 is refined.
+
 ### P5.02g — `backup` role grants (split from P5.02, SE-6)
 Tags: [SEC]            Depends on: P5.00, P1.12            Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`); round 1 F6
 Where: one migration (grant statements only, generated as P5.02 describes), `roles.json` (`backup`'s `passwordFrom`),

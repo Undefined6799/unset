@@ -5155,8 +5155,8 @@ Algorithm (checklist for Alex; the agent prepares 0, Alex does 1–6, the agent 
      commit (decision 35 D5), and `TEST_TRACK_BANNER=on`.
   2a. Confirm real SMTP on the dev PDS (set up before P1.34; P1.29a `PDS_EMAIL_SMTP_URL`, P1.30 check C11), using the
      provider Alex picked
-     from the team's shortlist (Alex answer 21: a paid sending service hosted in Canada or the EU; the RoPA names it,
-     P1.36), and send one confirmation mail to
+     from the team's shortlist (Alex answer 21: a paid sending service hosted in Canada or the EU, changed to Resend
+     in the US for now by ADR 0065; the RoPA names it, P1.36), and send one confirmation mail to
      Alex's own address **before the first invite**: there is no Mailpit (book edit 2026-10-07-no-mailpit), and P2.11's
      email gate never passes for a tester without real mail (phase-1-part2 note 13).
   3. Issue one invite per tester from Alex's own account through `/invite`; each tester creates their own dev-PDS
@@ -5520,7 +5520,8 @@ Nothing in either review was rejected on its merits. The four superseded coordin
 - **P2.22, P2-A5 Q-D** (answer 18): directory listing off until the person turns it on, settled. Q-A is settled in P4.17a
   (answer 26).
 - **P2.25 step 2a** (answer 21): the SMTP provider is a paid sending service in Canada or the EU, picked by Alex from a
-  team shortlist before the first invite.
+  team shortlist before the first invite. Changed by Alex 2026-11-19 02:22Z (ADR 0065, proposed): Resend, with its
+  data in the US, for now; an EU or Canadian sender is revisited before the first real member.
 - **P2-A4** (answer 43): settled; P5.07b's buffer is the same sealed short-lived record as videos.
 
 ### Editor pass (2026-10-04, decision 34)

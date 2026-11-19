@@ -253,6 +253,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21m | Font metrics for the fallback faces (split from P1.21) | — | P1.21 | `phase-1.md` |
 | P1.21a | Settings overview pages on the docs site (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.21b | Site-wide switch for search and AI listing, off by default (added 2026-11-19) | — | — | `phase-1.md` |
+| P1.21c | Remove dead and duplicated code: old CSP copy, PDS failure result, job claim (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.21e | Record the account lifecycle and burned names, ADR 0067 (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
@@ -1968,6 +1969,7 @@ Depth: **detail by risk; P5.00 refines** (contract parts in full, algorithms a r
 |---|---|---|---|---|
 | P5.00 | Refine Phase 5 | [STOP] | P4.28 | `phase-5.md` |
 | P5.01 | Hosting and backup storage decision | [STOP] [ALEX] | P5.00 | `phase-5.md` |
+| P5.01o | Object store operations on the chosen provider | [SEC] | P5.01 | `phase-5.md` |
 | P5.02g | `backup` role grants (SE-6) | [SEC] | P5.00, P1.12 | `phase-5.md` |
 | P5.02 | Production compose with profiles, per-container egress and own-host flows | [SEC] | P5.02g, P5.01 | `phase-5.md` |
 | P5.04q | Backup-freshness workflow (check part of P5.04; SE-6 `q`) | [SEC] | P5.02 | `phase-5.md` |

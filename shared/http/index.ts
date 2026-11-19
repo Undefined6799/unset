@@ -4,7 +4,7 @@
 
 export type { ClientIp } from "./clientIp.ts";
 export { type HttpKitConfig, hostAllowed, httpKitConfig } from "./config.ts";
-export { type HeaderSet, headerSets } from "./csp/headers.ts";
+export { type HeaderSet, SECURITY_HEADERS } from "./headers.ts";
 export { createHealth, type HealthState, type Readiness } from "./health.ts";
 export { definePolicies, type Policy, type PolicyEntry, type PolicyName, type PolicyTable } from "./limits/policy.ts";
 export { createRateLimiter, type RateLimiter } from "./limits/rateLimit.ts";
