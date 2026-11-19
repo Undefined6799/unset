@@ -118,7 +118,7 @@ export type Services = {
   /** P2.10: a member's invites (sealed codes), the request that issues one, and the audit row for a refusal. */
   readonly invites: {
     readonly store: InviteStore;
-    readonly issue: (did: Did) => Promise<IssueInviteResult>;
+    readonly issue: (did: Did, deadline?: AbortSignal) => Promise<IssueInviteResult>;
     readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */

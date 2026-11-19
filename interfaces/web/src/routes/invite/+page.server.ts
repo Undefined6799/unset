@@ -56,7 +56,7 @@ export const actions: Actions = {
     const outcome = await issueMemberInvite(
       {
         claim: (who, id) => invites.store.claim(who, id, deadline),
-        issue: invites.issue,
+        issue: (who) => invites.issue(who, deadline),
         store: (who, id, code) => invites.store.store(who, id, code, deadline),
         drop: (who, id) => invites.store.drop(who, id, deadline),
         denied: (who) => invites.denied(who, deadline),
