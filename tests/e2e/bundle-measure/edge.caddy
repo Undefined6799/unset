@@ -1,0 +1,37 @@
+# The local edge for the bundle experiment (P1.20u): staging's app site (deployment/edge/dev/app.caddy) with the same
+# snippets, zones and limits, read from the repository, so a change there is measured here too. What differs: it binds
+# loopback, uses Caddy's own internal certificate for unset.test, has no trusted proxy (so {client_ip} is the browser's
+# loopback socket: every request from one client address, as one member behind one address on staging), and writes an
+# access log with the path and status to a scratch file, for counting. Never deployed.
+{
+	admin off
+	persist_config off
+	servers {
+		timeouts {
+			read_body 30s
+			write 135s
+			idle 2m
+		}
+	}
+}
+
+import ../../../deployment/edge/snippets/ratelimit.caddy
+import ../../../deployment/edge/snippets/security-headers.caddy
+import ../../../deployment/edge/snippets/signin-files.caddy
+import ../../../deployment/edge/snippets/upstream.caddy
+
+https://unset.test:9444 {
+	bind 127.0.0.1
+	tls internal
+	log {
+		output file {$BUNDLE_EDGE_LOG}
+		format json
+	}
+	import security-headers
+	import noindex
+	route {
+		import app-ratelimit
+		import signin-files
+		import upstream 127.0.0.1:8091
+	}
+}

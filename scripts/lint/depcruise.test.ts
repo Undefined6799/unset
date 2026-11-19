@@ -708,6 +708,15 @@ describe("allowlist matrix", () => {
     await expectFail("svelte-no-react-ui", edge("apps/web/lib/components/a.ts", "../../../../shared/ui/index.ts"));
   });
 
+  test("web_routes_never_reach_postgres", async () => {
+    // P1.20t: a route asks an operation in lib/server, which reaches the database; the route itself never does.
+    await expectPass(edge("interfaces/web/src/lib/server/a.ts", "../../../../../infrastructure/postgres/index.ts"));
+    await expectFail(
+      "web-routes-no-postgres",
+      edge("interfaces/web/src/routes/a/+page.server.ts", "../../../../../infrastructure/postgres/index.ts"),
+    );
+  });
+
   test("shared_host_pin_is_a_leaf", async () => {
     // P1.33o: host-pin joins LEAF_SHARED. dependency-cruiser 18.5.0 allows a dependency that satisfies any
     // allowed rule (doc/rules-reference.md, `allowed`). This row is only its own files and Node built-ins.

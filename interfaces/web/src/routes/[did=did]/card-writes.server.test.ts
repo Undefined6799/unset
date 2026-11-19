@@ -23,13 +23,14 @@ const readme = (text: string) => ({
 const input = (text = "Hello") => ({ content: { kind: "readme", text } as CardContent, width: "full" as const });
 const KEY = "3k2abc" as CardKey;
 
-type Calls = { created: unknown[]; saved: unknown[]; removed: string[]; profile: unknown[] };
+type Calls = { created: unknown[]; swaps: string[]; saved: unknown[]; removed: string[]; profile: unknown[] };
+const HEAD = "bafyhead";
 
 function store(
   over: Partial<CardStore> = {},
   stored: unknown = { $type: "sh.unset.profile", displayName: "A", createdAt: T1 },
 ) {
-  const calls: Calls = { created: [], saved: [], removed: [], profile: [] };
+  const calls: Calls = { created: [], swaps: [], saved: [], removed: [], profile: [] };
   const base: CardStore = {
     list: async () =>
       ok({
@@ -38,10 +39,13 @@ function store(
           { key: "b", value: readme("B"), cid: "c" },
         ],
         complete: true,
+        overflow: false,
       }),
-    create: async (record) => {
+    head: async () => ok(HEAD),
+    create: async (record, swapCommit) => {
       calls.created.push(record);
-      return ok({ key: "new" });
+      calls.swaps.push(swapCommit);
+      return ok({ kind: "created", key: "new" });
     },
     save: async (key, build) => {
       const built = build(readme("old"));
@@ -73,10 +77,70 @@ describe("cardWrites", () => {
 
   test("a member with the most cards a page shows cannot add another", async () => {
     const full = Array.from({ length: 100 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
-    const { writes, calls } = store({ list: async () => ok({ cards: full, complete: true }) });
+    const { writes, calls } = store({ list: async () => ok({ cards: full, complete: true, overflow: false }) });
     const { content, width } = input();
     expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.too_many" });
     expect(calls.created).toEqual([]);
+  });
+
+  // C3 (outside review 2026-11-19): the count and the create are tied to one repo state. The create swaps on the
+  // commit read before the count, so a card added elsewhere in between (another tab) makes the PDS refuse it.
+  test("a new card is created only on the repo state its count was read from", async () => {
+    const { writes, calls } = store();
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "saved" });
+    expect(calls.swaps).toEqual([HEAD]);
+  });
+
+  test("a repo that changed meanwhile is counted again once, and the card is added if there is still room", async () => {
+    const heads = ["h1", "h2"];
+    let creates = 0;
+    const { writes, calls } = store({
+      head: async () => ok(heads.shift() ?? "none"),
+      create: async (record, swapCommit) => {
+        calls.created.push(record);
+        calls.swaps.push(swapCommit);
+        creates += 1;
+        return ok(creates === 1 ? { kind: "changed" } : { kind: "created", key: "new" });
+      },
+    });
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "saved" });
+    expect(calls.swaps).toEqual(["h1", "h2"]);
+  });
+
+  test("two tabs at 99 cards: the second count sees 100 and nothing more is written", async () => {
+    const at = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: readme("A"), cid: "c" }));
+    const lists = [at(99), at(100)];
+    const { writes, calls } = store({
+      list: async () => ok({ cards: lists.shift() ?? [], complete: true, overflow: false }),
+      create: async (record, swapCommit) => {
+        calls.created.push(record);
+        calls.swaps.push(swapCommit);
+        return ok({ kind: "changed" });
+      },
+    });
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.too_many" });
+    expect(calls.created).toHaveLength(1); // the first try, which the PDS refused: nothing was written
+  });
+
+  test("a repo that keeps changing is not tried a third time; the member is asked to save again", async () => {
+    const { writes, calls } = store({
+      create: async (record, swapCommit) => {
+        calls.created.push(record);
+        calls.swaps.push(swapCommit);
+        return ok({ kind: "changed" });
+      },
+    });
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.cards_changed" });
+    expect(calls.created).toHaveLength(2);
+  });
+
+  test("more cards than a page shows: adding says the page is full and moving says delete one first", async () => {
+    const over = Array.from({ length: 100 }, (_, n) => ({ key: `k${n}`, value: readme("A"), cid: "c" }));
+    const { writes, calls } = store({ list: async () => ok({ cards: over, complete: false, overflow: true }) });
+    expect(await writes.create(input().content, "full")).toEqual({ kind: "failed", code: "card.too_many" });
+    expect(await writes.reorder(over.map((card) => card.key))).toEqual({ kind: "failed", code: "card.overflow" });
+    expect(await writes.remove(KEY)).toEqual({ kind: "saved" });
+    expect([calls.created, calls.profile, calls.removed]).toEqual([[], [], [KEY]]);
   });
 
   test("an edit is built over the stored card and saved under its key", async () => {
@@ -106,7 +170,7 @@ describe("cardWrites", () => {
   });
 
   test("a list the read cut short is not a count: adding and moving are refused, nothing is written", async () => {
-    const cut = { cards: [{ key: "a", value: readme("A"), cid: "c" }], complete: false };
+    const cut = { cards: [{ key: "a", value: readme("A"), cid: "c" }], complete: false, overflow: false };
     const { writes, calls } = store({ list: async () => ok(cut) });
     const { content, width } = input();
     expect(await writes.create(content, width)).toEqual({ kind: "failed", code: "card.list_incomplete" });
@@ -126,7 +190,7 @@ describe("cardWrites", () => {
       { key: "h", value: { $type: "sh.unset.section", content: { $type: "x" } }, cid: "c" },
       { key: "bad/key", value: readme("B"), cid: "c" },
     ];
-    const list = async () => ok({ cards, complete: true });
+    const list = async () => ok({ cards, complete: true, overflow: false });
     const { writes, calls } = store({ list });
     expect(await writes.reorder(["a"])).toEqual({ kind: "saved" });
     expect(calls.profile).toMatchObject([{ ok: true, record: { cards: ["a"] } }]);
