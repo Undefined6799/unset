@@ -2835,7 +2835,8 @@ Outputs (option a′, settled):
     Each enqueues a durable job (the P6.05 job pattern, copied, not
     abstracted) and returns; a chat outage never blocks the core transaction.
   - `chat-admin` verbs (each its own assertion `verb`, each looking the user up by upstream-link subject = DID, never by
-    localpart): `lock`, `unlock`, `deactivate` (with Synapse erase), `delete_link` and `end_sessions`. `end_sessions` is
+    localpart): `lock`, `unlock`, `deactivate` (with Synapse erase), `delete_link` and `end_sessions`; plus `fence`
+    (erasure step 0), which makes no MAS call and only refuses later seeds for the DID. `end_sessions` is
     needed because MAS's back-channel action is fixed per provider (`backchannel_logout.rs:247`) and our one provider
     must stay `logout_browser_only` for app sign-out (P6.16); a second provider cannot help, because a logout token
     matches only sessions started through its own provider (`:233`). `end_sessions` lists the user's active
@@ -2847,7 +2848,7 @@ Outputs (option a′, settled):
   - `chat-auth` internal route `POST /internal/purge` (assertion `verb: "purge"`) deleting `profile` and
     `login_session` rows for the DID.
   - Table `app.chat_erasure(did PK, mxid, mas_user_id, step, attempts, next_attempt_at, last_error, created_at)`; `step ∈
-    { deactivate, wait_deactivated, delete_media, delete_link, purge_chat_auth, delete_mapping, done }`. `admin` gets
+    { stop_seed, deactivate, wait_deactivated, delete_media, delete_link, purge_chat_auth, delete_mapping, done }`. `admin` gets
     SELECT and UPDATE on `step = 'delete_media'` rows only.
 Algorithm (full detail: suspension, erasure and session ending):
   1. Settled by Alex (2026-10-03 16:49Z, P6-A2: "automatic", option a′; and 16:56Z, answer 52: chat is tied to the
@@ -2872,8 +2873,12 @@ Algorithm (full detail: suspension, erasure and session ending):
      0. `stop_seed` (added 2026-11-19 after the architecture review: a seed in flight can create the MAS user, or the
         user without its DID link, after erasure began, and rejecting its late database write removes nothing
         remotely). In a short transaction set the `app.chat_seed` row, if any, to `state = 'erasing'`, so no runner
-        claims it again; keep the row, whose stored `localpart` is the verified identity used to clean up. If its
-        lease is still live, wait until `lease_until` has passed, so any in-flight call has ended. Then find the remote
+        claims it again; keep the row, whose stored `localpart` is the verified identity used to clean up. A lease
+        running out does not prove the remote work stopped (P6.04's MAS calls and token retry can outlast the
+        caller's timeout), so fence it at `chat-admin` instead: a signed `fence` verb records the DID in
+        `chat-admin`'s refused list (fsynced, like `seeds.log`), so any later or queued `seed` for it is refused before
+        a MAS call, and answers only after any `seed` already running for that DID has returned (`chat-admin` runs
+        seeds for one DID one at a time). Only after `fence` answers is the remote account looked up. Then find the remote
         account: first by the DID link, as every verb does. If there is no link, the seed may have stopped between
         MAS's user create and link create (P6.04 steps 6 and 7), leaving a user with no link. Only for that case,
         `deactivate` and `delete_link` also accept the stored localpart inside web's signed assertion and act on the
@@ -2932,7 +2937,8 @@ Done when (tests):
   - `lock-on-account-inactive-ends-sessions`, `unlock-on-reactivate`, `lock-waits-for-job`,
     `deactivate-waits-for-job`, `erase-deletes-user-media`, `erase-deletes-upstream-link`, `erase-purges-chat-auth`,
     `erase-deletes-mapping-last`, `erase-report-pending-then-erased`,
-    `erase-waits-for-live-seed-lease`, `erase-after-late-seed-200-deactivates-user`,
+    `erase-fences-seed-before-lookup` (a fake MAS that writes the user after the caller's lease expired: the lookup
+    runs only after that write, and a later seed for the DID is refused), `erase-waits-for-live-seed-lease`, `erase-after-late-seed-200-deactivates-user`,
     `erase-after-lost-seed-reply-deactivates-user`, `erase-finds-user-created-before-link`,
     `erase-never-touches-user-linked-to-other-did`, `erase-not-done-while-seed-can-create`,
     `job-retries-and-alerts`, `lookup-by-subject-not-localpart`, `mas-path-allowlist-grows-only-by-these`,
