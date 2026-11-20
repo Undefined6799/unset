@@ -1,7 +1,7 @@
 // What the card specs share: the member's own page, and adding and deleting cards. The cards a spec adds are deleted
 // again, so the member page is as the other specs expect it. Card writes count against the member's 30 a minute
 // (interfaces/web/src/lib/server/limits.ts), so specs keep their writes few.
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { ACCOUNT, type PageFixture } from "./pages.ts";
 
 export const OWN_PAGE: PageFixture = {
@@ -37,4 +37,21 @@ export async function deleteCard(page: Page, name: string) {
   await chooseFromMenu(page, name, "Delete");
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("group", { name })).toHaveCount(0);
+}
+
+/** The Text card's posted markdown: the plain field the rich editor writes into (P1.21u). */
+export const postedText = (dialog: Locator) => dialog.locator('textarea[name="text"]');
+
+/**
+ * Types into the Text card's rich editor as a member does, one block per entry with Enter between, after clearing
+ * it; markdown shortcuts ("# ", "*a*") turn into formatting as they are typed.
+ */
+export async function writeText(editor: Locator, blocks: readonly string[]) {
+  await editor.click();
+  await editor.press("ControlOrMeta+a");
+  await editor.press("Backspace");
+  for (const [i, block] of blocks.entries()) {
+    if (i > 0) await editor.press("Enter");
+    await editor.pressSequentially(block);
+  }
 }

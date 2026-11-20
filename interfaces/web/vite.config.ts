@@ -46,7 +46,9 @@ export default defineConfig({
           "object-src": ["none"],
           "manifest-src": ["self"],
           "require-trusted-types-for": ["script"],
-          "trusted-types": ["svelte-trusted-html", "sveltekit-trusted-url"],
+          // ProseMirrorClipboard (ADR 0073): prosemirror-view 1.42.9 parses pasted HTML in a detached element through
+          // this one policy (dist/index.js, maybeWrapTrusted), on the owner's Text editor only.
+          "trusted-types": ["svelte-trusted-html", "sveltekit-trusted-url", "ProseMirrorClipboard"],
         },
       },
     }),

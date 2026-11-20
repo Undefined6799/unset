@@ -260,6 +260,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21h | Normal use fits inside every limit, tests only (added 2026-11-20) | — | — | `phase-1.md` |
 | P1.21i | Say in the terms how leaving works (added 2026-11-20) | — | P1.21e | `phase-1.md` |
 | P1.21j | Limits sized for thousands of members; web marks its PDS calls, ADR 0071 (added 2026-11-20) | trusted | P1.21h | `phase-1.md` |
+| P1.21u | Write the Text card in a Milkdown editor; CSP adds ProseMirrorClipboard, ADR 0073 (added 2026-11-20) | trusted | P1.21f | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |

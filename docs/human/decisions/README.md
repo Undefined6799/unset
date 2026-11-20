@@ -75,3 +75,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0067](0067-account-lifecycle-and-burned-names.md) | Deactivation, deletion after 30 days, takedown and moving away follow atproto's account model; no PLC tombstone by default; every hosted name is burned (P1.21e) | Accepted 2026-11-20 |
 | [0068](0068-profile-card-surfaces.md) | Each profile card chooses Filled, Outlined or Plain through an optional surface field | Proposed (awaiting Alex) |
 | [0071](0071-limits-for-thousands-of-members.md) | Limits sized for thousands of members; web marks its own PDS calls with a key so the edge gives them their own zones; app_signin counts only the login and join posts (P1.21j) | Proposed (awaiting Alex) |
+| [0073](0073-text-card-rich-editor.md) | The Text card is written in a Milkdown editor over the plain field, loaded on open; the CSP adds the one Trusted Types name `ProseMirrorClipboard` (P1.21u) | Proposed (awaiting Alex) |

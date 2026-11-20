@@ -663,3 +663,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
   profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
   Proposed, awaiting Alex.
+- **Text card rich editor (P1.21u, 2026-11-20; own record: [0073](0073-text-card-rich-editor.md)):** the Text
+  card's editor is Milkdown over the plain field, loaded when the editor opens; the app CSP adds the one Trusted
+  Types name `ProseMirrorClipboard` for paste. Proposed, awaiting Alex.

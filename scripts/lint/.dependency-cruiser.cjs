@@ -31,6 +31,8 @@ const SDK_ADAPTERS = [
   { sdk: "age-encryption", adapter: "infrastructure/seal/" },
   { sdk: "@atproto/lex[^/]*", adapter: "shared/lexicons/" },
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
+  { sdk: "@milkdown/[^/]*", adapter: "apps/web/lib/editor/" },
+  { sdk: "prosemirror-[^/]*", adapter: "apps/web/lib/editor/" },
 ];
 
 /** Node built-ins a domain may not import: I/O arrives as a passed-in dependency (README rule 1). */
