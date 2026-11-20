@@ -9,6 +9,7 @@ import {
   type CardKey,
   type CardKind,
   type CardLayout,
+  type CardSurface,
   type CardWidth,
   DEFAULT_LAYOUT,
   type Failed,
@@ -19,6 +20,7 @@ import {
   type Obj,
   oneOf,
   PRESETS,
+  SURFACES,
   WIDTHS,
 } from "./cards.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
@@ -181,18 +183,27 @@ const READERS: Record<string, (input: Obj) => Field<CardContent>> = {
   buttons: readButtons,
 };
 
-/** Reads one card as the editor sends it (untrusted JSON): `kind`, optional `width`, then the kind's fields. */
+/** Reads one card as the editor sends it (untrusted JSON): `kind`, optional `width` and `surface`, then the kind's fields. */
 export function parseCardInput(
   input: Obj,
-): { readonly ok: true; readonly content: CardContent; readonly width: CardWidth } | Failed {
+):
+  | { readonly ok: true; readonly content: CardContent; readonly width: CardWidth; readonly surface?: CardSurface }
+  | Failed {
   if (input.width !== undefined && !oneOf(WIDTHS, input.width)) return fail("card.invalid");
+  // Like width, no field is named: only a crafted request sends a surface the editor does not offer.
+  if (input.surface !== undefined && !oneOf(SURFACES, input.surface)) return fail("card.invalid");
   const reader = typeof input.kind === "string" && Object.hasOwn(READERS, input.kind) ? READERS[input.kind] : undefined;
   if (reader === undefined) return fail("card.kind_unknown");
   const content = reader(input);
   if (!content.ok) return content;
   const sized = validateRecord(NSID, { $type: NSID, content: toLexicon(content.value), createdAt: EPOCH }, "write");
   if (!sized.ok) return fail("card.too_long", tooLongField(sized.errors));
-  return { ok: true, content: content.value, width: oneOf(WIDTHS, input.width) ? input.width : "full" };
+  return {
+    ok: true,
+    content: content.value,
+    width: oneOf(WIDTHS, input.width) ? input.width : "full",
+    ...(oneOf(SURFACES, input.surface) ? { surface: input.surface } : {}),
+  };
 }
 
 const EPOCH = "1970-01-01T00:00:00.000Z";
@@ -299,6 +310,7 @@ export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: stri
 /**
  * The record to write over `existing` (the stored value, or null for a new card). Content is replaced; createdAt and
  * any field this version does not know are kept (ADR 0038), inside the content too while its kind stays the same.
+ * Missing surface input preserves the stored choice for older editors; explicit filled clears it.
  * Past the lexicon's limits, or a list grown past the editor's, is "too long". The whole record is validated once
  * more before it is returned.
  */
@@ -307,18 +319,27 @@ export function toCardRecord(
   width: CardWidth,
   existing: unknown,
   now: string,
+  surface?: CardSurface,
 ): { readonly ok: true; readonly record: CardRecord } | Failed {
   const fresh = toLexicon(content);
-  const sized: CardRecord = { $type: NSID, content: fresh, ...(width === "half" ? { width } : {}), createdAt: now };
+  const appearance = surface === undefined || surface === "filled" ? {} : { surface };
+  const sized: CardRecord = {
+    $type: NSID,
+    content: fresh,
+    ...(width === "half" ? { width } : {}),
+    ...appearance,
+    createdAt: now,
+  };
   if (!validateRecord(NSID, sized, "write").ok) return fail("card.too_long");
   if (!withinEditLimit(fresh, existing, content.kind)) return fail("card.too_long");
   const stored = isObject(existing) ? existing : {};
   const sameKind = isObject(stored.content) && stored.content.$type === fresh.$type ? stored.content : {};
   const old = Object.fromEntries(Object.entries(sameKind).filter(([k]) => !OWN_FIELDS[content.kind].includes(k)));
-  const { $type: _t, content: _c, width: _w, createdAt, ...kept } = stored;
+  const { $type: _t, content: _c, width: _w, surface: storedSurface, createdAt, ...kept } = stored;
   const record: CardRecord = {
     $type: NSID,
     ...kept,
+    ...(surface === undefined && storedSurface !== undefined ? { surface: storedSurface } : appearance),
     ...(width === "half" ? { width } : {}),
     content: { ...old, ...keepElementFields(fresh, sameKind, content.kind) },
     createdAt: typeof createdAt === "string" ? createdAt : now,

@@ -35,6 +35,7 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
   await panel.getByRole("link", { name: /^Links/ }).click();
   await panel.getByRole("textbox", { name: "Title" }).fill("Offline");
   await panel.getByRole("radio", { name: "Grid" }).check();
+  await panel.getByRole("radio", { name: "Outlined", exact: true }).check();
   const second = panel.getByRole("group", { name: "Link 2", exact: true });
   await second.getByRole("textbox", { name: "Address" }).fill("not a url");
   await panel.getByRole("button", { name: "Add" }).click();
@@ -44,18 +45,27 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
   await expect(address).toHaveValue("not a url");
   await expect(panel.getByRole("textbox", { name: "Title" })).toHaveValue("Offline");
   await expect(panel.getByRole("radio", { name: "Grid" })).toBeChecked();
+  await expect(panel.getByRole("radio", { name: "Outlined", exact: true })).toBeChecked();
   await address.fill("offline.example");
   await panel.getByRole("button", { name: "Add" }).click();
   const offline = page.getByRole("group", { name: "Offline card" });
   await expect(offline).toHaveCount(1);
+  await expect(page.locator('[data-slot="card"]').filter({ has: offline })).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
 
   // Edit the README in place.
   const readme = page.getByRole("group", { name: "README card" });
   await readme.getByRole("link", { name: "Edit" }).click();
   await expect(panel.getByRole("textbox", { name: "README" })).toHaveValue("# Without script");
   await panel.getByRole("textbox", { name: "README" }).fill("# Still without script");
+  await panel.getByRole("radio", { name: "Plain", exact: true }).check();
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("heading", { name: "Still without script" })).toBeVisible();
+  await readme.getByRole("link", { name: "Edit" }).click();
+  await expect(panel.getByRole("radio", { name: "Plain", exact: true })).toBeChecked();
+  await panel.getByRole("link", { name: "Cancel" }).click();
 
   // Move the README below the links: with no script the moves are plain buttons, not the three-dot menu.
   await expect(readme.getByRole("button", { name: /^More for/ })).toHaveCount(0);

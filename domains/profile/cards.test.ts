@@ -27,10 +27,25 @@ describe("parseCardKey", () => {
 });
 
 describe("readCard", () => {
+  test.each([undefined, "filled", "outlined", "plain", "future"])(
+    "reads surface %s without hiding older or future cards",
+    (surface) => {
+      const record = stored({ $type: ref("readme"), text: "Hi" }, surface === undefined ? {} : { surface });
+      expect(readCard(key(KEY), record)?.surface).toBe(
+        surface === "outlined" || surface === "plain" ? surface : "filled",
+      );
+    },
+  );
+
+  test.each([null, 1, {}, "x".repeat(33)])("hides a malformed stored surface %j", (surface) => {
+    expect(readCard(key(KEY), stored({ $type: ref("readme"), text: "Hi" }, { surface }))).toBeNull();
+  });
+
   test("reads each card kind into its view", () => {
     expect(readCard(key(KEY), stored({ $type: ref("readme"), text: "# Hi" }))).toEqual({
       key: KEY,
       width: "full",
+      surface: "filled",
       createdAt: T1,
       content: { kind: "readme", text: "# Hi" },
     });
@@ -84,6 +99,7 @@ describe("readCard", () => {
     );
     expect(readCard(key(KEY), card)).toMatchObject({
       width: "full",
+      surface: "filled",
       content: { buttons: [{ kind: "link", preset: "custom", label: "Tip me" }] },
     });
     const links = stored({ $type: ref("links"), layout: "masonry", items: [] });
@@ -138,6 +154,7 @@ describe("orderCards", () => {
   const card = (k: string, createdAt: string): Card => ({
     key: key(k),
     width: "full",
+    surface: "filled",
     createdAt,
     content: { kind: "readme", text: k },
   });

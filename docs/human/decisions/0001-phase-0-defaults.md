@@ -660,3 +660,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   atproto's account model. A deletion asked of us is final 30 days later; there is no PLC tombstone by default; every
   hosted name a member ever held is burned and never issued again; the privacy notice says the PLC log is permanent; a
   member who moves to another PDS may keep their name until they change it.
+- **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
+  profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
+  Proposed, awaiting Alex.

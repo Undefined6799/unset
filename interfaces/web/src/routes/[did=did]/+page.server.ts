@@ -220,7 +220,7 @@ export const actions: Actions = {
       event,
       (form, did) => {
         const input = cardInput(form);
-        return input.ok ? writesFor(did, event.locals).create(input.content, input.width) : input.failed;
+        return input.ok ? writesFor(did, event.locals).create(input.content, input.width, input.surface) : input.failed;
       },
       true,
     ),
@@ -230,7 +230,9 @@ export const actions: Actions = {
       (form, did) => {
         const key = keyField(form);
         const input = cardInput(form);
-        return input.ok ? writesFor(did, event.locals).save(key, input.content, input.width) : input.failed;
+        return input.ok
+          ? writesFor(did, event.locals).save(key, input.content, input.width, input.surface)
+          : input.failed;
       },
       true,
     ),

@@ -8,6 +8,7 @@ import {
   type CardContent,
   type CardError,
   type CardKey,
+  type CardSurface,
   type CardWidth,
   type ProfileError,
   reorderCards,
@@ -56,8 +57,8 @@ export type CardWrite =
   | { readonly kind: "redirect"; readonly location: string };
 
 export type CardWrites = {
-  readonly create: (content: CardContent, width: CardWidth) => Promise<CardWrite>;
-  readonly save: (key: CardKey, content: CardContent, width: CardWidth) => Promise<CardWrite>;
+  readonly create: (content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
+  readonly save: (key: CardKey, content: CardContent, width: CardWidth, surface?: CardSurface) => Promise<CardWrite>;
   readonly remove: (key: CardKey) => Promise<CardWrite>;
   readonly reorder: (requested: unknown) => Promise<CardWrite>;
   /** The avatar's shape, written into the profile record (sh.unset.profile avatarShape). */
@@ -86,8 +87,8 @@ export function cardWrites(store: CardStore, now: () => string): CardWrites {
     // a card added elsewhere meanwhile (another tab) makes the PDS refuse it and nothing is written. Counted once more
     // then, since an unrelated write to the repo also moves the head; a second refusal asks the member to save again.
     // A list cut short by the read budget (card-records.ts) is not a count: the add is refused.
-    create: async (content, width) => {
-      const built = toCardRecord(content, width, null, now());
+    create: async (content, width, surface) => {
+      const built = toCardRecord(content, width, null, now(), surface);
       if (!built.ok) return failed(built.code);
       for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
         const head = await store.head();
@@ -102,8 +103,8 @@ export function cardWrites(store: CardStore, now: () => string): CardWrites {
       }
       return failed("card.cards_changed");
     },
-    save: async (key, content, width) =>
-      outcome(await store.save(key, (existing) => toCardRecord(content, width, existing, now()))),
+    save: async (key, content, width, surface) =>
+      outcome(await store.save(key, (existing) => toCardRecord(content, width, existing, now(), surface))),
     remove: async (key) => {
       const removed = await store.remove(key);
       return removed.kind === "ok" ? SAVED : pdsFailure(removed);

@@ -13,6 +13,7 @@ export {
   type CardKind,
   type CardLayout,
   type CardLink,
+  type CardSurface,
   type CardWidth,
   type LinkPreset,
   orderCards,

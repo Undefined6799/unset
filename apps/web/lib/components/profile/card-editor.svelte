@@ -16,7 +16,14 @@ import { tick } from "svelte";
 import { BUTTONS_EDIT, CARD_EDIT, CARD_TEXT, COLLECTION_EDIT, LINKS_EDIT } from "../../profile/messages.ts";
 import { opensHere } from "../../profile/panel.ts";
 import { parseReadme } from "../../profile/parse.ts";
-import type { CardContent, CardPanelState, CardWidth, Enhance, SubmitHandler } from "../../profile/types.ts";
+import type {
+  CardContent,
+  CardPanelState,
+  CardSurface,
+  CardWidth,
+  Enhance,
+  SubmitHandler,
+} from "../../profile/types.ts";
 import { Icon, type IconName } from "../icon/index.ts";
 import * as Alert from "../ui/alert/index.ts";
 import { Button, buttonVariants } from "../ui/button/index.ts";
@@ -32,6 +39,7 @@ let {
   kind,
   content = null,
   width,
+  surface = "filled",
   cardKey,
   trigger,
   icon,
@@ -49,6 +57,7 @@ let {
   /** The stored card, or null to add one. */
   content?: CardContent | null;
   width: CardWidth;
+  surface?: CardSurface;
   /** The card being saved; absent, the form adds a card. */
   cardKey?: string;
   /** The link that opens the editor: with script it opens the dialog, without it goes to `href`. */
@@ -192,6 +201,11 @@ const WIDTHS = [
   { value: "full", label: CARD_EDIT.full, icon: "full" },
   { value: "half", label: CARD_EDIT.half, icon: "half" },
 ] as const;
+const SURFACES = [
+  { value: "filled", label: CARD_EDIT.filled },
+  { value: "outlined", label: CARD_EDIT.outlined },
+  { value: "plain", label: CARD_EDIT.plain },
+] as const;
 const LAYOUTS = [
   { value: "list", label: LINKS_EDIT.list, icon: "list" },
   { value: "grid", label: LINKS_EDIT.grid, icon: "apps" },
@@ -265,6 +279,7 @@ const buttonRows = $derived([
     {#if cardKey !== undefined}<input type="hidden" name="key" value={cardKey} />{/if}
     <input type="hidden" name="kind" value={kind} />
     <Choice label={CARD_EDIT.width} name="width" value={typedOr("width", width)} options={WIDTHS} />
+    <Choice label={CARD_EDIT.surface} name="surface" value={typedOr("surface", surface)} options={SURFACES} />
     {#if kind === "readme" && hydrated}
       <Tabs.Root value={tab} onValueChange={showTab}>
         <Tabs.List>
