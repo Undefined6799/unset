@@ -123,6 +123,72 @@ describe("image store", () => {
     expect(dropped?.unused_since).toBeInstanceOf(Date);
   });
 
+  test("image.discard_during_use: a discard waiting on a save's open use leaves the image and its use", async () => {
+    const did = await member();
+    const id = await stored(did);
+    const client = await web.connect();
+    let discarded: Promise<boolean>;
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE app.image SET state = 'published', unused_since = NULL WHERE id = $1", [id]);
+      discarded = store.discard(did, id, null);
+      // Give the discard time to reach the row lock the open use holds.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await client.query("INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2)", [id, record(did)]);
+      await client.query("COMMIT");
+    } finally {
+      client.release();
+    }
+    expect(await discarded).toBe(false);
+    expect(await exists(id)).toBe(true);
+    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).toHaveLength(1);
+  });
+
+  test("image.remove_concurrent: removing an image's last two uses at once marks it unused", async () => {
+    const did = await member();
+    const id = await stored(did);
+    await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
+    await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null);
+    await Promise.all(
+      ["3kaaaaaaaaaaa", "3kbbbbbbbbbbb"].map((rkey) => store.removeUse(did, id, record(did, rkey), null)),
+    );
+    const [row] = await sql<{ unused_since: Date | null }>("SELECT unused_since FROM app.image WHERE id = $1", [id]);
+    expect(row?.unused_since).toBeInstanceOf(Date);
+  });
+
+  test("image.discard_during_use: a discard waiting on a save's open use leaves the image and its use", async () => {
+    const did = await member();
+    const id = await stored(did);
+    const client = await web.connect();
+    let discarded: Promise<boolean> = Promise.resolve(true);
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE app.image SET state = 'published', unused_since = NULL WHERE id = $1", [id]);
+      discarded = store.discard(did, id, null);
+      // Give the discard time to reach the row lock the open use holds.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await client.query("INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2)", [id, record(did)]);
+      await client.query("COMMIT");
+    } finally {
+      client.release();
+    }
+    expect(await discarded).toBe(false);
+    expect(await exists(id)).toBe(true);
+    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [id])).toHaveLength(1);
+  });
+
+  test("image.remove_concurrent: removing an image's last two uses at once marks it unused", async () => {
+    const did = await member();
+    const id = await stored(did);
+    await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
+    await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null);
+    await Promise.all(
+      ["3kaaaaaaaaaaa", "3kbbbbbbbbbbb"].map((rkey) => store.removeUse(did, id, record(did, rkey), null)),
+    );
+    const [row] = await sql<{ unused_since: Date | null }>("SELECT unused_since FROM app.image WHERE id = $1", [id]);
+    expect(row?.unused_since).toBeInstanceOf(Date);
+  });
+
   describe("sweep", () => {
     beforeEach(() => sql("DELETE FROM app.image"));
 

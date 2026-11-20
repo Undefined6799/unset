@@ -3,9 +3,10 @@
 // form sends reaches another member's image (rule SE-2), and a use's record URI must be in the caller's repository.
 //
 // Concurrency (rule DA-4): admission and storing each run in one transaction under a per-member advisory lock, so two
-// uploads at once cannot both pass the limits or the quota. A use updates its image row before it inserts the use,
-// so the sweep's DELETE, which locks the same row, either runs first (the use then finds no image) or re-checks its
-// condition against the updated row and leaves it (READ COMMITTED re-evaluation). No network I/O runs inside.
+// uploads at once cannot both pass the limits or the quota. Adding, removing and discarding first lock the image row
+// (lockImage), so they run one at a time per image and each decides on the uses committed before it. The sweep locks
+// the rows it deletes with SKIP LOCKED, so it passes over an image a use is changing, and a use that waits for a
+// sweep finds the image gone. No network I/O runs inside.
 import { randomUUID } from "node:crypto";
 import {
   admitUpload,
@@ -16,7 +17,7 @@ import {
   type UploadUsage,
 } from "@unset/domains-content";
 import type { Did } from "@unset/domains-identity";
-import { type Pool, withClient } from "./pool.ts";
+import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 
 export type ImageKind = "image" | "avatar";
@@ -54,6 +55,16 @@ const USAGE = `
          (SELECT storage_quota_bytes FROM app.account WHERE did = $1) AS quota_bytes`;
 
 const LOCK = "SELECT pg_advisory_xact_lock(hashtext('image:' || $1))";
+
+/**
+ * The member's image row, locked for the rest of the transaction. Taken before any statement that decides on the
+ * image's uses: under READ COMMITTED each later statement then sees every use committed before the lock was granted,
+ * and no other use change can start until this transaction ends. False when the row is gone or not the member's.
+ */
+async function lockImage(tx: PoolClient, did: Did, id: string): Promise<boolean> {
+  const { rowCount } = await tx.query("SELECT 1 FROM app.image WHERE id = $1 AND did = $2 FOR UPDATE", [id, did]);
+  return (rowCount ?? 0) > 0;
+}
 
 type UsageRow = { last_hour: number; last_day: number; live_bytes: string; quota_bytes: string | null };
 
@@ -101,8 +112,9 @@ export function createImageStore(pool: Pool) {
 
     /** A failed upload or a picture removed before any save used it; an image in use is kept. */
     discard: (did: Did, id: string, deadline: AbortSignal | null): Promise<boolean> =>
-      withClient(pool, deadline, async (client) => {
-        const { rowCount } = await client.query(
+      withTransaction(pool, deadline, async (tx) => {
+        if (!(await lockImage(tx, did, id))) return false;
+        const { rowCount } = await tx.query(
           `DELETE FROM app.image WHERE id = $1 AND did = $2
              AND NOT EXISTS (SELECT 1 FROM app.image_use u WHERE u.image_id = app.image.id)`,
           [id, did],
@@ -113,7 +125,7 @@ export function createImageStore(pool: Pool) {
     /** A save's record uses the image; false when it is not the member's, gone, held or blocked. */
     addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<boolean> =>
       withTransaction(pool, deadline, async (tx) => {
-        if (!ownRecord(did, recordUri)) return false;
+        if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return false;
         const { rowCount } = await tx.query(
           `UPDATE app.image SET state = 'published', unused_since = NULL
             WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')`,
@@ -130,6 +142,7 @@ export function createImageStore(pool: Pool) {
     /** A save dropped the image from the record; when no use is left its copies go 7 days later. */
     removeUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<void> =>
       withTransaction(pool, deadline, async (tx) => {
+        if (!(await lockImage(tx, did, id))) return;
         const { rowCount } = await tx.query(
           `DELETE FROM app.image_use u USING app.image i
             WHERE u.image_id = i.id AND i.id = $1 AND i.did = $2 AND u.record_uri = $3`,
