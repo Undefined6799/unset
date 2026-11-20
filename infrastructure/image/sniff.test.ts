@@ -32,6 +32,20 @@ describe("sniff.table", () => {
     ["short", bytes([0xff, 0xd8])],
   ])("%s is refused", (_name, input) => expect(sniffImage(input)).toBeNull());
 
+  test("a PNG with more chunks before IDAT than any real one is refused without walking them", () => {
+    const huge = new Uint8Array(30_000_000);
+    huge.set(PNG);
+    for (let at = 8; at + 12 <= huge.length; at += 12) huge.set(bytes("tEXt"), at + 4);
+    expect(sniffImage(huge)).toBeNull();
+  });
+
+  test("a WebP with more chunks than any real one is refused without walking them", () => {
+    const huge = new Uint8Array(30_000_000);
+    huge.set(bytes("RIFF", le32(huge.length - 8), "WEBP"));
+    for (let at = 12; at + 8 <= huge.length; at += 8) huge.set(bytes("JUNK"), at);
+    expect(sniffImage(huge)).toBeNull();
+  });
+
   test("an ftyp box declaring megabytes of brands is refused without walking them", () => {
     const huge = new Uint8Array(30_000_000);
     huge.set(bytes(be32(huge.length), "ftyp", "avif", be32(0)));

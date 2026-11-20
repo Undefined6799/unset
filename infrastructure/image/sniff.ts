@@ -22,28 +22,40 @@ export function sniffImage(bytes: Uint8Array): Sniffed {
   return null;
 }
 
-/** An `acTL` chunk before the first `IDAT` makes an APNG (PNG spec, "APNG" extension, 3rd edition). */
+/**
+ * An `acTL` chunk before the first `IDAT` makes an APNG (PNG spec, "APNG" extension, 3rd edition). Real files carry a
+ * few chunks before their image data, so one with more than `MAX_CHUNKS` is refused rather than walked.
+ */
 function pngKind(bytes: Uint8Array): Sniffed {
-  for (let at = 8; at + 8 <= bytes.length; ) {
+  let at = 8;
+  for (let seen = 0; seen < MAX_CHUNKS && at + 8 <= bytes.length; seen++) {
     const type = ascii(bytes, at + 4, 4);
     if (type === "acTL") return "animated";
     if (type === "IDAT" || type === "IEND") return "png";
     at += 12 + u32(bytes, at);
   }
-  return "png";
+  return at + 8 <= bytes.length ? null : "png";
 }
 
-/** Extended WebP: the `VP8X` animation flag or an `ANIM` chunk (RFC 9649 §2.7). */
+/**
+ * WebP (RFC 9649 §2.5-2.7): a simple file (`VP8 ` or `VP8L` first) is always still. An extended one is animated when
+ * its `VP8X` animation flag is set or an `ANIM`/`ANMF` chunk comes before the image data; one with more than
+ * `MAX_CHUNKS` chunks before its image data is refused rather than walked.
+ */
 function webpKind(bytes: Uint8Array): Sniffed {
-  for (let at = 12; at + 8 <= bytes.length; ) {
+  let at = 12;
+  for (let seen = 0; seen < MAX_CHUNKS && at + 8 <= bytes.length; seen++) {
     const type = ascii(bytes, at, 4);
     if (type === "ANIM" || type === "ANMF") return "animated";
     if (type === "VP8X" && ((bytes[at + 8] ?? 0) & 0x02) !== 0) return "animated";
+    if (type === "VP8 " || type === "VP8L") return "webp";
     const size = u32le(bytes, at + 4);
     at += 8 + size + (size % 2);
   }
-  return "webp";
+  return at + 8 <= bytes.length ? null : "webp";
 }
+
+const MAX_CHUNKS = 64;
 
 /**
  * The ISO-BMFF `ftyp` box: `avif` is a still AVIF, `avis` an image sequence; HEIC and anything else are refused. Real

@@ -82,7 +82,7 @@ async function makeVersion(
   height: number,
 ): Promise<ImageVersion | "too_large" | "omitted"> {
   let smallest: { data: Buffer; info: OutputInfo } | undefined;
-  for (let quality = spec.quality; quality >= spec.minQuality; quality -= 10) {
+  for (const quality of qualitySteps(spec.quality, spec.minQuality)) {
     const out = await encode(shaped(open().rotate(), spec, width, height), spec.format, quality).toBuffer({
       resolveWithObject: true,
     });
@@ -99,6 +99,14 @@ async function makeVersion(
     bytes: new Uint8Array(data),
     sha256: createHash("sha256").update(data).digest("hex"),
   };
+}
+
+/** The qualities to try, from `quality` down in steps of 10, always ending on `minQuality`. */
+export function qualitySteps(quality: number, minQuality: number): number[] {
+  const steps: number[] = [];
+  for (let q = quality; q > minQuality; q -= 10) steps.push(q);
+  steps.push(minQuality);
+  return steps;
 }
 
 function shaped(image: Sharp, spec: VersionSpec, width: number, height: number): Sharp {
