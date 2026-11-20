@@ -115,6 +115,7 @@ There is no `main.ts`.
 | --- | --- | --- |
 | `app_signin` | 5 | 5m |
 | `app_burst` | 60 | 10s |
+| `app_files` | 120 | 10s |
 | `app_global` | 1200 | 5m |
 
 No schema, role or table. Certificate and key files are Compose secrets named on [compose](../compose/). They are not in this folder.
