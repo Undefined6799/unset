@@ -4802,6 +4802,21 @@ compact header, the avatar details panel and the choice in Settings › Profile.
 values, strict input, clearing, preservation, the lexicon limit and the indexer keeping the field. Merges only on
 Alex's line accepting ADR 0072. Ownership: interfaces/web → domains/profile → shared/lexicons.
 
+### P1.21o — Add the compact profile header and details panel (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21n · **Plan:** §5.4
+
+Alex's approved avatar-panel direction (2026-11-20), drawn when the profile's layout is compact (ADR 0072). The
+avatar, name and handle sit in a header above one card area up to 64rem wide; the owner keeps the edit pen, a
+separate Shape button for the avatar's editor, notices, card controls and Add card. The avatar opens a native
+`popover="auto"` panel under it (as the header menus, core-shell.md) with the headline, place, website, DID and the
+first Contact card's first button; it opens and closes with no script (click, tap, Enter, Space, Escape, outside,
+Close), is not modal, and sits under the avatar by CSS anchor positioning. Where the client runs (the owner's page)
+hovering opens it after 150ms and a click pins it; the public page runs no script, so it has no hover (put to Alex).
+Settings › Profile offers Side column or Compact header as native radios. Tests: the contact action, the layout
+read, and e2e for the header, the panel with and without script, and a 320px phone. Ownership: apps/web →
+interfaces/web → domains/profile.
+
 ### P1.21p — Show the README card as a Text card (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** P1.21f · **Plan:** §5.4

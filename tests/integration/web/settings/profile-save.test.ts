@@ -136,6 +136,8 @@ describe("a new member with no profile record", () => {
       "",
       "",
       "",
+      "sidebar",
+      "compact",
     ]);
     const before = up.writes().length;
     const response = await save(up, "displayName=New+Member&headline=&location=&website=&next=%2Fsettings%2Fprofile");
@@ -232,6 +234,18 @@ describe("GET /settings/profile on the stand-in PDS", () => {
       ["headline", "Night trains."],
       ["location", "Lund"],
       ["website", "https://mara.example"],
+      // The page layout (ADR 0072), as two radios; a record with none stored shows the side column chosen.
+      ["layout", "sidebar"],
+      ["layout", "compact"],
+    ]);
+    expect(
+      elements(form, "input", { name: "layout" }).map((input) => [
+        attr(input, "value"),
+        attr(input, "checked") !== undefined,
+      ]),
+    ).toEqual([
+      ["sidebar", true],
+      ["compact", false],
     ]);
     // No field for what the save cannot write (picture, its shape, listing), and no DID for the save to trust (SE-2).
     expect(inputs.map(([name]) => name)).not.toContain("did");
