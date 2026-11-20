@@ -46,6 +46,8 @@ export async function runJob(
     return refusal(error);
   }
   if (meta.format !== LIBVIPS_FORMAT[format]) return { kind: "refused", code: "image.cannot_use" };
+  // An ftyp can list both avif and heic brands; only an AV1-coded HEIF is an AVIF (sharp 0.35.5 dist/input.mjs).
+  if (format === "avif" && meta.compression !== "av1") return { kind: "refused", code: "image.cannot_use" };
   if ((meta.pages ?? 1) > 1) return { kind: "refused", code: "image.animated" };
   if (meta.width > limits.maxEdge || meta.height > limits.maxEdge)
     return { kind: "refused", code: "image.too_many_pixels" };

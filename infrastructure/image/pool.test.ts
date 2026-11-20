@@ -1,6 +1,6 @@
 // The processing stage against the pinned sharp (ADR 0070 points 2.2 and 3; book P2.17's tests, re-read for the new
 // standard). Pictures are made here with sharp, so no fixture image is committed.
-import { closeSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -297,6 +297,8 @@ describe("the pool", () => {
     });
     try {
       const input = new Uint8Array(await anyJpeg());
+      // Only a ready child takes a job; let the one child say it is ready first, so one job runs and eight wait.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       const results = await Promise.all(Array.from({ length: 10 }, () => hanging.process(input, LIMITS, [])));
       expect(results.filter((r) => r.kind === "refused" && r.code === "image.busy")).toHaveLength(1);
     } finally {
@@ -304,15 +306,53 @@ describe("the pool", () => {
     }
   }, 20_000);
 
-  test("pool.memory_limit: a child under a tiny address-space limit cannot start, and the job is cannot_use", async () => {
-    const starved = createImagePool({ children: 1, queueMax: 1, timeoutMs: 5000, addressSpaceMb: 256 });
+  test("pool.memory_limit: children that cannot start back off, the pool goes down and answers busy", async () => {
+    const events: string[] = [];
+    const starved = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 5000,
+      addressSpaceMb: 256,
+      onEvent: (event) => events.push(event),
+    });
     try {
       expect(await starved.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN])).toEqual({
         kind: "refused",
-        code: "image.cannot_use",
+        code: "image.busy",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Backoff of 250, 500, 1000 ms: a tight loop would have forked hundreds of times by now.
+      expect(events.filter((e) => e === "start_failed").length).toBeLessThanOrEqual(4);
+      expect(events).toContain("down");
+      expect(await starved.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN])).toEqual({
+        kind: "refused",
+        code: "image.busy",
       });
     } finally {
       starved.close();
     }
-  });
+  }, 20_000);
+
+  test("pool.recovers: a pool that went down comes back up once a child starts", async () => {
+    // The fixture child counts its starts here (it runs with an empty environment, so its tmpdir is /tmp).
+    const counter = `/tmp/pool-exit-twice-${process.pid}`;
+    rmSync(counter, { force: true });
+    const events: string[] = [];
+    const flaky = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 5000,
+      addressSpaceMb: 4096,
+      childPath: fixture("exit-twice-child.ts"),
+      onEvent: (event) => events.push(event),
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      expect(events.slice(0, 3)).toEqual(["start_failed", "start_failed", "start_failed"]);
+      expect(events).toContain("up");
+    } finally {
+      flaky.close();
+      rmSync(counter, { force: true });
+    }
+  }, 20_000);
 });

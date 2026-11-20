@@ -3,6 +3,7 @@
 // point at the parent's marker file.
 import { readdirSync, readlinkSync } from "node:fs";
 
+process.send?.({ ready: true });
 process.on("message", (job: { id: number }) => {
   const links = readdirSync("/proc/self/fd").map((fd) => {
     try {
