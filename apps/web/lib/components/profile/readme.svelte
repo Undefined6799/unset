@@ -1,18 +1,19 @@
 <!--
-  The README card's blocks (ADR 0051; from apps/web/src/screens/profile/readme.tsx, P1.20i): parsed on the server by
-  apps/web/lib/profile/parse.ts, rendered here as plain elements. Every member string is a text node (escaped by
-  Svelte); raw HTML never reaches the page, and each link's href is already a safeHref result. The card's own title is
-  an h2, so README headings start at h3.
+  The Text card's blocks (the #readme kind, ADR 0051; from apps/web/src/screens/profile/readme.tsx, P1.20i): parsed on
+  the server by apps/web/lib/profile/parse.ts, rendered here as plain elements. Every member string is a text node
+  (escaped by Svelte); raw HTML never reaches the page, and each link's href is already a safeHref result. The card has
+  no title of its own (P1.21p), so its headings sit beside the other cards' titles: # is an h2, under the page's h1.
 -->
 <script lang="ts">
 import type { Block, Inline, ListBlock } from "../../profile/types.ts";
 
 let { blocks }: { blocks: readonly Block[] } = $props();
-const HEADINGS = ["h3", "h4", "h5"] as const;
-// GitHub's README look (the profile-card mockup): the first two levels ruled underneath.
+const HEADINGS = ["h2", "h3", "h4"] as const;
+// The page's own type scale, not a document's (approved notebook direction, 2026-11-19): a first-level heading a step
+// above a card title, the next at a card title's size, the last as bold body text. No rules underneath.
 const HEADING_LOOK = [
-  "border-b pb-2 text-2xl leading-8 font-bold tracking-tight",
-  "mt-2 border-b pb-1.5 text-xl font-semibold",
+  "text-2xl leading-8 font-bold tracking-tight",
+  "mt-2 text-xl font-semibold",
   "mt-1 font-semibold",
 ] as const;
 </script>
@@ -40,10 +41,11 @@ const HEADING_LOOK = [
   {/if}
 {/snippet}
 
-<div class="flex flex-col gap-3">
+<!-- The base styles give a bare paragraph a margin (app.css); the card's inset is the edge, so the first and last lose it. -->
+<div class="flex flex-col gap-3 *:first:mt-0 *:last:mb-0">
   {#each blocks as block, i (i)}
     {#if block.kind === "heading"}
-      <svelte:element this={HEADINGS[block.level - 1] ?? "h5"} class={HEADING_LOOK[block.level - 1] ?? "font-semibold"}>
+      <svelte:element this={HEADINGS[block.level - 1] ?? "h4"} class={HEADING_LOOK[block.level - 1] ?? "font-semibold"}>
         {@render inline(block.children)}
       </svelte:element>
     {:else if block.kind === "paragraph"}
