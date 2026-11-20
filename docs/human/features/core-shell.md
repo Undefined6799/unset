@@ -14,7 +14,7 @@ The layout files are [`interfaces/web/src/routes/+layout.svelte`](../../../inter
 - `prefs` is the theme (`dark`, `light` or `system`) and the path the theme form returns to.
 - `signedIn` hides Sign in on the site shell.
 - `hiddenHeading` is a heading only assistive technology reads. Home sets it to "Home".
-- `noindex` adds a robots meta element. The page sets the `X-Robots-Tag` header itself.
+- `noindex` adds a robots meta element. The page sets the `X-Robots-Tag` header itself. With `SEARCH_LISTING` off ([public indexing](public-indexing.md)), the root layout adds the element to every page and `server.ts` sends the header on every response.
 - `wide` makes the main region full width, for the member page and the public profile.
 
 ## The three shells
