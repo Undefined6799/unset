@@ -25,7 +25,9 @@ Configurable: `deployment/edge/limits.json`, applied in `deployment/edge/snippet
 | `firehose_hour` | PDS host | 60 per 1h |
 | `identity` | PDS host | 300 per 5m |
 | `global` | PDS host | 3000 per 5m |
-| `app_signin` | app host | 5 per 5m |
+| `web_global` | PDS host | 90000 per 1m |
+| `web_oauth_token` | PDS host | 3000 per 5m |
+| `app_signin` | app host | 10 per 5m |
 | `app_burst` | app host | 60 per 10s |
 | `app_global` | app host | 1200 per 5m |
 
@@ -36,19 +38,19 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | Mode | Policy | Scope | Capacity | Refill |
 | --- | --- | --- | --- | --- |
 | header | `default` | ip | 60 | 300 a minute |
-| header | `default` | global | 3000 | 3000 a minute |
+| header | `default` | global | 30000 | 30000 a minute |
 | header | `profile` | ip | 60 | 300 a minute |
-| header | `profile` | global | 3000 | 3000 a minute |
+| header | `profile` | global | 30000 | 30000 a minute |
 | header | `profile` | did | 30 | 30 a minute |
 | header | `login` | ip | 10 | 10 a minute |
 | header | `invite` | ip | 60 | 300 a minute |
-| header | `invite` | global | 3000 | 3000 a minute |
+| header | `invite` | global | 30000 | 30000 a minute |
 | header | `invite` | did | 10 | 10 an hour |
-| socket | `default` | global | 3000 | 3000 a minute |
-| socket | `profile` | global | 3000 | 3000 a minute |
+| socket | `default` | global | 30000 | 30000 a minute |
+| socket | `profile` | global | 30000 | 30000 a minute |
 | socket | `profile` | did | 30 | 30 a minute |
-| socket | `login` | global | 120 | 120 a minute |
-| socket | `invite` | global | 3000 | 3000 a minute |
+| socket | `login` | global | 600 | 600 a minute |
+| socket | `invite` | global | 30000 | 30000 a minute |
 | socket | `invite` | did | 10 | 10 an hour |
 
 ## Invite quotas (pds-admin)

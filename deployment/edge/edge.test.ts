@@ -220,12 +220,13 @@ describe("edge config", () => {
     for (const env of ADAPTED_ENVS) {
       const config = reviewed(env);
       expect(memoryOnlyProblems(config), env).toEqual([]);
-      // Every zone is keyed by the client address, IPv6 by its /64.
+      // Every zone is keyed by the client address, IPv6 by its /64; web's marked zones by one fixed key (ADR 0071).
       const zones = handlers(config, "rate_limit").flatMap((limiter) => Object.entries(limiter.rate_limits as Obj));
       expect(zones.length, env).toBeGreaterThan(0);
       for (const [name, zone] of zones) {
-        expect(at(zone, "key"), `${env} ${name}`).toBe("{http.vars.client_ip}");
-        expect(at(zone, "ipv6_prefix"), `${env} ${name}`).toBe(64);
+        const web = name.startsWith("web_");
+        expect(at(zone, "key"), `${env} ${name}`).toBe(web ? "web" : "{http.vars.client_ip}");
+        expect(at(zone, "ipv6_prefix"), `${env} ${name}`).toBe(web ? undefined : 64);
       }
     }
     // A config with shared state, storage, a logged key or metrics fails.
@@ -317,6 +318,61 @@ describe("edge config", () => {
     const flood = allowedAt(Array(zone.events + 1).fill(0));
     expect(flood.at(-1)).toBe(false);
     expect(flood.slice(0, -1).every(Boolean)).toBe(true);
+  });
+
+  test("edge_web_key_zones_are_exact", () => {
+    // ADR 0071: web's mark is the fixed ends around hex and the key file's content between them. global and
+    // oauth_token skip only a marked call, web_global and web_oauth_token take only one, keyed "web"; every upstream
+    // deletes the header; no key value is in any config.
+    const mark = {
+      header: { "X-Unset-Web-Key": ["key-{file./run/secrets/pds_web_key}-key"] },
+      header_regexp: { "X-Unset-Web-Key": { pattern: "^key-[0-9a-f]+-key$" } },
+    };
+    const tokenPaths = ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"];
+    for (const env of ADAPTED_ENVS) {
+      const config = reviewed(env);
+      const pds = handlers(config, "rate_limit")
+        .map((limiter) => limiter.rate_limits as Obj)
+        .filter((zones) => "global" in zones);
+      expect(pds.length, env).toBeGreaterThan(0);
+      for (const zones of pds) {
+        expect(at(zones, "global", "match"), env).toEqual([{ not: [mark] }]);
+        expect(at(zones, "oauth_token", "match"), env).toEqual([{ not: [mark], path: tokenPaths }]);
+        expect(at(zones, "web_global", "match"), env).toEqual([mark]);
+        expect(at(zones, "web_oauth_token", "match"), env).toEqual([{ ...mark, path: tokenPaths }]);
+      }
+      for (const proxy of handlers(config, "reverse_proxy")) {
+        expect(at(proxy, "headers", "request", "delete"), env).toContain("X-Unset-Web-Key");
+      }
+      expect(JSON.stringify(config), env).not.toMatch(/key-[0-9a-f]{64}-key/);
+    }
+    // The rules refuse a loosened mark: a wildcard, no hex pattern, or a web zone keyed per address.
+    const edited = (edit: (zones: Obj) => void): Json => {
+      const config = reviewed("prod");
+      const zones = handlers(config, "rate_limit")
+        .map((limiter) => limiter.rate_limits as Obj)
+        .find((each) => "global" in each);
+      if (zones === undefined) throw new Error("no PDS zones");
+      edit(zones);
+      return config;
+    };
+    for (const fixture of [
+      edited((zones) => {
+        ((at(zones, "web_global", "match") as Obj[])[0] as Obj).header = { "X-Unset-Web-Key": ["*"] };
+      }),
+      edited((zones) => {
+        delete ((at(zones, "web_global", "match") as Obj[])[0] as Obj).header_regexp;
+      }),
+      edited((zones) => {
+        (zones.web_oauth_token as Obj).key = "{http.vars.client_ip}";
+      }),
+      edited((zones) => {
+        delete (zones.global as Obj).match;
+        delete (zones.oauth_token as Obj).match;
+      }),
+    ]) {
+      expect(adaptedProblems(fixture, "shipped", SENTINELS)).not.toEqual([]);
+    }
   });
 
   test("every_pds_route_has_a_zone", () => {

@@ -73,6 +73,7 @@ keeps every other host account out:
 | `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
+| `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -178,6 +179,18 @@ sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secr
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-secrets/pds_admin_keys
 rm unset-dev-secrets/.new-key unset-dev-secrets/.new-keys
 ```
+
+**Web's PDS key** (P1.21j, ADR 0071). The edge and web both read `pds_web_key`; one value, made once:
+
+```sh
+umask 077
+openssl rand -hex 32 > unset-dev-secrets/.new
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new unset-dev-secrets/pds_web_key
+rm unset-dev-secrets/.new
+```
+
+A missing file stops web at boot; a file the edge cannot read leaves web's calls in the tight per-address zones. To
+replace a leaked key, write a new file the same way and restart both the edge and web.
 
 The key file holds one key, so a new pair means writing both files and restarting the stack; a request signed in
 between is refused, never accepted.

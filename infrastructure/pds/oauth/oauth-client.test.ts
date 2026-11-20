@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDidResolver, type IdentityNetwork } from "@unset/domains-identity";
-import { ConfigError, defineConfig, loadConfig, oneOf } from "@unset/shared-config";
+import { ConfigError, defineConfig, loadConfig, oneOf, Secret } from "@unset/shared-config";
 import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
 import { afterAll, describe, expect, test } from "vitest";
 import {
@@ -144,6 +144,7 @@ function baseOptions() {
     resolveDid: createDidResolver({ network, plcUrl: new URL("https://plc.directory"), cacheTtlS: 60, cacheMax: 10 }),
     allowHttp: false,
     ownIssuer: "https://pds.example",
+    webKey: new Secret("0123456789abcdef".repeat(4)),
     log: silentLog,
   };
 }
@@ -244,6 +245,7 @@ describe("client", () => {
       resolveDid: createDidResolver({ network, plcUrl: new URL("https://plc.directory"), cacheTtlS: 60, cacheMax: 10 }),
       allowHttp: false,
       ownIssuer: "https://pds.example",
+      webKey: new Secret("0123456789abcdef".repeat(4)),
       log,
     });
     expect(client.clientMetadata.client_id).toBe(`${ORIGIN}/oauth-client-metadata.json`);
