@@ -683,3 +683,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   only, in a new zone `app_files` (120 per 10 seconds per address) instead of `app_burst`; `app_global` still counts
   them. It supersedes "`app_burst`, with no matcher" in ADR 0031 Decision 1 and "the same ... lack of matcher" in ADR
   0066 Decision 1; neither is edited. Proposed, awaiting Alex.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.
