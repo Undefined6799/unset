@@ -50,8 +50,13 @@ export async function writeText(editor: Locator, blocks: readonly string[]) {
   // The editor's own file loads when the dialog opens (ADR 0069 split), so wait for it before typing.
   await expect(editor).toHaveAttribute("contenteditable", "true");
   await editor.click();
-  await editor.press("ControlOrMeta+a");
-  await editor.press("Backspace");
+  // The editor puts its selection back a moment after a toolbar press, which can undo a select-all made at once:
+  // clear until it is empty.
+  await expect(async () => {
+    await editor.press("ControlOrMeta+a");
+    await editor.press("Backspace");
+    await expect(editor).toHaveText("", { timeout: 500 });
+  }).toPass();
   for (const [i, block] of blocks.entries()) {
     if (i > 0) await editor.press("Enter");
     await editor.pressSequentially(block);

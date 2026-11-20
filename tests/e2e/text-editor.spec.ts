@@ -132,6 +132,50 @@ test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
   await deleteCard(page, "Text card");
 });
 
+// Codex review of #1827: the page shows a quote as one paragraph of text (parse.ts), so Quote wraps only paragraphs;
+// on a heading or a list it does nothing, and the editor never shows formatting the saved card would lose.
+test("quote_wraps_paragraphs_and_leaves_headings_and_lists_alone", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  const quote = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Quote" });
+  await writeText(editor, ["- one", "two"]);
+  await editor.press("ControlOrMeta+a");
+  await quote.click();
+  await expect(postedText(dialog)).toHaveValue("- one\n- two");
+  await writeText(editor, ["## Title"]);
+  await editor.press("ControlOrMeta+a");
+  await quote.click();
+  await expect(postedText(dialog)).toHaveValue("## Title");
+  await writeText(editor, ["plain"]);
+  await quote.click();
+  await expect(postedText(dialog)).toHaveValue("> plain");
+  await page.keyboard.press("Escape");
+});
+
+// Stored text the page shows flat (a list in a quote, a quote or heading in a list item) still opens in full, and an
+// edit elsewhere keeps it: the editor refuses to add such nesting but never drops it.
+test("stored_text_the_page_shows_flat_opens_whole_and_is_kept", async ({ page }) => {
+  const watched = watch(page);
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  const stored = "> - one\n> - two\n\n- a\n\n  > q\n\n- b\n\n  ## h";
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: stored });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const card = page.getByRole("group", { name: "Text card" });
+  await card.getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  const editor = dialog.getByRole("textbox", { name: "Text" });
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  await expect(editor).toContainText("two");
+  await editor.getByText("one", { exact: true }).click();
+  await editor.press("End");
+  await editor.pressSequentially("!");
+  await expect(postedText(dialog)).toHaveValue(/one!/);
+  for (const kept of ["two", "q", "h"]) await expect(postedText(dialog)).toHaveValue(new RegExp(kept));
+  await page.keyboard.press("Escape");
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  await deleteCard(page, "Text card");
+});
+
 // Impatient member: the editor's file loads when the dialog opens (ADR 0069 split). Text typed into the plain field
 // before it arrives is carried into the editor and still posted.
 test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {

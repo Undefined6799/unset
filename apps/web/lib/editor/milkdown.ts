@@ -27,6 +27,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/preset-commonmark";
+import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Plugin } from "@milkdown/prose/state";
 import { $prose, callCommand, getMarkdown } from "@milkdown/utils";
 import "@milkdown/prose/view/style/prosemirror.css";
@@ -63,6 +64,28 @@ export type MountOptions = {
   /** Called with the markdown after every change the member makes, once per frame. */
   readonly onChange: (markdown: string) => void;
 };
+
+// The page's parser (apps/web/lib/profile/parse.ts) shows a quote as one paragraph of text and a list item as text with
+// an optional list of its own. The schema stays Milkdown's full one, so any stored text opens as it is; instead no
+// edit (toolbar, shortcut or paste) may add a heading or list inside a quote, or a quote, heading or code block inside
+// a list item, which the saved card would flatten. Text already stored that way stays editable.
+const ITEM_CHILDREN = new Set(["paragraph", "bullet_list", "ordered_list"]);
+function flattened(doc: ProseNode): number {
+  let count = 0;
+  doc.descendants((node, _pos, parent) => {
+    const holder = parent?.type.name;
+    if (holder === "blockquote" && node.type.name !== "paragraph") count += 1;
+    if (holder === "list_item" && !ITEM_CHILDREN.has(node.type.name)) count += 1;
+    return node.isBlock;
+  });
+  return count;
+}
+const pageShapes = $prose(
+  () =>
+    new Plugin({
+      filterTransaction: (tr, state) => !tr.docChanged || flattened(tr.doc) <= flattened(state.doc),
+    }),
+);
 
 /** remark-stringify ends the document with a line feed; the plain field never did, so neither does the editor. */
 const withoutFinalNewline = (markdown: string) => markdown.replace(/\n$/, "");
@@ -108,6 +131,7 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       }));
     })
     .use(commonmark)
+    .use(pageShapes)
     .use(history)
     .use(changes)
     .create();
