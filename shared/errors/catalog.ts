@@ -85,7 +85,6 @@ export const ERROR_CODES = {
   "invite.request_bad_email": { status: 400, public: true },
   "invite.request_age_required": { status: 400, public: true },
   "invite.request_country_required": { status: 400, public: true },
-  "invite.request_unavailable": { status: 503, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 

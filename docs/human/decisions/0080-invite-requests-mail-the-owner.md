@@ -30,12 +30,16 @@ of personal data: the email address of a visitor who is not a member.
    `interfaces/web/src/lib/server/limits.ts`: 3 an hour per address (when the edge names the client) and 20 a day for
    the whole site, which bounds the owner's inbox and the provider's quota; the edge's `app_burst` and `app_global`
    zones still apply. A repeat, a filled hidden trap field and a first ask all answer the same, so the page never
-   says whether an address asked before. The CSRF gate and the 1 KiB body cap apply as on every form.
+   says whether an address asked before, not even by how long it takes: the visitor is answered at once in every
+   case and the mail is sent after the answer, under its own 20 s deadline. A failed mail is logged
+   (`invite.request_mail_failed`, no address) and the address forgotten, so asking again sends again; the visitor is
+   not told, since telling them would differ from a repeat. The CSRF gate and the 1 KiB body cap apply as on every
+   form.
 5. **The transport.** `infrastructure/email` is the one adapter that imports nodemailer (dependency-cruiser
    `vendor-sdk-one-adapter`). Always encrypted before the login, as ADR 0065's rule for the PDS: an `smtps:` URL is
    TLS from the first byte, an `smtp:` URL must upgrade with STARTTLS (nodemailer `requireTLS`) or nothing is sent;
    TLS 1.2 or later, the system trust store. So a later EU sender on port 587 is a URL change. Each wait (connect,
-   greeting, idle) is 8 s inside the route's 20 s deadline; nodemailer reads no file or URL and writes no log. The
+   greeting, idle) is 8 s inside the send's 20 s deadline; nodemailer reads no file or URL and writes no log. The
    server is a fixed host from config, never from a request, so this is not caller-influenced egress and does not go
    through net-guard.
 6. **Off by default.** `INVITE_REQUESTS` is `off` unless set; then the page says requests are closed and no mail
@@ -79,5 +83,6 @@ The PDS image's older nodemailer 6.10.1 (`.github/trivyignore.pds.yaml`) is a se
   STARTTLS, no login when STARTTLS is missing, untrusted certificate, refused login, deadline).
 - `tests/integration/web/public/request-invite.test.ts`: on the built server, one mail to the owner with Reply-To, a
   repeat mails nothing, bad input, a missing tick and the trap send nothing, a cross-site POST is refused, the fourth
-  request from one address is refused, no address in any log line, the closed page, and a failed mail.
+  request from one address is refused, no address in any log line, the closed page, a failed mail, and a first ask,
+  a repeat and the trap answering well inside a second while the mail server never answers.
 - `interfaces/web/src/lib/server/limits.budget.test.ts`: normal use fits inside `inviteRequest`, a flood does not.

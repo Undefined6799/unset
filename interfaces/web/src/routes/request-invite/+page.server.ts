@@ -1,7 +1,9 @@
 // GET and POST /request-invite (book P2.10r; ADR 0080): a visitor leaves an email address and the owner gets one mail
 // with it, then sends an invite link from their own mailbox. The address is parsed once (domains/identity); a repeat
 // within 30 days, a filled trap field and a first ask all read the same, so the page tells nobody whether an address
-// asked before. Mail goes only to the owner. The gate has checked the Origin, the body size and the limit.
+// asked before, not even by how long the answer takes: the visitor is answered at once in every case and the mail is
+// sent after, under its own deadline. Mail goes only to the owner. The gate has checked the Origin, the body size and
+// the limit.
 import { type Actions, redirect, type ServerLoad } from "@sveltejs/kit";
 import { parseRequesterEmail, requestInvite } from "@unset/domains-identity";
 import { withErrorParam } from "@unset/shared-errors";
@@ -11,6 +13,8 @@ import { config } from "../../lib/server/runtime.ts";
 import { single } from "../../lib/server/sign-in.ts";
 
 const PAGE = "/request-invite";
+/** The send's own deadline, apart from the request's: the answer never waits for it (ADR 0080 point 4). */
+const MAIL_DEADLINE_MS = 20_000;
 
 export const load: ServerLoad = ({ url, locals, setHeaders }) => {
   setHeaders({ "x-robots-tag": "noindex" });
@@ -43,18 +47,21 @@ export const actions: Actions = {
       redirect(303, withErrorParam(PAGE, "invite.request_country_required"));
     }
     let first = false;
-    const outcome = await requestInvite(
+    // Not awaited: a first ask would otherwise answer only once the mail server had, and a repeat at once. The window
+    // is read before requestInvite's first await, so `first` is set here; a failed mail forgets the address again.
+    void requestInvite(
       {
         firstAsk: (who) => (first = requests.window.firstAsk(who)),
         forget: (who) => requests.window.forget(who),
-        notify: notifyOwner(requests.mailer, requests.to, config.PUBLIC_ORIGIN, locals.deadline),
+        notify: notifyOwner(requests.mailer, requests.to, config.PUBLIC_ORIGIN, AbortSignal.timeout(MAIL_DEADLINE_MS)),
       },
       email,
+    ).then(
+      (outcome) => {
+        if (outcome === "failed") log.error("invite.request_mail_failed", {});
+      },
+      () => log.error("invite.request_mail_failed", {}),
     );
-    if (outcome === "failed") {
-      log.error("invite.request_mail_failed", {});
-      redirect(303, withErrorParam(PAGE, "invite.request_unavailable"));
-    }
     log.info("invite.request_received", { kind: first ? "first" : "repeat" });
     redirect(303, `${PAGE}?sent=1`);
   },

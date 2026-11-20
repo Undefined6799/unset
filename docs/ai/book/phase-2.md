@@ -3205,7 +3205,9 @@ Threats:
 - A flood fills the owner's inbox or the provider's quota. Answered: 3 an hour per address, 20 a day site-wide
   (`invite_request.address_limit`, budget tests); a trap field (`invite_request.trap`). Accepted: 20 junk requests a
   day refuse real visitors until the bucket refills.
-- The page tells whether an address asked before. Answered: a repeat answers as a first ask (`invite_request.repeat`).
+- The page tells whether an address asked before. Answered: a repeat answers as a first ask
+  (`invite_request.repeat`), and as fast: the mail goes after the answer (`invite_request.same_answer_time`).
+  Accepted: a failed mail is only logged, and the address forgotten so asking again sends again.
 - An address leaks into logs or storage. Answered: none is logged (`invite_request.never_logged`); memory holds only a
   keyed hash for 30 days. Accepted: Resend holds the mail 30 days in the US (ADR 0065).
 - The provider key goes out in clear. Answered: implicit TLS or required STARTTLS, TLS 1.2+, the certificate checked

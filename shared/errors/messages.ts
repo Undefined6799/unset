@@ -72,5 +72,4 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "invite.request_bad_email": "That does not look like an email address. Check it and try again.",
   "invite.request_age_required": "Tick the box to say you are old enough to join.",
   "invite.request_country_required": "Tick the box about where you live.",
-  "invite.request_unavailable": "Your request could not be sent just now. Try again in a few minutes.",
 };
