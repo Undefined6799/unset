@@ -5,11 +5,21 @@
 import type { RequestHandler } from "@sveltejs/kit";
 import type { Did } from "@unset/domains-identity";
 import { type Services, services } from "../../lib/server/compose.ts";
-import { IMAGE_UPLOADS_IN_FLIGHT } from "../../lib/server/limits.ts";
-import { createUploadSlots, type DraftObjects, type ImageRows, type UploadCode, uploadImage } from "./upload.server.ts";
+import { IMAGE_UPLOADS_IN_FLIGHT, REVIEW_LANES } from "../../lib/server/limits.ts";
+import { policy } from "./policy.ts";
+import {
+  createReviewLanes,
+  createUploadSlots,
+  type DraftObjects,
+  type ImageRows,
+  type UploadCode,
+  uploadImage,
+} from "./upload.server.ts";
 
-/** This process's uploads in flight; one module, so one count. */
+/** This process's uploads in flight and its turns at review; one module, so one count of each. */
 const slots = createUploadSlots(IMAGE_UPLOADS_IN_FLIGHT);
+const lanes = createReviewLanes(REVIEW_LANES);
+const AFTER_BODY_MS = policy.deadlineMs ?? 0;
 
 const STATUS: Partial<Record<UploadCode, number>> = {
   "image.closed": 403,
@@ -39,11 +49,11 @@ async function readImage(request: Request): Promise<Uint8Array | null> {
   }
 }
 
-/** The member's rows, every call naming their DID and this request's deadline (rule SE-2, RE-1). */
-const rowsOf = (store: Services["images"]["store"], did: Did, deadline: AbortSignal): ImageRows => ({
-  admit: () => store.admit(did, deadline),
-  store: (image) => store.store(did, image, deadline),
-  discard: (id) => store.discard(did, id, deadline),
+/** The member's rows, every call naming their DID and the deadline it runs under (rule SE-2, RE-1). */
+const rowsOf = (store: Services["images"]["store"], did: Did): ImageRows => ({
+  admit: (deadline) => store.admit(did, deadline),
+  store: (image, deadline) => store.store(did, image, deadline),
+  discard: (id, deadline) => store.discard(did, id, deadline),
 });
 
 /** The store under the member's own prefix only; an id is ours (a UUID), never the request's. */
@@ -59,9 +69,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     open: images.open,
     member: locals.did,
     slots,
-    rows: rowsOf(images.store, locals.did, locals.deadline),
+    lanes,
+    rows: rowsOf(images.store, locals.did),
     processor: images.processor,
     objects: objectsOf(drafts, locals.did),
+    deadline: locals.deadline,
+    afterBodyMs: AFTER_BODY_MS,
   };
   const result = await uploadImage(deps, () => readImage(request));
   if (!result.ok) return json(STATUS[result.code] ?? 422, { code: result.code });

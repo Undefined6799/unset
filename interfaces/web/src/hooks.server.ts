@@ -170,7 +170,7 @@ async function withDeadline(
   policy: RoutePolicy,
   run: (deadline: AbortSignal) => Promise<Response>,
 ): Promise<Response> {
-  const ms = policy.deadlineMs ?? config.REQUEST_DEADLINE_MS;
+  const ms = (policy.bodyWindowMs ?? 0) + (policy.deadlineMs ?? config.REQUEST_DEADLINE_MS);
   const deadline = AbortSignal.timeout(ms);
   event.locals.deadline = deadline; // loads and actions pass it to every call they make
   event.locals.deadlineAt = performance.now() + ms;

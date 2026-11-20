@@ -58,3 +58,10 @@ export const policiesFor = (mode: "header" | "socket"): PolicyTable =>
  * 1 GB; a fifth is refused as busy and the editor says to try again.
  */
 export const IMAGE_UPLOADS_IN_FLIGHT = 4;
+
+/**
+ * Pictures web sends review at once: review's REVIEW_CHILDREN default (interfaces/review/config.ts), so none waits in
+ * review's queue on its 20 s job clock while web's 30 s timeout runs. The others wait in web, on their own deadline.
+ * tests/integration/web/review-lanes.test.ts holds the two numbers together.
+ */
+export const REVIEW_LANES = 2;
