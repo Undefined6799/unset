@@ -3950,6 +3950,18 @@ Size: ~150 source lines, ~240 test lines
 Goal: A cookie-less service on the media domain that serves draft image variants only for short-lived HMAC-signed
 URLs minted by `web` for a named purpose, with the sandbox headers.
 
+P2.19, first half, built 2026-11-20: the signed links in `domains/content/images/draft-url.ts` (`mintDraftPath`,
+`verifyDraftPath`; the message, the minute rounding, the 10-minute window, the purpose table and the key pattern as
+below, with `jpeg` for the extension our versions use) and the `media` process in `interfaces/media/` (the door, its
+settings and composition root; the store read through net-guard's `object-store` policy with a 5 s timeout and a 2 MiB
+answer cap, so a longer object fails as 503, not 404). One change from the inputs below: the link keys are one secret
+file, `DRAFT_URL_KEYRING_FILE`, in the seal keyring's format (`{"active": kid, "keys": {kid: base64 of 32 bytes}}`,
+up to four keys), so rotation keeps the old key while its links live, as the seal keyring does; there is no separate
+`DRAFT_URL_ACTIVE_KID`. `Keyring.sharesKeyWith` is the check web's config will use against `SEAL_KEYRING`. Left for the
+second half, one pull request on Alex's line because `img-src` widens: web's minting and its `DRAFT_URL_KEYRING`, the
+app CSP's `img-src` gaining `MEDIA_ORIGIN`, the `media` image, its compose service and store identity (read-only on
+`drafts/*`), the edge route for the media domain, and the runbook's new secret.
+
 Inputs: P2.18 object store and key convention (`media` gets **read-only** credentials on `drafts/` only); P1.08 header
   helpers (the `media` group); config shared by `web` and `media`: `DRAFT_URL_KEYS` (secret, JSON `[{kid, key: base64 ≥
   32 bytes}]`), `DRAFT_URL_ACTIVE_KID`; `web`: `MEDIA_ORIGIN`; `media`: `OBJECT_STORE_URL`, `OBJECT_STORE_MEDIA_KEY_ID`,
