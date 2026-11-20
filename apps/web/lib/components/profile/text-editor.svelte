@@ -73,9 +73,12 @@ onMount(async () => {
     const mounted = await mountMarkdownEditor(host, {
       value: textarea.value,
       labelledBy: labelId,
-      // Marked at once, so a save sent before the next frame still reads the editor (formdata below).
+      // Marked at once, so a save sent before the next frame still reads the editor (formdata below). An empty field
+      // is filled at once too: the browser checks `required` before formdata runs, and the first edit of a new card is
+      // only a few characters to write.
       onEdit: () => {
         changed = true;
+        if (textarea.value === "" && editor !== undefined) textarea.value = editor.markdown();
       },
       onChange: (markdown) => {
         textarea.value = markdown;

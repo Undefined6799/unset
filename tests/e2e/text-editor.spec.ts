@@ -176,6 +176,32 @@ test("stored_text_the_page_shows_flat_opens_whole_and_is_kept", async ({ page })
   await deleteCard(page, "Text card");
 });
 
+// Codex review of #1827: a new card's field is required and starts empty. A save sent in the same moment as the first
+// edit, before the editor's next frame, must not be stopped by the browser as an empty field.
+test("a_new_text_saved_in_the_same_moment_as_its_first_edit_is_added", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await editor.click();
+  await editor.evaluate(async (area) => {
+    // No DOM lib in this project: the calls this test makes. ProseMirror reads typed text from its DOM watcher, a
+    // microtask after the input; the save follows that, with no frame in between.
+    type Doc = { execCommand: (command: string, ui: boolean, value: string) => boolean };
+    type Field = { form: { requestSubmit: () => void } };
+    const box = area as unknown as {
+      ownerDocument: Doc;
+      closest: (selector: string) => { querySelector: (s: string) => Field } | null;
+    };
+    box.ownerDocument.execCommand("insertText", false, "first");
+    await Promise.resolve();
+    await Promise.resolve();
+    box.closest("[role=dialog]")?.querySelector('textarea[name="text"]').form.requestSubmit();
+  });
+  await expect(dialog).toBeHidden();
+  await page.getByRole("group", { name: "Text card" }).getByRole("link", { name: "Edit" }).click();
+  await expect(postedText(dialog)).toHaveValue("first");
+  await page.keyboard.press("Escape");
+  await deleteCard(page, "Text card");
+});
+
 // Impatient member: the editor's file loads when the dialog opens (ADR 0069 split). Text typed into the plain field
 // before it arrives is carried into the editor and still posted.
 test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {
