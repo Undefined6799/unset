@@ -43,14 +43,9 @@ test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ 
 async function paste(page: Page, editor: Locator, html: string) {
   const elsewhere = await page.context().newPage();
   await elsewhere.setContent(`<div id="copy" contenteditable="true">${html}</div>`);
-  await elsewhere.locator("#copy").focus();
-  // A range over the whole contents, since select-all inside a quote copies only its paragraphs in Chromium.
-  await elsewhere.evaluate(() => {
-    const range = document.createRange();
-    range.selectNodeContents(document.getElementById("copy") as HTMLElement);
-    document.getSelection()?.removeAllRanges();
-    document.getSelection()?.addRange(range);
-  });
+  // Playwright's selectText selects the element's contents with a range (playwright-core 1.64.1 injected selectText),
+  // since select-all inside a quote copies only its paragraphs in Chromium.
+  await elsewhere.locator("#copy").selectText();
   await elsewhere.keyboard.press("ControlOrMeta+c");
   await elsewhere.close();
   await page.bringToFront();
