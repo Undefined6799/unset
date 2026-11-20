@@ -133,7 +133,7 @@ describe("search and AI", () => {
   test("the_member_turns_both_on_with_a_title", async () => {
     const saved = await save({ searchEngines: "on", aiSearch: "on", title: "Vera <the maker>", description: "" });
     expect(saved.status).toBe(303);
-    expect(saved.headers.get("location")).toBe("/settings/profile#search-and-ai");
+    expect(saved.headers.get("location")).toBe("/settings/privacy?saved#search-and-ai");
     const page = await get(PAGE);
     expect(page.headers.get("x-robots-tag")).toBeNull();
     const html = await page.text();
