@@ -28,4 +28,8 @@ drawn by **Iconoir 7.12.1**, regular set, MIT licence (`LICENSE-iconoir.txt`, ©
 - P1.20k adds `list` (regular `list`), `carousel` (`view-columns-3`), `half` (`view-columns-2`) and `full` (`square`)
   for the card editor's layout and width choices, as Alex asked on 2026-11-18 (12:24:57Z, the layout shown as icons
   rather than words; 12:42:26Z, these four by name), same commit and pins: 50 names.
+- P1.21u adds `heading` (regular `text-size`), `bold`, `italic`, `numbered-list` (`numbered-list-left`), `quote`,
+  `inline-code` (`code`), `code-block` (`code-brackets`), `undo` and `redo` for the Text editor's formatting bar, as
+  Alex asked on 2026-11-20 (03:18:34Z, "use the iconoir icons as replacement", after the list was named), same commit
+  and pins: 59 names. `list` and `link` are reused for bullets and links.
 - Any further addition still requires sheet approval and a bounded registration; this is no open icon registry.
