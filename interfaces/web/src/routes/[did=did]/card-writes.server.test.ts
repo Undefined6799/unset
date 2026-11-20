@@ -382,15 +382,39 @@ describe("saveAll", () => {
     expect(calls.many).toHaveLength(2);
   });
 
-  test("a Save too large for one PDS call is refused as such, not as an outage, and is not tried again", async () => {
+  test("one card too large for any PDS call is refused by name, and is not tried again", async () => {
     const { writes, calls } = store({
       list: async () => listing([{ key: "a", cid: V }]),
       saveMany: async (updates, swapCommit) => {
         calls.many.push({ updates: [...updates], swapCommit });
-        return ok({ kind: "too_large" });
+        return ok({ kind: "too_large", key: "a" });
       },
     });
-    expect(await writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.save_too_large" });
+    expect(await writes.saveAll([edit("a", "New A")])).toEqual({
+      kind: "failed",
+      code: "card.save_too_large",
+      card: "a",
+    });
+    expect(calls.many).toHaveLength(1);
+  });
+
+  test("a Save written only in part names the cards written, and is not tried again", async () => {
+    const { writes, calls } = store({
+      list: async () =>
+        listing([
+          { key: "a", cid: V },
+          { key: "b", cid: V },
+        ]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({ kind: "partial", saved: ["a"] });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A"), edit("b", "New B")])).toEqual({
+      kind: "failed",
+      code: "card.save_partial",
+      saved: ["a"],
+    });
     expect(calls.many).toHaveLength(1);
   });
 

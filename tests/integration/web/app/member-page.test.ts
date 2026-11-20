@@ -499,6 +499,20 @@ describe("the one Save (ADR 0074)", () => {
     expect(shown).toContain("Second of two");
   });
 
+  // Past one PDS call's 150 KiB body (two full Text cards of 100,000 bytes each): two calls, the second swapping on
+  // the commit the first made, so both are saved.
+  test("two_full_cards_save_in_two_chained_calls", async () => {
+    let response: Response | undefined;
+    const writes = await writesOf(async () => {
+      response = await saveAll([...text(0, CARD_A, "a".repeat(100_000)), ...text(1, CARD_C, "c".repeat(100_000))]);
+    });
+    expect(response?.status).toBe(303);
+    expect(writes.map((w) => [w.method, w.rkey])).toEqual([
+      ["applyWrites", CARD_A],
+      ["applyWrites", CARD_C],
+    ]);
+  });
+
   test("a_card_changed_since_its_editor_opened_is_named_and_nothing_is_written", async () => {
     const writes = await writesOf(async () => {
       const response = await saveAll([...text(0, CARD_A, "Mine"), ...text(1, CARD_C, "Theirs", STALE)], {

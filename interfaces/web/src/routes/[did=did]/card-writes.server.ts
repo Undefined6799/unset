@@ -58,6 +58,7 @@ export type CardFailure =
   | "card.overflow"
   | "card.cards_changed"
   | "card.save_too_large"
+  | "card.save_partial"
   | "card.list_incomplete"
   | "card.conflict"
   | "card.pds_unavailable"
@@ -67,9 +68,15 @@ export type CardWrite =
   | { readonly kind: "saved" }
   /**
    * `field`, when given, is the form field to blame (the card editor shows the refusal beside it); `card`, in a save
-   * of several cards, is the card it is about.
+   * of several cards, is the card it is about; `saved`, in a Save written only in part, are the cards that were.
    */
-  | { readonly kind: "failed"; readonly code: CardFailure; readonly field?: string; readonly card?: CardKey }
+  | {
+      readonly kind: "failed";
+      readonly code: CardFailure;
+      readonly field?: string;
+      readonly card?: CardKey;
+      readonly saved?: readonly CardKey[];
+    }
   /** The PDS grant is gone or lacks a scope; the sign-in pages take over. */
   | { readonly kind: "redirect"; readonly location: string };
 
@@ -151,7 +158,8 @@ export function cardWrites(store: CardStore, now: () => string): CardWrites {
         const saved = await store.saveMany(built.updates, head.value);
         if (saved.kind !== "ok") return pdsFailure(saved);
         if (saved.value.kind === "saved") return SAVED;
-        if (saved.value.kind === "too_large") return failed("card.save_too_large");
+        if (saved.value.kind === "too_large") return tooLarge(edits, saved.value.key);
+        if (saved.value.kind === "partial") return partly(edits, saved.value.saved);
       }
       return failed("card.cards_changed");
     },
@@ -216,3 +224,18 @@ function buildEdits(edits: readonly CardEdit[], list: CardList, now: string): Bu
 }
 
 const named = (code: CardFailure, card: CardKey): CardWrite => ({ kind: "failed", code, card });
+
+/** The Save's own keys for the ones the store names, so nothing but a card the member sent is reported back. */
+const ofEdits = (edits: readonly CardEdit[], keys: readonly string[]): CardKey[] =>
+  edits.map((edit) => edit.key).filter((key) => keys.includes(key));
+
+const tooLarge = (edits: readonly CardEdit[], key: string): CardWrite => {
+  const [card] = ofEdits(edits, [key]);
+  return card === undefined ? failed("card.save_too_large") : named("card.save_too_large", card);
+};
+
+const partly = (edits: readonly CardEdit[], keys: readonly string[]): CardWrite => ({
+  kind: "failed",
+  code: "card.save_partial",
+  saved: ofEdits(edits, keys),
+});

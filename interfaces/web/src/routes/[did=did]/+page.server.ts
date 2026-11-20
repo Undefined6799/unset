@@ -36,6 +36,7 @@ import { readCardForm, splitCardsForm } from "./card-form.server.ts";
 import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
+import { partialMessage } from "./save-message.server.ts";
 
 /** The fields the order form may send: `order`, once per card. */
 const ORDER_FIELD = "order";
@@ -230,12 +231,23 @@ const isShown = (code: string): code is ShownCode => Object.hasOwn(ERROR_MESSAGE
  * A refusal: the page again, with the code's status, its message for the member, the field to blame if one is, and
  * for a card form what was typed, so an editor drawn in place with no script shows it again (card-panel.svelte).
  */
-function refused(code: ShownCode, field?: string, values?: Record<string, string>, card?: string) {
+function refused(
+  code: ShownCode,
+  shown: {
+    readonly field?: string | undefined;
+    readonly values?: Record<string, string> | undefined;
+    readonly card?: string | undefined;
+    readonly saved?: readonly string[] | undefined;
+    readonly message?: string | undefined;
+  } = {},
+) {
+  const { field, values, card, saved, message } = shown;
   return fail(new AppError(code).status, {
     code,
-    message: ERROR_MESSAGES[code],
+    message: message ?? ERROR_MESSAGES[code],
     ...(field === undefined ? {} : { field }),
     ...(card === undefined ? {} : { card }),
+    ...(saved === undefined ? {} : { saved }),
     ...(values === undefined ? {} : { values }),
   });
 }
@@ -248,6 +260,7 @@ async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
   run: (form: URLSearchParams, did: Did) => CardWrite | Promise<CardWrite>,
   echo = false,
+  explain: (written: Extract<CardWrite, { kind: "failed" }>) => string | undefined = () => undefined,
 ) {
   const did = ownDid(params.did, locals.did, "POST");
   let written: CardWrite;
@@ -258,10 +271,13 @@ async function write(
     written = await run(form, did);
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
-    return refused(cause.code, undefined, typed);
+    return refused(cause.code, { values: typed });
   }
   if (written.kind === "redirect") redirect(303, written.location);
-  if (written.kind === "failed") return refused(written.code, written.field, typed, written.card);
+  if (written.kind === "failed") {
+    const { code, field, card, saved } = written;
+    return refused(code, { field, values: typed, card, saved, message: explain(written) });
+  }
   redirect(303, `/${did}`);
 }
 
@@ -289,11 +305,20 @@ export const actions: Actions = {
     ),
   // The one Save (ADR 0074): every changed card at once, all or none. Sent by the page's script only, so a refusal is
   // not echoed back for an editor drawn with no script; the cards keep their text in the page.
-  saveAll: (event) =>
-    write(event, (form, did) => {
-      const read = cardEdits(form);
-      return read.ok ? writesFor(did, event.locals).saveAll(read.edits) : read.failed;
-    }),
+  saveAll: (event) => {
+    let edits: readonly CardEdit[] = [];
+    return write(
+      event,
+      (form, did) => {
+        const read = cardEdits(form);
+        if (!read.ok) return read.failed;
+        edits = read.edits;
+        return writesFor(did, event.locals).saveAll(edits);
+      },
+      false,
+      (written) => (written.saved === undefined ? undefined : partialMessage(edits, written.saved)),
+    );
+  },
   remove: (event) =>
     write(event, (form, did) => {
       const key = keyField(form);

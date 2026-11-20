@@ -5,6 +5,7 @@ import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import {
+  APPLY_WRITES_BODY_BYTES,
   createCardRecord,
   deleteCardRecord,
   latestCommit,
@@ -235,29 +236,96 @@ describe("saveCardRecords", () => {
     expect(calls).toHaveLength(1);
   });
 
-  test("a save whose body would pass the PDS's 150 KiB JSON limit is refused as too large, and nothing is sent", async () => {
-    const { pdsCall, ctx, calls } = pds(() => Response.json({}));
+  test("normal_use_fits_one_call: a hundred 1 KiB cards, or three 40 KB essays, go in one applyWrites", async () => {
+    // Realistic long edits: every card on a full page (100, the most a page holds) at about 1 KiB of text each (a
+    // long paragraph), or three cards at 40 KB each (about 6,500 words apiece, a long essay).
     const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    for (const updates of [
+      Array.from({ length: 100 }, (_, n) => ({ key: rkey(n), record: long("p".repeat(1_024)) })),
+      Array.from({ length: 3 }, (_, n) => ({ key: rkey(n), record: long("e".repeat(40_000)) })),
+    ]) {
+      const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
+      expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
+      expect(calls).toHaveLength(1);
+    }
+  });
+
+  test("two_full_cards_save_in_two_chained_calls, the second on the commit the first returned", async () => {
+    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    const commits = [CID, CID2];
+    const { pdsCall, ctx, calls } = pds(() =>
+      Response.json({ commit: { cid: commits[calls.length - 1], rev: "3jzfcijpj2z2d" } }),
+    );
     const updates = [
-      { key: "k1", record: long("a".repeat(80_000)) },
-      { key: "k2", record: long("b".repeat(80_000)) },
+      { key: "k1", record: long("a".repeat(100_000)) },
+      { key: "k2", record: long("b".repeat(100_000)) },
+    ];
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, "bafyhead")).toEqual({
+      kind: "ok",
+      value: { kind: "saved" },
+    });
+    const sent = calls.map((call) => call.body as { swapCommit: string; writes: { rkey: string }[] });
+    expect(sent.map((body) => [body.swapCommit, body.writes.map((write) => write.rkey)])).toEqual([
+      ["bafyhead", ["k1"]],
+      [CID, ["k2"]],
+    ]);
+    for (const call of calls) expect(JSON.stringify(call.body).length).toBeLessThanOrEqual(APPLY_WRITES_BODY_BYTES);
+  });
+
+  test("a_foreign_write_between_batches stops the chain and names the cards already saved", async () => {
+    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    const { pdsCall, ctx, calls } = pds(() =>
+      calls.length === 1
+        ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
+        : Response.json({ error: "InvalidSwap", message: "Commit was at bafy" }, { status: 400 }),
+    );
+    const updates = [
+      { key: "k1", record: long("a".repeat(100_000)) },
+      { key: "k2", record: long("b".repeat(100_000)) },
+      { key: "k3", record: long("c".repeat(100_000)) },
     ];
     expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
       kind: "ok",
-      value: { kind: "too_large" },
+      value: { kind: "partial", saved: ["k1"] },
     });
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(2);
   });
 
-  test("a save just inside the limit is sent", async () => {
-    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
+  test("an outage after the first batch is a partial save, not an outage, since the first batch is written", async () => {
     const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    const { pdsCall, ctx, calls } = pds(() =>
+      calls.length === 1
+        ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
+        : new Response("", { status: 502 }),
+    );
     const updates = [
-      { key: "k1", record: long("a".repeat(70_000)) },
-      { key: "k2", record: long("b".repeat(70_000)) },
+      { key: "k1", record: long("a".repeat(100_000)) },
+      { key: "k2", record: long("b".repeat(100_000)) },
     ];
-    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
-    expect(calls).toHaveLength(1);
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+      kind: "ok",
+      value: { kind: "partial", saved: ["k1"] },
+    });
+  });
+
+  test("one_card_past_the_limit_is_refused: a full card that is nearly all quotes escapes past 150 KiB", async () => {
+    // The one case that does not fit any call: 100,000 bytes of text (the most a Text card holds) that are almost all
+    // characters JSON escapes, so the card alone is about 200 KB on the wire. Nothing is sent.
+    const { pdsCall, ctx, calls } = pds(() => Response.json({}));
+    const quotes = { ...card, content: { ...card.content, text: '"'.repeat(100_000) } };
+    expect(
+      await saveCardRecords(
+        pdsCall,
+        ctx,
+        DID,
+        [
+          { key: "k1", record: card },
+          { key: "k2", record: quotes },
+        ],
+        CID2,
+      ),
+    ).toEqual({ kind: "ok", value: { kind: "too_large", key: "k2" } });
+    expect(calls).toHaveLength(0);
   });
 
   test("an empty save sends nothing", async () => {

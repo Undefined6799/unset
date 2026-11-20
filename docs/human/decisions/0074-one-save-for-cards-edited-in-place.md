@@ -20,7 +20,13 @@ how Bluesky's own app writes several records at once.
    each card's `key` and `version` (the record CID the member's editor opened). Every card is read and checked by the
    same parser as one card's form (`readCardForm`, `parseCardInput`) before anything is read from the PDS; a card
    named twice, a missing version or a stray field is `card.invalid`. The writes go in one
-   `com.atproto.repo.applyWrites` call of `update` writes: all land or none do.
+   `com.atproto.repo.applyWrites` call of `update` writes: all land or none do, whenever the changed cards fit one PDS
+   call (up to about 150 KB of changed text, item 6), which is almost every Save. Past that they go in several calls in
+   page order, each all or none, each swapping on the commit the one before it returned, so any other write in between
+   stops the chain. Every card is checked against its editor's version before the first call. When a later call
+   fails, the Save is `card.save_partial` with `saved`, the cards written, and a message that names the cards saved
+   and not saved as they read on the page (a Text card's first line, else its title); the rest stay unsaved, with
+   their drafts, and Save again writes them. Nothing is written twice or over another tab's text.
 2. **Concurrency (DA-4).** applyWrites has no per-record swap, only `swapCommit` on the whole repo. So the action reads
    the repo's head (`com.atproto.sync.getLatestCommit`), then lists the cards, and calls applyWrites with that head.
    Each card must still be the version its editor opened: one that is not is refused as `card.conflict` and named,
@@ -41,15 +47,15 @@ how Bluesky's own app writes several records at once.
 5. **No script.** Unchanged and complete: each card keeps its own form and `?/save`, with the plain Markdown field
    and the Width and Style choices.
 6. **Limits.** One Save is one request on the `profile` policy (30 a minute per member), however many cards it holds,
-   so it costs less than a request per card. The form's cap stays the card form's 2 MiB (Alex, 2026-11-18), but the
-   one that binds is the PDS's: @atproto/pds 0.5.51 parses a JSON body of at most 150 KiB (`dist/index.js:155`), well
-   inside net-guard's 1 MiB for atproto calls. The action measures the applyWrites body before sending it and refuses
-   a larger one as `card.save_too_large` with nothing written, rather than letting it read as an outage; the page
-   checks the same before sending and asks the member to save a few cards first. The same limit already applies to
-   one card's own save (`putRecord`); a Text card holds at most 100,000 bytes of text, so one card of ordinary text
-   fits. @atproto/pds 0.5.51 refuses more than 200 writes in one call,
-   and a page holds at most 100 cards. Our PDS runs with its own rate limits off (preflight), so applyWrites costs no
-   write points.
+   so it costs less than a request per card. The form's cap stays the card form's 2 MiB (Alex, 2026-11-18). The PDS's
+   own limit is smaller: @atproto/pds 0.5.51 parses a JSON body of at most 150 KiB (`dist/index.js:155`, not
+   configurable), well inside net-guard's 1 MiB for atproto calls. A Text card holds at most 100,000 bytes of text
+   and a page at most 100 cards, so one full card fits a call and two do not; a hundred cards of about 1 KiB each, or
+   three of 40 KB, still fit one. The action measures each applyWrites body as it sends it and splits only when the
+   cards do not fit (item 1). One card too large for any call by itself (a full card of characters JSON escapes, such
+   as quotes) is `card.save_too_large`, named, with nothing written; the same limit already applies to one card's own
+   save (`putRecord`). @atproto/pds 0.5.51 refuses more than 200 writes in one call, and a page holds at most 100
+   cards. Our PDS runs with its own rate limits off (preflight), so applyWrites costs no write points.
 
 ## Consequences
 
@@ -73,14 +79,18 @@ how Bluesky's own app writes several records at once.
 ## Compliance
 
 `interfaces/web/src/routes/[did=did]/card-writes.server.test.ts` (saveAll) checks one write on the head the versions
-were read on, a stale version, a gone card, a cut-short list, a refusal by the domain, a Save too large for one call,
-the one re-read and no third try; `card-form.server.test.ts` splits the Save's form and refuses stray names and too
-many fields; `infrastructure/pds/card-records.test.ts` checks the applyWrites body, InvalidSwap and the 150 KiB limit;
-`tests/integration/web/app/member-page.test.ts` saves two cards in one commit through the built server and refuses a
-stale card, a named field, a card named twice, a signed-out and a cross-site Save with nothing written; and
-`tests/integration/pds-apply-writes.image.test.ts` checks on the pinned PDS that two updates land in one commit, a
-stale head writes nothing, an update of a missing record fails the whole call, and a body past 150 KiB is refused.
-Acceptance is Alex's line on the pull request that adds this record.
+were read on, a stale version, a gone card, a cut-short list, a refusal by the domain, a card too large for any call,
+a Save written only in part, the one re-read and no third try; `save-message.server.test.ts` names the saved and
+unsaved cards; `card-form.server.test.ts` splits the Save's form and refuses stray names and too many fields;
+`infrastructure/pds/card-records.test.ts` checks the applyWrites body, InvalidSwap, that normal use fits one call
+(`normal_use_fits_one_call`), that two full cards go in two chained calls, that a write between them stops the chain
+and names the saved cards, and that one card past the limit is refused;
+`tests/integration/web/app/member-page.test.ts` saves two cards in one commit and two full cards in two calls through
+the built server (its stand-in PDS refuses a body past 150 KiB) and refuses a stale card, a named field, a card named
+twice, a signed-out and a cross-site Save with nothing written; and `tests/integration/pds-apply-writes.image.test.ts`
+checks on the pinned PDS that two updates land in one commit, a stale head writes nothing, an update of a missing
+record fails the whole call, and a body past 150 KiB is refused. Acceptance is Alex's line on the pull request that
+adds this record.
 
 ## Sources
 
