@@ -663,3 +663,37 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
   profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
   Proposed, awaiting Alex.
+- **Shared image foundation (P2.17, 2026-11-20; own record: [0070](0070-shared-image-foundation.md)):** Alex asked on
+  2026-11-20 01:12:01Z for one reusable image foundation and at 01:23:11Z made moderation, the fingerprint check
+  included, a later feature built before production. An image is a blob in the member's repository; a shared
+  `sh.unset.defs#image` carries the blob, alt text and aspect ratio, and each use adds its caption and fit. Five
+  stages: intake, processing in its own no-network process `review` with no secrets (JPEG main version up to 2560 px and 2,000,000 bytes, AVIF
+  and WebP display versions, every metadata block stripped, the upload never stored), an empty inspection port,
+  storage in the private store, and publish to the PDS at save time. Uploads with no real inspection mounted are refused at
+  intake on every app origin outside a closed list of test origins (localhost, .test, staging while it holds only
+  test accounts). It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
+  replace ADR 0029's scan paragraph outside production. AGPL-3.0-only packages may also depend on LGPL-3.0-or-later
+  libraries (libvips via sharp), superseding that line of ADR 0012. Proposed, awaiting Alex.
+- **ADR 0068 accepted (Alex, 2026-11-20 01:23Z, against 1e38138; own record:
+  [0068](0068-profile-card-surfaces.md)):** each profile card may store an optional surface, Filled, Outlined or
+  Plain, under ADR 0051 Decision 7; a missing field reads as Filled.
+- **Split client and the build-file zone (P1.21g, 2026-11-20; own record:
+  [0069](0069-split-client-and-build-file-zone.md)):** the web client uses SvelteKit's `split` strategy, so a heavy
+  part can load on demand, and the dev app edge counts content-hashed build files, GET or HEAD on the decoded path
+  only, in a new zone `app_files` (120 per 10 seconds per address) instead of `app_burst`; `app_global` still counts
+  them. It supersedes "`app_burst`, with no matcher" in ADR 0031 Decision 1 and "the same ... lack of matcher" in ADR
+  0066 Decision 1; neither is edited. Proposed, awaiting Alex.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.
+- **ADR 0070 accepted (Alex, 2026-11-20 02:50Z, against d1e6117; own record:
+  [0070](0070-shared-image-foundation.md)):** one shared image foundation. An image is a blob in the member's
+  repository and each use carries its alt text; processing runs in its own no-network process `review`; the
+  inspection port is empty; uploads with nothing mounted are refused outside a closed list of test origins. AGPL
+  packages may use LGPL-3.0-or-later libraries. Superseded step-book text and ADR 0012's licence line as the record
+  says; ADR 0029's scan paragraph is replaced when 0029 is accepted. 0012 and 0029 are not edited.
+- **ADR 0071 accepted (Alex, 2026-11-20 02:51Z, against dbfc459; own record:
+  [0071](0071-limits-for-thousands-of-members.md)):** limits sized for thousands of members; web marks its own PDS
+  calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
+  ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
+  are not edited.

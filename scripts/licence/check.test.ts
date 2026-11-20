@@ -51,6 +51,17 @@ describe("licence", () => {
     expect(checkPackage("@unset/domains-x", "AGPL-3.0-only", flatten(tree))).toEqual([]);
   });
 
+  // ADR 0070 point 9: an AGPL package may use an LGPL-3.0-or-later library (libvips through sharp); MIT code may not.
+  test("lgpl_allowed_for_agpl_only", () => {
+    const tree: LsNode = {
+      dependencies: { "@img/sharp-libvips-linux-x64": { version: "1.3.4", license: "LGPL-3.0-or-later" } },
+    };
+    expect(checkPackage("@unset/infrastructure-image", "AGPL-3.0-only", flatten(tree))).toEqual([]);
+    expect(checkPackage("@unset/shared-x", "MIT", flatten(tree))).toHaveLength(1);
+    const lgpl21: LsNode = { dependencies: { old: { version: "1.0.0", license: "LGPL-2.1-only" } } };
+    expect(checkPackage("@unset/infrastructure-image", "AGPL-3.0-only", flatten(lgpl21))).toHaveLength(1);
+  });
+
   test("licence_check_logic", () => {
     const one = (license: unknown, missing = false): LsNode => ({
       dependencies: {

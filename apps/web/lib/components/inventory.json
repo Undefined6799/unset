@@ -345,11 +345,15 @@
       },
       "profile-cards.svelte": {
         "origin": "ours",
-        "purpose": "The profile's cards in a two-column grid on the stock Card: README, links, collection, buttons."
+        "purpose": "The profile's cards in a two-column grid on the stock Card: Text, links, collection, buttons."
       },
       "profile-layout.svelte": {
         "origin": "ours",
-        "purpose": "The member page's frame: notices on top, then the side column and the cards, two columns on wide screens."
+        "purpose": "The member page's frame: notices on top, then the side column and the cards, two columns on wide screens; or the compact header above one card area (ADR 0072)."
+      },
+      "profile-header.svelte": {
+        "origin": "ours",
+        "purpose": "The compact profile header (ADR 0072): avatar, name and handle, and a native popover under the avatar with the profile's details; not a shadcn component, since the public page runs no script."
       },
       "profile-side.svelte": {
         "origin": "ours",
@@ -357,7 +361,7 @@
       },
       "readme.svelte": {
         "origin": "ours",
-        "purpose": "The README card's parsed blocks as plain escaped elements, with the README text styles."
+        "purpose": "The Text card's parsed blocks (the #readme kind) as plain escaped elements, on the page's type scale."
       }
     },
     "settings": {

@@ -109,3 +109,14 @@ export function websiteLink(website: string): { readonly href: string; readonly 
   const href = web(website);
   return href === null ? null : { href, text: website.replace(/^https?:\/\//, "") };
 }
+
+/**
+ * The page's published contact action for the compact header's details panel (P1.21o): the first button of the first
+ * Contact card, as that card shows it, or null. The profile record holds no contact field (ADR 0051), and an account's
+ * own email is never read here.
+ */
+export function contactAction(cards: readonly CardView[]): { readonly href: string; readonly label: string } | null {
+  const contact = cards.find((card) => card.shown.kind === "buttons")?.shown;
+  const first = contact?.kind === "buttons" ? contact.buttons[0] : undefined;
+  return first === undefined ? null : { href: first.href, label: first.label };
+}

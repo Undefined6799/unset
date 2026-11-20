@@ -6,7 +6,7 @@
 // with its code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
 import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
-import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
+import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { CARD_EDIT_LIMITS, type CardKey, parseAvatarShape, parseCardInput, parseCardKey } from "@unset/domains-profile";
 import {
@@ -106,7 +106,9 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
         ? null
         : { headline: profile.headline, location: profile.location, website: websiteLink(profile.website) },
     avatarShape: own.kind === "ok" ? own.avatarShape : "round",
+    layout: own.kind === "ok" ? own.layout : "sidebar",
     cards,
+    contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
     cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.section.textBytes },
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,

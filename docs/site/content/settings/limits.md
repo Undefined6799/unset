@@ -29,6 +29,7 @@ Configurable: `deployment/edge/limits.json`, applied in `deployment/edge/snippet
 | `web_oauth_token` | PDS host | 3000 per 5m |
 | `app_signin` | app host | 10 per 5m |
 | `app_burst` | app host | 60 per 10s |
+| `app_files` | app host | 120 per 10s |
 | `app_global` | app host | 1200 per 5m |
 
 ## App rate limits (web)
@@ -87,6 +88,7 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.headline` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarShapeBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.profile.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.location` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |

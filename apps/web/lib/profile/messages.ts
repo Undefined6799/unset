@@ -27,8 +27,8 @@ export const ADD_CARD = {
   trigger: "Add card",
   title: "Add a card",
   description: "Choose what the new card holds. You can change its width and order later.",
-  readme: "README",
-  readmeBlurb: "Your own text, with headings, lists, links, quotes and code.",
+  readme: "Text",
+  readmeBlurb: "Your own words, written in Markdown: headings, lists, links, quotes and code.",
   links: "Links",
   linksBlurb: "Your sites and accounts elsewhere, as a list, grid or carousel.",
   collection: "Collection",
@@ -59,13 +59,21 @@ export const PROFILE_SIDE = {
   edit: "Edit profile",
 } as const;
 
+/** The compact header and its details panel (ADR 0072, P1.21o). */
+export const PROFILE_PANEL = {
+  /** The avatar's name: it opens the details, so it says so. */
+  open: (name: string) => `About ${name}`,
+  title: "About",
+  close: "Close details",
+} as const;
+
 /** The owner's card controls (ADR 0051). */
 export const CARD_EDIT = {
   group: (name: string) => `${name} card`,
   edit: "Edit",
-  editReadme: "Edit README",
-  addReadme: "Add README",
-  readme: "README",
+  editReadme: "Edit text",
+  addReadme: "Add text",
+  readme: "Text",
   readmeHint: "Markdown: headings, lists, links, code and quotes.",
   write: "Write",
   preview: "Preview",

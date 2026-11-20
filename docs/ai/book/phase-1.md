@@ -4769,6 +4769,66 @@ border or shadow. Keep content, inner tiles, spacing and controls. Missing legac
 choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
 Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
 
+### P1.21g — Split the client into hashed pieces (added step, 2026-11-20)
+
+**Tags:** [SEC], trusted · **Depends on:** — · **Plan:** §6.1 (app page budget), §5.7 (edge limits)
+
+Alex agreed on 2026-11-20 00:27:59Z to split the signed-in app's client so heavy parts can load on demand; no new
+dependency comes with it. `output.bundleStrategy` goes from `single` to `split`, SvelteKit's own mechanism; `single`
+turns code splitting off, so no dynamic import could ever be lazy. The dev app edge counts the content-hashed build
+files under `/_app/immutable/` in a new zone, `app_files` (120 per 10 s per address), matched on the decoded, uncleaned
+path and GET or HEAD only; everything else stays in `app_burst`, and `app_global` counts all of it. Server.ts reads the
+refusal page's stylesheet from the root layout node, which is where kit lists it under `split`; the app JS budget
+measures each page route's cold set. A tab older than a deploy reloads through SvelteKit's version check
+(`tests/e2e/redeploy.spec.ts`). Proposed ADR 0069 records it; the edge zone loosens a security control, so the PR
+merges on Alex's typed line. Out of scope: making the card editor lazy (its own step), and the documents' missing
+compression that P1.20u noted.
+
+**Threats.** A spelling of a page path that the edge would count as a file (runs of slashes, case, dot segments,
+percent-encoding) would let one address render pages at the file allowance: the matcher reads the request's own
+decoded path, anchored and case-sensitive, and `adapted-build-files.test.ts` checks that every spelling it accepts is
+one web reads under `/_app/`, where nothing reaches a hook. A flood of made-up file names: each is a plain 404 before
+the hook, and `app_global` still caps the 5-minute total. A stale tab after a deploy: a full load, never a broken page.
+
+### P1.21n — Let the profile choose its page layout (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21f · **Plan:** §5.4
+
+Alex approved the compact profile direction on 2026-11-20 as an opt-in layout. Add optional
+`sh.unset.profile.layout` (ADR 0072, known values sidebar and compact; absent or unknown is sidebar), read and
+checked in domains/profile and accepted by the one profile save (POST /profile). Choosing sidebar clears the field;
+a save that leaves it out keeps the stored value. No page draws compact yet and no form offers it: P1.21o adds the
+compact header, the avatar details panel and the choice in Settings › Profile. Tests cover the default, unknown
+values, strict input, clearing, preservation, the lexicon limit and the indexer keeping the field. Merges only on
+Alex's line accepting ADR 0072. Ownership: interfaces/web → domains/profile → shared/lexicons.
+
+### P1.21o — Add the compact profile header and details panel (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21n · **Plan:** §5.4
+
+Alex's approved avatar-panel direction (2026-11-20), drawn when the profile's layout is compact (ADR 0072). The
+avatar, name and handle sit in a header above one card area up to 64rem wide; the owner keeps the edit pen, a
+separate Shape button for the avatar's editor, notices, card controls and Add card. The avatar opens a native
+`popover="auto"` panel under it (as the header menus, core-shell.md) with the headline, place, website, DID and the
+first Contact card's first button; it opens and closes with no script (click, tap, Enter, Space, Escape, outside,
+Close), is not modal, and sits under the avatar by CSS anchor positioning. Where the client runs (the owner's page)
+hovering opens it after 150ms and a click pins it; the public page runs no script, so it has no hover (put to Alex).
+Settings › Profile offers Side column or Compact header as native radios. Tests: the contact action, the layout
+read, and e2e for the header, the panel with and without script, and a 320px phone. Ownership: apps/web →
+interfaces/web → domains/profile.
+
+### P1.21p — Show the README card as a Text card (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** P1.21f · **Plan:** §5.4
+
+Alex's approved profile direction (2026-11-20). The member-facing name of the `#readme` card becomes "Text" in the
+picker, editor, controls and help; the stored kind and records are unchanged (ADR 0051 Decision 4: names are
+presentation). The "handle / README.md" bar is removed with no automatic heading in its place, so the member's own
+`#` is the card's h2. Filled and Outlined Text cards keep a responsive inset; Plain aligns with the grid. A link
+row or linked collection entry is one link with a resting cue (link colour and the external mark), no underline at rest
+and the label's underline on hover; prose links stay underlined. Tests: renamed labels, heading levels, the bar gone,
+a link row as one target. Ownership: apps/web only (with the two routes dropping the bar's handle prop).
+
 ### P1.21h — Normal use fits inside every limit (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** — · **Plan:** §5.2, §6
@@ -4822,8 +4882,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
-c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), i (leaving in the
-terms), l, m, q.
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), f (card
+surfaces), g (split client), h (limit budget tests), i (leaving in the terms), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's

@@ -66,6 +66,8 @@ chat-admin, identity, profile, content, social, feed, messaging, moderation, pri
 postgres, pds, tap, matrix, storage, arachnid, email, net-guard, session, seal, audit,
 lexicons, ui, config, errors, log, host-pin, i18n, deployment, tests, ci, docs.
 A new area is added here, and in `AREAS` in the guard, only when its folder is created.
+Workspaces filed under an existing area: `infrastructure/firehose` under indexer (its only
+user), `shared/admin-envelope` under pds-admin, `shared/safe-href` under ui.
 
 ## Body (keep under 60 lines; split if longer)
 - **area:** What it owns. Entry points. How data flows in and out. Links.

@@ -1,10 +1,11 @@
 <!--
   A member's public profile (P3.12s): the owner's page (routes/[did=did]) without its controls, the same side column
-  and cards, drawn with no script, with the title, description, canonical link and link-preview tags
+  and cards (or the compact header, ADR 0072), drawn with no script, with the title, description, canonical link and link-preview tags
   search engines and sharing read (review plan 2026-11-18 §7.1; no image until the media proxy). Everything shown was built by +page.server.ts from the member's published records.
 -->
 <script lang="ts">
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
+import ProfileHeader from "@unset/apps-web/lib/components/profile/profile-header.svelte";
 import ProfileLayout from "@unset/apps-web/lib/components/profile/profile-layout.svelte";
 import ProfileSide from "@unset/apps-web/lib/components/profile/profile-side.svelte";
 
@@ -22,19 +23,33 @@ let { data } = $props();
   <meta name="twitter:card" content="summary" />
 </svelte:head>
 
-<ProfileLayout>
+<ProfileLayout layout={data.layout}>
   {#snippet side()}
-    <ProfileSide
-      name={data.name}
-      letter={data.letter}
-      handle={data.handle}
-      did={data.did}
-      headline={data.headline}
-      location={data.location}
-      website={data.website}
-      shape={data.avatarShape}
-    />
+    {#if data.layout === "compact"}
+      <ProfileHeader
+        name={data.name}
+        letter={data.letter}
+        handle={data.handle}
+        did={data.did}
+        headline={data.headline}
+        location={data.location}
+        website={data.website}
+        contact={data.contact}
+        shape={data.avatarShape}
+      />
+    {:else}
+      <ProfileSide
+        name={data.name}
+        letter={data.letter}
+        handle={data.handle}
+        did={data.did}
+        headline={data.headline}
+        location={data.location}
+        website={data.website}
+        shape={data.avatarShape}
+      />
+    {/if}
   {/snippet}
 
-  <ProfileCards cards={data.cards} handle={data.handle} />
+  <ProfileCards cards={data.cards} />
 </ProfileLayout>

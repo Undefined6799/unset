@@ -15,8 +15,8 @@ import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import type { Snippet } from "svelte";
 import { enhance, type SubmitFunction } from "$app/forms";
-import { afterNavigate } from "$app/navigation";
-import { page } from "$app/state";
+import { afterNavigate, beforeNavigate } from "$app/navigation";
+import { page, updated } from "$app/state";
 import {
   accountLetter,
   ERROR_SHELL,
@@ -209,6 +209,17 @@ afterNavigate(() => {
     const popover = document.getElementById(id);
     if (popover?.matches(":popover-open")) popover.hidePopover();
   }
+});
+// A tab that has seen a newer build (SvelteKit checks version.json when the tab is shown or focused, and reads the
+// version on every data response) loads the next page in full, as kit 3.2.0 documents for version.name
+// (src/exports/vite/public.d.ts, "version"): the old tab's pieces may be gone after a deploy (P1.21g, ADR 0069), or
+// still loaded and older than the server's data. Each click sets the address at once and cancels the client
+// navigation, whose failed import would later load its own page in full (load_route), so the last one pressed wins.
+// Back and Forward and forms keep SvelteKit's own handling, which also falls back to a full load when a piece is gone.
+beforeNavigate(({ type, to, cancel }) => {
+  if (!updated.current || (type !== "link" && type !== "goto") || to?.url === undefined) return;
+  cancel();
+  location.href = to.url.href;
 });
 // A footer link is a 24px target (WCAG 2.2 SC 2.5.8): its 20px line plus 2px above and below.
 const footerLink = "py-0.5";
