@@ -184,12 +184,16 @@ describe("image upload intake", () => {
     expect(await uploadImage(s.deps(), slowBody)).toMatchObject({ ok: true });
   });
 
-  test("upload.work_after_the_body_answers_timeout_at_its_deadline", async () => {
-    const s = stack({ afterBodyMs: 30, process: () => new Promise<Result>(() => undefined) });
+  // Review of #1844: a review call past the deadline still holds the body, so its slot stays taken until it ends.
+  test("upload.timeout_answers_at_the_deadline_and_keeps_the_slot_until_review_ends", async () => {
+    let finish: (result: Result) => void = () => undefined;
+    const s = stack({ afterBodyMs: 30, process: () => new Promise<Result>((resolve) => (finish = resolve)) });
     const started = performance.now();
     expect(await uploadImage(s.deps(), s.read)).toEqual({ ok: false, code: "image.timeout" });
     expect(performance.now() - started).toBeLessThan(1000);
-    // The slot is free again: the member may try once more.
+    expect(await uploadImage(s.deps(), s.read)).toEqual({ ok: false, code: "image.one_at_a_time" });
+    finish({ kind: "refused", code: "image.busy" });
+    await sleep(0);
     expect(s.slots.take("did:plc:a")).toBe("ok");
   });
 

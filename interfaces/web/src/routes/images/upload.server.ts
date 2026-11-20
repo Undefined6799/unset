@@ -136,21 +136,28 @@ export async function uploadImage(deps: UploadDeps, readFile: () => Promise<Uint
   if (!deps.open) return { ok: false, code: "image.closed" };
   const slot = deps.slots.take(deps.member);
   if (slot !== "ok") return { ok: false, code: slot };
+  // The slot is held until the work after the body settles, not only until the member is answered: a review call
+  // past the deadline still holds the body (up to web's 30 s timeout), and the slots are what bound that memory.
+  let work: Promise<UploadResult> | undefined;
   try {
     const admission = await deps.rows.admit(deps.deadline);
     if (!admission.ok) return { ok: false, code: admission.code };
     const bytes = await readFile();
     if (bytes === null) return { ok: false, code: "image.missing" };
     const deadline = AbortSignal.any([deps.deadline, AbortSignal.timeout(deps.afterBodyMs)]);
-    return await answerBy(deadline, afterBody(deps, bytes, deadline));
+    work = afterBody(deps, bytes, deadline);
+    return await answerBy(deadline, work);
   } finally {
-    deps.slots.release(deps.member);
+    const release = () => deps.slots.release(deps.member);
+    if (work === undefined) release();
+    else work.then(release, release);
   }
 }
 
 /**
  * The work's answer, or a timeout once the deadline ends, so the member hears before the edge stops waiting. Work
- * still running stops at its next call, which takes the same deadline; a row it stored meanwhile is the sweep's.
+ * still running stops at its next call, which takes the same deadline; a row it stored meanwhile is the sweep's. Its
+ * slot stays taken until it settles (uploadImage).
  */
 function answerBy(deadline: AbortSignal, work: Promise<UploadResult>): Promise<UploadResult> {
   if (deadline.aborted) return Promise.resolve(TIMEOUT);
