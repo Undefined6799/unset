@@ -26,7 +26,7 @@ The atproto network adapter. Package `@unset/infrastructure-pds`. Identity looku
 
 `authorize` returns the URL only when its query has `request_uri` and no `code_challenge`. Otherwise it logs `oauth.authorize_failed` with kind `ParMissingError` and returns `{ ok: false, reason: "failed" }`. A URL with no `request_uri` fails that check. A non-PAR URL that already names a `request_uri` fails it too: when the server offers no PAR endpoint and does not require PAR, the library copies the request onto the authorization endpoint, including `code_challenge`.
 
-`oauthFields` allows `OAUTH_ALLOW_HTTP: true` only when `UNSET_ENV` is `dev`. `deployment/preflight/checks/local-only-keys.ts` (C29) refuses that key unless the stage is `local`. `interfaces/http/compose.ts` passes `cfg.OAUTH_ALLOW_HTTP` as `allowHttp`.
+`oauthFields` allows `OAUTH_ALLOW_HTTP: true` only when `UNSET_ENV` is `dev`. `deployment/preflight/checks/local-only-keys.ts` (C29) refuses that key unless the stage is `local`. `interfaces/web/src/lib/server/compose.ts` passes `cfg.OAUTH_ALLOW_HTTP` as `allowHttp`.
 
 `createPdsCall` takes `endSessions` and `tokenSetRemains` as arguments. The file's comment says this package does not import `infrastructure/session`. The [`infrastructure` row](../) allows `net-guard` and `seal` beside the package's own folder, not `session`.
 
@@ -56,7 +56,7 @@ Declared in `infrastructure/pds/package.json`:
 | Role | Path |
 | --- | --- |
 | Package export `.` | `infrastructure/pds/index.ts` |
-| Composition | `interfaces/http/compose.ts` |
+| Composition | `interfaces/web/src/lib/server/compose.ts` |
 
 No `main.ts` and no Compose service for this package. The `pds` service in `deployment/compose.dev.yaml` runs the first-party `ghcr.io/undefined6799/unset/pds` image by lock digest, built from `deployment/pds/Dockerfile` (P2.24y), not this folder. `deployment/compose.dev.source.yaml` builds `pds` from `deployment/pds/Dockerfile`.
 

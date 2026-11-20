@@ -23,7 +23,7 @@ Accepted records stay as written. This page is the index in [`docs/human/decisio
 | [0012](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0012-licence.md) | AGPL-3.0-only for the product, MIT for `shared/` (decision 27) | Accepted 2026-10-03 |
 | [0013](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0013-identity-network-port.md) | Identity resolution behind a network port, DNS on c-ares | Proposed (awaiting Alex) |
 | [0014](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0014-node-postgres.md) | node-postgres as the Postgres driver | Proposed (awaiting Alex) |
-| [0015](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
+| [0015](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0015-web-framework-glue.md) | Recorded Hono, server-rendered React and islands. Superseded by 0054. | Superseded |
 | [0016](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
 | [0017](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06; merge sentence superseded by 0019 |
 | [0018](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Accepted 2026-10-07 (P1.28, #409) |

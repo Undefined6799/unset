@@ -21,7 +21,7 @@ The non-leaf [`shared` row](../). This package's `package.json` has no `dependen
 
 Who may import it is the [shared](../) table. The domain row names `shared/errors/` specifically. On this tree `domains/` does not import it.
 
-On this tree, product importers include `apps/web`, `interfaces/http`, `infrastructure/{pds,postgres,session}`, `shared/http` and `shared/log`.
+On this tree, product importers include `apps/web`, `interfaces/web`, `infrastructure/{pds,postgres,session}`, `shared/http` and `shared/log`.
 
 ## Entry points
 

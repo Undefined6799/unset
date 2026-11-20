@@ -21,7 +21,7 @@ Migrations, the role roster, grants, pools, transactions, and the stores whose S
 | `infrastructure/postgres/tx.ts` | `inTransaction`, `withTransaction`. The file comment says `BEGIN`, `COMMIT` and `ROLLBACK` in TypeScript live only here. `docs/human/architecture.md` row DM-2 names Semgrep `transactions-only-in-tx`. |
 | `infrastructure/postgres/config.ts` | `postgresFields`, `poolFields`, `lockPoolFields`, `connectionOf`. |
 | `infrastructure/postgres/lock.ts` | `withAdvisoryLock`, `createRequestLock`. `LockNamespace.oauth` is `1`. The wait calls `pg_advisory_xact_lock`. |
-| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`, `oauthSessionExists`. SQL on `app.oauth_state` and `app.oauth_session`. The stores seal values. `oauthSessionExists` is `SELECT 1` on `app.oauth_session` and does not unseal. `createOAuthStateStore`'s `sweep` is run by `interfaces/http/jobs/sweeps.ts` (`sweep.oauth_state`). `interfaces/http/compose.ts` passes `oauthSessionExists` to `createPdsCall` as `tokenSetRemains`. |
+| `infrastructure/postgres/oauthStores.ts` | `createOAuthStateStore`, `createOAuthSessionStore`, `oauthSessionExists`. SQL on `app.oauth_state` and `app.oauth_session`. The stores seal values. `oauthSessionExists` is `SELECT 1` on `app.oauth_session` and does not unseal. `createOAuthStateStore`'s `sweep` is run by `interfaces/web/src/lib/server/sweeps.ts` (`sweep.oauth_state`). `interfaces/web/src/lib/server/compose.ts` passes `oauthSessionExists` to `createPdsCall` as `tokenSetRemains`. |
 | `infrastructure/postgres/accountRepository.ts` | `createAccountRepository`, `AccountRepositoryOptions`, `BlockTransaction`. SQL on `app.account`. Implements `AccountRepository` from `domains/identity/account.ts`. The audit writer (`recordUnderageBlock`) comes from the caller and gets only `BlockTransaction`, a `query`-only view of the block's transaction. |
 | `infrastructure/postgres/singleUse/store.ts` | `createSingleUseStore`. SQL on `app.single_use`. `PURPOSES` is the closed list. |
 | `infrastructure/postgres/didColumns.ts` | `didColumns`. One catalog query for columns typed `types.did` or `types.at_uri`, including arrays. |
@@ -61,7 +61,7 @@ Declared in `infrastructure/postgres/package.json`:
 | Bin `unset-rewrap` | `infrastructure/postgres/rewrap-cli.ts` |
 | Image | `ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]` in `deployment/images/migrate.Dockerfile` |
 | Compose | Service `migrate` in `deployment/compose.dev.yaml` and `deployment/compose.local.yaml`. `PG_USER` is `migrator`. |
-| Pools | `interfaces/http/compose.ts` calls `createPool` and `createLockPool` |
+| Pools | `interfaces/web/src/lib/server/compose.ts` calls `createPool` and `createLockPool` |
 
 The Postgres server is Compose service `postgres`, image `deployment/images/postgres.Dockerfile` (`FROM docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336`). `deployment/postgres/init/00-bootstrap.sh` runs at initdb and creates roles `migrator` and `tap`, databases `unset` and `tap`. `tap` is not in `roles.json`.
 

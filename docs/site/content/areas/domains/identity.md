@@ -71,9 +71,9 @@ A handle domain with no DNS record is `egress.dns_no_record` on both methods, so
 | `blocked` | `blocked` |
 | `age`, `chat` | `welcome` |
 
-`interfaces/http/app-gate.ts` turns the decision into a redirect. This folder does not.
+`interfaces/web/src/lib/server/app-gate.ts` turns the decision into a redirect. This folder does not.
 
-`parseBirthDate` returns a calendar date or null. `ageInYears` counts full UTC years. `interfaces/http` passes `latestCalendarDay(deps.now())` as `today`. Neither function stores the date.
+`parseBirthDate` returns a calendar date or null. `ageInYears` counts full UTC years. `interfaces/web/src/routes/welcome/age/+page.server.ts` passes `latestCalendarDay(new Date())` as `today`. Neither function stores the date.
 
 ## May import
 
@@ -87,7 +87,7 @@ Product files under `domains/identity` import only other files in that folder. `
 | --- | --- |
 | Package export `.` | `domains/identity/index.ts` |
 | Package export `./syntax` | `domains/identity/syntax.ts` |
-| Composition root | `interfaces/http/compose.ts` calls `createDidResolver`, `createHandleVerifier`, `resolveHandle`, and reads `TERMS_VERSION` and `PRIVACY_VERSION` |
+| Composition root | `interfaces/web/src/lib/server/compose.ts` calls `createDidResolver` and `createHandleVerifier`, and reads `TERMS_VERSION` and `PRIVACY_VERSION` |
 | Port implementation | `infrastructure/pds/identity-network.ts` |
 | OAuth resolvers | `infrastructure/pds/oauth/identity-resolvers.ts` imports `parseDid`, `parseHandle`, `resolveHandle` and `IdentityError` |
 | Syntax-only caller | `infrastructure/audit/append.ts` imports `parseDid` from `@unset/domains-identity/syntax` |
@@ -118,6 +118,6 @@ Values the gates read, stored by the caller:
 | Shape | Fields | Stored by |
 | --- | --- | --- |
 | `OnboardingAccount` | `onboarding`, `termsVersion`, `privacyVersion` | `infrastructure/postgres/accountRepository.ts` (the `AccountRepository` contract in `account.ts`) reads `onboarding`, `terms_version`, `privacy_version` from `app.account` |
-| `EmailCache` | `confirmed`, `checkedAt` | `openApp` (`interfaces/http/app-gate.ts`) sets `confirmed` to `session.emailConfirmed` and `checkedAt` to `session.emailCheckedAt`, or null when the session has no check time. `read` (`infrastructure/session/store.ts`) selects `email_confirmed` and `email_checked_at` from `app.session` |
+| `EmailCache` | `confirmed`, `checkedAt` | `openApp` (`interfaces/web/src/lib/server/app-gate.ts`) sets `confirmed` to `session.emailConfirmed` and `checkedAt` to `session.emailCheckedAt`, or null when the session has no check time. `read` (`infrastructure/session/store.ts`) selects `email_confirmed` and `email_checked_at` from `app.session` |
 
-`app.account` is created in `infrastructure/postgres/migrations/0015_app_account.sql`. It has `age_confirmed_at` and no birth-date column. `TERMS_VERSION` and `PRIVACY_VERSION` are the constants in `legal/versions.ts`. `interfaces/http/routes/legal.test.ts` (`legal.versions_exported`) checks them against the `version` in `apps/web/legal/terms.en.md` and `apps/web/legal/privacy.en.md`.
+`app.account` is created in `infrastructure/postgres/migrations/0015_app_account.sql`. It has `age_confirmed_at` and no birth-date column. `TERMS_VERSION` and `PRIVACY_VERSION` are the constants in `legal/versions.ts`. The comment in `domains/identity/legal/versions.ts` names the check `legal.versions_exported` against the `version` in `apps/web/legal/terms.en.md` and `apps/web/legal/privacy.en.md`.

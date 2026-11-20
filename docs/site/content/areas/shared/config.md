@@ -26,9 +26,10 @@ Typed configuration, read once at boot. Package `@unset/shared-config`. Permanen
 
 | Name | Folder |
 | --- | --- |
-| `http` | `interfaces/http/` |
+| `http` | `interfaces/web/`. Compose still sets `UNSET_SERVICE: http`. |
+| `indexer` | `interfaces/indexer/` |
 
-The other `SERVICES` names (`admin`, `api`, `indexer`, `media`, `review`, `jobs`, `audit-verify`, `chat-auth`) have no folder on this tree.
+The other `SERVICES` names (`admin`, `api`, `media`, `review`, `jobs`, `audit-verify`, `chat-auth`) have no folder on this tree.
 
 ## May import
 
@@ -36,7 +37,7 @@ The non-leaf [`shared` row](../). This package's `package.json` has no `dependen
 
 Who may import it is the [shared](../) table. The domain row allows `shared/config/` as types only. On this tree `domains/` does not import it.
 
-On this tree, product importers are `interfaces/http`, `infrastructure/{pds,postgres,seal}` and `shared/http`.
+On this tree, product importers are `interfaces/web`, `infrastructure/{pds,postgres,seal}` and `shared/http`.
 
 ## Entry points
 

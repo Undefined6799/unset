@@ -3,106 +3,23 @@ title: web
 weight: 2
 ---
 
-The public site: screens, the page shell, and the island runtime. Package `@unset/apps-web`. Framework glue is [ADR 0015](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0015-web-framework-glue.md).
+Screens for unset.sh. Package `@unset/apps-web`. UI only: no product rules and no database access. [ADR 0055](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0055-shadcn-svelte-and-one-theme-file.md) is the UI decision. [ADR 0056](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0056-web-boundary-by-file-kind.md) says what the web process may import from here.
 
 ## Owns
 
-UI for the http process. Product source under `apps/web` does not read the filesystem or `process.env`. The server passes props into `renderPage` (`apps/web/render.tsx`).
-
-The server reaches screens through the `screens` object in `apps/web/render.tsx`. `interfaces/http/web/render-entry.ts` lists the same keys in `SCREEN_NAMES`.
-
-| `screens` key | Module |
+| Path | What it holds |
 | --- | --- |
-| `home` | `apps/web/src/screens/Home.tsx` |
-| `login` | `apps/web/src/screens/Login.tsx` |
-| `loginContinue` | `apps/web/src/screens/LoginContinue.tsx` |
-| `signedOut` | `apps/web/src/screens/SignedOut.tsx` |
-| `verifyEmail` | `apps/web/src/screens/VerifyEmail.tsx` |
-| `welcomeAge` | `apps/web/src/screens/welcome/Age.tsx` |
-| `welcomeTerms` | `apps/web/src/screens/welcome/Terms.tsx` |
-| `welcomeChat` | `apps/web/src/screens/welcome/ChatLater.tsx` |
-| `welcomeBlocked` | `apps/web/src/screens/welcome/UnderAge.tsx` |
-| `me` | `apps/web/src/screens/Me.tsx` |
-| `settingsProfile` | `apps/web/src/screens/settings/SettingsProfile.tsx` |
-| `settingsAccount` | `apps/web/src/screens/settings/SettingsAccount.tsx` |
-| `legal` | `apps/web/src/screens/Legal.tsx` |
-| `errorPage` | `apps/web/src/errors/ErrorPage.tsx` |
+| `apps/web/lib/components/ui/` | Stock shadcn-svelte. `apps/web/lib/components/inventory.json` lists each file. |
+| `apps/web/lib/components/profile/` | Profile and card screens. |
+| `apps/web/lib/components/settings/` | Settings screens. |
+| `apps/web/lib/components/icon/` | The Svelte Icon. It reads `shared/ui/icons/icons.json`. |
+| `apps/web/lib/profile/` | Parse, view and messages. `parse.ts`, `view.ts`, `readme-scan.ts`. |
+| `apps/web/lib/settings/` | Settings copy and the profile-form shape. |
+| `apps/web/app.css` | Tailwind entry. |
+| `apps/web/legal/` | `terms.en.md`, `privacy.en.md` and `domains.en.md`, read as `?raw` by the legal routes. |
 
-Modules a screen renders that are not themselves a `screens` key:
+The theme is `shared/ui/theme.css`. Links go through `shared/safe-href`.
 
-| Module | Rendered by |
-| --- | --- |
-| `apps/web/src/screens/PdsAccountLink.tsx` | `Me`, `SettingsAccount`, `SignedOut`, `VerifyEmail` |
-| `apps/web/src/screens/settings/SettingsShell.tsx` | `SettingsProfile`, `SettingsAccount` |
-| `apps/web/src/screens/welcome/PrivacyNotice.tsx` | `Me`, `SettingsProfile`, `SettingsAccount` |
+`interfaces/web` may import `apps/web/lib/`, `apps/web/app.css` and the markdown files directly in `apps/web/legal/` (`interface-web-components`, `web-components-only`). It imports nothing else here. This package does not import `interfaces/`.
 
-The rest of the package:
-
-| Piece | Path |
-| --- | --- |
-| Document | `apps/web/src/document.tsx` |
-| Shell | `apps/web/src/shell/AppShell.tsx` |
-| Head | `apps/web/src/shell/head.tsx` |
-| Footer theme form | `apps/web/src/shell/PrefsForms.tsx` |
-| Popover close | `apps/web/src/islands/runtime/popovers.ts` |
-| Copy | `apps/web/src/shell/messages.ts`, `apps/web/src/screens/messages.ts`, `apps/web/src/screens/welcome/messages.ts`, `apps/web/src/screens/settings/messages.ts` |
-| Island runtime | `apps/web/src/islands/runtime/` |
-| Legal parser | `apps/web/src/legal/` |
-| Styles | `apps/web/src/styles.ts`, `apps/web/src/screens/CoreShell.module.css`, `apps/web/src/screens/Login.module.css`, `apps/web/src/screens/settings/SettingsAccount.module.css`, `apps/web/src/screens/settings/SettingsShell.module.css` |
-
-There is no `*.island.tsx` under `apps/web`. `render.tsx` and `apps/web/src/islands/runtime/bootstrap.ts` glob `apps/web/src/islands/*.island.tsx` and `shared/ui/islands/*.island.tsx`. The island components on the tree are under `shared/ui/islands/`. `bootstrap.ts` calls `closePopoversOnPageHide` (`popovers.ts`) on `pagehide`, so an open popover is shut before the back-forward cache stores the page.
-
-When `navigation` is set, `AppShell` renders `NavigationMenuButton` and `Navigation`, and `ThemePickerSlot` when `prefs` is set. When `navigation` and `feed` are both unset, it renders `PrefsForms` in the footer when `prefs` is set (`apps/web/src/shell/AppShell.tsx`).
-
-## May import
-
-The [apps](../) boundary's `app` row, plus the narrowing rules on that page. Source files import `@unset/shared-errors`, `@unset/shared-islands`, and `@unset/shared-ui`.
-
-Declared in `apps/web/package.json`:
-
-| Dependency | Version |
-| --- | --- |
-| `@unset/shared-errors` | workspace |
-| `@unset/shared-islands` | workspace |
-| `@unset/shared-ui` | workspace |
-| `react` | 19.3.1 |
-| `react-dom` | 19.3.1 |
-
-`apps/web/vite.config.ts` imports `scripts/ui/css-scope.ts`. `apps/web/src/styles.ts` globs CSS under `shared/ui/` (`layers.css`, `tokens.css`, `base.css`, and `shared/ui/components/**/*.module.css`). `web-not-admin` refuses a path that is `admin/…` or contains `/admin/`.
-
-## Entry points
-
-| Role | Path |
-| --- | --- |
-| Render module | `apps/web/render.tsx` |
-| Package export `.` | `./render.tsx` (`apps/web/package.json`) |
-| Package export `./server`, types | `./render.tsx` |
-| Package export `./server`, default | `./dist/server/render.js` after the build below. `dist/` is gitignored. |
-| Loader | `interfaces/http/web/render-entry.ts` imports `@unset/apps-web/server` and requires `renderPage`, `islandName`, `screens`, and `safeHref` |
-| Browser entry | `apps/web/src/islands/runtime/bootstrap.ts` (Vite input `boot`) |
-| Styles entry | `apps/web/src/styles.ts` (Vite input `styles`) |
-| Build config | `apps/web/vite.config.ts`. Nothing imports it. |
-
-`render.tsx` re-exports `safeHref` from `@unset/shared-ui`. The loader requires that export. What `safeHref` accepts is the kit's behaviour.
-
-Build, from `apps/web/package.json`:
-
-```sh
-npm run build -w @unset/apps-web
-```
-
-That runs `vite build --config vite.config.ts` (output `dist/client`) and `vite build --config vite.config.ts --ssr render.tsx` (output `dist/server`).
-
-## Data
-
-No schema, role, or table. The Postgres role `web` is the http process's login; see [Apps](../).
-
-Icons the styles entry exports (`?url&no-inline` in `apps/web/src/styles.ts`): `apps/web/src/shell/icons/unset-favicon-32.png`, `apps/web/src/shell/icons/unset-apple-touch-icon.png`.
-
-English legal markdown, inlined at build by `apps/web/src/legal/documents.ts` (`?raw`):
-
-| File | Key |
-| --- | --- |
-| `apps/web/legal/terms.en.md` | `terms` |
-| `apps/web/legal/privacy.en.md` | `privacy` |
-| `apps/web/legal/domains.en.md` | `domains` |
+Routes are on [Endpoints](/endpoints/web/). The process is [web](../../interfaces/web/).

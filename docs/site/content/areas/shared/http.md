@@ -3,108 +3,22 @@ title: http
 weight: 4
 ---
 
-The server kit every interface process is built from. Package `@unset/shared-http`. The web server itself is `interfaces/http` (a later Areas page). Route tables are on [Endpoints](/endpoints/).
+Pieces the web process and the indexer share. Package `@unset/shared-http`. The web server is [web](../../interfaces/web/). This folder has no server, no CSRF gate and no route table. The Hono server and the CSRF gate were deleted in P1.20k (`shared/http/index.ts`).
 
 ## Owns
 
-`shared/http/server.ts` builds one Hono server per process (`createServer`). The checks a route passes through are `middlewareOf`:
+Exports are `shared/http/index.ts`.
 
-| Check | When |
+| File | What it holds |
 | --- | --- |
-| `requestId` | Every route |
-| `hostCheck`, `trustedProxy` | Every route except `/health` |
-| `methodCheck` | Every route |
-| `contentTypeCheck`, `bodyLimit` | `POST` |
-| `rateLimitIp` | Unless `rateLimit` is `exempt` |
-| `csrf` | `POST` |
-| `session`, `rateLimitDid` | `session: "required"`. The server's `gate` runs after `csrf` |
+| `shared/http/config.ts` | `hostAllowed`, `httpKitConfig`. |
+| `shared/http/headers.ts` | `SECURITY_HEADERS`. |
+| `shared/http/health.ts` | `createHealth`. |
+| `shared/http/shutdown.ts` | `drain`, `exitOnSignals`. |
+| `shared/http/clientIp.ts` | `ClientIp`. |
+| `shared/http/trustedProxy.ts` | `createClientIpResolver`. |
+| `shared/http/returnPath.ts` | `safeReturnPath`, the only way a redirect target is chosen from input. |
+| `shared/http/limits/rateLimit.ts` | Token buckets. |
+| `shared/http/limits/policy.ts` | `definePolicies`. |
 
-`SECURITY_HEADERS` (`shared/http/headers.ts`) are the non-CSP security headers. Web sends them on every response with its own CSP (`interfaces/web/server.ts`, `interfaces/web/src/lib/server/csp.ts`).
-
-`/health` (`shared/http/health.ts`) returns JSON `{ status, service, commit }` with `cache-control: no-store`. Ready is 200 `ok`. `draining`, not yet ready, and a failed check are 503 (`draining`, `starting` or `unready`). A check that throws, rejects, or takes longer than 1 s counts as not ready.
-
-| Piece | Path | What it is for |
-| --- | --- | --- |
-| Routes | `shared/http/routes.ts` | `defineRoute`, the only registration path |
-| CSRF gate | `shared/http/csrf/gate.ts` | Same-origin check for anything other than GET and HEAD |
-| GET mutations | `shared/http/csrf/exceptions.ts` | Paths a non-POST route may mark `mutates` |
-| Security headers | `shared/http/headers.ts` | Every header but the CSP, which is web's own |
-| Client address | `shared/http/trustedProxy.ts`, `shared/http/clientIp.ts` | The edge header, or the socket where there is no edge |
-| Body limit | `shared/http/limits/bodyLimit.ts` | Caps the request body |
-| Rate limit | `shared/http/limits/rateLimit.ts`, `shared/http/limits/policy.ts` | The primitive. Each interface owns its policy table |
-| Return path | `shared/http/returnPath.ts` | Turns an untrusted "next" value into a same-origin path or nothing |
-| Errors | `shared/http/errors.ts` | Response by code and group |
-| Config fragment | `shared/http/config.ts` | `httpKitConfig`, merged into each entrypoint schema |
-| Shutdown | `shared/http/shutdown.ts` | Drain on SIGTERM |
-
-`defineRoute` accepts methods `GET`, `HEAD` and `POST`, and groups `app`, `public`, `profile`, `static`, `media`, `admin`, `api`. `rateLimit` is required. `exempt` is allowed only for group `static`. `session` is `"required"`, `"handler"` or `"none"`, with no default. `"required"` sets `requiresSession`. `"handler"` sets `handlerSession` and leaves `requiresSession` unset, so `middlewareOf` does not add `session` or `rateLimitDid`, and a per-DID policy still requires `session: "required"` (`checkRoutes` and `middlewareOf` in `server.ts`). A route's deadline is its `deadlineMs` or `REQUEST_DEADLINE_MS`. A set `deadlineMs` is an integer from 1000 to 120000.
-
-`createServer`'s `gate` is a `SessionGate` ([ADR 0045](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0045-kit-enforces-the-session-gate.md)). A route with `requiresSession` and no gate throws before the server listens. `admit` calls the gate after the CSRF check and inside the route's deadline. A `Response` is sent and the handler does not run. An admission has to name a non-empty `did`; otherwise the answer is `internal.error` and the per-DID bucket is not taken. An admitted request is then limited per DID when the policy has a `did` entry. The handler of a request that passes receives that admission's `session` on the context. The handler `defineRoute` stores for `"required"` throws if the context has no `session`. A gate that throws is an error response: `internal.error`, or the thrown `AppError` code. `"handler"` and `"none"` do not call the gate.
-
-`defineRoute` refuses `{ mutates: true }` on a non-POST unless the path is in `GET_MUTATION_EXCEPTIONS`. The only entry is `GET /oauth/callback`. The CSRF gate still runs only for `POST` (`csrfDenied`).
-
-`createCsrfGate` (`shared/http/csrf/gate.ts`) allows GET and HEAD. For anything else it decides in this order, and a throw denies:
-
-| Step | Result |
-| --- | --- |
-| `Sec-Fetch-Site: same-origin` | Allow |
-| `Sec-Fetch-Site: cross-site` or `same-site` | Deny |
-| `Origin` present | Allow only when its lowercase value equals `PUBLIC_ORIGIN`'s origin. The value `null` denies. |
-| No `Origin`, `Referer` present | Allow only when the Referer's origin equals that same origin |
-| None of those headers | Deny |
-
-`ClientIp` prints, serialises and inspects as `[ip]`. The address leaves through `rateKey()`.
-
-`policiesFor` builds one policy per route group from config origins. `public` and `profile` set no `script-src`. `public` images are the assets path. `profile` images are the media origin. `media` sets `sandbox`.
-
-`safeReturnPath` returns a `SafePath` or `null`. `DENIED_TARGETS` is `/login`, `/logout` and `/oauth`.
-
-The kit's `index.ts` does not export the CSRF gate, the CSP builder, the proxy resolver or `/health`. Interfaces reach those through `createServer`. It does export `SessionGate`.
-
-## May import
-
-The non-leaf [`shared` row](../). Declared in `shared/http/package.json`:
-
-| Dependency | Version |
-| --- | --- |
-| `@hono/node-server` | 2.1.5 |
-| `hono` | 4.13.13 |
-| `@unset/shared-config` | workspace |
-| `@unset/shared-errors` | workspace |
-| `@unset/shared-log` | workspace |
-
-Who may import it is the [shared](../) table. On this tree the only product importer is `interfaces/http`. `apps/` does not import it.
-
-## Entry points
-
-| Export | Path |
-| --- | --- |
-| Package export `.` | `shared/http/index.ts` |
-| `createServer` | `shared/http/server.ts` |
-| `defineRoute` | `shared/http/routes.ts` |
-| `definePolicies`, `createRateLimiter` | `shared/http/limits/policy.ts`, `shared/http/limits/rateLimit.ts` |
-| `httpKitConfig`, `hostAllowed` | `shared/http/config.ts` |
-| `safeReturnPath`, `DENIED_TARGETS` | `shared/http/returnPath.ts` |
-| `errorResponse` | `shared/http/errors.ts` |
-
-Each interface calls `createServer` from its `compose.ts` and `defineRoute` from its route files. `bootOrExit` stays in [config](../config/).
-
-## Data
-
-No schema, role or table. Policy tables live in each interface's `limits.ts`. The kit's own keys are `httpKitConfig` in `shared/http/config.ts`, plus the common entrypoint keys from [config](../config/):
-
-| Key | Default in the field |
-| --- | --- |
-| `PUBLIC_ORIGIN` | none |
-| `HTTP_ALLOWED_HOSTS` | none |
-| `SHUTDOWN_GRACE_MS` | 10000 |
-| `REQUEST_DEADLINE_MS` | 30000 |
-| `TRUSTED_PROXY_MODE` | none (`header` or `socket`) |
-| `TRUSTED_PROXY_HEADER` | `""` |
-| `TRUSTED_PROXY_CIDRS` | `[]` |
-| `TRUSTED_PROXY_HOPS` | 1 |
-| `HTTP_BODY_LIMIT_BYTES` | 65536 |
-| `RATE_LIMIT_MAX_KEYS` | 100000 |
-| `MEDIA_ORIGIN` | none |
-
-`MEDIA_ORIGIN` must be a different site from `PUBLIC_ORIGIN`, except when `UNSET_SERVICE` is `media`.
+On this tree the product importers are `interfaces/web` and `interfaces/indexer` (`exitOnSignals` in `interfaces/indexer/main.ts`). `apps/` does not import it. Who else may import it is the [shared](../) table.
