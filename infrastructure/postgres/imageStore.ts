@@ -199,6 +199,26 @@ export function createImageStore(pool: Pool) {
         );
         return { kind: "deleted", images: deleted.rows.map((row) => ({ did: row.did, id: String(row.id) })) };
       }),
+
+    /**
+     * Which of these ids still have a row, with their member, and how many rows there are in all: the orphan sweep's
+     * read (interfaces/web image-orphans.ts). Like the sweep it acts for no member, so it has no DID predicate; the
+     * caller matches each row's DID to its folder's.
+     */
+    named: (
+      ids: readonly string[],
+      deadline: AbortSignal | null,
+    ): Promise<{ live: number; images: { did: Did; id: string }[] }> =>
+      withClient(pool, deadline, async (client) => {
+        const { rows } = await client.query<{ did: Did; id: string; live: number }>(
+          `SELECT i.did, i.id::text AS id, (SELECT count(*) FROM app.image)::int AS live
+             FROM (SELECT 1) one LEFT JOIN app.image i ON i.id = ANY($1::uuid[])`,
+          [ids],
+        );
+        const live = rows[0]?.live ?? 0;
+        const images = rows.filter((row) => row.id !== null).map((row) => ({ did: row.did, id: String(row.id) }));
+        return { live, images };
+      }),
   };
 }
 

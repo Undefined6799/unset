@@ -68,6 +68,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
+import { sweepOrphanImages } from "./image-orphans.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
 import { policiesFor } from "./limits.ts";
 import { publishedNote } from "./note.ts";
@@ -166,7 +167,7 @@ function reviewProcessor(guard: NetGuard): ImageProcessor {
 
 /**
  * The rows go first, all or nothing; then each image's objects. A delete that fails is counted and thrown after the
- * rest, so the sweep logs it; those objects stay until the orphan sweep (P2.19b follow-up) finds them.
+ * rest, so the sweep logs it; those objects stay until the orphan sweep (image-orphans.ts) finds them.
  */
 async function sweepImages(store: ImageStore, drafts: ObjectStore): Promise<void> {
   const swept = await store.sweep(null);
@@ -332,6 +333,11 @@ async function build(): Promise<Services> {
       { job: "sweep.invite", run: () => invites.store.clearExpired() },
       // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
       { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
+      // P2.19b: objects a failed delete left behind, once their rows are gone (image-orphans.ts).
+      {
+        job: "sweep.image_orphan",
+        run: () => sweepOrphanImages(drafts, { named: (ids) => images.store.named(ids, null) }),
+      },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,

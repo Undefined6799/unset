@@ -3943,6 +3943,11 @@ P2.19b, review follow-ups, built 2026-11-20 (#1844): the upload's deadline resta
 `bodyWindowMs` 120 s, then 100 s for review and the store); web sends review at most `REVIEW_LANES` (2) pictures at
 once; a timed-out upload keeps its slot until its review call ends. Four uploads per process stays (eight measured at
 about 910 MiB above web's base).
+P2.19b, orphan-object sweep, built 2026-11-20: web's sweeps also run `sweep.image_orphan`
+(`interfaces/web/src/lib/server/image-orphans.ts`). It lists `drafts/`, then reads which of the listed ids still have
+a row (`ImageStore.named`), and deletes each `drafts/<did>/i/<id>/` folder no row of that member names, all or nothing
+under the image sweep's governor. No age check: rows are written before objects and deleted before them, and ids are
+never reused, so a folder with no row at that read can never gain one. Keys of any other shape are left alone.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
