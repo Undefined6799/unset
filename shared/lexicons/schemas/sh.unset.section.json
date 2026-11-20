@@ -13,7 +13,7 @@
         "properties": {
           "content": {
             "type": "union",
-            "refs": ["#readme", "#links", "#collection", "#buttons"],
+            "refs": ["#readme", "#links", "#collection", "#buttons", "#image", "#gallery"],
             "description": "What the card holds. A kind a reader does not know hides the card; it is never an error."
           },
           "width": {
@@ -152,6 +152,11 @@
           "format": "uri",
           "maxLength": 2000,
           "description": "An http or https URL. A reader drops any other scheme."
+        },
+        "image": {
+          "type": "ref",
+          "ref": "sh.unset.defs#image",
+          "description": "A picture shown with the entry, in its own proportions."
         }
       }
     },
@@ -214,6 +219,51 @@
           "maxGraphemes": 40,
           "maxLength": 400,
           "description": "Button text for custom."
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["image"],
+      "description": "One picture with its caption and fit. Also each picture of a gallery.",
+      "properties": {
+        "image": {
+          "type": "ref",
+          "ref": "sh.unset.defs#image"
+        },
+        "caption": {
+          "type": "string",
+          "maxGraphemes": 300,
+          "maxLength": 3000,
+          "description": "Text shown under the picture."
+        },
+        "fit": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["contain", "fill"],
+          "description": "contain shows the whole picture in its own proportions; fill crops it to fill the space. Absent or unknown means contain."
+        }
+      }
+    },
+    "gallery": {
+      "type": "object",
+      "required": ["images"],
+      "description": "A small set of pictures.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000
+        },
+        "images": {
+          "type": "array",
+          "maxLength": 12,
+          "items": {
+            "type": "ref",
+            "ref": "#image"
+          },
+          "description": "In display order. A gallery holds at least one picture; the editor deletes a card left empty.",
+          "minLength": 1
         }
       }
     }

@@ -3,6 +3,7 @@
  */
 
 export * as authApp from "./unset/authApp.generated.ts";
+export * as defs from "./unset/defs.generated.ts";
 export * as follow from "./unset/follow.generated.ts";
 export * as profile from "./unset/profile.generated.ts";
 export * as section from "./unset/section.generated.ts";

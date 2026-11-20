@@ -114,6 +114,12 @@ Configurable per stack in the compose files.
 | `LIMITS.section.presetBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.buttonUriBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.buttonLabel` | `40` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.imageMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.imageAlt` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.imageCaption` | `300` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.fitBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.galleryTitle` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.galleryMax` | `12` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `IMAGE_ACCEPT` | `image/png, image/jpeg, image/webp, image/avif` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `APP_LIMITS.displayName` | `64` | profile editor | `domains/profile/profile.ts` |
 | `APP_LIMITS.headline` | `120` | profile editor | `domains/profile/profile.ts` |
