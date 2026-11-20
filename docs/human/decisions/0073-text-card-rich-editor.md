@@ -49,7 +49,10 @@ content into the member's own editor, which then becomes markdown that the serve
 What still holds: script-src still refuses inline scripts and inline event handlers, so markup with a script in it
 does not run even inside the detached document (tests/e2e/text-editor.spec.ts pastes `<img onerror>` and
 `<script>` and checks nothing ran). No other HTML sink gains a policy. The stored text is still parsed and escaped
-on the server, and public pages load no script at all.
+on the server, and public pages load no script at all. Inline `style` attributes in pasted HTML (Chromium copies
+computed styles that way) are refused by the app's `style-src-attr` while ProseMirror parses the paste; the browser
+logs that in the member's own console only (the app has no CSP reporting endpoint), and nothing is lost, since markdown
+keeps no styles.
 
 ## Alternatives
 
@@ -64,7 +67,8 @@ on the server, and public pages load no script at all.
 ## Compliance
 
 Parser tests cover the backslash escapes; browser tests under the app's real CSP cover the toolbar and markdown
-shortcuts, paste with no policy violation, a script in pasted markup not running, text saved untouched staying as
+shortcuts, a real keyboard copy and paste from a page with no CSP, in all three engines, with no Trusted Types
+violation, a script in pasted markup not running, text saved untouched staying as
 stored, and the phone layout; the existing card editor and no-script tests still pass; the gate test pins the
 policy's exact text.
 
