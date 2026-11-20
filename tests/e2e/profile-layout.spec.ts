@@ -14,7 +14,7 @@ const OWN_PAGE: PageFixture = {
   member: "account",
 };
 
-/** Adds one README card as a plain form post and returns its controls' group. */
+/** Adds one Text card as a plain form post and returns its controls' group. */
 async function withReadme(page: Page) {
   const status = await page.evaluate(async () => {
     const body = new URLSearchParams({ kind: "readme", width: "full", text: "# Layout check" });
@@ -25,16 +25,16 @@ async function withReadme(page: Page) {
   expect(status).toBe(303);
   await page.reload();
   await page.waitForLoadState("networkidle");
-  return page.getByRole("group", { name: "README card" });
+  return page.getByRole("group", { name: "Text card" });
 }
 
-/** Deletes the README added through its menu's Delete, so the member page is as the other specs expect it. */
+/** Deletes the Text card added through its menu's Delete, so the member page is as the other specs expect it. */
 async function removeReadme(page: Page) {
-  const card = page.getByRole("group", { name: "README card" });
-  await card.getByRole("button", { name: "More for README card" }).click();
+  const card = page.getByRole("group", { name: "Text card" });
+  await card.getByRole("button", { name: "More for Text card" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   // Staging audit 2026-11-19: the confirm names the card it deletes.
-  await expect(page.getByRole("dialog").getByRole("heading")).toHaveText("Delete README card?");
+  await expect(page.getByRole("dialog").getByRole("heading")).toHaveText("Delete Text card?");
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(card).toHaveCount(0);
 }
@@ -47,7 +47,7 @@ test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", asy
   const card = await withReadme(page);
   try {
     const name = await page.getByRole("heading", { level: 1 }).boundingBox();
-    const readme = await page.getByText("README.md", { exact: true }).boundingBox();
+    const readme = await page.getByRole("heading", { level: 2, name: "Layout check" }).boundingBox();
     expect(name !== null && readme !== null && name.x + name.width <= readme.x).toBe(true);
     await expect(page.getByRole("link", { name: "Add card" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Edit profile" })).toHaveAttribute("href", "/settings/profile");
@@ -56,7 +56,7 @@ test("the_side_column_sits_left_of_the_cards_and_controls_are_always_shown", asy
     await expect(card).toHaveCSS("opacity", "1");
     await expect(edit).toBeVisible();
     await expect(edit).toHaveCSS("height", "32px");
-    await expect(card.getByRole("button", { name: "More for README card" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "More for Text card" })).toBeVisible();
     const editBox = await edit.boundingBox();
     expect(editBox !== null && readme !== null && editBox.x > readme.x).toBe(true);
   } finally {
@@ -91,29 +91,16 @@ test.describe("phone", () => {
     try {
       await expect(card.getByRole("link", { name: "Edit" })).toHaveCSS("height", "44px");
       const name = await page.getByRole("heading", { level: 1 }).boundingBox();
-      const readme = await page.getByText("README.md", { exact: true }).boundingBox();
+      const readme = await page.getByRole("heading", { level: 2, name: "Layout check" }).boundingBox();
       expect(name !== null && readme !== null && name.y + name.height <= readme.y).toBe(true);
       const width = await page.evaluate(() => {
         const root = (globalThis as unknown as { document: { documentElement: { scrollWidth: number } } }).document;
         return root.documentElement.scrollWidth;
       });
       expect(width).toBeLessThanOrEqual(320);
-      // Staging walkthrough 2026-11-19: with a handle and the card's controls in the bar, a phone broke the file name
-      // ("READM", "E.md"). This member has no verified handle, so the card is narrowed to leave the name as little
-      // room; it stays on one line and the bar's other parts give way.
-      const file = page.getByText("README.md", { exact: true });
-      await file.evaluate((element) => {
-        type Box = { closest: (selector: string) => { style: { width: string } } | null };
-        const card = (element as unknown as Box).closest('[data-slot="card"]');
-        if (card !== null) card.style.width = "120px";
-      });
-      const lineHeight = Number.parseFloat(
-        await file.evaluate((element) => {
-          const view = globalThis as unknown as { getComputedStyle: (node: object) => { lineHeight: string } };
-          return view.getComputedStyle(element).lineHeight;
-        }),
-      );
-      expect((await file.boundingBox())?.height).toBeLessThan(lineHeight * 1.5);
+      // P1.21p: the Text card has no file-name bar and no heading of its own; the member's # is the card's h2.
+      await expect(page.getByText("README.md")).toHaveCount(0);
+      await expect(card.getByRole("heading", { level: 2 })).toHaveText("Layout check");
     } finally {
       await removeReadme(page);
     }
