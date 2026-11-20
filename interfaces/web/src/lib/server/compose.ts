@@ -152,7 +152,12 @@ const REVIEW_ANSWER_BYTES = 8 * 1024 * 1024;
  */
 function reviewProcessor(guard: NetGuard): ImageProcessor {
   const send = guardedFetch(guard, review(config.REVIEW_URL), { timeoutMs: 30_000, maxBytes: REVIEW_ANSWER_BYTES });
-  return createRemoteImageProcessor(async (body, headers) => {
+  return createRemoteImageProcessor(async (bytes, headers) => {
+    // fetch's BodyInit (DOM library, svelte-check) takes only an ArrayBuffer-backed view. The upload's bytes come
+    // from File.arrayBuffer(), so this re-views them without a copy; anything else is a programming error.
+    const { buffer } = bytes;
+    if (!(buffer instanceof ArrayBuffer)) throw new TypeError("review body is not backed by an ArrayBuffer");
+    const body = new Uint8Array(buffer, bytes.byteOffset, bytes.byteLength);
     const answer = await send(new URL(PROCESS_PATH, config.REVIEW_URL), { method: "POST", body, headers });
     const contentType = answer.headers.get("content-type") ?? "";
     return { status: answer.status, contentType, body: new Uint8Array(await answer.arrayBuffer()) };
