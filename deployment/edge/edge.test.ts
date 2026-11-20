@@ -735,3 +735,15 @@ describe("local stack files (P1.34c)", () => {
     expect(readdirSync(join(EDGE, "local")).sort()).toEqual(["app.caddy", "tls.caddy"]);
   });
 });
+
+describe("dev leaf (P1.21w)", () => {
+  test("dev_leaf_runbook_names_every_dev_site", () => {
+    // Caddy v2.11.9 automates a certificate for every site name no loaded certificate covers
+    // (modules/caddyhttp/autohttps.go:200-207, HasCertificateForSubject), so a dev site missing from the leaf the
+    // runbook makes would start ACME on the staging edge, against ADR 0032 Decision 1 (Codex on #1829).
+    const runbook = readFileSync(join(EDGE, "..", "..", "docs", "human", "runbooks", "dev-stack-secrets.md"), "utf8");
+    const san = /subjectAltName=([^\\\n']+)\\n/.exec(runbook)?.[1];
+    const names = san?.split(",").map((entry) => entry.replace(/^DNS:/, ""));
+    expect(names?.sort()).toEqual([DEV_APP.APP_HOST, DEV_DOCS.DOCS_HOST, "staging.unset.ac"].sort());
+  });
+});

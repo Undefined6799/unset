@@ -17,7 +17,11 @@ edge needs no restart.
    certificate check off for the target, **TLS Server Name** `docs.unset.sh`. Turn the resource's login off: the docs
    are public, in the repository already. Pangolin sends no SNI to an IP target without the TLS Server Name, and the
    edge refuses a handshake without one (ADR 0032 Decision 5).
-3. Deploy the stack from a checkout that has this change (the edge gains the docs site and the folder bind), then
+3. **The dev leaf.** Remake the edge's self-signed leaf with `docs.unset.sh` as its third name, as
+   `dev-stack-secrets.md` ("The dev edge's self-signed leaf") now gives it, before the deploy below. Caddy asks a public
+   CA for a certificate for any site name the loaded leaf does not cover (Caddy v2.11.9
+   `modules/caddyhttp/autohttps.go:200-207`), which the staging edge must never do (ADR 0032 Decision 1).
+4. Deploy the stack from a checkout that has this change (the edge gains the docs site and the folder bind), then
    publish once, below.
 
 ## Each time: publish

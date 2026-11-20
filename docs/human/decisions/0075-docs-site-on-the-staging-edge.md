@@ -15,7 +15,9 @@ deliberate decision.
 
 1. **A third site on the staging edge.** `deployment/edge/dev/docs.caddy` serves `docs.unset.sh` as plain files with
    Caddy's `file_server`: no upstream, no new service, no new port. It binds the edge's `newt_edge` address and uses
-   the dev leaf, like the other two staging sites. The production edge and the local stack do not serve it.
+   the dev leaf, like the other two staging sites; the leaf gains `docs.unset.sh` as a third name, since Caddy would
+   otherwise ask a public CA for one (`modules/caddyhttp/autohttps.go:200-207`), and the runbook's after-deploy check
+   expects all three. The production edge and the local stack do not serve it.
 2. **The files.** The edge reads the built site from the checkout's `docs/site/public`, one read-only folder bind at
    `/srv/docs`. The folder is kept in git, empty but for `.gitkeep`, so the bind exists on every checkout. Publishing
    is a manual build with the pinned Hugo image (`docs/human/runbooks/docs-site.md`); there is no deploy workflow
