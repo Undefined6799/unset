@@ -35,6 +35,36 @@ async function ownPage(page: Page): Promise<void> {
   await page.waitForLoadState("networkidle");
 }
 
+/** A Contact card whose one button has a 40-grapheme label, the editor's limit (review of #1825). */
+const LONG_LABEL = "Book a long talk about trains and places";
+async function withLongContact(page: Page): Promise<void> {
+  const status = await page.evaluate(async (label) => {
+    const body = new URLSearchParams([
+      ["kind", "buttons"],
+      ["width", "full"],
+      ["heading", "Say hello"],
+      ["buttons.0.kind", "link"],
+      ["buttons.0.preset", "custom"],
+      ["buttons.0.uri", "https://example.com/talk"],
+      ["buttons.0.label", label],
+    ]);
+    const init = { method: "POST", body, headers: { accept: "text/html" }, redirect: "manual" } as const;
+    const answer = await fetch("?/create", init);
+    return answer.type === "opaqueredirect" ? 303 : answer.status;
+  }, LONG_LABEL);
+  expect(status).toBe(303);
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+}
+
+async function removeContact(page: Page): Promise<void> {
+  const card = page.getByRole("group", { name: "Say hello card" });
+  await card.getByRole("button", { name: "More for Say hello card" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await expect(card).toHaveCount(0);
+}
+
 const avatar = (page: Page) => page.getByRole("button", { name: /^About / });
 const details = (page: Page) => page.getByRole("region", { name: "About" });
 
@@ -109,10 +139,16 @@ test.describe("phone", () => {
     await chooseLayout(page, "Compact header");
     try {
       await ownPage(page);
+      await withLongContact(page);
       await avatar(page).tap();
       await expect(details(page)).toBeVisible();
       const box = await details(page).boundingBox();
       expect(box !== null && box.x >= 0 && box.x + box.width <= 320).toBe(true);
+      // The longest Contact label wraps inside the panel instead of running past its edge.
+      const action = await details(page).getByRole("link", { name: LONG_LABEL }).boundingBox();
+      expect(box !== null && action !== null && action.x + action.width <= box.x + box.width).toBe(true);
+      await page.keyboard.press("Escape");
+      await removeContact(page);
       const width = await page.evaluate(() => {
         const root = (globalThis as unknown as { document: { documentElement: { scrollWidth: number } } }).document;
         return root.documentElement.scrollWidth;

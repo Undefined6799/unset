@@ -207,7 +207,13 @@ function toggled(event: ToggleEvent): void {
     </div>
   </dl>
   {#if contact !== null}
-    <Button href={contact.href} rel="nofollow ugc noopener noreferrer" class="self-start">{contact.label}</Button>
+    <!-- A label of up to 40 graphemes wraps inside the panel on a 320px screen, as card-footer buttons do (app.css): the
+         stock Button never wraps, and cn() lets these classes replace its nowrap and fixed height. -->
+    <Button
+      href={contact.href}
+      rel="nofollow ugc noopener noreferrer"
+      class="h-auto min-h-9 max-w-full self-start whitespace-normal text-left">{contact.label}</Button
+    >
   {/if}
 </section>
 {#if notes !== undefined}
