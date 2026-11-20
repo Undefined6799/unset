@@ -29,8 +29,13 @@ export function reviewListener(processor: ImageProcessor, counted: (outcome: Out
       return;
     }
     readBody(request, length).then(
-      (bytes) =>
-        run(processor, bytes, job, response, counted).catch(() => refuse(response, counted, "image.cannot_use")),
+      async (bytes) => {
+        try {
+          await run(processor, bytes, job, response, counted);
+        } catch {
+          refuse(response, counted, "image.cannot_use");
+        }
+      },
       () => refuse(response, counted, "bad_request"),
     );
   };
