@@ -2526,6 +2526,28 @@ As built (2026-11-19, Alex: the notice was "permanent on the profile page"): mig
   banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
   there and the seen column its read state.
 
+### P2.27 — Notifications: the bell, the page and the first two sources
+Tags: [SEC]            Depends on: P2.12b, P2.13c            Plan: §4 (decision 25's inbox item superseded by ADR 0079); §6 "no user sign-in records"
+Alex 2026-11-20 20:02Z and 20:22Z (plan /mnt/project-files/plans/notifications/plan.md). ADR 0079, Proposed.
+
+**What:** `domains/notifications` lists a member's notifications, newest first: a new sign-in (another live session of
+the member that began after this browser's, worked out from app.session, never stored) and a changed privacy notice
+(P2.12b's seen column). The bell shows the count and the newest 5, with the session read; `/notifications` shows 50.
+Each entry is a plain form that marks it opened and goes to its subject; Mark all as read names the newest listed.
+Migration 0036 adds `app.session.sign_ins_seen_at`, per browser, forward only, never past now().
+**Tests:** tests/integration/session/sign-ins.test.ts, tests/integration/web/app/notifications.test.ts (denial,
+viewing changes nothing, double and stale posts, a sign-in after the list, bad forms, cross-site), the limits budget,
+`/notifications` in the e2e and axe pages.
+**Not in this step:** stored notifications, the Settings › Privacy keep-30-days choice (ADR 0079 point 5: with the first
+stored source), a device-only reminder for an unsaved profile (point 6, with in-place editing), email, push, live
+updates.
+
+### P2.27a — The keep-30-days choice with the first stored notification
+Tags: [SEC]            Depends on: P2.27
+Waits for the first notification source that cannot be derived.
+**What:** ADR 0079 point 5: the `app.notification` table, its erasure and export lines, deleted on open by default,
+the Settings › Privacy choice to keep read ones for 30 days, and the 30-day ceiling on every row.
+
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a
 Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit

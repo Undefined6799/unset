@@ -81,3 +81,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0073](0073-text-card-rich-editor.md) | The Text card is written in a Milkdown editor over the plain field, loaded on open; the CSP adds the one Trusted Types name `ProseMirrorClipboard` (P1.21u) | Proposed (awaiting Alex) |
 | [0075](0075-docs-site-on-the-staging-edge.md) | The docs site at docs.unset.sh is a third site on the staging edge, served as files from the checkout with its own CSP and zone (P1.21w) | Accepted 2026-11-20 |
 | [0076](0076-image-uploads-up-to-64-mib.md) | Image uploads up to 64 MiB and 110 megapixels; web, net-guard and review caps, memory and the edge's read window rise with it (P2.19e) | Accepted 2026-11-20 |
+| [0079](0079-notifications-in-core.md) | Notifications are a core feature: the bell and /notifications, worked out from sessions and the notice seen column, gone once opened; the stored model fixed for the first source that needs it (P2.27) | Proposed (awaiting Alex) |

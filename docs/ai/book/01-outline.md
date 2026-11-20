@@ -576,6 +576,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
 | P2.12b | Show the privacy notice once | [SEC] | P2.12 | `phase-2.md` |
 | P2.12c | Close the welcome axe gaps | — | P2.12a | `phase-2.md` |
+| P2.27 | Notifications: the bell, the page and the first two sources | [SEC] | P2.12b, P2.13c | `phase-2.md` |
+| P2.27a | The keep-30-days choice with the first stored notification | [SEC] | P2.27 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13d | Keep next and handle after a sign-in theme change | [SEC] | P1.25f | `phase-2.md` |
