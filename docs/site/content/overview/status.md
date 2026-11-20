@@ -19,11 +19,11 @@ Sign-in, onboarding and the account page are in [What unset is](../what-is-unset
 
 ## Processes
 
-`interfaces/http` is the only process folder on this tree.
-
-| Folder | Manifest routes |
+| Folder | What it does |
 | --- | --- |
-| `interfaces/http` | [What unset is](../what-is-unset/) |
+| `interfaces/web` | The SvelteKit web server for `apps/web`. Routes are on [Endpoints](../../endpoints/) |
+| `interfaces/indexer` | Reads our PDS's stream into `idx`; off unless `INDEXER_ENABLED` |
+| `interfaces/pds-admin` | Holds the PDS admin password and issues member invites for web |
 
 ## Folders
 
@@ -32,8 +32,8 @@ Decision 34 is [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/
 | Boundary | On this tree |
 | --- | --- |
 | `apps/` | `web` |
-| `interfaces/` | `http` |
+| `interfaces/` | `indexer`, `pds-admin`, `web` |
 | `domains/` | `identity`, `profile` |
-| `infrastructure/` | `audit`, `net-guard`, `pds`, `postgres`, `seal`, `session`, `storage` |
-| `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
+| `infrastructure/` | `audit`, `firehose`, `net-guard`, `pds`, `postgres`, `seal`, `session`, `storage` |
+| `shared/` | `admin-envelope`, `config`, `errors`, `host-pin`, `http`, `lexicons`, `log`, `safe-href`, `ui`, `ui-build` |
 | `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, `compose.dev.yaml`, `compose.dev.source.yaml`, `compose.local.yaml` |
