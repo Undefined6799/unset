@@ -21,7 +21,6 @@ import type {
   VersionSpec,
 } from "@unset/domains-content";
 import type { JobMessage } from "./child.ts";
-import type { JobResult } from "./encode.ts";
 import { sniffImage } from "./sniff.ts";
 
 export type PoolOptions = {
@@ -51,7 +50,6 @@ type Slot = {
   starting: NodeJS.Timeout | null;
   busy: { id: number; job: Job; timer: NodeJS.Timeout } | null;
 };
-type ChildMessage = { readonly ready: true } | { readonly id: number; readonly result: JobResult };
 
 const PRLIMIT = "/usr/bin/prlimit";
 const FIRST_BACKOFF_MS = 250;
@@ -92,17 +90,27 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     slot.ready = false;
     slot.starting = setTimeout(() => failedStart(slot), options.startTimeoutMs ?? 10_000);
     slot.starting.unref();
-    child.on("message", (message: ChildMessage) => {
+    child.on("message", (message: unknown) => {
       if (slot.child !== child) return;
-      if ("ready" in message) {
+      // A taken-over child can send anything: a message that is not one of the two shapes ends the child (and its
+      // job, as cannot_use) rather than throwing in the parent.
+      if (!isRecord(message)) {
+        failChild(slot);
+        return;
+      }
+      if (message.ready === true) {
         clearStarting(slot);
         slot.ready = true;
         slot.failures = 0;
         options.onEvent?.("ready");
         updateDown();
         dispatch();
-      } else if (slot.busy?.id === message.id) {
-        finish(slot, toProcessResult(message.result, slot.busy.job), false);
+      } else if (slot.busy !== null && slot.busy.id === message.id) {
+        const result = toProcessResult(message.result, slot.busy.job);
+        // A malformed answer also ends the child; a well-formed refusal leaves it running.
+        finish(slot, result ?? { kind: "refused", code: "image.cannot_use" }, result === null);
+      } else {
+        failChild(slot);
       }
     });
     const died = () => {
@@ -115,6 +123,12 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     };
     child.on("exit", died);
     child.on("error", died);
+  }
+
+  /** A child that broke the protocol: its job, if any, is cannot_use and it is replaced; idle, it is a failed start. */
+  function failChild(slot: Slot): void {
+    if (slot.busy !== null) finish(slot, { kind: "refused", code: "image.cannot_use" }, true);
+    else failedStart(slot);
   }
 
   /** A child that died before it was ready or while idle, or never said it was ready: back off, then start again. */
@@ -210,30 +224,39 @@ const refused = (code: Extract<ProcessResult, { kind: "refused" }>["code"]): Pro
 /**
  * What a child answered, checked as untrusted: an exploited decoder controls its own answer, so the parent recomputes
  * every SHA-256 and accepts only the versions it asked for, each once, within its byte limit and with sane sizes, and
- * only the refusal codes it knows. Anything else reads as `image.cannot_use`.
+ * only the refusal codes it knows. Anything else is null: the job is `image.cannot_use` and the child is replaced.
  */
-function toProcessResult(result: JobResult, job: Job): ProcessResult {
-  const cannot: ProcessResult = { kind: "refused", code: "image.cannot_use" };
-  if (result.kind === "refused") return REFUSALS.has(result.code) ? { kind: "refused", code: result.code } : cannot;
-  if (result.kind !== "ok" || !size(result.width, job.limits.maxEdge) || !size(result.height, job.limits.maxEdge)) {
-    return cannot;
+function toProcessResult(result: unknown, job: Job): ProcessResult | null {
+  const cannot = null;
+  if (!isRecord(result)) return cannot;
+  if (result.kind === "refused") {
+    return REFUSALS.has(result.code as ImageRefusal) ? { kind: "refused", code: result.code as ImageRefusal } : cannot;
   }
+  const { width, height } = result;
+  if (result.kind !== "ok" || !Array.isArray(result.versions)) return cannot;
+  if (!size(width, job.limits.maxEdge) || !size(height, job.limits.maxEdge)) return cannot;
   const specs = new Map(job.versions.map((v) => [`${v.name}.${v.format}`, v]));
   const versions: ImageVersion[] = [];
-  for (const v of result.versions) {
-    const key = `${v.name}.${v.format}`;
-    const spec = specs.get(key);
+  for (const v of result.versions as unknown[]) {
+    if (!isRecord(v)) return cannot;
+    const spec = specs.get(`${String(v.name)}.${String(v.format)}`);
     if (spec === undefined || !(v.bytes instanceof Uint8Array) || v.bytes.length === 0) return cannot;
-    if (v.bytes.length > spec.maxBytes || !size(v.width, MAX_VERSION_EDGE) || !size(v.height, MAX_VERSION_EDGE)) {
-      return cannot;
+    if (!size(v.width, MAX_VERSION_EDGE) || !size(v.height, MAX_VERSION_EDGE)) return cannot;
+    specs.delete(`${spec.name}.${spec.format}`);
+    // The child leaves out an optional version it could not fit; one that arrives over its cap anyway is dropped.
+    if (v.bytes.length > spec.maxBytes) {
+      if (spec.required) return cannot;
+      continue;
     }
-    specs.delete(key);
     const sha256 = createHash("sha256").update(v.bytes).digest("hex");
     versions.push({ name: spec.name, format: spec.format, width: v.width, height: v.height, bytes: v.bytes, sha256 });
   }
   if ([...specs.values()].some((spec) => spec.required)) return cannot;
-  return { kind: "ok", source: { format: job.format, width: result.width, height: result.height }, versions };
+  return { kind: "ok", source: { format: job.format, width, height }, versions };
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const REFUSALS: ReadonlySet<ImageRefusal> = new Set<ImageRefusal>([
   "image.too_large",

@@ -57,8 +57,8 @@ export async function runJob(
   try {
     for (const spec of specs) {
       const made = await makeVersion(open, spec, width, height);
-      if (made === null) return { kind: "refused", code: "image.too_large" };
-      versions.push(made);
+      if (made === "too_large") return { kind: "refused", code: "image.too_large" };
+      if (made !== "omitted") versions.push(made);
     }
   } catch (error) {
     return refusal(error);
@@ -71,13 +71,16 @@ function refusal(error: unknown): JobResult {
   return { kind: "refused", code: tooMany ? "image.too_many_pixels" : "image.cannot_use" };
 }
 
-/** The version at falling qualities until it fits; null when a required one never does. */
+/**
+ * The version at falling qualities until it fits. One that never fits is `too_large` when required, which refuses the
+ * upload, and `omitted` when optional: a hard photo never fails on a display size, and the page uses another one.
+ */
 async function makeVersion(
   open: () => Sharp,
   spec: VersionSpec,
   width: number,
   height: number,
-): Promise<ImageVersion | null> {
+): Promise<ImageVersion | "too_large" | "omitted"> {
   let smallest: { data: Buffer; info: OutputInfo } | undefined;
   for (let quality = spec.quality; quality >= spec.minQuality; quality -= 10) {
     const out = await encode(shaped(open().rotate(), spec, width, height), spec.format, quality).toBuffer({
@@ -86,8 +89,7 @@ async function makeVersion(
     if (smallest === undefined || out.data.length < smallest.data.length) smallest = out;
     if (out.data.length <= spec.maxBytes) break;
   }
-  if (smallest === undefined) return null;
-  if (smallest.data.length > spec.maxBytes && spec.required) return null;
+  if (smallest === undefined || smallest.data.length > spec.maxBytes) return spec.required ? "too_large" : "omitted";
   const { data, info } = smallest;
   return {
     name: spec.name,

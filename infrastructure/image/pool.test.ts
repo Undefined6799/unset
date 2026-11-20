@@ -347,6 +347,17 @@ describe("the pool", () => {
     }
   }, 20_000);
 
+  test("ingest.optional_over_cap: a display version that cannot fit is left out, and the upload still succeeds", async () => {
+    const noise = new Uint8Array(1200 * 800 * 3);
+    for (let i = 0; i < noise.length; i++) noise[i] = (i * 2654435761) >>> 24;
+    const photo = await sharp(noise, { raw: { width: 1200, height: 800, channels: 3 } })
+      .png()
+      .toBuffer();
+    const tight: VersionSpec = { ...SMALL, name: "tiny", maxBytes: 1000 };
+    const result = ok(await run(photo, [MAIN, tight]));
+    expect(result.versions.map((v) => v.name)).toEqual(["main"]);
+  }, 60_000);
+
   test("pool.start_timeout: a child that never says it is ready is killed, counted and the pool goes down", async () => {
     const down = eventOf("down");
     const events: string[] = [];
@@ -387,6 +398,32 @@ describe("the pool", () => {
       lying.close();
     }
   });
+
+  test("pool.malformed_answers: null or a misshapen answer is cannot_use, never a crash of the parent", async () => {
+    const input = new Uint8Array(await anyJpeg());
+    for (const name of ["null-child.ts", "bad-versions-child.ts"]) {
+      const broken = createImagePool({
+        children: 1,
+        queueMax: 1,
+        timeoutMs: 5000,
+        addressSpaceMb: 4096,
+        childPath: fixture(name),
+      });
+      try {
+        expect(await broken.process(input, LIMITS, [MAIN]), name).toEqual({
+          kind: "refused",
+          code: "image.cannot_use",
+        });
+        // The child was replaced and the parent still answers.
+        expect(await broken.process(input, LIMITS, [MAIN]), name).toEqual({
+          kind: "refused",
+          code: "image.cannot_use",
+        });
+      } finally {
+        broken.close();
+      }
+    }
+  }, 20_000);
 
   test("pool.recovers: a pool that went down comes back up once a child starts", async () => {
     // The fixture child counts its starts here (it runs with an empty environment, so its tmpdir is /tmp).

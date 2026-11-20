@@ -24,7 +24,10 @@ export type VersionSpec = {
   readonly quality: number;
   readonly minQuality: number;
   readonly maxBytes: number;
-  /** Still over `maxBytes` at `minQuality`: true refuses the upload as too large, false keeps the smallest. */
+  /**
+   * Still over `maxBytes` at `minQuality`: true refuses the upload as too large; false leaves this version out, so a
+   * hard photo never fails on a display size. A result never holds a version over its `maxBytes`.
+   */
   readonly required: boolean;
 };
 
