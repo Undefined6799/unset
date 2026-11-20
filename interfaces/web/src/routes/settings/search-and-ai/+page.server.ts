@@ -1,6 +1,6 @@
 // POST /settings/search-and-ai: the member's Search and AI choices (ADR 0062) as a form action, saved in Postgres for
 // the session's own DID, never one from the form (SE-2). The gate has checked the session, the CSRF origin, the body
-// and the limit. A save answers 303 back to Settings › Profile; a refusal shows its code and the field to blame. The
+// and the limit. A save answers 303 back to Settings › Privacy (P1.21y); a refusal shows its code and the field to blame. The
 // route has no page of its own, so a GET is a 404, as /profile's is.
 import { type Actions, error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { parseDiscoverabilityForm } from "@unset/domains-profile";
@@ -25,6 +25,6 @@ export const actions: Actions = {
       error(ERROR_CODES[parsed.code].status, { message: parsed.code, ...blame });
     }
     await services().discoverability.save(did, parsed.value, locals.deadline);
-    redirect(303, "/settings/profile#search-and-ai");
+    redirect(303, "/settings/privacy?saved#search-and-ai");
   },
 };

@@ -4890,6 +4890,33 @@ edge rules and C18 accept exactly that site and that bind. Publishing is the man
 `docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
 merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
 
+### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
+
+Alex, 2026-11-20 18:55Z: "the privacy part will be to have the search and AI ... the search title and the search
+description ... will be an advanced setting ... some kind of preview of what people will see". The Search and AI form
+(ADR 0062) moves from the bottom of Settings › Profile to a new Settings › Privacy page in the side list. The title
+and description sit under a native `details` "Advanced" (works with no script; open when either is set). Inside it
+(Alex, 19:21Z: "add ... the search preview ... inside the advanced setting"), a preview
+draws the result the public page publishes: its address, the override or the name and headline, and the letter
+avatar until the media origin serves pictures (ADR 0070), when the page gains `og:image` and the preview the same
+picture. With no script the preview shows what is saved; with the client it follows the fields. The save keeps its
+path, `POST /settings/search-and-ai`, and now returns to `/settings/privacy?saved`. No data, lexicon or ADR change.
+Ownership: apps/web → interfaces/web.
+
+### P1.21z — Make the Text editor's buttons toggle and show state (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1
+
+Alex, 2026-11-20, after trying P1.21u on staging: "the button, they don't really work, but they kind of work, but I
+cannot select the text size". Each bar button shows whether it is on for the selection (`aria-pressed`) and a second
+press turns it off; a button the page could not show is unavailable; List and Numbered list switch kind. The heading
+sizes 1 to 3 and Normal text are a stock dropdown menu. A press keeps the editor's selection, so it acts on the words
+the member chose. The two parked P1.21u follow-ups ride along: a paste nesting lists deeper than the page shows is
+refused, and an escaped `]` inside an emphasised link keeps both. ADR 0073's acceptance record rides here too. No CSP
+or Trusted Types change. Ownership: apps/web (editor, Text card) → apps/web/lib/profile (parser).
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
