@@ -93,6 +93,8 @@ export const CARD_EDIT = {
   surface: "Surface",
   /** The card menu's name for Surface (Alex 2026-11-20: "Style"). */
   style: "Style",
+  /** Swaps a Text card's editor on the owner's page for its plain Markdown field (ADR 0074 item 4). */
+  showMarkdown: "Show Markdown",
   filled: "Filled",
   outlined: "Outlined",
   plain: "Plain",

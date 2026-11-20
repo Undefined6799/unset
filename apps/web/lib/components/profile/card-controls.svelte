@@ -12,7 +12,8 @@
   deleted card's place goes to the card that takes it (its first control), or the one before when it was last, or Add
   card when none is left; the page stays where it was (the page's enhance refreshes in place). On the owner's page with
   the editor in place (ADR 0074 item 4), a Text card's menu also holds its Width and Style as radio groups: a choice is
-  handed to `onchoose` and waits, with the card's words, for the page's one Save.
+  handed to `onchoose` and waits, with the card's words, for the page's one Save; and Show Markdown, which `markdown`
+  turns on and off (the page swaps the editor for the plain field).
 -->
 <script module lang="ts">
 /** The card a move button was pressed on, and which, until the new order arrives. */
@@ -48,6 +49,7 @@ let {
   enhance = () => undefined,
   chosen,
   onchoose,
+  markdown,
 }: {
   cards: readonly CardView[];
   index: number;
@@ -56,6 +58,8 @@ let {
   /** The Text card's Width and Style as the member last chose them, saved or not. */
   chosen?: { readonly width: CardWidth; readonly surface: CardSurface };
   onchoose?: (change: CardChange) => void;
+  /** Whether the Text card shows its plain Markdown field instead of the editor, and how to turn that over. */
+  markdown?: { readonly shown: boolean; readonly toggle: () => void };
 } = $props();
 
 
@@ -294,6 +298,12 @@ $effect(() => {
                 <DropdownMenu.RadioItem value={surface} closeOnSelect={false}>{CARD_EDIT[surface]}</DropdownMenu.RadioItem>
               {/each}
             </DropdownMenu.RadioGroup>
+            {#if markdown !== undefined}
+              <DropdownMenu.Separator />
+              <DropdownMenu.CheckboxItem bind:checked={() => markdown.shown, () => markdown.toggle()}
+                >{CARD_EDIT.showMarkdown}</DropdownMenu.CheckboxItem
+              >
+            {/if}
           {/if}
           {#if cards.length > 1 || choosesHere}<DropdownMenu.Separator />{/if}
           <DropdownMenu.Item variant="destructive" onSelect={removeFromMenu}
