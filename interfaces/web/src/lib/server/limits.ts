@@ -51,3 +51,10 @@ function withoutAddressEntries(table: PolicyTable): PolicyTable {
 /** Per address in `header` mode (the edge names the client); ceilings only in `socket` mode. */
 export const policiesFor = (mode: "header" | "socket"): PolicyTable =>
   mode === "socket" ? withoutAddressEntries(policies) : policies;
+
+/**
+ * Picture uploads held in memory at once (ADR 0070 point 4): one per member, four for the whole process. Measured
+ * 2026-11-20 (routes/images/upload.server.ts): four 64 MiB uploads parsed at once peak at about 510 MiB, inside web's
+ * 1 GB; a fifth is refused as busy and the editor says to try again.
+ */
+export const IMAGE_UPLOADS_IN_FLIGHT = 4;

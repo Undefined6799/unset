@@ -711,3 +711,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Image uploads up to 64 MiB (P2.19e, 2026-11-20; own record: [0076](0076-image-uploads-up-to-64-mib.md)):**
   uploads rise from 30 MB and 70 megapixels to 64 MiB and 110 megapixels, with web's, net-guard's and review's caps,
   memory and the edge's read window raised to match; the versions we keep do not change. Proposed, awaiting Alex.
+- **ADR 0076 accepted (Alex, 2026-11-20 18:53Z, against 7a1de42; own record:
+  [0076](0076-image-uploads-up-to-64-mib.md)):** image uploads up to 64 MiB and 110 megapixels, with web's, net-guard's
+  and review's caps, memory and the edge's read window raised to match.
