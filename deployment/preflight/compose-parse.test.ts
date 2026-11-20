@@ -704,6 +704,10 @@ secrets:
 // kills the whole run at 600 s (P1.27k, P1.27g). The tests that call it give 60 s, room for several compose files.
 const COMPOSE_CALL_MS = 10_000;
 const COMPOSE_TEST_MS = 60_000;
+// Under CI nothing probes at load, so `docker compose version` is the file's first Docker call and pays the CLI's and
+// the Compose plugin's cold start on the runner. It was killed at 10 s on a slow runner (#1848, f43dd7a), as the old
+// load probe once was (run 38646729832). It gets 30 s, inside the test's 60 s, and runs once per file.
+const COMPOSE_VERSION_MS = 30_000;
 
 /**
  * Whether the agreement tests run (P1.35f). Under CI they always do and nothing is probed: CI must have Compose (the
@@ -731,12 +735,19 @@ const composeRuns = agreementRuns(process.env, () => {
  */
 function composeVersion(env?: Readonly<Record<string, string>>): string {
   const ran = docker(["compose", "version", "--short"], {
-    timeoutMs: COMPOSE_CALL_MS,
+    timeoutMs: COMPOSE_VERSION_MS,
     ...(env === undefined ? {} : { env }),
   });
   if (ran.code !== 0) throw new Error(`docker compose version exited ${ran.code}`);
   return ran.out.trim();
 }
+
+/** The version the agreement tests record, asked once per file so only the first test pays the cold start. */
+let recorded: string | undefined;
+const recordedVersion = (): string => {
+  recorded ??= composeVersion();
+  return recorded;
+};
 
 /** The only variables the wrapper passes to Compose (ruling F3.3), from this process where set. */
 function allowlisted(): Record<string, string> {
@@ -983,7 +994,7 @@ describe("compose agreement", () => {
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
   // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
   test.runIf(composeRuns)("preflight_matches_compose_config", { timeout: COMPOSE_TEST_MS }, async ({ annotate }) => {
-    await annotate(`docker compose version ${composeVersion()}`);
+    await annotate(`docker compose version ${recordedVersion()}`);
     const fixture = join(dir, "compose.yaml");
     writeFileSync(fixture, STACK);
     writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
@@ -1002,7 +1013,7 @@ describe("compose agreement", () => {
   // from the file Compose does, on a fixture whose .env and env file disagree; a shell value, which Compose would prefer,
   // makes the preflight refuse to run. Compose runs with only the wrapper's allowlist (F3.3) plus the one name tried.
   test.runIf(composeRuns)("env_file_matches_compose_config", { timeout: COMPOSE_TEST_MS }, async ({ annotate }) => {
-    await annotate(`docker compose version ${composeVersion()}`);
+    await annotate(`docker compose version ${recordedVersion()}`);
     const inputs = join(dir, "inputs");
     mkdirSync(inputs);
     const file = join(inputs, "compose.yaml");
@@ -1061,7 +1072,7 @@ describe("compose agreement", () => {
     "project_directory_matches_compose_config",
     { timeout: COMPOSE_TEST_MS },
     async ({ annotate }) => {
-      await annotate(`docker compose version ${composeVersion()}`);
+      await annotate(`docker compose version ${recordedVersion()}`);
       const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
       mkdirSync(join(dir, "a"));
       mkdirSync(join(dir, "b"));
