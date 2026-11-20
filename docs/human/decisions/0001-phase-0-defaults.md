@@ -714,3 +714,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0076 accepted (Alex, 2026-11-20 18:53Z, against 7a1de42; own record:
   [0076](0076-image-uploads-up-to-64-mib.md)):** image uploads up to 64 MiB and 110 megapixels, with web's, net-guard's
   and review's caps, memory and the edge's read window raised to match.
+- **Text cards edited in place, one Save (P1.21v, 2026-11-20; own record:
+  [0074](0074-one-save-for-cards-edited-in-place.md)):** the owner edits Text cards on the page and one Save writes
+  every changed card in one applyWrites call on the repo head, each checked against the version its editor opened;
+  no script keeps per-card saves. Proposed, awaiting Alex.
