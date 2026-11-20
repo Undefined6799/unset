@@ -137,7 +137,7 @@ services:
       APP_HOST: ${APP_HOST}
       APP_UPSTREAM: web:8080
       ACME_EMAIL: ${EDGE_ACME_EMAIL}
-    secrets: [local_tls_cert, local_tls_key]
+    secrets: [local_tls_cert, local_tls_key, pds_web_key]
     ports:
       - 127.0.0.1:80:80
       - 127.0.0.1:443:443
@@ -200,6 +200,7 @@ services:
       # dev:up no pds-admin runs, so the Invite page answers that invites are unavailable.
       PDS_ADMIN_URL: http://pds-admin:8080
       PDS_ADMIN_WEB_KEY_FILE: /run/secrets/web_pds_admin_key
+      PDS_WEB_KEY_FILE: /run/secrets/pds_web_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
@@ -214,7 +215,7 @@ services:
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -413,6 +414,10 @@ secrets:
     file: ../../unset-dev-secrets/web_oauth_client_keys
   web_pds_admin_key:
     file: ../../unset-dev-secrets/web_pds_admin_key
+  # Web's mark on its own calls to our PDS (P1.21j; Proposed ADR 0071): 64 hex characters; web sends it, the edge
+  # compares it to give web's calls their own zones.
+  pds_web_key:
+    file: ../../unset-dev-secrets/pds_web_key
   local_tls_cert:
     file: ../../unset-dev-secrets/local_tls_cert
   local_tls_key:
