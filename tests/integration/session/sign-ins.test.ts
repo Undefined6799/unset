@@ -128,16 +128,23 @@ describe("new sign-in notifications", () => {
   test("sign_ins.marking_is_exact_to_the_microsecond", async () => {
     const did = await member();
     const me = await session(did, 7200);
+    // Two sign-ins one microsecond apart, a minute back on the database clock (Codex review of 897a6a1: fixed
+    // dates fell behind `me` once the clock passed them).
+    const [base] = await sql(
+      "SELECT to_char(date_trunc('second', now() - interval '60 seconds') AT TIME ZONE 'UTC', " +
+        "'YYYY-MM-DD\"T\"HH24:MI:SS') AS at",
+    );
+    const older = `${base?.at}.000001Z`;
+    const newest = `${base?.at}.000002Z`;
     await sql(
       "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) VALUES " +
-        "($1, $2, '2026-11-20T20:00:00.000001Z', now(), now() + interval '1 day'), " +
-        "($3, $2, '2026-11-20T20:00:00.000002Z', now(), now() + interval '1 day')",
-      [sha256(Buffer.alloc(32, 201)), did, sha256(Buffer.alloc(32, 202))],
+        "($1, $2, $4::timestamptz, now(), now() + interval '1 day'), " +
+        "($3, $2, $5::timestamptz, now(), now() + interval '1 day')",
+      [sha256(Buffer.alloc(32, 201)), did, sha256(Buffer.alloc(32, 202)), older, newest],
     );
-    const older = "2026-11-20T20:00:00.000001Z";
-    expect(await since(me.idHash, 50)).toEqual(["2026-11-20T20:00:00.000002Z", older]);
+    expect(await since(me.idHash, 50)).toEqual([newest, older]);
     await markSeen(me.idHash, older);
-    expect(await since(me.idHash, 50)).toEqual(["2026-11-20T20:00:00.000002Z"]);
+    expect(await since(me.idHash, 50)).toEqual([newest]);
   });
 
   test("sign_ins.marking_twice_or_with_an_older_time_never_reopens", async () => {
