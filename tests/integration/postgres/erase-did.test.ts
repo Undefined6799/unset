@@ -46,7 +46,12 @@ function seedApp(did: string, fill: string): void {
      INSERT INTO idx.track_request (did, requested_at) VALUES ('${did}', now());
      INSERT INTO app.discoverability (did, search_engines, updated_at) VALUES ('${did}', true, now());
      INSERT INTO app.invite (id, inviter_did, submission_id, state, created_at)
-       VALUES (gen_random_uuid(), '${did}', gen_random_uuid(), 'pending', now());`,
+       VALUES (gen_random_uuid(), '${did}', gen_random_uuid(), 'pending', now());
+     INSERT INTO app.image (id, did, kind, state, width, height, bytes, created_at)
+       VALUES (repeat('${fill}', 16)::uuid, '${did}', 'image', 'published', 1, 1, 1, now());
+     INSERT INTO app.image_use (image_id, record_uri)
+       VALUES (repeat('${fill}', 16)::uuid, 'at://${did}/sh.unset.section/3kaaaaaaaaaaa');
+     INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());`,
   );
 }
 
@@ -183,6 +188,9 @@ describe("core.erase_did", () => {
       "app.single_use": 1,
       "idx.track_request": 1,
       "app.discoverability": 1,
+      "app.image": 1,
+      "app.image_use": 1,
+      "app.image_upload": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -219,6 +227,9 @@ describe("core.erase_did", () => {
       "app.single_use": 0,
       "idx.track_request": 0,
       "app.discoverability": 0,
+      "app.image": 0,
+      "app.image_use": 0,
+      "app.image_upload": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,
