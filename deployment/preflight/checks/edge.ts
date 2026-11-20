@@ -75,9 +75,10 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
 }
 
 /**
- * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three and the docs site's two:
- * dev/app.caddy, dev/pds.caddy and dev/docs.caddy, each one read-only file bind at /etc/caddy/sites/enabled/<its
- * name>, dev/tls.caddy at /etc/caddy/snippets/tls.caddy (P1.38e), and the built docs at DOCS_ROOT (P1.21w; ADR 0075).
+ * The dev edge's site mounts, or why its binds are not exactly ADR 0032 Decision 3's three, the docs site's two and
+ * the media site's one: dev/app.caddy, dev/pds.caddy, dev/docs.caddy and dev/media.caddy (P2.19), each one read-only
+ * file bind at /etc/caddy/sites/enabled/<its name>, dev/tls.caddy at /etc/caddy/snippets/tls.caddy (P1.38e), and the
+ * built docs at DOCS_ROOT (P1.21w; ADR 0075).
  * No directory is mounted at the enabled sites, and the edge binds nothing else; siteMountsProblem then requires each
  * site from dev/ by its own name.
  */
@@ -334,8 +335,8 @@ function sourceExists(path: string): boolean {
 /** One read-only file mount at /etc/caddy/sites/enabled/`name`: the host file it binds and its name there (P1.34q). */
 type SiteMount = { source: string; name: string };
 
-/** The dev edge's three sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3; P1.21w). */
-const DEV_SITES = ["app.caddy", "docs.caddy", "pds.caddy"];
+/** The dev edge's four sites, each from deployment/edge/dev/ under its own name (ADR 0032 Decision 3; P1.21w; P2.19). */
+const DEV_SITES = ["app.caddy", "docs.caddy", "media.caddy", "pds.caddy"];
 /** The app site a local edge mounts from deployment/edge/local/ beside the shipped sites (P1.34a). */
 const LOCAL_APP_SITE = "app.caddy";
 
