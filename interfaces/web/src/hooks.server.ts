@@ -276,7 +276,9 @@ function withGroupHeaders(
   if (group === "app" && kit !== null) {
     // Under `vite dev` Vite serves files from other paths, so 'self' stays (ADR 0054 decision 5); the media origin is
     // added either way, so draft previews show in dev too (book P2.19).
-    const csp = dev ? withMediaImages(kit, config.MEDIA_ORIGIN) : narrowed(kit, config.PUBLIC_ORIGIN, config.MEDIA_ORIGIN);
+    const csp = dev
+      ? withMediaImages(kit, config.MEDIA_ORIGIN)
+      : narrowed(kit, config.PUBLIC_ORIGIN, config.MEDIA_ORIGIN);
     out.headers.set("content-security-policy", csp);
   } else {
     out.headers.set("content-security-policy", ZERO_SCRIPT[cspGroup]);
