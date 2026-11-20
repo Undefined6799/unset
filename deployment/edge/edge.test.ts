@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { ADAPTED_ENVS, type AdaptedEnvName, type Json, SENTINELS } from "./adapted.ts";
-import { adaptedProblems, DEV_APP } from "./adapted-rules.ts";
+import { adaptedProblems, DEV_APP, DEV_DOCS } from "./adapted-rules.ts";
 
 const EDGE = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(EDGE, file), "utf8");
@@ -296,10 +296,12 @@ describe("edge config", () => {
       );
     const pds = ruled(limits.rateLimitZones as Record<string, { events: number; window: string }>);
     const app = ruled(limits.appRateLimitZones as Record<string, { events: number; window: string }>);
+    const docs = ruled(limits.docsRateLimitZones as Record<string, { events: number; window: string }>);
     expect(adapted("prod")).toEqual([pds]);
-    // Dev: the app site's own zones and the PDS's. Local: both sites count on the PDS's zones (local/app.caddy).
-    expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds]));
-    expect(adapted("dev").length).toBe(2);
+    // Dev: the app site's own zones, the PDS's and the docs site's (P1.21w). Local: both sites count on the PDS's
+    // zones (local/app.caddy).
+    expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds, docs]));
+    expect(adapted("dev").length).toBe(3);
     expect(adapted("local")).toEqual([pds, pds]);
   });
 
@@ -399,15 +401,17 @@ describe("edge config", () => {
 
   test("every_pds_route_has_a_zone", () => {
     // On what Caddy adapts, for each env's files (P1.39d): the rules on the adapted config pass. The dev rules name
-    // the app site's two values, so the dev config is read with those in place of their sentinels.
+    // the app site's two values and the docs site's host, so the dev config is read with those in place of their
+    // sentinels.
     expect(adaptedProblems(reviewed("prod"), "shipped", SENTINELS)).toEqual([]);
     expect(adaptedProblems(reviewed("local"), "local", SENTINELS)).toEqual([]);
-    const devText = (["APP_HOST", "APP_UPSTREAM"] as const).reduce(
-      (text, name) => text.replaceAll(SENTINELS[name], DEV_APP[name]),
+    const ruled = { ...DEV_APP, ...DEV_DOCS };
+    const devText = (["APP_HOST", "APP_UPSTREAM", "DOCS_HOST"] as const).reduce(
+      (text, name) => text.replaceAll(SENTINELS[name], ruled[name]),
       read("adapted/dev.generated.json"),
     );
     expect(devText).toContain(DEV_APP.APP_HOST);
-    expect(adaptedProblems(JSON.parse(devText) as Json, "dev", { ...SENTINELS, ...DEV_APP })).toEqual([]);
+    expect(adaptedProblems(JSON.parse(devText) as Json, "dev", { ...SENTINELS, ...ruled })).toEqual([]);
   });
 
   test("edge_admin_api_off_in_config", () => {
@@ -434,7 +438,7 @@ describe("edge config", () => {
     const carried = ["request>client_ip", "request>headers", "request>remote_ip", "request>remote_port"];
     for (const env of ADAPTED_ENVS) {
       const logs = at(reviewed(env), "logging", "logs") as Obj;
-      const sites = env === "prod" ? 1 : 2;
+      const sites = { prod: 1, local: 2, dev: 3 }[env];
       expect(Object.keys(logs).sort(), env).toEqual(["default", ...Array.from({ length: sites }, (_, n) => `log${n}`)]);
       for (const [name, log] of Object.entries(logs)) {
         expect(at(log, "encoder", "format"), `${env} ${name}`).toBe("filter");

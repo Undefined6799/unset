@@ -210,6 +210,8 @@ jobs:
   # (gohugoio/hugo v0.168.0 Dockerfile, USER hugo) and a GitHub-hosted runner
   # is uid 1001, so the project directory has to be writable before hugo can
   # create public/ and resources/. Output is world-readable (umask 0022).
+  # public/ is kept in git (its .gitkeep, for the staging edge's bind, ADR
+  # 0075), so it is made writable too.
   docs-site:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
@@ -223,7 +225,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Let the Hugo user write the build
-        run: chmod a+rwx docs/site
+        run: chmod a+rwx docs/site docs/site/public
       - name: Build the docs site
         run: >-
           docker run --rm --entrypoint hugo -v "$PWD:/project" -w /project/docs/site "$HUGO_IMAGE"
