@@ -37,7 +37,7 @@ Fixed in config: `deployment/edge/snippets/security-headers.caddy`.
 
 ## Web headers on every response
 
-Fixed in code: `shared/http/csp/headers.ts`. These are the `static` group's headers, which web sends on every response (`interfaces/web/server.ts`); origins are shown by their setting name. The `media` group differs, since other sites embed it: `referrer-policy: no-referrer` and `cross-origin-resource-policy: cross-origin`.
+Fixed in code: `STATIC_CSP` in `interfaces/web/src/lib/server/csp.ts` and `SECURITY_HEADERS` in `shared/http/headers.ts`. Web sends them on every response (`interfaces/web/server.ts`); a page replaces the CSP with its group's, below.
 
 | Header | Value |
 | --- | --- |
@@ -57,6 +57,5 @@ Fixed in code: `interfaces/web/src/lib/server/csp.ts`.
 | Group | Content-Security-Policy |
 | --- | --- |
 | `public` | `default-src 'none'; img-src <PUBLIC_ORIGIN>/_app/; style-src <PUBLIC_ORIGIN>/_app/; font-src <PUBLIC_ORIGIN>/fonts/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'` |
-| `profile` | `default-src 'none'; img-src <MEDIA_ORIGIN>; style-src <PUBLIC_ORIGIN>/_app/; font-src <PUBLIC_ORIGIN>/fonts/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` |
 | `static` | `default-src 'none'; frame-ancestors 'none'` |
 | `app` | SvelteKit's own (kit.csp in interfaces/web/vite.config.ts); fallback `default-src 'none'; frame-ancestors 'none'` |

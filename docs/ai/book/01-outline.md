@@ -253,6 +253,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21m | Font metrics for the fallback faces (split from P1.21) | — | P1.21 | `phase-1.md` |
 | P1.21a | Settings overview pages on the docs site (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.21b | Site-wide switch for search and AI listing, off by default (added 2026-11-19) | — | — | `phase-1.md` |
+| P1.21c | Remove dead and duplicated code: old CSP copy, PDS failure result, job claim (added 2026-11-19) | — | — | `phase-1.md` |
+| P1.21d | Sign-out asks the session store which browsers are live (refactor, added 2026-11-19) | trusted | — | `phase-1.md` |
+| P1.21e | Record the account lifecycle and burned names, ADR 0067 (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
@@ -1671,6 +1674,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.08 | Handle registry rule | [SEC] | P3.06, P2.02 | `phase-3.md` |
 | P3.08k | Trusted base for discovery (split from P3.08d, SE-6) | [SEC] | P3.07, P3.08 | `phase-3.md` |
 | P3.08d | Find repos by their profile record (Tap signal collection) | [SEC] | P3.02, P3.05, P3.07, P3.08, P3.08k, P3.20c | `phase-3.md` |
+| P3.08n | Burn every hosted name a member held (ADR 0067) | [SEC] | P3.08, P3.07 | `phase-3.md` |
 | P3.09 | Media proxy for published blobs | [SEC] | P3.06, P2.19 | `phase-3.md` |
 | P3.10 | `api` entrypoint: public XRPC | [SEC] | P3.05, P1.06 | `phase-3.md` |
 | P3.11 | Service-auth JWT verifier; signed-in `getTimeline` and `searchProfiles` | [SEC] | P3.10, P1.16 | `phase-3.md` |

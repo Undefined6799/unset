@@ -142,16 +142,13 @@ const named = (value: string): string =>
   value.replaceAll(EXAMPLE.PUBLIC_ORIGIN, "<PUBLIC_ORIGIN>").replaceAll(EXAMPLE.MEDIA_ORIGIN, "<MEDIA_ORIGIN>");
 
 async function webHeaders(root: string): Promise<{ base: Row[]; pages: Row[] }> {
-  const headerSets = (await importNamed(root, "shared/http/csp/headers.ts", "headerSets")) as (
-    cfg: Record<string, string>,
-  ) => Record<string, Record<string, string>>;
-  const sets = headerSets({ UNSET_ENV: "prod", ...EXAMPLE, ASSETS_BASE: "", DEV_VITE_ORIGIN: "" });
-  const base = Object.entries(sets.static ?? {}).map(([name, value]) => [code(name), code(named(value))]);
-  const zeroScript = (await importNamed(root, "interfaces/web/src/lib/server/csp.ts", "zeroScriptCsp")) as (
-    origin: string,
-    media: string,
-  ) => Record<string, string>;
-  const groups = zeroScript(EXAMPLE.PUBLIC_ORIGIN, EXAMPLE.MEDIA_ORIGIN);
+  const csp = "interfaces/web/src/lib/server/csp.ts";
+  const staticCsp = (await importNamed(root, csp, "STATIC_CSP")) as string;
+  const security = (await importNamed(root, "shared/http/headers.ts", "SECURITY_HEADERS")) as Record<string, string>;
+  const sent = { "content-security-policy": staticCsp, ...security };
+  const base = Object.entries(sent).map(([name, value]) => [code(name), code(named(value))]);
+  const zeroScript = (await importNamed(root, csp, "zeroScriptCsp")) as (origin: string) => Record<string, string>;
+  const groups = zeroScript(EXAMPLE.PUBLIC_ORIGIN);
   const pages = Object.entries(groups).map(([group, csp]) => [
     code(group),
     group === "app"

@@ -6,8 +6,8 @@
 // handle then locks the rows of any other verified holder of it, to move them to 'unresolved'. Only this pass writes
 // handles and it runs one job at a time, so two transactions never lock those rows in opposite order; if one ever did,
 // Postgres would abort one and its job would be claimed again. Migration 0031 refuses a second verified holder either way.
-import { claimJobs, endJob } from "./accountStore.ts";
 import { count, isErased, lockAccount, queueJob } from "./indexStore.ts";
+import { claimJobs, endJob } from "./jobs.ts";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 

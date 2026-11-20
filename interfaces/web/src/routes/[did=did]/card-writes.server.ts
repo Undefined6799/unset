@@ -17,7 +17,7 @@ import {
   withCardOrder,
 } from "@unset/domains-profile";
 import type { BuiltRecord, CardList, CreateOutcome, PdsResult, SaveOutcome } from "@unset/infrastructure-pds";
-import { respondToPdsFailure } from "../../lib/server/pds-failure.ts";
+import { pdsSignInRedirect } from "../../lib/server/pds-failure.ts";
 
 /** The member's own card and profile records, already bound to their DID and this request's deadline. */
 export type CardStore = {
@@ -69,12 +69,10 @@ const SAVED: CardWrite = { kind: "saved" };
 const CREATE_ATTEMPTS = 2;
 const failed = (code: CardFailure): CardWrite => ({ kind: "failed", code });
 
-export function cardWrites(store: CardStore, pdsHost: string, now: () => string): CardWrites {
+export function cardWrites(store: CardStore, now: () => string): CardWrites {
   const pdsFailure = (result: Exclude<PdsResult<unknown>, { kind: "ok" }>): CardWrite => {
-    const response = respondToPdsFailure("POST", result, pdsHost);
-    return response.action === "redirect"
-      ? { kind: "redirect", location: response.location }
-      : failed("card.pds_unavailable");
+    const location = pdsSignInRedirect(result);
+    return location === null ? failed("card.pds_unavailable") : { kind: "redirect", location };
   };
   const outcome = <C extends CardFailure>(result: PdsResult<SaveOutcome<C>>): CardWrite => {
     if (result.kind !== "ok") return pdsFailure(result);

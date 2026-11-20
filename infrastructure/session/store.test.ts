@@ -85,6 +85,32 @@ describe("session store without a database", () => {
     }
   });
 
+  test("session.countLive_judges_on_the_callers_client_by_the_idle_limit", async () => {
+    // The last browser's count (P2.08c) runs on the client the caller holds, so it sees that transaction's own delete,
+    // and it binds the idle limit, never the touch interval (verify-1009 M3). Its rows against Postgres are pinned in
+    // tests/integration/web/sign-out.test.ts.
+    const store = storeWith(() => Promise.reject(new Error("never reached")));
+    const did = parseDid("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") as Did;
+    const counted = (n: unknown) => {
+      let values: unknown[] = [];
+      const db = {
+        query: (_text: string, bound: unknown[] = []) => {
+          values = bound;
+          return Promise.resolve({ rows: [{ n }] as never[], rowCount: 1 });
+        },
+      };
+      return { result: store.countLive(db, did), values: () => values };
+    };
+    const two = counted(2);
+    expect(await two.result).toBe(2);
+    expect(two.values()).toEqual([did, LIMITS.idleS]);
+    expect(await counted(0).result).toBe(0);
+    // A count that is not a whole number fails, so a broken read never passes for "no browser left".
+    for (const n of [undefined, null, -1, 1.5, "1"]) {
+      await expect(counted(n).result).rejects.toThrow("session count missing");
+    }
+  });
+
   test("session.destroyAllForDid_requires_tx", () => {
     // The caller's transaction is a required argument, so ending the sessions commits with the caller's own change
     // (P2.12's block, P3.06's account state) or not at all. The check is the typecheck; nothing is called here.

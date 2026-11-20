@@ -25,13 +25,10 @@ const profile = (extra: Record<string, unknown> = {}): StoredRecord => ({
 });
 const card = (key: string, value: unknown): StoredCard => ({ key, value, cid: "c" });
 const load = (p: PdsResult<StoredRecord | null>, c: PdsResult<StoredCard[]>, complete = true) =>
-  loadOwnProfile(
-    {
-      profile: async () => p,
-      cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete, overflow: false } } : c),
-    },
-    "pds.example",
-  );
+  loadOwnProfile({
+    profile: async () => p,
+    cards: async () => (c.kind === "ok" ? { kind: "ok", value: { cards: c.value, complete, overflow: false } } : c),
+  });
 
 describe("loadOwnProfile", () => {
   test("reads the side column and the cards in the profile's order", async () => {

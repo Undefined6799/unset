@@ -27,7 +27,7 @@ import { themeChunk } from "./lib/server/theme.ts";
 const FORM_TYPES = new Set(["application/x-www-form-urlencoded", "multipart/form-data"]);
 const UNTRUSTED_PEER_LOG_MS = 60_000;
 
-const ZERO_SCRIPT = zeroScriptCsp(config.PUBLIC_ORIGIN, config.MEDIA_ORIGIN);
+const ZERO_SCRIPT = zeroScriptCsp(config.PUBLIC_ORIGIN);
 
 let untrustedLoggedAt = Number.NEGATIVE_INFINITY;
 const clientIpOf = createClientIpResolver(config, () => {

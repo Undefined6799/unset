@@ -3357,8 +3357,6 @@ describe("preflight C29 (P1.36k)", () => {
         ["OAUTH_ALLOW_HTTP", '"true"'],
         ["OAUTH_ALLOW_HTTP", '"false"'],
         ["NETGUARD_ALLOW_LOOPBACK", '"true"'],
-        ["DEV_VITE_ORIGIN", "http://localhost:5173"],
-        ["DEV_VITE_ORIGIN", '""'],
       ]) {
         expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key}`).toBe(
           `FAIL C29 key=${key} service=web it is for a local stack only`,
@@ -3378,7 +3376,6 @@ describe("preflight C29 (P1.36k)", () => {
       for (const [key, value] of [
         ["PUBLIC_ORIGIN", "http://app.example.test"],
         ["MEDIA_ORIGIN", "http://media.example.net"],
-        ["ASSETS_BASE", "http://assets.example.test/assets/"],
         ["PUBLIC_ORIGIN", "app.example.test"],
         ["PUBLIC_ORIGIN", '""'],
         ["MEDIA_ORIGIN", "HTTP://media.example.net"],
@@ -3397,19 +3394,20 @@ describe("preflight C29 (P1.36k)", () => {
       const origins = [
         "      PUBLIC_ORIGIN: https://app.example.test",
         "      MEDIA_ORIGIN: https://media.example.net",
-        "      ASSETS_BASE: https://app.example.test/assets/",
       ].join("\n");
       const result = await check(withWeb(env, origins), env);
       expect(
         result.lines.find((l) => / C29 /.test(l)),
         env,
       ).toBe("PASS C29 ok");
-      // An empty ASSETS_BASE is the runtime's own default: the public origin's /assets/.
-      const empty = await check(withWeb(env, '      ASSETS_BASE: ""'), env);
-      expect(
-        empty.lines.find((l) => / C29 /.test(l)),
-        env,
-      ).toBe("PASS C29 ok");
+      // P1.21c: ASSETS_BASE and DEV_VITE_ORIGIN are read by nothing now, so a leftover in an env file fails nothing.
+      for (const leftover of ['      ASSETS_BASE: ""', "      DEV_VITE_ORIGIN: http://localhost:5173"]) {
+        const left = await check(withWeb(env, leftover), env);
+        expect(
+          left.lines.find((l) => / C29 /.test(l)),
+          `${env} ${leftover}`,
+        ).toBe("PASS C29 ok");
+      }
     }
   });
 });
