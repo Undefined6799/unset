@@ -34,7 +34,10 @@ describe("image standard (ADR 0070 point 3)", () => {
     expect(avatarVersions().every((v) => v.crop === undefined)).toBe(true);
   });
 
-  test("uploads stop at 30 MB, 70 megapixels and 12,000 px a side", () => {
-    expect(UPLOAD_LIMITS).toEqual({ maxBytes: 30_000_000, maxPixels: 70_000_000, maxEdge: 12_000 });
+  test("uploads stop at 64 MiB, 110 megapixels and 12,000 px a side (ADR 0076)", () => {
+    expect(UPLOAD_LIMITS).toEqual({ maxBytes: 64 * 1024 * 1024, maxPixels: 110_000_000, maxEdge: 12_000 });
+    // A 60 MB JPEG and a 102-megapixel medium-format frame (11,648 x 8,736) fit.
+    expect(UPLOAD_LIMITS.maxBytes).toBeGreaterThanOrEqual(60_000_000);
+    expect(11_648 * 8_736).toBeLessThanOrEqual(UPLOAD_LIMITS.maxPixels);
   });
 });

@@ -1,6 +1,10 @@
 // edge_timeout_above_every_deadline (P1.28; plan §6.1 Deadlines; rule RE-1): every request's deadline ends before
 // the edge gives up on the upstream, so the app's own 503 http.deadline reaches the client. Read from Caddy's adapted
 // JSON (v2.11.7: durations in nanoseconds; reverse_proxy transport `response_header_timeout`, server `write_timeout`).
+// The server's read window is limits.json EDGE_READ_BODY_S (ADR 0076). Go starts a response's write clock when the
+// request's headers are read (go1.25 net/http/server.go Server.WriteTimeout; x/net/http2 server.go starts a stream's
+// write timer when it opens), so the body's upload counts against it: every server writes for longer than its read
+// window plus the upstream's wait, or a slow 64 MiB upload that the read window allows is cut before its answer.
 
 const NS_PER_MS = 1_000_000;
 
@@ -20,10 +24,10 @@ function proxies(node: Json): Record<string, Json>[] {
   return [...own, ...Object.values(object).flatMap(proxies)];
 }
 
-type Servers = Record<string, { write_timeout?: number }>;
+type Servers = Record<string, { read_timeout?: number; write_timeout?: number }>;
 
 /** The edge's own timeouts: every reverse_proxy waits exactly the limit, every server writes for longer. */
-function edgeProblems(config: Json, edgeNs: number): string[] {
+function edgeProblems(config: Json, edgeNs: number, readNs: number): string[] {
   const all = proxies(config);
   const found = all.length === 0 ? ["no reverse_proxy in the config"] : [];
   for (const proxy of all) {
@@ -32,7 +36,12 @@ function edgeProblems(config: Json, edgeNs: number): string[] {
   }
   const servers = (config as { apps?: { http?: { servers?: Servers } } }).apps?.http?.servers ?? {};
   for (const [name, server] of Object.entries(servers)) {
-    if (!((server.write_timeout ?? 0) > edgeNs)) found.push(`server ${name} write timeout is not above it`);
+    if (server.read_timeout !== readNs) {
+      found.push(`server ${name} read_timeout ${server.read_timeout ?? "unset"} is not limits.json EDGE_READ_BODY_S`);
+    }
+    if (!((server.write_timeout ?? 0) > readNs + edgeNs)) {
+      found.push(`server ${name} write timeout is not above its read window and the upstream's`);
+    }
   }
   return found;
 }
@@ -52,11 +61,16 @@ function deadlineProblems(manifests: readonly Manifest[], maxRequestDeadlineMs: 
 /** Each way the adapted config, limits.json and the route manifests break the deadline order; empty when they hold. */
 export function timeoutProblems(
   config: Json,
-  limits: { EDGE_UPSTREAM_TIMEOUT_S?: unknown },
+  limits: { EDGE_UPSTREAM_TIMEOUT_S?: unknown; EDGE_READ_BODY_S?: unknown },
   manifests: readonly Manifest[],
   maxRequestDeadlineMs: number,
 ): string[] {
   const edgeMs = Number(limits.EDGE_UPSTREAM_TIMEOUT_S) * 1000;
   if (!Number.isFinite(edgeMs) || edgeMs <= 0) return ["limits.json has no EDGE_UPSTREAM_TIMEOUT_S"];
-  return [...edgeProblems(config, edgeMs * NS_PER_MS), ...deadlineProblems(manifests, maxRequestDeadlineMs, edgeMs)];
+  const readMs = Number(limits.EDGE_READ_BODY_S) * 1000;
+  if (!Number.isFinite(readMs) || readMs <= 0) return ["limits.json has no EDGE_READ_BODY_S"];
+  return [
+    ...edgeProblems(config, edgeMs * NS_PER_MS, readMs * NS_PER_MS),
+    ...deadlineProblems(manifests, maxRequestDeadlineMs, edgeMs),
+  ];
 }

@@ -415,8 +415,8 @@ describe("compose.dev.yaml (P1.29)", () => {
     {
       name: "mem_limit raised on web",
       table: readLimits(),
-      compose: limited(dev(), "web", { memLimit: "1g" }),
-      problem: `web: mem_limit is 1g, ${LIMITS} says 512m`,
+      compose: limited(dev(), "web", { memLimit: "2g" }),
+      problem: `web: mem_limit is 2g, ${LIMITS} says 1g`,
     },
     {
       name: "cpus removed from edge",

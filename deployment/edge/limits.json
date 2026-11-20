@@ -1,5 +1,6 @@
 {
   "EDGE_UPSTREAM_TIMEOUT_S": 130,
+  "EDGE_READ_BODY_S": 120,
   "rateLimitZones": {
     "session": {
       "events": 30,

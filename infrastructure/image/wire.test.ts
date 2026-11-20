@@ -36,8 +36,13 @@ const ok = (versions: ImageVersion[]) =>
 describe("job", () => {
   test("round-trips, and only within the ceiling", () => {
     expect(parseJob(encodeJob(job))).toEqual(job);
-    const big = { ...job, limits: { ...job.limits, maxBytes: 64 * 1024 * 1024 } };
+    // ADR 0076: a 64 MiB, 120-megapixel job is the ceiling; one byte or one pixel past it is refused.
+    const top = { ...job, limits: { ...job.limits, maxBytes: 64 * 1024 * 1024, maxPixels: 120_000_000 } };
+    expect(parseJob(encodeJob(top))).toEqual(top);
+    const big = { ...job, limits: { ...job.limits, maxBytes: 64 * 1024 * 1024 + 1 } };
     expect(parseJob(encodeJob(big))).toBeNull();
+    const wide = { ...job, limits: { ...job.limits, maxPixels: 120_000_001 } };
+    expect(parseJob(encodeJob(wide))).toBeNull();
     const many = { ...job, versions: Array.from({ length: 13 }, (_, i) => spec(`v${i}`, false)) };
     expect(parseJob(encodeJob(many))).toBeNull();
     const huge = { ...job, versions: [{ ...spec("main", true), size: 10_000 }] };

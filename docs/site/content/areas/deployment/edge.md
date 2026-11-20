@@ -20,7 +20,7 @@ The runtime stage copies `deployment/edge/fonts/SpaceGrotesk-Variable.woff2` and
 | global | `admin off`, `persist_config off` |
 | `log default` | stderr, level `ERROR`, and the address, URI, header and TLS fields in the `fields` list deleted |
 | `servers 10.250.37.3:443` | `trusted_proxies static 10.250.37.2/32`, `trusted_proxies_strict`, `client_ip_headers X-Forwarded-For` |
-| `servers` | no `trusted_proxies`; `read_body 30s`, `write 135s`, `idle 2m` |
+| `servers` | no `trusted_proxies`; `read_header 10s`, `read_body 120s`, `write 255s`, `idle 2m` (ADR 0076) |
 | `http://127.0.0.1:8081` | `bind 127.0.0.1`, `respond /health 200`, `respond 404` |
 | imports | `snippets/*.caddy`, then `sites/enabled/*.caddy` |
 

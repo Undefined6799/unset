@@ -1,5 +1,6 @@
 // The deadline-order check's own failures (P1.28 edge_timeout_above_every_deadline): a route deadline at the edge's
-// limit, a site without the upstream snippet's timeout, or no manifest at all each fail.
+// limit, a site without the upstream snippet's timeout, a server whose write clock cannot cover a whole upload and the
+// upstream's wait after it (ADR 0076), or no manifest at all each fail.
 import { describe, expect, test } from "vitest";
 import { timeoutProblems } from "./timeouts.ts";
 
@@ -9,9 +10,11 @@ const proxy = (header?: number) => ({
   ...(header === undefined ? {} : { transport: { protocol: "http", response_header_timeout: header } }),
 });
 const config = (...handlers: object[]) => ({
-  apps: { http: { servers: { srv0: { write_timeout: 135 * S, routes: [{ handle: handlers }] } } } },
+  apps: {
+    http: { servers: { srv0: { read_timeout: 120 * S, write_timeout: 255 * S, routes: [{ handle: handlers }] } } },
+  },
 });
-const limits = { EDGE_UPSTREAM_TIMEOUT_S: 130 };
+const limits = { EDGE_UPSTREAM_TIMEOUT_S: 130, EDGE_READ_BODY_S: 120 };
 const manifests = [
   { file: "interfaces/http/routes.manifest.json", routes: [{ path: "/publish", deadlineMs: 120_000 }] },
 ];
@@ -33,8 +36,19 @@ describe("edge deadline order", () => {
   });
 
   test("write_timeout_and_inputs_checked", () => {
-    const short = { apps: { http: { servers: { srv0: { write_timeout: 130 * S, routes: [proxy(130 * S)] } } } } };
-    expect(timeoutProblems(short, limits, manifests, 60_000)).toEqual(["server srv0 write timeout is not above it"]);
+    const server = (read: number, write: number) => ({
+      apps: { http: { servers: { srv0: { read_timeout: read, write_timeout: write, routes: [proxy(130 * S)] } } } },
+    });
+    // Go's write clock starts when the headers are read (net/http Server.WriteTimeout), so the body counts against it.
+    expect(timeoutProblems(server(120 * S, 250 * S), limits, manifests, 60_000)).toEqual([
+      "server srv0 write timeout is not above its read window and the upstream's",
+    ]);
+    expect(timeoutProblems(server(30 * S, 255 * S), limits, manifests, 60_000)).toEqual([
+      "server srv0 read_timeout 30000000000 is not limits.json EDGE_READ_BODY_S",
+    ]);
+    expect(timeoutProblems(config(proxy(130 * S)), { EDGE_UPSTREAM_TIMEOUT_S: 130 }, manifests, 60_000)).toEqual([
+      "limits.json has no EDGE_READ_BODY_S",
+    ]);
     expect(timeoutProblems(config(proxy(130 * S)), limits, [], 60_000)).toEqual(["no route manifest was read"]);
     expect(timeoutProblems(config(proxy(130 * S)), {}, manifests, 60_000)).toEqual([
       "limits.json has no EDGE_UPSTREAM_TIMEOUT_S",

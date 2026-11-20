@@ -708,3 +708,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Text card rich editor (P1.21u, 2026-11-20; own record: [0073](0073-text-card-rich-editor.md)):** the Text
   card's editor is Milkdown over the plain field, loaded when the editor opens; the app CSP adds the one Trusted
   Types name `ProseMirrorClipboard` for paste. Proposed, awaiting Alex.
+- **Image uploads up to 64 MiB (P2.19e, 2026-11-20; own record: [0076](0076-image-uploads-up-to-64-mib.md)):**
+  uploads rise from 30 MB and 70 megapixels to 64 MiB and 110 megapixels, with web's, net-guard's and review's caps,
+  memory and the edge's read window raised to match; the versions we keep do not change. Proposed, awaiting Alex.
