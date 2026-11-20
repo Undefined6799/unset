@@ -686,6 +686,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
   store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
   awaiting Alex.
+- **ADR 0069 accepted (Alex, 2026-11-20 03:59Z, against 8f1fa27; own record:
+  [0069](0069-split-client-and-build-file-zone.md)):** the web client is split into content-hashed pieces and the dev
+  app edge counts them in their own zone, `app_files`.
+- **ADR 0072 accepted (Alex, 2026-11-20 04:23Z, against 6b6abe4; own record: [0072](0072-profile-page-layout.md)):**
+  the profile may store an optional layout, sidebar or compact; absent means sidebar.
 - **Text card rich editor (P1.21u, 2026-11-20; own record: [0073](0073-text-card-rich-editor.md)):** the Text
   card's editor is Milkdown over the plain field, loaded when the editor opens; the app CSP adds the one Trusted
   Types name `ProseMirrorClipboard` for paste. Proposed, awaiting Alex.
