@@ -19,12 +19,11 @@ CREATE TABLE app.notification (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (did, dedupe_key)
 );
+-- The foreign key's index, which the member's list reads in order too. The sweep has none: it scans at most 30 days
+-- of rows, and an index for it comes with a measurement (rule PF-1).
 -- query: infrastructure/postgres/notificationStore.ts:LIST
--- why: speed
+-- why: foreign-key
 CREATE INDEX notification_did_created ON app.notification (did, created_at DESC);
--- query: infrastructure/postgres/notificationStore.ts:SWEEP
--- why: speed
-CREATE INDEX notification_created ON app.notification (created_at);
 
 GRANT SELECT (id, did, reason, topic, dedupe_key, older_sessions_only, created_at) ON app.notification TO web;
 GRANT INSERT (did, reason, topic, dedupe_key, older_sessions_only) ON app.notification TO web;
