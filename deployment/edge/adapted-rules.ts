@@ -64,7 +64,7 @@ const HANDLER_KEYS: Readonly<Record<string, readonly string[]>> = {
   map: ["source", "destinations", "mappings", "defaults"],
   log_append: ["key", "value"],
 };
-const MATCHERS = ["host", "path", "method", "not", "path_regexp", "header_regexp", "vars_regexp"];
+const MATCHERS = ["host", "path", "method", "not", "path_regexp", "header", "header_regexp", "vars_regexp"];
 const ZONE_KEYS = ["key", "window", "max_events", "match", "ipv6_prefix"];
 const SERVER_KEYS = [
   "listen",
@@ -110,6 +110,19 @@ const TIMEOUTS = ["read_timeout", "write_timeout", "idle_timeout"];
 /** The client address headers the edge removes before every upstream (ADR 0018). */
 const ADDRESS_HEADERS = ["X-Forwarded-For", "X-Real-IP", "Forwarded"];
 const CLIENT_KEY = "{http.vars.client_ip}";
+/**
+ * Web's mark on its own calls to our PDS (P1.21j; Proposed ADR 0071): the header matches the fixed ends around hex and
+ * equals the key file's content between them, so a missing file (`key--key`) or a `*` can never match. The header is
+ * deleted before the upstream.
+ */
+const WEB_KEY_HEADER = "X-Unset-Web-Key";
+const WEB_MARK: Json = {
+  header: { [WEB_KEY_HEADER]: ["key-{file./run/secrets/pds_web_key}-key"] },
+  header_regexp: { [WEB_KEY_HEADER]: { pattern: "^key-[0-9a-f]+-key$" } },
+};
+/** The zones a marked call counts in instead of `global` and `oauth_token`: one bucket for all of web. */
+const WEB_KEY = "web";
+const WEB_ZONES = ["web_global", "web_oauth_token"];
 
 // What each snippet adapts to, compared whole. (security-headers) and (noindex) are site handlers; the others are
 // routes inside the site's `route`.
@@ -750,7 +763,7 @@ const PDS_ZONES: readonly Zone[] = [
   ["blob_upload", 60, 300, paths("/xrpc/com.atproto.repo.uploadBlob")],
   ["firehose", 6, 60, paths("/xrpc/com.atproto.sync.subscribeRepos")],
   ["firehose_hour", 60, 3600, paths("/xrpc/com.atproto.sync.subscribeRepos")],
-  ["global", 3000, 300],
+  ["global", 3000, 300, [{ not: [WEB_MARK] }]],
   [
     "identity",
     300,
@@ -763,7 +776,7 @@ const PDS_ZONES: readonly Zone[] = [
     ),
   ],
   ["oauth_signin", 30, 300, [{ method: ["POST"], path: [`${API}/sign-in`] }]],
-  ["oauth_token", 120, 300, paths("/oauth/token", "/xrpc/com.atproto.server.refreshSession")],
+  ["oauth_token", 120, 300, [{ not: [WEB_MARK], path: ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"] }]],
   [
     "reset",
     5,
@@ -793,6 +806,13 @@ const PDS_ZONES: readonly Zone[] = [
       },
     ],
   ],
+  ["web_global", 90_000, 60, [WEB_MARK]],
+  [
+    "web_oauth_token",
+    3000,
+    300,
+    [{ ...obj(WEB_MARK), path: ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"] }],
+  ],
 ];
 /**
  * A content-hashed build file (P1.21g; ADR 0069; snippets/ratelimit.caddy app-build-file): a GET or HEAD whose decoded,
@@ -808,14 +828,9 @@ const APP_ZONES: readonly Zone[] = [
   ["app_burst", 60, 10, [{ not: [BUILD_FILE] }]],
   ["app_files", 120, 10, [BUILD_FILE]],
   ["app_global", 1200, 300],
-  [
-    "app_signin",
-    5,
-    300,
-    [{ method: ["POST"], path: ["/login", "/verify-email", "/join"] }, { path: ["/oauth/callback"] }],
-  ],
+  ["app_signin", 10, 300, [{ method: ["POST"], path: ["/login", "/join"] }]],
 ];
-/** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64. */
+/** The one rate_limit handler a set of zones adapts to: each keyed on the client address, IPv6 by /64, but web's. */
 const limiter = (zones: readonly Zone[]): Json => ({
   handler: "rate_limit",
   disable_metrics: true,
@@ -823,8 +838,7 @@ const limiter = (zones: readonly Zone[]): Json => ({
     zones.map(([name, events, seconds, match]) => [
       name,
       {
-        ipv6_prefix: 64,
-        key: CLIENT_KEY,
+        ...(WEB_ZONES.includes(name) ? { key: WEB_KEY } : { ipv6_prefix: 64, key: CLIENT_KEY }),
         max_events: events,
         window: seconds * 1_000_000_000,
         ...(match === undefined ? {} : { match }),
@@ -833,22 +847,36 @@ const limiter = (zones: readonly Zone[]): Json => ({
   ),
 });
 
-/** One rate_limit's zones: the site's own global zone, unmatched; no other site's; every zone keyed on the client. */
+/**
+ * One rate_limit's zones: the site's own global zone, unmatched but for web's mark; no other site's; every zone keyed
+ * on the client, but web's own, which match web's mark exactly.
+ */
 function zoneSetProblems(name: string, zones: Obj, own: string, other: string): string[] {
   const found: string[] = [];
+  const ownMatch = obj(zones[own]).match;
   if (!(own in zones)) found.push(`${name}: there is no ${own} zone`);
-  else if ("match" in obj(zones[own])) found.push(`${name}: the ${own} zone has a matcher`);
+  else if (ownMatch !== undefined && !same(ownMatch, [{ not: [WEB_MARK] }])) {
+    found.push(`${name}: the ${own} zone has a matcher`);
+  }
   if (other in zones) found.push(`${name}: the route applies another site's zones`);
   // A fixed label: the zone's name is input, and a message repeats nothing it was given.
-  if (Object.values(zones).some((settings) => obj(settings).key !== CLIENT_KEY)) {
-    found.push(`${name}: a zone is not keyed on {client_ip}`);
-  }
+  const keyed = ([zone, settings]: [string, Json]) =>
+    WEB_ZONES.includes(zone)
+      ? obj(settings).key === WEB_KEY && arr(obj(settings).match).every((each) => webMarked(each))
+      : obj(settings).key === CLIENT_KEY;
+  if (!Object.entries(zones).every(keyed)) found.push(`${name}: a zone is not keyed on {client_ip}`);
   return found;
 }
 
+/** A matcher that holds web's whole mark, and nothing that would loosen it. */
+const webMarked = (matcher: Json): boolean => {
+  const set = obj(matcher);
+  return same({ header: set.header ?? null, header_regexp: set.header_regexp ?? null }, WEB_MARK) && !("not" in set);
+};
+
 /**
  * One upstream's rules (ADR 0018; P1.28l; P1.36j): it dials the site's one configured upstream, removes each client
- * address header and sets none again, and sets X-Forwarded-Host to the request's own Host, once. Caddy v2.11.7 keeps
+ * address header and web's key header (P1.21j) and sets none again, and sets X-Forwarded-Host to the request's own Host, once. Caddy v2.11.7 keeps
  * an incoming X-Forwarded-Host from a trusted proxy (reverseproxy.go:1012-1022), and under dev Newt is trusted.
  */
 function proxyProblems(name: string, proxy: Obj, upstream: string): string[] {
@@ -879,7 +907,7 @@ function proxyProblems(name: string, proxy: Obj, upstream: string): string[] {
     handler: "reverse_proxy",
     headers: {
       request: {
-        delete: ADDRESS_HEADERS,
+        delete: [...ADDRESS_HEADERS, WEB_KEY_HEADER],
         set: { "X-Forwarded-Host": ["{http.request.host}"], "X-Forwarded-Proto": ["https"] },
       },
     },
@@ -1031,6 +1059,8 @@ function positionsBlanked(top: Obj, append: Json): Json {
   const handler = (each: Json): Json => {
     const value = obj(each);
     if (same(value, append)) return null;
+    // The ruled PDS zones hold web's key file by name, the one secret path outside the certificate files.
+    if (same(value, limiter(PDS_ZONES))) return null;
     if (value.handler === "reverse_proxy") return { ...value, upstreams: null };
     return "routes" in value ? { ...value, routes: arr(value.routes).map(route) } : value;
   };

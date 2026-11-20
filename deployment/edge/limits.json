@@ -52,11 +52,19 @@
     "global": {
       "events": 3000,
       "window": "5m"
+    },
+    "web_global": {
+      "events": 90000,
+      "window": "1m"
+    },
+    "web_oauth_token": {
+      "events": 3000,
+      "window": "5m"
     }
   },
   "appRateLimitZones": {
     "app_signin": {
-      "events": 5,
+      "events": 10,
       "window": "5m"
     },
     "app_burst": {

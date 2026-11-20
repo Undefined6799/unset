@@ -7,9 +7,20 @@
 # the same as limits.json rateLimitZones (edge_ratelimit_matches_limits). They take over the PDS's own per-address
 # limits, which are off because the PDS sees only the edge's address (P1b-A1, "Do not forward"). A request counts in
 # every zone it matches; paired limits (session, firehose) are two zones on one matcher; global has no matcher, so
-# every PDS route has a zone. OAuth paths are @atproto/oauth-provider's (create-oauth-middleware.ts,
+# every PDS route has a zone, except web's own calls (below). OAuth paths are @atproto/oauth-provider's (create-oauth-middleware.ts,
 # create-api-middleware.ts and oauth-provider-api constants.ts at atproto 2902aa2). Over a limit: 429 with
 # Retry-After. The app's own limits stay the inner layer; these replace nothing.
+#
+# Web's own calls (P1.21j; Proposed ADR 0071). Web reaches our PDS through Pangolin like any client, so every member's
+# calls share web's one address, and global and oauth_token would cap the whole site. Web marks each call it makes to
+# our PDS with X-Unset-Web-Key: "key-", the 64 hex characters of the pds_web_key secret, "-key". A request is marked
+# only when the header is that exact value: lower-case hex between the fixed ends, and equal to the ends around the
+# secret file the edge reads at request time (Caddy v2.11.9 replacer.go fileReplacementProvider; matchers.go
+# matchHeaders compares exactly unless the expected value starts or ends with "*", which the fixed ends rule out). A
+# missing file reads as empty, so the expected value is "key--key", which the hex pattern can never be: a missing or
+# wrong secret leaves web in the tight zones, as before. A marked request skips global and oauth_token and counts in
+# web_global and web_oauth_token, one bucket keyed `web`, so a leaked key does not multiply by address. The header is
+# compared, never logged (log.caddy deletes request headers), and never reaches the PDS (upstream.caddy).
 (pds-ratelimit) {
 	rate_limit {
 		zone session {
@@ -43,6 +54,10 @@
 		zone oauth_token {
 			match {
 				path /oauth/token /xrpc/com.atproto.server.refreshSession
+				not {
+					header_regexp X-Unset-Web-Key ^key-[0-9a-f]+-key$
+					header X-Unset-Web-Key key-{file./run/secrets/pds_web_key}-key
+				}
 			}
 			key {client_ip}
 			ipv6_prefix 64
@@ -124,8 +139,36 @@
 			window 5m
 		}
 		zone global {
+			match {
+				not {
+					header_regexp X-Unset-Web-Key ^key-[0-9a-f]+-key$
+					header X-Unset-Web-Key key-{file./run/secrets/pds_web_key}-key
+				}
+			}
 			key {client_ip}
 			ipv6_prefix 64
+			events 3000
+			window 5m
+		}
+		# Web's own calls (P1.21j; Proposed ADR 0071): marked with the key only web holds, they leave global and
+		# oauth_token above for these two, one bucket for all of web whatever address it arrives from (`key web`). A
+		# marked zone for uploads would sit here in the same shape (ADR 0070 owns blob_upload).
+		zone web_global {
+			match {
+				header_regexp X-Unset-Web-Key ^key-[0-9a-f]+-key$
+				header X-Unset-Web-Key key-{file./run/secrets/pds_web_key}-key
+			}
+			key web
+			events 90000
+			window 1m
+		}
+		zone web_oauth_token {
+			match {
+				path /oauth/token /xrpc/com.atproto.server.refreshSession
+				header_regexp X-Unset-Web-Key ^key-[0-9a-f]+-key$
+				header X-Unset-Web-Key key-{file./run/secrets/pds_web_key}-key
+			}
+			key web
 			events 3000
 			window 5m
 		}
@@ -152,9 +195,10 @@
 # app_global (1200) now binds a client that keeps that pace for minutes. Behind the edge, web's own default bucket is
 # site-wide (3000 at once, 50 a second; ADR 0042), so about thirteen addresses at app_global's average drain it, where
 # twenty-five at the old 2 a second did; fifty addresses sending their 60 at once empty it, where 150 did (ADR 0066).
-# app_signin counts POST /join too (P2.10): it starts a sign-up at our PDS, as POST /login starts a sign-in.
-# app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
-# (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
+# app_signin counts POST /join too (P2.10): it starts a sign-up at our PDS, as POST /login starts a sign-in. Since
+# P1.21j (Proposed ADR 0071) it counts only those two, 10 per 5 minutes: the callback can only follow a login the zone
+# already counted, and POST /verify-email needs a signed-in session, so counting them made one first sign-in three
+# events and two people behind one address went over. Both still count in app_burst and app_global.
 # app_files (P1.21g; ADR 0069): the split client (output.bundleStrategy "split") loads a cold app page as about 30
 # content-hashed build files under /_app/immutable/, in a second, so they count in app_files instead of app_burst;
 # documents, data, fonts, version.json and every POST stay in app_burst as before, and app_global still counts
@@ -175,14 +219,11 @@
 		zone app_signin {
 			match {
 				method POST
-				path /login /verify-email /join
-			}
-			match {
-				path /oauth/callback
+				path /login /join
 			}
 			key {client_ip}
 			ipv6_prefix 64
-			events 5
+			events 10
 			window 5m
 		}
 		zone app_burst {

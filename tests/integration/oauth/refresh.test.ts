@@ -17,6 +17,7 @@ import {
   withClient,
 } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { Secret } from "@unset/shared-config";
 import type { Logger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 
@@ -167,6 +168,7 @@ async function replica(lock: "advisory" | "none", { keys, activeKid } = onlyA) {
     resolveDid,
     allowHttp: true,
     ownIssuer: as.origin,
+    webKey: new Secret("0123456789abcdef".repeat(4)),
     log: silent,
   });
   return { client, sessions: createOAuthSessionStore<SavedSession>({ pool, sealer, log: silent }) };

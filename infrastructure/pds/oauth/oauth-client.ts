@@ -18,7 +18,7 @@ import {
   TokenRevokedError,
 } from "@atproto/oauth-client-node";
 import type { Consistency, Did, IdentityNetwork, ResolvedDid } from "@unset/domains-identity";
-import { bool, type Field, str, withRule } from "@unset/shared-config";
+import { bool, type Field, type Secret, str, withRule } from "@unset/shared-config";
 import type { Logger } from "@unset/shared-log";
 import { AccountElsewhereError, didResolverForOAuth, handleResolverForOAuth } from "./identity-resolvers.ts";
 import { SCOPE_METADATA } from "./scopes.ts";
@@ -175,6 +175,8 @@ export type OAuthClientOptions = {
   readonly allowHttp: boolean;
   /** Our PDS's issuer, exactly (P1.36v): only its accounts sign in. */
   readonly ownIssuer: string;
+  /** Web's mark for the edge (P1.21j; Proposed ADR 0071), sent on every request to `ownIssuer` and nowhere else. */
+  readonly webKey: Secret;
   readonly log: Logger;
 };
 
@@ -184,13 +186,21 @@ export type OAuthClientOptions = {
  * metadata names in place of itself is refused before it is asked anything. Identities resolve through the domain,
  * not this fetch.
  */
-function ownIssuerOnly(send: typeof fetch, ownIssuer: string): typeof fetch {
+function ownIssuerOnly(send: typeof fetch, ownIssuer: string, webKey: Secret): typeof fetch {
   const origin = new URL(ownIssuer).origin;
   return (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
-    return URL.parse(url)?.origin === origin ? send(input, init) : Promise.reject(new AccountElsewhereError());
+    if (URL.parse(url)?.origin !== origin) return Promise.reject(new AccountElsewhereError());
+    // The edge gives web's calls their own zones when this header is exactly the key between its fixed ends
+    // (deployment/edge/snippets/ratelimit.caddy); it drops the header before the PDS.
+    const request = new Request(input, init);
+    request.headers.set(WEB_KEY_HEADER, `key-${webKey.reveal()}-key`);
+    return send(request);
   };
 }
+
+/** The header the edge reads web's key from (ratelimit.caddy, upstream.caddy). */
+export const WEB_KEY_HEADER = "X-Unset-Web-Key";
 
 /** A cache that never holds anything, so every identity lookup reaches the domain's resolvers. */
 const NO_CACHE = {
@@ -217,7 +227,7 @@ export async function createOAuthClient(options: OAuthClientOptions) {
     stateStore: options.stateStore,
     sessionStore: options.sessionStore,
     requestLock: options.requestLock,
-    fetch: ownIssuerOnly(options.fetch, options.ownIssuer),
+    fetch: ownIssuerOnly(options.fetch, options.ownIssuer, options.webKey),
     handleResolver: handleResolverForOAuth(options.network),
     didResolver: didResolverForOAuth(options.resolveDid, options.ownIssuer),
     // No library cache in front of ours: by default it keeps DID documents an hour and handles ten minutes
