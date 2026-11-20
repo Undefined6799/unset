@@ -43,16 +43,19 @@ const call = async (method, nsid, body, token) => {
     await new Promise((d) => setTimeout(d, 500));
   }
   const made = await call("POST", "com.atproto.server.createAccount", {
-    handle: "save.pds.test", email: "save@pds.test", password: process.argv[1],
+    handle: "cardsave.pds.test", email: "cardsave@pds.test", password: process.argv[1],
   });
   if (made.status !== 200) return console.log(JSON.stringify({ made }));
   const { did, accessJwt: token } = made.body;
   const card = (text) => ({ $type: "sh.unset.section", content: { $type: "sh.unset.section#readme", text },
     createdAt: new Date().toISOString() });
-  for (const rkey of ["a", "b"]) {
-    await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.section", rkey,
-      record: card(rkey) }, token);
+  const keys = [];
+  for (const text of ["a", "b"]) {
+    const made = await call("POST", "com.atproto.repo.createRecord", { repo: did, collection: "sh.unset.section",
+      record: card(text) }, token);
+    keys.push(made.body.uri.split("/").at(-1));
   }
+  const [a, b] = keys;
   const headOf = async () =>
     (await call("GET", "com.atproto.sync.getLatestCommit?did=" + encodeURIComponent(did), undefined, token)).body.cid;
   const update = (rkey, text) => ({ $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section",
@@ -62,13 +65,14 @@ const call = async (method, nsid, body, token) => {
   const texts = async () => {
     const listed = await call("GET", "com.atproto.repo.listRecords?collection=sh.unset.section&repo=" +
       encodeURIComponent(did), undefined, token);
-    return Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri.split("/").at(-1), r.value.content.text]));
+    const byKey = Object.fromEntries((listed.body.records ?? []).map((r) => [r.uri.split("/").at(-1), r.value.content.text]));
+    return { a: byKey[a], b: byKey[b], count: Object.keys(byKey).length };
   };
   const head = await headOf();
-  const both = await save([update("a", "A1"), update("b", "B1")], head);
+  const both = await save([update(a, "A1"), update(b, "B1")], head);
   const afterBoth = await headOf();
-  const stale = await save([update("a", "A2")], head);
-  const missing = await save([update("a", "A3"), update("gone", "G")], afterBoth);
+  const stale = await save([update(a, "A2")], head);
+  const missing = await save([update(a, "A3"), update("3jzfcijpj2z2z", "G")], afterBoth);
   console.log(JSON.stringify({
     both: both.status,
     oneCommit: typeof both.body.commit?.cid === "string" && both.body.commit.cid === afterBoth,
@@ -133,7 +137,7 @@ describe("applyWrites on the pinned PDS", () => {
           oneCommit: true,
           stale: [400, "InvalidSwap"],
           missing: true,
-          texts: { a: "A1", b: "B1" },
+          texts: { a: "A1", b: "B1", count: 2 },
         });
       },
       () =>
