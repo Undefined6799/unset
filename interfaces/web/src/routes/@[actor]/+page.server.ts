@@ -4,7 +4,8 @@
 // SE-2); a redirect would say the account exists, so it comes only after the account is found. A found account
 // under any other path is sent to its canonical one (a verified handle, else the DID). Kept out of search results
 // unless the member turned on "Search engines may list my page" (ADR 0062), whose title and description, when set,
-// replace the name and headline in the page's title and description. No images until the media proxy (P3.09): the
+// replace the name and headline in the page's title and description. With listing off on the whole site (P1.21b),
+// server.ts and the root layout say noindex on this page too. No images until the media proxy (P3.09): the
 // avatar is the letter, as on the owner's page.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { cardViews, websiteLink } from "@unset/apps-web/lib/profile/view.ts";

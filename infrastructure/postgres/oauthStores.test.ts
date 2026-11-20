@@ -28,6 +28,23 @@ describe("oauth stores", () => {
     expect(connects).toBe(0);
   });
 
+  test("del_passes_an_aborted_signal", async () => {
+    // Sign-out's fallback delete (P2.08) runs under the request's deadline, as its own SQL did before P1.21d.
+    let connects = 0;
+    const pool = {
+      connect: () => {
+        connects += 1;
+        return Promise.reject(new Error("should not connect"));
+      },
+    } as unknown as Pool;
+    const signal = AbortSignal.abort();
+    const session = createOAuthSessionStore({ pool, sealer, log });
+    const state = createOAuthStateStore({ pool, sealer, log });
+    await expect(session.del(DID, { signal })).rejects.toMatchObject({ code: "http.deadline" });
+    await expect(state.del("state-1", { signal })).rejects.toMatchObject({ code: "http.deadline" });
+    expect(connects).toBe(0);
+  });
+
   test("get_ends_a_checked_out_query_on_abort", async () => {
     // The deadline used to stop waiting while the SELECT still held its client (Codex on #1285). end() runs first,
     // and the rejection is observed only after release, so the next checkout is not behind that query.

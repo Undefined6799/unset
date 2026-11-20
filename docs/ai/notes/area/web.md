@@ -24,7 +24,8 @@ screens, `render.tsx`, the island runtime and Hono are deleted; nothing in the r
   load); the components render what they return, every link already through `safeHref`.
 - `apps/web/legal/`: the three legal texts, read as `?raw` by the legal pages.
 - `interfaces/web/`: the SvelteKit server. `server.ts` (adapter-node custom server: host check, base headers, the
-  log line, listen and drain) and `src/hooks.server.ts` (per-route policy, session, limits, deadline, CSP) are the
+  log line, listen and drain; the base headers are `STATIC_CSP` from `src/lib/server/csp.ts`, web's only CSP source,
+  and shared/http's `SECURITY_HEADERS`) and `src/hooks.server.ts` (per-route policy, session, limits, deadline, CSP) are the
   request gate; `src/lib/server/` holds the server modules and the composition root (`compose.ts`); each route has a
   `policy.ts`. The shell is the root `+layout.svelte`, fed by a page's `shell` (`src/lib/shell.ts`).
 

@@ -871,7 +871,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     const sources = readdirSync(join(DEPLOYMENT, "..", "shared/http"), { recursive: true, encoding: "utf8" })
       .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.startsWith("dist/"))
       .map((f) => [`shared/http/${f}`, readFileSync(join(DEPLOYMENT, "..", "shared/http", f), "utf8")] as const);
-    expect(sources.length).toBeGreaterThan(10);
+    // Ten source files since P1.21c deleted csp/ (four); the floor only proves the walk found the kit.
+    expect(sources.length).toBeGreaterThanOrEqual(10);
     for (const [file, text] of sources) {
       expect(text, file).not.toMatch(/x-forwarded-(?:proto|host|scheme)|["'`]forwarded["'`]|\.encrypted\b/i);
     }

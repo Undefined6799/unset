@@ -10,6 +10,7 @@
 // touches idx.relay_cursor, so the stream's cursor row, taken first on the ingest path, cannot deadlock with it.
 import { type IndexChange, planCommit } from "@unset/domains-profile";
 import { applyWrite, count, isErased, lockAccount, queueJob, replaceBlobs } from "./indexStore.ts";
+import { claimJobs, endJob } from "./jobs.ts";
 import { type Pool, type PoolClient, withClient } from "./pool.ts";
 import { withTransaction } from "./tx.ts";
 
@@ -75,17 +76,13 @@ export function createTrackStore(pool: Pool, options: { readonly timeoutMs: numb
     // The claim locks only job rows and never waits on the erasure lock (SKIP LOCKED), so it cannot deadlock with
     // core.erase_did, which takes that lock first.
     dueBackfills: (limit) =>
-      withClient(pool, deadline(), async (client) => {
-        const { rows } = await client.query(
-          `UPDATE idx.account_job j SET due_at = now() + make_interval(secs => $2)
-             FROM (SELECT did FROM idx.account_job WHERE kind = 'backfill' AND due_at <= now()
-                    ORDER BY due_at, did LIMIT $1 FOR UPDATE SKIP LOCKED) due
-            WHERE j.did = due.did AND j.kind = 'backfill'
-           RETURNING j.did, j.attempts, j.due_at::text AS claim`,
-          [limit, BACKFILL_LEASE_SECONDS],
-        );
-        return rows.map((row) => ({ did: String(row.did), attempts: Number(row.attempts), claim: String(row.claim) }));
-      }),
+      withClient(pool, deadline(), async (client) =>
+        (await claimJobs(client, "backfill", limit, BACKFILL_LEASE_SECONDS)).map(({ did, attempts, claim }) => ({
+          did,
+          attempts,
+          claim,
+        })),
+      ),
     applySnapshot: (job, rev, records) => inTx((tx) => applySnapshot(tx, job, rev, records)),
     backfillFailed: (job, failure) => inTx((tx) => backfillFailed(tx, job, failure)),
   };
@@ -127,7 +124,7 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
   const did = job.did;
   const account = (await isErased(tx, did)) ? null : await lockAccount(tx, did);
   if (account === null || !account.active) {
-    await endJob(tx, job);
+    await endBackfill(tx, job);
     return count(tx, "backfill_skipped");
   }
   // The stream has applied a later commit since the repo was read. A row that commit deleted is gone, so no rev guard
@@ -165,7 +162,7 @@ async function applySnapshot(tx: PoolClient, job: BackfillJob, rev: string, reco
      WHERE did = $1`,
     [did, rev],
   );
-  await endJob(tx, job);
+  await endBackfill(tx, job);
   await count(tx, "backfill_applied");
 }
 
@@ -177,7 +174,7 @@ async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: Backfil
     // event the stream lost. Only getRepoStatus says which, and only for an account still tracked and not erased.
     // confirm_status before the backfill row, as missedEvents takes them (indexStore.ts).
     if (!erased && (await lockAccount(tx, job.did)) !== null) await queueJob(tx, job.did, "confirm_status");
-    await endJob(tx, job);
+    await endBackfill(tx, job);
     return count(tx, "backfill_failed");
   }
   await count(tx, "backfill_failed");
@@ -199,14 +196,11 @@ async function backfillFailed(tx: PoolClient, job: BackfillJob, failure: Backfil
     [keep ? job.did : null, attempts, job.did, job.claim],
   );
   if (rowCount === 0) return; // a newer request took the job over
-  await endJob(tx, job);
+  await endBackfill(tx, job);
   await count(tx, "backfill_dead_letter");
 }
 
 /** Ends the claimed job; a request that arrived during the read has moved its due time and stays. */
-async function endJob(tx: PoolClient, job: BackfillJob): Promise<void> {
-  await tx.query("DELETE FROM idx.account_job WHERE did = $1 AND kind = 'backfill' AND due_at = $2::timestamptz", [
-    job.did,
-    job.claim,
-  ]);
+async function endBackfill(tx: PoolClient, job: BackfillJob): Promise<void> {
+  await endJob(tx, { ...job, kind: "backfill" });
 }

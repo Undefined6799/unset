@@ -9,10 +9,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"; // guard-allow: egress inbound listener only, sends nothing out
 import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
-import { drain, exitOnSignals, headerSets, hostAllowed } from "@unset/shared-http";
+import { drain, exitOnSignals, hostAllowed, SECURITY_HEADERS } from "@unset/shared-http";
 import { createLogger, type LogFields } from "@unset/shared-log";
 import { BODY_CAP } from "./src/lib/server/body-cap.ts";
 import { schema } from "./src/lib/server/config.ts";
+import { STATIC_CSP } from "./src/lib/server/csp.ts";
 import { NOTE_KEY, type ProcessNote, type RequestNote, STAND_INS_KEY, type StandIns } from "./src/lib/server/note.ts";
 
 const config = bootOrExit(schema);
@@ -77,8 +78,16 @@ const { handler } = await import("#kit/handler").catch((error: unknown): never =
   process.exit(1);
 });
 
-/** Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). */
-const BASE_HEADERS = headerSets(config).static;
+/**
+ * Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). With Search and AI listing off
+ * on the whole site (SEARCH_LISTING, P1.21b) every response, files and refusals included, also says noindex; a page
+ * that sets its own X-Robots-Tag sets the same value.
+ */
+const BASE_HEADERS = {
+  "content-security-policy": STATIC_CSP,
+  ...SECURITY_HEADERS,
+  ...(config.SEARCH_LISTING === "on" ? {} : { "x-robots-tag": "noindex" }),
+};
 
 const METHODS: readonly NonNullable<LogFields["method"]>[] = [
   "GET",

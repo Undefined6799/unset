@@ -46,7 +46,7 @@ export const isLocalOnlyNetwork = (name: string): boolean => LOCAL_ONLY_NETWORKS
  * Runtime keys only compose.local.yaml may set (P1.36k; architecture 2026-10-19 03:45Z and 03:50Z). A container can't
  * tell a local stack from staging, since both run UNSET_ENV=dev, so each runtime allowance meant for local alone is
  * switched on by a key, and C29 refuses the key under --env dev and prod. Sites: oauth-client.ts (OAUTH_ALLOW_HTTP),
- * shared/config/netGuard.ts (NETGUARD_ALLOW_LOOPBACK), shared/http/config.ts and csp/headers.ts (DEV_VITE_ORIGIN).
+ * shared/config/netGuard.ts (NETGUARD_ALLOW_LOOPBACK).
  */
-export const LOCAL_ONLY_KEY_NAMES = ["OAUTH_ALLOW_HTTP", "NETGUARD_ALLOW_LOOPBACK", "DEV_VITE_ORIGIN"] as const;
+export const LOCAL_ONLY_KEY_NAMES = ["OAUTH_ALLOW_HTTP", "NETGUARD_ALLOW_LOOPBACK"] as const;
 export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set(LOCAL_ONLY_KEY_NAMES);

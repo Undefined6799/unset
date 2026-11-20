@@ -26,7 +26,7 @@ We do not store IP addresses or browser details. From Phase 5, the connection da
 
 ## Who else receives it
 
-The Canadian Centre for Child Protection receives fingerprints only, never the photo or video. The hosting provider is named in Phase 5. When posting opens, automated review of posts and comments you submit for publication runs on our own servers and sends nothing to another company.
+Resend, a company in the United States, sends the account emails from our sign-in server, such as confirmation and password reset codes. It receives your email address and those messages, and keeps them for 30 days in the United States. The Canadian Centre for Child Protection receives fingerprints only, never the photo or video. The hosting provider is named in Phase 5. When posting opens, automated review of posts and comments you submit for publication runs on our own servers and sends nothing to another company.
 
 <!-- P5 -->
 
@@ -38,6 +38,7 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 | --- | --- |
 | Account, profile and onboarding timestamps | Until the account is deleted, then erased, including from backups within 30 days |
 | Copy of your public profile and sections | Until you delete the record, or the account is deleted, then erased, including from backups within 30 days. We keep only a keyed hash of your account identifier, so we never copy your profile again |
+| Names you held under our domain | While the service runs. We never issue a name again once it was used, to you or anyone else, so we keep each name with no account identifier: as a keyed hash once that is built, and until then the name alone |
 | Search and AI choices and search title and description | Until you turn them all off or the account is deleted, then erased, including from backups within 30 days |
 | Sessions | Until you sign out, or 7 days idle, or 30 days at most |
 | Sealed sign-in tokens | Until you sign out or the grant ends |
@@ -61,11 +62,13 @@ An unpublished profile draft, its text, sections and draft images, is deleted wh
 
 You can ask for a copy of the information we hold (an export), for erasure and for a correction. Raise it with us first, at {{privacyOfficerContact}}. You can complain to the [Office of the Privacy Commissioner of Canada](https://www.priv.gc.ca/en/report-a-concern/) and to [Quebec's Commission d'accès à l'information](https://www.cai.gouv.qc.ca/english/).
 
+When you ask us to delete your account, we hide it at once and delete it 30 days later; until then you can change your mind. Deleting it yourself on the sign-in server, {{pdsHost}}, takes effect at once. Backups then age out within their 30 days.
+
 <!-- P7 -->
 
 ## Federation
 
-Public profiles and posts are copied by relays and by other apps. We cannot erase every copy.
+Public profiles and posts are copied by relays and by other apps. We cannot erase every copy. Your account identifier (DID) and every handle it has had are written to the public PLC directory, which keeps that history forever, even after your account is deleted. Nobody, including us, can remove it.
 
 <!-- P8 -->
 
@@ -76,4 +79,4 @@ Public profiles and posts are copied by relays and by other apps. We cannot eras
 ## Changes
 
 - 2026-10-17: First placeholder. Not reviewed by a lawyer. Not legal advice.
-- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, the keyed hash we keep after erasure, and your Search and AI choices.
+- 2026-11-19: Added the copy of your public profile we keep when your account is on our PDS, the keyed hash we keep after erasure, your Search and AI choices, Resend, which sends our account emails from the United States, the names we never issue again, and the public PLC history of your identifier.

@@ -45,7 +45,7 @@ Checks, in `CHECKS` order (`deployment/preflight/checks/index.ts`). `LOCAL_CHECK
 | C26 | `checks/build.ts` | Each build's Dockerfile is one `scripts/ci/list-dockerfiles.ts` discovers, the context is the one that workflow uses, and the context does not reach the secrets folder, the dev CA folder, or an env file. |
 | C27 | `checks/build.ts` | A tmpfs on `/var/run/postgresql` is only on the service that runs the postgres image. |
 | C28 | `checks/pds.ts` | `PDS_DID_PLC_URL` is set and is `https://plc.directory`. |
-| C29 | `checks/local-only-keys.ts` | Dev and prod: no `LOCAL_ONLY_KEY_NAMES` key, and each origin key is `https:` (`ASSETS_BASE` may be empty). Local skips. |
+| C29 | `checks/local-only-keys.ts` | Dev and prod: no `LOCAL_ONLY_KEY_NAMES` key, and each origin key is `https:`. Local skips. |
 | C30 | `checks/pds.ts` | The `pds` service has one env file. Its names are the four `PDS_ENV_SECRETS`, plus the two mail URLs under dev and prod, plus the store's key pair `PDS_STORE_KEYS` under local and dev. Those names are not also set in the compose `environment`. |
 | C31 | `checks/newt.ts` | Dev requires a `newt` service. Its one env file holds `PANGOLIN_ENDPOINT`, `NEWT_ID` and `NEWT_SECRET`. Compose `environment` is the six `NEWT_SETTINGS` literals. No mount and no secret. Outside local it runs the lock's `newt` ref. Local may omit it. |
 | C32 | `checks/placeholders.ts` | Dev and prod: no environment value starts with `[to fill:`. Local skips. |

@@ -2,21 +2,22 @@
 // (kit.csp in vite.config.ts), which adds the hash of its startup script at each build; kit's config is fixed at build
 // time and names 'self', so `narrowed` replaces 'self' in script-src, style-src and font-src with the path sources
 // files are served from (`/_app/` for the build, `/fonts/` for our fonts). The groups that run no script get fixed
-// headers built from the origin here, the same policies as shared/http/csp/policies.ts with SvelteKit's paths.
+// headers built from the origin here. This file is the web's only CSP source: server.ts sends STATIC_CSP on every
+// response, and the hook replaces it on a page with its group's.
 import type { PageGroup } from "./policy.ts";
 
 const LOCKED = "form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
-const STATIC = "default-src 'none'; frame-ancestors 'none'";
+/** The policy of anything that is not a page: build files, fonts, refusals sent before the hook (server.ts). */
+export const STATIC_CSP = "default-src 'none'; frame-ancestors 'none'";
 
 /** The header for the groups that run no script, by group. `app` is SvelteKit's own; this is its fallback. */
-export function zeroScriptCsp(origin: string, media: string): Readonly<Record<PageGroup, string>> {
+export function zeroScriptCsp(origin: string): Readonly<Record<PageGroup, string>> {
   const build = `${origin}/_app/`;
   const fonts = `${origin}/fonts/`;
   return Object.freeze({
     public: `default-src 'none'; img-src ${build}; style-src ${build}; font-src ${fonts}; ${LOCKED}; object-src 'none'; manifest-src 'self'`,
-    profile: `default-src 'none'; img-src ${media}; style-src ${build}; font-src ${fonts}; ${LOCKED}`,
-    static: STATIC,
-    app: STATIC,
+    static: STATIC_CSP,
+    app: STATIC_CSP,
   });
 }
 

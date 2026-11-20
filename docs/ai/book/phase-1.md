@@ -4640,7 +4640,122 @@ shadcn-svelte, porting only the 39 routes that run today (`interfaces/http/route
 - P1.20j Switch-over: image, compose, edge and the scheduled sweeps; staging on Alex's word.
 - P1.20k Delete the React UI, `interfaces/http`, Hono and their packages.
 
+### P1.20l, P1.20s–P1.20v — Follow-ups from the architecture review (added steps, 2026-11-19)
+
+**Tags:** — · **Depends on:** P1.20k · **Plan:** §5.1, §6.1
+
+An outside architecture review of a7676f6 (Codex, handed over by Alex on 2026-11-19) and Alex's direction in it:
+use the framework's real form types with controllers beside their routes, narrow what routes can reach, measure
+before changing the bundle or edge rules, and make feature ownership readable. Verdicts against main e8afe10 and the
+reasons for each slice: the description of the PR that added these steps (P1.20l, #1744). The other P1.20 letters
+from P1.20m on, apart from s to v, are other threads' fixes from the same days, named in their own PRs. Order (Alex, 2026-11-19 05:01Z: the current app first, not the future):
+P1.20t, P1.20s, P1.20v, P1.20u; the Phase 5 and 6 edits only keep the plan right and build nothing now. One PR per
+step:
+- P1.20l These steps, and the P6.05, P6.17 and P5.01o book edits.
+- P1.20s **Real Svelte form types in one route-owned controller.** The settings profile form only. It spans two
+  routes: `/settings/profile` renders it and `/profile` saves it (`routes/profile/save.server.ts`). Its browser
+  submit handler moves beside the rendering route, `interfaces/web/src/routes/settings/profile/`, with a comment
+  naming `/profile` as the action it posts to; it is typed with kit's own `SubmitFunction` and `ActionResult`; `apps/web/lib/components/settings/profile-form.svelte` takes the ready action as svelte/action's
+  `Action` (apps/web declares `svelte`, not `@sveltejs/kit`; no new package) plus typed values, errors and pending
+  state. Correct the comments that say apps/web may import nothing from the framework (`apps/web/lib/profile/types.ts`
+  above `SubmitHandler` and `Enhance`, and `profile-form.svelte`): ADR 0056 decision 3 and the `sveltekit-web-only`
+  rule keep the framework out of domains, infrastructure and shared only. Done when: no hand-written SubmitFunction
+  or ActionResult is left in that flow; svelte-check and typecheck pass; success, a refusal with its field blamed and
+  focused, and a PDS failure behave as before; a save with JavaScript off still works. The card and avatar editors
+  move only in a later step, and only if this one reads clearer.
+- P1.20t **Reconsent as one operation in `lib/server`.** One function in `interfaces/web/src/lib/server/sign-in.ts`
+  issues the login nonce and asks for the authorization target, and returns both the nonce and the target (the
+  caller still sets the two cookies), or the refusal code; `startSignIn` and the verify-email `reconsent` action
+  both call it, each passing its own expected DID, prompt (`consent`, `login` or `none`) and deadline. The route
+  keeps cookies and redirects and no longer imports `@unset/infrastructure-postgres` or takes `pool` and `nonces`.
+  This removes the duplication and the route's database access; it does not narrow the whole services container. `Services.resolveDid` and
+  `OAuthServices.sessionStore`, which nothing outside `compose.ts` reads, leave the public types. Request deadline,
+  expected DID, refusal codes and the account lock are unchanged. Optional: a dependency-cruiser rule that route
+  files never import `infrastructure-postgres` (a tightening). Done when: the reconsent cases in
+  `tests/integration/web/welcome/onboarding.test.ts` and the sign-in tests pass unchanged against real Postgres; no
+  DI framework, command bus or new folder. The rest of `Services` narrows a field at a time when a route is touched.
+- P1.20u **Experiment: single versus split client bundle through the staging app edge.** Build the same commit with
+  `bundleStrategy` `single` and `split`, load the owner page, settings and the card editor cold and warm, and two
+  tabs at once, from one client address through a local edge running staging's own `app-ratelimit` snippet and
+  limits (not the e2e proxy; staging itself is not touched). The value to measure is not page weight alone: also
+  failed asset loads (429s) and what a new deploy makes a returning browser download again. Record requests per
+  route, the peak per 10 s, 429s, compressed JS and CSS per route, the lazy editor's transfer and time to
+  interactive, in `docs/ai/notes/`. Changes no rule, no budget and no config. Alex wants the split bundle for
+  caching and scale (2026-11-19 05:01Z), so if the numbers hold, the next PR switches to `split` with the bucket
+  below; if they do not, it reports why and keeps `single`. That edge change (a bounded bucket
+  for hashed `/_app/immutable/` files only) loosens a security control, so it needs Alex's typed line.
+- P1.20v **Feature maps and stale docs.** Fix `docs/human/features/core-shell.md`, which still describes the React
+  shell deleted in P1.20k, and the README line saying public profiles wait for the indexer (live since P3.12s).
+  Add four short maps under `docs/human/features/`: profile and cards, sign-in and onboarding, public indexing, and
+  storage. Each names the route, the `lib/server` operation, the domain rules, the adapter, the tables and grants,
+  the tests, and what still runs when the feature is switched off or replaced. The indexing map lists the services
+  that run in the source stacks only (`deployment/preflight/local-only.ts`) and why. Docs only.
+
 ---
+
+### P1.21a — Settings overview pages (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6.1 (docs site)
+
+Alex asked on 2026-11-19 for one place where a person, and later an agent, sees every value the app can change,
+with the settings staying where they live. `scripts/docs/settings.ts` generates `docs/site/content/settings/` from the
+process config schemas, pds-admin's config, the compose files, the edge's limits and headers, web's limits and
+security headers, a named list of constants fixed in code, and the member settings pages; `settings.test.ts` fails on
+drift. `shared/config` fields gain a data-only `allowed` string for the pages. Secrets show only their name. No
+setting, limit or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
+
+### P1.21b — Site-wide switch for search and AI listing (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — (builds on ADR 0062, merged in #1731) · **Plan:** §5.1
+
+Alex asked on 2026-11-19 for one line that turns search and AI listing off for the whole app, so staging is never
+listed. The web setting `SEARCH_LISTING` (`on` or `off`) defaults to `off`. Off: every response carries
+`X-Robots-Tag: noindex` (server.ts) and every page `<meta name="robots" content="noindex">` (root layout),
+robots.txt refuses the training and AI search crawlers every path, lets `User-agent: *` fetch every page (a page it
+blocks never shows its noindex, and a linked address could still be listed: ADR 0031 Decision 1), and names no
+sitemap; the sitemap lists nothing; neither reads members' choices. The switch takes a restart, and a copy cached
+before it may live five minutes. Members' stored choices are untouched, and Settings › Profile › Search and AI says listing is
+off on this site. On: ADR 0062 exactly. Both staging compose files and the local one set `off` as a literal; turning
+it on for production is a later step that needs Alex's word. Fits inside ADR 0062, which decides what a member's
+choice does on a listed site; it adds no data and no crawler rule. The letter does not belong to the token pipeline
+below; it was the next free id.
+
+### P1.21c — Remove dead and duplicated code (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.1, §9
+
+Alex approved on 2026-11-19 three findings of that day's refactor pass (`reviews/2026-11-19-refactor-pass/`), each
+removing code without changing behaviour. (1) The Hono-era page CSPs in `shared/http/csp/` were read by nothing but
+their own test and the `static` header web sends before its hook; web's `csp.ts` becomes the only CSP source
+(`STATIC_CSP`), `shared/http/headers.ts` keeps the other security headers, and the unused `profile` page group, the
+settings `ASSETS_BASE` and `DEV_VITE_ORIGIN` and their preflight C29 entries go. A leftover key in an env file still
+boots. (2) `pds-failure.ts` returns only the sign-in redirect its four callers use, and the PDS host stops being
+threaded through for it. (3) The indexer's backfill queue uses the shared `claimJobs` and `endJob`, which move to
+`infrastructure/postgres/jobs.ts`. The letter does not belong to the token pipeline below; it was the next free id.
+
+### P1.21d — Sign-out asks the session store which browsers are live (added step, 2026-11-19)
+
+**Tags:** trusted · **Depends on:** — · **Plan:** §5.3 "Logout"
+
+From the 2026-11-19 refactor pass (finding 3), which Alex approved that day. The web process's sign-out ran two
+queries of its own: a copy of the session store's lifetime rule, to count the browsers still signed in (P2.08c), and
+a delete of the token set when the revoke fails. The session store gains `countLive(db, did)`, and its read and the
+count share one SQL fragment for the idle and absolute limits, so the last browser's count cannot drift from what
+signs a browser in. The fallback delete calls the token store's `del`, which takes an optional deadline like `get`.
+`interfaces/web/src/lib/server/session-count.ts` is deleted. No behaviour changes: the same order, the same
+transaction and lock, the same outcome for the last browser and for one of several; the existing sign-out integration
+tests pin it. The letter does not belong to the token pipeline below; it was the next free id.
+
+### P1.21e — Record the account lifecycle and burned names (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Docs only. Alex decided on 2026-11-19 (22:40Z) how deactivation, deletion, takedown and moving away treat a member's
+DID, DNS record, PDS account and name, after research into how atproto means them to work. Proposed ADR 0067 records
+it; the privacy notice's 2026-11-19 version gains the permanent PLC history and the burned names (no member has
+accepted that version yet), the RoPA gains a "Burned names" row, the erasure runbook gains the manual DNS and name
+steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
+No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
 
 ### P1.21 — Token pipeline
 
@@ -4657,7 +4772,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
   `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
-P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: l, m, q.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's

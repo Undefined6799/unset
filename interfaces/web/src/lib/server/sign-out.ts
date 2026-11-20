@@ -12,7 +12,6 @@ import type { Session } from "@unset/infrastructure-session";
 import { services } from "./compose.ts";
 import { withRevokeTimeout } from "./revoke-timeout.ts";
 import { dropSessionCookie } from "./session.ts";
-import { remainingSessions } from "./session-count.ts";
 import { dropCookie, encodeIssuer, issuerOrigin, putCookie } from "./sign-in-state.ts";
 
 /** The issuer read's own deadline (P2.08h): well below PG_CONNECT_TIMEOUT_MS's 2000, so a hung store cannot hold us. */
@@ -32,15 +31,15 @@ const failed = (): never => error(503, { message: "logout.failed" });
 
 /** Revoke the grant. On any failure the stored set is deleted here, so no grant remains on our side. */
 async function revokeOrDrop(did: Did, deadline: AbortSignal): Promise<void> {
-  const { oauth, pool, log } = services();
+  const { oauth, log } = services();
   try {
     // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
     await withRevokeTimeout(oauth.client.revoke(did), deadline);
   } catch (cause: unknown) {
     log.warn("oauth.revoke_failed", { kind: className(cause) });
-    await withClient(pool, deadline, (db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did])).catch(
-      (drop: unknown) => log.warn("oauth.revoke_failed", { kind: className(drop) }),
-    );
+    await oauth
+      .dropTokenSet(did, deadline)
+      .catch((drop: unknown) => log.warn("oauth.revoke_failed", { kind: className(drop) }));
   }
 }
 
@@ -49,10 +48,10 @@ async function revokeOrDrop(did: Did, deadline: AbortSignal): Promise<void> {
  * grant a concurrent sign-in just stored. If the lock or the count fails, the revoke still runs (F13).
  */
 async function endGrantIfLast(did: Did, deadline: AbortSignal): Promise<void> {
-  const { oauth, pool, sessionLimits, log } = services();
+  const { oauth, pool, sessions, log } = services();
   try {
     await oauth.lockDid(did, async () => {
-      const remaining = await withClient(pool, deadline, (db) => remainingSessions(db, did, sessionLimits.idleS));
+      const remaining = await withClient(pool, deadline, (db) => sessions.countLive(db, did));
       if (remaining === 0) await revokeOrDrop(did, deadline);
     });
   } catch (cause: unknown) {
@@ -112,11 +111,11 @@ function finish(cookies: Cookies, issuer: string | null): never {
 export async function signOut(session: Session | undefined, cookies: Cookies, deadline: AbortSignal): Promise<never> {
   if (session === undefined) finish(cookies, null);
   const issuer = await recordedIssuer(session);
-  const { pool, sessions, sessionLimits, log } = services();
+  const { pool, sessions, log } = services();
   // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it.
   const remaining = await withTransaction(pool, deadline, async (tx) => {
     await sessions.destroy(tx, session.idHash);
-    return remainingSessions(tx, session.did, sessionLimits.idleS);
+    return sessions.countLive(tx, session.did);
   }).catch(failed);
   log.info("auth.logout_this_browser");
   // Last browser: revoke outside the transaction. The count saw this delete.

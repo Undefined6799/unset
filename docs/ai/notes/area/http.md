@@ -196,8 +196,8 @@ or startup fails on the missing build. `main.test.ts` fails if `main.ts` statica
 hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLimit, rateLimitIp, csrf. Also:
 - `routes.ts`: `defineRoute`, the only way to register a route; it refuses a route without limits or a deadline.
 - `csrf/gate.ts`: the one CSRF gate (Sec-Fetch-Site, then exact Origin, then exact Referer, else deny).
-- `csp/`: the Content-Security-Policy per route group. `public` (P1.25k) is for our own zero-JS pages (`/`, `/legal/terms`,
-  `/legal/privacy`, `/legal/domains`): no script-src, images from the assets path only, and no cookie read (any group but `app`).
+- `headers.ts`: the security headers every web response carries besides its CSP. The CSP itself is web's own
+  (interfaces/web/src/lib/server/csp.ts); the Hono-era per-group copy in `csp/` was deleted in P1.21c.
 - `trustedProxy.ts` and `clientIp.ts`: the client address, which prints as `[ip]` and only leaves as a rate key.
 - `returnPath.ts`: the one redirect-target validator.
 - `health.ts`: `/health`, which reveals only status and commit. `web` registers one readiness check, a `SELECT 1`

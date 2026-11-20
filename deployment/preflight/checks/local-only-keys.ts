@@ -12,9 +12,7 @@ const isHttps = (raw: string): boolean => URL.canParse(raw) && new URL(raw).prot
 
 /** The first origin key in `env` that is not https, or undefined. */
 function plainOrigin(env: SecretMap): NamedKey | undefined {
-  return ORIGIN_KEYS.find((name) =>
-    env.use(name, (raw) => raw !== undefined && !(name === "ASSETS_BASE" && raw === "") && !isHttps(raw)),
-  );
+  return ORIGIN_KEYS.find((name) => env.use(name, (raw) => raw !== undefined && !isHttps(raw)));
 }
 
 export const c29: Check = {

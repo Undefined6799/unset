@@ -4,6 +4,8 @@
 // for those names: the DID's document must name our PDS, our PDS must hold an active repo for it
 // (com.atproto.sync.getRepoStatus), and our PDS must map the handle back to the same DID
 // (com.atproto.identity.resolveHandle). Without those, anyone could point a DNS-less claim at one of our names.
+// They are also the backstop for a TXT record that outlived its account: on deletion or takedown the record is
+// removed (by hand until ADR 0063's writer exists), and until it is, our PDS no longer maps the name (ADR 0067).
 //
 // Three outcomes. `invalid` clears the stored handle. `unresolved` is an outage on our side or theirs: it keeps what is
 // stored, but only while the DID document still claims the stored handle, so it names the claim when the document was

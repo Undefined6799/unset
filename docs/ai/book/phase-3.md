@@ -1550,6 +1550,34 @@ Diagram: none.
 
 ---
 
+### P3.08n — Burn every hosted name a member held
+Tags: [SEC]            Depends on: P3.08, P3.07            Plan: §5.2 "The 'PDS isn't ours' rule"; ADR 0067
+Where: a migration for the list and its key; `interfaces/indexer` (adds names); the ADR 0063 writer and the web claim
+form (check them)
+Size: ~120 source lines, ~200 test lines
+
+Goal: a name under our handle domain that a member ever held is never issued again (ADR 0067 decision 6).
+
+Inputs: a hosted name the first time it verifies for a DID (P3.08); the account's `deleted` event or erasure; a
+verified change away from one of our names; a claim or record write for a hosted name. Not `idx.account.handle`
+alone: the P3.08 re-check sets it to NULL as soon as the account is inactive (`interfaces/indexer/handles.ts` returns
+`invalid` for a non-active repo; `infrastructure/postgres/handleStore.ts` clears it), so during the 30 days before a
+deletion the index no longer knows the name.
+Outputs: an app-owned held-name row (DID and name, outside `idx`, never cleared by a re-check, erased with the DID);
+and a burned row holding a keyed HMAC-SHA256 of the lower-cased name, no DID and no date, the key generated in
+Postgres like the P3.07s tombstone's; `eraseDid` turns the held row into the burned row and leaves the burned row.
+
+Algorithm: when a hosted name first verifies, record the held row. On erasure or a change away, add the name's hash,
+idempotently, in the same transaction that drops the held row. On a claim, the web form refuses a name that is burned
+or held by another DID, with a plain message. The ADR 0063 writer refuses to write a record for one (so a name taken
+directly on the PDS never verifies) but rewrites the holder's own, as after a reversed takedown.
+
+Threats (SE-1): a backup reader with the key can test a guessed name, which the public PLC log already shows for any
+DID they know; a writer that skips the check reissues a name (test: a burned name never gets a record).
+Done when: a deleted member's name and a changed-away name are refused at claim and at write, including after
+deactivation, a handle re-check, then deletion; an unrelated name is not; the holder's own record can be rewritten;
+and erasure keeps the burned list. Waits on ADR 0067 being accepted and the ADR 0063 writer's step.
+
 ### P3.09 — Media proxy for published blobs
 Tags: [SEC]            Depends on: P3.06, P2.19            Plan: §2 rule 9, §5.2 "Media proxy", §6.1 images; vault `atproto-blob-serving-security`
 Where: `interfaces/media/src/published.ts`, `interfaces/indexer/purge.ts`, migration for the `media` role

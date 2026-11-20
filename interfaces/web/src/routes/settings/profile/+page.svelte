@@ -24,18 +24,22 @@ let {
     pagePath: string;
     discoverability: { searchEngines: boolean; aiSearch: boolean; title: string; description: string };
     discoverabilityLimits: { title: number; description: number };
+    saved: boolean;
+    searchListingOff: boolean;
   };
 } = $props();
 
 const messageFor = (code: string | undefined): string | undefined =>
   code !== undefined && code in ERROR_MESSAGES ? ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] : undefined;
 
-let status: ProfileFormStatus = $state({ kind: "editing" });
+// The submit handler's status once the member has submitted; before that, saved when the page is a save's return.
+let submitted: ProfileFormStatus | undefined = $state(undefined);
+const status: ProfileFormStatus = $derived(submitted ?? (data.saved ? { kind: "saved" } : { kind: "editing" }));
 const save: Action<HTMLFormElement> = (form) =>
   enhance(
     form,
     profileSubmit((next) => {
-      status = next;
+      submitted = next;
     }),
   );
 </script>
@@ -53,4 +57,4 @@ const save: Action<HTMLFormElement> = (form) =>
 {:else}
   <ProfileForm values={data.profile} limits={data.limits} pagePath={data.pagePath} {messageFor} enhance={save} {status} />
 {/if}
-<SearchAiForm values={data.discoverability} limits={data.discoverabilityLimits} />
+<SearchAiForm values={data.discoverability} limits={data.discoverabilityLimits} siteOff={data.searchListingOff} />

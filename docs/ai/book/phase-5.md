@@ -587,6 +587,32 @@ Reuse:
 Not in this step: backup code (P5.04); compose (P5.02); the Law 25 PIA (P5.12).
 Diagram: "Backup and restore flow" above.
 
+### P5.01o — Object store operations on the chosen provider (added 2026-11-19)
+Tags: [SEC]            Depends on: P5.01            Plan: §5.8, §6 (backups, erasure); ADRs 0041, 0050
+Where: `deployment/preflight/` (bucket provisioning), `docs/human/runbooks/object-store.md`, `deployment/hosting.md`
+Size: ~80 source lines, ~120 test lines, one runbook section
+
+Goal: S3 is settled (Alex, 2026-11-19: keep it, for what it enables later). Make the object store's operations
+explicit for the provider P5.01 chooses, so S3 compatibility is not mistaken for identical administration. From the
+architecture review of 2026-11-19 (A7; reasons in the description of #1744, which added this step).
+
+Checks, each written down in the runbook with who owns it, and the testable ones as tests against the provider or
+its CI stand-in:
+  - bucket and prefix isolation; separate keys for the app and the PDS, each limited to its own bucket;
+  - put, get, list with pagination, and tags (the `lifecycle=expire` tag of P5.01) behave as the adapter expects;
+  - retries and partial failure on a multi-object operation;
+  - bucket provisioning and physical clean-up on that provider: today they run through SeaweedFS's own shell with
+    no S3 admin key (ADR 0050, `deployment/preflight/objects-buckets.ts`), which a hosted provider does not have.
+    The provider's way is checked, not assumed, and written as a new ADR that supersedes the parts of 0050 it
+    replaces (Alex accepts it);
+  - a logical delete is told apart from the provider's physical reclamation; SQL erasure is never described as
+    erasing object bytes (ADR 0041);
+  - restore brings back PDS metadata and blobs together, then replays the erasure history;
+  - capacity, key rotation, backup and upgrade each have a named owner.
+Not in this step: dropping the object store or the `infrastructure/storage` adapter (S3 is settled; the adapter has
+no runtime consumer yet and stays as the declared contract); the `STORAGE_MODE` `disk` option in P5.01, which should
+go when P5.01 is refined.
+
 ### P5.02g — `backup` role grants (split from P5.02, SE-6)
 Tags: [SEC]            Depends on: P5.00, P1.12            Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`); round 1 F6
 Where: one migration (grant statements only, generated as P5.02 describes), `roles.json` (`backup`'s `passwordFrom`),
@@ -2233,11 +2259,12 @@ Algorithm:
   3. **By kind:**
      - **Access** → `dsar.export`. The requester gets a single-use link; the moderator never sees it.
      - **Erasure, account on our PDS:**
-       1. Create a GDPR hold (the account is deactivated).
-       2. After 7 days, with an owner's approval, execute it. `pds-admin` `deleteAccount` returns success.
+       1. Create a GDPR hold (the account is deactivated, with `deleteAfter` 30 days later; ADR 0067).
+       2. After 30 days, with an owner's approval, execute it. `pds-admin` `deleteAccount` returns success.
        3. **Then `admin` calls `eraseDid(did)` directly** (round 1 F2). The later `#account deleted` event, from
           `tap-own` or the relay, is an idempotent no-op.
-       4. The erasure runbook (P5.08c) signs the PLC tombstone.
+       4. The DNS record is removed and the name burned (ADR 0067; P3.08n). The PLC tombstone is signed only when
+          the member asked for their identity to be ended (P5.08c's runbook); never by default.
        5. If the user reactivates during the hold → the case is withdrawn.
      - **Erasure, foreign DID** → a held DB action that erases our index and app rows only. It refuses DIDs our PDS
        hosts.
@@ -2281,7 +2308,7 @@ Done when (tests):
     `erasure_removes_sec_lane_side_rows_keeps_mod_lane`.
 
 Reuse: none beyond the steps named.
-Not in this step: the PLC tombstone procedure (P5.08c); the hold mechanics (P4.07).
+Not in this step: the PLC tombstone procedure, on a member's request only (P5.08c); the hold mechanics (P4.07).
 Diagram: none.
 
 ### P5.08c — Phase 5 runbooks
@@ -2294,7 +2321,9 @@ Goal: every operational procedure the admin design requires by Phase 5 exists in
 Inputs: admin design §11.2; P1.37; P5.03–P5.08b.
 Outputs: runbooks, each with the sections `When`, `Who`, `Steps`, `Verify`, `Record` and `Last drilled`:
 - takedown with statement;
-- **erasure with PLC tombstone**: build the operation, Alex signs offline, submit, verify;
+- **PLC tombstone on a member's request** (ADR 0067; never by default, after the deletion is final, with the
+  warning that it is final after 72 hours and does not clear the public log): build the operation, Alex signs
+  offline, submit, verify;
 - legal orders and holds, **including how to ask for a hold's retention to be extended or why it cannot be shortened**;
 - DSA Art. 18 notification;
 - moderator onboarding;
