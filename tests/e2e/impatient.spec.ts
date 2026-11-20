@@ -27,6 +27,7 @@ const fixture = (path: string, route = path): PageFixture => ({
 });
 const OWN_PAGE = fixture(`/${ACCOUNT.did}`, "/:did");
 const SETTINGS = fixture("/settings/profile");
+const PRIVACY = fixture("/settings/privacy"); // Search and AI lives here since P1.21y
 
 /** The member's main pages and the heading each shows once it has really arrived. */
 const PAGES = [
@@ -65,8 +66,8 @@ async function press(page: Page, path: string): Promise<void> {
 }
 
 /** The member sees `path`'s real page: its URL, its heading, and none of the error page's words. */
-async function landedOn(page: Page, path: string): Promise<void> {
-  const target = PAGES.find((candidate) => candidate.path === path);
+async function landedOn(page: Page, path: string, heading?: string): Promise<void> {
+  const target = heading === undefined ? PAGES.find((candidate) => candidate.path === path) : { heading };
   await expect(page).toHaveURL(new RegExp(`^${TEST_ORIGIN}${path}(\\?saved)?(#[a-z-]+)?$`));
   await expect(page.locator("main h1").first()).toContainText(target?.heading ?? "");
   await expect(page.locator("body")).not.toContainText(/Internal Error|Something went wrong|Not Found/i);
@@ -169,12 +170,12 @@ test("saving_the_profile_three_times_fast_says_saved_once_and_stays", async ({ p
 });
 
 test("saving_search_and_ai_three_times_fast_lands_back_on_settings", async ({ page }) => {
-  expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+  expect((await openPage(page, PRIVACY))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const seen = trouble(page);
   await page.getByRole("button", { name: "Save search and AI" }).click({ clickCount: 3, delay: 20 });
   await page.waitForLoadState("networkidle");
-  await landedOn(page, SETTINGS.path);
+  await landedOn(page, PRIVACY.path, "Privacy");
   expect(seen).toEqual([]);
 });
 
@@ -235,11 +236,11 @@ test.describe("no script", () => {
   });
 
   test("saving_search_and_ai_three_times_fast_lands_back_on_settings", async ({ page }) => {
-    expect((await openPage(page, SETTINGS))?.status()).toBe(200);
+    expect((await openPage(page, PRIVACY))?.status()).toBe(200);
     const seen = trouble(page);
     await page.getByRole("button", { name: "Save search and AI" }).click({ clickCount: 3, delay: 20 });
     await page.waitForLoadState("load");
-    await landedOn(page, SETTINGS.path);
+    await landedOn(page, PRIVACY.path, "Privacy");
     expect(seen).toEqual([]);
   });
 });

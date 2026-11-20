@@ -13,6 +13,7 @@ let { children }: { children: Snippet } = $props();
 
 const PAGES: readonly { label: string; path: string; icon: IconName }[] = [
   { label: SETTINGS.profile, path: "/settings/profile", icon: "profile" },
+  { label: SETTINGS.privacy, path: "/settings/privacy", icon: "hide" },
   { label: SETTINGS.account, path: "/settings/account", icon: "private" },
 ];
 </script>

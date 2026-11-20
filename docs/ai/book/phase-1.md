@@ -4902,6 +4902,21 @@ sticky unsaved-changes bar under the header, Width and Style in the card's menu,
 (3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
 Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
 
+### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2
+
+Alex, 2026-11-20 18:55Z: "the privacy part will be to have the search and AI ... the search title and the search
+description ... will be an advanced setting ... some kind of preview of what people will see". The Search and AI form
+(ADR 0062) moves from the bottom of Settings › Profile to a new Settings › Privacy page in the side list. The title
+and description sit under a native `details` "Advanced" (works with no script; open when either is set). Inside it
+(Alex, 19:21Z: "add ... the search preview ... inside the advanced setting"), a preview
+draws the result the public page publishes: its address, the override or the name and headline, and the letter
+avatar until the media origin serves pictures (ADR 0070), when the page gains `og:image` and the preview the same
+picture. With no script the preview shows what is saved; with the client it follows the fields. The save keeps its
+path, `POST /settings/search-and-ai`, and now returns to `/settings/privacy?saved`. No data, lexicon or ADR change.
+Ownership: apps/web → interfaces/web.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
