@@ -1,8 +1,11 @@
 # 0073 — The Text card gets a Milkdown editor, and the CSP allows ProseMirror's one paste policy
 
-Status: Proposed (awaiting Alex). Alex asked for it on 2026-11-20 ("it feels pretty awful to write markdown right
-now"). It loosens a security control (one Trusted Types policy name), so it merges only on his typed line (ADR 0059).
-Measurements are in the PR (P1.21u).
+Status: Accepted by Alex, 2026-11-20 13:08:50Z, against 76abad4. At 13:08:21Z he wrote "Merge 1827 and 1832"; the
+coordinator answered at 13:08:26Z with the exact lines "Merge 1827 at 76abad4" and "Merge 1832 at 4c69b5e", and at
+13:08:50Z he replied under them "Just do it with these 2 heads here", taken by the coordinator and the verifier as
+naming both heads (ADR 0059). Merged as 93fa393. This status paragraph, the index row and the ADR 0001 acceptance
+line were added afterwards in P1.21z. Alex asked for it on 2026-11-20 ("it feels pretty awful to write markdown right
+now"). It loosens a security control (one Trusted Types policy name). Measurements are in #1827 (P1.21u).
 
 ## Context
 
