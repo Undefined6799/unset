@@ -32,16 +32,17 @@ of personal data: the email address of a visitor who is not a member.
    zones still apply. A repeat, a filled hidden trap field and a first ask all answer the same, so the page never
    says whether an address asked before. The CSRF gate and the 1 KiB body cap apply as on every form.
 5. **The transport.** `infrastructure/email` is the one adapter that imports nodemailer (dependency-cruiser
-   `vendor-sdk-one-adapter`). SMTP with implicit TLS only (`smtps:`, TLS 1.2 or later, the system trust store); a
-   plain `smtp:` URL is refused at boot, because it would send the key before any upgrade. Each wait (connect,
+   `vendor-sdk-one-adapter`). Always encrypted before the login, as ADR 0065's rule for the PDS: an `smtps:` URL is
+   TLS from the first byte, an `smtp:` URL must upgrade with STARTTLS (nodemailer `requireTLS`) or nothing is sent;
+   TLS 1.2 or later, the system trust store. So a later EU sender on port 587 is a URL change. Each wait (connect,
    greeting, idle) is 8 s inside the route's 20 s deadline; nodemailer reads no file or URL and writes no log. The
    server is a fixed host from config, never from a request, so this is not caller-influenced egress and does not go
-   through net-guard. Changing provider is one URL.
+   through net-guard.
 6. **Off by default.** `INVITE_REQUESTS` is `off` unless set; then the page says requests are closed and no mail
-   setting is read. On, boot refuses unless `INVITE_REQUEST_SMTP_URL` (a secret file, an `smtps:` URL holding the
-   provider's key), `INVITE_REQUEST_TO` (a secret file, so the owner's address is never in the checkout or in
-   `docker inspect`) and `INVITE_REQUEST_FROM` are all valid. `shared/config` gains `optionalSecretFile` for the two
-   files. A mail key for web should be its own Resend key with sending rights only, not the PDS's.
+   setting is read. On, boot refuses unless `INVITE_REQUEST_SMTP_URL` (a secret file, an `smtps:` or `smtp:` URL
+   holding the provider's key), `INVITE_REQUEST_TO` (a secret file, so the owner's address is never in the checkout or
+   in `docker inspect`) and `INVITE_REQUEST_FROM` are all valid. `shared/config` gains `optionalSecretFile` for the
+   two files. A mail key for web should be its own Resend key with sending rights only, not the PDS's.
 
 ## Dependency (ADR 0057)
 
@@ -74,8 +75,8 @@ The PDS image's older nodemailer 6.10.1 (`.github/trivyignore.pds.yaml`) is a se
 
 ## Compliance
 
-- `tests/integration/email/smtp.test.ts`: the real adapter against a TLS SMTP server on loopback (TLS refused when the
-  certificate is not trusted, login refused, deadline).
+- `tests/integration/email/smtp.test.ts`: the real adapter against a TLS SMTP server on loopback (implicit TLS,
+  STARTTLS, no login when STARTTLS is missing, untrusted certificate, refused login, deadline).
 - `tests/integration/web/public/request-invite.test.ts`: on the built server, one mail to the owner with Reply-To, a
   repeat mails nothing, bad input, a missing tick and the trap send nothing, a cross-site POST is refused, the fourth
   request from one address is refused, no address in any log line, the closed page, and a failed mail.

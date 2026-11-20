@@ -3208,7 +3208,8 @@ Threats:
 - The page tells whether an address asked before. Answered: a repeat answers as a first ask (`invite_request.repeat`).
 - An address leaks into logs or storage. Answered: none is logged (`invite_request.never_logged`); memory holds only a
   keyed hash for 30 days. Accepted: Resend holds the mail 30 days in the US (ADR 0065).
-- The provider key goes out in clear. Answered: `smtps:` only, TLS 1.2+, the certificate checked (`tests/integration/email/smtp.test.ts`).
+- The provider key goes out in clear. Answered: implicit TLS or required STARTTLS, TLS 1.2+, the certificate checked
+  (`tests/integration/email/smtp.test.ts`).
 ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
 Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
 

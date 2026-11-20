@@ -1,36 +1,48 @@
-// Outbound mail over SMTP with implicit TLS (ADR 0080). The one adapter that imports nodemailer (dependency-cruiser
-// vendor-sdk-one-adapter). Read for nodemailer 10.5.0: dist/cjs/smtp-transport/index.d.ts (host, port, secure, auth),
-// dist/cjs/smtp-connection/index.d.ts (connectionTimeout, greetingTimeout, socketTimeout; `secure` opens TLS before
-// the greeting) and dist/cjs/mailer/index.d.ts (disableFileAccess, disableUrlAccess). The server is a fixed host from
-// config, never from a request, so this is not caller-influenced egress (CLAUDE.md "Egress").
+// Outbound mail over SMTP, always encrypted before the login (ADR 0080). The one adapter that imports nodemailer
+// (dependency-cruiser vendor-sdk-one-adapter). Read for nodemailer 10.5.0: dist/cjs/smtp-transport/index.d.ts (host,
+// port, secure, auth), dist/cjs/smtp-connection/index.d.ts (connectionTimeout, greetingTimeout, socketTimeout; `secure`
+// opens TLS before the greeting; `requireTLS` "forces the client to use STARTTLS") and dist/cjs/mailer/index.d.ts
+// (disableFileAccess, disableUrlAccess). The server is a fixed host from config, never from a request, so this is not
+// caller-influenced egress (CLAUDE.md "Egress").
 import { createTransport } from "nodemailer";
 
-/** Where mail goes: an `smtps:` URL's parts. The password is the provider's key. */
+/** Where mail goes: an SMTP URL's parts. The password is the provider's key. */
 export type MailServer = {
   readonly host: string;
   readonly port: number;
+  /** `smtps:`: TLS from the first byte. Otherwise STARTTLS is required, and refused means nothing is sent. */
+  readonly implicitTls: boolean;
   readonly user: string;
   readonly pass: string;
 };
 
 /**
- * `smtps://user:pass@host:port` (port 465 when absent), or null. Only implicit TLS: a plain `smtp:` URL would send the
- * key before any upgrade, so it is refused. No path, query or fragment.
+ * `smtps://user:pass@host:port` (implicit TLS, port 465 when absent) or `smtp://user:pass@host:port` (STARTTLS
+ * required, port 587 when absent; ADR 0065's rule for the PDS: smtps, or smtp with requireTLS), or null. No path,
+ * query or fragment.
  */
-export function parseSmtpsUrl(raw: string): MailServer | null {
+export function parseSmtpUrl(raw: string): MailServer | null {
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
     return null;
   }
-  if (url.protocol !== "smtps:" || url.hostname === "" || url.username === "" || url.password === "") return null;
+  if (
+    (url.protocol !== "smtps:" && url.protocol !== "smtp:") ||
+    url.hostname === "" ||
+    url.username === "" ||
+    url.password === ""
+  )
+    return null;
   if (url.pathname !== "" || url.search !== "" || url.hash !== "") return null;
-  const port = url.port === "" ? 465 : Number(url.port);
+  const implicitTls = url.protocol === "smtps:";
+  const port = url.port !== "" ? Number(url.port) : implicitTls ? 465 : 587;
   try {
     return {
       host: url.hostname,
       port,
+      implicitTls,
       user: decodeURIComponent(url.username),
       pass: decodeURIComponent(url.password),
     };
@@ -66,7 +78,9 @@ export function createSmtpMailer(options: MailerOptions): Mailer {
   const transport = createTransport({
     host: server.host,
     port: server.port,
-    secure: true,
+    secure: server.implicitTls,
+    // Without implicit TLS, STARTTLS must succeed before the login, or the send fails (smtp-connection requireTLS).
+    requireTLS: !server.implicitTls,
     auth: { user: server.user, pass: server.pass },
     connectionTimeout: options.timeoutMs,
     greetingTimeout: options.timeoutMs,

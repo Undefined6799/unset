@@ -4,7 +4,7 @@
 // P1.20e: what the OAuth client stands on, as interfaces/http/config.ts has it since P2.04c: the lock pool, the seal
 // keyring, net-guard, the identity lookups, the client keys and our PDS.
 import { parseRequesterEmail } from "@unset/domains-identity";
-import { parseSmtpsUrl } from "@unset/infrastructure-email";
+import { parseSmtpUrl } from "@unset/infrastructure-email";
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
@@ -143,7 +143,7 @@ const inviteRequestConfig = {
         parseRequesterEmail(String(config.INVITE_REQUEST_FROM)) !== null),
   ),
   INVITE_REQUEST_SMTP_URL: withRule(optionalSecretFile({ minBytes: 16 }), (config) =>
-    unsetOr(config.INVITE_REQUEST_SMTP_URL, (text) => parseSmtpsUrl(text) !== null),
+    unsetOr(config.INVITE_REQUEST_SMTP_URL, (text) => parseSmtpUrl(text) !== null),
   ),
   INVITE_REQUEST_TO: withRule(optionalSecretFile({ minBytes: 6 }), (config) =>
     unsetOr(config.INVITE_REQUEST_TO, (text) => parseRequesterEmail(text) !== null),

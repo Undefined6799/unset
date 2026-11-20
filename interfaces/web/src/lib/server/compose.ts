@@ -20,7 +20,7 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { createSmtpMailer, type Mailer, parseSmtpsUrl } from "@unset/infrastructure-email";
+import { createSmtpMailer, type Mailer, parseSmtpUrl } from "@unset/infrastructure-email";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -157,7 +157,7 @@ const MAIL_TIMEOUT_MS = 8000;
 function inviteRequestsOf(): InviteRequests | null {
   const { INVITE_REQUESTS: on, INVITE_REQUEST_SMTP_URL: url, INVITE_REQUEST_TO: to } = config;
   if (on !== "on") return null;
-  const server = url === undefined ? null : parseSmtpsUrl(url.reveal());
+  const server = url === undefined ? null : parseSmtpUrl(url.reveal());
   if (server === null || to === undefined) throw new Error("invite requests: on without their settings");
   return {
     window: createAskWindow({ now: () => Date.now() }),

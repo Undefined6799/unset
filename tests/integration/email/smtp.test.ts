@@ -6,9 +6,15 @@ import { startTestSmtp } from "../../support/smtp-server.ts";
 
 const MAIL = { to: "owner@example.test", replyTo: "visitor@example.test", subject: "Invite request", text: "Hello" };
 
-function mailer(port: number, options: { pass?: string; ca?: string } = {}) {
+function mailer(port: number, options: { pass?: string; ca?: string; implicitTls?: boolean } = {}) {
   return createSmtpMailer({
-    server: { host: "localhost", port, user: "user", pass: options.pass ?? "pass" },
+    server: {
+      host: "localhost",
+      port,
+      implicitTls: options.implicitTls ?? true,
+      user: "user",
+      pass: options.pass ?? "pass",
+    },
     from: "noreply@example.test",
     timeoutMs: 2000,
     ...(options.ca === undefined ? {} : { ca: options.ca }),
@@ -47,6 +53,30 @@ describe("createSmtpMailer", () => {
     const smtp = await startTestSmtp();
     try {
       expect(await mailer(smtp.port).send(MAIL, AbortSignal.timeout(5000))).toBe("failed");
+      expect(smtp.received).toHaveLength(0);
+    } finally {
+      await smtp.close();
+    }
+  });
+
+  it("upgrades with STARTTLS before the login when the URL is smtp", async () => {
+    const smtp = await startTestSmtp({ mode: "starttls" });
+    try {
+      const starttls = mailer(smtp.port, { ca: smtp.cert, implicitTls: false });
+      expect(await starttls.send(MAIL, AbortSignal.timeout(5000))).toBe("sent");
+      expect(smtp.logins).toEqual([{ auth: "\0user\0pass", overTls: true }]);
+      expect(smtp.received).toHaveLength(1);
+    } finally {
+      await smtp.close();
+    }
+  });
+
+  it("never sends the key in clear: a server without STARTTLS gets no login and no mail", async () => {
+    const smtp = await startTestSmtp({ mode: "plain" });
+    try {
+      const starttls = mailer(smtp.port, { ca: smtp.cert, implicitTls: false });
+      expect(await starttls.send(MAIL, AbortSignal.timeout(5000))).toBe("failed");
+      expect(smtp.logins).toEqual([]);
       expect(smtp.received).toHaveLength(0);
     } finally {
       await smtp.close();

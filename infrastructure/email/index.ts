@@ -5,5 +5,5 @@ export {
   type Mailer,
   type MailerOptions,
   type MailServer,
-  parseSmtpsUrl,
+  parseSmtpUrl,
 } from "./smtp.ts";

@@ -251,7 +251,7 @@ setting are valid. Both files are owner-only (0600), like the others in this fol
 
 - `web_invite_request_smtp`: one line, `smtps://resend:<key>@smtp.resend.com:465`. Make a Resend API key for web alone,
   with sending access only and limited to the sending domain, not the PDS's key (Resend dashboard, API Keys, Create).
-  A plain `smtp:` URL is refused.
+  An `smtp://...:587` URL works too, and then STARTTLS is required before the login.
 - `web_invite_request_to`: one line, the owner's address that receives each request.
 - `INVITE_REQUEST_FROM` (plain env, not a secret): a sender on the verified Resend domain, for example the PDS's
   `noreply@` address.
