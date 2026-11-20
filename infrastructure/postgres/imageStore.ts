@@ -30,6 +30,8 @@ export type StoredImage = {
   readonly bytes: number;
 };
 
+export type ImageSize = { readonly width: number; readonly height: number };
+
 export type LibraryImage = StoredImage & { readonly state: string; readonly createdAt: Date; readonly inUse: boolean };
 
 export type SweepResult =
@@ -122,21 +124,26 @@ export function createImageStore(pool: Pool) {
         return (rowCount ?? 0) > 0;
       }),
 
-    /** A save's record uses the image; false when it is not the member's, gone, held or blocked. */
-    addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<boolean> =>
+    /**
+     * A save's record uses the image, once however often it is asked; its pixel size, which the record's aspect ratio
+     * gives, or null when it is not the member's, gone, held or blocked.
+     */
+    addUse: (did: Did, id: string, recordUri: string, deadline: AbortSignal | null): Promise<ImageSize | null> =>
       withTransaction(pool, deadline, async (tx) => {
-        if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return false;
-        const { rowCount } = await tx.query(
+        if (!ownRecord(did, recordUri) || !(await lockImage(tx, did, id))) return null;
+        const { rows } = await tx.query<{ width: number; height: number }>(
           `UPDATE app.image SET state = 'published', unused_since = NULL
-            WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')`,
+            WHERE id = $1 AND did = $2 AND state IN ('uploaded', 'released', 'published')
+            RETURNING width, height`,
           [id, did],
         );
-        if ((rowCount ?? 0) === 0) return false;
+        const [size] = rows;
+        if (size === undefined) return null;
         await tx.query("INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2) ON CONFLICT DO NOTHING", [
           id,
           recordUri,
         ]);
-        return true;
+        return { width: Number(size.width), height: Number(size.height) };
       }),
 
     /** A save dropped the image from the record; when no use is left its copies go 7 days later. */
@@ -153,6 +160,32 @@ export function createImageStore(pool: Pool) {
           `UPDATE app.image SET unused_since = now()
             WHERE id = $1 AND did = $2 AND NOT EXISTS (SELECT 1 FROM app.image_use u WHERE u.image_id = $1)`,
           [id, did],
+        );
+      }),
+
+    /**
+     * The record now uses only `keep` (null: no image): a replaced or removed picture's use goes, and an image left with
+     * no use has its copies deleted 7 days later. Each image is locked as removeUse locks it.
+     */
+    keepOnlyUse: (did: Did, recordUri: string, keep: string | null, deadline: AbortSignal | null): Promise<void> =>
+      withTransaction(pool, deadline, async (tx) => {
+        const { rows } = await tx.query<{ id: string }>(
+          `SELECT i.id::text AS id FROM app.image i JOIN app.image_use u ON u.image_id = i.id
+            WHERE i.did = $1 AND u.record_uri = $2 AND ($3::uuid IS NULL OR i.id <> $3::uuid)
+            ORDER BY i.id FOR UPDATE OF i`,
+          [did, recordUri, keep],
+        );
+        const ids = rows.map((row) => row.id);
+        if (ids.length === 0) return;
+        await tx.query("DELETE FROM app.image_use WHERE record_uri = $1 AND image_id = ANY($2::uuid[])", [
+          recordUri,
+          ids,
+        ]);
+        await tx.query(
+          `UPDATE app.image SET unused_since = now()
+            WHERE did = $1 AND id = ANY($2::uuid[])
+              AND NOT EXISTS (SELECT 1 FROM app.image_use u WHERE u.image_id = app.image.id)`,
+          [did, ids],
         );
       }),
 

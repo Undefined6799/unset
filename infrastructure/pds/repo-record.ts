@@ -12,7 +12,7 @@ export type PdsCall = <T>(
   ctx: PdsContext | null,
   did: Did,
   op: (xrpc: Agent) => Promise<T>,
-  opts: { readonly idempotent: boolean },
+  opts: { readonly idempotent: boolean; readonly timeoutMs?: number },
 ) => Promise<PdsResult<T>>;
 
 export function isXrpcError(error: unknown, name: string): boolean {

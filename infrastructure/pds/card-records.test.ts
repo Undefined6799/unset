@@ -10,6 +10,7 @@ import {
   deleteCardRecord,
   latestCommit,
   listCardRecords,
+  newCardKey,
   saveCardRecord,
   saveCardRecords,
 } from "./card-records.ts";
@@ -176,6 +177,18 @@ describe("listCardRecords", () => {
 });
 
 describe("createCardRecord", () => {
+  test("card.create_named: a key web picked is sent, and newCardKey makes record keys that sort in time", async () => {
+    const key = newCardKey();
+    expect(key).toMatch(/^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/);
+    expect(newCardKey() > key).toBe(true);
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ uri: `at://${DID}/sh.unset.section/${key}`, cid: CID }));
+    expect(await createCardRecord(pdsCall, ctx, DID, card, CID2, key)).toEqual({
+      kind: "ok",
+      value: { kind: "created", key },
+    });
+    expect(calls[0]?.body).toMatchObject({ rkey: key, swapCommit: CID2 });
+  });
+
   test("creates the record and lets the PDS pick its key", async () => {
     const { pdsCall, ctx, calls } = pds(() =>
       Response.json({ uri: `at://${DID}/sh.unset.section/3jzfcijpj2z2c`, cid: CID }),

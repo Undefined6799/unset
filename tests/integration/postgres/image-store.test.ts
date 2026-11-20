@@ -94,8 +94,8 @@ describe("image store", () => {
     const other = await member();
     const id = await stored(owner);
     expect(await store.list(other, null)).toEqual([]);
-    expect(await store.addUse(other, id, record(other), null)).toBe(false);
-    expect(await store.addUse(owner, id, record(other), null)).toBe(false);
+    expect(await store.addUse(other, id, record(other), null)).toBeNull();
+    expect(await store.addUse(owner, id, record(other), null)).toBeNull();
     expect(await store.discard(other, id, null)).toBe(false);
     await store.removeUse(other, id, record(owner), null);
     expect(await exists(id)).toBe(true);
@@ -107,8 +107,8 @@ describe("image store", () => {
   test("image.shared: removing one use keeps an image another record still uses", async () => {
     const did = await member();
     const id = await stored(did);
-    expect(await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null)).toBe(true);
-    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toBe(true);
+    expect(await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null)).toEqual({ width: 2560, height: 1707 });
+    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toEqual({ width: 2560, height: 1707 });
     await store.removeUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
     expect(await store.discard(did, id, null)).toBe(false);
     const [kept] = await sql<{ state: string; unused_since: Date | null }>(
@@ -121,6 +121,32 @@ describe("image store", () => {
       id,
     ]);
     expect(dropped?.unused_since).toBeInstanceOf(Date);
+  });
+
+  test("image.keep_only_use: a replaced picture's use goes and its copies are due in a week; the kept one stays", async () => {
+    const did = await member();
+    const other = await member();
+    const [old, fresh, theirs] = [await stored(did), await stored(did), await stored(other)];
+    await store.addUse(did, old, record(did), null);
+    await store.addUse(did, fresh, record(did), null);
+    await store.addUse(other, theirs, record(other), null);
+    await store.keepOnlyUse(did, record(did), fresh, null);
+    const rows = await sql<{ id: string; unused: boolean; uses: number }>(
+      `SELECT id::text, unused_since IS NOT NULL AS unused,
+              (SELECT count(*)::int FROM app.image_use u WHERE u.image_id = app.image.id) AS uses
+         FROM app.image WHERE id = ANY($1::uuid[])`,
+      [[old, fresh, theirs]],
+    );
+    expect(Object.fromEntries(rows.map((row) => [row.id, [row.unused, row.uses]]))).toEqual({
+      [old]: [true, 0],
+      [fresh]: [false, 1],
+      [theirs]: [false, 1],
+    });
+    // Another member's call reaches nothing of theirs, and null drops the record's last use.
+    await store.keepOnlyUse(other, record(did), null, null);
+    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(1);
+    await store.keepOnlyUse(did, record(did), null, null);
+    expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(0);
   });
 
   test("image.discard_during_use: a discard waiting on a save's open use leaves the image and its use", async () => {
@@ -187,7 +213,7 @@ describe("image store", () => {
     test("image.sweep_use_first: an expired upload a save used before the sweep is kept", async () => {
       const did = await member();
       const id = await aged(did, "uploaded", "2 days");
-      expect(await store.addUse(did, id, record(did), null)).toBe(true);
+      expect(await store.addUse(did, id, record(did), null)).toEqual({ width: 10, height: 10 });
       expect(await store.sweep(null)).toEqual({ kind: "deleted", images: [] });
       expect(await exists(id)).toBe(true);
     });

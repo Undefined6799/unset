@@ -26,6 +26,7 @@ export {
 export {
   createImageStore,
   type ImageKind,
+  type ImageSize,
   type ImageStore,
   type LibraryImage,
   type StoredImage,

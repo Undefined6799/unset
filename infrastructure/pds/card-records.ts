@@ -2,6 +2,7 @@
 // returned unparsed; domains/profile reads them. Calls and errors: @atproto/api 0.30.3 com.atproto.repo.listRecords,
 // createRecord, deleteRecord (dist/client/types/com/atproto/repo/*.d.ts) and com.atproto.sync.getLatestCommit;
 // record keys: atproto.com/specs/record-key.
+import { TID } from "@atproto/common-web";
 import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { PdsContext, PdsResult } from "./pds-call.ts";
@@ -138,9 +139,16 @@ export type CreateOutcome =
   | { readonly kind: "changed" };
 
 /**
+ * A new card's record key, for a card web must name before it is written (a picture card records its picture's use
+ * first): a TID as the PDS itself would pick one (atproto.com/specs/tid; @atproto/common-web 0.5.17 TID.nextStr).
+ */
+export const newCardKey = (): string => TID.nextStr();
+
+/**
  * Creates a card, only if the repo's head is still `swapCommit` (compare-and-swap on the whole repo: createRecord
  * `swapCommit`; @atproto/pds 0.5.51 checks it inside the repo's write transaction, processWrites, and answers
- * InvalidSwap, writing nothing). The PDS picks the key (a TID). Not retried: a retry could create it twice.
+ * InvalidSwap, writing nothing). The PDS picks the key (a TID) unless `rkey` names one (newCardKey). Not retried: a
+ * retry could create it twice.
  */
 export function createCardRecord(
   pdsCall: PdsCall,
@@ -148,6 +156,7 @@ export function createCardRecord(
   did: Did,
   record: Readonly<Record<string, unknown>>,
   swapCommit: string,
+  rkey?: string,
 ): Promise<PdsResult<CreateOutcome>> {
   return pdsCall(
     ctx,
@@ -159,6 +168,7 @@ export function createCardRecord(
           collection: CARD_COLLECTION,
           record: { ...record },
           swapCommit,
+          ...(rkey === undefined ? {} : { rkey }),
         });
         const key = ownCardKey(data.uri, did);
         if (key === null) throw new Error("createRecord returned a record outside this repo");
