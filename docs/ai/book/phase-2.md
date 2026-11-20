@@ -3929,7 +3929,9 @@ Readers still hide both kinds until P2.19c draws them.
 P2.19d (ADR 0070 point 8's body and request caps, one pull request on Alex's line): web's `/images` route takes up to
 31 MiB and sets adapter-node's cap; net-guard's `review` policy sends up to 32 MiB, the object store's puts up to 2 MiB,
 and `com.atproto.repo.uploadBlob` alone up to 2 MiB; every other route and request keeps its cap.
-<<<<<<< HEAD
+P2.19e (ADR 0076, one pull request on Alex's line): uploads up to 64 MiB, 110 megapixels and 12,000 px a side; `/images`
+65 MiB, net-guard's `review` policy 66 MiB, review's job ceiling 64 MiB and 120 megapixels; web 1 GB, review 2 GB and
+2 CPUs; the edge reads for 120 s and writes for 255 s, headers 10 s. Masters and the object store's 2 MiB are unchanged.
 P2.19b, first half, built 2026-11-20: `POST /images` takes one multipart field `image` and answers JSON (id, size,
 version names, or a refusal code). In order: uploads open on this stack (`uploadsOpen`), one upload per member and
 four per process (`IMAGE_UPLOADS_IN_FLIGHT`), the hourly, daily and quota limits before the body is read, review's
@@ -3937,11 +3939,10 @@ versions through `REVIEW_URL` and net-guard's `review` policy, the row, then eve
 `drafts/<did>/i/<id>/`; a failed put removes what it wrote. web's sweeps run the image sweep and delete each swept
 image's objects. Left for the second half: the shared editor control and the no-script card form, an orphan-object
 sweep, the objects at erasure (P3.07) and in export (P4.26), and the privacy notice and record of processing lines.
-=======
-P2.19e (ADR 0076, one pull request on Alex's line): uploads up to 64 MiB, 110 megapixels and 12,000 px a side; `/images`
-65 MiB, net-guard's `review` policy 66 MiB, review's job ceiling 64 MiB and 120 megapixels; web 1 GB, review 2 GB and
-2 CPUs; the edge reads for 120 s and writes for 255 s, headers 10 s. Masters and the object store's 2 MiB are unchanged.
->>>>>>> origin/main
+P2.19b, review follow-ups, built 2026-11-20 (#1844): the upload's deadline restarts once its body is read (policy
+`bodyWindowMs` 120 s, then 100 s for review and the store); web sends review at most `REVIEW_LANES` (2) pictures at
+once; a timed-out upload keeps its slot until its review call ends. Four uploads per process stays (eight measured at
+about 910 MiB above web's base).
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)

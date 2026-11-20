@@ -93,6 +93,7 @@ export const MEMBER_PAGES: readonly PageFixture[] = [
   signedIn("/verify-email", "verify"),
   signedIn(`/${ACCOUNT.did}`, "account", "/:did"),
   signedIn("/settings/profile", "account"),
+  signedIn("/settings/privacy", "account"),
   signedIn("/settings/account", "account"),
   signedIn("/invite", "account"),
 ];
