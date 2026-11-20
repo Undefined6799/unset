@@ -197,22 +197,40 @@ export type MountOptions = {
 // it shows beside the third. Text already stored that way stays editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 const PAGE_LIST_DEPTH = 3;
-function listDepth(doc: ProseNode, pos: number): number {
-  const $pos = doc.resolve(pos);
-  let lists = 0;
-  for (let depth = $pos.depth; depth > 0; depth -= 1) if (ITEM_LISTS.has($pos.node(depth).type.name)) lists += 1;
-  return lists;
+/**
+ * How many flattened shapes `node` and what it holds carry, given its parent, its index there and how many lists hold
+ * it: what the page would show differently from the editor.
+ */
+function shapesIn(node: ProseNode, parent: ProseNode, index: number, lists: number): number {
+  const holder = parent.type.name;
+  const name = node.type.name;
+  let count = 0;
+  if (ITEM_LISTS.has(name) && lists >= PAGE_LIST_DEPTH) count += 1;
+  if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
+  if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
+  if (name === "hardbreak") count += 1;
+  if (!node.isBlock) return count;
+  const inner = lists + (ITEM_LISTS.has(name) ? 1 : 0);
+  node.forEach((child, _offset, at) => {
+    count += shapesIn(child, node, at, inner);
+  });
+  return count;
 }
+/**
+ * Each top-level block's count, kept while the block is: ProseMirror nodes never change, and an edit or a dry run
+ * builds a new node only for the block it touches and shares every other one with the old document. So the bar's
+ * dozen dry runs and the page-shape filter walk the block being edited, not the whole text, on each keystroke.
+ */
+const blockShapes = new WeakMap<ProseNode, number>();
 function flattened(doc: ProseNode): number {
   let count = 0;
-  doc.descendants((node, pos, parent, index) => {
-    const holder = parent?.type.name;
-    const name = node.type.name;
-    if (ITEM_LISTS.has(name) && listDepth(doc, pos) >= PAGE_LIST_DEPTH) count += 1;
-    if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
-    if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
-    if (name === "hardbreak") count += 1;
-    return node.isBlock;
+  doc.forEach((block, _offset, index) => {
+    let shapes = blockShapes.get(block);
+    if (shapes === undefined) {
+      shapes = shapesIn(block, doc, index, 0);
+      blockShapes.set(block, shapes);
+    }
+    count += shapes;
   });
   return count;
 }
