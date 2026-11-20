@@ -203,6 +203,13 @@ services:
       PDS_WEB_KEY_FILE: /run/secrets/pds_web_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
+      # The draft image store (P2.21a; ADR 0070): web writes members' drafts under unset-private/drafts/ as its
+      # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
+      # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
+      OBJECT_STORE_URL: http://objects:8333
+      OBJECT_STORE_BUCKET: unset-private
+      OBJECT_STORE_ACCESS_ID: unset-web
+      OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
       # page says noindex and robots.txt names no member. A literal, so turning it on is a reviewed change.
       SEARCH_LISTING: "off"
@@ -215,11 +222,11 @@ services:
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app, web_egress, pds_admin]
+    networks: [db, app, web_egress, pds_admin, objects_web, review_web]
     mem_limit: 512m
     cpus: 1
     pids_limit: 128
@@ -244,10 +251,35 @@ services:
     volumes:
       - objectsdata:/data
     secrets: [objects_s3]
-    networks: [objects, objects_pds]
+    networks: [objects, objects_pds, objects_web]
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 256
+    restart: unless-stopped
+
+  # The review process (P2.21a; ADR 0070 point 2.2): decodes members' pictures in killable child processes and sends
+  # the versions back to web. Built from the checkout only, until its image is locked for production (local-only.ts
+  # SOURCE_ONLY_SERVICES). It joins review_web alone, internal and shared only with web, so it has no route out, and
+  # holds no secret, env file or mount; the preflight's C35 refuses it otherwise. Settings are literals, its defaults.
+  review:
+    build:
+      context: ..
+      dockerfile: deployment/images/review.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: review
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8082"
+    networks: [review_web]
+    mem_limit: 1536m
+    cpus: 1
+    pids_limit: 128
     restart: unless-stopped
 
   # The indexer (P3.05s; ADR 0052): reads our PDS's stream and repos into idx for the public pages. Built from the
@@ -370,6 +402,9 @@ networks:
   # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
   objects_pds:
     internal: true
+  # Web's way to the store's S3 port and nothing else (P2.21a): internal, the two of them only.
+  objects_web:
+    internal: true
   # web's way to pds-admin (P2.10) and nothing else: internal, web and pds-admin only.
   pds_admin:
     internal: true
@@ -384,6 +419,9 @@ networks:
   # The indexer's own way out (ADR 0052 Decision 2, the shape of web_egress): the PLC directory, did:web documents and
   # handle resolution, every request through net-guard. Only the indexer joins it.
   indexer_egress:
+  # Web's way to the review process and nothing else (P2.21a; ADR 0070 point 2.2): internal, web and review only.
+  review_web:
+    internal: true
 
 volumes:
   pgdata:
@@ -426,6 +464,9 @@ secrets:
   # identity; read by objects (uid 1000) only.
   objects_s3:
     file: ../../unset-dev-secrets/objects_s3
+  # Web's secret key for its identity in objects_s3 (P2.21a): 64 hex characters; read by web (uid 65532) only.
+  objects_web:
+    file: ../../unset-dev-secrets/objects_web
   # pds-admin's files (P2.09e), read by 65532 only: the PDS admin password, web's public key, the request log's key.
   pds_admin_password:
     file: ../../unset-dev-secrets/pds_admin_password

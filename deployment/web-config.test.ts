@@ -29,6 +29,7 @@ const STANDIN: Record<string, () => string> = {
   },
   web_pds_admin_key: () => generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }) as string,
   pds_web_key: () => randomBytes(32).toString("hex"),
+  objects_web: () => randomBytes(32).toString("hex"),
 };
 
 /** web's environment from one compose file, every reference resolved and every secret file replaced by a stand-in. */
@@ -62,6 +63,7 @@ describe("web's environment against its config", () => {
         "web_oauth_client_keys",
         "web_pds_admin_key",
         "pds_web_key",
+        "objects_web",
       ]);
       const { schema: config } = await import(join(REPOSITORY, "interfaces/web/src/lib/server/config.ts"));
       const { loadConfig } = await import(join(REPOSITORY, "shared/config/index.ts"));

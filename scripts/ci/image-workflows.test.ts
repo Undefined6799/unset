@@ -302,22 +302,32 @@ describe("image workflows", () => {
     expect(health).toContain('secrets="$RUNNER_TEMP/secrets"');
     expect(health).toContain('-v "$secrets:/run/secrets:ro"');
     // P2.10: web also needs its pds-admin signing key (an Ed25519 key it checks at boot).
-    for (const name of ["pg_password", "seal_keyring", "oauth_client_keys", "pds_admin_web_key", "pds_web_key"])
-      expect(health).toContain(`"$secrets/${name}"`);
+    const secrets = [
+      "pg_password",
+      "seal_keyring",
+      "oauth_client_keys",
+      "pds_admin_web_key",
+      "pds_web_key",
+      "objects_web",
+    ];
+    for (const name of secrets) expect(health).toContain(`"$secrets/${name}"`);
     const files = [
       "PG_PASSWORD_FILE",
       "SEAL_KEYRING_FILE",
       "OAUTH_CLIENT_KEYS_FILE",
       "PDS_ADMIN_WEB_KEY_FILE",
       "PDS_WEB_KEY_FILE",
+      "OBJECT_STORE_SECRET_FILE",
     ];
     for (const key of files) {
       expect(health).toMatch(new RegExp(`-e ${key}=/run/secrets/\\w+`));
     }
-    expect(health).not.toMatch(/-e (PG_PASSWORD|SEAL_KEYRING|OAUTH_CLIENT_KEYS|PDS_ADMIN_WEB_KEY|PDS_WEB_KEY)=/);
+    expect(health).not.toMatch(
+      /-e (PG_PASSWORD|SEAL_KEYRING|OAUTH_CLIENT_KEYS|PDS_ADMIN_WEB_KEY|PDS_WEB_KEY|OBJECT_STORE_SECRET)=/,
+    );
     // The rest of web's settings live in its test env file, which must name every one web requires.
     const testEnv = readFileSync(join(ROOT, "deployment", "images", "web.test.env"), "utf8");
-    for (const key of ["PDS_ADMIN_URL", "PDS_ADMIN_WEB_KID", "PDS_DID"])
+    for (const key of ["PDS_ADMIN_URL", "PDS_ADMIN_WEB_KID", "PDS_DID", "OBJECT_STORE_URL", "OBJECT_STORE_ACCESS_ID"])
       expect(testEnv).toMatch(new RegExp(`^${key}=.+$`, "m"));
     // The app and a throwaway Postgres share one job network; the app waits for nothing else.
     expect(health).toMatch(/docker run -d "\$\{pg\[@\]\}" "\$POSTGRES_IMAGE"/);

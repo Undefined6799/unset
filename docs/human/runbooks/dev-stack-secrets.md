@@ -74,6 +74,7 @@ keeps every other host account out:
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
+| `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -108,7 +109,7 @@ PR.
 ## The object store's identities (P2.18s; ADR 0041 Decision 3, ADR 0050)
 
 `objects_s3` is SeaweedFS's identities file (`weed server -s3.config`), read only by the `objects` service, which runs
-as `1000`. It holds one identity per process that has a key. Since P2.18p that is the PDS's, `pds`, with exactly
+as `1000`. It holds one identity per process that has a key: the PDS's since P2.18p, and web's since P2.21a (below). The PDS's is `pds`, with exactly
 `Read:unset-pds`, `Write:unset-pds` and `List:unset-pds`; its key pair is also in `pds.env` (below). Make both at once
 with step 2 of `pds-blobstore-move.md`, which writes them without printing them. Before any process has a key, the
 file holds no identity at all, so the store denies every request:
@@ -118,6 +119,38 @@ file holds no identity at all, so the store denies every request:
 Never add an identity with the `Admin` action: buckets are created by the stack wrapper through the store's own shell
 (`deployment/preflight/objects-buckets.ts`), and removal goes through that shell too (ADR 0050 Decision 1). A file
 that is missing or empty stops the store at start; one with no identities starts it and refuses every request.
+
+**Web's identity (P2.21a).** Since P2.21a web keeps members' draft images in the bucket `unset-private`, under
+`drafts/`, as its own identity `web`. Its key id is the literal `unset-web` in the compose files
+(`OBJECT_STORE_ACCESS_ID`); its secret key is the file `objects_web`, which web reads and the identity holds. Its actions
+are exactly `Read:unset-private/drafts/*`, `Write:unset-private/drafts/*`, `Tagging:unset-private/drafts/*` and
+`List:unset-private`, which `tests/integration/storage/object-store.test.ts` proves. Web reaches the store on the
+network `objects_web`, which only web and `objects` share. Web will not start without `objects_web`, so on a stack
+that already runs, make both before you deploy the commit that brings P2.21a. From the checkout, with no value
+printed:
+
+```sh
+S=../unset-dev-secrets
+sudo cp -p $S/objects_s3 $S/objects_s3.before-web
+sudo cat $S/objects_s3 | node -e '
+const fs = require("node:fs"), { randomBytes } = require("node:crypto");
+const file = JSON.parse(fs.readFileSync(0, "utf8"));
+if (!Array.isArray(file.identities)) throw new Error("objects_s3 has no identities list");
+if (file.identities.some((i) => i.name === "web")) throw new Error("objects_s3 already has a web identity");
+const secret = randomBytes(32).toString("hex"), d = "unset-private/drafts/*";
+const actions = [`Read:${d}`, `Write:${d}`, `Tagging:${d}`, "List:unset-private"];
+file.identities.push({ name: "web", credentials: [{ accessKey: "unset-web", secretKey: secret }], actions });
+fs.writeFileSync(process.argv[1], JSON.stringify(file), { mode: 0o600 });
+fs.writeFileSync(process.argv[2], secret, { mode: 0o600 });
+' $S/objects_s3.new $S/objects_web.new
+sudo chown 1000:1000 $S/objects_s3.new && sudo chmod 0400 $S/objects_s3.new
+sudo chown 65532:65532 $S/objects_web.new && sudo chmod 0400 $S/objects_web.new
+sudo mv $S/objects_s3.new $S/objects_s3 && sudo mv $S/objects_web.new $S/objects_web
+```
+
+The store reads `objects_s3` when it starts, so the deploy that follows picks up the new identity. To undo before
+that deploy, move `objects_s3.before-web` back and remove `objects_web`. The local stack (`scripts/ci/local-stack.ts`)
+writes both files itself on every run.
 
 ## pds-admin's files (P2.09e; ADR 0060)
 

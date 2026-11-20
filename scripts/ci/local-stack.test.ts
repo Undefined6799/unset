@@ -17,6 +17,7 @@ import {
   SERVICES,
   secp256k1PrivateHex,
   servicesVerdict,
+  WEB_STORE_KEY_ID,
 } from "./local-stack.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -66,13 +67,27 @@ describe("generated values (D2)", () => {
     // The PDS's store key pair (P2.18p): a fresh pair each run, scoped to unset-pds alone.
     expect(v.pdsStoreKeyId).toMatch(/^[0-9a-f]{32}$/);
     expect(Buffer.from(v.pdsStoreSecret, "base64url")).toHaveLength(30);
-    const [identity, ...others] = JSON.parse(objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret)).identities;
+    const pds = { keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret };
+    const [identity, web, ...others] = JSON.parse(objectsIdentities(pds, "w".repeat(64))).identities;
     expect(others).toEqual([]);
     expect(identity).toEqual({
       name: "pds",
       credentials: [{ accessKey: v.pdsStoreKeyId, secretKey: v.pdsStoreSecret }],
       actions: ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"],
     });
+    // Web's (P2.21a): members' drafts only, under the key id compose gives web as a literal.
+    expect(web).toEqual({
+      name: "web",
+      credentials: [{ accessKey: WEB_STORE_KEY_ID, secretKey: "w".repeat(64) }],
+      actions: [
+        "Read:unset-private/drafts/*",
+        "Write:unset-private/drafts/*",
+        "Tagging:unset-private/drafts/*",
+        "List:unset-private",
+      ],
+    });
+    const compose = readFileSync(join(import.meta.dirname, "../../deployment/compose.local.yaml"), "utf8");
+    expect(compose).toContain(`      OBJECT_STORE_ACCESS_ID: ${WEB_STORE_KEY_ID}\n`);
     expect(isP256DidKey(v.recoveryDidKey)).toBe(true);
     const keyring = JSON.parse(v.keyring);
     expect(keyring.active).toBe("k1");
@@ -156,12 +171,23 @@ describe("the one bounded wait (D4)", () => {
     { Service: "objects", State: "running", Health: "healthy" },
     { Service: "pds-admin", State: "running", Health: "" },
     { Service: "indexer", State: "running", Health: "healthy" },
+    { Service: "review", State: "running", Health: "healthy" },
   ];
   const swap = (service: string, row: object) =>
     up.map((r) => (r.Service === service ? { Service: service, ...row } : r));
 
   test("wait_passes_only_when_every_service_is_up", () => {
-    expect(SERVICES).toEqual(["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin", "indexer"]);
+    expect(SERVICES).toEqual([
+      "postgres",
+      "migrate",
+      "pds",
+      "edge",
+      "web",
+      "objects",
+      "pds-admin",
+      "indexer",
+      "review",
+    ]);
     expect(servicesVerdict(up)).toBe("up");
     expect(servicesVerdict(up.filter((r) => r.Service !== "web"))).toBe("failed: web missing");
     expect(servicesVerdict(swap("migrate", { State: "exited", ExitCode: 1 }))).toBe("failed: migrate exited");
