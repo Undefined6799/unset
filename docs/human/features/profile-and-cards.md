@@ -6,7 +6,7 @@ A member's profile and cards are records in that member's own repository. The me
 
 - [`interfaces/web/src/routes/[did=did]/`](../../../interfaces/web/src/routes/[did=did]) is the member's own page, at `/<DID>`. It loads the profile and cards from the member's PDS. Its form actions create, edit, delete and reorder cards, and save the avatar shape. A path that is not a DID, or another member's DID, is a 404. A visitor is sent to sign in.
 - [`interfaces/web/src/routes/profile/`](../../../interfaces/web/src/routes/profile) is `POST /profile`, the one profile save. It has no page: a GET is a 404. The DID is the session's.
-- [`interfaces/web/src/routes/settings/profile/`](../../../interfaces/web/src/routes/settings/profile) is the settings page. The profile form posts to `/profile`, and the save returns to `/settings/profile?saved`, so the page says it saved even with no script. Search and AI posts to `/settings/search-and-ai` ([public indexing](public-indexing.md)).
+- [`interfaces/web/src/routes/settings/profile/`](../../../interfaces/web/src/routes/settings/profile) is the settings page. The profile form posts to `/profile`, and the save returns to `/settings/profile?saved`, so the page says it saved even with no script. Search and AI is on Settings › Privacy ([public indexing](public-indexing.md)).
 - [`interfaces/web/src/routes/@[actor]/`](../../../interfaces/web/src/routes/@[actor]) is the public page. It reads the index, not the PDS.
 
 ## Operation
