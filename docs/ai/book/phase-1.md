@@ -4769,6 +4769,15 @@ border or shadow. Keep content, inner tiles, spacing and controls. Missing legac
 choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
 Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
 
+### P1.21i — Say in the terms how leaving works (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** P1.21e · **Plan:** §6
+
+Alex, 2026-11-20 01:07Z: an account is hidden at once during the 30 days before deletion (the open point of ADR 0067
+rule 2), and the terms should say so too. The terms gain one "Leaving" sentence that points to the privacy notice,
+which already says it, and a new version, 2026-11-20 (`TERMS_VERSION`); members accept it again on their next visit.
+Alex accepted the re-acceptance because the service is not live yet (01:09Z). No other change.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
@@ -4785,7 +4794,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
-c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), l, m, q.
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), i (leaving in the
+terms), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
