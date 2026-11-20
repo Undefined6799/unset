@@ -209,15 +209,12 @@ async function throttle(page: Page): Promise<void> {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
 }
 
-/** Opens the card editor from Add card and picks README: the time to the focused text field and what it fetched. */
+/** Opens the card editor from Add card and picks Text: the time to the focused text field and what it fetched. */
 async function openEditor(page: Page) {
   const started = Date.now();
   await page.getByRole("link", { name: "Add card" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^README/ })
-    .click();
-  await page.getByRole("dialog").getByRole("textbox", { name: "README" }).waitFor();
+  await page.getByRole("dialog").getByRole("button", { name: /^Text/ }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).waitFor();
   const ms = Date.now() - started;
   const url = page.url();
   return { ms, stayedOnPage: !url.includes("?add") };

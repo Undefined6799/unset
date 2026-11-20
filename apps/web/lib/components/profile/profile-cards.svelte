@@ -1,7 +1,7 @@
 <!--
   The profile's cards (ADR 0051; P1.20i; laid out as the profile-card mockup, Alex 2026-11-17): a two-column grid on
-  wide screens where a half card takes one column, each card on the stock Card. The README reads like a GitHub README
-  under a "handle / README.md" bar; links are rows split by rules (a long list scrolls inside its card); collections
+  wide screens where a half card takes one column, each card on the stock Card. The Text card (the #readme kind) is the
+  member's Markdown alone, with no bar or title of its own; links are rows split by rules (a long list scrolls inside its card); collections
   are tiles; the buttons card is the raised Contact panel with a ruled edge. Carousels scroll with CSS snap: one to
   four tiles by the card's own width (a container query), and when more are left a part of the next one shows and
   the count says to scroll; the scrolling area and its buttons are carousel.svelte. Everything shown was built by
@@ -12,6 +12,7 @@
 import type { Snippet } from "svelte";
 import { CARD_TEXT } from "../../profile/messages.ts";
 import type { CardLayout, CardSurface, CardView } from "../../profile/types.ts";
+import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 import * as Card from "../ui/card/index.ts";
 import Carousel from "./carousel.svelte";
@@ -19,13 +20,10 @@ import Readme from "./readme.svelte";
 
 let {
   cards,
-  handle = null,
   controls,
   add,
 }: {
   cards: readonly CardView[];
-  /** The verified handle the README bar names; null shows README.md alone. */
-  handle?: string | null;
   controls?: Snippet<[number]>;
   add?: Snippet;
 } = $props();
@@ -58,6 +56,16 @@ const TAIL = ["hidden", "@sm:hidden", "@2xl:hidden", "@4xl:hidden", ""] as const
 const tierOf = (count: number) => Math.min(Math.max(count, 1), 5) - 1;
 const tile = "flex min-w-0 snap-start flex-col gap-1 rounded-sm border bg-secondary p-3.5";
 const row = "flex min-w-0 justify-between gap-3 border-t py-2.5 first:border-t-0 first:pt-0";
+/**
+ * A linked row or tile is one link (P1.21p): the whole row is the target, so it holds no other control. The base rule
+ * underlines every link in text (app.css); a row is not text, so it drops that and shows its resting cue instead: the
+ * title in the link colour with the external mark. Hover underlines the title alone, so nothing moves or resizes, and
+ * a key's focus rings the whole row (app.css draws the ring on every link).
+ */
+const rowItem = "min-w-0 border-t first:border-t-0";
+const rowLink = "group/link flex min-w-0 gap-3 py-2.5 text-foreground no-underline [li:first-child>&]:pt-0";
+const tileLink = "group/link w-full text-foreground no-underline hover:border-ring/60";
+const linkTitle = "font-medium text-info underline-offset-4 group-hover/link:underline";
 const label = "shrink-0 font-mono text-xs leading-6 tracking-wider text-muted-foreground uppercase";
 /** A link's host hides on a phone, where the row has no room for it; an entry's tag is its own text and stays. */
 const site = `${label} max-sm:hidden`;
@@ -81,6 +89,11 @@ function outer(shown: CardView): string {
   return shown.surface === "plain" && controls !== undefined ? `${surface} ${PLAIN_FOCUS}` : surface;
 }
 const head = "flex items-start justify-between gap-3";
+/**
+ * The Text card's inset by surface: Filled and Outlined keep room inside their edge, wider from tablet up; Plain has no
+ * edge, so its text lines up with the grid and the other cards' edges.
+ */
+const TEXT_INSET: Record<CardSurface, string> = { filled: "p-5 md:p-7", outlined: "p-5 md:p-7", plain: "p-0" };
 const count = "font-mono text-xs text-muted-foreground";
 </script>
 
@@ -112,16 +125,12 @@ const count = "font-mono text-xs text-muted-foreground";
     {#each cards as shown, index (shown.key)}
       {@const span = shown.width === "half" ? "" : "md:col-span-2"}
       {#if shown.shown.kind === "readme"}
-        <Card.Root class="group/card {card} {span} {outer(shown)}" data-surface={shown.surface}>
-          <div class="{head} min-h-12 items-center border-b px-5 py-2">
-            <p class="flex min-w-0 items-center gap-2 font-mono text-sm text-muted-foreground">
-              <!-- The handle gives way on a narrow card, never the file name (staging walkthrough 2026-11-19). -->
-              {#if handle !== null}<span class="truncate">{handle}</span><span aria-hidden="true">/</span>{/if}
-              <span class="shrink-0 font-medium whitespace-nowrap text-foreground">README.md</span>
-            </p>
+        <!-- No bar and no automatic heading (P1.21p): the member's own text leads, its headings are the card's. -->
+        <Card.Root class="group/card {card} {span} {outer(shown)} {TEXT_INSET[shown.surface]}" data-surface={shown.surface}>
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1"><Readme blocks={shown.shown.blocks} /></div>
             {@render controls?.(index)}
           </div>
-          <div class="px-6 pt-5 pb-6"><Readme blocks={shown.shown.blocks} /></div>
         </Card.Root>
       {:else if shown.shown.kind === "links"}
         {@const links = shown.shown}
@@ -130,12 +139,18 @@ const count = "font-mono text-xs text-muted-foreground";
         {#snippet linkList(layout: string)}
           <ul class={layout}>
             {#each links.items as link, i (i)}
-              <li class={links.layout === "list" ? row : tile}>
-                <div class="min-w-0">
-                  <a class="font-medium" href={link.href} rel="me nofollow ugc noopener noreferrer">{link.text}</a>
-                  {#if link.description !== ""}<p class="text-sm text-muted-foreground">{link.description}</p>{/if}
-                </div>
-                {#if link.site !== ""}<span class={site}>{link.site}</span>{/if}
+              <li class={links.layout === "list" ? rowItem : "flex min-w-0 snap-start"}>
+                <a
+                  class="{links.layout === 'list' ? rowLink : `${tile} ${tileLink}`} justify-between"
+                  href={link.href}
+                  rel="me nofollow ugc noopener noreferrer"
+                >
+                  <span class="min-w-0">
+                    <span class={linkTitle}>{link.text}<Icon name="external" size={16} class="ms-1 inline align-[-3px]" /></span>
+                    {#if link.description !== ""}<span class="block text-sm text-muted-foreground">{link.description}</span>{/if}
+                  </span>
+                  {#if link.site !== ""}<span class={site}>{link.site}</span>{/if}
+                </a>
               </li>
             {/each}
           </ul>
@@ -151,15 +166,25 @@ const count = "font-mono text-xs text-muted-foreground";
         {#snippet entryList(layout: string)}
           <ul class={layout}>
             {#each entries.items as entry, i (i)}
-              <li class={entries.layout === "list" ? `${row} flex-col gap-1` : tile}>
+              {#snippet entryBody(linked: boolean)}
                 {#if entry.tag !== ""}<span class={label}>{entry.tag}</span>{/if}
                 <h3 class="font-semibold">
-                  {#if entry.href === null}{entry.title}{:else}<a href={entry.href} rel="nofollow ugc noopener noreferrer"
-                      >{entry.title}</a
-                    >{/if}
+                  {#if linked}<span class={linkTitle}>{entry.title}<Icon name="external" size={16} class="ms-1 inline align-[-3px]" /></span
+                    >{:else}{entry.title}{/if}
                 </h3>
                 {#if entry.description !== ""}<p class="text-sm text-muted-foreground">{entry.description}</p>{/if}
-              </li>
+              {/snippet}
+              {#if entry.href === null}
+                <li class={entries.layout === "list" ? `${row} flex-col gap-1` : tile}>{@render entryBody(false)}</li>
+              {:else}
+                <li class={entries.layout === "list" ? rowItem : "flex min-w-0 snap-start"}>
+                  <a
+                    class="{entries.layout === 'list' ? rowLink : `${tile} ${tileLink}`} flex-col gap-1"
+                    href={entry.href}
+                    rel="nofollow ugc noopener noreferrer">{@render entryBody(true)}</a
+                  >
+                </li>
+              {/if}
             {/each}
           </ul>
         {/snippet}
