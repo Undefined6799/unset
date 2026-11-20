@@ -5,7 +5,7 @@ import { pipeline, type Readable, Transform } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { Agent, buildConnector, type Dispatcher, request as undiciRequest } from "undici";
 import { classifyAddress, isInternalName, normaliseHost } from "./classify.ts";
-import type { Policy } from "./policies.ts";
+import { type Policy, requestCap } from "./policies.ts";
 import { type LookupAnswer, type NetGuardCode, NetGuardError, pinnedLookup, resolveVettedWith } from "./resolve.ts";
 
 /** What the composition root passes in (parsed by shared/config netGuardFields, plus wiring). */
@@ -38,7 +38,7 @@ export type GuardedRequest = {
   method?: "GET" | "POST" | "PUT";
   /** Sent with keys lowercased. A `host` header is refused; `user-agent` and `accept-encoding` are always ours. */
   headers?: Record<string, string>;
-  /** At most 1 MiB; a stream is read into memory first. */
+  /** At most the policy's `requestBytes` (1 MiB unless it names more); a stream is read into memory first. */
   body?: Uint8Array | AsyncIterable<Uint8Array>;
   timeoutMs?: number;
   maxBytes?: number;
@@ -57,7 +57,6 @@ export type NetGuardHooks = {
 
 const MAX_TIMEOUT_MS = 30_000;
 const MAX_BYTES = 64 * 1024 * 1024;
-const MAX_REQUEST_BODY = 1024 * 1024;
 const DNS_TIMEOUT_MS = 3_000;
 const CONNECT_TIMEOUT_MS = 5_000;
 const ACCEPT_ENCODING = "gzip, br, identity";
@@ -65,7 +64,7 @@ const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 /** Statuses that never carry a body (WHATWG Fetch "null body status"). */
 export const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 204, 205, 304]);
 
-type Limits = { timeoutMs: number; maxBytes: number };
+type Limits = { timeoutMs: number; maxBytes: number; requestBytes: number };
 type Seen = { status: number | null; bytes: number };
 type Target = { host: string; allow: "public" | "private"; loopbackOnly: boolean };
 
@@ -82,7 +81,7 @@ function checkRequest(policy: Policy, req: GuardedRequest): Limits {
   if (!(Number.isInteger(maxBytes) && maxBytes > 0 && maxBytes <= MAX_BYTES)) {
     throw new RangeError("maxBytes must be an integer in (0, 64 MiB]");
   }
-  return { timeoutMs, maxBytes };
+  return { timeoutMs, maxBytes, requestBytes: requestCap(policy) };
 }
 
 /**
@@ -126,10 +125,10 @@ function checkTarget(policy: Policy, raw: string, settings: NetGuardSettings): T
   return { host, allow: "public", loopbackOnly: false };
 }
 
-/** The request body in memory, refused past 1 MiB; a stream stops being read once the deadline passes. */
-async function bufferBody(body: GuardedRequest["body"], signal: AbortSignal): Promise<Uint8Array | undefined> {
+/** The request body in memory, refused past `cap`; a stream stops being read once the deadline passes. */
+async function bufferBody(body: GuardedRequest["body"], cap: number, signal: AbortSignal) {
   if (body === undefined || body instanceof Uint8Array) {
-    if ((body?.length ?? 0) > MAX_REQUEST_BODY) throw new NetGuardError("egress.too_large");
+    if ((body?.length ?? 0) > cap) throw new NetGuardError("egress.too_large");
     return body;
   }
   const chunks: Uint8Array[] = [];
@@ -137,7 +136,7 @@ async function bufferBody(body: GuardedRequest["body"], signal: AbortSignal): Pr
   for await (const chunk of body) {
     if (signal.aborted) throw new NetGuardError("egress.timeout");
     total += chunk.length;
-    if (total > MAX_REQUEST_BODY) throw new NetGuardError("egress.too_large");
+    if (total > cap) throw new NetGuardError("egress.too_large");
     chunks.push(chunk);
   }
   return new Uint8Array(Buffer.concat(chunks));
@@ -326,7 +325,7 @@ async function guarded(
   try {
     if (signal.aborted) throw new NetGuardError("egress.timeout"); // before any DNS lookup
     const target = checkTarget(policy, req.url, settings);
-    const body = await bufferBody(req.body, signal);
+    const body = await bufferBody(req.body, limits.requestBytes, signal);
     return await exchange(target, req, { limits, headers, body }, signal, settings, hooks, seen);
   } catch (error) {
     throw egressError(error, signal);

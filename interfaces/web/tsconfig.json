@@ -13,6 +13,9 @@
       "path": "../../apps/web"
     },
     {
+      "path": "../../domains/content"
+    },
+    {
       "path": "../../domains/identity"
     },
     {

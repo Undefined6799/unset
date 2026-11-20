@@ -3,7 +3,18 @@
 export { type Classification, classifyAddress, isInternalName } from "./src/classify.ts";
 export { resolveTxt, type TxtOptions, type TxtResolver } from "./src/dns.ts";
 export { type FetchDefaults, guardedFetch, libraryFetch } from "./src/libraryFetch.ts";
-export { atproto, internalPolicy, objectStore, type Policy, pdsAdmin, plc } from "./src/policies.ts";
+export {
+  atproto,
+  atprotoBlobUpload,
+  DEFAULT_REQUEST_BYTES,
+  internalPolicy,
+  objectStore,
+  type Policy,
+  pdsAdmin,
+  plc,
+  REQUEST_BODY_CEILING,
+  review,
+} from "./src/policies.ts";
 export type { AddressClass, Range } from "./src/ranges.ts";
 export {
   createNetGuard,

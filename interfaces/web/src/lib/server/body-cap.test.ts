@@ -3,7 +3,10 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { UPLOAD_LIMITS } from "@unset/domains-content";
+import { LIMITS } from "@unset/shared-lexicons";
 import { expect, test } from "vitest";
+import { IMAGE_UPLOAD_LIMIT_BYTES } from "../../routes/images/policy.ts";
 import { BODY_CAP } from "./body-cap.ts";
 import type { RoutePolicy } from "./policy.ts";
 
@@ -24,4 +27,16 @@ test("the_cap_is_the_largest_route_body", async () => {
   const largest = Math.max(...policies.map((policy) => policy.maxBody ?? 0));
   expect(largest).toBeGreaterThan(64 * 1024);
   expect(BODY_CAP).toBe(largest);
+});
+
+test("images.normal_use_fits: a 30 MB picture with the longest alt and caption is under the upload's cap", async () => {
+  const form = new FormData();
+  form.set("image", new Blob([new Uint8Array(UPLOAD_LIMITS.maxBytes)], { type: "image/jpeg" }), "IMG_0001.jpeg");
+  // A grapheme can take several UTF-8 bytes: five each bounds what any alt or caption adds.
+  form.set("alt", "é".repeat(LIMITS.section.imageAlt * 5));
+  form.set("caption", "é".repeat(LIMITS.section.imageCaption * 5));
+  const bytes = (await new Response(form).arrayBuffer()).byteLength;
+  expect(bytes).toBeGreaterThan(UPLOAD_LIMITS.maxBytes);
+  expect(bytes).toBeLessThanOrEqual(IMAGE_UPLOAD_LIMIT_BYTES);
+  expect(BODY_CAP).toBe(IMAGE_UPLOAD_LIMIT_BYTES);
 });

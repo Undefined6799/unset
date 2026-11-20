@@ -2,16 +2,31 @@
 // outbound request names one. v1 has no model-provider policy: moderation is local (Alex answer 30b), and only an
 // Alex-approved PR enabling P4.10 may add one.
 
+/**
+ * The largest request body a policy sends, when it names none: 1 MiB. A policy may name a larger one for its own
+ * calls, up to REQUEST_BODY_CEILING; the caps below are the only ones that do (ADR 0070 point 8), each bound to one
+ * call or one internal origin, and every other request keeps 1 MiB.
+ */
+export const DEFAULT_REQUEST_BYTES = 1024 * 1024;
+/** No policy may name more: web's call to review, a 30 MB upload with room to spare. */
+export const REQUEST_BODY_CEILING = 32 * 1024 * 1024;
+
+type Caps = {
+  readonly name: string;
+  /** Largest request body this policy sends; absent means DEFAULT_REQUEST_BYTES. */
+  readonly requestBytes?: number;
+};
+
 export type Policy =
   /** Exact hostnames over https on port 443; answers must be public. */
-  | { readonly name: string; readonly kind: "fixed"; readonly hosts: readonly string[] }
+  | (Caps & { readonly kind: "fixed"; readonly hosts: readonly string[] })
   /** An HTTP service inside the stack, by exact origin; answers must be private. Plain http is allowed only here. */
-  | { readonly name: string; readonly kind: "internal"; readonly origins: readonly string[] }
+  | (Caps & { readonly kind: "internal"; readonly origins: readonly string[] })
   /**
    * Any host over https on port 443. A host in the guard's `internalHosts` (our own PDS, reached inside the stack)
    * must resolve only to private addresses; every other host only to public ones, and never be an internal name.
    */
-  | { readonly name: string; readonly kind: "public" };
+  | (Caps & { readonly kind: "public" });
 
 /** The PLC directory, for did:plc documents. */
 export const plc: Policy = { name: "plc", kind: "fixed", hosts: ["plc.directory"] };
@@ -19,15 +34,35 @@ export const plc: Policy = { name: "plc", kind: "fixed", hosts: ["plc.directory"
 /** User PDSes and authorization servers, did:web documents and `.well-known/atproto-did`; our own PDS included. */
 export const atproto: Policy = { name: "atproto", kind: "public" };
 
+/**
+ * A member's picture to their PDS (`com.atproto.repo.uploadBlob`; ADR 0070 point 8): the atproto policy, with a body
+ * of up to 2 MiB, room for the 2,000,000-byte main version. libraryFetch picks it for that one call only.
+ */
+export const atprotoBlobUpload: Policy = { name: "atproto-upload", kind: "public", requestBytes: 2 * 1024 * 1024 };
+
 /** True when `origin` is exactly the serialised origin of an http or https URL (no path, case or default port). */
 const isHttpOrigin = (origin: string): boolean =>
   URL.canParse(origin) && ["http:", "https:"].includes(new URL(origin).protocol) && new URL(origin).origin === origin;
 
-/** An `internal` policy; throws (a programming error) for any origin that is not exactly an http(s) origin. */
-export function internalPolicy(name: string, origins: readonly string[]): Policy {
+const validCap = (bytes: number): boolean => Number.isInteger(bytes) && bytes > 0 && bytes <= REQUEST_BODY_CEILING;
+
+/** The largest body a request under `policy` may send; a hand-built policy past the ceiling throws (a programming error). */
+export function requestCap(policy: Policy): number {
+  const bytes = policy.requestBytes ?? DEFAULT_REQUEST_BYTES;
+  if (!validCap(bytes)) throw new RangeError("requestBytes must be an integer in (0, 32 MiB]");
+  return bytes;
+}
+
+/**
+ * An `internal` policy; throws (a programming error) for any origin that is not exactly an http(s) origin, or for a
+ * request cap that is not a whole number of bytes up to REQUEST_BODY_CEILING.
+ */
+export function internalPolicy(name: string, origins: readonly string[], requestBytes?: number): Policy {
   const bad = origins.filter((origin) => !isHttpOrigin(origin));
   if (origins.length === 0 || bad.length > 0) throw new TypeError("internal policy origins must be http(s) origins");
-  return { name, kind: "internal", origins: [...origins] };
+  if (requestBytes === undefined) return { name, kind: "internal", origins: [...origins] };
+  if (!validCap(requestBytes)) throw new RangeError("requestBytes must be an integer in (0, 32 MiB]");
+  return { name, kind: "internal", origins: [...origins], requestBytes };
 }
 
 /**
@@ -42,8 +77,16 @@ export const localPlc: Policy = internalPolicy("plc", ["http://plc:2582"]);
 /**
  * The private object store (P2.18k; plan §5.8 drafts store): one exact internal origin, the `OBJECT_STORE_URL` the
  * calling process's composition root passes in, so its answers must be private and no other host or port is reachable.
+ * A put may carry up to 2 MiB, room for a picture's 2,000,000-byte main version (ADR 0070 points 2.4 and 3).
  */
-export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin]);
+export const objectStore = (origin: string): Policy => internalPolicy("object-store", [origin], 2 * 1024 * 1024);
+
+/**
+ * The review process (ADR 0070 point 2.2): web's one call with a member's upload, by the `REVIEW_URL` web's composition
+ * root passes in. Private answers only; a body of up to 32 MiB, review's own job ceiling (infrastructure/image wire.ts
+ * JOB_CEILING), for an upload of at most 30,000,000 bytes.
+ */
+export const review = (origin: string): Policy => internalPolicy("review", [origin], REQUEST_BODY_CEILING);
 
 /**
  * pds-admin (P2.09k; plan §5.2): the one internal service that holds the PDS admin password. `web` reaches it by one
