@@ -9,7 +9,7 @@ Every service drops all capabilities, sets `no-new-privileges`, uses a read-only
 
 ## Dev stack
 
-`web` is the `http` process (`UNSET_SERVICE=http`, `interfaces/http`). No other interface is a service in this file.
+`web` runs `interfaces/web`, the SvelteKit server; its `UNSET_SERVICE` is still `http`. No other interface is a service in this file.
 
 | Service | Image | User | Networks | Database role |
 | --- | --- | --- | --- | --- |
@@ -73,4 +73,4 @@ Every roster role gets `idle_in_transaction_session_timeout=10s`, `lock_timeout=
 
 ## Interface processes not in Compose
 
-None. `interfaces/http` is the only process folder on this tree. The other processes in guideline §1 get their folder with their first route (decision 34).
+`interfaces/indexer` and `interfaces/pds-admin` are not services in `deployment/compose.dev.yaml`. Both run in `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml`. The other processes in guideline §1 get their folder with their first route (decision 34).
