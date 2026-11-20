@@ -1579,6 +1579,10 @@ deactivation, a handle re-check, then deletion; an unrelated name is not; the ho
 and erasure keeps the burned list. Waits on ADR 0067 being accepted and the ADR 0063 writer's step.
 
 ### P3.09 — Media proxy for published blobs
+
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): outside production a published image is served with
+ADR 0070's inspection port empty; ADR 0029's scan-record rule (P3.09a) applies to production only. Pages use the
+display versions from the private store as well as the blob itself.
 Tags: [SEC]            Depends on: P3.06, P2.19            Plan: §2 rule 9, §5.2 "Media proxy", §6.1 images; vault `atproto-blob-serving-security`
 Where: `interfaces/media/src/published.ts`, `interfaces/indexer/purge.ts`, migration for the `media` role
 Size: ~200 source lines, ~250 test lines
