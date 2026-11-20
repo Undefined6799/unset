@@ -9,6 +9,7 @@ import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
 import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
+import * as conflictMarkers from "./conflict-markers.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
@@ -390,5 +391,56 @@ describe("case-collision", () => {
 
   test("case_guard_fails_closed_on_empty_index", () => {
     expect(() => caseCollision.scanAll(indexedRepo([]))).toThrow(/listed no paths/);
+  });
+});
+
+/** A temp repo with `files` written and added to the index, for guards that read tracked files. */
+function trackedRepo(files: Record<string, string | Uint8Array>): string {
+  const root = tempRepo(files);
+  const git = (args: string[]) => execFileSync("git", ["-C", root, ...args], { env: fixtureGitEnv(), stdio: "ignore" });
+  git(["init", "-q"]);
+  git(["add", "-A"]);
+  return root;
+}
+
+function expectConflictFixtures(kind: "bad" | "good"): void {
+  const { files, expected } = readFixtures("conflict-markers", kind);
+  expect(countFindings(Object.keys(files), conflictMarkers.scanAll(trackedRepo(files)))).toEqual(expected);
+}
+
+describe("conflict-markers", () => {
+  // Built at run time so this file holds no marker of its own.
+  const open = `${"<".repeat(7)} HEAD`;
+  const base = `${"|".repeat(7)} base`;
+  const middle = "=".repeat(7);
+  const close = `${">".repeat(7)} origin/main`;
+
+  test("conflict_in_docs_and_code_fails", () => expectConflictFixtures("bad"));
+  test("lookalike_lines_pass", () => expectConflictFixtures("good"));
+
+  test("each_marker_line_is_named", () => {
+    const text = ["a", open, "b", base, "c", middle, "d", close, ""].join("\n");
+    expect(conflictMarkers.findConflictMarkers("docs/x.md", text).map((f) => f.line)).toEqual([2, 4, 8]);
+  });
+
+  test("crlf_and_bare_markers_fail", () => {
+    const text = `${"<".repeat(7)}\r\nx\r\n${">".repeat(7)}\r\n`;
+    expect(conflictMarkers.findConflictMarkers("a.ts", text)).toHaveLength(2);
+  });
+
+  test("untracked_and_fixture_files_are_not_read", () => {
+    const root = trackedRepo({ "a.md": "fine\n", "scripts/guards/fixtures/x/bad.fixture": `${open}\n` });
+    writeFileSync(join(root, "untracked.md"), `${open}\n`);
+    expect(conflictMarkers.scanAll(root)).toEqual([]);
+  });
+
+  test("binary_files_are_skipped", () => {
+    const bytes = new Uint8Array([0, ...new TextEncoder().encode(`\n${open}\n`)]);
+    expect(conflictMarkers.scanAll(trackedRepo({ "img.png": bytes, "a.md": "ok\n" }))).toEqual([]);
+  });
+
+  test("conflict_guard_fails_closed", () => {
+    expect(() => conflictMarkers.scanAll(tempRepo({ "a.md": "" }))).toThrow(/not a git repository/);
+    expect(() => conflictMarkers.scanAll(indexedRepo([]))).toThrow(/listed no paths/);
   });
 });
