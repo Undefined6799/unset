@@ -58,12 +58,12 @@ No `main.ts` under `infrastructure/`. Each package publishes `index.ts` (`packag
 
 | Package | Public module | Process |
 | --- | --- | --- |
-| audit | `infrastructure/audit/index.ts` | None. `interfaces/http/compose.ts` does not construct it. `interfaces/http/age-gate-audit.ts` calls `appendAudit`. |
-| net-guard | `infrastructure/net-guard/index.ts` | None. `interfaces/http/compose.ts` calls `createNetGuard`. |
-| pds | `infrastructure/pds/index.ts` | None. `interfaces/http/compose.ts` calls `createIdentityNetwork`, `createOAuthClient` and `createPdsCall`. |
+| audit | `infrastructure/audit/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` does not construct it. `interfaces/web/src/lib/server/age-gate-audit.ts` calls `appendAudit`. |
+| net-guard | `infrastructure/net-guard/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createNetGuard`. |
+| pds | `infrastructure/pds/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createIdentityNetwork`, `createOAuthClient` and `createPdsCall`. |
 | postgres | `infrastructure/postgres/index.ts` | `unset-migrate` and `unset-rewrap`. See [postgres](postgres/). |
-| seal | `infrastructure/seal/index.ts` | None. `interfaces/http/compose.ts` calls `createSealer`. |
-| session | `infrastructure/session/index.ts` | None. `interfaces/http/compose.ts` calls `createSessionStore`. |
+| seal | `infrastructure/seal/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createSealer`. |
+| session | `infrastructure/session/index.ts` | None. `interfaces/web/src/lib/server/compose.ts` calls `createSessionStore`. |
 | storage | `infrastructure/storage/index.ts` | None. No file under `interfaces/` or `apps/` calls `createObjectStore`. |
 
 ## Data

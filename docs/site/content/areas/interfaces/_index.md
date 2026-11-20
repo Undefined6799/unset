@@ -14,11 +14,13 @@ Route tables are on [Endpoints](/endpoints/). This section does not list paths.
 
 ## Owns
 
-One folder under `interfaces/` on this tree: `interfaces/http`, the web server, its own package and its own process. The other processes in guideline §1 (admin, api, indexer, media, review and the rest) get their folder with their first route (decision 34).
+On this tree: `interfaces/web` (the web server), `interfaces/indexer` and `interfaces/pds-admin`. The other processes in guideline §1 get their folder with their first code (decision 34).
 
 | Process | Path | Page |
 | --- | --- | --- |
-| http | `interfaces/http` | [http](./http/) |
+| web | `interfaces/web` | [web](./web/) |
+| indexer | `interfaces/indexer` | |
+| pds-admin | `interfaces/pds-admin` | |
 
 ## May import
 
@@ -34,13 +36,13 @@ Extra rows, and the rules that refuse an edge the row would otherwise allow:
 
 | Rule | Effect |
 | --- | --- |
-| `interface-http-render` | `interfaces/http/` may also import the file `apps/web/render.tsx`. |
-| `interface-http-render-build` | `interfaces/http/web/render-entry.ts` may import `@unset/apps-web/server` when that specifier does not resolve. |
+| `interface-web-components` | `interfaces/web/` may import `apps/web/lib/`, `apps/web/app.css` and `apps/web/legal/*.md`. |
+| `interface-web-build` | `interfaces/web/server.ts` may import `#kit/handler` and `#kit/manifest` when those specifiers do not resolve. |
 | `interface-admin-render` | `interfaces/admin/` may also import the path `RENDER_ENTRIES.admin` names (`apps/admin/render.tsx`). |
 | `admin-service` | `ADMIN_SERVICES` names `interfaces/pds-admin/` and `interfaces/chat-admin/`. The row allows `node:*`, that path, and `ZERO_DEP_ALLOWLIST` (`shared/admin-envelope/`). No npm. `admin-services-zero-deps` states the same bound. |
 | `no-interface-to-interface` | An interface does not import another interface. |
-| `app-render-entry-only` | From outside `apps/`, only `interfaces/http` and `interfaces/admin` import an app, and only the path `RENDER_ENTRIES` names in the two rows above. |
-| `web-not-admin` | `interfaces/http/` imports nothing whose path is `admin/…` or contains `/admin/`. |
+| `app-render-entry-only` | From outside `apps/`, only `interfaces/web` and `interfaces/admin` import an app, and only what their own rows allow. |
+| `web-not-admin` | `interfaces/web` and `apps/web` import nothing whose path is `admin/…` or contains `/admin/`. |
 | `infra-shared-via-index` | From outside, `infrastructure/<name>/` and `shared/<name>/` are reached through `index.ts`. A `*.fake.ts` and a `.css` file are the exceptions this rule allows. |
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported only by tests and by `interfaces/<name>/compose.ts`, and only with a dynamic `import()` after the `UNSET_ENV` check. |
 | `no-product-imports-tooling` | Product code does not import `scripts/` or `tests/`. |
@@ -48,13 +50,13 @@ Extra rows, and the rules that refuse an edge the row would otherwise allow:
 
 ## Entry points
 
-No `index.ts` under `interfaces/`. Each process starts at `main.ts`, which calls `bootOrExit(config)` and `compose`.
+No `index.ts` under `interfaces/`. The web process starts at `interfaces/web/server.ts`. A process that is not the web server starts at `main.ts`.
 
 | Process | Start | Composition root | In a container today |
 | --- | --- | --- | --- |
-| http | `interfaces/http/main.ts` | `interfaces/http/compose.ts` | Yes. `deployment/images/node-app.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/http/main.ts"]`. Compose service `web` runs that image (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`). |
+| web | `interfaces/web/server.ts` | `interfaces/web/src/lib/server/compose.ts` | Yes. `deployment/images/node-app.Dockerfile` sets `ENTRYPOINT ["node", "interfaces/web/server.ts"]`. Compose service `web` runs that image (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`). |
 
-`main.ts` for http also runs `boot()` before `listen`.
+`server.ts` loads settings with `bootOrExit` and listens after the SvelteKit `init` hook has built the adapters.
 
 Dev stack, from the repository root (`package.json`):
 
@@ -70,6 +72,6 @@ Postgres roles for these processes are in `infrastructure/postgres/roles.json`. 
 
 `infrastructure/postgres/roles.ts` syncs passwords only when `passwordFrom` is not null.
 
-Only [http](./http/) opens a pool. `roles.json` also lists roles for processes that have no folder on this tree. Per-role grants for `web` are on its page.
+[web](./web/) and `interfaces/indexer` each open a pool. `roles.json` also lists roles for processes that have no folder on this tree. Per-role grants for `web` are on its page.
 
 `review_egress` is a role in `roles.json` (`connectionLimit` 4 is `review`; `review_egress` is 2).

@@ -63,8 +63,8 @@ The [Domains](../) `domain` row, and the narrowing rules on that page.
 | Role | Path |
 | --- | --- |
 | Package export `.` | `domains/profile/index.ts` |
-| Form parse | `interfaces/http/routes/profile.ts` imports `parseProfileFields` and `PROFILE_FIELDS` |
-| Record build | `interfaces/http/compose.ts` passes `(existing) => toProfileRecord(fields, existing, now)` to `saveProfileRecord` in `infrastructure/pds/profile-record.ts` |
+| Form parse | `interfaces/web/src/routes/profile/save.server.ts` calls `parseProfileFields` |
+| Record build | `interfaces/web/src/routes/profile/+page.server.ts` calls `toProfileRecord` and `saveProfileRecord` in `infrastructure/pds/profile-record.ts` |
 | Read | `domains/profile/profile.test.ts` calls `readProfileRecord` |
 
 There is no `main.ts`.

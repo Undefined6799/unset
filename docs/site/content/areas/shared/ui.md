@@ -3,104 +3,22 @@ title: ui
 weight: 8
 ---
 
-Generic UI: the design sheet copy, tokens, icons, kit components and `safeHref`. Package `@unset/shared-ui`. The design source is [ADR 0016](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0016-design-source.md). Iconoir is decision 33, recorded in [ADR 0001](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0001-phase-0-defaults.md). The island runtime is [islands](../islands/).
+Design data the apps share. Package `@unset/shared-ui`, MIT. The React kit that lived here was deleted in P1.20k. [ADR 0055](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0055-shadcn-svelte-and-one-theme-file.md) is the UI decision. Iconoir is decision 33. The design source is [ADR 0016](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0016-design-source.md).
 
 ## Owns
 
-`shared/ui/sheet/` is a pinned copy of the unset.sh design sheet. `sheet/source.json` records version `1792621080-00d4`, copied 2026-10-21, and a sha256 per file. Tokens change on the sheet. The copy is updated in a PR that updates `source.json` and the generated CSS together (ADR 0016).
-
-Generated styles, which `apps/web/src/styles.ts` globs:
-
-| File |
-| --- |
-| `shared/ui/src/layers.css` |
-| `shared/ui/src/tokens.css` |
-| `shared/ui/src/base.css` |
-| `shared/ui/components/**/*.module.css` |
-
-`shared/ui/tokens/font-metrics.ts` is the type of `tokens/font-metrics.json`. The build that writes the JSON is [ui-build](../ui-build/).
-
-Icons are Iconoir 7.12.1, copied as `shared/ui/icons/svg/*.svg.txt`. The sheet list is 36 names. `shared/ui/approved-extensions.json`'s `icons` object adds five: `devices` (Iconoir `computer`), `apps` (Iconoir `view-grid`), `bulb-off` (Iconoir `light-bulb`), `bulb-on` (Iconoir `light-bulb-on`) and `tv` (Iconoir `modern-tv`). `icons/svg/` and `icons/drawings/` each hold 41 files. `icons/icons.json` records those 41 names, `iconoirVersion` `7.12.1`, sheet version `1792621080-00d4`, and `extensionProvenance` (`path`, `sha256`, `designApproval`, `registeredOn`, `iconoirCommit`). `components/Icon/Icon.tsx` draws from `icons.json` on the server. Islands use `IconDrawing` and the one drawing module they import. There is no icon npm package. `Icon`, `IconName` and `IconProps` are exports of `index.ts` and of `./presentation` (`shared/ui/presentation.ts`). Kit components under `shared/ui/components/` import `Icon` by relative path.
-
-`shared/ui/inventory.json` registers the sheet components. Every entry's `status` is `built`. Navigation's `variants` are `left drawer` and `phone floating bar`. The Icon, Header, Button and Navigation entries each set `extensions` to `[{ path: "approved-extensions.json", sha256 }]`. A new component is registered on the sheet first.
-
-`shared/ui/approved-extensions.json` is that registration. Its `components` object is Navigation, Header and Button. Its `icons` object is `devices`, `apps`, `bulb-off`, `bulb-on` and `tv`. [ui-build](../ui-build/) checks it when writing `icons.json`.
-
-`shared/ui/safe-href.ts`: `safeHref(raw, allow)` returns a `SafeHref` or `null`. `HrefScheme` is `http:`, `https:`, `mailto:` or `path`. The file header says `javascript:`, `data:`, `vbscript:` and protocol-relative links cannot reach the page. Button and Link take `SafeHref`. The cases are `safe-href.test.ts`.
-
-Kit islands on the tree (`shared/ui/islands/`):
-
-| File |
-| --- |
-| `copy.island.tsx` |
-| `header-menu.island.tsx` |
-| `modal.island.tsx` |
-| `search.island.tsx` |
-| `select.island.tsx` |
-| `tabs.island.tsx` |
-| `theme-picker.island.tsx` |
-| `toast.island.tsx` |
-
-`components/Navigation/Navigation.tsx` renders the left drawer as a `popover="auto"` `<nav>`, and the phone floating bar. `NavigationMenuButton` toggles that drawer. `ThemePicker.tsx` is the form placed in the drawer's `extra` slot. `ThemePickerSlot.tsx` mounts it as the `theme-picker` island. `index.ts` exports `ThemePickerSlot` and the types `ThemeChoice` and `ThemePickerProps`. `ThemePicker` stays in `ThemePicker.tsx`.
-
-`index.ts` exports these names:
-
-| Export |
-| --- |
-| `Avatar`, `AvatarProps`, `AvatarSize`, `Button`, `ButtonProps`, `Callout`, `CalloutProps`, `Card`, `CardProps` |
-| `Checkbox`, `CheckboxProps`, `DescriptionItem`, `DescriptionList`, `DescriptionListProps` |
-| `Footer`, `FooterProps`, `BrandHeader`, `BrandHeaderProps`, `Header`, `HeaderProps` |
-| `Icon`, `IconName`, `IconProps`, `Input`, `InputProps`, `Link`, `LinkProps` |
-| `Navigation`, `NavigationAnchorProps`, `NavigationLinkRenderer`, `NavigationMenuButton`, `NavigationProps` |
-| `ThemeChoice`, `ThemePickerProps` (types), `ThemePickerSlot` |
-| `RadioGroup`, `RadioGroupProps`, `SkipLink`, `SkipLinkProps`, `Switch`, `SwitchProps` |
-| `safeHref`, `SafeHref`, `HrefScheme` |
-| `FallbackFace`, `FontMetrics` (types) |
-
-`Header`'s `brandOnly` branch returns `BrandHeader` (`shared/ui/components/Header/Header.tsx`).
-
-`presentation.ts` is the `./presentation` export. The file comment calls it a browser presentation entry: no full Header, island runtime or app imports.
-
-| Export |
-| --- |
-| `Avatar`, `AvatarProps`, `AvatarSize`, `Button`, `ButtonProps`, `Checkbox`, `CheckboxProps` |
-| `Icon`, `IconName`, `IconProps`, `Input`, `InputProps`, `Link`, `LinkProps`, `Mark`, `MarkProps` |
-| `Navigation`, `NavigationAnchorProps`, `NavigationLinkRenderer`, `NavigationMenuButton`, `NavigationProps`, `Progress`, `ProgressProps` |
-| `safeHref`, `SafeHref`, `HrefScheme` |
-
-## May import
-
-Rows `shared-ui-lexicons` and `shared-ui-islands`: its own folder, npm, and `shared/islands/index.ts`. No Node built-in.
-
-`island-import-boundary` applies to each `*.island.tsx`.
-
-Declared in `shared/ui/package.json`:
-
-| Dependency | Version | Kind |
-| --- | --- | --- |
-| `@unset/shared-islands` | workspace | dependency |
-| `react` | 19.3.1 | dependency |
-| `@types/react` | 19.3.0 | devDependency |
-| `@types/react-dom` | 19.3.0 | devDependency |
-| `react-dom` | 19.3.1 | devDependency |
-
-Who may import the index is the [shared](../) table. [ui-build](../ui-build/) may import it as types only. From outside this package, `infra-shared-via-index` reaches `index.ts`. A `.css` file is the exception, which is how `apps/web/src/styles.ts` reaches the styles.
-
-On this tree, product importers of `@unset/shared-ui` are `apps/web` and `interfaces/http` (`routes/login.ts`, `routes/verify-email.ts`). `scripts/ui/font-metrics.ts` imports the `FontMetrics` type. That folder is tooling. `shared/ui/components/Header/BrandHeader.test.tsx` imports `@unset/shared-ui/presentation` and `@unset/shared-ui/brand-header`.
-
-## Entry points
-
-| Role | Path |
+| Path | What it holds |
 | --- | --- |
-| Package export `.` | `shared/ui/index.ts` |
-| Package export `./presentation` | `shared/ui/presentation.ts` |
-| Package export `./brand-header` | `shared/ui/components/Header/BrandHeader.tsx` |
-| Link validator | `shared/ui/safe-href.ts` |
-| Browser islands | `shared/ui/islands/*.island.tsx` |
-| Styles | the CSS paths above. `apps/web` globs them. This package has no styles entry of its own. |
+| `shared/ui/theme.css` | The theme. Screens are themed only by this file. |
+| `shared/ui/tokens/` | Token source. `shared/ui/src/tokens.css` is generated from it. |
+| `shared/ui/sheet/` | Pinned copy of the design sheet. |
+| `shared/ui/fonts/` | `SpaceGrotesk-Variable.woff2` and `JetBrainsMono-Variable.woff2`. |
+| `shared/ui/icons/` | The Iconoir copy and `icons.json`. |
+| `shared/ui/approved-extensions.json` | Icons added beyond the sheet list. |
+| `shared/ui/inventory.json` | Sheet components and their status. |
+| `shared/ui/components/Navigation/README.md` | The sheet note for Navigation. No component code. |
+| `shared/ui/index.ts` | Font-metric types for `shared/ui-build`. Nothing else. |
 
-Rebuild of generated files is [ui-build](../ui-build/).
+Package exports (`shared/ui/package.json`): `.`, `./icons.json`, `./fonts/*.woff2`, `./theme.css`.
 
-## Data
-
-No schema, role or table. The sheet copy, `inventory.json`, `approved-extensions.json`, `icons/icons.json`, `tokens/font-metrics.json` and the generated CSS are the package's data.
+`safeHref` is [`shared/safe-href/`](https://github.com/Undefined6799/unset/blob/main/shared/safe-href/safe-href.ts). The Svelte screens are [web](../../apps/web/). `LEAF_SHARED` includes this folder. Row `shared-ui-safe-href` reaches `shared/safe-href/index.ts`. The Svelte Icon and the font route are the only product readers of `icons.json` and the two font files (`svelte-no-react-ui`).
