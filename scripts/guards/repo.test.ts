@@ -8,6 +8,7 @@ import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
 import * as classColours from "./class-colours.ts";
 import * as compositionRoot from "./composition-root.ts";
+import * as conflictMarkers from "./conflict-markers.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
@@ -34,6 +35,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["route-registration", routeRegistration.scanAll],
   ["composition-root", compositionRoot.scanAll],
   ["case-collision", caseCollision.scanAll],
+  ["conflict-markers", conflictMarkers.scanAll],
   ["also-known-as", alsoKnownAs.scanAll],
   ["ui-inventory", uiInventory.scanAll],
   ["page-classes", pageClasses.scanAll],
@@ -84,8 +86,10 @@ test("unreadable_file_is_finding", () => {
     "web-prerender": "interfaces/web/src/routes/+page.ts",
     "svelte-imports": "apps/web/lib/components/profile/bad.svelte",
   };
-  // case-collision reads only names from git, never file contents.
-  for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {
+  // case-collision reads only names from git, and conflict-markers reads only git-tracked files (markers are ASCII, so
+  // it decodes leniently); both are covered in guards.test.ts.
+  const gitBased = new Set(["case-collision", "conflict-markers"]);
+  for (const [rule, scanAll] of RULES.filter(([rule]) => !gitBased.has(rule))) {
     const root = mkdtempSync(join(tmpdir(), "guards-"));
     afterAll(() => rmSync(root, { recursive: true, force: true }));
     const file = scanned[rule] ?? "apps/web/src/bad.ts";
