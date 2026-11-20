@@ -193,13 +193,22 @@ export type MountOptions = {
 // indented continuation line the parser moves out of the list. The schema stays Milkdown's full one, so any stored
 // text opens as it is; instead no edit (toolbar, shortcut or paste) may add a shape the saved card would flatten: a
 // second paragraph, heading or list inside a quote, a second paragraph, quote, heading or code block inside a list
-// item, or a line break anywhere. Text already stored that way stays editable.
+// item, a line break anywhere, or a list nested deeper than the page's three levels (parse.ts MAX_LIST_DEPTH), which
+// it shows beside the third. Text already stored that way stays editable.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
+const PAGE_LIST_DEPTH = 3;
+function listDepth(doc: ProseNode, pos: number): number {
+  const $pos = doc.resolve(pos);
+  let lists = 0;
+  for (let depth = $pos.depth; depth > 0; depth -= 1) if (ITEM_LISTS.has($pos.node(depth).type.name)) lists += 1;
+  return lists;
+}
 function flattened(doc: ProseNode): number {
   let count = 0;
-  doc.descendants((node, _pos, parent, index) => {
+  doc.descendants((node, pos, parent, index) => {
     const holder = parent?.type.name;
     const name = node.type.name;
+    if (ITEM_LISTS.has(name) && listDepth(doc, pos) >= PAGE_LIST_DEPTH) count += 1;
     if (holder === "blockquote" && (index > 0 || name !== "paragraph")) count += 1;
     if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(name)) count += 1;
     if (name === "hardbreak") count += 1;
