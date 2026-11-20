@@ -76,26 +76,27 @@ describe("one member", () => {
 });
 
 describe("the whole site behind the edge", () => {
-  // The site-wide default bucket (3000 at once, 50 a second; ADR 0042) is shared by every member. These two tests state
-  // its size in members, for the review of that bucket before production.
+  // The site-wide default bucket (ADR 0042), shared by every member: 30000 at once, 500 a second since P1.21j
+  // (Proposed ADR 0071; it was 3000 and 50, which held about 100 such members). These tests state its size in members.
   const browsing = (members: number, seconds: number): Request[] =>
     Array.from({ length: members }, (_, n) =>
       paced(seconds / 2, 2000, (at) => ({ at, policy: "default", address: EDGE }), (n * 2000) / members),
     ).flat();
 
-  test("a_hundred_members_each_clicking_every_two_seconds_for_ten_minutes_pass", () => {
-    expect(refused("socket", browsing(100, 600))).toBe(0);
+  test("a_thousand_members_each_clicking_every_two_seconds_for_five_minutes_pass", () => {
+    expect(refused("socket", browsing(1000, 300))).toBe(0);
   });
 
-  test("two_hundred_members_each_clicking_every_two_seconds_are_refused_within_two_minutes", () => {
-    expect(refused("socket", browsing(200, 120))).toBeGreaterThan(0);
+  test("two_thousand_members_each_clicking_every_two_seconds_are_refused_within_two_minutes", () => {
+    expect(refused("socket", browsing(2000, 120))).toBeGreaterThan(0);
   });
 
-  test("sixty_members_signing_in_within_one_minute_pass", () => {
-    // POST /login and the callback both count under `login`; in socket mode that is the site-wide sign-in ceiling.
-    const signIns = Array.from({ length: 60 }, (_, n) => [
-      { at: n * 1000, policy: "login", address: EDGE },
-      { at: n * 1000 + 3000, policy: "login", address: EDGE },
+  test("three_hundred_members_signing_in_within_one_minute_pass", () => {
+    // POST /login and the callback both count under `login`; in socket mode that is the site-wide sign-in ceiling,
+    // 600 at once and 10 a second since P1.21j (it was 120 and 2).
+    const signIns = Array.from({ length: 300 }, (_, n) => [
+      { at: n * 200, policy: "login", address: EDGE },
+      { at: n * 200 + 3000, policy: "login", address: EDGE },
     ]).flat();
     expect(refused("socket", signIns)).toBe(0);
   });
@@ -104,7 +105,16 @@ describe("the whole site behind the edge", () => {
     expect(
       refused(
         "socket",
-        paced(121, 0, (at) => ({ at, policy: "login", address: EDGE })),
+        paced(601, 0, (at) => ({ at, policy: "login", address: EDGE })),
+      ),
+    ).toBe(1);
+  });
+
+  test("a_page_flood_past_the_ceiling_is_refused", () => {
+    expect(
+      refused(
+        "socket",
+        paced(30_001, 0, (at) => ({ at, policy: "default", address: EDGE })),
       ),
     ).toBe(1);
   });

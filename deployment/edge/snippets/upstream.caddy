@@ -12,11 +12,13 @@
 # v2.11.7 sets X-Forwarded-For before applying header_up (reverseproxy.go:909 and 714), so the removal wins; it passes
 # Host by default. X-Forwarded-Host is set to the request's own Host (P1.36j): from a trusted proxy, Newt under dev,
 # Caddy would otherwise keep the incoming value (reverseproxy.go:1012-1022); elsewhere it already sets that same value.
+# Web's key header (ratelimit.caddy, P1.21j) is read by the limiter and dropped here, so the PDS never sees it.
 (upstream) {
 	reverse_proxy {args[0]} {
 		header_up -X-Forwarded-For
 		header_up -X-Real-IP
 		header_up -Forwarded
+		header_up -X-Unset-Web-Key
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-Host {host}
 		transport http {

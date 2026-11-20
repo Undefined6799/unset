@@ -942,6 +942,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
     web_pds_admin_key: 65532,
+    pds_web_key: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
     objects_s3: 1000,
@@ -1101,7 +1102,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 13 mounted secrets" },
+      { pass: true, reason: "3 files, 14 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
@@ -1155,7 +1156,9 @@ describe("Newt in front of the edge (P1.37v; ADR 0030 Decision 2, ADR 0031)", ()
       expect(read(`edge/dev/${site}`).match(/^\tbind .*$/gm), site).toEqual([`\tbind ${EDGE_ADDRESS}`]);
     }
     const limits = read("edge/snippets/ratelimit.caddy");
-    expect(limits.match(/^\t+key .*$/gm)?.every((line) => line.trim() === "key {client_ip}")).toBe(true);
+    // Web's marked zones share one fixed key (P1.21j; Proposed ADR 0071).
+    const keys = limits.match(/^\t+key .*$/gm)?.map((line) => line.trim()) ?? [];
+    expect(keys.filter((line) => line !== "key {client_ip}")).toEqual(["key web", "key web"]);
   });
 
   test("newt_and_the_edge_have_fixed_addresses_inside_the_subnet", () => {

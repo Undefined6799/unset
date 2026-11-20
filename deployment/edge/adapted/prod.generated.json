@@ -278,6 +278,22 @@
                                     "global": {
                                       "ipv6_prefix": 64,
                                       "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "not": [
+                                            {
+                                              "header": {
+                                                "X-Unset-Web-Key": ["key-{file./run/secrets/pds_web_key}-key"]
+                                              },
+                                              "header_regexp": {
+                                                "X-Unset-Web-Key": {
+                                                  "pattern": "^key-[0-9a-f]+-key$"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ],
                                       "max_events": 3000,
                                       "window": 300000000000
                                     },
@@ -314,6 +330,18 @@
                                       "key": "{http.vars.client_ip}",
                                       "match": [
                                         {
+                                          "not": [
+                                            {
+                                              "header": {
+                                                "X-Unset-Web-Key": ["key-{file./run/secrets/pds_web_key}-key"]
+                                              },
+                                              "header_regexp": {
+                                                "X-Unset-Web-Key": {
+                                                  "pattern": "^key-[0-9a-f]+-key$"
+                                                }
+                                              }
+                                            }
+                                          ],
                                           "path": ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"]
                                         }
                                       ],
@@ -393,6 +421,41 @@
                                         }
                                       ],
                                       "max_events": 1500,
+                                      "window": 300000000000
+                                    },
+                                    "web_global": {
+                                      "key": "web",
+                                      "match": [
+                                        {
+                                          "header": {
+                                            "X-Unset-Web-Key": ["key-{file./run/secrets/pds_web_key}-key"]
+                                          },
+                                          "header_regexp": {
+                                            "X-Unset-Web-Key": {
+                                              "pattern": "^key-[0-9a-f]+-key$"
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "max_events": 90000,
+                                      "window": 60000000000
+                                    },
+                                    "web_oauth_token": {
+                                      "key": "web",
+                                      "match": [
+                                        {
+                                          "header": {
+                                            "X-Unset-Web-Key": ["key-{file./run/secrets/pds_web_key}-key"]
+                                          },
+                                          "header_regexp": {
+                                            "X-Unset-Web-Key": {
+                                              "pattern": "^key-[0-9a-f]+-key$"
+                                            }
+                                          },
+                                          "path": ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"]
+                                        }
+                                      ],
+                                      "max_events": 3000,
                                       "window": 300000000000
                                     }
                                   }
@@ -539,7 +602,7 @@
                                   "handler": "reverse_proxy",
                                   "headers": {
                                     "request": {
-                                      "delete": ["X-Forwarded-For", "X-Real-IP", "Forwarded"],
+                                      "delete": ["X-Forwarded-For", "X-Real-IP", "Forwarded", "X-Unset-Web-Key"],
                                       "set": {
                                         "X-Forwarded-Host": ["{http.request.host}"],
                                         "X-Forwarded-Proto": ["https"]
