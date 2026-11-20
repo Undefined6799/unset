@@ -184,6 +184,11 @@ describe("backslash escapes", () => {
     expect(parseInline("\\``code`")).toEqual([text("`"), { kind: "code", text: "code" }]);
   });
 
+  // Codex review of #1827: an escaped star before a closing star is text, not part of the closer's run.
+  test("an escaped star before a closing star still lets it close", () => {
+    expect(parseInline("*a \\**")).toEqual([{ kind: "em", children: [text("a *")] }]);
+  });
+
   test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
     expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
   });

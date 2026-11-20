@@ -112,7 +112,9 @@ export type Mark = "*" | "_" | "**" | "__";
 export function closes(text: string, j: number, mark: Mark): boolean {
   if (!text.startsWith(mark, j) || isEscaped(text, j)) return false;
   const ch = mark[0];
-  if (mark.length === 1 && (text[j + 1] === ch || text[j - 1] === ch)) return false;
+  // An escaped mark before it is text, not part of its run (CommonMark 0.31.2, "Backslash escapes").
+  const runBefore = text[j - 1] === ch && !isEscaped(text, j - 1);
+  if (mark.length === 1 && (text[j + 1] === ch || runBefore)) return false;
   return ch !== "_" || !isWord(text[j + mark.length]);
 }
 
