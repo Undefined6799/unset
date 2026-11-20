@@ -60,7 +60,7 @@
       "window": "5m"
     },
     "app_burst": {
-      "events": 20,
+      "events": 60,
       "window": "10s"
     },
     "app_files": {

@@ -302,6 +302,22 @@ describe("edge config", () => {
     expect(adapted("local")).toEqual([pds, pds]);
   });
 
+  test("app_burst_lets_a_member_click_four_times_a_second_and_refuses_a_flood", () => {
+    // P1.20o/P1.20r (Alex 2026-11-19 13:17:24Z: "increase it from 20 to 60"): at 20 per 10 s a member pressing
+    // Settings and Profile fast was refused. A warm client navigation is one request (its __data.json) and a cold
+    // page at most five (ratelimit.caddy's count; under the split client its build files count in app_files), so a
+    // cold page then four clicks a second for ten seconds must all pass, and a flood one past the zone must not.
+    const zone = (JSON.parse(read("limits.json")) as { appRateLimitZones: Record<string, ZoneValue> }).appRateLimitZones
+      .app_burst;
+    if (zone === undefined) throw new Error("no app_burst zone in limits.json");
+    const coldPage = [0, 0, 0, 0, 0];
+    const clicks = Array.from({ length: 40 }, (_, i) => 250 * (i + 1));
+    expect(allowedAt(zone, [...coldPage, ...clicks]).filter((ok) => !ok)).toEqual([]);
+    const flood = allowedAt(zone, Array(zone.events + 1).fill(0));
+    expect(flood.at(-1)).toBe(false);
+    expect(flood.slice(0, -1).every(Boolean)).toBe(true);
+  });
+
   test("app_files_lets_two_cold_browsers_load_at_once_and_refuses_a_flood", () => {
     // P1.21g (ADR 0069): under the split client a cold app page asks for up to 30 hashed build files at once (27
     // scripts on the heaviest route, the stylesheet and two icons; scripts/budgets/app-js.ts lists them) and its

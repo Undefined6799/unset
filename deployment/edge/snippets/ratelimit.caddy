@@ -135,17 +135,23 @@
 
 # The dev app site's own zones (P1.36b; ADR 0031 Decision 1, architecture 2026-10-20 13:18Z): new names, so no state is
 # shared with the PDS site's zones (one pool per zone name, as above), and the dev app site imports these alone, never
-# pds-ratelimit. app_signin holds one client below web's shared sign-in bucket, app_burst below the 5 a second at which
-# web refills its shared default bucket, and app_global, with no matcher, keeps every app route in a zone, under the
-# 1500 per 5 minutes that app_burst makes safe. Values as limits.json appRateLimitZones (edge_app_zones_match_limits).
+# pds-ratelimit. app_signin holds one client below web's shared sign-in bucket, app_burst caps one client's burst, and
+# app_global, with no matcher, keeps every app route in a zone and holds one client's average under 4 a second.
+# Values as limits.json appRateLimitZones (edge_app_zones_match_limits).
 # app_global's size (ADR 0031 Decision 1, "measured page load plus headroom"), recounted in Chromium on the SvelteKit
-# build at P1.20j: a page with a cold cache is 5 requests to the app name on an app page (the HTML, the one script and
-# one stylesheet of output.bundleStrategy "single", interfaces/web/vite.config.ts, and the 2 fonts) and 4 on a public
-# page (no script). The build's files are hashed and cached a year, the fonts a day, and every page shares them, so a
-# warm page is 1. A first visit from / through sign-in, the three welcome steps and /me is 6 pages, 4 POSTs and the
-# callback: 29 requests warm as counted at P1.36b, 33 with no cache at all. 1200 is about 36 such uncached visits per
-# address per 5 minutes: room for a few testers behind one address. app_burst (20 per 10s) already holds one address
-# to 600 per 5 minutes, so app_global binds only if app_burst is loosened.
+# build at P1.20j: a page with a cold cache was 5 requests to the app name on an app page (the HTML, the one script and
+# one stylesheet of output.bundleStrategy "single", and the 2 fonts) and 4 on a public page (no script). The build's
+# files are hashed and cached a year, the fonts a day, so a warm page is 1. A first visit from / through sign-in, the
+# three welcome steps and /me is 6 pages, 4 POSTs and the callback: 29 requests warm as counted at P1.36b, 33 with no
+# cache at all. Under "split" (P1.21g) the one script becomes the 34 pieces those pages import, so the uncached visit
+# is about 66: 1200 is about 18 of them per address per 5 minutes, still room for a few testers behind one address,
+# and a warm page is still 1. app_burst was 20 per 10s until P1.20r (Alex
+# 2026-11-19 13:17:24Z, "increase it from 20 to 60"): a member pressing Settings and Profile about twice a second met
+# it, and a warm client navigation costs one request (its __data.json). At 60 per 10s it lets a member click four
+# times a second for ten seconds after a cold page and still refuses a flood; it allows 1800 per 5 minutes, so
+# app_global (1200) now binds a client that keeps that pace for minutes. Behind the edge, web's own default bucket is
+# site-wide (3000 at once, 50 a second; ADR 0042), so about thirteen addresses at app_global's average drain it, where
+# twenty-five at the old 2 a second did; fifty addresses sending their 60 at once empty it, where 150 did (ADR 0066).
 # app_signin counts POST /join too (P2.10): it starts a sign-up at our PDS, as POST /login starts a sign-in.
 # app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
 # (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
@@ -158,7 +164,7 @@
 # no run of slashes, dot segment, letter case or other spelling that web would read as another route can match.
 # adapter-node serves the files from a table built at boot, with a year's immutable caching, and SvelteKit answers a
 # missing one under /_app/ with a plain 404 before any hook runs (kit 3.2.0 src/runtime/server/respond.js:367), so
-# nothing this zone counts reaches a hook, a session or the database. 120 per 10 s is four cold pages at once.
+# nothing this zone counts reaches a hook, a session or the database. 120 per 10 s is four cold pages of 30 at once.
 (app-build-file) {
 	method GET HEAD
 	vars_regexp {http.request.uri.path} ^/_app/immutable/(?:entry|nodes|chunks|assets)/[\w-]+(?:\.[\w-]+)?\.(?:js|css|woff2|png)$
@@ -187,7 +193,7 @@
 			}
 			key {client_ip}
 			ipv6_prefix 64
-			events 20
+			events 60
 			window 10s
 		}
 		zone app_files {

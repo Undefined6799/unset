@@ -644,3 +644,19 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   Renovate groups non-major updates weekly and the verifier may merge the test and lint tools group; drafts run the
   cheap checks; the required checks are the file's list; a merge is tested on main's current tip. ADR 0019 and one
   sentence of ADR 0044 are amended.
+- **Edge app_burst raised from 20 to 60 per 10 seconds (P1.20r, 2026-11-19; own record:
+  [0066](0066-edge-app-burst-sixty.md)):** Alex asked for it on 2026-11-19 13:17:24Z ("increase it from 20 to 60")
+  after members pressing Settings and Profile fast met the dev app site's `app_burst` zone. It supersedes the value 20
+  and its reason in ADR 0031 Decision 1, ADR 0042 Decision 1's "unchanged" for that zone, and ADR 0042 Decision 2's
+  "25 clients" sizing of `default` (now about 13 sustained, and 50 at once where it took 150). `app_signin`,
+  `app_global` and every PDS zone are unchanged. 0031 and 0042 are not edited. Proposed, awaiting Alex.
+- **ADR 0066 accepted (Alex, 2026-11-20 00:33:12Z, against b62aa80; own record:
+  [0066](0066-edge-app-burst-sixty.md)):** the dev app site's edge zone `app_burst` allows 60 requests per 10 seconds
+  per address, where it was 20; `app_global` bounds a client's average at 4 a second. ADR 0031 Decision 1's value 20
+  and its reason, ADR 0042 Decision 1's "unchanged" for that zone and ADR 0042 Decision 2's "25 clients" sizing of
+  `default` are superseded. 0031 and 0042 are not edited.
+- **ADR 0067 accepted (Alex, 2026-11-20 00:33Z, against 14f438b; own record:
+  [0067](0067-account-lifecycle-and-burned-names.md)):** deactivation, deletion, takedown and moving away follow
+  atproto's account model. A deletion asked of us is final 30 days later; there is no PLC tombstone by default; every
+  hosted name a member ever held is burned and never issued again; the privacy notice says the PLC log is permanent; a
+  member who moves to another PDS may keep their name until they change it.

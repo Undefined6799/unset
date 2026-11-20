@@ -805,7 +805,7 @@ const BUILD_FILE: Json = {
 };
 /** The dev app site's own zones (dev/app.caddy, P1.36b): build files in app_files alone, then app_global. */
 const APP_ZONES: readonly Zone[] = [
-  ["app_burst", 20, 10, [{ not: [BUILD_FILE] }]],
+  ["app_burst", 60, 10, [{ not: [BUILD_FILE] }]],
   ["app_files", 120, 10, [BUILD_FILE]],
   ["app_global", 1200, 300],
   [
