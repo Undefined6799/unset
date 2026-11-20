@@ -32,7 +32,7 @@ Declared in `infrastructure/seal/package.json`: `@unset/shared-config`, workspac
 | Role | Path |
 | --- | --- |
 | Package export `.` | `infrastructure/seal/index.ts` |
-| Composition | `createSealer` in `interfaces/http/compose.ts` |
+| Composition | `createSealer` in `interfaces/web/src/lib/server/compose.ts` |
 | Rewrap | `infrastructure/postgres/rewrap-cli.ts` imports `sealFields` and calls `rewrapAll` |
 
 No `main.ts` and no Compose service for this package. Compose service `web` mounts secret `web_seal_keyring` (`deployment/compose.dev.yaml`).

@@ -9,7 +9,7 @@ The Dockerfiles, the lock of images a dev or prod stack may run, the upstream ba
 
 | File | Builds | Runtime |
 | --- | --- | --- |
-| `deployment/images/node-app.Dockerfile` | `web`, `APP=web` | `USER 65532:65532`. `ENTRYPOINT ["node", "interfaces/http/main.ts"]`. `EXPOSE 8080`. Health check is `GET /health` on `LISTEN_PORT`. Label licence `AGPL-3.0-only`. |
+| `deployment/images/node-app.Dockerfile` | `web`, `APP=web` | `USER 65532:65532`. `ENTRYPOINT ["node", "interfaces/web/server.ts"]`. `EXPOSE 8080`. Health check is `GET /health` on `LISTEN_PORT`. Label licence `AGPL-3.0-only`. |
 | `deployment/images/migrate.Dockerfile` | `migrate` | `USER 65532:65532`. `ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]`. Label licence `AGPL-3.0-only`. |
 | `deployment/images/postgres.Dockerfile` | `postgres` | `USER 999:999`. No `ENTRYPOINT` of our own. Health check is `pg_isready`. Label licence `AGPL-3.0-only AND PostgreSQL`. |
 | `deployment/edge/Dockerfile` | `edge` | On [edge](../edge/). |
