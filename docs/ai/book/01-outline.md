@@ -257,6 +257,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21d | Sign-out asks the session store which browsers are live (refactor, added 2026-11-19) | trusted | — | `phase-1.md` |
 | P1.21e | Record the account lifecycle and burned names, ADR 0067 (added 2026-11-19) | — | — | `phase-1.md` |
 | P1.21f | Let each profile card choose its surface (added 2026-11-19) | trusted | P1.20 | `phase-1.md` |
+| P1.21g | Split the client into hashed pieces, with an edge zone for them, ADR 0069 (added 2026-11-20) | [SEC], trusted | — | `phase-1.md` |
 | P1.21n | Let the profile choose its page layout (added 2026-11-20) | trusted | P1.21f | `phase-1.md` |
 | P1.21h | Normal use fits inside every limit, tests only (added 2026-11-20) | — | — | `phase-1.md` |
 | P1.21p | Show the README card as a Text card (added 2026-11-20) | — | P1.21f | `phase-1.md` |

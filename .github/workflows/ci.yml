@@ -63,7 +63,7 @@ jobs:
         run: npm run build -w @unset/interfaces-web
       # Alex, 2026-11-18T04:18:09Z: 120 KB gzip is a target that warns, never a gate.
       - name: Report the app page JS (warns above 120 KB gzip)
-        run: node scripts/budgets/app-js.ts interfaces/web/build/client
+        run: node scripts/budgets/app-js.ts interfaces/web/build
       - name: Validate .github/renovate.json
         run: >-
           docker run --rm -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator "$RENOVATE_IMAGE"
