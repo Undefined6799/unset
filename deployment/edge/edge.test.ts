@@ -288,6 +288,37 @@ describe("edge config", () => {
     expect(adapted("local")).toEqual([pds, pds]);
   });
 
+  test("app_burst_lets_a_member_click_four_times_a_second_and_refuses_a_flood", () => {
+    // P1.20o/P1.20r (Alex 2026-11-19 13:17:24Z: "increase it from 20 to 60"): at 20 per 10 s a member pressing
+    // Settings and Profile fast was refused. A warm client navigation is one request (its __data.json) and a cold
+    // page five (ratelimit.caddy's count), so a cold page then four clicks a second for ten seconds must all pass,
+    // and a flood one past the zone must not. The zone is caddy-ratelimit's ring buffer (5625512f24f6
+    // ringbuffer.go:66-84): `events` slots of times, an event is allowed when the slot under the cursor is older than
+    // the window, and only an allowed event takes a slot.
+    const limits = JSON.parse(read("limits.json")) as {
+      appRateLimitZones: Record<string, { events: number; window: string }>;
+    };
+    const zone = limits.appRateLimitZones.app_burst;
+    if (zone === undefined) throw new Error("no app_burst zone in limits.json");
+    const windowMs = nanoseconds(zone.window) / 1_000_000;
+    const allowedAt = (times: readonly number[]): boolean[] => {
+      const ring: number[] = Array(zone.events).fill(Number.NEGATIVE_INFINITY);
+      let cursor = 0;
+      return times.map((at) => {
+        if (at - (ring[cursor] ?? 0) <= windowMs) return false;
+        ring[cursor] = at;
+        cursor = (cursor + 1) % ring.length;
+        return true;
+      });
+    };
+    const coldPage = [0, 0, 0, 0, 0];
+    const clicks = Array.from({ length: 40 }, (_, i) => 250 * (i + 1));
+    expect(allowedAt([...coldPage, ...clicks]).filter((ok) => !ok)).toEqual([]);
+    const flood = allowedAt(Array(zone.events + 1).fill(0));
+    expect(flood.at(-1)).toBe(false);
+    expect(flood.slice(0, -1).every(Boolean)).toBe(true);
+  });
+
   test("every_pds_route_has_a_zone", () => {
     // On what Caddy adapts, for each env's files (P1.39d): the rules on the adapted config pass. The dev rules name
     // the app site's two values, so the dev config is read with those in place of their sentinels.
