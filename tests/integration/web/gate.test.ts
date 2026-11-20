@@ -133,6 +133,31 @@ describe("hosts and headers", () => {
     expect((await web.fetch("/_app/version.json")).status).toBe(200);
   });
 
+  // P1.21g (ADR 0069): the edge lets build files through in their own zone (app_files), so neither a file nor a
+  // missing one may reach a hook, a session or the database. adapter-node 6.0.2 serves the files from a table built at
+  // boot with a year's immutable caching (src/static.js); kit 3.2.0 answers any other path under /_app/ with a plain
+  // 404 before the hook (src/runtime/server/respond.js:367), which server.ts logs as unrouted.
+  test("a_build_file_is_cached_a_year_and_a_missing_one_is_a_plain_404_before_the_hook", async () => {
+    const chunks = join(REPO, "interfaces", "web", "build", "client", "_app", "immutable", "chunks");
+    const [chunk] = readdirSync(chunks).filter((file) => file.endsWith(".js"));
+    if (chunk === undefined) throw new Error(`no chunk under ${chunks}`);
+    const served = await web.fetch(`/_app/immutable/chunks/${chunk}`);
+    expect(served.status).toBe(200);
+    expect(served.headers.get("cache-control")).toBe("public,max-age=31536000,immutable");
+    const before = web.logs().length;
+    const gone = await web.fetch("/_app/immutable/chunks/Gone0000.js");
+    expect(gone.status).toBe(404);
+    expect(gone.headers.get("content-type")).toMatch(/^text\/plain/);
+    expect(gone.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(await gone.text()).toBe("Not found");
+    const line = () =>
+      web
+        .logs()
+        .slice(before)
+        .find((entry) => entry.event === "http.request" && entry.status === 404);
+    await expect.poll(() => line()?.route).toBe("/unrouted");
+  });
+
   test("every_response_carries_the_security_headers", async () => {
     for (const path of ["/_app/version.json", "/nope", "/test-routes/plain-page", "/test-routes/fails"]) {
       const response = await web.fetch(path);
