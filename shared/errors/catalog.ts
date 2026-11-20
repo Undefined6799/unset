@@ -81,6 +81,11 @@ export const ERROR_CODES = {
   "invite.closed": { status: 409, public: true },
   "invite.denied": { status: 403, public: true },
   "invite.unavailable": { status: 503, public: true },
+  // P2.10r, invite requests (ADR 0080). Shown on /request-invite from a redirect (`error=`).
+  "invite.request_bad_email": { status: 400, public: true },
+  "invite.request_age_required": { status: 400, public: true },
+  "invite.request_country_required": { status: 400, public: true },
+  "invite.request_unavailable": { status: 503, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 

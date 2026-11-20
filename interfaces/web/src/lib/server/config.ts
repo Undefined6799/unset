@@ -3,6 +3,8 @@
 // through the process note (note.ts). A slice adds the fields its routes need, as interfaces/http/config.ts has them.
 // P1.20e: what the OAuth client stands on, as interfaces/http/config.ts has it since P2.04c: the lock pool, the seal
 // keyring, net-guard, the identity lookups, the client keys and our PDS.
+import { parseRequesterEmail } from "@unset/domains-identity";
+import { parseSmtpsUrl } from "@unset/infrastructure-email";
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
@@ -14,6 +16,7 @@ import {
   int,
   netGuardFields,
   oneOf,
+  optionalSecretFile,
   origin,
   Secret,
   secretFile,
@@ -121,6 +124,33 @@ const searchConfig = {
   SEARCH_LISTING: oneOf(["on", "off"], { default: "off" }),
 };
 
+/** A secret file that is unset, or set and passing `check`. */
+const unsetOr = (value: unknown, check: (text: string) => boolean): boolean =>
+  value === undefined || (value instanceof Secret && check(value.reveal()));
+
+/**
+ * Invite requests (book P2.10r; ADR 0080): off by default, so a stack with no mail settings never offers the form. On,
+ * the three below must be set: the SMTP server as an `smtps:` URL (it holds the provider's key), the owner's address
+ * the notice goes to (a file, so it is never in the checkout or in `docker inspect`), and the sender address.
+ */
+const inviteRequestConfig = {
+  INVITE_REQUESTS: withRule(
+    oneOf(["on", "off"], { default: "off" }),
+    (config) =>
+      config.INVITE_REQUESTS !== "on" ||
+      (config.INVITE_REQUEST_SMTP_URL instanceof Secret &&
+        config.INVITE_REQUEST_TO instanceof Secret &&
+        parseRequesterEmail(String(config.INVITE_REQUEST_FROM)) !== null),
+  ),
+  INVITE_REQUEST_SMTP_URL: withRule(optionalSecretFile({ minBytes: 16 }), (config) =>
+    unsetOr(config.INVITE_REQUEST_SMTP_URL, (text) => parseSmtpsUrl(text) !== null),
+  ),
+  INVITE_REQUEST_TO: withRule(optionalSecretFile({ minBytes: 6 }), (config) =>
+    unsetOr(config.INVITE_REQUEST_TO, (text) => parseRequesterEmail(text) !== null),
+  ),
+  INVITE_REQUEST_FROM: str({ default: "" }),
+};
+
 /** Our PDS's issuer, from PDS_HOSTNAME, with no switch to widen it (interfaces/http/config.ts `pdsIssuerOf`). */
 export const pdsIssuerOf = (cfg: { PDS_HOSTNAME: string; OAUTH_ALLOW_HTTP: boolean }): string =>
   `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
@@ -146,6 +176,7 @@ export const schema = defineEntrypointConfig({
   ...pdsConfig,
   ...onboardingConfig,
   ...inviteConfig,
+  ...inviteRequestConfig,
   ...objectStoreConfig,
   ...reviewConfig,
   ...searchConfig,

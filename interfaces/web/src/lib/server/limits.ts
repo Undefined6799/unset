@@ -26,6 +26,13 @@ export const policies = definePolicies({
     SITE_CEILING,
     { capacity: 10, refillPerSec: 10 / 3600, scope: "did" },
   ],
+  // Asking for an invite while signed out (book P2.10r; ADR 0080): each POST mails the owner, so 3 an hour from one
+  // address and 20 a day for the whole site, which bounds the owner's inbox and the mail provider's quota.
+  inviteRequest: [
+    { capacity: 3, refillPerSec: 3 / 3600, scope: "ip" },
+    SITE_CEILING,
+    { capacity: 20, refillPerSec: 20 / 86_400, scope: "global" },
+  ],
 });
 
 export type PolicyName = keyof typeof policies & string;

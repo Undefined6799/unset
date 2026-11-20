@@ -119,3 +119,33 @@ describe("the whole site behind the edge", () => {
     ).toBe(1);
   });
 });
+
+describe("invite requests (P2.10r; ADR 0080)", () => {
+  const ask = (at: number, n = 1): Request => ({ at, policy: "inviteRequest", address: address(n) });
+  const HOUR = 3_600_000;
+
+  test("a_visitor_who_mistypes_twice_then_sends_passes", () => {
+    expect(
+      refused(
+        "header",
+        paced(3, 20_000, (at) => ask(at)),
+      ),
+    ).toBe(0);
+  });
+
+  test("a_fourth_request_from_one_address_within_the_hour_is_refused", () => {
+    expect(
+      refused(
+        "header",
+        paced(4, 1000, (at) => ask(at)),
+      ),
+    ).toBe(1);
+  });
+
+  test("twenty_visitors_over_a_day_pass_and_a_twenty_first_at_once_is_refused", () => {
+    // Behind the edge only the site-wide bucket stays: 20 at once, refilled at 20 a day.
+    const viaEdge = (at: number): Request => ({ ...ask(at), address: EDGE });
+    expect(refused("socket", paced(20, HOUR, viaEdge))).toBe(0);
+    expect(refused("socket", paced(21, 1000, viaEdge))).toBe(1);
+  });
+});
