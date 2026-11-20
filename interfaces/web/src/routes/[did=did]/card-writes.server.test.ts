@@ -23,14 +23,22 @@ const readme = (text: string) => ({
 const input = (text = "Hello") => ({ content: { kind: "readme", text } as CardContent, width: "full" as const });
 const KEY = "3k2abc" as CardKey;
 
-type Calls = { created: unknown[]; swaps: string[]; saved: unknown[]; removed: string[]; profile: unknown[] };
+type CardVersion = Parameters<CardWrites["saveAll"]>[0][number]["version"];
+type Calls = {
+  created: unknown[];
+  swaps: string[];
+  saved: unknown[];
+  removed: string[];
+  profile: unknown[];
+  many: { updates: unknown[]; swapCommit: string }[];
+};
 const HEAD = "bafyhead";
 
 function store(
   over: Partial<CardStore> = {},
   stored: unknown = { $type: "sh.unset.profile", displayName: "A", createdAt: T1 },
 ) {
-  const calls: Calls = { created: [], swaps: [], saved: [], removed: [], profile: [] };
+  const calls: Calls = { created: [], swaps: [], saved: [], removed: [], profile: [], many: [] };
   const base: CardStore = {
     list: async () =>
       ok({
@@ -55,6 +63,10 @@ function store(
     remove: async (key) => {
       calls.removed.push(key);
       return ok(undefined);
+    },
+    saveMany: async (updates, swapCommit) => {
+      calls.many.push({ updates: [...updates], swapCommit });
+      return ok({ kind: "saved" });
     },
     saveProfile: async (build) => {
       const built = build(stored);
@@ -253,4 +265,133 @@ test("create and save pass the chosen surface to the member's stored record", as
   expect(calls.created[0]).toMatchObject({ surface: "outlined" });
   expect(await writes.save(KEY, content, width, "plain")).toEqual({ kind: "saved" });
   expect(calls.saved[0]).toMatchObject({ built: { ok: true, record: { surface: "plain" } } });
+});
+
+describe("saveAll", () => {
+  const V = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm" as CardVersion;
+  const V2 = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae" as CardVersion;
+  const listing = (cards: { key: string; cid: string; text?: string }[], complete = true) =>
+    ok({
+      cards: cards.map((c) => ({ key: c.key, value: readme(c.text ?? c.key), cid: c.cid })),
+      complete,
+      overflow: false,
+    });
+  const edit = (key: string, text: string, version = V) => ({
+    key: key as CardKey,
+    version,
+    content: { kind: "readme", text } as CardContent,
+    width: "full" as const,
+  });
+
+  test("every changed card is written in one call on the head the versions were read on", async () => {
+    const { writes, calls } = store({
+      list: async () =>
+        listing([
+          { key: "a", cid: V },
+          { key: "b", cid: V },
+          { key: "c", cid: V },
+        ]),
+    });
+    expect(await writes.saveAll([edit("a", "New A"), edit("c", "New C", V)])).toEqual({ kind: "saved" });
+    expect(calls.many).toHaveLength(1);
+    expect(calls.many[0]?.swapCommit).toBe(HEAD);
+    expect(calls.many[0]?.updates).toMatchObject([
+      { key: "a", record: { content: { text: "New A" }, createdAt: T1 } },
+      { key: "c", record: { content: { text: "New C" }, createdAt: T1 } },
+    ]);
+    expect(calls.saved).toEqual([]);
+  });
+
+  test("a card changed since the editor opened is refused by name and nothing is written", async () => {
+    const { writes, calls } = store({
+      list: async () =>
+        listing([
+          { key: "a", cid: V },
+          { key: "b", cid: V2 },
+        ]),
+    });
+    expect(await writes.saveAll([edit("a", "New A"), edit("b", "New B")])).toEqual({
+      kind: "failed",
+      code: "card.conflict",
+      card: "b",
+    });
+    expect(calls.many).toEqual([]);
+  });
+
+  test("a card that is gone is refused by name; one a cut-short list may not hold is not a guess", async () => {
+    const gone = store({ list: async () => listing([{ key: "a", cid: V }]) });
+    expect(await gone.writes.saveAll([edit("a", "New A"), edit("z", "Z")])).toEqual({
+      kind: "failed",
+      code: "card.missing",
+      card: "z",
+    });
+    const cut = store({ list: async () => listing([{ key: "a", cid: V }], false) });
+    expect(await cut.writes.saveAll([edit("z", "Z")])).toEqual({ kind: "failed", code: "card.list_incomplete" });
+    expect(await cut.writes.saveAll([edit("a", "New A")])).toEqual({ kind: "saved" });
+    expect(gone.calls.many).toEqual([]);
+  });
+
+  test("a card the domain refuses is named and nothing is written", async () => {
+    const { writes, calls } = store({ list: async () => listing([{ key: "a", cid: V }]) });
+    expect(await writes.saveAll([edit("a", "x".repeat(100_001))])).toEqual({
+      kind: "failed",
+      code: "card.too_long",
+      card: "a",
+    });
+    expect(calls.many).toEqual([]);
+  });
+
+  test("a repo that moved on for another reason is read again once, and saved when the cards are unchanged", async () => {
+    let tries = 0;
+    const heads = ["h1", "h2"];
+    const { writes, calls } = store({
+      head: async () => ok(heads[tries] ?? "h3"),
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        tries += 1;
+        return ok(tries === 1 ? { kind: "changed" } : { kind: "saved" });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A")])).toEqual({ kind: "saved" });
+    expect(calls.many.map((c) => c.swapCommit)).toEqual(["h1", "h2"]);
+  });
+
+  test("a card changed between the two reads is refused by name on the second", async () => {
+    let reads = 0;
+    const { writes, calls } = store({
+      list: async () => listing([{ key: "a", cid: reads++ === 0 ? V : V2 }]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({ kind: "changed" });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.conflict", card: "a" });
+    expect(calls.many).toHaveLength(1);
+  });
+
+  test("a repo that keeps moving is not tried a third time", async () => {
+    const { writes, calls } = store({
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({ kind: "changed" });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.cards_changed" });
+    expect(calls.many).toHaveLength(2);
+  });
+
+  test("an outage is a retryable failure and an ended session sends the member to sign in", async () => {
+    const down = async () => ({ kind: "transient", code: "pds_unavailable" }) as const;
+    expect(await store({ head: down }).writes.saveAll([edit("a", "A")])).toEqual({
+      kind: "failed",
+      code: "card.pds_unavailable",
+    });
+    const { writes } = store({
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async () => ({ kind: "transient", code: "pds_unavailable" }) as const,
+    });
+    expect(await writes.saveAll([edit("a", "A")])).toEqual({ kind: "failed", code: "card.pds_unavailable" });
+  });
 });

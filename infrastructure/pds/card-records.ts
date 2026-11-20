@@ -188,6 +188,52 @@ export function saveCardRecord<C extends string>(
   );
 }
 
+export type SaveManyOutcome =
+  | { readonly kind: "saved" }
+  /** The repo's head was no longer `swapCommit`: something was written first, and none of the cards was written. */
+  | { readonly kind: "changed" };
+
+/**
+ * Writes over several cards at once, all or none (ADR 0074): one com.atproto.repo.applyWrites call of `update`
+ * writes, only if the repo's head is still `swapCommit`. @atproto/pds 0.5.51 (dist/api/com/atproto/repo/
+ * applyWrites.js) refuses more than 200 writes, checks the grant once for each action and collection, and applies
+ * them in one processWrites transaction, answering InvalidSwap with nothing written when the head moved. A write
+ * has no per-record swap, so the caller checks each card's version against a list read on the same head. Not
+ * retried here: the caller re-reads and decides (RE-1, one layer).
+ */
+export function saveCardRecords(
+  pdsCall: PdsCall,
+  ctx: PdsContext | null,
+  did: Did,
+  updates: readonly { readonly key: string; readonly record: Readonly<Record<string, unknown>> }[],
+  swapCommit: string,
+): Promise<PdsResult<SaveManyOutcome>> {
+  if (updates.length === 0) return Promise.resolve({ kind: "ok", value: { kind: "saved" } });
+  return pdsCall(
+    ctx,
+    did,
+    async (agent): Promise<SaveManyOutcome> => {
+      try {
+        await agent.com.atproto.repo.applyWrites({
+          repo: did,
+          swapCommit,
+          writes: updates.map((update) => ({
+            $type: "com.atproto.repo.applyWrites#update" as const,
+            collection: CARD_COLLECTION,
+            rkey: update.key,
+            value: { ...update.record },
+          })),
+        });
+        return { kind: "saved" };
+      } catch (error: unknown) {
+        if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };
+        throw error;
+      }
+    },
+    { idempotent: false },
+  );
+}
+
 /** Deletes one card. Not retried. */
 export function deleteCardRecord(
   pdsCall: PdsCall,

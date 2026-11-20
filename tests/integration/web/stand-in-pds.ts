@@ -1,14 +1,15 @@
 // A stand-in PDS and its authorization server for the built web server's tests (rule TE-1: the PDS is unmanaged), run
 // inside stand-in-server.ts. It answers what a restored OAuth session asks for (the authorization server metadata, as
 // tests/integration/oauth/refresh.test.ts serves it) and the calls the member's page makes, over one in-memory repo:
-// getRecord, listRecords, putRecord (with swapRecord), createRecord (with swapCommit), deleteRecord and
+// getRecord, listRecords, putRecord (with swapRecord), createRecord (with swapCommit), deleteRecord, applyWrites
+// (update writes only, with swapCommit, all in one commit) and
 // com.atproto.sync.getLatestCommit (https://atproto.com/specs/xrpc; lexicons com.atproto.repo.*, sync.*). Every write
 // moves the repo's head, as a real commit does. Each write is reported through `onWrite`.
 import { createHash } from "node:crypto";
 import type { PdsFixture } from "./built-server.ts";
 
 export type PdsWrite = {
-  readonly method: "putRecord" | "createRecord" | "deleteRecord";
+  readonly method: "putRecord" | "createRecord" | "deleteRecord" | "applyWrites";
   readonly collection: string;
   readonly rkey: string;
   readonly record?: unknown;
@@ -122,10 +123,24 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
       record?: unknown;
       swapRecord?: string | null;
       swapCommit?: string;
+      writes?: { $type?: string; collection: string; rkey: string; value: unknown }[];
     };
     if (input.repo !== fixture.did) return wrongRepo();
     if (input.swapCommit !== undefined && input.swapCommit !== head())
       return json(400, { error: "InvalidSwap", message: `Commit was at ${head()}` });
+    if (method === "applyWrites") {
+      const writes = input.writes ?? [];
+      // An update of a record that is not there fails the whole call, as pds-apply-writes.image.test.ts shows the real
+      // PDS does.
+      if (
+        writes.some((w) => w.$type !== "com.atproto.repo.applyWrites#update" || !collection(w.collection).has(w.rkey))
+      )
+        return json(400, { error: "InvalidRequest", message: "only updates of existing records here" });
+      for (const w of writes) collection(w.collection).set(w.rkey, w.value);
+      commits += 1;
+      for (const w of writes) onWrite({ method, collection: w.collection, rkey: w.rkey, record: w.value });
+      return json(200, { commit: { cid: head(), rev: "3jzfcijpj2z2b" }, results: [] });
+    }
     const records = collection(input.collection);
     if (method === "putRecord") {
       const rkey = input.rkey ?? "";

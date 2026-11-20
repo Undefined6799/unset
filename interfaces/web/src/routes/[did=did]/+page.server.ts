@@ -8,7 +8,14 @@ import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/
 import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { type Did, parseDid } from "@unset/domains-identity";
-import { CARD_EDIT_LIMITS, type CardKey, parseAvatarShape, parseCardInput, parseCardKey } from "@unset/domains-profile";
+import {
+  CARD_EDIT_LIMITS,
+  type CardKey,
+  parseAvatarShape,
+  parseCardInput,
+  parseCardKey,
+  parseCardVersion,
+} from "@unset/domains-profile";
 import {
   createCardRecord,
   deleteCardRecord,
@@ -16,6 +23,7 @@ import {
   listCardRecords,
   loadProfileRecord,
   saveCardRecord,
+  saveCardRecords,
   saveProfileRecord,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
@@ -24,8 +32,8 @@ import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
-import { readCardForm } from "./card-form.server.ts";
-import { type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
+import { readCardForm, splitCardsForm } from "./card-form.server.ts";
+import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
 
@@ -136,6 +144,7 @@ function writesFor(did: Did, locals: App.Locals) {
     create: (record, swapCommit) => createCardRecord(pdsCall, ctx, did, record, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
     remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
+    saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
   return cardWrites(store, () => new Date().toISOString());
@@ -173,6 +182,42 @@ function cardInput(form: URLSearchParams) {
   return { ok: false, failed } as const;
 }
 
+/**
+ * The one Save's cards (ADR 0074): each card's `key` and `version` once, then its fields read as one card form, so a
+ * refusal names the card and the field in the Save's own names (`cards.N.text`). A card named twice, or with no
+ * version, is card.invalid before anything is read from the PDS.
+ */
+function cardEdits(form: URLSearchParams):
+  | { readonly ok: true; readonly edits: CardEdit[] }
+  | {
+      readonly ok: false;
+      readonly failed: CardWrite;
+    } {
+  const edits: CardEdit[] = [];
+  for (const { index, form: card } of splitCardsForm(form)) {
+    const keys = card.getAll("key");
+    const versions = card.getAll("version");
+    const key = keys.length === 1 ? parseCardKey(keys[0]) : null;
+    const version = versions.length === 1 ? parseCardVersion(versions[0]) : null;
+    if (key === null || version === null || edits.some((edit) => edit.key === key)) throw new AppError("card.invalid");
+    card.delete("key");
+    card.delete("version");
+    const input = cardInput(card);
+    if (!input.ok) return { ok: false, failed: inSave(input.failed, index, key) };
+    const { content, width, surface } = input;
+    edits.push(surface === undefined ? { key, version, content, width } : { key, version, content, width, surface });
+  }
+  return { ok: true, edits };
+}
+
+/** A card form's refusal as the Save names it: the card, and its field under that card's prefix. */
+function inSave(failed: CardWrite, index: number, card: CardKey): CardWrite {
+  if (failed.kind !== "failed") return failed;
+  return failed.field === undefined
+    ? { kind: "failed", code: failed.code, card }
+    : { kind: "failed", code: failed.code, card, field: `cards.${index}.${failed.field}` };
+}
+
 /** Only the named fields, each as the forms send it; anything else is card.invalid. */
 function onlyFields(form: URLSearchParams, allowed: readonly string[]): void {
   for (const name of form.keys()) if (!allowed.includes(name)) throw new AppError("card.invalid");
@@ -185,11 +230,12 @@ const isShown = (code: string): code is ShownCode => Object.hasOwn(ERROR_MESSAGE
  * A refusal: the page again, with the code's status, its message for the member, the field to blame if one is, and
  * for a card form what was typed, so an editor drawn in place with no script shows it again (card-panel.svelte).
  */
-function refused(code: ShownCode, field?: string, values?: Record<string, string>) {
+function refused(code: ShownCode, field?: string, values?: Record<string, string>, card?: string) {
   return fail(new AppError(code).status, {
     code,
     message: ERROR_MESSAGES[code],
     ...(field === undefined ? {} : { field }),
+    ...(card === undefined ? {} : { card }),
     ...(values === undefined ? {} : { values }),
   });
 }
@@ -215,7 +261,7 @@ async function write(
     return refused(cause.code, undefined, typed);
   }
   if (written.kind === "redirect") redirect(303, written.location);
-  if (written.kind === "failed") return refused(written.code, written.field, typed);
+  if (written.kind === "failed") return refused(written.code, written.field, typed, written.card);
   redirect(303, `/${did}`);
 }
 
@@ -241,6 +287,13 @@ export const actions: Actions = {
       },
       true,
     ),
+  // The one Save (ADR 0074): every changed card at once, all or none. Sent by the page's script only, so a refusal is
+  // not echoed back for an editor drawn with no script; the cards keep their text in the page.
+  saveAll: (event) =>
+    write(event, (form, did) => {
+      const read = cardEdits(form);
+      return read.ok ? writesFor(did, event.locals).saveAll(read.edits) : read.failed;
+    }),
   remove: (event) =>
     write(event, (form, did) => {
       const key = keyField(form);

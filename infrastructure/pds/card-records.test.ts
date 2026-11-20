@@ -4,7 +4,14 @@ import type { Did } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import type { Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { createCardRecord, deleteCardRecord, latestCommit, listCardRecords, saveCardRecord } from "./card-records.ts";
+import {
+  createCardRecord,
+  deleteCardRecord,
+  latestCommit,
+  listCardRecords,
+  saveCardRecord,
+  saveCardRecords,
+} from "./card-records.ts";
 import { createPdsCall } from "./pds-call.ts";
 
 const DID = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" as Did;
@@ -187,6 +194,51 @@ describe("createCardRecord", () => {
     );
     expect(await createCardRecord(pdsCall, ctx, DID, card, CID2)).toEqual({ kind: "ok", value: { kind: "changed" } });
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("saveCardRecords", () => {
+  test("writes every card in one applyWrites call, on the repo head it was given", async () => {
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
+    const other = { ...card, content: { ...card.content, text: "Bye" } };
+    const result = await saveCardRecords(
+      pdsCall,
+      ctx,
+      DID,
+      [
+        { key: "k1", record: card },
+        { key: "k2", record: other },
+      ],
+      CID2,
+    );
+    expect(result).toEqual({ kind: "ok", value: { kind: "saved" } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url.pathname).toBe("/xrpc/com.atproto.repo.applyWrites");
+    expect(calls[0]?.body).toEqual({
+      repo: DID,
+      swapCommit: CID2,
+      writes: [
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section", rkey: "k1", value: card },
+        { $type: "com.atproto.repo.applyWrites#update", collection: "sh.unset.section", rkey: "k2", value: other },
+      ],
+    });
+  });
+
+  test("a repo whose commit moved on is reported as changed, and nothing is retried here", async () => {
+    const { pdsCall, ctx, calls } = pds(() =>
+      Response.json({ error: "InvalidSwap", message: "Commit was at bafy" }, { status: 400 }),
+    );
+    expect(await saveCardRecords(pdsCall, ctx, DID, [{ key: "k1", record: card }], CID2)).toEqual({
+      kind: "ok",
+      value: { kind: "changed" },
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  test("an empty save sends nothing", async () => {
+    const { pdsCall, ctx, calls } = pds(() => Response.json({}));
+    expect(await saveCardRecords(pdsCall, ctx, DID, [], CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
+    expect(calls).toHaveLength(0);
   });
 });
 
