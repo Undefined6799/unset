@@ -11,12 +11,19 @@ A check that cannot decide denies.
 
 | Check | Where | What a failure does |
 | --- | --- | --- |
-| CSRF gate | [`shared/http/csrf/gate.ts`](https://github.com/Undefined6799/unset/blob/main/shared/http/csrf/gate.ts) | A throw becomes `reason: error`, which is a deny. No `Sec-Fetch-Site`, `Origin` or `Referer` is a deny. |
-| Session read | [`infrastructure/session/store.ts`](https://github.com/Undefined6799/unset/blob/main/infrastructure/session/store.ts) | A database error throws `service.unavailable`. The read does not return an anonymous session. |
+| Route policy | [`interfaces/web/src/lib/server/route-table.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/lib/server/route-table.ts) | A route folder with no `policy.ts` has no row, and the gate answers 500 `internal.error` without running it. `tests/integration/web/gate.test.ts` checks every route folder has one. |
+| Form-only bodies | [`interfaces/web/src/hooks.server.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/hooks.server.ts) | A `POST` whose type is not `application/x-www-form-urlencoded` or `multipart/form-data` is 415. A body with no declared length, or one over the route's `maxBody`, is 413. Any method other than `GET`, `HEAD` and `POST` is 405. |
+| Session read | [`infrastructure/session/store.ts`](https://github.com/Undefined6799/unset/blob/main/infrastructure/session/store.ts) | A database error throws `service.unavailable` (503). The read does not return an anonymous session, and the cookie stays. |
 | Rate limit | [`shared/http/limits/rateLimit.ts`](https://github.com/Undefined6799/unset/blob/main/shared/http/limits/rateLimit.ts) | `consume` on a thrown error returns a deny and calls `onError`. |
-| Session-required route | [`shared/http/server.ts`](https://github.com/Undefined6799/unset/blob/main/shared/http/server.ts) `checkRoutes`, `admit` | A `session: "required"` route and no `gate` throws at startup (`session: "required" needs the server's gate`). A missing gate at `admit` is `internal.error`. The gate runs after CSRF. A throw is an error response and the handler does not run: `internal.error`, or the thrown `AppError` code. An admission whose `did` is not a non-empty string is `internal.error` (`ratelimit.no_session`) and the per-DID bucket is not applied. A gate `Response` is the answer. `session: "handler"` leaves `requiresSession` unset, so `admit` returns before the gate. [ADR 0045](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0045-kit-enforces-the-session-gate.md). |
+| Deadline | `interfaces/web/src/hooks.server.ts` `withDeadline` | Past the route's `deadlineMs` (or `REQUEST_DEADLINE_MS`) the answer is 503 `http.deadline`. A late result is logged, never sent. |
 | Bootstrap | [`deployment/postgres/init/00-bootstrap.sh`](https://github.com/Undefined6799/unset/blob/main/deployment/postgres/init/00-bootstrap.sh) | A missing or empty password file exits before any SQL. |
-| Security headers | `shared/http/server.ts` `secured` | A throw while applying the group's headers answers 500 with the `static` set. |
+| Error pages | `interfaces/web/src/hooks.server.ts` `handleError`, `caughtResponse` | Only a catalog code is sent, never an error's message or cause. Anything not in the catalog as public is 500 `internal.error`. |
+
+## The request gate
+
+[`interfaces/web/server.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/server.ts) is adapter-node's custom server. It runs for every response, files and SvelteKit's own refusals included: the host check, the security headers from `shared/http`, and the one log line. [`interfaces/web/src/hooks.server.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/hooks.server.ts) then runs, in order: the route's policy, test routes (404 unless `TEST_ROUTES`), the body checks, the client address and its limit, the session and the member's limit, the route under its deadline, and last the group's CSP. [ADR 0054](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0054-web-process-on-sveltekit.md) and [ADR 0056](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0056-web-boundary-by-file-kind.md) are the record.
+
+Each route folder holds a `policy.ts` beside its `+page` or `+server` file (`definePolicy` in [`interfaces/web/src/lib/server/policy.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/lib/server/policy.ts)). It names the CSP group (`app`, `public` or `static`), the rate-limit policy, an optional write policy for `POST`, the session mode, `maxBody` and an optional deadline. The generated [Endpoints](../../endpoints/) page lists every route's policy.
 
 ## Sessions
 
@@ -24,56 +31,47 @@ The browser cookie is host-only. The database stores a hash.
 
 | Piece | Where | What it is for |
 | --- | --- | --- |
-| Cookie | [`interfaces/http/session-cookie.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/http/session-cookie.ts) | Name `__Host-sid`. Attributes are `Path=/; Secure; HttpOnly; SameSite=Lax` and `Max-Age`. Two cookies of that name are ignored. |
+| Cookie | [`interfaces/web/src/lib/server/session.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/lib/server/session.ts) | Name `__Host-sid`. Attributes are `Path=/; Secure; HttpOnly; SameSite=Lax` and `Max-Age`. Two cookies of that name are ignored. An unknown, malformed or expired cookie is cleared. |
 | Store | [`infrastructure/session/store.ts`](https://github.com/Undefined6799/unset/blob/main/infrastructure/session/store.ts) | 32 random bytes in the cookie; `app.session.id_hash` is their sha256. Expiry uses the database clock. A session lasts only while `app.oauth_session` has a row for the DID. |
-| App pages | [`interfaces/http/app-gate.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/http/app-gate.ts) | `openApp` reads the session, then onboarding, then the email gate. A missing session redirects to `/login`. `compose.ts` passes `appSessionGate`, which calls `openApp`, as `createServer`'s `gate`. |
-| Welcome, verify-email, logout | `interfaces/http/routes/welcome.ts`, `verify-email.ts`, `logout.ts` | These handlers read the session themselves. They do not call `openApp`. Logout reads it on `POST /logout` and `POST /logout/everywhere`. |
+| App gate | [`interfaces/web/src/lib/server/app-gate.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/lib/server/app-gate.ts) | `openApp`: onboarding, then a confirmed email. The decisions are `domains/identity`'s; this file turns them into 303 redirects (`/welcome`, `/welcome/terms`, `/welcome/blocked`, `/verify-email`). A grant revoked at the PDS drops the cookie and sends the browser to sign-in. |
 | Domain attribute | [`scripts/guards/cookie-domain.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/guards/cookie-domain.ts) | A `Domain` attribute on a cookie fails CI. The guard has no allow. |
 
-Two layers. [ADR 0045](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0045-kit-enforces-the-session-gate.md) is the record. The kit enforces `session: "required"`. `session: "handler"` is recorded, and the handler does the check.
+A policy's `session` is one of four modes, or absent:
 
-`defineRoute` records `session` as `"required"`, `"handler"` or `"none"`, with no default (`shared/http/routes.ts`). `"required"` sets `requiresSession` and stores a handler that throws when the context has no `session`. `"handler"` sets `handlerSession` and leaves `requiresSession` unset. `admit` returns before the gate when `requiresSession` is absent, and `middlewareOf` adds `session` and `rateLimitDid` only when it is set. `createServer` takes one optional `gate` (`SessionGate` on `ServerOptions`). For a required route it calls that gate after the CSRF check, inside the route's deadline. A `Response` is the answer and the handler does not run. An admission is limited per DID when the policy has a `did` entry, and the handler is called with that admission's `session` as `ctx.session`.
+| Mode | Signed out | Signed in |
+| --- | --- | --- |
+| `required` | 303 to `/login?next=<page>` | the member's limit, then the app gate |
+| `writes` | `GET` and `HEAD` pass; a `POST` goes to sign-in | the member's limit, then the app gate on a `POST` |
+| `onboarding` | 303 to sign-in | the member's limit, no app gate (welcome and verify-email are where the gate sends people) |
+| `optional` | passes | the session is read, never gated; the page is private and varies on `Cookie` |
+| absent | no session is read, except on an `app` page | the same |
 
-`interfaces/http/compose.ts` passes `gate: appSessionGate(accountDeps.open)`. `appSessionGate` (`interfaces/http/app-gate.ts`) calls `open`, which compose binds to `openApp`. The admission's `session` is the `OpenedApp`, and its `did` is that value's `session.did`. A `Response` from `open` is the refusal. `RETURN_TO` is checked first: `GET /me` and `POST /profile` return to `/did`. A parameter-free `GET` or `HEAD` that is not listed returns to its own template. A route with neither throws, and the kit answers that throw as an error response.
+The page sign-in returns to is the route's own id when it has no parameter, or the policy's fixed `returnTo`. A session route with a parameter and no `returnTo` is refused. It is never taken from the request.
 
-Five routes set `"required"`, and `interfaces/http/routes.manifest.json` records `requiresSession: true` on each: `GET /did` and `GET /me` (`routes/me.ts`), `POST /profile` (`routes/profile.ts`), and `GET /settings/profile` and `GET /settings/account` (`routes/settings.ts`). Their handlers take the admitted `OpenedApp` and do not call `open`. `GET /did` and `GET /me` redirect to `/${session.session.did}`. `POST /profile` writes that session's DID. `GET /settings/profile` and `GET /settings/account` render from it. `POST /profile` names the `profile` policy, which has a per-DID entry. The other four name `default`, which has none, so `rateLimitDid` matches no entry and consumes nothing.
+## CSRF
 
-Ten routes set `"handler"`, recorded as `handlerSession: true`: `GET /:did` (`routes/me.ts`), `GET /verify-email` and `POST /verify-email/reconsent` (`routes/verify-email.ts`), and `GET /welcome`, `GET` and `POST /welcome/age`, `GET` and `POST /welcome/terms`, and `GET` and `POST /welcome/chat` (`routes/welcome.ts`). The kit does not call the gate. The other routes in that folder set `"none"`, which omits both fields. A `"none"` route may still read the session in its handler. `GET /health`, added in `shared/http/server.ts`, is `session: "none"` and skips the host check and the trusted-proxy step.
-
-The handlers are the second layer on a route the kit does not gate. `openApp` is still session, then onboarding, then the email gate. A missing session redirects to `/login` with `next`. `GET /:did` parses the path first, and a segment that is not a DID throws `http.not_found` before `deps.open`. `GET /settings` sets `"none"`, returns 303 to `/settings/profile` and does not read a session. Welcome, verify-email and logout do not call `openApp`. `welcome.ts` reads the session in `located` and on `GET /welcome/blocked`. A missing session in `located` redirects to `/login` with `next`. `GET /welcome/blocked` sets `"none"` and renders the page when there is no session. `verify-email.ts` reads the session on `GET /verify-email` and `POST /verify-email/reconsent` and redirects a missing session to `/login` with `next`. `logout.ts` sets `"none"` and reads the session on `POST /logout`, `POST /logout/everywhere` and `GET /signed-out`. `POST /signed-out` does not read a session. Legal pages pass `"none"` and do not read the session.
-
-## CSRF gate
-
-Every method other than `GET` and `HEAD` that the server accepts is `POST`, and every `POST` passes the gate (`shared/http/server.ts`, `csrfDenied`). `GET` and `HEAD` are not gated. The decision (`shared/http/csrf/gate.ts`):
-
-| Signal | Result |
-| --- | --- |
-| `Sec-Fetch-Site: same-origin` | allow |
-| `Sec-Fetch-Site: cross-site` or `same-site` | deny |
-| `Origin` present | allow only when it lower-cases to `PUBLIC_ORIGIN`'s origin; the value `null` denies |
-| no `Origin`, `Referer` present | allow only when the Referer URL's origin equals that origin |
-| none of the three | deny |
-
-A denied POST is logged as `csrf.denied` with the route template and a fixed reason word, and the response is 403.
+Every method the server accepts other than `GET` and `HEAD` is `POST`. SvelteKit's own Origin check refuses a cross-site form post before the hook runs (kit 3.2.0 `src/runtime/server/respond.js`). It covers only the form types, so the hook refuses every other body type with 415, which puts every `POST` under that check. [`tests/integration/web/csrf-coverage.test.ts`](https://github.com/Undefined6799/unset/blob/main/tests/integration/web/csrf-coverage.test.ts) checks, on the built server, that every route that can write refuses a cross-site post and a post with no `Origin`, whatever the body type. The OAuth callback is the one `GET` that changes state; its state and nonce protect it.
 
 ## Rate limits
 
 Two layers, both in memory. In `socket` mode the edge's per-client zones are the per-client layer ([ADR 0042](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0042-app-limits-behind-the-edge.md)).
 
-The process layer is a token bucket per policy (`shared/http/limits/rateLimit.ts`). Keys are an HMAC of the IP rate key or the DID under a salt that is not written. Each interface has its own table. `interfaces/http/limits.ts` defines `default`, `profile`, `login`, `search`, `report`, `follow`, `like` and `upload`. `interfaces/http/compose.ts` passes `policiesFor(cfg.TRUSTED_PROXY_MODE)`:
+The process layer is a token bucket per policy (`shared/http/limits/rateLimit.ts`). Keys are an HMAC of the IP rate key or the DID under a salt that is not written. [`interfaces/web/src/lib/server/limits.ts`](https://github.com/Undefined6799/unset/blob/main/interfaces/web/src/lib/server/limits.ts) defines the web table; a route names one of its keys, and a name that is not in it fails the endpoint check. `compose.ts` passes `policiesFor(config.TRUSTED_PROXY_MODE)`:
 
 | `TRUSTED_PROXY_MODE` | Table |
 | --- | --- |
 | `header` | The full `policies` table |
-| `socket` | Every `scope: "ip"` entry is dropped. `default` keeps its `global` entry. `login` gains the site-wide sign-in ceiling. Per-DID entries stay |
+| `socket` | Every `scope: "ip"` entry is dropped. `login` gains the site-wide sign-in ceiling. Per-DID entries stay |
 
-`deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml` set `socket` on web. Routes in the tree name `default`, `login`, `profile` or `exempt` (`exempt` is the assets route and `GET /health`; `POST /profile` names `profile`). `scripts/guards/route-policy.ts` fails a route whose policy is missing from that interface's table. A per-DID entry requires `session: "required"` (`shared/http/server.ts`, `checkRoutes`).
+`deployment/compose.dev.yaml`, `deployment/compose.dev.source.yaml` and `deployment/compose.local.yaml` set `socket` on web. `/health` is the one `probe` route: no host check and no rate limit, so the container probe always reaches it.
 
 The edge layer is `deployment/edge/snippets/ratelimit.caddy`: caddy-ratelimit, sliding window, keyed by client address, no `distributed` block and no `storage` ([ADR 0018](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0018-edge-rate-limit-plugin.md)). Dev and dev-source mount `deployment/edge/dev/app.caddy`, which imports `app-ratelimit`. Local mounts `deployment/edge/local/app.caddy`, which imports `pds-ratelimit`, as the PDS sites do.
 
+The edge's sign-in zone (`app_signin`) counts `POST /login` and `POST /join` only, per client address. Web reaches our PDS through the edge from one address, so web's own PDS calls carry `X-Unset-Web-Key`, built from the `pds_web_key` secret. A request with exactly that value counts against two site-wide zones keyed `web` instead of the per-address PDS zones; a missing or wrong key counts as any other client. The key is compared, never logged, and `deployment/edge/snippets/upstream.caddy` drops it before the PDS. A leaked key lifts web's per-address PDS limits until it is replaced. [ADR 0071](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0071-limits-for-thousands-of-members.md) (Proposed) is the record; the numbers are on [Limits](../../settings/limits/).
+
 ## PDS fonts
 
-The app's Content-Security-Policy is the kit ([http](../../areas/shared/http/)). On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` serves `.woff2` files from `/_unset/fonts/` and answers every other `/_unset/` path with 404, inside the route and before the upstream. When the response Content-Type starts with `text/html`, it appends `font-src https://{$PDS_HOST}/_unset/fonts/` to a Content-Security-Policy the response already carries. `deployment/edge/adapted-rules.ts` (`fontProblems`, `strayProblems`), on the config `caddy adapt` prints, rejects a wider font route, a file server outside it, a response matcher outside it, and any other change to a Content-Security-Policy. The lines are on [edge](../../areas/deployment/edge/). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) is the PDS frontend record.
+The app's Content-Security-Policy is set per page group in `interfaces/web/src/lib/server/csp.ts`. On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` serves `.woff2` files from `/_unset/fonts/` and answers every other `/_unset/` path with 404, inside the route and before the upstream. When the response Content-Type starts with `text/html`, it appends `font-src https://{$PDS_HOST}/_unset/fonts/` to a Content-Security-Policy the response already carries. `deployment/edge/adapted-rules.ts` (`fontProblems`, `strayProblems`), on the config `caddy adapt` prints, rejects a wider font route, a file server outside it, a response matcher outside it, and any other change to a Content-Security-Policy. The lines are on [edge](../../areas/deployment/edge/). [ADR 0027](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0027-pds-frontend-distribution.md) is the PDS frontend record.
 
 ## Logging allowlist
 
