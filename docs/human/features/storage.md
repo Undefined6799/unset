@@ -1,0 +1,37 @@
+# Storage
+
+One object store holds blobs. Today the PDS uses it for members' blobs. The app has a client and does not call it.
+
+## Route
+
+There is no web route. The store is the `objects` service in the compose files, SeaweedFS with its S3 gateway ([ADR 0041](../decisions/0041-object-store.md), [ADR 0050](../decisions/0050-object-store-admin-through-its-shell.md)). The image is [`deployment/images/objects.Dockerfile`](../../../deployment/images/objects.Dockerfile).
+
+## Operation
+
+Nothing under `interfaces/` or `apps/` calls the store. The app's client is [`infrastructure/storage/object-store.ts`](../../../infrastructure/storage/object-store.ts): `createObjectStore` signs each call with `aws4fetch` 1.0.20 and sends it through net-guard's `object-store` policy. No caller passes that fetch in yet.
+
+## Domain rules
+
+None. The store has no product rules of its own. A profile or a card names a blob by CID; the record rules live in [profile and cards](profile-and-cards.md).
+
+## Adapter
+
+The PDS is the caller that runs today. In the compose files its blob store is the bucket `unset-pds` (`PDS_BLOBSTORE_S3_BUCKET`, `PDS_BLOBSTORE_S3_ENDPOINT` and the matching S3 settings). It reaches the store on the network `objects_pds`, which only the PDS and `objects` share.
+
+[`deployment/preflight/objects-buckets.ts`](../../../deployment/preflight/objects-buckets.ts) creates two buckets, `unset-pds` and `unset-private`, through the store's own shell. The one secret is `objects_s3`. It holds no admin identity (ADR 0050).
+
+`unset-private` is the drafts bucket. It waits for the later media work (Phase 2 and Phase 4). The `web` service joins `db`, `app` and `web_egress`, and `pds_admin` on the source stacks.
+
+## Tables and grants
+
+None.
+
+## Tests
+
+[`infrastructure/storage/object-store.test.ts`](../../../infrastructure/storage/object-store.test.ts), [`tests/integration/storage/object-store.test.ts`](../../../tests/integration/storage/object-store.test.ts), [`pds-key.test.ts`](../../../tests/integration/storage/pds-key.test.ts) (the PDS key reaches only its own bucket) and [`pds-blobstore.image.test.ts`](../../../tests/integration/storage/pds-blobstore.image.test.ts).
+
+## When it is off or replaced
+
+With the store down, the PDS cannot store or serve blobs, avatars included. The app does not call the store, so its pages do not read or write objects themselves.
+
+A production store is not configured yet. The client and the PDS speak plain S3, so a later hosted endpoint would be a configuration change. That swap is unverified: no production configuration exists.
