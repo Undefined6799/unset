@@ -12,8 +12,8 @@ async function openNewText(page: Page) {
   await page.waitForLoadState("networkidle");
   await page.getByRole("link", { name: "Add card" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: /^README/ }).click();
-  const editor = dialog.getByRole("textbox", { name: "README" });
+  await dialog.getByRole("button", { name: /^Text/ }).click();
+  const editor = dialog.getByRole("textbox", { name: "Text" });
   await expect(editor).toHaveAttribute("contenteditable", "true");
   return { dialog, editor };
 }
@@ -87,23 +87,23 @@ test("text_opened_and_saved_untouched_is_stored_as_it_was", async ({ page }) => 
   await addCard(page, { kind: "readme", width: "full", surface: "filled", text: stored });
   await page.reload();
   await page.waitForLoadState("networkidle");
-  const card = page.getByRole("group", { name: "README card" });
+  const card = page.getByRole("group", { name: "Text card" });
   await card.getByRole("link", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("textbox", { name: "README" })).toHaveAttribute("contenteditable", "true");
+  await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveAttribute("contenteditable", "true");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
   await card.getByRole("link", { name: "Edit" }).click();
   await expect(postedText(dialog)).toHaveValue(stored);
   await page.keyboard.press("Escape");
-  await deleteCard(page, "README card");
+  await deleteCard(page, "Text card");
 });
 
 test.describe("on a phone", () => {
   test.use(phone({ width: 375, height: 800 }));
   test("the_editor_fills_the_screen_with_its_bar_at_the_top", async ({ page }) => {
     const { dialog, editor } = await openNewText(page);
-    const shown = page.getByRole("dialog", { name: "Add README" });
+    const shown = page.getByRole("dialog", { name: "Add text" });
     // Measured once the stock zoom-in has ended.
     await expect
       .poll(async () => {
