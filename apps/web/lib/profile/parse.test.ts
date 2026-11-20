@@ -178,6 +178,12 @@ describe("backslash escapes", () => {
     expect(parseInline("`a\\*b`")).toEqual([{ kind: "code", text: "a\\*b" }]);
   });
 
+  // Codex review of #1827: an escaped backtick opens no code span, so it cannot hide the mark that closes emphasis.
+  test("an escaped backtick opens no code span", () => {
+    expect(parseInline("*a \\` b* c \\`")).toEqual([{ kind: "em", children: [text("a ` b")] }, text(" c `")]);
+    expect(parseInline("\\``code`")).toEqual([text("`"), { kind: "code", text: "code" }]);
+  });
+
   test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
     expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
   });

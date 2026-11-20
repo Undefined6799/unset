@@ -125,6 +125,11 @@ export function codeSpans(text: string): readonly (readonly [number, number])[] 
   const closer = codeCloser(text);
   const code: [number, number][] = [];
   for (let i = text.indexOf("`"); i !== -1; ) {
+    // An escaped backtick is text and opens nothing; the rest of its run may still open a span (CommonMark 0.31.2).
+    if (isEscaped(text, i)) {
+      i = text.indexOf("`", i + 1);
+      continue;
+    }
     const length = runLength(text, i, "`");
     const end = closer(length, i + length);
     if (end !== -1) code.push([i, end + length]);
