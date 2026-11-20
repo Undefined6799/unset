@@ -4897,7 +4897,8 @@ merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs
 Alex, 2026-11-20 18:55Z: "the privacy part will be to have the search and AI ... the search title and the search
 description ... will be an advanced setting ... some kind of preview of what people will see". The Search and AI form
 (ADR 0062) moves from the bottom of Settings › Profile to a new Settings › Privacy page in the side list. The title
-and description sit under a native `details` "Advanced" (works with no script; open when either is set). A preview
+and description sit under a native `details` "Advanced" (works with no script; open when either is set). Inside it
+(Alex, 19:21Z: "add ... the search preview ... inside the advanced setting"), a preview
 draws the result the public page publishes: its address, the override or the name and headline, and the letter
 avatar until the media origin serves pictures (ADR 0070), when the page gains `og:image` and the preview the same
 picture. With no script the preview shows what is saved; with the client it follows the fields. The save keeps its

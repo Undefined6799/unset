@@ -41,7 +41,9 @@ test.describe("javascript off", () => {
       page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Privacy" }),
     ).toHaveAttribute("aria-current", "page");
     await expect(form.getByLabel("Search title")).toBeHidden();
+    await expect(preview(page)).toBeHidden(); // inside Advanced (Alex, 2026-11-20 19:21Z)
     await form.locator("summary").click();
+    await expect(preview(page)).toBeVisible();
     await form.getByLabel("Search title").fill("Member One, maker");
     await form.getByLabel("Search engines may list my page").check();
     try {

@@ -318,8 +318,12 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     // The title and description sit under a closed "Advanced" while neither is set; no script is needed to open it.
     const [advanced] = elements(form, "details");
     expect(attr(advanced, "open")).toBeUndefined();
-    expect(textContent(elements(advanced, "summary")[0]).trim()).toBe("Advanced: search title and description");
-    // The preview: what the public page would publish, at its canonical address, and no link out of the page.
+    expect(textContent(elements(advanced, "summary")[0]).trim()).toBe(
+      "Advanced: search title, description and preview",
+    );
+    // The preview, inside Advanced (Alex, 2026-11-20 19:21Z): what the public page would publish, at its canonical
+    // address, and no link out of the page.
+    expect(elements(advanced, "div", { "data-search-preview": "" })).toHaveLength(1);
     const shown = preview(document);
     expect(shown.title).toBe("Mara Lind");
     expect(shown.description).toBe("Night trains.");

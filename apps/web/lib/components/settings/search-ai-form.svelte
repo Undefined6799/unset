@@ -1,12 +1,13 @@
 <!--
   Settings › Privacy › Search and AI (ADR 0062; P1.21y moved it here from Settings › Profile): two switches, both off
-  until the member turns them on, then the optional search title and description under "Advanced", then a preview of
-  the search result they make. A plain form that posts to /settings/search-and-ai and comes back here; it needs no
-  script. The switches are native checkboxes and "Advanced" is a native details element, so both work with no script;
-  shadcn-svelte's Collapsible (Bits) opens only once its script runs. With no script the preview shows what is saved;
-  where the client runs it follows the fields as the member types. Each switch says what it does and what it cannot
-  do (review plan 2026-11-18 §7.2). With listing switched off on the whole site (P1.21b, `siteOff`), it says so above
-  the switches, which still save the member's choices.
+  until the member turns them on, then "Advanced": the optional search title and description and a preview of the
+  search result they make (Alex, 2026-11-20 19:21Z: the preview goes inside Advanced). A plain form that posts to
+  /settings/search-and-ai and comes back here; it needs no script. The switches are native checkboxes and "Advanced"
+  is a native details element, so both work with no script; shadcn-svelte's Collapsible (Bits) opens only once its
+  script runs. With no script the preview shows what is saved; where the client runs it follows the fields as the
+  member types. Each switch says what it does and what it cannot do (review plan 2026-11-18 §7.2). With listing
+  switched off on the whole site (P1.21b, `siteOff`), it says so above the switches, which still save the member's
+  choices.
 -->
 <script lang="ts">
 import { untrack } from "svelte";
@@ -124,15 +125,15 @@ let description = $state(start.description);
               {T.searchDescriptionHint(limits.description)}
             </p>
           </div>
+          <SearchPreview
+            title={title.trim() || page.name}
+            description={description.trim() || page.headline}
+            url={page.url}
+            letter={page.letter}
+            listed={searchEngines}
+          />
         </div>
       </details>
-      <SearchPreview
-        title={title.trim() || page.name}
-        description={description.trim() || page.headline}
-        url={page.url}
-        letter={page.letter}
-        listed={searchEngines}
-      />
       <div><Button type="submit">{T.save}</Button></div>
     </form>
   </Card.Content>

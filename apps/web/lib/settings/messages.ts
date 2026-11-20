@@ -83,7 +83,7 @@ export const SEARCH_AI_SETTINGS = {
   searchDescription: "Search description",
   searchDescriptionHint: (n: number) =>
     `Optional. Replaces your headline under the title. Up to ${n} characters. Search engines may rewrite both.`,
-  advanced: "Advanced: search title and description",
+  advanced: "Advanced: search title, description and preview",
   preview: "Search result preview",
   previewNote:
     "An example drawn by unset.sh from what you set here, not taken from a search engine. Search engines choose what to show and may shorten or rewrite it. Your profile picture appears here once pictures arrive on unset.sh.",
