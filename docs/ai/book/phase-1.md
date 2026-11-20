@@ -4790,6 +4790,20 @@ decoded path, anchored and case-sensitive, and `adapted-build-files.test.ts` che
 one web reads under `/_app/`, where nothing reaches a hook. A flood of made-up file names: each is a plain 404 before
 the hook, and `app_global` still caps the 5-minute total. A stale tab after a deploy: a full load, never a broken page.
 
+### P1.21h — Normal use fits inside every limit (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.2, §6
+
+Alex, 2026-11-19 13:21Z, after the P1.20o white page: the "normal use fits inside the limit" logic applies
+everywhere. Tests only, no limit changes (changing one is a security loosening and needs his typed line). For every
+app-facing edge zone in `deployment/edge/limits.json` (`deployment/edge/limits.budget.test.ts`, on a model of
+caddy-ratelimit's ring buffer) and every policy in `interfaces/web/src/lib/server/limits.ts` (`limits.budget.test.ts`
+beside it, on the real limiter with a fake clock), a test that a person's real use passes and one that a flood is
+refused. The PDS zones web's own calls reach (one address for every member on staging) get a size in members. A
+realistic use a limit refuses is a named `test.fails` with the reason, reported to Alex. Static app files
+get no budget here: P1.21g gives them their own zone. The letter does not belong to the token pipeline below; it was
+the next free id.
+
 ### P1.21i — Say in the terms how leaving works (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** P1.21e · **Plan:** §6
