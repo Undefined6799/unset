@@ -46,9 +46,9 @@ and the relays (https://atproto.com/specs/repository).
    | Another member | page | page | limited |
    | The member | page | page | page |
 
-   The limited page shows the avatar, display name, handle and DID and one sentence, with no headline, details, cards,
-   description, canonical link or link-preview tags, and says noindex in the page and in `X-Robots-Tag`. A whole page
-   that is not public says above it who sees it.
+   The limited page shows, in one card centered on the page (Alex, 20:49Z), the avatar, display name, handle and DID and
+   one sentence, with no headline, details, cards, description, canonical link or link-preview tags, and says noindex in
+   the page and in `X-Robots-Tag`. A whole page that is not public says above it who sees it.
 4. A page that is not public is never offered to search engines or AI search, whatever its Search and AI choices
    (ADR 0062) say: noindex, out of the sitemap, and no AI search Allow line in robots.txt (`publicProfileStore`'s
    listing queries keep only records with no `visibility` or `public`). The choices are kept until the page is public
