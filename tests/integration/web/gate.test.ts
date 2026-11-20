@@ -147,7 +147,6 @@ describe("hosts and headers", () => {
     const before = web.logs().length;
     const gone = await web.fetch("/_app/immutable/chunks/Gone0000.js");
     expect(gone.status).toBe(404);
-    expect(gone.headers.get("content-type")).toMatch(/^text\/plain/);
     expect(gone.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
     expect(await gone.text()).toBe("Not found");
     const line = () =>

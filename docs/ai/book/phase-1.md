@@ -4759,7 +4759,7 @@ No code or behaviour changes. The letter does not belong to the token pipeline b
 
 ### P1.21g — Split the client into hashed pieces (added step, 2026-11-20)
 
-**Tags:** [SEC], trusted · **Depends on:** P1.20u, P1.20r · **Plan:** §6.1 (app page budget), §5.7 (edge limits)
+**Tags:** [SEC], trusted · **Depends on:** — · **Plan:** §6.1 (app page budget), §5.7 (edge limits)
 
 Alex agreed on 2026-11-20 00:27:59Z to split the signed-in app's client so heavy parts can load on demand; no new
 dependency comes with it. `output.bundleStrategy` goes from `single` to `split`, SvelteKit's own mechanism; `single`
