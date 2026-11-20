@@ -41,11 +41,15 @@ const BUILD_STYLESHEET = /^_app\/immutable\/assets\/[\w.-]+\.css$/;
  * checks the built server has it.
  */
 async function buildStylesheet(): Promise<string | undefined> {
-  const loaded = await import("#kit/manifest").catch(() => undefined);
-  const root = await loaded?.manifest?.nodes?.[0]?.().catch(() => undefined);
-  const sheets = root?.stylesheets;
-  const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
-  return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
+  try {
+    const { manifest } = await import("#kit/manifest");
+    const sheets = (await manifest?.nodes?.[0]?.())?.stylesheets;
+    const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
+    return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
+  } catch {
+    // Any shape the manifest or node 0 takes, thrown or rejected, only leaves the refusal page plain.
+    return undefined;
+  }
 }
 
 const standIns = (globalThis as Record<symbol, unknown>)[STAND_INS_KEY] as StandIns | undefined;
