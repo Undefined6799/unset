@@ -71,6 +71,10 @@
       "events": 60,
       "window": "10s"
     },
+    "app_files": {
+      "events": 120,
+      "window": "10s"
+    },
     "app_global": {
       "events": 1200,
       "window": "5m"

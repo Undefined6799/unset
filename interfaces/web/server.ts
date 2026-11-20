@@ -33,24 +33,28 @@ process.on("uncaughtException", (error: unknown) => {
 const BUILD_STYLESHEET = /^_app\/immutable\/assets\/[\w.-]+\.css$/;
 
 /**
- * The app's stylesheet, read once from SvelteKit's build manifest (`#kit/manifest`, package.json "imports"; kit 3.2.0
- * writes `manifest.client.stylesheets` into build/server/manifest.js, whose top level only declares data; its nodes
- * load lazily), for the gate's refusal page.
- * Without it that page is plain, which is all a missing or odd entry costs; gate.test.ts checks the built server has
- * it.
+ * The app's stylesheet, read once from SvelteKit's build manifest (`#kit/manifest`, package.json "imports"), for the
+ * gate's refusal page. Under output.bundleStrategy "split" (P1.21g) kit 3.2.0 lists no stylesheet in
+ * `manifest.client`; the one Tailwind sheet belongs to the root layout, node 0, whose module exports `stylesheets`
+ * (build/server/nodes/0.js). Loading that node loads the root layout's code, which reads the process note, so this runs
+ * after the handler has loaded. Without it the page is plain, which is all a missing or odd entry costs; gate.test.ts
+ * checks the built server has it.
  */
 async function buildStylesheet(): Promise<string | undefined> {
-  const loaded = await import("#kit/manifest").catch(() => undefined);
-  const sheets = loaded?.manifest?.client?.stylesheets;
-  const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
-  return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
+  try {
+    const { manifest } = await import("#kit/manifest");
+    const sheets = (await manifest?.nodes?.[0]?.())?.stylesheets;
+    const first: unknown = Array.isArray(sheets) ? sheets[0] : undefined;
+    return typeof first === "string" && BUILD_STYLESHEET.test(first) ? `/${first}` : undefined;
+  } catch {
+    // Any shape the manifest or node 0 takes, thrown or rejected, only leaves the refusal page plain.
+    return undefined;
+  }
 }
 
 const standIns = (globalThis as Record<symbol, unknown>)[STAND_INS_KEY] as StandIns | undefined;
-const stylesheet = await buildStylesheet();
 const note: ProcessNote = {
   config,
-  ...(stylesheet === undefined ? {} : { stylesheet }),
   ...(standIns === undefined ? {} : { standIns }),
   requests: new AsyncLocalStorage<RequestNote>(),
   shutdown: { draining: [], close: [] },
@@ -77,6 +81,7 @@ const { handler } = await import("#kit/handler").catch((error: unknown): never =
   }
   process.exit(1);
 });
+note.stylesheet = await buildStylesheet();
 
 /**
  * Every response carries these; the app replaces the CSP on its pages (hooks.server.ts). With Search and AI listing off
