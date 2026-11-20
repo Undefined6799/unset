@@ -30,18 +30,22 @@ const showForm = $derived(data.open && !data.signedIn && !data.received);
       <p>{T.closed}</p>
     {:else}
       <form method="POST" id="request-invite">
-        <Label for="email">{T.emailLabel}</Label>
-        <Input id="email" name="email" type="email" autocomplete="email" required maxlength={254} />
-        <Label><input type="checkbox" name="ageAck" value="yes" required /> {T.age(data.minAge)}</Label>
+        <!-- Each field in a paragraph, so the shell's paragraph spacing keeps them apart (no classes in pages). -->
+        <p>
+          <Label for="email">{T.emailLabel}</Label>
+          <Input id="email" name="email" type="email" autocomplete="email" required maxlength={254} />
+        </p>
+        <p><Label><input type="checkbox" name="ageAck" value="yes" required /> {T.age(data.minAge)}</Label></p>
         {#if data.countryRule}
-          <Label><input type="checkbox" name="countryAck" value="yes" required /> {T.country}</Label>
+          <p><Label><input type="checkbox" name="countryAck" value="yes" required /> {T.country}</Label></p>
         {/if}
         <div hidden>
           <label for="website">{T.trapLabel}</label>
           <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
         </div>
       </form>
-      <p>{T.privacy} <a href="/legal/privacy">{T.notice}</a></p>
+      <!-- Fine print: smaller than the form, as the card's lead is. -->
+      <p><small>{T.privacy} <a href="/legal/privacy">{T.notice}</a></small></p>
     {/if}
   </Card.Content>
   {#if showForm}
