@@ -32,12 +32,24 @@ function converse(
   mode: SmtpMode,
   tlsOptions: { cert: string; key: string },
   record: Pick<TestSmtp, "received" | "logins">,
+  slowMs: number,
 ): void {
   const seen: ReceivedMail = { auth: "", from: "", to: "", data: "" };
   let current: Socket = socket;
   let overTls = mode === "implicit";
   let inData = false;
   let buffer = "";
+  // Every reply waits `slowMs`: a server that keeps answering, each answer inside the client's idle timeout.
+  const reply = (text: string, end = false): void => {
+    const out = current;
+    const go = (): void => {
+      if (out.destroyed) return;
+      if (end) out.end(text);
+      else out.write(text);
+    };
+    if (slowMs > 0) setTimeout(go, slowMs);
+    else go();
+  };
   const command = (line: string): string => {
     if (/^EHLO /i.test(line)) {
       return mode === "starttls" && !overTls
@@ -68,7 +80,7 @@ function converse(
         buffer = buffer.slice(end + 5);
         inData = false;
         record.received.push({ ...seen });
-        current.write("250 queued\r\n");
+        reply("250 queued\r\n");
         continue;
       }
       const at = buffer.indexOf("\r\n");
@@ -86,17 +98,20 @@ function converse(
         buffer = "";
         return;
       }
-      const reply = command(line);
-      if (/^QUIT$/i.test(line)) current.end(reply);
-      else current.write(reply);
+      reply(command(line), /^QUIT$/i.test(line));
     }
   };
   socket.on("data", onData);
-  socket.write("220 test ESMTP\r\n");
+  reply("220 test ESMTP\r\n");
 }
 
-/** A one-message-per-connection SMTP server on 127.0.0.1. `stall` accepts and never greets. */
-export async function startTestSmtp(options: { stall?: boolean; mode?: SmtpMode } = {}): Promise<TestSmtp> {
+/**
+ * A one-message-per-connection SMTP server on 127.0.0.1. `stall` accepts and never greets; `slowMs` delays every
+ * reply by that many milliseconds.
+ */
+export async function startTestSmtp(
+  options: { stall?: boolean; mode?: SmtpMode; slowMs?: number } = {},
+): Promise<TestSmtp> {
   const mode = options.mode ?? "implicit";
   const dir = mkdtempSync(join(tmpdir(), "smtp-test-"));
   const certPath = join(dir, "cert.pem");
@@ -117,7 +132,7 @@ export async function startTestSmtp(options: { stall?: boolean; mode?: SmtpMode 
     open.add(socket);
     socket.on("close", () => open.delete(socket));
     socket.on("error", () => undefined);
-    if (options.stall !== true) converse(socket, mode, { cert, key }, record);
+    if (options.stall !== true) converse(socket, mode, { cert, key }, record, options.slowMs ?? 0);
   };
   const server = mode === "implicit" ? createServer({ cert, key }, onConnection) : netServer(onConnection);
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));

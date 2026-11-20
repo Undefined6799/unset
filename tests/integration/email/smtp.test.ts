@@ -93,4 +93,17 @@ describe("createSmtpMailer", () => {
       await smtp.close();
     }
   });
+
+  it("stops the conversation at the deadline, so a slow server never gets the message", async () => {
+    // Each reply comes inside the idle timeout, so only the deadline can end the send. Were the send left running
+    // after "failed", the message would land later, and the caller, told it failed, would let the visitor ask again.
+    const smtp = await startTestSmtp({ slowMs: 150 });
+    try {
+      expect(await mailer(smtp.port, { ca: smtp.cert }).send(MAIL, AbortSignal.timeout(400))).toBe("failed");
+      await new Promise((done) => setTimeout(done, 1500));
+      expect(smtp.received).toHaveLength(0);
+    } finally {
+      await smtp.close();
+    }
+  });
 });
