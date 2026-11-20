@@ -1,11 +1,11 @@
 # 0071 — Limits sized for thousands of members, and web's own PDS calls marked
 
-Status: Accepted by Alex, 2026-11-20, against dbfc459 (his typed line naming that reviewed head; #1820 merged at
-02:52:01Z). This status paragraph, the index row and the ADR 0001 acceptance line were added afterwards in the next
-P2.17 pull request. Step P1.21j. It loosens security controls (ADR 0059 decision 1). Alex, 2026-11-20, on upload limits:
-"make a very generous limit … I don't want to discover that these are issues once the users are scaling up". The project
-is not live. It supersedes ADR 0042's two ceiling values (Decision 2) and ADR 0031 Decision 1's `app_signin` matcher and
-value. Neither accepted record is edited.
+Status: Accepted by Alex, 2026-11-20 02:51Z, against dbfc459 (his line "Merge 1820 at dbfc459", typed in the project
+chat after the coordinator had reviewed that head and CI was green; merged as 6b65247). This status paragraph, the index
+row and the ADR 0001 acceptance line were added afterwards in the next P2.17 pull request. Step P1.21j. It loosens
+security controls (ADR 0059 decision 1). Alex, 2026-11-20, on upload limits: "make a very generous limit … I don't want
+to discover that these are issues once the users are scaling up". The project is not live. It supersedes ADR 0042's two
+ceiling values (Decision 2) and ADR 0031 Decision 1's `app_signin` matcher and value. Neither accepted record is edited.
 
 ## Context
 P1.21h (`deployment/edge/limits.budget.test.ts`, `interfaces/web/src/lib/server/limits.budget.test.ts`) gave every
