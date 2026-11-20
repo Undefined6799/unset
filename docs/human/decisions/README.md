@@ -79,4 +79,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0071](0071-limits-for-thousands-of-members.md) | Limits sized for thousands of members; web marks its own PDS calls with a key so the edge gives them their own zones; app_signin counts only the login and join posts (P1.21j) | Accepted 2026-11-20 |
 | [0072](0072-profile-page-layout.md) | The profile chooses its page layout, sidebar or compact, through an optional layout field (P1.21n) | Accepted 2026-11-20 |
 | [0073](0073-text-card-rich-editor.md) | The Text card is written in a Milkdown editor over the plain field, loaded on open; the CSP adds the one Trusted Types name `ProseMirrorClipboard` (P1.21u) | Proposed (awaiting Alex) |
-| [0075](0075-docs-site-on-the-staging-edge.md) | The docs site at docs.unset.sh is a third site on the staging edge, served as files from the checkout with its own CSP and zone (P1.21w) | Proposed (awaiting Alex) |
+| [0075](0075-docs-site-on-the-staging-edge.md) | The docs site at docs.unset.sh is a third site on the staging edge, served as files from the checkout with its own CSP and zone (P1.21w) | Accepted 2026-11-20 |
