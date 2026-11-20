@@ -7,8 +7,10 @@ import {
   type AvatarShape,
   type Card,
   type ProfileFields,
+  type ProfileLayout,
   pageCards,
   readAvatarShape,
+  readProfileLayout,
   readProfileRecord,
 } from "@unset/domains-profile";
 import type { CardList, PdsResult, StoredRecord } from "@unset/infrastructure-pds";
@@ -20,6 +22,8 @@ export type OwnProfile =
       readonly profile: ProfileFields | null;
       /** The avatar's crop; round when unset or unknown. */
       readonly avatarShape: AvatarShape;
+      /** The page layout (ADR 0072); sidebar when unset or unknown. */
+      readonly layout: ProfileLayout;
       readonly cards: readonly Card[];
       /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
       readonly cardsComplete: boolean;
@@ -49,6 +53,7 @@ export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile
     kind: "ok",
     profile: fields === null || fields.displayName === "" ? null : fields,
     avatarShape: readAvatarShape(record),
+    layout: readProfileLayout(record),
     cards: pageCards(record, cards.value.cards),
     cardsComplete: cards.value.complete,
     cardsOverflow: cards.value.overflow,

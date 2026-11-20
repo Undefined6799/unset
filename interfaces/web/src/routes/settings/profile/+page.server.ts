@@ -9,6 +9,8 @@ import {
   DISCOVERABILITY_LIMITS,
   EMPTY_PROFILE,
   type ProfileFields,
+  type ProfileLayout,
+  readProfileLayout,
   readProfileRecord,
 } from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
@@ -26,9 +28,13 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
     loadProfileRecord(services().pds.pdsCall, ctx, did),
     services().discoverability.get(did, locals.deadline),
   ]);
-  let profile: ProfileFields | null = null;
+  let profile: (ProfileFields & { readonly layout: ProfileLayout }) | null = null;
   if (read.kind === "ok") {
-    profile = read.value === null ? EMPTY_PROFILE : readProfileRecord(read.value.value);
+    const stored = read.value?.value;
+    profile = {
+      ...(stored === undefined ? EMPTY_PROFILE : readProfileRecord(stored)),
+      layout: readProfileLayout(stored),
+    };
   } else {
     const location = pdsSignInRedirect(read);
     if (location !== null) redirect(303, location);
