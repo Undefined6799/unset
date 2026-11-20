@@ -67,6 +67,7 @@ import { createHealth, createRateLimiter, type RateLimiter } from "@unset/shared
 import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
 import { pdsIssuerOf } from "./config.ts";
+import { draftLinks } from "./draft-links.ts";
 import { type EmailRefresher, emailRefresher } from "./email-refresh.ts";
 import { recordInviteDenied } from "./invite-audit.ts";
 import { policiesFor } from "./limits.ts";
@@ -320,6 +321,8 @@ async function build(): Promise<Services> {
     open: uploadsOpen({ origin: config.PUBLIC_ORIGIN, env: config.UNSET_ENV, pdsHostname: config.PDS_HOSTNAME }),
     store: createImageStore(pool),
     processor: reviewProcessor(guard),
+    /** The owner's preview link to one of their own draft versions (book P2.19), on the media origin. */
+    previewLink: draftLinks(config.DRAFT_URL_KEYRING, config.MEDIA_ORIGIN),
   };
 
   // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
