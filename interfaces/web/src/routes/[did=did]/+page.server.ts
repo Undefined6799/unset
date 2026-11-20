@@ -107,7 +107,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     noindex: true,
     wide: true,
   };
-  const cards = own.kind === "ok" ? cardViews(own.cards) : [];
+  const cards = own.kind === "ok" ? cardViews(own.cards, own.versions) : [];
   return {
     shell,
     account,

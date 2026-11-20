@@ -29,6 +29,19 @@ describe("card views", () => {
     });
   });
 
+  test("a_card_carries_its_version_only_where_the_page_gave_one", () => {
+    const readme = { kind: "readme", text: "Hi" } as const;
+    const views = cardViews(
+      [
+        { key: "a", width: "full", content: readme },
+        { key: "b", width: "full", content: readme },
+      ],
+      new Map([["a", "bafyv"]]),
+    );
+    expect(views.map((view) => view.version)).toEqual(["bafyv", undefined]);
+    expect("version" in (cardViews([{ key: "a", width: "full", content: readme }])[0] ?? {})).toBe(false);
+  });
+
   test("an_email_button_carries_its_address_and_a_link_button_none", () => {
     const [card] = cardViews([
       {

@@ -102,6 +102,8 @@ export type CardShown =
 
 export type CardView = {
   readonly key: string;
+  /** On the owner's page, the record CID the card was read at: what an edit of it names (ADR 0074). */
+  readonly version?: string;
   readonly width: CardWidth;
   readonly surface: CardSurface;
   readonly content: CardContent;

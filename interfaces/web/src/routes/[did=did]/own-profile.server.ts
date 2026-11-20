@@ -6,9 +6,11 @@
 import {
   type AvatarShape,
   type Card,
+  type CardVersion,
   type ProfileFields,
   type ProfileLayout,
   pageCards,
+  parseCardVersion,
   readAvatarShape,
   readProfileLayout,
   readProfileRecord,
@@ -25,6 +27,8 @@ export type OwnProfile =
       /** The page layout (ADR 0072); sidebar when unset or unknown. */
       readonly layout: ProfileLayout;
       readonly cards: readonly Card[];
+      /** Each card's record CID by key, the version its editor opens (ADR 0074); a card without a valid one is absent. */
+      readonly versions: ReadonlyMap<string, CardVersion>;
       /** False when the read stopped early (card-records.ts budget): the page says some cards are missing. */
       readonly cardsComplete: boolean;
       /** True when more cards are stored than the page shows: the page asks the member to delete one. */
@@ -55,6 +59,12 @@ export async function loadOwnProfile(reads: OwnProfileReads): Promise<OwnProfile
     avatarShape: readAvatarShape(record),
     layout: readProfileLayout(record),
     cards: pageCards(record, cards.value.cards),
+    versions: new Map(
+      cards.value.cards.flatMap((stored) => {
+        const version = parseCardVersion(stored.cid);
+        return version === null ? [] : [[stored.key, version] as const];
+      }),
+    ),
     cardsComplete: cards.value.complete,
     cardsOverflow: cards.value.overflow,
   };
