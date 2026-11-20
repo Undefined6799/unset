@@ -210,8 +210,11 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
       closed = true;
       for (const slot of slots) {
         if (slot.restart !== null) clearTimeout(slot.restart);
-        if (slot.busy !== null) clearTimeout(slot.busy.timer);
+        const busy = slot.busy;
+        slot.busy = null;
+        if (busy !== null) clearTimeout(busy.timer);
         stop(slot);
+        busy?.job.done({ kind: "refused", code: "image.busy" });
       }
       for (const job of waiting.splice(0)) job.done({ kind: "refused", code: "image.busy" });
     },
@@ -223,8 +226,8 @@ const refused = (code: Extract<ProcessResult, { kind: "refused" }>["code"]): Pro
 
 /**
  * What a child answered, checked as untrusted: an exploited decoder controls its own answer, so the parent recomputes
- * every SHA-256 and accepts only the versions it asked for, each once, within its byte limit and with sane sizes, and
- * only the refusal codes it knows. Anything else is null: the job is `image.cannot_use` and the child is replaced.
+ * every SHA-256 and accepts only the versions it asked for, each once, within its byte limit and the size it asked
+ * for, and only the refusal codes it knows. Anything else is null: the job is `image.cannot_use` and the child is replaced.
  */
 function toProcessResult(result: unknown, job: Job): ProcessResult | null {
   const cannot = null;
@@ -238,10 +241,12 @@ function toProcessResult(result: unknown, job: Job): ProcessResult | null {
   const specs = new Map(job.versions.map((v) => [`${v.name}.${v.format}`, v]));
   const versions: ImageVersion[] = [];
   for (const v of result.versions as unknown[]) {
-    if (!isRecord(v)) return cannot;
-    const spec = specs.get(`${String(v.name)}.${String(v.format)}`);
+    if (!isRecord(v) || typeof v.name !== "string" || typeof v.format !== "string") return cannot;
+    const spec = specs.get(`${v.name}.${v.format}`);
     if (spec === undefined || !(v.bytes instanceof Uint8Array) || v.bytes.length === 0) return cannot;
-    if (!size(v.width, MAX_VERSION_EDGE) || !size(v.height, MAX_VERSION_EDGE)) return cannot;
+    // `width` bounds only the width, so its height may reach the source's own edge limit.
+    const tallest = spec.fit === "width" ? job.limits.maxEdge : spec.size;
+    if (!size(v.width, spec.size) || !size(v.height, tallest)) return cannot;
     specs.delete(`${spec.name}.${spec.format}`);
     // The child leaves out an optional version it could not fit; one that arrives over its cap anyway is dropped.
     if (v.bytes.length > spec.maxBytes) {
@@ -268,6 +273,5 @@ const REFUSALS: ReadonlySet<ImageRefusal> = new Set<ImageRefusal>([
   "image.timeout",
 ]);
 /** No version is ever larger than this a side: the largest spec is the 2560 px main version. */
-const MAX_VERSION_EDGE = 4096;
 const size = (value: unknown, max: number): value is number =>
   typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max;

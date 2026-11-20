@@ -401,7 +401,7 @@ describe("the pool", () => {
 
   test("pool.malformed_answers: null or a misshapen answer is cannot_use, never a crash of the parent", async () => {
     const input = new Uint8Array(await anyJpeg());
-    for (const name of ["null-child.ts", "bad-versions-child.ts"]) {
+    for (const name of ["null-child.ts", "bad-versions-child.ts", "object-name-child.ts"]) {
       const broken = createImagePool({
         children: 1,
         queueMax: 1,
@@ -424,6 +424,30 @@ describe("the pool", () => {
       }
     }
   }, 20_000);
+
+  test("ingest.tall: a width-only display version of a tall picture may be taller than any main version", async () => {
+    const tall = await solid(600, 6000).jpeg().toBuffer();
+    const result = ok(await run(tall, [MAIN, SMALL]));
+    expect(result.versions.find((v) => v.name === "w480")).toMatchObject({ width: 480, height: 4800 });
+  });
+
+  test("pool.close_settles: closing the pool answers a job a child is working on", async () => {
+    const ready = eventOf("ready");
+    const hanging = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 60_000,
+      addressSpaceMb: 4096,
+      childPath: fixture("hang-child.ts"),
+      onEvent: ready.onEvent,
+    });
+    await ready.happened;
+    const pending = hanging.process(new Uint8Array(await anyJpeg()), LIMITS, []);
+    // Let the job reach the child before closing.
+    await new Promise((resolve) => setImmediate(resolve));
+    hanging.close();
+    expect(await pending).toEqual({ kind: "refused", code: "image.busy" });
+  });
 
   test("pool.recovers: a pool that went down comes back up once a child starts", async () => {
     // The fixture child counts its starts here (it runs with an empty environment, so its tmpdir is /tmp).

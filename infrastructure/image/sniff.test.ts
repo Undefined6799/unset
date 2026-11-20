@@ -31,4 +31,11 @@ describe("sniff.table", () => {
     ["tiff", bytes([0x49, 0x49, 0x2a, 0], new Array(12).fill(0))],
     ["short", bytes([0xff, 0xd8])],
   ])("%s is refused", (_name, input) => expect(sniffImage(input)).toBeNull());
+
+  test("an ftyp box declaring megabytes of brands is refused without walking them", () => {
+    const huge = new Uint8Array(30_000_000);
+    huge.set(bytes(be32(huge.length), "ftyp", "avif", be32(0)));
+    huge.fill(0x61, 16);
+    expect(sniffImage(huge)).toBeNull();
+  });
 });

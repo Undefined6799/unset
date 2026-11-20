@@ -45,11 +45,21 @@ function webpKind(bytes: Uint8Array): Sniffed {
   return "webp";
 }
 
-/** The ISO-BMFF `ftyp` box: `avif` is a still AVIF, `avis` an image sequence; HEIC and anything else are refused. */
+/**
+ * The ISO-BMFF `ftyp` box: `avif` is a still AVIF, `avis` an image sequence; HEIC and anything else are refused. Real
+ * boxes list a handful of brands, so one declaring more than `MAX_FTYP` bytes is refused rather than walked.
+ */
 function isoKind(bytes: Uint8Array): Sniffed {
-  const end = Math.min(u32(bytes, 0), bytes.length);
-  const brands: string[] = [ascii(bytes, 8, 4)];
-  for (let at = 16; at + 4 <= end; at += 4) brands.push(ascii(bytes, at, 4));
-  if (brands.includes("avis")) return "animated";
-  return brands.includes("avif") ? "avif" : null;
+  const declared = u32(bytes, 0);
+  if (declared > MAX_FTYP) return null;
+  const end = Math.min(declared, bytes.length);
+  let avif = false;
+  for (let at = 8; at + 4 <= end; at += at === 8 ? 8 : 4) {
+    const brand = ascii(bytes, at, 4);
+    if (brand === "avis") return "animated";
+    if (brand === "avif") avif = true;
+  }
+  return avif ? "avif" : null;
 }
+
+const MAX_FTYP = 4096;
