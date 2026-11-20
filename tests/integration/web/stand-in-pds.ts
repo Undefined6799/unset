@@ -116,10 +116,11 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         });
       return json(404, { error: "MethodNotImplemented" });
     }
-    // @atproto/pds 0.5.51 parses applyWrites and putRecord bodies up to 1,000,000 bytes (applyWrites.js:50,
-    // putRecord.js:35; the image test checks applyWrites) and other JSON bodies up to 150 KiB (dist/index.js:155).
+    // @atproto/pds 0.5.51 parses applyWrites, createRecord and putRecord bodies up to 1,000,000 bytes
+    // (applyWrites.js:50, createRecord.js:35, putRecord.js:35; the image test checks applyWrites) and other JSON bodies
+    // up to 150 KiB (dist/index.js:155).
     const raw = await request.text();
-    const bodyLimit = method === "applyWrites" || method === "putRecord" ? 1_000_000 : 150 * 1024;
+    const bodyLimit = method === "deleteRecord" ? 150 * 1024 : 1_000_000;
     if (Buffer.byteLength(raw) > bodyLimit) {
       return json(413, { error: "PayloadTooLarge", message: "request entity too large" });
     }
