@@ -694,3 +694,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
   ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
   are not edited.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.

@@ -47,6 +47,7 @@ const FIXTURES: Record<string, Build> = {
   "profile.headline": P((n) => ({ headline: text(n) })),
   "profile.avatarMaxSize": P((n) => ({ avatar: blob(n) })),
   "profile.avatarShapeBytes": P((n) => ({ avatarShape: text(n) })),
+  "profile.layoutBytes": P((n) => ({ layout: text(n) })),
   "profile.location": P((n) => ({ location: text(n) })),
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
   "profile.cardsMax": P((n) => ({ cards: many(n, "3jzfcijpj2z2a") })),
