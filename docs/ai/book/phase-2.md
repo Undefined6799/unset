@@ -3372,8 +3372,8 @@ Diagram: none.
 ### P2.16 — Image fingerprint stage (interface, local PDQ, fake check)
 
 Book edit 2026-11-20-shared-images (ADR 0070, Proposed): superseded until moderation is planned. ADR 0070 puts an empty
-inspection port after processing and before publish, where this check mounts; production refuses to publish images
-while nothing is mounted, so there is no production boot refusal and no fake to build now.
+inspection port after processing, where this check mounts; production refuses image uploads at intake while no real
+inspection is mounted, and there is no fake to build now.
 Tags: [SEC] [MOD]            Depends on: P2.16b, P1.02, P1.12, P1.15            Plan: §5.8 "Fingerprints", "Fingerprint check on everything"; Alex decision 2026-10-03 02:58Z (real check deferred to Phase 5)
 Where: `domains/moderation/fingerprint/{fingerprint-check.ts, gate.ts, uploads-enabled.ts, README.md}`;
   `infrastructure/arachnid/fingerprint-check.fake.ts` (the fake, beside the folder where P5.07b adds the real client;
@@ -3532,7 +3532,8 @@ flowchart LR
 Book edit 2026-11-20-shared-images (ADR 0070, Proposed): the stages, formats and versions are ADR 0070's (points 2 and 3): JPEG, PNG,
 WebP and AVIF up to 30 MB and 70 megapixels; a JPEG main version up to 2560 px and 2,000,000 bytes; AVIF and WebP
 display versions at 480, 960 and 1600 px; a square avatar crop. The avatar/cover purposes and the variant table below
-are superseded, sharp lives in `infrastructure/image/`, and step 5's gate is ADR 0070's inspection port.
+are superseded, sharp lives in `infrastructure/image/` and runs only in the separate no-network process
+`interfaces/review/` (not a child of web), and step 5's gate is ADR 0070's inspection port.
 Tags: [SEC]            Depends on: P2.16, P2.16b            Plan: §2 rule 10; §6.1 image budget; §5.4 drafts
 Where: `domains/content/media/image/{sniff.ts, child.ts, pool.ts, variants.ts, ingest.ts, README.md}`,
   `interfaces/http/image-child.ts` (the child entry point)
