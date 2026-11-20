@@ -3,49 +3,50 @@ title: Layers
 weight: 2
 ---
 
-Folder dependencies are an allowlist. `MATRIX` in `scripts/lint/.dependency-cruiser.cjs` is the definition: an edge no row lists fails as `not-in-allowed`. The `forbidden` rules restate the same boundaries so a failure names the one it breaks. The full checked table, including review-only rows, is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
+Folder dependencies are an allowlist. `MATRIX` in `scripts/lint/.dependency-cruiser.cjs` is the definition: an edge no row lists fails as `not-in-allowed`. The `forbidden` rules restate the same boundaries so a failure names the one it breaks. The full checked table is [`docs/human/architecture.md`](https://github.com/Undefined6799/unset/blob/main/docs/human/architecture.md).
 
-From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reached only through `index.ts` (rule `infra-shared-via-index`, DC-2). A domain reaches another domain only through that domain's `index.ts` (`domain-cross-via-index`). From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names (rule `domain-via-exports`, DC-2).
+From outside a workspace, `infrastructure/<name>/` and `shared/<name>/` are reached only through `index.ts` (`infra-shared-via-index`, DC-2). A domain reaches another domain only through that domain's `index.ts` (`domain-cross-via-index`). From `apps/`, `interfaces/`, `infrastructure/` or `shared/`, a domain is reached only through its `index.ts` or a file its `package.json` `exports` names (`domain-via-exports`, DC-2).
 
 ## Folders in the tree
 
 | Layer | Present |
 | --- | --- |
 | `apps/` | `web` |
-| `interfaces/` | `http` |
-| `domains/` | `identity` |
-| `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session`, `storage` |
-| `shared/` | `config`, `errors`, `host-pin`, `http`, `islands`, `lexicons`, `log`, `ui`, `ui-build` |
-| `deployment/` | `edge`, `images`, `postgres`, `preflight`, `env`, the two compose files |
+| `interfaces/` | `web`, `indexer`, `pds-admin` |
+| `domains/` | `identity`, `profile` |
+| `infrastructure/` | `postgres`, `pds`, `net-guard`, `seal`, `audit`, `session`, `storage`, `firehose` |
+| `shared/` | `config`, `errors`, `host-pin`, `http`, `lexicons`, `log`, `ui`, `ui-build`, `admin-envelope`, `safe-href` |
+| `deployment/` | `edge`, `images`, `pds`, `postgres`, `preflight`, `env`, `sigstore`, the compose files |
 
-Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` is the UI in the tree. It holds no product rules and no database access (`app-only-shared`). `interfaces/http` is the only interface in the tree; the other processes the plan names get their folder with their first route. `domains/identity` is the only product-rule package. `infrastructure/session` holds the browser session store and does not import the Postgres driver; `interfaces/http/compose.ts` passes the pool in.
+Decision 34 ([`docs/ai/PLAN.md`](https://github.com/Undefined6799/unset/blob/main/docs/ai/PLAN.md)): a folder appears when its first code lands. `apps/web` holds screens only (`app-only-shared`). `interfaces/web` is the web server. `domains/identity` and `domains/profile` are the product-rule packages. `infrastructure/session` does not import the Postgres driver; `interfaces/web/src/lib/server/compose.ts` and `interfaces/indexer/compose.ts` each pass a pool in.
 
 ## Allowlist
 
-`from` is the importing folder. "May reach" is that row of `MATRIX`, narrowed by the forbidden rule named in the last column where one changes the outcome. npm and Node built-ins are abbreviated.
+`from` is the importing folder. npm and Node built-ins are abbreviated. The last column is the forbidden rule that narrows the row.
 
 | Row | From | May reach | Narrowed by |
 | --- | --- | --- | --- |
 | app | `apps/<name>/` | itself, `shared/`, npm | `no-app-to-app`, `app-only-shared` |
-| interface | `interfaces/<name>/` except the paths `ADMIN_SERVICES` names | itself, `domains/`, `infrastructure/`, `shared/`, Node, npm | `no-interface-to-interface`, `domain-via-exports` |
-| interface-http-render | `interfaces/http/` | `apps/web/render.tsx` | `app-render-entry-only` |
-| interface-http-render-build | `interfaces/http/web/render-entry.ts` | `@unset/apps-web/server` | the one unresolved import (`couldNotResolve: true`) |
+| interface | `interfaces/<name>/` except `ADMIN_SERVICES` | itself, `domains/`, `infrastructure/`, `shared/`, Node, npm | `no-interface-to-interface`, `domain-via-exports` |
+| interface-web-sveltekit | `interfaces/web/` | `$app/…` | unresolved on purpose |
+| interface-web-components | `interfaces/web/` | `apps/web/lib/`, `app.css`, `theme.css`, `legal/*.md` | `web-components-only` |
+| interface-web-build | `interfaces/web/server.ts` | `#kit/handler`, `#kit/manifest` | unresolved on purpose |
 | interface-admin-render | `interfaces/admin/` | `apps/admin/render.tsx` | `app-render-entry-only` |
-| admin-service | `interfaces/pds-admin/`, `interfaces/chat-admin/` | itself, `shared/admin-envelope/`, Node built-ins | `admin-services-zero-deps` |
-| domain | `domains/<name>/` | itself, another domain's `index.ts`, `shared/errors/`, `shared/lexicons/`, type-only `shared/config/` | `domain-pure`, `domain-no-io-builtins` (no `fs`, `net`, `http`, `https`, `http2`, `dgram`, `dns`, `tls`, `child_process`, `worker_threads`) |
-| infrastructure | `infrastructure/<name>/` except net-guard | itself, `net-guard/`, `seal/`, `domains/`, `shared/`, Node, npm | `infrastructure-not-entry`, `domain-via-exports` |
+| admin-service | `interfaces/pds-admin/`, `interfaces/chat-admin/` | itself, `shared/admin-envelope/`, Node | `admin-services-zero-deps` |
+| domain | `domains/<name>/` | itself, another domain's `index.ts`, `shared/errors/`, `shared/lexicons/`, type-only `shared/config/` | `domain-pure`, `domain-no-io-builtins` |
+| infrastructure | `infrastructure/<name>/` except net-guard | itself, `net-guard/`, `seal/`, `domains/`, `shared/`, Node, npm | `infrastructure-not-entry` |
 | net-guard | `infrastructure/net-guard/` | itself, `undici`, Node | `net-guard-leaf` |
-| shared | `shared/` except the leaf folders below | `shared/`, Node, npm | `shared-leaf` |
-| shared-lexicons-scripts | `shared/lexicons/scripts/` | `shared/lexicons/`, npm, and `fs`, `path`, `os`, `url`, `child_process` | `lexicon-scripts-not-imported` |
+| shared | `shared/` except `LEAF_SHARED` | `shared/`, Node, npm | `shared-leaf` |
+| shared-lexicons-scripts | `shared/lexicons/scripts/` | `shared/lexicons/`, npm, `fs`, `path`, `os`, `url`, `child_process` | `lexicon-scripts-not-imported` |
 | shared-ui-lexicons | `shared/ui/`, `shared/lexicons/` | itself, npm | |
-| shared-ui-islands | `shared/ui/` | `shared/islands/index.ts` | |
-| shared-islands | `shared/islands/` | itself, npm | no Node built-in on this row |
+| shared-ui-safe-href | `shared/ui/` | `shared/safe-href/index.ts` | |
+| shared-safe-href | `shared/safe-href/` | itself | no npm, no Node |
 | shared-ui-build | `shared/ui-build/` | itself, type-only `shared/ui/index.ts`, npm | |
 | shared-admin-envelope | `shared/admin-envelope/` | itself, Node | `allowlist-zero-deps` |
 | shared-host-pin | `shared/host-pin/` | itself, Node | |
-| deployment-preflight | `deployment/preflight/` | itself, `deployment/edge/adapted.ts`, `deployment/edge/adapted-rules.ts`, `shared/host-pin/index.ts`, the `yaml` package, Node | `edge-not-preflight` is one way: the edge never imports the preflight |
-| tooling | `scripts/`, `tests/`, `*.test.ts`, root config, an app's `vite.config.ts` | anything | `no-product-imports-tooling-set`: product code never imports this set |
+| deployment-preflight | `deployment/preflight/` | itself, `deployment/edge/adapted.ts`, `adapted-rules.ts`, `shared/host-pin/index.ts`, `yaml`, Node | `edge-not-preflight` |
+| tooling | `scripts/`, `tests/`, `*.test.ts`, root config, an app `vite.config.ts` | anything | `no-product-imports-tooling-set` |
 
-An app's `vite.config.ts` may also import Node built-ins and `scripts/ui/css-scope.ts` (`app-build-config-imports`). Nothing imports that file. A `*.island.tsx` may import `shared/ui/`, `shared/islands/` and `react/jsx-runtime` (`island-import-boundary`). `vendor-sdk-one-adapter` allows each SDK in `SDK_ADAPTERS` on one adapter path. The paths on this tree are `infrastructure/postgres/` (`pg`), `infrastructure/net-guard/` (`undici`), `infrastructure/pds/` (`@atproto/oauth-client-node`, `@atproto/api`), `infrastructure/seal/` (`age-encryption`), `infrastructure/storage/` (`@aws-sdk/client-s3`) and `shared/lexicons/` (`@atproto/lex*`). The same list names the path `apps/chat/matrix/` for `matrix-js-sdk`. `ADMIN_SERVICES` names `interfaces/pds-admin/` and `interfaces/chat-admin/`. `RENDER_ENTRIES.admin` names `apps/admin/render.tsx`. `ZERO_DEP_ALLOWLIST` and the `shared-admin-envelope` row name `shared/admin-envelope/`. Those strings are paths in `scripts/lint/.dependency-cruiser.cjs`.
+`LEAF_SHARED` is `ui`, `ui-build`, `lexicons`, `admin-envelope`, `host-pin` and `safe-href`. `app-build-config-imports` still names `scripts/ui/css-scope.ts`; that file is not on the tree. In the web process only server files reach a domain or infrastructure (`svelte-screens-no-core`). `vendor-sdk-one-adapter` allows each SDK in `SDK_ADAPTERS` on one path. On this tree those paths include `infrastructure/postgres/`, `net-guard/`, `pds/`, `seal/`, `storage/` and `firehose/`, and `shared/lexicons/`. The same list names `apps/chat/matrix/` for `matrix-js-sdk`; that folder is not on the tree.
 
-Adapters are built in the process's `compose.ts` (`interfaces/http/compose.ts` is the one that wires Postgres, net-guard, the PDS client, the sealer and the session store). `main.ts` imports `compose.ts` and does not import `infrastructure/`.
+Adapters are built in a process's `compose.ts`. `interfaces/web/server.ts` does not import `infrastructure/`.
