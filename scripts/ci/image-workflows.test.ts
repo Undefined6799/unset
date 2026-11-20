@@ -327,7 +327,14 @@ describe("image workflows", () => {
     );
     // The rest of web's settings live in its test env file, which must name every one web requires.
     const testEnv = readFileSync(join(ROOT, "deployment", "images", "web.test.env"), "utf8");
-    for (const key of ["PDS_ADMIN_URL", "PDS_ADMIN_WEB_KID", "PDS_DID", "OBJECT_STORE_URL", "OBJECT_STORE_ACCESS_ID"])
+    for (const key of [
+      "PDS_ADMIN_URL",
+      "PDS_ADMIN_WEB_KID",
+      "PDS_DID",
+      "OBJECT_STORE_URL",
+      "OBJECT_STORE_ACCESS_ID",
+      "REVIEW_URL",
+    ])
       expect(testEnv).toMatch(new RegExp(`^${key}=.+$`, "m"));
     // The app and a throwaway Postgres share one job network; the app waits for nothing else.
     expect(health).toMatch(/docker run -d "\$\{pg\[@\]\}" "\$POSTGRES_IMAGE"/);
