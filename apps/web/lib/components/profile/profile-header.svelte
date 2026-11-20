@@ -31,6 +31,7 @@ import AvatarEditor from "./avatar-editor.svelte";
 let {
   name,
   letter,
+  avatar = null,
   handle = null,
   did,
   headline = "",
@@ -43,6 +44,13 @@ let {
 }: {
   name: string;
   letter: string;
+  /**
+   * The avatar picture, filled in by the shared image work (ADR 0070) with a media-origin URL, never a blob or store
+   * URL; null shows the letter. A plain img, not Bits Avatar.Image: bits-ui 2.20.6 keeps that image at display:none
+   * until its script marks it loaded (dist/bits/avatar/avatar.svelte.js), and the public page runs no script. Its alt
+   * is empty, since the name sits right beside it.
+   */
+  avatar?: { readonly url: string; readonly width: number; readonly height: number } | null;
   /** The handle line; null leaves it out (no profile yet). */
   handle?: string | null;
   did: string;
@@ -124,11 +132,15 @@ function toggled(event: ToggleEvent): void {
     onpointerleave={hoverOut}
     onclick={pin}
   >
-    <Avatar.Root class="size-full {rounded}">
-      <Avatar.Fallback aria-hidden="true" class="text-2xl font-semibold text-muted-foreground md:text-3xl {rounded}"
-        >{letter}</Avatar.Fallback
-      >
-    </Avatar.Root>
+    {#if avatar !== null}
+      <img src={avatar.url} width={avatar.width} height={avatar.height} alt="" class="size-full object-cover {rounded}" />
+    {:else}
+      <Avatar.Root class="size-full {rounded}">
+        <Avatar.Fallback aria-hidden="true" class="text-2xl font-semibold text-muted-foreground md:text-3xl {rounded}"
+          >{letter}</Avatar.Fallback
+        >
+      </Avatar.Root>
+    {/if}
     <!-- The disclosure cue: a small chevron on the avatar's corner, turned while the panel is open. -->
     <span
       aria-hidden="true"
