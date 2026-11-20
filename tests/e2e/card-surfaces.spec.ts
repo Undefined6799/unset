@@ -3,15 +3,23 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { addCard, deleteCard, OWN_PAGE } from "./cards.ts";
 import { openPage } from "./observe.ts";
 
+// The README card cycles through every surface in the editor; each other kind is added with one surface and checked
+// once, so the test spends 11 of the member's profile writes (4 adds, 3 saves, 4 deletes).
 const CARDS = [
-  { name: "README card", fields: { kind: "readme", text: "# Surface check" } },
+  { name: "README card", surface: "plain", fields: { kind: "readme", text: "# Surface check" } },
   {
     name: "Surface links card",
+    surface: "outlined",
     fields: { kind: "links", title: "Surface links", "items.0.uri": "https://example.com" },
   },
-  { name: "Surface work card", fields: { kind: "collection", title: "Surface work", "items.0.title": "Project" } },
+  {
+    name: "Surface work card",
+    surface: "plain",
+    fields: { kind: "collection", title: "Surface work", "items.0.title": "Project" },
+  },
   {
     name: "Surface contact card",
+    surface: "outlined",
     fields: {
       kind: "buttons",
       heading: "Surface contact",
@@ -19,7 +27,8 @@ const CARDS = [
       "buttons.0.address": "hello@example.com",
     },
   },
-] satisfies { name: string; fields: Record<string, string> }[];
+] satisfies { name: string; surface: string; fields: Record<string, string> }[];
+const WRITES_USED = 11;
 
 async function appearance(page: Page, outer: Locator, surface: string) {
   for (const colorScheme of ["light", "dark"] as const) {
@@ -39,33 +48,33 @@ test("all_card_kinds_save_reload_and_restore_their_surface", async ({ page }) =>
   test.setTimeout(120_000);
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  for (const card of CARDS) await addCard(page, { ...card.fields, surface: "plain" });
+  for (const card of CARDS) await addCard(page, { ...card.fields, surface: card.surface });
   await page.reload();
   await page.waitForLoadState("networkidle");
+  let failure: unknown;
   try {
-    for (const card of CARDS) {
-      const controls = page.getByRole("group", { name: card.name, exact: true });
-      const outer = page.locator('[data-slot="card"]').filter({ has: controls });
-      await appearance(page, outer, "plain");
-      for (const [value, label] of [
-        ["outlined", "Outlined"],
-        ["filled", "Filled"],
-        ["plain", "Plain"],
-      ] as const) {
-        await controls.getByRole("link", { name: "Edit", exact: true }).click();
-        const dialog = page.getByRole("dialog");
-        await dialog.getByRole("radio", { name: label, exact: true }).check();
-        await dialog.getByRole("button", { name: "Save", exact: true }).click();
-        await expect(dialog).toBeHidden();
-        await page.reload();
-        await page.waitForLoadState("networkidle");
-        await appearance(page, outer, value);
-        await controls.getByRole("link", { name: "Edit", exact: true }).click();
-        await expect(dialog.getByRole("radio", { name: label, exact: true })).toBeChecked();
-        await page.keyboard.press("Escape");
-        await expect(dialog).toHaveCount(0);
-        await expect(controls.getByRole("link", { name: "Edit", exact: true })).toBeFocused();
-      }
+    const outerOf = (name: string) =>
+      page.locator('[data-slot="card"]').filter({ has: page.getByRole("group", { name, exact: true }) });
+    for (const card of CARDS) await appearance(page, outerOf(card.name), card.surface);
+    const controls = page.getByRole("group", { name: "README card", exact: true });
+    for (const [value, label] of [
+      ["outlined", "Outlined"],
+      ["filled", "Filled"],
+      ["plain", "Plain"],
+    ] as const) {
+      await controls.getByRole("link", { name: "Edit", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("radio", { name: label, exact: true }).check();
+      await dialog.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await page.reload();
+      await page.waitForLoadState("networkidle");
+      await appearance(page, outerOf("README card"), value);
+      await controls.getByRole("link", { name: "Edit", exact: true }).click();
+      await expect(dialog.getByRole("radio", { name: label, exact: true })).toBeChecked();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(controls.getByRole("link", { name: "Edit", exact: true })).toBeFocused();
     }
     await page.getByRole("heading", { level: 1 }).click();
     for (const colorScheme of ["light", "dark"] as const) {
@@ -85,7 +94,13 @@ test("all_card_kinds_save_reload_and_restore_their_surface", async ({ page }) =>
       fullPage: true,
       animations: "disabled",
     });
+  } catch (error) {
+    failure = error;
   } finally {
     for (const card of CARDS) await deleteCard(page, card.name);
   }
+  // The card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
+  // 30 a minute). As cards-stale.spec.ts does, wait for this test's writes to come back so the next spec starts full.
+  await page.waitForTimeout(WRITES_USED * 2_000 + 1_000);
+  if (failure !== undefined) throw failure;
 });
