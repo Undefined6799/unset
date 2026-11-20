@@ -59,6 +59,14 @@ export const PROFILE_SIDE = {
   edit: "Edit profile",
 } as const;
 
+/** The compact header and its details panel (ADR 0072, P1.21o). */
+export const PROFILE_PANEL = {
+  /** The avatar's name: it opens the details, so it says so. */
+  open: (name: string) => `About ${name}`,
+  title: "About",
+  close: "Close details",
+} as const;
+
 /** The owner's card controls (ADR 0051). */
 export const CARD_EDIT = {
   group: (name: string) => `${name} card`,
