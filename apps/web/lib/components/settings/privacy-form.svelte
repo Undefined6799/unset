@@ -81,6 +81,7 @@ const known = $derived(visibility !== "noProfile" && visibility !== "unreadable"
                   value={choice}
                   id="{id}-{choice}"
                   checked={visibility === choice}
+                  data-visibility-radio
                 />
                 <Label for="{id}-{choice}">{T.options[choice].label}</Label>
                 <Button
@@ -94,8 +95,9 @@ const known = $derived(visibility !== "noProfile" && visibility !== "unreadable"
                 </Button>
               </div>
               {#if choice === "public"}
-                <!-- Shown while Public is ticked, by CSS, so no script is needed. -->
-                <div class="ms-9 hidden min-w-0 group-has-[input:checked]/choice:grid" data-search-under-public>
+                <!-- Shown while the Public radio is ticked, by CSS, so no script is needed; keyed on the radio, never on any
+                     checked input, so a ticked switch inside does not keep it shown. -->
+                <div class="ms-9 hidden min-w-0 group-has-[[data-visibility-radio]:checked]/choice:grid" data-search-under-public>
                   {@render fields()}
                 </div>
               {/if}

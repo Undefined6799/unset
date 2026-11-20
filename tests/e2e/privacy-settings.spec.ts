@@ -82,10 +82,14 @@ test.describe("page visibility, javascript off", () => {
     const form = visibility(page);
     await expect(form.getByRole("radio", { name: "Public" })).toBeChecked();
     await expect(section(page)).toBeVisible();
-    // With no script, ticking another choice hides the fields at once (CSS), before any save.
-    await form.getByRole("radio", { name: "Only me" }).check();
-    await expect(section(page)).toBeHidden();
+    // A ticked switch inside the fields must not keep them shown once another choice is ticked (Codex on #1851).
+    await section(page).getByLabel("Search engines may list my page").check();
     try {
+      await page.getByRole("button", { name: "Save privacy" }).click();
+      await expect(form).toContainText("Privacy saved.");
+      // With no script, ticking another choice hides the fields at once (CSS), before any save.
+      await form.getByRole("radio", { name: "Only me" }).check();
+      await expect(section(page)).toBeHidden();
       await page.getByRole("button", { name: "Save privacy" }).click();
       await expect(page).toHaveURL(/\/settings\/privacy\?saved#privacy$/);
       await expect(form).toContainText("Privacy saved.");
@@ -93,6 +97,7 @@ test.describe("page visibility, javascript off", () => {
       await expect(section(page)).toBeHidden();
     } finally {
       await visibility(page).getByRole("radio", { name: "Public" }).check();
+      await section(page).getByLabel("Search engines may list my page").uncheck();
       await page.getByRole("button", { name: "Save privacy" }).click();
       await expect(section(page)).toBeVisible();
     }
