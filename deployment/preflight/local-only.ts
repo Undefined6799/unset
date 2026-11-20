@@ -31,13 +31,14 @@ export const DEV_ONLY_NETWORKS: ReadonlySet<string> = new Set(["newt_edge", "new
  * preflight check judges them as it judges any built service. compose.dev.source.test.ts holds the source file to the
  * dev file plus exactly these.
  */
-export const SOURCE_ONLY_SERVICES: ReadonlySet<string> = new Set(["pds-admin", "indexer", "review"]);
+export const SOURCE_ONLY_SERVICES: ReadonlySet<string> = new Set(["pds-admin", "indexer", "review", "media"]);
 export const SOURCE_ONLY_NETWORKS: ReadonlySet<string> = new Set([
   "pds_admin",
   "pds_admin_pds",
   "indexer_pds",
   "indexer_egress",
   "review_web",
+  "objects_media",
 ]);
 
 /** Whether a network belongs to the local stack alone: on the list, or named like the PLC's. */

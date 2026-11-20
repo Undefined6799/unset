@@ -182,6 +182,21 @@ Services we run as shipped or without a settings schema: the keys each stack set
 | `PDS_HOST` | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` |
 | `PDS_UPSTREAM` | `pds:3000` | `pds:3000` |
 
+### media
+
+| Key | local | staging |
+| --- | --- | --- |
+| `DRAFT_URL_KEYRING_FILE` | file `/run/secrets/draft_url_keyring` | file `/run/secrets/draft_url_keyring` |
+| `LISTEN_PORT` | `8083` | `8083` |
+| `NODE_OPTIONS` | `--max-old-space-size=192` | `--max-old-space-size=192` |
+| `OBJECT_STORE_ACCESS_ID` | `unset-media` | `unset-media` |
+| `OBJECT_STORE_BUCKET` | `unset-private` | `unset-private` |
+| `OBJECT_STORE_SECRET_FILE` | file `/run/secrets/objects_media` | file `/run/secrets/objects_media` |
+| `OBJECT_STORE_URL` | `http://objects:8333` | `http://objects:8333` |
+| `UNSET_COMMIT` | `0000000000000000000000000000000000000000` | `0000000000000000000000000000000000000000` |
+| `UNSET_ENV` | `dev` | `dev` |
+| `UNSET_SERVICE` | `media` | `media` |
+
 ### newt
 
 | Key | local | staging |

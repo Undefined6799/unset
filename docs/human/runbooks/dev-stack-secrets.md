@@ -75,7 +75,8 @@ keeps every other host account out:
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 | `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
-| `draft_url_keyring` | `65532:65532` | web, every stack (media too, when it joins a stack) | the draft link keys (P2.19): a JSON keyring like `web_seal_keyring` but with keys of its own; web will not start without it, nor if any key is also a seal key |
+| `objects_media` | `65532:65532` | media, stacks built from source | 64 hex characters: the secret key of media's identity `unset-media` in `objects_s3`, which may only read drafts; media will not start without it (P2.19) |
+| `draft_url_keyring` | `65532:65532` | web, every stack; media, stacks built from source | the draft link keys (P2.19): a JSON keyring like `web_seal_keyring` but with keys of its own; web will not start without it, nor if any key is also a seal key |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
@@ -155,6 +156,35 @@ sudo mv $S/objects_s3.new $S/objects_s3 && sudo mv $S/objects_web.new $S/objects
 The store reads `objects_s3` when it starts, so the deploy that follows picks up the new identity. To undo before
 that deploy, move `objects_s3.before-web` back and remove `objects_web`. The local stack (`scripts/ci/local-stack.ts`)
 writes both files itself on every run.
+
+**Media's identity (P2.19).** The media process reads draft previews as its own identity `media`, key id the
+literal `unset-media` (`OBJECT_STORE_ACCESS_ID`), secret key the file `objects_media`. Its one action is
+`Read:unset-private/drafts/*`: no list, write, tag or delete, which `objects_key_scoped_to_prefix` in
+`tests/integration/storage/object-store.test.ts` proves. It reaches the store on `objects_media`, shared only with
+`objects`. Media runs only on the stacks built from source, so make both files before the first `dev:source:up` that
+brings it, from the checkout, with no value printed:
+
+```sh
+S=../unset-dev-secrets
+sudo cp -p $S/objects_s3 $S/objects_s3.before-media
+sudo cat $S/objects_s3 | node -e '
+const fs = require("node:fs"), { randomBytes } = require("node:crypto");
+const file = JSON.parse(fs.readFileSync(0, "utf8"));
+if (!Array.isArray(file.identities)) throw new Error("objects_s3 has no identities list");
+if (file.identities.some((i) => i.name === "media")) throw new Error("objects_s3 already has a media identity");
+const secret = randomBytes(32).toString("hex");
+const actions = ["Read:unset-private/drafts/*"];
+file.identities.push({ name: "media", credentials: [{ accessKey: "unset-media", secretKey: secret }], actions });
+fs.writeFileSync(process.argv[1], JSON.stringify(file), { mode: 0o600 });
+fs.writeFileSync(process.argv[2], secret, { mode: 0o600 });
+' $S/objects_s3.new $S/objects_media.new
+sudo chown 1000:1000 $S/objects_s3.new && sudo chmod 0400 $S/objects_s3.new
+sudo chown 65532:65532 $S/objects_media.new && sudo chmod 0400 $S/objects_media.new
+sudo mv $S/objects_s3.new $S/objects_s3 && sudo mv $S/objects_media.new $S/objects_media
+```
+
+The store reads `objects_s3` when it starts, so restart `objects` with the deploy. To undo before it, move
+`objects_s3.before-media` back and remove `objects_media`. The local stack writes both itself.
 
 ## pds-admin's files (P2.09e; ADR 0060)
 
