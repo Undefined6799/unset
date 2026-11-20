@@ -42,6 +42,6 @@ const corners = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
     <p class="m-0 text-sm text-muted-foreground" data-limited={signIn === null ? "ownerOnly" : "signedIn"}>
       {signIn === null ? LIMITED_PAGE.ownerOnly : LIMITED_PAGE.signedIn}
     </p>
-    {#if signIn !== null}<Button href={signIn}>{LIMITED_PAGE.signIn}</Button>{/if}
+    {#if signIn !== null}<Button href={signIn} data-limited-sign-in>{LIMITED_PAGE.signIn}</Button>{/if}
   </Card.Root>
 </div>

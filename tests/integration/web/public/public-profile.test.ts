@@ -292,7 +292,7 @@ describe("page visibility (ADR 0078)", () => {
     const html = await response.text();
     expectLimited(html, "Bea");
     expect(html).toContain('data-limited="signedIn"');
-    expect(html).toContain("Sign in to see it");
+    expect(html).toContain("data-limited-sign-in");
     expect(html).toContain(`/login?next=${encodeURIComponent("/@bea.unset.org")}`);
     expect(html).not.toContain("<script");
   });
@@ -316,7 +316,7 @@ describe("page visibility (ADR 0078)", () => {
       const html = await response.text();
       expectLimited(html, "Cy");
       expect(html).toContain('data-limited="ownerOnly"');
-      expect(html).not.toContain("Sign in to see it"); // signing in would not show it
+      expect(html).not.toContain("data-limited-sign-in"); // signing in would not show it
     }
     const own = await get("/@cy.unset.org", { cookie: await signedIn(ONLY_ME) });
     const html = await own.text();

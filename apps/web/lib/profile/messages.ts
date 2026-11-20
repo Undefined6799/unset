@@ -209,7 +209,7 @@ export const TEXT_EDITOR = {
 export const LIMITED_PAGE = {
   signedIn: "This member shows their page to signed-in members only.",
   ownerOnly: "This member has chosen to keep their page private.",
-  signIn: "Sign in to see it",
+  signIn: "Sign in",
 } as const;
 
 /** Above the whole page when it is not public, so the viewer knows who else sees it (ADR 0078). */
