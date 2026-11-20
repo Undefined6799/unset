@@ -282,6 +282,7 @@ async function startOn(
       PDS_DID: `did:web:${PDS_HOST}`,
       // P2.21a: the draft image store; no store answers here, and none is asked at boot.
       OBJECT_STORE_URL: "http://objects.test:8333",
+      REVIEW_URL: "http://review.test:8082",
       OBJECT_STORE_BUCKET: "unset-private",
       OBJECT_STORE_ACCESS_ID: "unset-web",
       OBJECT_STORE_SECRET_FILE: secret("objects_web", randomBytes(32).toString("hex")),

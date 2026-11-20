@@ -1,7 +1,9 @@
 # 0076 — Image uploads up to 64 MiB and 110 megapixels
 
-Status: Proposed (awaiting Alex). Supersedes only the upload numbers in ADR 0070 points 3, 4 and 8; everything else in
-ADR 0070 stands. Alex asked on 2026-11-20 at 13:16Z: "Yes i think its worth rising it to 64 mb".
+Status: Accepted by Alex, 2026-11-20 18:53Z, against 7a1de42 (his line "merge 1838 at 7A1DE42", typed in the
+project chat after that head was reviewed; merged as a9d829e). This status paragraph, the index row and the ADR 0001
+acceptance line were added afterwards in #1840. Supersedes only the upload numbers in ADR 0070 points 3, 4 and 8;
+everything else in ADR 0070 stands. Alex asked on 2026-11-20 at 13:16Z: "Yes i think its worth rising it to 64 mb".
 
 ## Context
 
