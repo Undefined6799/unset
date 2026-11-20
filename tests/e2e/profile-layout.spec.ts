@@ -98,9 +98,10 @@ test.describe("phone", () => {
         return root.documentElement.scrollWidth;
       });
       expect(width).toBeLessThanOrEqual(320);
-      // P1.21p: the Text card has no file-name bar and no heading of its own; the member's # is the card's h2.
+      // P1.21p: the Text card has no file-name bar and no heading of its own; the member's # is the card's h2 (`card`
+      // is the controls' group, so the heading is found on the page).
       await expect(page.getByText("README.md")).toHaveCount(0);
-      await expect(card.getByRole("heading", { level: 2 })).toHaveText("Layout check");
+      await expect(page.getByRole("heading", { level: 2, name: "Layout check" })).toBeVisible();
     } finally {
       await removeReadme(page);
     }
