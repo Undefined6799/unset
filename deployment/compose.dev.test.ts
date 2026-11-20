@@ -772,7 +772,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
     expect(raw.services.edge?.networks).toEqual({ edge: null, app: null, newt_edge: { ipv4_address: EDGE_ADDRESS } });
     expect(service(dev(), "pds").networks).toEqual(["edge", "pds_egress", "objects_pds"]);
-    expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
+    expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress", "objects_web"]);
     expect(service(dev(), "web").environment.map(([key]) => key)).not.toContain("NETGUARD_INTERNAL_HOSTS");
   });
 
@@ -950,6 +950,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
     objects_s3: 1000,
+    objects_web: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -1039,7 +1040,10 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
     expect(pdsNeighbours(devInputs())).toEqual([]);
     const webOnEdge = (text: string) =>
-      text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
+      text.replace(
+        "    networks: [db, app, web_egress, objects_web]\n",
+        "    networks: [db, app, web_egress, objects_web, edge]\n",
+      );
     expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
@@ -1055,8 +1059,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     expect(pdsNeighbours(inputs)).toEqual([]);
     const webOnEdge = (text: string) =>
       text.replace(
-        "    networks: [db, app, web_egress, pds_admin]\n",
-        "    networks: [db, app, web_egress, pds_admin, edge]\n",
+        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web]\n",
+        "    networks: [db, app, web_egress, pds_admin, objects_web, review_web, edge]\n",
       );
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replaceAll("\n      pds:\n", "\n      relay:\n");
@@ -1106,7 +1110,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 14 mounted secrets" },
+      { pass: true, reason: "3 files, 15 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

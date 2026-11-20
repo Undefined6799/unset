@@ -6,6 +6,7 @@
 // P1.36y, P2.13): the lock pool, the sealer, net-guard, the identity network, the handle check, the PDS call, the
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
+// P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import {
   type AccountRepository,
@@ -17,7 +18,7 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
+import { createNetGuard, guardedFetch, libraryFetch, objectStore } from "@unset/infrastructure-net-guard";
 import {
   createIdentityNetwork,
   createInviteIssuer,
@@ -50,6 +51,7 @@ import {
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionLimits, type SessionStore } from "@unset/infrastructure-session";
+import { createObjectStore, type ObjectStore } from "@unset/infrastructure-storage";
 import { createHealth, createRateLimiter, type RateLimiter } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import { recordUnderageBlock } from "./age-gate-audit.ts";
@@ -124,6 +126,8 @@ export type Services = {
   readonly publicProfiles: PublicProfileStore;
   /** The signed-in member's own Search and AI choices (ADR 0062). */
   readonly discoverability: DiscoverabilityStore;
+  /** Members' draft pictures in the private store, as web's own identity (P2.21a; ADR 0070 point 2.4). */
+  readonly drafts: ObjectStore;
 };
 
 /** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
@@ -308,6 +312,14 @@ async function build(): Promise<Services> {
     invites,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
+    // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
+    drafts: createObjectStore({
+      origin: config.OBJECT_STORE_URL,
+      bucket: config.OBJECT_STORE_BUCKET,
+      keyId: config.OBJECT_STORE_ACCESS_ID,
+      secret: config.OBJECT_STORE_SECRET.reveal(),
+      fetch: guardedFetch(guard, objectStore(config.OBJECT_STORE_URL)),
+    }),
   };
 }
 

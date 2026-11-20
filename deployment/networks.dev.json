@@ -6,10 +6,12 @@
   "newt_egress": { "internal": false, "members": ["newt"] },
   "pds_egress": { "internal": false, "members": ["pds"] },
   "objects_pds": { "internal": true, "members": ["pds", "objects"] },
+  "objects_web": { "internal": true, "members": ["web", "objects"] },
   "web_egress": { "internal": false, "members": ["web"] },
   "objects": { "internal": true, "members": ["objects"] },
   "pds_admin": { "internal": true, "members": ["web", "pds-admin"] },
   "pds_admin_pds": { "internal": true, "members": ["pds", "pds-admin"] },
   "indexer_pds": { "internal": true, "members": ["pds", "indexer"] },
-  "indexer_egress": { "internal": false, "members": ["indexer"] }
+  "indexer_egress": { "internal": false, "members": ["indexer"] },
+  "review_web": { "internal": true, "members": ["web", "review"] }
 }

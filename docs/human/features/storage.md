@@ -16,7 +16,7 @@ None. The store has no product rules of its own. A profile or a card names a blo
 
 ## Adapter
 
-The PDS is the caller that runs today. In the compose files its blob store is the bucket `unset-pds` (`PDS_BLOBSTORE_S3_BUCKET`, `PDS_BLOBSTORE_S3_ENDPOINT` and the matching S3 settings). It reaches the store on the network `objects_pds`, which only the PDS and `objects` share.
+The PDS is the caller that runs today. In the compose files its blob store is the bucket `unset-pds` (`PDS_BLOBSTORE_S3_BUCKET`, `PDS_BLOBSTORE_S3_ENDPOINT` and the matching S3 settings). It reaches the store on the network `objects_pds`, which only the PDS and `objects` share. Since P2.21a web is wired to the store too, as the identity `web` on members' drafts only (`unset-private/drafts/`), on the network `objects_web`, which only web and `objects` share; its secret is `objects_web` (runbook `dev-stack-secrets.md`).
 
 [`deployment/preflight/objects-buckets.ts`](../../../deployment/preflight/objects-buckets.ts) creates two buckets, `unset-pds` and `unset-private`, through the store's own shell. The one secret is `objects_s3`. It holds no admin identity (ADR 0050).
 

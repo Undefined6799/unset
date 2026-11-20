@@ -79,6 +79,7 @@ Configurable per stack in the compose files.
 | `pds-admin` | 128m memory, 0.25 CPU, 32 processes | 128m memory, 0.25 CPU, 32 processes |
 | `pds-token-reader` | 128m memory, 0.25 CPU, 32 processes | not in this stack |
 | `postgres` | 1g memory, 1 CPU, 256 processes | 1g memory, 1 CPU, 256 processes |
+| `review` | 1536m memory, 1 CPU, 128 processes | 1536m memory, 1 CPU, 128 processes |
 | `web` | 512m memory, 1 CPU, 128 processes | 512m memory, 1 CPU, 128 processes |
 
 ## Limits fixed in code
