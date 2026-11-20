@@ -212,6 +212,7 @@ describe("GET /settings/account", () => {
     const html = await response.text();
     expect(sideList(html)).toEqual([
       { href: "/settings/profile", current: false },
+      { href: "/settings/privacy", current: false },
       { href: "/settings/account", current: true },
     ]);
     const document = parse(html);
@@ -255,7 +256,7 @@ describe("GET /settings/account", () => {
     expect(elements(forms[0], "button").map((button) => textContent(button).trim())).toEqual(["Sign out everywhere"]);
   });
 
-  test.each(["/settings/profile", "/settings/account"])("guards %s", async (path) => {
+  test.each(["/settings/profile", "/settings/privacy", "/settings/account"])("guards %s", async (path) => {
     // The gate's final outcome (asked of the integration lane): /login keeps the page to come back to.
     const response = await get(path);
     expect(response.status).toBe(303);

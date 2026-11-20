@@ -223,10 +223,13 @@ describe("GET /settings/profile on the stand-in PDS", () => {
     const nav = elements(document, "nav", { "aria-label": "Settings" })[0];
     expect(elements(nav, "a").map((a) => [attr(a, "href"), attr(a, "aria-current") ?? null])).toEqual([
       ["/settings/profile", "page"],
+      ["/settings/privacy", null],
       ["/settings/account", null],
     ]);
     const [form, ...others] = elements(document, "form", { method: "post", action: "/profile" });
     expect(others).toEqual([]);
+    // Search and AI moved to Settings › Privacy (P1.21y).
+    expect(elements(document, "form", { action: "/settings/search-and-ai" })).toEqual([]);
     const inputs = elements(form, "input").map((input) => [attr(input, "name"), attr(input, "value")]);
     expect(inputs).toEqual([
       ["next", "/settings/profile"],
@@ -259,5 +262,96 @@ describe("GET /settings/profile on the stand-in PDS", () => {
     const html = await response.text();
     expect(html).toContain("Your profile could not be loaded");
     expect(elements(parse(html), "form", { action: "/profile" })).toEqual([]);
+  });
+});
+
+describe("GET /settings/privacy on the stand-in PDS", () => {
+  // P1.21y: Search and AI (ADR 0062) on its own settings page, with a search result preview drawn from the same values
+  // the public page publishes: the override when set, else the profile's name and headline read from the PDS.
+  const privacyPage = (on: Server, query = "") =>
+    on.web.fetch(`/settings/privacy${query}`, {
+      headers: { accept: "text/html", "x-forwarded-for": clientAddress(), cookie },
+    });
+  const saveChoices = (on: Server, body: string) =>
+    on.web.fetch("/settings/search-and-ai", {
+      method: "POST",
+      body,
+      headers: {
+        origin: ORIGIN,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "text/html",
+        "x-forwarded-for": clientAddress(),
+        cookie,
+      },
+    });
+  const preview = (document: Node | undefined) => {
+    const [box] = elements(document, "div", { "data-search-preview": "" });
+    const one = (name: string) => elements(box, "p", { [name]: "" }).map(textContent)[0] ?? null;
+    return { title: one("data-preview-title"), description: one("data-preview-description"), text: textContent(box) };
+  };
+
+  test("the_page_holds_search_and_ai_and_previews_the_profile", async () => {
+    await save(up, "displayName=Mara+Lind&headline=Night+trains.&location=&website=");
+    expect((await saveChoices(up, "title=&description=")).status).toBe(303);
+    const response = await privacyPage(up);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    const document = parse(await response.text());
+    const nav = elements(document, "nav", { "aria-label": "Settings" })[0];
+    expect(elements(nav, "a").map((a) => [attr(a, "href"), attr(a, "aria-current") ?? null])).toEqual([
+      ["/settings/profile", null],
+      ["/settings/privacy", "page"],
+      ["/settings/account", null],
+    ]);
+    expect(elements(document, "h1").map(textContent)).toEqual(["Privacy"]);
+    const [form, ...others] = elements(document, "form", { method: "post", action: "/settings/search-and-ai" });
+    expect(others).toEqual([]);
+    expect(elements(form, "input").map((input) => [attr(input, "name"), attr(input, "checked") !== undefined])).toEqual(
+      [
+        ["searchEngines", false],
+        ["aiSearch", false],
+        ["title", false],
+        ["description", false],
+      ],
+    );
+    // The title and description sit under a closed "Advanced" while neither is set; no script is needed to open it.
+    const [advanced] = elements(form, "details");
+    expect(attr(advanced, "open")).toBeUndefined();
+    expect(textContent(elements(advanced, "summary")[0]).trim()).toBe("Advanced: search title and description");
+    // The preview: what the public page would publish, at its canonical address, and no link out of the page.
+    const shown = preview(document);
+    expect(shown.title).toBe("Mara Lind");
+    expect(shown.description).toBe("Night trains.");
+    expect(shown.text).toContain(`${new URL(ORIGIN).host} › @${OWNER}`);
+    expect(elements(elements(document, "div", { "data-search-preview": "" })[0], "a")).toEqual([]);
+    expect(elements(document, "p", { "data-preview-unlisted": "" })).toHaveLength(1);
+  });
+
+  test("a_save_comes_back_saying_so_and_the_preview_shows_the_overrides", async () => {
+    const saved = await saveChoices(up, "searchEngines=on&title=Mara+%3Cof+the+trains%3E&description=Timetables.");
+    expect(saved.status).toBe(303);
+    expect(saved.headers.get("location")).toBe("/settings/privacy?saved#search-and-ai");
+    const html = await (await privacyPage(up, "?saved")).text();
+    expect(html).toContain("Search and AI saved.");
+    expect(html).not.toContain("<of the trains>"); // escaped, as everywhere
+    const document = parse(html);
+    const shown = preview(document);
+    expect(shown.title).toBe("Mara <of the trains>");
+    expect(shown.description).toBe("Timetables.");
+    // A set override keeps "Advanced" open, so the member always sees it; listing is on, so no "not listed" line.
+    expect(attr(elements(document, "details")[0], "open")).toBeDefined();
+    expect(elements(document, "p", { "data-preview-unlisted": "" })).toEqual([]);
+    expect((await saveChoices(up, "title=&description=")).status).toBe(303);
+  });
+
+  test("a_pds_that_cannot_be_read_still_shows_the_choices_named_by_did", async () => {
+    const response = await privacyPage(unread);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie") ?? "").not.toContain("__Host-sid=;");
+    const document = parse(await response.text());
+    expect(elements(document, "form", { action: "/settings/search-and-ai" })).toHaveLength(1);
+    expect(preview(document).title).toBe(OWNER);
+    expect(preview(document).description).toBeNull();
   });
 });

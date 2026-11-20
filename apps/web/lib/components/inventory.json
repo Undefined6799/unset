@@ -383,7 +383,11 @@
       },
       "search-ai-form.svelte": {
         "origin": "ours",
-        "purpose": "Settings › Profile's Search and AI form: two switches, search title and description, and their honest limits, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
+        "purpose": "Settings › Privacy's Search and AI form: two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
+      },
+      "search-preview.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Privacy's search result preview (P1.21y): the title, description and address the public page publishes, with the letter avatar until the media origin serves pictures; labelled as an example."
       }
     }
   }

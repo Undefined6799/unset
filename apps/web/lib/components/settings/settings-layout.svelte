@@ -1,7 +1,7 @@
 <!--
   The settings frame (P2.13c; Alex, 2026-10-23 01:11:22Z, "Side list"): a side list of the settings pages on the left
   of the wide main, the page beside it; on phones the list is a row of tabs above the page. The current one is marked
-  aria-current. The page's own heading sits flush on top.
+  aria-current. The page's own heading sits flush on top. On phones the tabs are tighter, so three fit at 320 px.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
@@ -26,7 +26,7 @@ let {
           <a
             href={item.path}
             aria-current={current === item.path ? "page" : undefined}
-            class="text-muted-foreground hover:text-foreground hover:bg-accent aria-[current=page]:text-foreground aria-[current=page]:bg-accent -mb-px flex min-h-10 items-center gap-2.5 border-b-2 border-transparent px-3 text-sm font-medium no-underline aria-[current=page]:border-foreground md:mb-0 md:rounded-md md:border-b-0 md:aria-[current=page]:border-transparent pointer-coarse:min-h-11"
+            class="text-muted-foreground hover:text-foreground hover:bg-accent aria-[current=page]:text-foreground aria-[current=page]:bg-accent -mb-px flex min-h-10 items-center gap-2.5 border-b-2 border-transparent px-2 text-sm md:px-3 font-medium no-underline aria-[current=page]:border-foreground md:mb-0 md:rounded-md md:border-b-0 md:aria-[current=page]:border-transparent pointer-coarse:min-h-11"
           >
             <Icon name={item.icon} size={16} />{item.label}
           </a>
