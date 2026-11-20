@@ -1,9 +1,11 @@
 // A stand-in child for pool.test.ts that answers as an exploited decoder might: a version nobody asked for, larger
 // than any limit, with a made-up hash. The parent must refuse the whole answer.
-process.send?.({ ready: true });
-process.on("message", (job: { id: number }) => {
+import { onJob, say } from "./stand-in.ts";
+
+say({ ready: true });
+onJob((job) => {
   const bytes = new Uint8Array(3_000_000);
-  process.send?.({
+  say({
     id: job.id,
     result: {
       kind: "ok",

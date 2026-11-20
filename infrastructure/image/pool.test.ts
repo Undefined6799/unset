@@ -317,6 +317,29 @@ describe("the pool", () => {
     }
   }, 20_000);
 
+  test("pool.queue_zero: with no queue, an idle child still takes a job and only the next one is busy", async () => {
+    const ready = eventOf("ready");
+    const hanging = createImagePool({
+      children: 1,
+      queueMax: 0,
+      timeoutMs: 400,
+      addressSpaceMb: 4096,
+      childPath: fixture("hang-child.ts"),
+      onEvent: ready.onEvent,
+    });
+    try {
+      const input = new Uint8Array(await anyJpeg());
+      await ready.happened;
+      const results = await Promise.all([hanging.process(input, LIMITS, []), hanging.process(input, LIMITS, [])]);
+      expect(results).toEqual([
+        { kind: "refused", code: "image.timeout" },
+        { kind: "refused", code: "image.busy" },
+      ]);
+    } finally {
+      hanging.close();
+    }
+  }, 20_000);
+
   test("pool.memory_limit: children that cannot start back off, the pool goes down and answers busy", async () => {
     const down = eventOf("down");
     const events: string[] = [];
@@ -430,6 +453,28 @@ describe("the pool", () => {
     const result = ok(await run(tall, [MAIN, SMALL]));
     expect(result.versions.find((v) => v.name === "w480")).toMatchObject({ width: 480, height: 4800 });
   });
+
+  test("pool.answer_cap: an answer declared larger than its job allows ends the child before it is read", async () => {
+    const ready = eventOf("ready");
+    const flooding = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 15_000,
+      addressSpaceMb: 4096,
+      childPath: fixture("flood-child.ts"),
+      onEvent: ready.onEvent,
+    });
+    try {
+      await ready.happened;
+      const started = Date.now();
+      const result = await flooding.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN]);
+      expect(result).toEqual({ kind: "refused", code: "image.cannot_use" });
+      // Refused on the declared length, not after the job's deadline.
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      flooding.close();
+    }
+  }, 20_000);
 
   test("pool.close_settles: closing the pool answers a job a child is working on", async () => {
     const ready = eventOf("ready");

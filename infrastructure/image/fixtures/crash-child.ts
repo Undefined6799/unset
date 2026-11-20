@@ -1,3 +1,5 @@
 // A stand-in child for pool.test.ts that dies on its first job, as a native fault in libvips would.
-process.send?.({ ready: true });
-process.on("message", () => process.kill(process.pid, "SIGSEGV"));
+import { onJob, say } from "./stand-in.ts";
+
+say({ ready: true });
+onJob(() => process.kill(process.pid, "SIGSEGV"));
