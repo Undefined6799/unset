@@ -1,12 +1,13 @@
-# 0070 — One shared image foundation: blobs in the member's repository, five stages, processing apart from web, an empty inspection port
+# 0070 — One shared image foundation: processing apart from web, an empty inspection port
 
 Status: Proposed (awaiting Alex). Steps P2.17 to P2.19c. Alex asked for it on 2026-11-20 01:12:01Z ("Build one
 reusable image foundation for profile cards, galleries, project screenshots, and future posts/blog content") and set
 its direction at 01:23:11Z: no moderation or fingerprint check for now, a cleanly separated foundation that later
 checks mount onto, decent quality for photographers, every picture converted to a proper format with all metadata
-stripped, and moderation in place before production rather than an upload switch. It supersedes step-book text
-(listed under Consequences) and replaces one paragraph of ADR 0029, which is still Proposed. It contradicts no
-accepted record: ADR 0041 (the object store) and ADR 0039 (sign-in scopes) stand as they are.
+stripped, and moderation in place before production rather than an upload switch. It supersedes step-book text (listed
+under Consequences) and replaces one paragraph of ADR 0029, which is still Proposed. Decision 9 supersedes one line of
+ADR 0012 (the licence record). It contradicts no other accepted record: ADR 0041 (the object store) and ADR 0039
+(sign-in scopes) stand as they are.
 
 ## Context
 The profile needs images: a single-image card, pictures on collection entries such as project screenshots, and a
@@ -60,7 +61,8 @@ Facts this record rests on, read in the pinned sources:
       upright from its orientation tag, converted to sRGB, stripped of every metadata block, and written out as the
       versions in point 3. sharp is imported in one adapter folder, `infrastructure/image/`, and only `review` uses it.
    3. *Inspection*, a port with no implementation mounted. It receives the processed versions and answers with one
-      of the results below. Moderation, fingerprints, AI alt-text suggestions, descriptions and categories mount there later,
+      of the results below. Moderation, fingerprints, AI alt-text suggestions, descriptions and categories mount there
+      later,
       each in its own step, from a closed list of named implementations wired only in web's composition root. Their
       results attach to the image as our own metadata in a table that step adds; nothing is reserved now. The result
       type and the image's states are designed now for what a later check must be able to say, though none is built:
@@ -141,6 +143,13 @@ Facts this record rests on, read in the pinned sources:
      per-member caps in web are the real control, and the zone only stops floods. For other clients of our PDS it
      stays per address.
 
+9. **AGPL-3.0-only packages may depend on LGPL-3.0-or-later libraries.** This is the one licence added to ADR 0012's
+   list for AGPL packages, here for libvips, which sharp ships in its prebuilt binaries (`@img/sharp-libvips-*`
+   1.3.4); it supersedes that line of ADR 0012. LGPL-3.0 is GPL-3.0 with extra permissions, and GPL-3.0 code may be
+   combined with AGPL-3.0 code (AGPL-3.0 section 13), so the combination is distributable under our licence.
+   Everything else stays refused: MIT packages still take only permissive licences, and GPL, LGPL-2.1 and any other
+   licence still stop the check. The check's allowed list changes in the pull request that adds sharp.
+
 ## Alternatives
 - **Keep the step book's order: fingerprint gate first (P2.16), then the pipeline.** Rejected by Alex: moderation is a
   later feature. The empty inspection port is where it mounts, so no stage moves when it arrives.
@@ -186,7 +195,8 @@ Facts this record rests on, read in the pinned sources:
 
 ## Compliance
 Tests in each step's pull request: `review`'s child cannot read web's secrets or open a socket; production wiring with
-no inspection or with a test double refuses intake and boot; processing refuses malformed, truncated, oversized, too-many-pixel, animated and
+no inspection or with a test double refuses intake and boot; processing refuses malformed, truncated, oversized,
+too-many-pixel, animated and
 mismatched files, removes every metadata block, applies orientation, survives a child crash and a timeout, and answers
 "busy" when the queue is full; storage checks ownership on every key and row, quota and limits under concurrency, the
 24-hour and 7-day expiries, a shared CID kept while used, erasure and export; publish is refused in production with no

@@ -672,4 +672,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   storage in the private store, and publish to the PDS at save time. Uploads with no real inspection mounted are refused at
   intake on every app origin outside a closed list of test origins (localhost, .test, staging while it holds only
   test accounts). It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
-  replace ADR 0029's scan paragraph outside production. Proposed, awaiting Alex.
+  replace ADR 0029's scan paragraph outside production. AGPL-3.0-only packages may also depend on LGPL-3.0-or-later
+  libraries (libvips via sharp), superseding that line of ADR 0012. Proposed, awaiting Alex.
