@@ -1,7 +1,9 @@
 # 0068 — Each profile card chooses its outer surface
 
-Status: Proposed (awaiting Alex). Alex approved the Filled / Outlined / Plain direction and requested implementation on
-2026-11-19. This adds an optional field under ADR 0051 Decision 7; it changes no existing required field.
+Status: Accepted by Alex, 2026-11-20 01:23Z, against 1e38138 (his line "Merge 1815 at 1e38138", typed in the project
+chat after the coordinator had reviewed that head). This status paragraph, the index row and the ADR 0001 acceptance
+line were added afterwards in #1817. Alex approved the Filled / Outlined / Plain direction and requested
+implementation on 2026-11-19. This adds an optional field under ADR 0051 Decision 7; it changes no existing required field.
 
 ## Context
 

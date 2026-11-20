@@ -37,8 +37,8 @@ function html(src: string): string {
 }
 
 describe("Readme", () => {
-  test("headings sit under the card's own heading", () => {
-    expect(html("# A\n\n## B\n\n### C")).toBe("<h3>A</h3><h4>B</h4><h5>C</h5>");
+  test("headings start under the page heading, as the card has none of its own", () => {
+    expect(html("# A\n\n## B\n\n### C")).toBe("<h2>A</h2><h3>B</h3><h4>C</h4>");
   });
 
   test("an ordered list keeps its first number", () => {

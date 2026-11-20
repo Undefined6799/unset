@@ -35,7 +35,7 @@ export const PROFILE_SETTINGS = {
   locationHint: (n: number) => `Where you are, as you want to say it. Up to ${n} characters.`,
   website: "Website",
   websiteHint: "An http or https address.",
-  cardsNote: "Your README, links and other cards are edited on your page.",
+  cardsNote: "Your text, links and other cards are edited on your page.",
   viewPage: "View your page",
   save: "Save profile",
   saving: "Saving…",

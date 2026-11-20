@@ -7,12 +7,12 @@
 // times; an event is allowed when the slot under the cursor is older than the window, and only an allowed event takes a
 // slot. A request counts in every zone it matches (ratelimit.caddy's header comment).
 //
-// What a member's browser sends, as ratelimit.caddy's app comment counts it on the SvelteKit build (P1.20j): a page with
-// a cold cache is 5 requests (HTML, the one script, the one stylesheet, 2 fonts), a warm page or client navigation is
-// 1 (its __data.json), and a first visit through sign-in, the welcome steps and /me is 33 with no cache. A sign-in is
-// POST /login and the /oauth/callback redirect, plus POST /verify-email the first time; a sign-up is POST /join, the
-// callback and POST /verify-email. Static app files get no zone of their own here: P1.21g adds one for the hashed
-// files, and until then they count in app_burst and app_global like any request, as the cold-page counts below do.
+// What a member's browser sends, as ratelimit.caddy's app comment counts it on the split SvelteKit build (P1.21g, ADR
+// 0069): a page with a cold cache is its document, the two fonts and about 30 content-hashed build files under
+// /_app/immutable/, which count in app_files and not in app_burst; a warm page or client navigation is 1 (its
+// __data.json); and a first visit through sign-in, the welcome steps and /me is about 66 with no cache, every one of
+// them counted in app_global. A sign-in is POST /login and the /oauth/callback redirect, plus POST /verify-email the
+// first time; a sign-up is POST /join, the callback and POST /verify-email.
 // ADR 0066's own app_burst test in edge.test.ts stays; this file judges every zone the same way.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -55,7 +55,11 @@ const paced = (count: number, everyMs: number, from = 0): number[] =>
 /** Several people behind one address (a household, an office, a phone carrier's shared address), merged in order. */
 const together = (...people: readonly number[][]): number[] => people.flat().sort((a, b) => a - b);
 
-const COLD_PAGE = [0, 0, 0, 0, 0];
+/** What app_burst sees of a cold page: its document and the two fonts; the build files go to app_files. */
+const COLD_PAGE = [0, 0, 0];
+/** The build files of the heaviest cold page (27 scripts, the stylesheet and two icons; scripts/budgets/app-js.ts). */
+const COLD_PAGE_FILES = 30;
+const FIRST_VISIT = 66;
 
 /** A flood one past the zone, all at once: everything up to the zone's size passes and the next is refused. */
 function expectFloodRefused(name: string): void {
@@ -78,14 +82,23 @@ describe("app_burst", () => {
   test("a_flood_one_past_the_zone_is_refused", () => expectFloodRefused("app_burst"));
 });
 
+describe("app_files", () => {
+  test("two_people_behind_one_address_opening_a_cold_page_at_once_then_browsing_pass", () => {
+    const person = (offset: number) => [...Array(COLD_PAGE_FILES).fill(offset), ...paced(10, 100, offset + 1_000)];
+    expect(refusedIn("app_files", together(person(0), person(0)))).toBe(0);
+  });
+
+  test("a_flood_one_past_the_zone_is_refused", () => expectFloodRefused("app_files"));
+});
+
 describe("app_global", () => {
   test("a_first_visit_then_five_minutes_of_a_click_every_two_seconds_passes", () => {
-    const firstVisit = paced(33, 300);
+    const firstVisit = paced(FIRST_VISIT, 300);
     expect(refusedIn("app_global", [...firstVisit, ...paced(150, 2000, 10_000)])).toBe(0);
   });
 
   test("five_people_behind_one_address_each_on_a_first_visit_and_browsing_pass", () => {
-    const person = (offset: number) => [...paced(33, 300, offset), ...paced(150, 2000, offset + 10_000)];
+    const person = (offset: number) => [...paced(FIRST_VISIT, 300, offset), ...paced(150, 2000, offset + 10_000)];
     expect(refusedIn("app_global", together(...[0, 100, 200, 300, 400].map(person)))).toBe(0);
   });
 
