@@ -288,11 +288,12 @@ describe("edge", () => {
     const routes = await Promise.all(
       policyFiles.map(async (file) => {
         const { policy } = (await import(pathToFileURL(join(routesDir, file)).href)) as {
-          policy: { deadlineMs?: number };
+          policy: { deadlineMs?: number; bodyWindowMs?: number };
         };
         return {
           path: `/${file.slice(0, -"policy.ts".length)}`,
           ...(policy.deadlineMs === undefined ? {} : { deadlineMs: policy.deadlineMs }),
+          ...(policy.bodyWindowMs === undefined ? {} : { bodyWindowMs: policy.bodyWindowMs }),
         };
       }),
     );

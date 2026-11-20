@@ -32,6 +32,7 @@ const KNOWN_FIELDS = new Set([
   "returnTo",
   "maxBody",
   "deadlineMs",
+  "bodyWindowMs",
   "probe",
   "testOnly",
 ]);
@@ -50,6 +51,7 @@ export type RouteRecord = {
   readonly writeLimit: string | null;
   readonly bodyLimit: number | null;
   readonly deadlineMs: number | null;
+  readonly bodyWindowMs: number | null;
   readonly testOnly: boolean | null;
   readonly probe: boolean | null;
   readonly why: string;
@@ -132,6 +134,7 @@ function readDraft(
       session: readField(value, "session", file, problems, oneLine, "session is not a single-line string"),
       bodyLimit: readField(value, "maxBody", file, problems, count, "maxBody is not a positive integer"),
       deadlineMs: readField(value, "deadlineMs", file, problems, count, "deadlineMs is not a positive integer"),
+      bodyWindowMs: readField(value, "bodyWindowMs", file, problems, count, "bodyWindowMs is not a positive integer"),
       testOnly: readField(value, "testOnly", file, problems, flag, "testOnly is not a boolean"),
       probe: readField(value, "probe", file, problems, flag, "probe is not a boolean"),
     },
@@ -363,6 +366,13 @@ function bucketCell(name: string | null, policies: ProcessModel["policies"]): st
 
 const yn = (value: boolean | null): string => (value === null ? NOT_RECORDED : value ? "yes" : "no");
 
+/** The deadline, and for a route with a body window the time its body may take before the deadline starts. */
+function deadlineCell(route: RouteRecord): string {
+  if (route.deadlineMs === null) return NOT_RECORDED;
+  if (route.bodyWindowMs === null) return String(route.deadlineMs);
+  return `${route.deadlineMs} after a ${route.bodyWindowMs} body window`;
+}
+
 function row(route: RouteRecord, policies: ProcessModel["policies"]): string {
   const cells = [
     route.method,
@@ -374,7 +384,7 @@ function row(route: RouteRecord, policies: ProcessModel["policies"]): string {
     route.writeLimit ?? NOT_RECORDED,
     bucketCell(route.writeLimit, policies),
     route.bodyLimit === null ? NOT_RECORDED : String(route.bodyLimit),
-    route.deadlineMs === null ? NOT_RECORDED : String(route.deadlineMs),
+    deadlineCell(route),
     yn(route.testOnly),
     yn(route.probe),
   ];
@@ -452,7 +462,7 @@ function indexPage(model: EndpointModel): string {
     "",
     `- **Path** is the route id relative to \`${ROUTES}\`, including SvelteKit parameters, encoded characters and layout groups. It is a route pattern, not a concrete request URL.`,
     "- **Method** lists exports of `+server.ts`/`+server.js`, GET for `+page` files, and POST for an exported `actions` in `+page.server.ts`/`+page.server.js`. SvelteKit 3.2.0 sources: `src/core/sync/create_manifest_data/index.js`, `src/runtime/server/endpoint.js` and `src/runtime/server/page/actions.js` in `interfaces/web/node_modules/@sveltejs/kit`. Implicit HEAD/OPTIONS are omitted; a handler may still refuse a method.",
-    "- **Group, session, rate limit, write limit, body limit, deadline, test only, probe** copy `group`, `session`, `limit`, `writeLimit`, `maxBody`, `deadlineMs`, `testOnly`, `probe` from that route's `policy.ts`. Missing fields are `not recorded`, not a claim that the runtime has no session, limit or deadline.",
+    "- **Group, session, rate limit, write limit, body limit, deadline, test only, probe** copy `group`, `session`, `limit`, `writeLimit`, `maxBody`, `deadlineMs` (with `bodyWindowMs` where a route has one), `testOnly`, `probe` from that route's `policy.ts`. Missing fields are `not recorded`, not a claim that the runtime has no session, limit or deadline.",
     `- **Buckets, write buckets** copy the named entries of \`${LIMITS}\`'s \`policies\` export. These are the app's configured buckets, not the edge limits in \`deployment/edge/\` (not read here). \`policiesFor\` in the same file removes IP entries in socket mode and adds the login global ceiling.`,
     `- **Why, input, output, errors, auth** come only from \`${DATA_DIR}/web.yaml\`. Absent or empty prose is \`not recorded\`.`,
     "",
