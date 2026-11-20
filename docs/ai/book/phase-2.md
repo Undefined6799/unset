@@ -3196,6 +3196,8 @@ Goal: a visitor with no invite leaves one email address and the two sign-up tick
   address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
 Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
   mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
+Follow-up (ruled 2026-11-20): the owner sees that invite-request mails are failing, not only in the log, for example
+  through the notification center (ADR 0079) once it has landed; a visitor is never told (ADR 0080 point 4).
 
 Threats:
 - The form mails a third party (spam relay). Answered: mail goes only to `INVITE_REQUEST_TO`; the typed address is
