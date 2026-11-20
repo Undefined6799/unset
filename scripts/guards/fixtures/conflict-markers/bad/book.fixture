@@ -1,0 +1,9 @@
+// fixture: docs/ai/book/phase-2.md findings=3
+## P2.19
+<<<<<<< HEAD
+ours
+||||||| abc123 (base)
+base
+=======
+theirs
+>>>>>>> origin/main
