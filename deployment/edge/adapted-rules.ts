@@ -796,7 +796,7 @@ const PDS_ZONES: readonly Zone[] = [
 ];
 /** The dev app site's own zones (dev/app.caddy, P1.36b). */
 const APP_ZONES: readonly Zone[] = [
-  ["app_burst", 20, 10],
+  ["app_burst", 60, 10],
   ["app_global", 1200, 300],
   [
     "app_signin",

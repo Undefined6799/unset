@@ -207,7 +207,7 @@
                                     "app_burst": {
                                       "ipv6_prefix": 64,
                                       "key": "{http.vars.client_ip}",
-                                      "max_events": 20,
+                                      "max_events": 60,
                                       "window": 10000000000
                                     },
                                     "app_global": {
