@@ -31,6 +31,9 @@ const SDK_ADAPTERS = [
   { sdk: "age-encryption", adapter: "infrastructure/seal/" },
   { sdk: "@atproto/lex[^/]*", adapter: "shared/lexicons/" },
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
+  // ADR 0070 point 2.2: pictures are decoded only in infrastructure/image's sandboxed children, never in web.
+  { sdk: "sharp", adapter: "infrastructure/image/" },
+  { sdk: "@img/[^/]+", adapter: "infrastructure/image/" },
 ];
 
 /** Node built-ins a domain may not import: I/O arrives as a passed-in dependency (README rule 1). */
