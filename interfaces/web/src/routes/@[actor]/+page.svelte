@@ -36,5 +36,5 @@ let { data } = $props();
     />
   {/snippet}
 
-  <ProfileCards cards={data.cards} handle={data.handle} />
+  <ProfileCards cards={data.cards} />
 </ProfileLayout>
