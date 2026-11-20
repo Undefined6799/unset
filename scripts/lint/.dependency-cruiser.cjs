@@ -497,10 +497,16 @@ module.exports = {
       "no-orphans",
       "A module nothing imports is usually dead code.",
       // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054); svelte-check reads
-      // apps/web's svelte.config.js (P1.20c).
+      // apps/web's svelte.config.js (P1.20c). A test's stand-in child process is started by path (ADR 0070).
       {
         orphan: true,
-        pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)", SVELTE_CHECK_CONFIG],
+        pathNot: [
+          TOOLING,
+          "\\.d\\.ts$",
+          "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)",
+          SVELTE_CHECK_CONFIG,
+          "^infrastructure/image/fixtures/[a-z-]+-child\\.ts$",
+        ],
       },
       {},
       "warn",
