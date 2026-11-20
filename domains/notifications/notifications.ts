@@ -91,8 +91,21 @@ export type NotificationList = {
   readonly more: boolean;
 };
 
+/** How many entries a read for a list of `limit` takes: enough to show it, count the badge and know of more. */
+export const readSize = (limit: number): number => Math.max(limit, COUNT_CAP) + 1;
+
+/**
+ * The bell's read: the session read brings this many newest entries with it (infrastructure/session/store.ts), so a
+ * page spends no statement of its own on the bell.
+ */
+export const BELL_READ = readSize(BELL_LIMIT);
+
+/** Up to `limit` entries and the badge's count, from a newest-first read of `readSize(limit)` entries. */
+export function listOf(read: readonly Entry[], limit: number): NotificationList {
+  return { entries: read.slice(0, limit), unread: Math.min(read.length, COUNT_CAP), more: read.length > limit };
+}
+
 /** Up to `limit` entries, and the count the badge shows, from one read. */
 export async function inboxList(inbox: Inbox, limit: number): Promise<NotificationList> {
-  const all = await inbox.list(Math.max(limit, COUNT_CAP) + 1);
-  return { entries: all.slice(0, limit), unread: Math.min(all.length, COUNT_CAP), more: all.length > limit };
+  return listOf(await inbox.list(readSize(limit)), limit);
 }

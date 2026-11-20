@@ -6,12 +6,11 @@
 // the member's own profile link are on app pages and on pages rendered for a member, which the gate sends private and
 // uncached; a visitor's public page follows the system theme, so its bytes stay the same for every visitor.
 import type { ServerLoad } from "@sveltejs/kit";
-import { BELL_LIMIT } from "@unset/domains-notifications";
 import { safeReturnPath } from "@unset/shared-http";
 import { shellAccount } from "../lib/server/account.ts";
 import { type AppOpenDeps, appOpen } from "../lib/server/app-open.ts";
 import { services } from "../lib/server/compose.ts";
-import { notificationsView } from "../lib/server/notifications.ts";
+import { bellView } from "../lib/server/notifications.ts";
 import { policyOf } from "../lib/server/route-table.ts";
 import { config } from "../lib/server/runtime.ts";
 import { themeFromCookies, themeReturnTo } from "../lib/server/theme.ts";
@@ -60,9 +59,9 @@ export const load: ServerLoad = async (event) => {
   // The changed privacy notice banner (P2.12b), as the app gate decided it for this request; it names the version it
   // shows so its dismiss records that one and no newer.
   const privacyNotice = locals.privacyNotice ? services().versions.privacy : null;
-  // The bell (P2.27): the newest few and the unread count, read on every page a member opens, so it is current with no
-  // script and no polling. Undefined for a visitor; "failed" when the read failed, and the page renders anyway.
-  const notifications = locals.did === undefined ? undefined : await notificationsView(event, BELL_LIMIT);
+  // The bell (P2.27): the newest few and the unread count, brought by the session read on every page a member opens,
+  // so it is current with no script, no polling and no statement of its own. Undefined for a visitor.
+  const notifications = locals.did === undefined ? undefined : await bellView(event);
   // Search and AI listing off on the whole site (P1.21b): every page's markup says noindex, as server.ts's header does.
   const siteNoindex = config.SEARCH_LISTING !== "on";
   return {

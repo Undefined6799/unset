@@ -264,6 +264,18 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.inbox": {
+      "web": {
+        "columns": {
+          "viewer": ["SELECT"],
+          "id": ["SELECT"],
+          "did": ["SELECT"],
+          "reason": ["SELECT"],
+          "topic": ["SELECT"],
+          "created_at": ["SELECT"]
+        }
+      }
+    },
     "app.notification": {
       "web": {
         "columns": {

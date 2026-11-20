@@ -78,7 +78,9 @@ Notifications are private, server-side data, never PDS records.
 - New personal data: a member's unopened notifications. Purpose: telling the member about their own account.
   Lawful basis: contract (GDPR Art. 6(1)(b)), as for the account itself. Erasure: `core.erase_did` deletes them, and
   they go by cascade with `app.account`. Export: they join the privacy export when it is built. The ROPA has the line.
-- Every signed-in page reads the inbox once more (one indexed statement, newest 11).
+- The bell costs a page no statement of its own: the session read brings the newest 11 entries this browser may
+  see, through `app.inbox`, the one view where the rule of point 4 is written, which the inbox's own statements read
+  too. The per-route query budget is unchanged.
 - A member who signs in on a new device with no other browser signed in sees no sign-in alert there; any older
   browser that later opens the app does, until the entry is 30 days old.
 - Limits: opening and marking all as read count against a `notifications` policy (the page limits and 120 a minute

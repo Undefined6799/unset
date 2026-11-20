@@ -3,7 +3,7 @@
 // an entry only older browsers may see stays out of reach of the browser it is about and of every later one.
 import { relative } from "node:path";
 import { type Did, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
-import { type Entry, notify } from "@unset/domains-notifications";
+import { BELL_READ, type Entry, notify } from "@unset/domains-notifications";
 import {
   createAccountRepository,
   createNotificationStore,
@@ -204,6 +204,35 @@ describe("notification store", () => {
   test("notifications.the_table_refuses_an_unknown_reason", async () => {
     const did = await member();
     await expect(db((c) => store.insert(c, did, { reason: "chat" as "sign_in" }))).rejects.toThrow(/check constraint/);
+  });
+
+  test("notifications.the_session_read_brings_the_bell_by_the_same_rule", async () => {
+    // The bell comes with the session read (infrastructure/session/store.ts) through app.inbox, as the list does.
+    const reader = createSessionStore({
+      withDb: (deadline, fn) => withClient(web, deadline, fn),
+      limits: { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 },
+      log: quiet,
+    });
+    const did = await member();
+    const laptop = await withTransaction(web, null, (tx) => sessions.create(tx, did));
+    await new Promise((done) => setTimeout(done, 2));
+    const thief = await withTransaction(web, null, async (tx) => {
+      const session = await sessions.create(tx, did);
+      await store.insert(tx, did, { reason: "sign_in", olderSessionsOnly: true });
+      return session;
+    });
+    for (let n = 0; n < BELL_READ + 2; n += 1) {
+      await send(did, { reason: "privacy_notice", topic: `v${n}`, dedupeKey: `k${n}` });
+    }
+    const bell = async (cookieValue: string) =>
+      (await reader.read({ key: {}, cookieValue, deadline: null })).session?.inbox ?? [];
+    const laptopBell = await bell(laptop.cookieValue);
+    expect(laptopBell.map((e) => e.id)).toEqual((await list(did, laptop.idHash, BELL_READ)).map((e) => e.id));
+    expect(laptopBell).toHaveLength(BELL_READ);
+    expect((await bell(thief.cookieValue)).map((e) => e.reason)).not.toContain("sign_in");
+    expect((await bell(thief.cookieValue)).map((e) => e.sentAt)).toEqual(
+      (await list(did, thief.idHash, BELL_READ)).map((e) => new Date(Math.floor(e.sentAt.getTime()))),
+    );
   });
 
   test("notifications.notify_refuses_before_the_store_is_asked", async () => {

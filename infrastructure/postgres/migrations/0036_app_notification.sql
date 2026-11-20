@@ -29,6 +29,19 @@ GRANT SELECT (id, did, reason, topic, dedupe_key, older_sessions_only, created_a
 GRANT INSERT (did, reason, topic, dedupe_key, older_sessions_only) ON app.notification TO web;
 GRANT DELETE ON app.notification TO web;
 
+-- The one rule for what a browser may see (ADR 0079 point 4), written once: a row per live session and each of its
+-- member's notifications, leaving out an `older_sessions_only` row unless the session began before it was sent. The
+-- inbox's statements and the session read (infrastructure/session/store.ts, which brings the bell with it so a page
+-- spends no statement of its own on it) both read through it. security_invoker checks web's own grants on the tables
+-- under it (https://www.postgresql.org/docs/18/sql-createview.html).
+CREATE VIEW app.inbox WITH (security_invoker = true) AS
+  SELECT s.id_hash AS viewer, n.id, n.did, n.reason, n.topic, n.created_at
+    FROM app.session s
+    JOIN app.notification n ON n.did = s.did
+   WHERE NOT n.older_sessions_only OR n.created_at > s.created_at;
+
+GRANT SELECT (viewer, id, did, reason, topic, created_at) ON app.inbox TO web;
+
 -- core.erase_did, as in migration 0035, with app.notification.did added to step 2's list and its statement to step 4,
 -- before app.account (the rows would also go by cascade; the statement counts them). The signature, owner and grants
 -- are unchanged, so CREATE OR REPLACE keeps them.

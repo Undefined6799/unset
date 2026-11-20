@@ -2,11 +2,13 @@
 // as read through `Inbox`, and none of that changes when a source is added.
 export {
   BELL_LIMIT,
+  BELL_READ,
   COUNT_CAP,
   type Entry,
   type Inbox,
   inboxList,
   KEEP_DAYS,
+  listOf,
   type Notification,
   type NotificationId,
   type NotificationList,
@@ -17,4 +19,5 @@ export {
   parseNotificationId,
   REASONS,
   type Reason,
+  readSize,
 } from "./notifications.ts";

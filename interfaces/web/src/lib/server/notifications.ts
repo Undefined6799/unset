@@ -4,7 +4,15 @@
 import type { RequestEvent } from "@sveltejs/kit";
 import type { REASON_SCREENS } from "@unset/apps-web/lib/notifications/reasons.ts";
 import type { NotificationsView } from "@unset/apps-web/lib/notifications/view.ts";
-import { type Inbox, inboxList, type Reason } from "@unset/domains-notifications";
+import {
+  BELL_LIMIT,
+  type Entry,
+  type Inbox,
+  inboxList,
+  listOf,
+  type NotificationList,
+  type Reason,
+} from "@unset/domains-notifications";
 import { services } from "./compose.ts";
 import { gateSession } from "./session.ts";
 
@@ -21,16 +29,31 @@ export function inboxOf(event: RequestEvent): Inbox | undefined {
   return services().notifications.inbox(event.locals.did, session.idHash, event.locals.deadline);
 }
 
+const viewOf = (list: NotificationList): NotificationsView => ({
+  state: "ready",
+  entries: list.entries.map((e: Entry) => ({ id: e.id, reason: e.reason, sentAt: e.sentAt.toISOString() })),
+  unread: list.unread,
+  more: list.more,
+});
+
 /** Up to `limit` notifications for the browser's session, or undefined for a request with none. */
 export async function notificationsView(event: RequestEvent, limit: number): Promise<NotificationsView | undefined> {
   const inbox = inboxOf(event);
   if (inbox === undefined) return undefined;
   try {
-    const list = await inboxList(inbox, limit);
-    const entries = list.entries.map((e) => ({ id: e.id, reason: e.reason, sentAt: e.sentAt.toISOString() }));
-    return { state: "ready", entries, unread: list.unread, more: list.more };
+    return viewOf(await inboxList(inbox, limit));
   } catch (error) {
     services().log.warn("notifications.read_failed", { kind: error instanceof Error ? error.name : "unknown" });
     return { state: "failed" };
   }
+}
+
+/**
+ * The bell, from the entries the session read brought (infrastructure/session/store.ts), so a page spends no
+ * statement of its own on it; a session read without them reads the inbox instead.
+ */
+export async function bellView(event: RequestEvent): Promise<NotificationsView | undefined> {
+  const inbox = gateSession(event)?.inbox;
+  if (inbox === undefined || event.locals.did === undefined) return notificationsView(event, BELL_LIMIT);
+  return viewOf(listOf(inbox, BELL_LIMIT));
 }

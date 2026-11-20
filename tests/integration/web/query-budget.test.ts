@@ -24,15 +24,10 @@ import { readyMember } from "./members.ts";
 
 const BUDGET = 5;
 /**
- * The owner's page runs 7: the session, the account row, the bell's inbox read (P2.27, ADR 0079), then the sealed
- * grant read once to restore the OAuth session and once more inside the restore lock for each of the page's PDS calls
- * (measured 2026-11-18 on k2, the inbox read added 2026-11-20).
+ * The owner's page runs 6: the session, the account row, then the sealed grant read once to restore the OAuth session
+ * and once more inside the restore lock for each of the page's PDS calls (measured 2026-11-18 on k2).
  */
-/**
- * Settings › Privacy runs 6 since the bell's inbox read joined every signed-in page (P2.27, ADR 0079; measured
- * 2026-11-20): it ran 5, the budget, before.
- */
-const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 7, "/settings/privacy": 6 };
+const KNOWN_OVERRUNS: Record<string, number> = { [`/did:plc:${"a".repeat(24)}`]: 6 };
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROUTES = join(REPO, "interfaces", "web", "src", "routes");
 const provided = inject("postgres");
