@@ -79,11 +79,16 @@ describe("image upload intake", () => {
     expect(s.calls.read).toBe(0);
   });
 
-  test("upload.limits_refuse_before_the_body_is_read", async () => {
-    const s = stack({ rows: { admit: async () => ({ ok: false, code: "image.hourly_limit" }) } });
-    expect(await uploadImage(s.deps(), s.read)).toEqual({ ok: false, code: "image.hourly_limit" });
-    expect(s.calls.read).toBe(0);
-  });
+  // The numbers themselves, and that a busy day fits inside them, are domains/content library.test.ts and
+  // tests/integration/postgres/image-store.test.ts; here, that each refusal stops the upload before its body.
+  test.each(["image.hourly_limit", "image.daily_limit", "image.quota"] as const)(
+    "upload.limits_refuse_before_the_body_is_read: %s",
+    async (code) => {
+      const s = stack({ rows: { admit: async () => ({ ok: false, code }) } });
+      expect(await uploadImage(s.deps(), s.read)).toEqual({ ok: false, code });
+      expect(s.calls.read).toBe(0);
+    },
+  );
 
   test("upload.one_at_a_time_per_member_and_four_site_wide", async () => {
     const s = stack();
