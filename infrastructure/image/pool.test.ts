@@ -431,6 +431,28 @@ describe("the pool", () => {
     expect(result.versions.find((v) => v.name === "w480")).toMatchObject({ width: 480, height: 4800 });
   });
 
+  test("pool.answer_cap: an answer declared larger than its job allows ends the child before it is read", async () => {
+    const ready = eventOf("ready");
+    const flooding = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 15_000,
+      addressSpaceMb: 4096,
+      childPath: fixture("flood-child.ts"),
+      onEvent: ready.onEvent,
+    });
+    try {
+      await ready.happened;
+      const started = Date.now();
+      const result = await flooding.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN]);
+      expect(result).toEqual({ kind: "refused", code: "image.cannot_use" });
+      // Refused on the declared length, not after the job's deadline.
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      flooding.close();
+    }
+  }, 20_000);
+
   test("pool.close_settles: closing the pool answers a job a child is working on", async () => {
     const ready = eventOf("ready");
     const hanging = createImagePool({

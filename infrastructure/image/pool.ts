@@ -10,8 +10,10 @@
 // small) never forks in a tight loop. After three failed starts in a row in every slot the pool is down: it answers
 // busy at once and empties its queue, and comes back up when a child is ready again. A crash or a timeout during a
 // job replaces the child at once, since the job, not the child, is the likely cause.
-import { type ChildProcess, fork } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import type { Readable, Writable } from "node:stream";
+import { serialize } from "node:v8";
 import type {
   ImageProcessor,
   ImageRefusal,
@@ -20,6 +22,7 @@ import type {
   ProcessResult,
   VersionSpec,
 } from "@unset/domains-content";
+import { createFrameReader, frame } from "./channel.ts";
 import type { JobMessage } from "./child.ts";
 import { sniffImage } from "./sniff.ts";
 
@@ -56,6 +59,10 @@ const FIRST_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 30_000;
 /** Failed starts in a row after which a slot counts as down. */
 const DOWN_AFTER = 3;
+/** The largest frame an idle child may send: its ready message is a few bytes. */
+const IDLE_FRAME_MAX = 1024;
+/** Room in an answer beyond its versions' bytes, for the manifest around them. */
+const ANSWER_OVERHEAD = 64 * 1024;
 
 export function createImagePool(options: PoolOptions): ImageProcessor & { close(): void } {
   const childPath = options.childPath ?? new URL("./child.ts", import.meta.url).pathname;
@@ -64,14 +71,16 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
   let closed = false;
   let down = false;
 
+  // No IPC channel (see channel.ts): jobs go in on the child's stdin, answers come back on its fd 3.
   const spawnChild = (): ChildProcess =>
-    fork(childPath, [], {
+    spawn(PRLIMIT, [`--as=${options.addressSpaceMb * 1024 * 1024}`, "--", process.execPath, childPath], {
       env: {},
-      execPath: PRLIMIT,
-      execArgv: [`--as=${options.addressSpaceMb * 1024 * 1024}`, "--", process.execPath],
-      serialization: "advanced",
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      stdio: ["pipe", "ignore", "ignore", "pipe"],
     });
+
+  /** The most a slot's child may declare in one frame: an answer to its job, or only a ready message when idle. */
+  const frameMax = (slot: Slot): number =>
+    slot.busy === null ? IDLE_FRAME_MAX : slot.busy.job.versions.reduce((sum, v) => sum + v.maxBytes, ANSWER_OVERHEAD);
 
   const slots: Slot[] = Array.from({ length: options.children }, () => ({
     child: null,
@@ -90,7 +99,18 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     slot.ready = false;
     slot.starting = setTimeout(() => failedStart(slot), options.startTimeoutMs ?? 10_000);
     slot.starting.unref();
-    child.on("message", (message: unknown) => {
+    const answers = child.stdio[3] as Readable;
+    const reader = createFrameReader(
+      () => frameMax(slot),
+      (message) => onMessage(message),
+      () => {
+        if (slot.child === child) failChild(slot);
+      },
+    );
+    answers.on("data", (chunk: Buffer) => reader.push(chunk));
+    answers.on("error", () => undefined);
+    (child.stdin as Writable).on("error", () => undefined);
+    const onMessage = (message: unknown) => {
       if (slot.child !== child) return;
       // A taken-over child can send anything: a message that is not one of the two shapes ends the child (and its
       // job, as cannot_use) rather than throwing in the parent.
@@ -112,7 +132,7 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
       } else {
         failChild(slot);
       }
-    });
+    };
     const died = () => {
       if (slot.child !== child) return;
       if (slot.busy !== null) {
@@ -155,6 +175,8 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     slot.ready = false;
     if (child === null) return;
     child.removeAllListeners();
+    child.stdin?.destroy();
+    (child.stdio[3] as Readable | null)?.destroy();
     child.kill("SIGKILL");
   }
 
@@ -188,7 +210,7 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
       const timer = setTimeout(() => finish(slot, { kind: "refused", code: "image.timeout" }, true), options.timeoutMs);
       slot.busy = { id, job, timer };
       const { done: _done, ...message } = job;
-      slot.child.send({ id, ...message } satisfies JobMessage);
+      (slot.child.stdin as Writable).write(frame(serialize({ id, ...message } satisfies JobMessage)));
     }
   }
 
