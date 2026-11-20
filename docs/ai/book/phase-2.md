@@ -3929,6 +3929,13 @@ Readers still hide both kinds until P2.19c draws them.
 P2.19d (ADR 0070 point 8's body and request caps, one pull request on Alex's line): web's `/images` route takes up to
 31 MiB and sets adapter-node's cap; net-guard's `review` policy sends up to 32 MiB, the object store's puts up to 2 MiB,
 and `com.atproto.repo.uploadBlob` alone up to 2 MiB; every other route and request keeps its cap.
+P2.19b, first half, built 2026-11-20: `POST /images` takes one multipart field `image` and answers JSON (id, size,
+version names, or a refusal code). In order: uploads open on this stack (`uploadsOpen`), one upload per member and
+four per process (`IMAGE_UPLOADS_IN_FLIGHT`), the hourly, daily and quota limits before the body is read, review's
+versions through `REVIEW_URL` and net-guard's `review` policy, the row, then every version under
+`drafts/<did>/i/<id>/`; a failed put removes what it wrote. web's sweeps run the image sweep and delete each swept
+image's objects. Left for the second half: the shared editor control and the no-script card form, an orphan-object
+sweep, the objects at erasure (P3.07) and in export (P4.26), and the privacy notice and record of processing lines.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)

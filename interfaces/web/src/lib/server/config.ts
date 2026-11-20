@@ -105,6 +105,14 @@ const objectStoreConfig = {
 };
 
 /**
+ * The review process (ADR 0070 point 2.2): its one internal origin on `review_web`, where web sends a member's picture
+ * through net-guard's `review` policy and gets the versions back. No secret: review holds none and trusts web's network.
+ */
+const reviewConfig = {
+  REVIEW_URL: origin({ protocols: ["http:"] }),
+};
+
+/**
  * Search and AI listing for the whole site (P1.21b, within ADR 0062). Off, the default, so a stack that leaves it unset
  * is never listed: every response says noindex, robots.txt refuses AI crawlers and names no member, and the sitemap
  * lists nothing, whatever members chose; their choices are kept. On, each member's own choices decide, as ADR 0062 describes.
@@ -139,6 +147,7 @@ export const schema = defineEntrypointConfig({
   ...onboardingConfig,
   ...inviteConfig,
   ...objectStoreConfig,
+  ...reviewConfig,
   ...searchConfig,
   ...legalConfig,
   ...testRoutesConfig,

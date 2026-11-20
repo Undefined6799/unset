@@ -207,6 +207,7 @@ services:
       # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
       # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
       OBJECT_STORE_URL: http://objects:8333
+      REVIEW_URL: http://review:8082
       OBJECT_STORE_BUCKET: unset-private
       OBJECT_STORE_ACCESS_ID: unset-web
       OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web

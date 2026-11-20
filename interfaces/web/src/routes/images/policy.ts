@@ -7,11 +7,14 @@ import { definePolicy } from "../../lib/server/policy.ts";
  */
 export const IMAGE_UPLOAD_LIMIT_BYTES = 31 * 1024 * 1024;
 
-// The upload itself arrives in P2.21b. A write needs a session and counts against the member's own profile limit.
+// The upload (+server.ts). A write needs a session and counts against the member's own profile limit. Its deadline
+// covers a full 64 MiB upload at about 5 Mbit/s (107 s, ADR 0076) and review's 20 s, and stays below the edge's 130 s
+// wait for an answer (tests/integration/deployment/edge/timeouts.ts).
 export const policy = definePolicy({
   group: "app",
   limit: "default",
   writeLimit: "profile",
   session: "required",
   maxBody: IMAGE_UPLOAD_LIMIT_BYTES,
+  deadlineMs: 125_000,
 });
