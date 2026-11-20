@@ -53,6 +53,7 @@ describe("parseReadme, adversarial input", () => {
     "](",
     "\\](",
     "\\[",
+    "\\]",
     "[a]",
     "[a](",
     "](x)",
