@@ -655,3 +655,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   per address, where it was 20; `app_global` bounds a client's average at 4 a second. ADR 0031 Decision 1's value 20
   and its reason, ADR 0042 Decision 1's "unchanged" for that zone and ADR 0042 Decision 2's "25 clients" sizing of
   `default` are superseded. 0031 and 0042 are not edited.
+- **ADR 0067 accepted (Alex, 2026-11-20 00:33Z, against 14f438b; own record:
+  [0067](0067-account-lifecycle-and-burned-names.md)):** deactivation, deletion, takedown and moving away follow
+  atproto's account model. A deletion asked of us is final 30 days later; there is no PLC tombstone by default; every
+  hosted name a member ever held is burned and never issued again; the privacy notice says the PLC log is permanent; a
+  member who moves to another PDS may keep their name until they change it.

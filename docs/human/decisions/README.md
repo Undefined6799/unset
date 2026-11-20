@@ -72,4 +72,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0064](0064-handles-move-to-unset-name.md) | Handles move from unset.im to unset.name, a DNSSEC-signed domain; supersedes 0025's handle rows | Proposed (awaiting Alex) |
 | [0065](0065-resend-sends-account-mail-from-the-us.md) | Resend sends account mail for now, with its data in the United States; drops answer 21's Canada or EU hosting (P2.25) | Proposed (awaiting Alex) |
 | [0066](0066-edge-app-burst-sixty.md) | The edge's `app_burst` zone allows 60 requests per 10 seconds per address; supersedes 0031's value 20 and two sizing statements of 0042 (P1.20r) | Accepted 2026-11-20 |
-| [0067](0067-account-lifecycle-and-burned-names.md) | Deactivation, deletion after 30 days, takedown and moving away follow atproto's account model; no PLC tombstone by default; every hosted name is burned (P1.21e) | Proposed (awaiting Alex) |
+| [0067](0067-account-lifecycle-and-burned-names.md) | Deactivation, deletion after 30 days, takedown and moving away follow atproto's account model; no PLC tombstone by default; every hosted name is burned (P1.21e) | Accepted 2026-11-20 |

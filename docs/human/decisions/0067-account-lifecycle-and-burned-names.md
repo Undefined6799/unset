@@ -1,8 +1,10 @@
 # 0067 — Deactivation, deletion, takedown and moving away follow atproto's account model; every hosted name is burned
 
-Status: Proposed (awaiting Alex). Step P1.21e (docs only). Alex, 2026-11-19 22:40Z: no PLC tombstone by default; 30
-days before a deletion is final; every name a member ever held is burned; the privacy notice says the PLC log is
-permanent; a member who moves to another PDS may keep their name until they change it.
+Status: Accepted by Alex, 2026-11-20 00:33Z, against 14f438b (his line "Merge 1814 at 14f438b", typed in the project
+chat after the coordinator had reviewed that head and CI was green). This status paragraph, the index row and the ADR
+0001 acceptance line were added afterwards in #1808. Step P1.21e (docs only). Alex, 2026-11-19 22:40Z: no PLC tombstone
+by default; 30 days before a deletion is final; every name a member ever held is burned; the privacy notice says the PLC
+log is permanent; a member who moves to another PDS may keep their name until they change it.
 
 ## Context
 A member's DID and handle outlive their account in ways the protocol fixes and we do not. The findings, with every
