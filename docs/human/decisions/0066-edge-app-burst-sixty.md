@@ -1,11 +1,11 @@
 # 0066 — The edge's app_burst zone allows 60 requests per 10 seconds
 
-Status: Accepted by Alex, 2026-11-20 00:33:12Z, against b62aa80 (his line "Merge 1808 at b62aa80", typed in the
-project chat after the coordinator had reviewed that head and CI was green). The only changes since that head are this
-status paragraph, the index row, the ADR 0001 acceptance line and merges of main. Step P1.20r. Alex asked for it on
-2026-11-19 13:17:24Z: "increase it from 20 to 60". It loosens a security control (ADR 0059 decision 1). It supersedes
-the value 20 for `app_burst` and its reason in ADR 0031 Decision 1, and two statements of ADR 0042 (below). Neither
-accepted record is edited.
+Status: Accepted by Alex, 2026-11-20 00:33:12Z, against b62aa80 (his line "Merge 1808 at b62aa80", typed in the project
+chat after the coordinator had reviewed that head and CI was green). The only changes since that head are this status
+paragraph, the index row, the ADR 0001 acceptance line, merges of main and the record of ADR 0067's acceptance. Step
+P1.20r. Alex asked for it on 2026-11-19 13:17:24Z: "increase it from 20 to 60". It loosens a security control (ADR 0059
+decision 1). It supersedes the value 20 for `app_burst` and its reason in ADR 0031 Decision 1, and two statements of ADR
+0042 (below). Neither accepted record is edited.
 
 ## Context
 ADR 0031 Decision 1 gave the dev app site's edge a per-client zone `app_burst`, no matcher, 20 events per 10 seconds,
