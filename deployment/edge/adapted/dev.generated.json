@@ -207,7 +207,37 @@
                                     "app_burst": {
                                       "ipv6_prefix": 64,
                                       "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "not": [
+                                            {
+                                              "method": ["GET", "HEAD"],
+                                              "vars_regexp": {
+                                                "{http.request.uri.path}": {
+                                                  "pattern": "^/_app/immutable/(?:entry|nodes|chunks|assets)/[\\w-]+(?:\\.[\\w-]+)?\\.(?:js|css|woff2|png)$"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ],
                                       "max_events": 20,
+                                      "window": 10000000000
+                                    },
+                                    "app_files": {
+                                      "ipv6_prefix": 64,
+                                      "key": "{http.vars.client_ip}",
+                                      "match": [
+                                        {
+                                          "method": ["GET", "HEAD"],
+                                          "vars_regexp": {
+                                            "{http.request.uri.path}": {
+                                              "pattern": "^/_app/immutable/(?:entry|nodes|chunks|assets)/[\\w-]+(?:\\.[\\w-]+)?\\.(?:js|css|woff2|png)$"
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "max_events": 120,
                                       "window": 10000000000
                                     },
                                     "app_global": {

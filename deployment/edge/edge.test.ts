@@ -138,6 +138,20 @@ const handlers = (config: Json, name: string): Obj[] => objects(config).filter((
 const at = (value: Json | undefined, ...keys: string[]): Json | undefined =>
   keys.reduce<Json | undefined>((each, key) => (isObj(each) ? each[key] : undefined), value);
 
+type ZoneValue = { events: number; window: string };
+/** Whether each event at `times` (ms, ascending) passes one client's zone, as caddy-ratelimit's ring buffer decides. */
+function allowedAt(zone: ZoneValue, times: readonly number[]): boolean[] {
+  const windowMs = nanoseconds(zone.window) / 1_000_000;
+  const ring: number[] = Array(zone.events).fill(Number.NEGATIVE_INFINITY);
+  let cursor = 0;
+  return times.map((at) => {
+    if (at - (ring[cursor] ?? 0) <= windowMs) return false;
+    ring[cursor] = at;
+    cursor = (cursor + 1) % ring.length;
+    return true;
+  });
+}
+
 /** A window as limits.json writes it (`5m`, `24h`, `10s`), in the nanoseconds Caddy adapts a duration to. */
 function nanoseconds(window: string): number {
   const [, count, unit] = /^(\d+)([smh])$/.exec(window) ?? [];
@@ -286,6 +300,29 @@ describe("edge config", () => {
     expect(adapted("dev")).toEqual(expect.arrayContaining([app, pds]));
     expect(adapted("dev").length).toBe(2);
     expect(adapted("local")).toEqual([pds, pds]);
+  });
+
+  test("app_files_lets_two_cold_browsers_load_at_once_and_refuses_a_flood", () => {
+    // P1.21g (ADR 0069): under the split client a cold app page asks for up to 30 hashed build files at once (27
+    // scripts on the heaviest route, the stylesheet and two icons; scripts/budgets/app-js.ts lists them) and its
+    // document, its data and the two fonts, which stay in app_burst. Two members behind one address opening a cold page
+    // in the same second, and then a third page each with ten new pieces, must all pass; a flood one past the zone must
+    // not. The zone is caddy-ratelimit's ring buffer (5625512f24f6 ringbuffer.go:66-84): `events` slots of times, an
+    // event is allowed when the slot under the cursor is older than the window, and only an allowed event takes a slot.
+    const zones = (JSON.parse(read("limits.json")) as { appRateLimitZones: Record<string, ZoneValue> })
+      .appRateLimitZones;
+    const files = zones.app_files;
+    const burst = zones.app_burst;
+    if (files === undefined || burst === undefined) throw new Error("no app_files or app_burst zone in limits.json");
+    const coldPageFiles = 30;
+    const twoColdBrowsers = Array(2 * coldPageFiles).fill(0);
+    const nextPages = Array.from({ length: 2 * 10 }, (_, i) => 1_000 + 100 * i);
+    expect(allowedAt(files, [...twoColdBrowsers, ...nextPages]).filter((ok) => !ok)).toEqual([]);
+    const flood = allowedAt(files, Array(files.events + 1).fill(0));
+    expect(flood.at(-1)).toBe(false);
+    expect(flood.slice(0, -1).every(Boolean)).toBe(true);
+    // What app_burst sees of the same two cold pages: two documents and two fonts each, none of the files.
+    expect(allowedAt(burst, Array(2 * 3).fill(0)).every(Boolean)).toBe(true);
   });
 
   test("every_pds_route_has_a_zone", () => {

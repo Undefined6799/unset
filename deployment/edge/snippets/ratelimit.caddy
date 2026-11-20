@@ -149,6 +149,21 @@
 # app_signin counts POST /join too (P2.10): it starts a sign-up at our PDS, as POST /login starts a sign-in.
 # app_signin's two match blocks are either-or: each is one matcher set, and a zone counts a request any set matches
 # (caddy-ratelimit 5625512f24f6 caddyfile.go:141-147, handler.go:205); the callback arrives as a GET redirect.
+# app_files (P1.21g; ADR 0069): the split client (output.bundleStrategy "split") loads a cold app page as about 30
+# content-hashed build files under /_app/immutable/, in a second, so they count in app_files instead of app_burst;
+# documents, data, fonts, version.json and every POST stay in app_burst as before, and app_global still counts
+# everything, files too. A request is a build file only when it is a GET or HEAD and its decoded path, before Caddy
+# cleans it, is one of the names SvelteKit 3.2.0 writes (entry/, nodes/, chunks/, assets/; one hash of [A-Za-z0-9_-],
+# a known extension): {http.request.uri.path} is the request's own decoded path (Caddy v2.11.9 replacer.go:186), so
+# no run of slashes, dot segment, letter case or other spelling that web would read as another route can match.
+# adapter-node serves the files from a table built at boot, with a year's immutable caching, and SvelteKit answers a
+# missing one under /_app/ with a plain 404 before any hook runs (kit 3.2.0 src/runtime/server/respond.js:367), so
+# nothing this zone counts reaches a hook, a session or the database. 120 per 10 s is four cold pages at once.
+(app-build-file) {
+	method GET HEAD
+	vars_regexp {http.request.uri.path} ^/_app/immutable/(?:entry|nodes|chunks|assets)/[\w-]+(?:\.[\w-]+)?\.(?:js|css|woff2|png)$
+}
+
 (app-ratelimit) {
 	rate_limit {
 		zone app_signin {
@@ -165,9 +180,23 @@
 			window 5m
 		}
 		zone app_burst {
+			match {
+				not {
+					import app-build-file
+				}
+			}
 			key {client_ip}
 			ipv6_prefix 64
 			events 20
+			window 10s
+		}
+		zone app_files {
+			match {
+				import app-build-file
+			}
+			key {client_ip}
+			ipv6_prefix 64
+			events 120
 			window 10s
 		}
 		zone app_global {
