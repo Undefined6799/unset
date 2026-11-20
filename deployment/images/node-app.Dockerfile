@@ -34,6 +34,7 @@ COPY --from=deps /app/shared /app/shared
 # Postgres, sealing and net-guard, the session store sign-in writes to (P2.06), the audit writer the age gate
 # calls (P2.12), the profile domain the profile page and save route call (P2.20s), and the record validator.
 # web_image_copies_every_workspace_the_server_reaches fails when one of them is missing.
+COPY --from=deps /app/domains/content /app/domains/content
 COPY --from=deps /app/domains/identity /app/domains/identity
 COPY --from=deps /app/domains/profile /app/domains/profile
 COPY --from=deps /app/infrastructure/audit /app/infrastructure/audit

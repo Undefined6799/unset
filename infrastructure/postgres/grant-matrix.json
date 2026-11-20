@@ -230,6 +230,40 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.image": {
+      "web": {
+        "columns": {
+          "id": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "kind": ["SELECT", "INSERT"],
+          "state": ["SELECT", "INSERT", "UPDATE"],
+          "width": ["SELECT", "INSERT"],
+          "height": ["SELECT", "INSERT"],
+          "bytes": ["SELECT", "INSERT"],
+          "created_at": ["SELECT", "INSERT"],
+          "unused_since": ["SELECT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.image_upload": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "admitted_at": ["SELECT", "INSERT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.image_use": {
+      "web": {
+        "columns": {
+          "image_id": ["SELECT", "INSERT"],
+          "record_uri": ["SELECT", "INSERT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

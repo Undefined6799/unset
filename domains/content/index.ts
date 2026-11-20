@@ -1,5 +1,16 @@
 // Content (decision 34): what members post and place on their pages. Today: the shared image foundation's
-// processing contract and its image standard (ADR 0070).
+// processing contract, its image standard and a member's image library (ADR 0070).
+
+export type { ImageAdmission, InspectionResult, UploadUsage } from "./images/library.ts";
+export {
+  admitUpload,
+  fitsQuota,
+  IMAGE_ALLOWANCE,
+  IMAGE_EXPIRY,
+  SWEEP_GOVERNOR,
+  sweepAllowed,
+  uploadsOpen,
+} from "./images/library.ts";
 export type {
   ImageProcessor,
   ImageRefusal,

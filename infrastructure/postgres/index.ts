@@ -24,6 +24,14 @@ export {
   type HandleStore,
 } from "./handleStore.ts";
 export {
+  createImageStore,
+  type ImageKind,
+  type ImageStore,
+  type LibraryImage,
+  type StoredImage,
+  type SweepResult,
+} from "./imageStore.ts";
+export {
   createIndexStore,
   INGEST_COUNTERS,
   type IndexFrame,

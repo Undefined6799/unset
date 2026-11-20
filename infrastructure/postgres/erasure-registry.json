@@ -76,5 +76,17 @@
   "app.discoverability.did": {
     "strategy": "delete_row",
     "reason": "the member's Search and AI choices for their public page (ADR 0062); they go when they are erased"
+  },
+  "app.image.did": {
+    "strategy": "delete_row",
+    "reason": "the member's stored images (ADR 0070): sizes, state and times; the rows go when they are erased, and the object prefix drafts/<did>/ with them once objects are written (P2.18 follow-up)"
+  },
+  "app.image_use.record_uri": {
+    "strategy": "delete_row",
+    "reason": "which of the member's records use each image; the rows go with their image when the member is erased"
+  },
+  "app.image_upload.did": {
+    "strategy": "delete_row",
+    "reason": "the member's upload times for the hourly and daily limits, kept a day; they go when the member is erased"
   }
 }

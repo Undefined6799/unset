@@ -2325,6 +2325,7 @@ describe("indexer image", () => {
       "COPY --from=deps /app/package.json /app/package.json",
       "COPY --from=deps /app/node_modules /app/node_modules",
       "COPY --from=deps /app/shared /app/shared",
+      "COPY --from=deps /app/domains/content /app/domains/content",
       "COPY --from=deps /app/domains/identity /app/domains/identity",
       "COPY --from=deps /app/domains/profile /app/domains/profile",
       "COPY --from=deps /app/infrastructure/firehose /app/infrastructure/firehose",
