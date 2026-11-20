@@ -3,20 +3,20 @@ title: notifications
 weight: 3
 ---
 
-What a member is told about their own account, as one list for the navbar bell and the notifications page. Package `@unset/domains-notifications`. The design is [ADR 0079](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0079-notifications-in-core.md), Proposed.
+The member's notification inbox: the one way to send into it, and the list the navbar bell and the notifications page read. Package `@unset/domains-notifications`. The design is [ADR 0079](https://github.com/Undefined6799/unset/blob/main/docs/human/decisions/0079-notifications-in-core.md), Proposed.
 
 ## Owns
 
-The list's order, its caps and the one time a form may send. Nothing here is stored and this folder opens no socket.
+The closed list of reasons, what a notification may carry, the list's caps and how long an entry lives. The rows are in `app.notification` (migration 0036), behind `infrastructure/postgres/notificationStore.ts`; this folder opens no socket.
 
 | Module | What it holds |
 | --- | --- |
 | `domains/notifications/index.ts` | Package root. Re-exports the names below. |
-| `domains/notifications/notifications.ts` | `notificationsFor`, `parseSignInAt`, `BELL_LIMIT` (5), `PAGE_LIMIT` (50), `COUNT_CAP` (10), and the entry types. |
+| `domains/notifications/notifications.ts` | `notify` (the send call), `inboxList`, `REASONS`, `parseNotificationId`, the `Inbox` and `Outbox` ports, `BELL_LIMIT` (5), `PAGE_LIMIT` (50), `COUNT_CAP` (10), `KEEP_DAYS` (30). |
 
-| Entry | Comes from |
+| Reason | Sent by |
 | --- | --- |
-| `sign_in` | Another live session of the member that began after this browser's and after this browser last opened its sign-in entries (`infrastructure/session` `newerSignIns`, `app.session.sign_ins_seen_at`). |
-| `privacy_notice` | The privacy notice changed since the member dismissed it (`app.account.privacy_notice_seen_version`). |
+| `sign_in` | The OAuth callback, in the transaction that makes the session; only browsers signed in before it see it. |
+| `privacy_notice` | The OAuth callback, once per notice version, when the changed-notice banner would show; withdrawn when the banner is dismissed. |
 
-`parseSignInAt` accepts only the store's exact shape, ISO 8601 in UTC with six decimals, so opening an entry names its own session and no later one.
+A notification carries a reason, an optional topic (1 to 64 printable ASCII characters) and an optional dedupe key (1 to 128). Nothing a person typed is stored: the words come from the screens' reason table.

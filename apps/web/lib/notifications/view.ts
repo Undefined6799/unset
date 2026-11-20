@@ -1,8 +1,10 @@
 // What the server sends the screens for a notification (P2.27; rule SE-3: an explicit view type, no domain object).
-// `at` is the session's start in UTC with microseconds; the open form sends it back as it came.
-export type NotificationView =
-  | { readonly kind: "sign_in"; readonly at: string }
-  | { readonly kind: "privacy_notice"; readonly version: string };
+// `reason` is one of the keys of REASON_SCREENS (reasons.ts); `sentAt` is ISO 8601 in UTC.
+export type NotificationView = {
+  readonly id: string;
+  readonly reason: string;
+  readonly sentAt: string;
+};
 
 /** The bell's and the page's data: the entries, the capped unread count, and whether older ones exist. */
 export type NotificationsView =
@@ -29,13 +31,3 @@ export function timeText(at: string, local: boolean): string {
   const date = new Date(at);
   return local ? OWN.format(date) : `${UTC.format(date)} UTC`;
 }
-
-/** The newest sign-in listed: what "Mark all as read" sends, so it covers it and every older one, and none newer. */
-export const newestSignIn = (entries: readonly NotificationView[]): string | null =>
-  entries.find((entry) => entry.kind === "sign_in")?.at ?? null;
-
-/** The privacy notice version listed, if any, for "Mark all as read". */
-export const listedNotice = (entries: readonly NotificationView[]): string | null => {
-  const notice = entries.find((entry) => entry.kind === "privacy_notice");
-  return notice?.kind === "privacy_notice" ? notice.version : null;
-};

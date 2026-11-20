@@ -2526,27 +2526,29 @@ As built (2026-11-19, Alex: the notice was "permanent on the profile page"): mig
   banner drawn before a newer notice was deployed cannot hide it. When notifications land, this becomes one entry
   there and the seen column its read state.
 
-### P2.27 — Notifications: the bell, the page and the first two sources
-Tags: [SEC]            Depends on: P2.12b, P2.13c            Plan: §4 (decision 25's inbox item superseded by ADR 0079); §6 "no user sign-in records"
-Alex 2026-11-20 20:02Z and 20:22Z (plan /mnt/project-files/plans/notifications/plan.md). ADR 0079, Proposed.
+### P2.27 — Notifications: the inbox, the send call, the bell and the page
+Tags: [SEC]            Depends on: P2.12b, P2.13c            Plan: §4 (decision 25's inbox item superseded by ADR 0079); §6 (sign-in records, ADR 0079 point 4)
+Alex 2026-11-20 20:02Z, 20:22Z, 20:58Z and 21:00Z (plan /mnt/project-files/plans/notifications/plan.md). ADR 0079, Proposed.
 
-**What:** `domains/notifications` lists a member's notifications, newest first: a new sign-in (another live session of
-the member that began after this browser's, worked out from app.session, never stored) and a changed privacy notice
-(P2.12b's seen column). The bell shows the count and the newest 5, with the session read; `/notifications` shows 50.
-Each entry is a plain form that marks it opened and goes to its subject; Mark all as read names the newest listed.
-Migration 0036 adds `app.session.sign_ins_seen_at`, per browser, forward only, never past now().
-**Tests:** tests/integration/session/sign-ins.test.ts, tests/integration/web/app/notifications.test.ts (denial,
-viewing changes nothing, double and stale posts, a sign-in after the list, bad forms, cross-site), the limits budget,
-`/notifications` in the e2e and axe pages.
-**Not in this step:** stored notifications, the Settings › Privacy keep-30-days choice (ADR 0079 point 5: with the first
-stored source), a device-only reminder for an unsaved profile (point 6, with in-place editing), email, push, live
-updates.
+**What:** the notification inbox. Migration 0036 adds `app.notification` (reason from a closed list, optional topic
+and dedupe key, `older_sessions_only`, sent time; no text a person typed), web's column grants, the 30-day sweep and
+its line in `core.erase_did`. `domains/notifications` has the one send call, `notify`, and the list the bell (newest 5
+and the count) and `/notifications` (50) read. `apps/web/lib/notifications/reasons.ts` is the one table of each
+reason's words, icon and link; the build holds it to the domain's reasons. Opening deletes; Mark all as read deletes
+up to the newest listed. Two sources send through `notify`: a new sign-in, in the callback's transaction and seen only
+by older browsers, and a changed privacy notice, once per version at sign-in and withdrawn when the banner is dismissed.
+**Tests:** tests/integration/postgres/notification-store.test.ts, tests/integration/web/app/notifications.test.ts
+(denial, the new browser cannot clear it, viewing changes nothing, double and stale posts, one sent after the list, bad
+forms, cross-site, the notice), the sign-in callback test, erase-did, the limits budget, `/notifications` in the e2e
+and axe pages.
+**Not in this step:** the Settings › Privacy keep-30-days choice (P2.27a), export (with the privacy export), module
+senders (ADR 0079 point 6, with the first module), a device-only reminder for an unsaved profile (point 7, with
+in-place editing), email, push, live updates.
 
-### P2.27a — The keep-30-days choice with the first stored notification
+### P2.27a — Keep read notifications for 30 days
 Tags: [SEC]            Depends on: P2.27
-Waits for the first notification source that cannot be derived.
-**What:** ADR 0079 point 5: the `app.notification` table, its erasure and export lines, deleted on open by default,
-the Settings › Privacy choice to keep read ones for 30 days, and the 30-day ceiling on every row.
+**What:** ADR 0079 point 5: the Settings › Privacy choice to keep opened notifications for 30 days instead of deleting
+them on open (a read time on the row, shown as read), inside the same 30-day ceiling.
 
 ### P2.12c — Close the welcome axe gaps
 Tags: (none)            Depends on: P2.12a

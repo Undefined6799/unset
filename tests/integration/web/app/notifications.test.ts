@@ -1,11 +1,18 @@
-// P2.27 (ADR 0079): the bell and the notifications page on the built web server. Postgres as `web` (TE-2). A member's
-// browsers are stored grants and sessions, as own-page.test.ts makes them; a second session of the same DID is a
-// sign-in on another device, which the first browser is told about and the second is not.
+// P2.27 (ADR 0079): the bell and the notifications page on the built web server, over the inbox. Postgres as `web`
+// (TE-2). A member's browsers are stored grants and sessions, as own-page.test.ts makes them; a sign-in on another
+// device is a session made with its notification in one transaction, as the OAuth callback does it, which the older
+// browser is told about and the new one is not.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { relative } from "node:path";
-import { type Did, parseDid } from "@unset/domains-identity";
+import { type Did, PRIVACY_VERSION, parseDid } from "@unset/domains-identity";
 import type { SavedSession } from "@unset/infrastructure-pds";
-import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
+import {
+  createNotificationStore,
+  createOAuthSessionStore,
+  createPool,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
@@ -35,6 +42,7 @@ const keyring = parseKeyring(JSON.stringify({ active: "k1", keys: { k1: randomBy
 if (keyring === undefined) throw new Error("test keyring did not parse");
 const tokenSets = createOAuthSessionStore<SavedSession>({ pool, sealer: createSealer(keyring), log: quiet });
 const ISSUER = "https://pds.unset.test";
+const inbox = createNotificationStore();
 
 let dids = 0;
 function nextDid(): Did {
@@ -44,8 +52,8 @@ function nextDid(): Did {
   return parsed;
 }
 
-/** A member past the app gate with `browsers` sessions, oldest first, each signed in a moment after the last. */
-async function member(browsers: number): Promise<{ did: Did; cookies: string[] }> {
+/** A member past the app gate with one browser. */
+async function member(): Promise<{ did: Did; cookie: string }> {
   const did = nextDid();
   const dpopJwk = {
     ...generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" }),
@@ -64,15 +72,28 @@ async function member(browsers: number): Promise<{ did: Did; cookies: string[] }
       token_type: "DPoP",
     },
   });
-  const cookies: string[] = [];
-  for (let n = 0; n < browsers; n += 1) {
-    const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did));
-    cookies.push(`__Host-sid=${created.cookieValue}`);
-    await new Promise((done) => setTimeout(done, 5));
-  }
+  const created = await withTransaction(pool, null, (tx) => sessions.create(tx, did));
   await readyMember(pool, did);
-  return { did, cookies };
+  await new Promise((done) => setTimeout(done, 3));
+  return { did, cookie: `__Host-sid=${created.cookieValue}` };
 }
+
+/** Another device signs in: its session and its notification in one transaction, as oauth-callback.ts does. */
+async function signInElsewhere(did: Did): Promise<string> {
+  const created = await withTransaction(pool, null, async (tx) => {
+    const session = await sessions.create(tx, did);
+    await inbox.insert(tx, did, { reason: "sign_in", olderSessionsOnly: true });
+    return session;
+  });
+  await readyMember(pool, did);
+  await new Promise((done) => setTimeout(done, 3));
+  return `__Host-sid=${created.cookieValue}`;
+}
+
+const notice = (did: Did, version: string) =>
+  withClient(pool, null, (db) =>
+    inbox.insert(db, did, { reason: "privacy_notice", topic: version, dedupeKey: `privacy_notice:${version}` }),
+  );
 
 let web: RunningWeb;
 beforeAll(async () => {
@@ -99,9 +120,9 @@ const post = (path: string, fields: Record<string, string>, cookie: string, orig
     },
   });
 const html = async (path: string, cookie: string) => (await get(path, cookie)).text();
-/** The exact times the page's forms carry, once each (the bell and the page both list them, newest first). */
+/** The ids the page's forms carry, once each (the bell and the page both list them, newest first). */
 const listed = (page: string): string[] => [
-  ...new Set([...page.matchAll(/name="at" value="([^"]+)"/g)].map((m) => m[1] ?? "")),
+  ...new Set([...page.matchAll(/name="(?:id|upTo)" value="([^"]+)"/g)].map((m) => m[1] ?? "")),
 ];
 /** The bell's count, as its accessible name reads it. */
 const UNREAD = /Notifications, (?:\d+|9\+) unread/;
@@ -116,119 +137,140 @@ describe("the bell and the notifications page", () => {
   });
 
   test("notifications.sign_in_shows_on_the_older_browser_with_its_count", async () => {
-    const { cookies } = await member(2);
-    const [phone, laptop] = cookies as [string, string];
-    const page = await html("/notifications", phone);
+    const { did, cookie: laptop } = await member();
+    const phone = await signInElsewhere(did);
+    const page = await html("/notifications", laptop);
     expect(page).toContain(SIGN_IN);
     // The bell on every page: the count in the button's name, and the newest few.
     expect(page).toContain("Notifications, 1 unread");
-    expect(listed(page)[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
-    const other = await html("/notifications", laptop);
+    expect(listed(page)[0]).toMatch(/^[0-9a-f-]{36}$/);
+    const other = await html("/notifications", phone);
     expect(other).not.toContain(SIGN_IN);
     expect(other).toContain("No new notifications.");
   });
 
-  test("notifications.denial: another member's sign-ins never show", async () => {
-    const mine = await member(1);
-    await member(2);
-    const page = await html("/notifications", mine.cookies[0] as string);
+  test("notifications.denial: another member's notifications never show, and their ids open nothing", async () => {
+    const alice = await member();
+    await signInElsewhere(alice.did);
+    const [id] = listed(await html("/notifications", alice.cookie));
+    const bob = await member();
+    const page = await html("/notifications", bob.cookie);
     expect(page).not.toContain(SIGN_IN);
     expect(page).not.toMatch(UNREAD);
+    const opened = await post("/notifications?/open", { id: id as string }, bob.cookie);
+    expect(opened.headers.get("location")).toBe("/notifications");
+    await post("/notifications?/readAll", { upTo: id as string }, bob.cookie);
+    expect(await html("/notifications", alice.cookie)).toContain(SIGN_IN);
+  });
+
+  test("notifications.the_new_browser_cannot_clear_the_alert", async () => {
+    const { did, cookie: laptop } = await member();
+    const thief = await signInElsewhere(did);
+    const [id] = listed(await html("/notifications", laptop));
+    await post("/notifications?/open", { id: id as string }, thief);
+    await post("/notifications?/readAll", { upTo: id as string }, thief);
+    expect(await html("/notifications", laptop)).toContain(SIGN_IN);
   });
 
   test("notifications.viewing_changes_nothing", async () => {
-    const { cookies } = await member(2);
-    const phone = cookies[0] as string;
-    for (let n = 0; n < 3; n += 1) await html("/notifications", phone);
-    expect(await html("/notifications", phone)).toContain(SIGN_IN);
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    for (let n = 0; n < 3; n += 1) await html("/notifications", cookie);
+    expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.open: it is gone and the browser goes to Settings, Account", async () => {
-    const { cookies } = await member(2);
-    const phone = cookies[0] as string;
-    const [at] = listed(await html("/notifications", phone));
-    const response = await post("/notifications?/open", { kind: "sign_in", at: at as string }, phone);
+  test("notifications.open: it is gone and the browser goes to its reason's page", async () => {
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const [id] = listed(await html("/notifications", cookie));
+    const response = await post("/notifications?/open", { id: id as string }, cookie);
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/settings/account");
-    const page = await html("/notifications", phone);
+    const page = await html("/notifications", cookie);
     expect(page).not.toContain(SIGN_IN);
     expect(page).not.toMatch(UNREAD);
   });
 
   test("notifications.read_all_twice_and_rapid_opens_change_nothing_more", async () => {
-    const { cookies } = await member(3);
-    const phone = cookies[0] as string;
-    const times = listed(await html("/notifications", phone));
-    expect(times).toHaveLength(2);
-    const fields = { at: times[0] as string, return: "/settings/account" };
-    const sent = await Promise.all([1, 2, 3].map(() => post("/notifications?/readAll", fields, phone)));
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    await signInElsewhere(did);
+    const ids = listed(await html("/notifications", cookie));
+    expect(ids).toHaveLength(2);
+    const fields = { upTo: ids[0] as string, return: "/settings/account" };
+    const sent = await Promise.all([1, 2, 3].map(() => post("/notifications?/readAll", fields, cookie)));
     for (const response of sent) {
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/settings/account");
     }
-    // A stale tab then opens the older one: nothing comes back.
-    await post("/notifications?/open", { kind: "sign_in", at: times[1] as string }, phone);
-    expect(await html("/notifications", phone)).not.toContain(SIGN_IN);
+    // A stale tab then opens the older one: it is gone, so the browser goes back to the list.
+    const stale = await post("/notifications?/open", { id: ids[1] as string }, cookie);
+    expect(stale.headers.get("location")).toBe("/notifications");
+    expect(await html("/notifications", cookie)).not.toContain(SIGN_IN);
   });
 
-  test("notifications.read_all_keeps_a_sign_in_that_came_after_the_list", async () => {
-    const { did, cookies } = await member(2);
-    const phone = cookies[0] as string;
-    const [shown] = listed(await html("/notifications", phone));
-    await withTransaction(pool, null, (tx) => sessions.create(tx, did));
-    await post("/notifications?/readAll", { at: shown as string }, phone);
-    expect(listed(await html("/notifications", phone))).toHaveLength(1);
+  test("notifications.read_all_keeps_one_that_came_after_the_list", async () => {
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const [shown] = listed(await html("/notifications", cookie));
+    await signInElsewhere(did);
+    await post("/notifications?/readAll", { upTo: shown as string }, cookie);
+    expect(listed(await html("/notifications", cookie))).toHaveLength(1);
   });
 
   test("notifications.bad_forms_change_nothing", async () => {
-    const { cookies } = await member(2);
-    const phone = cookies[0] as string;
-    for (const fields of [
-      { kind: "sign_in", at: "2099-01-01T00:00:00Z" },
-      { kind: "sign_in", at: "not a time" },
-      { kind: "sign_in" },
-      { kind: "other", at: "2026-11-20T20:00:00.000000Z" },
-    ]) {
-      const response = await post("/notifications?/open", fields, phone);
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    for (const fields of [{ id: "not-an-id" }, { id: "" }, {}, { id: crypto.randomUUID() }]) {
+      const response = await post("/notifications?/open", fields as Record<string, string>, cookie);
       expect(response.headers.get("location"), JSON.stringify(fields)).toBe("/notifications");
     }
-    const outside = await post("/notifications?/readAll", { return: "https://evil.test/" }, phone);
+    const outside = await post("/notifications?/readAll", { upTo: "x", return: "https://evil.test/" }, cookie);
     expect(outside.headers.get("location")).toBe("/notifications");
-    expect(await html("/notifications", phone)).toContain(SIGN_IN);
+    expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.cross_site: a POST from another site is refused and marks nothing", async () => {
-    const { cookies } = await member(2);
-    const phone = cookies[0] as string;
-    const [at] = listed(await html("/notifications", phone));
-    const response = await post(
-      "/notifications?/open",
-      { kind: "sign_in", at: at as string },
-      phone,
-      "https://evil.test",
-    );
+  test("notifications.cross_site: a POST from another site is refused and opens nothing", async () => {
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const [id] = listed(await html("/notifications", cookie));
+    const response = await post("/notifications?/open", { id: id as string }, cookie, "https://evil.test");
     expect(response.status).toBe(403);
-    expect(await html("/notifications", phone)).toContain(SIGN_IN);
+    expect(await html("/notifications", cookie)).toContain(SIGN_IN);
   });
 
-  test("notifications.privacy_notice: a changed notice is listed, and opening it dismisses it", async () => {
-    const { did, cookies } = await member(1);
-    const phone = cookies[0] as string;
+  test("notifications.privacy_notice: listed once, and opening it leads to the notice", async () => {
+    const { did, cookie } = await member();
+    await notice(did, "an-older-notice");
+    await notice(did, "an-older-notice");
+    const page = await html("/notifications", cookie);
+    expect(page).toContain("We updated our privacy notice");
+    expect(listed(page)).toHaveLength(1);
+    const response = await post("/notifications?/open", { id: listed(page)[0] as string }, cookie);
+    expect(response.headers.get("location")).toBe("/legal/privacy");
+    expect(await html("/notifications", cookie)).not.toContain("We updated our privacy notice");
+  });
+
+  test("notifications.privacy_notice: dismissing the banner withdraws the entry", async () => {
+    const { did, cookie } = await member();
     await withClient(pool, null, (db) =>
       db.query("UPDATE app.account SET privacy_version = 'an-older-notice' WHERE did = $1", [did]),
     );
-    const page = await html("/notifications", phone);
-    expect(page).toContain("We updated our privacy notice");
-    const version = /name="version" value="([^"]+)"/.exec(page)?.[1];
-    expect(version).toBeDefined();
-    const response = await post("/notifications?/open", { kind: "privacy_notice", version: version as string }, phone);
-    expect(response.headers.get("location")).toBe("/legal/privacy");
-    expect(await html("/notifications", phone)).not.toContain("We updated our privacy notice");
+    await notice(did, PRIVACY_VERSION);
+    expect(await html("/notifications", cookie)).toContain("We updated our privacy notice");
+    const dismissed = await post(
+      "/privacy-notice/seen",
+      { version: PRIVACY_VERSION, return: "/notifications" },
+      cookie,
+    );
+    expect(dismissed.status).toBe(303);
+    expect(await html("/notifications", cookie)).not.toContain("We updated our privacy notice");
   });
 
   test("notifications.no_script: the page and the bell are plain forms", async () => {
-    const { cookies } = await member(2);
-    const page = await html("/notifications", cookies[0] as string);
+    const { did, cookie } = await member();
+    await signInElsewhere(did);
+    const page = await html("/notifications", cookie);
     expect(page).toMatch(/<form method="POST" action="\/notifications\?\/open">/);
     expect(page).toMatch(/<form method="POST" action="\/notifications\?\/readAll">/);
     // With no script the time reads in UTC.

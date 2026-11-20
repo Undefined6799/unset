@@ -51,7 +51,8 @@ function seedApp(did: string, fill: string): void {
        VALUES (repeat('${fill}', 16)::uuid, '${did}', 'image', 'published', 1, 1, 1, now());
      INSERT INTO app.image_use (image_id, record_uri)
        VALUES (repeat('${fill}', 16)::uuid, 'at://${did}/sh.unset.section/3kaaaaaaaaaaa');
-     INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());`,
+     INSERT INTO app.image_upload (did, admitted_at) VALUES ('${did}', now());
+     INSERT INTO app.notification (did, reason) VALUES ('${did}', 'sign_in');`,
   );
 }
 
@@ -191,6 +192,7 @@ describe("core.erase_did", () => {
       "app.image": 1,
       "app.image_use": 1,
       "app.image_upload": 1,
+      "app.notification": 1,
       "idx.account": 1,
       "idx.dead_letter": 1,
       "mod.account_state": 1,
@@ -230,6 +232,7 @@ describe("core.erase_did", () => {
       "app.image": 0,
       "app.image_use": 0,
       "app.image_upload": 0,
+      "app.notification": 0,
       "audit.event_body": 0,
       "idx.account": 0,
       "idx.dead_letter": 0,

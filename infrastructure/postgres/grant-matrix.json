@@ -179,8 +179,7 @@
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
           "email_checked_at": ["SELECT", "UPDATE"],
-          "issuer_origin": ["SELECT", "INSERT"],
-          "sign_ins_seen_at": ["SELECT", "UPDATE"]
+          "issuer_origin": ["SELECT", "INSERT"]
         },
         "rowPrivileges": ["DELETE"]
       }
@@ -261,6 +260,20 @@
         "columns": {
           "image_id": ["SELECT", "INSERT"],
           "record_uri": ["SELECT", "INSERT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.notification": {
+      "web": {
+        "columns": {
+          "id": ["SELECT"],
+          "did": ["SELECT", "INSERT"],
+          "reason": ["SELECT", "INSERT"],
+          "topic": ["SELECT", "INSERT"],
+          "dedupe_key": ["SELECT", "INSERT"],
+          "older_sessions_only": ["SELECT", "INSERT"],
+          "created_at": ["SELECT"]
         },
         "rowPrivileges": ["DELETE"]
       }

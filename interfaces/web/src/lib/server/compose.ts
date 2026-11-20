@@ -7,7 +7,7 @@
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
-// P2.27: this browser's sign-in notifications on its session row (ADR 0079).
+// P2.27: the member's notification inbox and the one way to send into it (ADR 0079).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
@@ -20,7 +20,7 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { COUNT_CAP } from "@unset/domains-notifications";
+import { type Inbox, type Notification, type NotifyResult, notify } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -46,12 +46,14 @@ import {
   createImageStore,
   createInviteStore,
   createLockPool,
+  createNotificationStore,
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   createPublicProfileStore,
   createRequestLock,
   createSingleUseStore,
+  type Db,
   type DiscoverabilityStore,
   type ImageStore,
   type InviteStore,
@@ -127,14 +129,6 @@ export type Services = {
   readonly versions: OnboardingVersions;
   /** The email gate's PDS recheck and its hold (email-refresh.ts). */
   readonly email: EmailRefresher;
-  /**
-   * P2.27 (ADR 0079): this browser's sign-in notifications, which are the member's other sessions begun since, and
-   * marking them opened. Both on this browser's session row only (infrastructure/session signInsSince).
-   */
-  readonly signIns: {
-    readonly since: (idHash: Buffer, limit: number, deadline: AbortSignal) => Promise<string[]>;
-    readonly markSeen: (idHash: Buffer, upTo: string, deadline: AbortSignal) => Promise<void>;
-  };
   /** Caches the member's email answer on this browser's session row. */
   readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
   /** P2.10: a member's invites (sealed codes), the request that issues one, and the audit row for a refusal. */
@@ -142,6 +136,16 @@ export type Services = {
     readonly store: InviteStore;
     readonly issue: (did: Did, deadline?: AbortSignal) => Promise<IssueInviteResult>;
     readonly denied: (did: Did, deadline: AbortSignal) => Promise<void>;
+  };
+  /**
+   * P2.27 (ADR 0079): the member's inbox as this browser may see it, and the one way a source sends into it. `sendIn`
+   * runs on the caller's transaction, for a source that must send with its own write (a new sign-in).
+   */
+  readonly notifications: {
+    readonly inbox: (did: Did, idHash: Buffer, deadline: AbortSignal) => Inbox;
+    readonly send: (did: Did, notification: Notification, deadline: AbortSignal) => Promise<NotifyResult>;
+    readonly sendIn: (db: Db, did: Did, notification: Notification) => Promise<NotifyResult>;
+    readonly withdraw: (did: Did, dedupeKey: string, deadline: AbortSignal) => Promise<void>;
   };
   /** The public /@handle page's read of the index (P3.12s): visible accounts only (migration 0030). */
   readonly publicProfiles: PublicProfileStore;
@@ -227,8 +231,6 @@ async function build(): Promise<Services> {
     withDb: (deadline, fn) => withClient(pool, deadline, fn),
     limits: sessionLimits,
     log,
-    // The bell's few newer sign-ins come with each session read (P2.27; notifications.ts SIGN_INS_WITH_SESSION).
-    newerSignInsRead: COUNT_CAP + 1,
   });
   const limiter: RateLimiter = createRateLimiter(policiesFor(config.TRUSTED_PROXY_MODE), {
     maxKeys: config.RATE_LIMIT_MAX_KEYS,
@@ -303,12 +305,6 @@ async function build(): Promise<Services> {
   const accounts = createAccountRepository(pool, { recordUnderageBlock });
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
-  const signIns = {
-    since: (idHash: Buffer, limit: number, deadline: AbortSignal) =>
-      withClient(pool, deadline, (db) => sessions.signInsSince(db, idHash, limit)),
-    markSeen: (idHash: Buffer, upTo: string, deadline: AbortSignal) =>
-      withTransaction(pool, deadline, (tx) => sessions.markSignInsSeen(tx, idHash, upTo)),
-  };
   // `deadlineAt` is the request's own, on the monotonic clock: pdsCall retries a read only while it fits (P2.07a).
   const email = emailRefresher({
     sessionInfo: (did, deadline, deadlineAt) => pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
@@ -324,6 +320,19 @@ async function build(): Promise<Services> {
       key: { kid: config.PDS_ADMIN_WEB_KID, privateKey: webAdminKey(config.PDS_ADMIN_WEB_KEY.reveal()) },
     }),
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
+  };
+
+  const inboxRows = createNotificationStore();
+  const notifications: Services["notifications"] = {
+    inbox: (did, idHash, deadline) => ({
+      list: (limit) => withClient(pool, deadline, (db) => inboxRows.list(db, did, idHash, limit)),
+      open: (id) => withClient(pool, deadline, (db) => inboxRows.open(db, did, idHash, id)),
+      openUpTo: (upTo) => withClient(pool, deadline, (db) => inboxRows.openUpTo(db, did, idHash, upTo)),
+    }),
+    send: (did, notification, deadline) =>
+      withClient(pool, deadline, (db) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification)),
+    sendIn: (db, did, notification) => notify({ insert: (n) => inboxRows.insert(db, did, n) }, notification),
+    withdraw: (did, dedupeKey, deadline) => withClient(pool, deadline, (db) => inboxRows.withdraw(db, did, dedupeKey)),
   };
 
   // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
@@ -350,6 +359,7 @@ async function build(): Promise<Services> {
       { job: "sweep.invite", run: () => invites.store.clearExpired() },
       // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
       { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
+      { job: "sweep.notification", run: () => withClient(pool, null, (db) => inboxRows.sweep(db)) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -392,8 +402,8 @@ async function build(): Promise<Services> {
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
     email,
     setEmailConfirmed,
-    signIns,
     invites,
+    notifications,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
     drafts,

@@ -1,22 +1,21 @@
 <!--
-  "Mark all as read" (P2.27): a plain form that names what the list showed, the newest sign-in and the notice version,
-  so the server marks those and every older sign-in, never one that arrived after the list was drawn. Sending it twice
-  changes nothing more.
+  "Mark all as read" (P2.27): a plain form that names the newest entry the list showed, so the server deletes it and
+  every older one, never one sent after the list was drawn. Sending it twice changes nothing more.
 -->
 <script lang="ts">
 import { NOTIFICATIONS as T } from "../../notifications/messages.ts";
-import { listedNotice, type NotificationView, newestSignIn } from "../../notifications/view.ts";
+import type { NotificationView } from "../../notifications/view.ts";
 import { Icon } from "../icon/index.ts";
 import { Button } from "../ui/button/index.ts";
 
 let { entries, returnTo }: { entries: readonly NotificationView[]; returnTo: string } = $props();
-const at = $derived(newestSignIn(entries));
-const version = $derived(listedNotice(entries));
+const newest = $derived(entries[0]?.id);
 </script>
 
-<form method="POST" action="/notifications?/readAll">
-  {#if at !== null}<input type="hidden" name="at" value={at} />{/if}
-  {#if version !== null}<input type="hidden" name="version" value={version} />{/if}
-  <input type="hidden" name="return" value={returnTo} />
-  <Button type="submit" variant="ghost" size="sm"><Icon name="done" size={16} />{T.markAll}</Button>
-</form>
+{#if newest !== undefined}
+  <form method="POST" action="/notifications?/readAll">
+    <input type="hidden" name="upTo" value={newest} />
+    <input type="hidden" name="return" value={returnTo} />
+    <Button type="submit" variant="ghost" size="sm"><Icon name="done" size={16} />{T.markAll}</Button>
+  </form>
+{/if}
