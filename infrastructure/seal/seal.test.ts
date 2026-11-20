@@ -9,7 +9,7 @@ import { ConfigError, defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test, vi } from "vitest";
 import { type SealContext, sealContext } from "./context.ts";
 import { SealError } from "./error.ts";
-import { type Keyring, parseKeyring, sealFields } from "./keyring.ts";
+import { type Keyring, keyringFile, parseKeyring, sealFields } from "./keyring.ts";
 import { createSealer } from "./sealer.ts";
 
 const key = (fill: number): string => Buffer.alloc(32, fill).toString("base64");
@@ -202,5 +202,21 @@ describe("seal", () => {
         ".CQkJCQkJCQkJCQkJ.QXm6grvtIq8-hgWUREUYKYwhyESdcyM3E1w",
     );
     expect(Buffer.from(createSealer(ring).unseal(sealed, context)).toString()).toBe("hello seal");
+  });
+});
+
+describe("keyring sharing (book P2.19 config.draft_keys_distinct)", () => {
+  const b64 = (fill: number) => Buffer.alloc(32, fill).toString("base64");
+  const ring = (keys: Record<string, string>) =>
+    parseKeyring(JSON.stringify({ active: Object.keys(keys)[0], keys })) as Keyring;
+
+  test("keyring.shares_key: true only when one key value is in both, whatever its kid", () => {
+    expect(ring({ a: b64(1) }).sharesKeyWith(ring({ b: b64(2) }))).toBe(false);
+    expect(ring({ a: b64(1), c: b64(3) }).sharesKeyWith(ring({ b: b64(2), z: b64(3) }))).toBe(true);
+    expect(ring({ a: b64(1) }).sharesKeyWith(ring({ a: b64(2) }))).toBe(false);
+  });
+
+  test("keyring.field: keyringFile reads a keyring from <KEY>_FILE like the seal field", () => {
+    expect(keyringFile()).toEqual(sealFields.SEAL_KEYRING);
   });
 });
