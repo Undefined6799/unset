@@ -7,14 +7,17 @@ import { definePolicy } from "../../lib/server/policy.ts";
  */
 export const IMAGE_UPLOAD_LIMIT_BYTES = 65 * 1024 * 1024;
 
-// The upload (+server.ts). A write needs a session and counts against the member's own profile limit. Its deadline
-// covers a full 64 MiB upload at about 5 Mbit/s (107 s, ADR 0076) and review's 20 s, and stays below the edge's 130 s
-// wait for an answer (tests/integration/deployment/edge/timeouts.ts).
+// The upload (+server.ts). A write needs a session and counts against the member's own profile limit. The body may
+// take the edge's whole read window (120 s, limits.json EDGE_READ_BODY_S): a 64 MiB picture at about 5 Mbit/s takes
+// 107 s (ADR 0076). Once it is read, the route has 100 s for review and the store, below the 130 s the edge waits for
+// an answer after it has sent the body on (snippets/upstream.caddy response_header_timeout, which Go starts "after
+// fully writing the request (including its body)": go1.24.7 net/http/transport.go:226-230, roundTrip :2835).
 export const policy = definePolicy({
   group: "app",
   limit: "default",
   writeLimit: "profile",
   session: "required",
   maxBody: IMAGE_UPLOAD_LIMIT_BYTES,
-  deadlineMs: 125_000,
+  bodyWindowMs: 120_000,
+  deadlineMs: 100_000,
 });
