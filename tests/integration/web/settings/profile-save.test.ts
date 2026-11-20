@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import type { SavedSession } from "@unset/infrastructure-pds";
-import { createOAuthSessionStore, createPool, withTransaction } from "@unset/infrastructure-postgres";
+import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
@@ -347,6 +347,42 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     expect(attr(elements(document, "details")[0], "open")).toBeDefined();
     expect(elements(document, "p", { "data-preview-unlisted": "" })).toEqual([]);
     expect((await saveChoices(up, "title=&description=")).status).toBe(303);
+  });
+
+  test("the_preview_address_is_the_handle_the_public_page_uses", async () => {
+    // The indexer's verified handle, as /@<handle> serves it, not this process's handle cache (empty here).
+    const indexer = createPool({
+      connection: { ...pg, ...provided.roles.indexer, ssl: false },
+      service: "indexer-privacy-test",
+      max: 1,
+      connectTimeoutMs: 5000,
+    });
+    const record = { $type: "sh.unset.profile", displayName: "Mara Lind", createdAt: "x" };
+    try {
+      await withClient(indexer, null, async (c) => {
+        await c.query("INSERT INTO idx.account (did, track_requested_at, updated_at) VALUES ($1, now(), now())", [
+          OWNER,
+        ]);
+        await c.query(
+          "UPDATE idx.account SET handle = 'mara.unset.org', handle_status = 'verified', pds_active = true WHERE did = $1",
+          [OWNER],
+        );
+        await c.query(
+          `INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+           VALUES ($1, $2, 'cid-p', '3l', $3, 'Mara Lind', false, now())`,
+          [OWNER, `at://${OWNER}/sh.unset.profile/self`, record],
+        );
+      });
+      const shown = preview(parse(await (await privacyPage(up)).text()));
+      expect(shown.text).toContain(`${new URL(ORIGIN).host} › @mara.unset.org`);
+      expect(shown.text).not.toContain(OWNER);
+    } finally {
+      await withClient(indexer, null, async (c) => {
+        await c.query("DELETE FROM idx.profile WHERE did = $1", [OWNER]);
+        await c.query("DELETE FROM idx.account WHERE did = $1", [OWNER]);
+      });
+      await indexer.end();
+    }
   });
 
   test("a_pds_that_cannot_be_read_still_shows_the_choices_named_by_did", async () => {

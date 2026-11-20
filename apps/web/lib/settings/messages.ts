@@ -87,7 +87,8 @@ export const SEARCH_AI_SETTINGS = {
   preview: "Search result preview",
   previewNote:
     "An example drawn by unset.sh from what you set here, not taken from a search engine. Search engines choose what to show and may shorten or rewrite it. Your profile picture appears here once pictures arrive on unset.sh.",
-  previewUnlisted: "Search engines are not allowed to list your page now, so it does not appear in their results.",
+  previewUnlisted:
+    'With "Search engines may list my page" off, saving asks search engines not to list your page. One that already lists it can take days to drop it.',
   save: "Save search and AI",
   saved: "Search and AI saved.",
 } as const;
