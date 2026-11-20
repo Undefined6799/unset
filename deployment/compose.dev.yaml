@@ -249,7 +249,7 @@ services:
       migrate:
         condition: service_completed_successfully
     networks: [db, app, web_egress, objects_web]
-    mem_limit: 512m
+    mem_limit: 1g
     cpus: 1
     pids_limit: 128
     restart: unless-stopped

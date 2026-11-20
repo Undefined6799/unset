@@ -46,17 +46,24 @@
 		trusted_proxies_strict
 		client_ip_headers X-Forwarded-For
 		timeouts {
-			read_body 30s
-			write 135s
+			read_header 10s
+			read_body 120s
+			write 255s
 			idle 2m
 		}
 	}
 	servers {
 		# No trusted_proxies: nothing else sits in front of the edge.
-		# Above the upstream's 130 s (snippets/upstream.caddy, limits.json).
+		# ADR 0076, the same in both blocks. read_body (limits.json EDGE_READ_BODY_S) bounds headers and body together:
+		# a 64 MiB upload at 5 Mbit/s takes about 107 s. Every route's own body cap still bounds what it reads.
+		# read_header keeps headers to 10 s; Caddy v2.11.9 would give them its 1 minute default
+		# (modules/caddyhttp/app.go defaultReadHeaderTimeout). write runs from the end of the headers, so the upload counts
+		# against it (go1.25 net/http Server.WriteTimeout): it sits above read_body plus the upstream's 130 s
+		# (snippets/upstream.caddy, limits.json). tests/integration/deployment/edge/timeouts.ts checks the order.
 		timeouts {
-			read_body 30s
-			write 135s
+			read_header 10s
+			read_body 120s
+			write 255s
 			idle 2m
 		}
 	}

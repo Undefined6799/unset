@@ -12,6 +12,7 @@ Configurable: `deployment/edge/limits.json`, applied in `deployment/edge/snippet
 | Zone or key | Host | Limit |
 | --- | --- | --- |
 | `EDGE_UPSTREAM_TIMEOUT_S` | setting | `130` |
+| `EDGE_READ_BODY_S` | setting | `120` |
 | `session` | PDS host | 30 per 5m |
 | `session_day` | PDS host | 300 per 24h |
 | `oauth_signin` | PDS host | 30 per 5m |
@@ -79,8 +80,8 @@ Configurable per stack in the compose files.
 | `pds-admin` | 128m memory, 0.25 CPU, 32 processes | 128m memory, 0.25 CPU, 32 processes |
 | `pds-token-reader` | 128m memory, 0.25 CPU, 32 processes | not in this stack |
 | `postgres` | 1g memory, 1 CPU, 256 processes | 1g memory, 1 CPU, 256 processes |
-| `review` | 1536m memory, 1 CPU, 128 processes | 1536m memory, 1 CPU, 128 processes |
-| `web` | 512m memory, 1 CPU, 128 processes | 512m memory, 1 CPU, 128 processes |
+| `review` | 2g memory, 2 CPU, 128 processes | 2g memory, 2 CPU, 128 processes |
+| `web` | 1g memory, 1 CPU, 128 processes | 1g memory, 1 CPU, 128 processes |
 
 ## Limits fixed in code
 

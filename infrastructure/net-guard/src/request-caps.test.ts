@@ -81,16 +81,17 @@ describe("request body caps", () => {
     expect(await send(pdsAdmin("http://pds-admin:8080"), "http://pds-admin:8080/x", MiB + 1)).toBe("egress.too_large");
   });
 
-  test("caps.review: a 30,000,000-byte upload reaches review; past 32 MiB is refused", async () => {
+  test("caps.review: a 60,000,000-byte upload reaches review; past 66 MiB is refused (ADR 0076)", async () => {
     const policy = review("http://review:8080");
     expect(policy).toEqual({
       name: "review",
       kind: "internal",
       origins: ["http://review:8080"],
-      requestBytes: 32 * MiB,
+      requestBytes: 66 * MiB,
     });
-    expect(await send(policy, "http://review:8080/v1/process", 30_000_000)).toBe("sent");
-    expect(await send(policy, "http://review:8080/v1/process", 32 * MiB + 1)).toBe("egress.too_large");
+    expect(await send(policy, "http://review:8080/v1/process", 60_000_000)).toBe("sent");
+    expect(await send(policy, "http://review:8080/v1/process", 66 * MiB)).toBe("sent");
+    expect(await send(policy, "http://review:8080/v1/process", 66 * MiB + 1)).toBe("egress.too_large");
   });
 
   test("caps.object_store: a 2,000,000-byte main version is stored; past 2 MiB is refused", async () => {
@@ -119,12 +120,17 @@ describe("request body caps", () => {
     expect(await post(`/x${UPLOAD}`, MiB + 1)).toBe("egress.too_large");
   });
 
-  test("caps.ceiling: no policy may name more than 32 MiB, however it is built", async () => {
-    expect(REQUEST_BODY_CEILING).toBe(32 * MiB);
-    expect(() => internalPolicy("x", ["http://x:1"], 32 * MiB + 1)).toThrow(RangeError);
+  test("caps.ceiling: no policy may name more than 66 MiB, however it is built", async () => {
+    expect(REQUEST_BODY_CEILING).toBe(66 * MiB);
+    expect(() => internalPolicy("x", ["http://x:1"], 66 * MiB + 1)).toThrow(RangeError);
     expect(() => internalPolicy("x", ["http://x:1"], 0)).toThrow(RangeError);
     expect(() => internalPolicy("x", ["http://x:1"], 1.5)).toThrow(RangeError);
-    const handBuilt: Policy = { name: "x", kind: "internal", origins: ["http://review:8080"], requestBytes: 64 * MiB };
+    const handBuilt: Policy = {
+      name: "x",
+      kind: "internal",
+      origins: ["http://review:8080"],
+      requestBytes: 66 * MiB + 1,
+    };
     await expect(guardOn(http.port).request(handBuilt, { url: "http://review:8080/" })).rejects.toThrow(RangeError);
   });
 });
