@@ -47,7 +47,6 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   return {
     shell: settingsShell(request, "/settings/privacy"),
     visibility,
-    visibilitySaved: url.searchParams.has("visibility-saved"),
     discoverability: own.choices,
     limits: DISCOVERABILITY_LIMITS,
     page: {
@@ -56,7 +55,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
       headline: fields.headline,
       letter: accountLetter(name),
     },
-    // The Search and AI save's 303 back here (routes/settings/search-and-ai): with no script, the page says it saved.
+    // The save's 303 back here (routes/settings/search-and-ai): with no script, the page says it saved.
     saved: url.searchParams.has("saved"),
     // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
     searchListingOff: config.SEARCH_LISTING !== "on",

@@ -27,13 +27,16 @@ and the relays (https://atproto.com/specs/repository).
    `ownerOnly`, the most closed level, so a newer client's choice is never shown more widely than its owner meant
    (`domains/profile` `readProfileVisibility`). A save writes only a known value; choosing `public` removes the field;
    a save that does not send it keeps the stored value (as ADR 0072 does for `layout`).
-2. Settings › Privacy leads with the choice, as native radios posted to `POST /profile` with only that field, so it
-   works with no script. The labels are "Public", "Signed-in members only" and "Only me", in one place
-   (`apps/web/lib/settings/messages.ts` `PAGE_VISIBILITY`); the stored values never change with them. Never the word
-   "private" for a choice. A short disclaimer stays in view under the choices: this asks apps not to show the page and
-   does not hide the profile on the network. Each choice has a question mark opening its whole explanation in a native
-   popover (who sees what on unset.sh, search and AI, that other apps do not know the setting, that the handle and DID
-   stay public).
+2. Settings › Privacy holds one form with the choice as native radios and, under Public, the Search and AI fields
+   (ADR 0062), shown only while Public is ticked (Alex, 20:26Z), by CSS from the checked radio, so it works with no
+   script. It posts to `POST /settings/search-and-ai`, the path ADR 0062 named: the choice is written to the profile
+   record on the member's PDS first, then the Search and AI choices are saved, only while the choice is public; a
+   page not shown to everyone keeps its stored choices. The labels are "Public", "Signed-in members only" and "Only
+   me", in one place (`apps/web/lib/settings/messages.ts` `PAGE_VISIBILITY`); the stored values never change with
+   them. Never the word "private" for a choice. A short disclaimer stays in view under the choices: this asks apps not
+   to show the page and does not hide the profile on the network. Each choice's question mark opens its one-line
+   explanation in a native popover (Alex, 20:26Z: nothing longer for now; a link to member documentation can come
+   later).
 3. `/@<actor>` reads an optional session (the `optional` policy the home and legal pages use: a page rendered for a
    member is private and never stored; every answer varies on Cookie). What each viewer gets (`pageShownTo`):
 
@@ -48,8 +51,8 @@ and the relays (https://atproto.com/specs/repository).
    that is not public says above it who sees it.
 4. A page that is not public is never offered to search engines or AI search, whatever its Search and AI choices
    (ADR 0062) say: noindex, out of the sitemap, and no AI search Allow line in robots.txt (`publicProfileStore`'s
-   listing queries keep only records with no `visibility` or `public`). The choices are kept and the Search and AI form
-   is left out of Settings › Privacy until the page is public again. Search crawlers are not disallowed, so they can
+   listing queries keep only records with no `visibility` or `public`). The choices are kept until the page is public
+   again. Search crawlers are not disallowed, so they can
    fetch the limited page and read its noindex; a blocked crawler would keep a stale result. Search engines usually drop
    a page within days to a few weeks; copies others made can remain, which the help says.
 5. The indexer keeps the field as it keeps any profile field; no migration, column or new personal data.
@@ -69,9 +72,10 @@ and the relays (https://atproto.com/specs/repository).
   app reading `sh.unset.profile` could not honour it.
 - Showing the 404 of a missing account to anyone left out (D7 as written). Rejected by Alex, 19:46Z.
 - Calling a level "Private". Rejected: the records stay public on the network.
-- One form for the choice and Search and AI, the server ignoring Search and AI while not public. Rejected: the choice is
-  saved to the PDS and Search and AI to our database, and two forms keep each save one write; the page shows Search
-  and AI once a saved choice is public.
+- Two forms, the choice saved alone through `POST /profile` and Search and AI shown once a saved choice is public.
+  Built first; Alex asked for Search and AI folded under Public instead (20:26Z). One save now writes the PDS, then our
+  database; if the second write fails after the first, the member sees the error and saving again finishes it.
+- A long explanation behind each question mark. Drafted; Alex chose the one line for now (20:26Z).
 
 ## Consequences
 
@@ -88,4 +92,4 @@ search engine for days to weeks. Privacy notice: a sentence on what the choice d
 `tests/integration/web/public/public-profile.test.ts` covers each level for a visitor, another member and the owner,
 and an unknown value; `tests/integration/postgres/public-profile-store.test.ts` keeps non-public pages out of the
 sitemap and robots.txt; `tests/integration/web/settings/profile-save.test.ts` and `tests/e2e/privacy-settings.spec.ts`
-cover the settings with no script. Acceptance is Alex's line on the pull request that adds this record.
+cover the one form with no script. Acceptance is Alex's line on the pull request that adds this record.

@@ -75,7 +75,7 @@ export const PAGE_VISIBILITY = {
   options: {
     public: {
       label: "Public",
-      hint: "Anyone can see your page. Below, you choose whether search engines and AI search may list it.",
+      hint: "Anyone can see your page, and you choose below whether search engines and AI search may list it.",
     },
     signedIn: {
       label: "Signed-in members only",
@@ -86,37 +86,18 @@ export const PAGE_VISIBILITY = {
       hint: "Other people, signed in or not, see only your name and handle and that you keep your page private. Search engines and AI search never list it.",
     },
   },
-  /** The question mark beside each choice opens its whole story (Alex, 2026-11-20 19:55Z). */
+  /** The question mark beside each choice opens its hint (Alex, 2026-11-20 20:26Z: nothing longer for now). */
   help: {
     open: (choice: string) => `What "${choice}" means`,
     close: "Close",
-    public: [
-      "Anyone can open your page at its address, signed in or not, and a shared link shows your name and headline.",
-      "Search engines and AI search list it only if you turn them on below.",
-    ],
-    signedIn: [
-      "On unset.sh, people who are not signed in see only your name, handle and avatar, with a note to sign in. Signed-in members see your whole page.",
-      "Search engines and AI search never list it, and a shared link shows nothing about it. If your page was listed before, search engines usually drop it within days to a few weeks. Copies already made by others can remain.",
-    ],
-    ownerOnly: [
-      "On unset.sh, only you see your whole page. Everyone else, signed in or not, sees your name, handle and avatar and a note that you keep your page private, so people who meet you elsewhere on unset.sh know it is you.",
-      "Search engines and AI search never list it, and a shared link shows nothing about it. If your page was listed before, search engines usually drop it within days to a few weeks. Copies already made by others can remain.",
-    ],
-    /** Said for both choices that are not public. */
-    network: [
-      "This is a request to apps, not a lock. Your profile and cards are records in your atproto account: anyone can read them from your sign-in server and the network's relays, and other apps do not know this setting, so they may show them.",
-      "Your handle and DID are public on the network whatever you choose.",
-    ],
   },
   disclaimer:
     "This asks apps not to show your page; it does not hide your profile. What you publish stays public on the atproto network: any app or person can still read it from your sign-in server.",
-  save: "Save who sees your page",
-  saved: "Saved. Your page now follows this choice.",
+  save: "Save privacy",
+  saved: "Privacy saved.",
   noProfile: "You have no page yet. Publish your profile first, then choose who sees it.",
   unreadable:
     "We could not read your profile from your sign-in server, so this choice is not shown. Try again in a moment.",
-  searchOff:
-    "Search engines and AI search are off while your page is not public. Your Search and AI choices are kept for when it is.",
 } as const;
 
 export const SEARCH_AI_SETTINGS = {
@@ -144,6 +125,4 @@ export const SEARCH_AI_SETTINGS = {
     "An example drawn by unset.sh from what you set here, not taken from a search engine. Search engines choose what to show and may shorten or rewrite it. Your profile picture appears here once pictures arrive on unset.sh.",
   previewUnlisted:
     'With "Search engines may list my page" off, saving asks search engines not to list your page. One that already lists it can take days to drop it.',
-  save: "Save search and AI",
-  saved: "Search and AI saved.",
 } as const;

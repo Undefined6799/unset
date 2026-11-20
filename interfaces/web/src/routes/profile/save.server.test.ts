@@ -66,23 +66,6 @@ describe("saveProfileForm", () => {
     expect(saved).toEqual([]);
   });
 
-  // ADR 0078: Settings › Privacy posts only who sees the page, so every other field keeps what the record holds.
-  test("the page visibility alone is saved and comes back to Settings › Privacy", async () => {
-    const { save, saved } = saver();
-    const result = await saveProfileForm(form({ visibility: "ownerOnly", next: "/settings/privacy" }), DID, save);
-    expect(result).toEqual({ location: "/settings/privacy?visibility-saved#page-visibility" });
-    expect(saved).toEqual([{ did: DID, fields: { visibility: "ownerOnly" } }]);
-  });
-
-  test.each([
-    ["an unknown visibility", form({ visibility: "friends" })],
-    ["a repeated visibility", form({ visibility: ["public", "ownerOnly"] })],
-  ])("%s is refused before anything is written", async (_name, sent) => {
-    const { save, saved } = saver();
-    expect(await saveProfileForm(sent, DID, save)).toMatchObject({ code: "profile.invalid" });
-    expect(saved).toEqual([]);
-  });
-
   test("a DID in the form never picks whose profile is written (SE-2)", async () => {
     const { save, saved } = saver();
     const other = `did:plc:${"m".repeat(24)}`;

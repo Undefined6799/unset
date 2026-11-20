@@ -4914,9 +4914,10 @@ disclaimer that the profile "will always remain available publicly on the At Pro
 signed-in members only, and only the member); for anyone left out "some kind of a message there to say that it's a
 user ... show minimum information about his account"; a question mark beside each choice with the whole explanation.
 The choice is an optional open string `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent means
-public, unknown means ownerOnly), saved by `POST /profile` from Settings › Privacy. `/@` reads an optional session;
+public, unknown means ownerOnly), saved with Search and AI by Settings › Privacy's one form, Search and AI folded under
+Public (20:26Z), each question mark showing that choice's one line. `/@` reads an optional session;
 whoever the choice leaves out gets the limited page (avatar, name, handle, DID, one sentence; noindex, no link-preview
-tags); a page that is not public is never listed in the sitemap or robots.txt and its Search and AI form is left out.
+tags); a page that is not public is never listed in the sitemap or robots.txt, and its Search and AI choices are kept.
 ADR 0078 supersedes decision 37's "never hides on unset.sh" sentence and decision 35 D7 for this page.
 Ownership: apps/web → interfaces/web → domains/profile; infrastructure/postgres for the listing queries.
 
