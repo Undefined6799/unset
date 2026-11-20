@@ -663,3 +663,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
   profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
   Proposed, awaiting Alex.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.

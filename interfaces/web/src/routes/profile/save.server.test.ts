@@ -49,6 +49,23 @@ describe("saveProfileForm", () => {
     expect(saved).toEqual([{ did: DID, fields: { displayName: "Alice", headline: "" } }]);
   });
 
+  // ADR 0072: Settings › Profile posts the page layout with the fields; one value of a known layout only.
+  test("the page layout is saved with the fields", async () => {
+    const { save, saved } = saver();
+    const result = await saveProfileForm(form({ displayName: "Alice", layout: "compact" }), DID, save);
+    expect(result).toEqual({ location: `/${DID}` });
+    expect(saved).toEqual([{ did: DID, fields: { displayName: "Alice", layout: "compact" } }]);
+  });
+
+  test.each([
+    ["an unknown layout", form({ displayName: "A", layout: "magazine" })],
+    ["a repeated layout", form({ displayName: "A", layout: ["compact", "sidebar"] })],
+  ])("%s is refused before anything is written", async (_name, sent) => {
+    const { save, saved } = saver();
+    expect(await saveProfileForm(sent, DID, save)).toMatchObject({ code: "profile.invalid" });
+    expect(saved).toEqual([]);
+  });
+
   test("a DID in the form never picks whose profile is written (SE-2)", async () => {
     const { save, saved } = saver();
     const other = `did:plc:${"m".repeat(24)}`;

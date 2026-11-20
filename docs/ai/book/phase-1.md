@@ -4769,6 +4769,18 @@ border or shadow. Keep content, inner tiles, spacing and controls. Missing legac
 choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
 Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
 
+### P1.21n — Let the profile choose its page layout (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21f · **Plan:** §5.4
+
+Alex approved the compact profile direction on 2026-11-20 as an opt-in layout. Add optional
+`sh.unset.profile.layout` (ADR 0072, known values sidebar and compact; absent or unknown is sidebar), read and
+checked in domains/profile and accepted by the one profile save (POST /profile). Choosing sidebar clears the field;
+a save that leaves it out keeps the stored value. No page draws compact yet and no form offers it: P1.21o adds the
+compact header, the avatar details panel and the choice in Settings › Profile. Tests cover the default, unknown
+values, strict input, clearing, preservation, the lexicon limit and the indexer keeping the field. Merges only on
+Alex's line accepting ADR 0072. Ownership: interfaces/web → domains/profile → shared/lexicons.
+
 ### P1.21h — Normal use fits inside every limit (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** — · **Plan:** §5.2, §6

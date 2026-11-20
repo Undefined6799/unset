@@ -74,3 +74,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0066](0066-edge-app-burst-sixty.md) | The edge's `app_burst` zone allows 60 requests per 10 seconds per address; supersedes 0031's value 20 and two sizing statements of 0042 (P1.20r) | Accepted 2026-11-20 |
 | [0067](0067-account-lifecycle-and-burned-names.md) | Deactivation, deletion after 30 days, takedown and moving away follow atproto's account model; no PLC tombstone by default; every hosted name is burned (P1.21e) | Accepted 2026-11-20 |
 | [0068](0068-profile-card-surfaces.md) | Each profile card chooses Filled, Outlined or Plain through an optional surface field | Proposed (awaiting Alex) |
+| [0072](0072-profile-page-layout.md) | The profile chooses its page layout, sidebar or compact, through an optional layout field (P1.21n) | Proposed (awaiting Alex) |
