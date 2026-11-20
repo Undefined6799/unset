@@ -26,6 +26,12 @@
             "type": "string",
             "format": "datetime",
             "description": "When the card was first published."
+          },
+          "surface": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["filled", "outlined", "plain"],
+            "description": "Outer card surface. Absent or unknown means filled."
           }
         }
       }

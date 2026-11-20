@@ -69,6 +69,7 @@ const panelState = (stay: string): CardPanelState => ({
     kind={card.content.kind}
     content={card.content}
     width={card.width}
+    surface={card.surface}
     cardKey={card.key}
     trigger={null}
     panel={panelState(`edit=${card.key}`)}

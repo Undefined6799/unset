@@ -4757,6 +4757,27 @@ accepted that version yet), the RoPA gains a "Burned names" row, the erasure run
 steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
 No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21f — Let each profile card choose its surface (added step, 2026-11-19)
+
+**Tags:** trusted · **Depends on:** P1.20 · **Plan:** §5.4
+
+Alex approved Filled / Outlined / Plain per card and requested implementation on 2026-11-19. Add optional
+`sh.unset.section.surface` (ADR 0068), checked in domains/profile and carried through the existing form actions.
+Reuse the native editor choice and preserve no-script retries. All four card kinds share the outer treatment;
+Filled keeps the existing appearance, Outlined is transparent with a fine border, and Plain has no outer fill,
+border or shadow. Keep content, inner tiles, spacing and controls. Missing legacy form input preserves a stored
+choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
+Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
+
+### P1.21i — Say in the terms how leaving works (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** P1.21e · **Plan:** §6
+
+Alex, 2026-11-20 01:07Z: an account is hidden at once during the 30 days before deletion (the open point of ADR 0067
+rule 2), and the terms should say so too. The terms gain one "Leaving" sentence that points to the privacy notice,
+which already says it, and a new version, 2026-11-20 (`TERMS_VERSION`); members accept it again on their next visit.
+Alex accepted the re-acceptance because the service is not live yet (01:09Z). No other change.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
@@ -4773,7 +4794,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
-c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), l, m, q.
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), i (leaving in the
+terms), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's

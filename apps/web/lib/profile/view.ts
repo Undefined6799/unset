@@ -5,7 +5,7 @@
 import { safeHref } from "@unset/shared-safe-href";
 import { CARD_TEXT } from "./messages.ts";
 import { parseReadme } from "./parse.ts";
-import type { CardContent, CardShown, CardView, CardWidth, ShownButton } from "./types.ts";
+import type { CardContent, CardShown, CardSurface, CardView, CardWidth, ShownButton } from "./types.ts";
 
 const web = (uri: string): string | null => (uri === "" ? null : safeHref(uri, ["http:", "https:"]));
 
@@ -89,8 +89,20 @@ function shownOf(content: CardContent): CardShown {
 
 /** The page's cards, in page order, each with what it shows. */
 export const cardViews = (
-  cards: readonly { readonly key: string; readonly width: CardWidth; readonly content: CardContent }[],
-): CardView[] => cards.map(({ key, width, content }) => ({ key, width, content, shown: shownOf(content) }));
+  cards: readonly {
+    readonly key: string;
+    readonly width: CardWidth;
+    readonly surface?: CardSurface;
+    readonly content: CardContent;
+  }[],
+): CardView[] =>
+  cards.map(({ key, width, surface = "filled", content }) => ({
+    key,
+    width,
+    surface,
+    content,
+    shown: shownOf(content),
+  }));
 
 /** The side column's website as a link, or null when unset or not http(s). */
 export function websiteLink(website: string): { readonly href: string; readonly text: string } | null {

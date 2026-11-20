@@ -245,3 +245,12 @@ describe("cardWrites", () => {
     });
   });
 });
+
+test("create and save pass the chosen surface to the member's stored record", async () => {
+  const { writes, calls } = store();
+  const { content, width } = input();
+  expect(await writes.create(content, width, "outlined")).toEqual({ kind: "saved" });
+  expect(calls.created[0]).toMatchObject({ surface: "outlined" });
+  expect(await writes.save(KEY, content, width, "plain")).toEqual({ kind: "saved" });
+  expect(calls.saved[0]).toMatchObject({ built: { ok: true, record: { surface: "plain" } } });
+});

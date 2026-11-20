@@ -13,6 +13,7 @@ export const LIMITS = {
   },
   section: {
     widthBytes: 32,
+    surfaceBytes: 32,
     textBytes: 100_000,
     title: 100,
     layoutBytes: 32,

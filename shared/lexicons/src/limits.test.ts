@@ -51,6 +51,7 @@ const FIXTURES: Record<string, Build> = {
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
   "profile.cardsMax": P((n) => ({ cards: many(n, "3jzfcijpj2z2a") })),
   "section.widthBytes": S((n) => ({ ...links([]), width: text(n) })),
+  "section.surfaceBytes": S((n) => ({ ...links([]), surface: text(n) })),
   "section.textBytes": S((n) => card("readme", { text: text(n) })),
   "section.title": S((n) => links([], { title: text(n) })),
   "section.layoutBytes": S((n) => collection([], { layout: text(n) })),
