@@ -334,6 +334,22 @@ test("a_quote_keeps_one_paragraph_and_no_line_break_is_added", async ({ page }) 
   await page.keyboard.press("Escape");
 });
 
+// Codex review of #1827: the page nests lists three deep and shows a fourth level beside the third, so a paste that
+// nests deeper is refused.
+test("a_paste_nesting_lists_deeper_than_the_page_shows_is_refused", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await paste(
+    page,
+    editor,
+    "<p>a</p><ul><li>one<ul><li>two<ul><li>three<ul><li>four</li></ul></li></ul></li></ul></li></ul><p>b</p>",
+  );
+  await editor.pressSequentially("typed");
+  await expect(postedText(dialog)).toHaveValue("typed");
+  await paste(page, editor, "<p>a</p><ul><li>one<ul><li>two<ul><li>three</li></ul></li></ul></li></ul><p>b</p>");
+  await expect(postedText(dialog)).toHaveValue(/ {4}- three/);
+  await page.keyboard.press("Escape");
+});
+
 // Codex review of #1827: bold and italic together are written so the page reads both, "***word***" it reads wrongly.
 // The second press also acts on the words the first one did.
 test("bold_and_italic_together_are_written_so_the_page_reads_both", async ({ page }) => {
