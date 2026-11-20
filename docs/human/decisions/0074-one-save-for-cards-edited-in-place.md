@@ -41,9 +41,14 @@ how Bluesky's own app writes several records at once.
 5. **No script.** Unchanged and complete: each card keeps its own form and `?/save`, with the plain Markdown field
    and the Width and Style choices.
 6. **Limits.** One Save is one request on the `profile` policy (30 a minute per member), however many cards it holds,
-   so it costs less than a request per card. The body cap stays the card form's 2 MiB (Alex, 2026-11-18); the page
-   tells the member before sending a Save past it. @atproto/pds 0.5.51 refuses more than 200 writes in one call, and
-   a page holds at most 100 cards. Our PDS runs with its own rate limits off (preflight), so applyWrites costs no
+   so it costs less than a request per card. The form's cap stays the card form's 2 MiB (Alex, 2026-11-18), but the
+   one that binds is the PDS's: @atproto/pds 0.5.51 parses a JSON body of at most 150 KiB (`dist/index.js:155`), well
+   inside net-guard's 1 MiB for atproto calls. The action measures the applyWrites body before sending it and refuses
+   a larger one as `card.save_too_large` with nothing written, rather than letting it read as an outage; the page
+   checks the same before sending and asks the member to save a few cards first. The same limit already applies to
+   one card's own save (`putRecord`); a Text card holds at most 100,000 bytes of text, so one card of ordinary text
+   fits. @atproto/pds 0.5.51 refuses more than 200 writes in one call,
+   and a page holds at most 100 cards. Our PDS runs with its own rate limits off (preflight), so applyWrites costs no
    write points.
 
 ## Consequences
@@ -68,18 +73,19 @@ how Bluesky's own app writes several records at once.
 ## Compliance
 
 `interfaces/web/src/routes/[did=did]/card-writes.server.test.ts` (saveAll) checks one write on the head the versions
-were read on, a stale version, a gone card, a cut-short list, a refusal by the domain, the one re-read and no third
-try; `card-form.server.test.ts` splits the Save's form and refuses stray names and too many fields;
-`infrastructure/pds/card-records.test.ts` checks the applyWrites body and InvalidSwap;
+were read on, a stale version, a gone card, a cut-short list, a refusal by the domain, a Save too large for one call,
+the one re-read and no third try; `card-form.server.test.ts` splits the Save's form and refuses stray names and too
+many fields; `infrastructure/pds/card-records.test.ts` checks the applyWrites body, InvalidSwap and the 150 KiB limit;
 `tests/integration/web/app/member-page.test.ts` saves two cards in one commit through the built server and refuses a
 stale card, a named field, a card named twice, a signed-out and a cross-site Save with nothing written; and
 `tests/integration/pds-apply-writes.image.test.ts` checks on the pinned PDS that two updates land in one commit, a
-stale head writes nothing, and an update of a missing record fails the whole call. Acceptance is Alex's line on the
-pull request that adds this record.
+stale head writes nothing, an update of a missing record fails the whole call, and a body past 150 KiB is refused.
+Acceptance is Alex's line on the pull request that adds this record.
 
 ## Sources
 
 @atproto/api 0.30.3 `com.atproto.repo.applyWrites` (`dist/client/types/com/atproto/repo/applyWrites.d.ts`);
-@atproto/pds 0.5.51 `dist/api/com/atproto/repo/applyWrites.js` (200-write cap, per-pair grant check, InvalidSwap);
+@atproto/pds 0.5.51 `dist/api/com/atproto/repo/applyWrites.js` (200-write cap, per-pair grant check, InvalidSwap)
+and `dist/index.js:155` (`jsonLimit: 150 * 1024`);
 atproto.com/specs/repository (commits) and atproto.com/specs/data-model (CID string form). Checked on the pinned image
 by `tests/integration/pds-apply-writes.image.test.ts`.

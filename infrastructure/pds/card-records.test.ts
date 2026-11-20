@@ -235,6 +235,31 @@ describe("saveCardRecords", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("a save whose body would pass the PDS's 150 KiB JSON limit is refused as too large, and nothing is sent", async () => {
+    const { pdsCall, ctx, calls } = pds(() => Response.json({}));
+    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    const updates = [
+      { key: "k1", record: long("a".repeat(80_000)) },
+      { key: "k2", record: long("b".repeat(80_000)) },
+    ];
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+      kind: "ok",
+      value: { kind: "too_large" },
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a save just inside the limit is sent", async () => {
+    const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
+    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+    const updates = [
+      { key: "k1", record: long("a".repeat(70_000)) },
+      { key: "k2", record: long("b".repeat(70_000)) },
+    ];
+    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
+    expect(calls).toHaveLength(1);
+  });
+
   test("an empty save sends nothing", async () => {
     const { pdsCall, ctx, calls } = pds(() => Response.json({}));
     expect(await saveCardRecords(pdsCall, ctx, DID, [], CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });

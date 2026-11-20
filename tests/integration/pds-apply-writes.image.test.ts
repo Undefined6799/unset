@@ -3,8 +3,10 @@
 // saveCardRecords). This checks on the real PDS the stack runs (@atproto/pds 0.5.51, deployment/pds/source.lock.json)
 // that both cards land in one commit, that a second call on the now stale head is refused as InvalidSwap with nothing
 // written, and that an update naming a record that is not there fails the whole call, so the other card in it stays
-// as it was. The member's own token signs every call; the app's OAuth token takes the same verifier (applyWrites.js
-// checks the grant for each action and collection). PLC is the one service the PDS calls here; a stand-in accepts it.
+// as it was, and that a body past the PDS's 150 KiB JSON limit (dist/index.js:155; APPLY_WRITES_BODY_BYTES) is
+// refused with nothing written. The member's own token signs every call; the app's OAuth token takes the same
+// verifier (applyWrites.js checks the grant for each action and collection). PLC is the one service the PDS calls
+// here; a stand-in accepts it.
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -73,17 +75,21 @@ const call = async (method, nsid, body, token) => {
   const afterBoth = await headOf();
   const stale = await save([update(a, "A2")], head);
   const missing = await save([update(a, "A3"), update("3jzfcijpj2z2z", "G")], afterBoth);
+  const tooLarge = await save([update(a, "x".repeat(80000)), update(b, "y".repeat(80000))], afterBoth);
   console.log(JSON.stringify({
     both: both.status,
     oneCommit: typeof both.body.commit?.cid === "string" && both.body.commit.cid === afterBoth,
     stale: [stale.status, stale.body.error],
     missing: missing.status === 200 ? 200 : missing.status >= 400,
+    tooLarge: tooLarge.status === 200 ? 200 : tooLarge.status >= 400,
     texts: await texts(),
   }));
 })();`;
 
 describe("applyWrites on the pinned PDS", () => {
-  test("two_cards_save_in_one_commit_and_a_stale_or_partly_missing_save_writes_nothing", { timeout: TEST_MS }, () => {
+  test("two_cards_save_in_one_commit_and_a_stale_partly_missing_or_too_large_save_writes_nothing", {
+    timeout: TEST_MS,
+  }, () => {
     expect(PDS).toBeDefined();
     const network = `unset-test-apply-${hex()}`;
     const plc = `unset-test-plc-${hex()}`;
@@ -137,6 +143,7 @@ describe("applyWrites on the pinned PDS", () => {
           oneCommit: true,
           stale: [400, "InvalidSwap"],
           missing: true,
+          tooLarge: true,
           texts: { a: "A1", b: "B1", count: 2 },
         });
       },

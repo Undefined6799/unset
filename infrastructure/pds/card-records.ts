@@ -191,7 +191,17 @@ export function saveCardRecord<C extends string>(
 export type SaveManyOutcome =
   | { readonly kind: "saved" }
   /** The repo's head was no longer `swapCommit`: something was written first, and none of the cards was written. */
-  | { readonly kind: "changed" };
+  | { readonly kind: "changed" }
+  /** The call's body would pass the PDS's JSON body limit, so it was not sent and nothing was written. */
+  | { readonly kind: "too_large" };
+
+/**
+ * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses every procedure's JSON body with
+ * `jsonLimit: 150 * 1024` (dist/index.js:155) and refuses a larger one; it is also well inside net-guard's
+ * 1 MiB request cap for atproto calls (infrastructure/net-guard/src/libraryFetch.ts), so the PDS's limit is the one
+ * that binds. Measured on the body we send, so a Save past it is refused here by name rather than as an outage.
+ */
+export const APPLY_WRITES_BODY_BYTES = 150 * 1024;
 
 /**
  * Writes over several cards at once, all or none (ADR 0074): one com.atproto.repo.applyWrites call of `update`
@@ -209,21 +219,25 @@ export function saveCardRecords(
   swapCommit: string,
 ): Promise<PdsResult<SaveManyOutcome>> {
   if (updates.length === 0) return Promise.resolve({ kind: "ok", value: { kind: "saved" } });
+  const body = {
+    repo: did,
+    swapCommit,
+    writes: updates.map((update) => ({
+      $type: "com.atproto.repo.applyWrites#update" as const,
+      collection: CARD_COLLECTION,
+      rkey: update.key,
+      value: { ...update.record },
+    })),
+  };
+  if (Buffer.byteLength(JSON.stringify(body)) > APPLY_WRITES_BODY_BYTES) {
+    return Promise.resolve({ kind: "ok", value: { kind: "too_large" } });
+  }
   return pdsCall(
     ctx,
     did,
     async (agent): Promise<SaveManyOutcome> => {
       try {
-        await agent.com.atproto.repo.applyWrites({
-          repo: did,
-          swapCommit,
-          writes: updates.map((update) => ({
-            $type: "com.atproto.repo.applyWrites#update" as const,
-            collection: CARD_COLLECTION,
-            rkey: update.key,
-            value: { ...update.record },
-          })),
-        });
+        await agent.com.atproto.repo.applyWrites(body);
         return { kind: "saved" };
       } catch (error: unknown) {
         if (isXrpcError(error, "InvalidSwap")) return { kind: "changed" };

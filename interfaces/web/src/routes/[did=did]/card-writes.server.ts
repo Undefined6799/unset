@@ -57,6 +57,7 @@ export type CardFailure =
   | "card.too_many"
   | "card.overflow"
   | "card.cards_changed"
+  | "card.save_too_large"
   | "card.list_incomplete"
   | "card.conflict"
   | "card.pds_unavailable"
@@ -150,6 +151,7 @@ export function cardWrites(store: CardStore, now: () => string): CardWrites {
         const saved = await store.saveMany(built.updates, head.value);
         if (saved.kind !== "ok") return pdsFailure(saved);
         if (saved.value.kind === "saved") return SAVED;
+        if (saved.value.kind === "too_large") return failed("card.save_too_large");
       }
       return failed("card.cards_changed");
     },

@@ -382,6 +382,18 @@ describe("saveAll", () => {
     expect(calls.many).toHaveLength(2);
   });
 
+  test("a Save too large for one PDS call is refused as such, not as an outage, and is not tried again", async () => {
+    const { writes, calls } = store({
+      list: async () => listing([{ key: "a", cid: V }]),
+      saveMany: async (updates, swapCommit) => {
+        calls.many.push({ updates: [...updates], swapCommit });
+        return ok({ kind: "too_large" });
+      },
+    });
+    expect(await writes.saveAll([edit("a", "New A")])).toEqual({ kind: "failed", code: "card.save_too_large" });
+    expect(calls.many).toHaveLength(1);
+  });
+
   test("an outage is a retryable failure and an ended session sends the member to sign in", async () => {
     const down = async () => ({ kind: "transient", code: "pds_unavailable" }) as const;
     expect(await store({ head: down }).writes.saveAll([edit("a", "A")])).toEqual({
