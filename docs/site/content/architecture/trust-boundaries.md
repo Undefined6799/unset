@@ -17,13 +17,13 @@ On the PDS host, `deployment/edge/snippets/pds-fonts.caddy` answers `/_unset/` i
 
 ## One process per container
 
-Each Compose service is one process, with its own user, read-only root and dropped capabilities (`deployment/compose.dev.yaml`). `web` is `interfaces/http`, the only interface folder in the tree.
+Each Compose service is one process, with its own user, read-only root and dropped capabilities (`deployment/compose.dev.yaml`). `interfaces/` holds `web`, `indexer` and `pds-admin`. The web service runs `interfaces/web` (SvelteKit); its compose name and `UNSET_SERVICE: http` keep the older name.
 
 Database roles match that split. `web` is the only roster role the dev stack logs in as. Grants are per role in `infrastructure/postgres/grant-matrix.json`; migration 0003 grants schema `USAGE` and no table privileges. Later migrations grant column lists on the tables they create.
 
 ## Egress
 
-Caller-influenced outbound HTTP is scanned by `scripts/guards/egress.ts`. A dynamic `fetch`, a raw `http`/`https`/`net`/`tls` client, `undici`, or `new WebSocket` / `new EventSource` fails outside `infrastructure/net-guard/` and test files. `EGRESS_FILE_EXEMPTIONS` in that file is `interfaces/pds-admin/pds.mjs`.
+Caller-influenced outbound HTTP is scanned by `scripts/guards/egress.ts`. A dynamic `fetch`, a raw `http`/`https`/`net`/`tls` client, `undici`, or `new WebSocket` / `new EventSource` fails outside `infrastructure/net-guard/` and test files. `EGRESS_FILE_EXEMPTIONS` in that file is `interfaces/pds-admin/pds.ts`.
 
 `infrastructure/net-guard/src/request.ts`: a caller-influenced request names a policy, connects only to addresses `resolveVetted` accepted, and a 301, 302, 303, 307 or 308 is refused rather than followed. `undici` is imported only in this folder (`vendor-sdk-one-adapter`).
 
@@ -37,13 +37,12 @@ Paths the section names that are in the tree:
 
 | Path | What it is |
 | --- | --- |
-| `shared/http/` | CSRF gate, session slot, CSP builder, server kit |
+| `shared/http/` | client address, trusted proxy, return path, limits, headers |
 | `infrastructure/session/` | browser session store |
-| `interfaces/http/session-cookie.ts` | `__Host-sid` |
+| `interfaces/web/server.ts`, `src/hooks.server.ts`, `src/lib/server/`, `src/routes/**/policy.ts` | the web gate; `__Host-sid` is set in `src/lib/server/session.ts` |
 | `domains/identity/verify-handle.ts` | two-way handle check |
 | `infrastructure/net-guard/` | egress |
-| `shared/islands/` | island props serialiser |
-| `shared/ui/safe-href.ts` | link allowlist |
+| `shared/safe-href/` | link allowlist |
 | `infrastructure/seal/` | seal |
 | `infrastructure/postgres/roles.json`, `roles.ts` | roster and password sync |
 | `infrastructure/postgres/migrations/`, `grant-matrix.json`, `erasure-registry.json` | named on the `# parsed:` line |
