@@ -10,6 +10,7 @@ import {
   codeCloser,
   destinationFinder,
   emphasisCloser,
+  isEscapable,
   isWord,
   type Mark,
   nextIndex,
@@ -148,6 +149,12 @@ export function parseInline(text: string, depth = 0, links = true): Inline[] {
   };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
+    // A backslash escape (CommonMark 0.31.2, "Backslash escapes") is its character as text, before any construct.
+    if (text[i] === "\\" && isEscapable(text[i + 1])) {
+      buffer += text[i + 1];
+      i += 2;
+      continue;
+    }
     const taken =
       depth >= MAX_DEPTH
         ? null

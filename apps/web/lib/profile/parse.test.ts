@@ -152,3 +152,33 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     expect(parseReadme("a\u0000b\u0007c")).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: "abc" }] }]);
   });
 });
+
+// CommonMark 0.31.2, "Backslash escapes" (https://spec.commonmark.org/0.31.2/#backslash-escapes): any ASCII
+// punctuation after a backslash is that character as text, and opens or closes nothing. The rich editor (remark-
+// stringify 11) writes these for a literal `*`, `_` or `[`, so the page must not show the backslash.
+describe("backslash escapes", () => {
+  test("an escaped mark is the mark as text", () => {
+    expect(parseInline("a \\* b \\_ c \\[d]")).toEqual([text("a * b _ c [d]")]);
+  });
+
+  test("an escaped mark opens no emphasis and closes none", () => {
+    expect(parseInline("\\*not em\\*")).toEqual([text("*not em*")]);
+    expect(parseInline("*a \\* b*")).toEqual([{ kind: "em", children: [text("a * b")] }]);
+  });
+
+  test("an escaped backslash is one backslash, and the mark after it still counts", () => {
+    expect(parseInline("\\\\*em*")).toEqual([text("\\"), { kind: "em", children: [text("em")] }]);
+  });
+
+  test("a backslash before anything that is not ASCII punctuation stays", () => {
+    expect(parseInline("C:\\dir \\é")).toEqual([text("C:\\dir \\é")]);
+  });
+
+  test("inside a code span a backslash is text", () => {
+    expect(parseInline("`a\\*b`")).toEqual([{ kind: "code", text: "a\\*b" }]);
+  });
+
+  test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
+    expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
+  });
+});

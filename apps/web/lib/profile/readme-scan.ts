@@ -8,6 +8,16 @@ export const isWord = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{
  * A link destination with its backslash escapes removed: "\\(" is "(" (CommonMark 0.31.2, "Backslash escapes": any
  * ASCII punctuation), so an escaped parenthesis reaches safeHref as itself, not as a path separator.
  */
+/** ASCII punctuation: what a backslash escapes (CommonMark 0.31.2, "Backslash escapes"). */
+export const isEscapable = (ch: string | undefined) => ch !== undefined && /^[!-/:-@[-`{-~]$/.test(ch);
+
+/** Whether the character at `j` follows an odd run of backslashes, so it is text (CommonMark 0.31.2). */
+export function isEscaped(text: string, j: number): boolean {
+  let run = 0;
+  while (text[j - 1 - run] === "\\") run += 1;
+  return run % 2 === 1;
+}
+
 export const unescapeDestination = (destination: string) => destination.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 
 /** The length of the run of `ch` starting at `i`. */
@@ -100,7 +110,7 @@ export type Mark = "*" | "_" | "**" | "__";
  * run, and an underscore mark with no letter or digit after it.
  */
 export function closes(text: string, j: number, mark: Mark): boolean {
-  if (!text.startsWith(mark, j)) return false;
+  if (!text.startsWith(mark, j) || isEscaped(text, j)) return false;
   const ch = mark[0];
   if (mark.length === 1 && (text[j + 1] === ch || text[j - 1] === ch)) return false;
   return ch !== "_" || !isWord(text[j + mark.length]);
