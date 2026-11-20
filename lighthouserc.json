@@ -11,7 +11,8 @@
         "https://unset.test:8443/login",
         "https://unset.test:8443/signed-out",
         "https://unset.test:8443/welcome/blocked",
-        "https://unset.test:8443/join?invite=pds-test-abcde-fghij"
+        "https://unset.test:8443/join?invite=pds-test-abcde-fghij",
+        "https://unset.test:8443/request-invite"
       ],
       "settings": {
         "formFactor": "mobile",
@@ -28,7 +29,7 @@
     "assert": {
       "assertMatrix": [
         {
-          "matchingUrlPattern": "^https://unset\\.test:8443/(legal/[a-z]+|login|welcome/blocked|join\\?invite=[A-Za-z0-9-]+|@did:plc:[a-z2-7]{24})?$",
+          "matchingUrlPattern": "^https://unset\\.test:8443/(legal/[a-z]+|login|welcome/blocked|join\\?invite=[A-Za-z0-9-]+|request-invite|@did:plc:[a-z2-7]{24})?$",
           "assertions": {
             "categories:accessibility": ["error", { "minScore": 1 }],
             "categories:performance": ["warn", { "minScore": 0 }],
