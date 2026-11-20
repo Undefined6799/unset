@@ -660,3 +660,12 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   atproto's account model. A deletion asked of us is final 30 days later; there is no PLC tombstone by default; every
   hosted name a member ever held is burned and never issued again; the privacy notice says the PLC log is permanent; a
   member who moves to another PDS may keep their name until they change it.
+- **Shared image foundation (P2.17, 2026-11-20; own record: [0070](0070-shared-image-foundation.md)):** Alex asked on
+  2026-11-20 01:12:01Z for one reusable image foundation and at 01:23:11Z made moderation, the fingerprint check
+  included, a later feature built before production. An image is a blob in the member's repository; a shared
+  `sh.unset.defs#image` carries the blob, alt text and aspect ratio, and each use adds its caption and fit. Five
+  stages: intake, processing in a killable child process (JPEG main version up to 2560 px and 2,000,000 bytes, AVIF
+  and WebP display versions, every metadata block stripped, the upload never stored), an empty inspection port,
+  storage in the private store, and publish to the PDS at save time. Production refuses to publish images while the
+  inspection port is empty. It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
+  replace ADR 0029's scan paragraph outside production. Proposed, awaiting Alex.
