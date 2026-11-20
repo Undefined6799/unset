@@ -714,3 +714,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0076 accepted (Alex, 2026-11-20 18:53Z, against 7a1de42; own record:
   [0076](0076-image-uploads-up-to-64-mib.md)):** image uploads up to 64 MiB and 110 megapixels, with web's, net-guard's
   and review's caps, memory and the edge's read window raised to match.
+- **ADR 0073 accepted (Alex, 2026-11-20 13:08:50Z, against 76abad4, by "Just do it with these 2 heads here" under the
+  coordinator's "Merge 1827 at 76abad4"; own record: [0073](0073-text-card-rich-editor.md)):** the Text card is
+  written in Milkdown over the plain field, and the app CSP adds the one Trusted Types name `ProseMirrorClipboard`.
