@@ -7,6 +7,7 @@
 // single-use nonces and the hourly sweeps. A slice that needs a new service adds it here; pages get it via `services()`.
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
+// P2.27: this browser's sign-in notifications on its session row (ADR 0079).
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
@@ -19,6 +20,7 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
+import { COUNT_CAP } from "@unset/domains-notifications";
 import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
 import {
   createNetGuard,
@@ -125,6 +127,14 @@ export type Services = {
   readonly versions: OnboardingVersions;
   /** The email gate's PDS recheck and its hold (email-refresh.ts). */
   readonly email: EmailRefresher;
+  /**
+   * P2.27 (ADR 0079): this browser's sign-in notifications, which are the member's other sessions begun since, and
+   * marking them opened. Both on this browser's session row only (infrastructure/session signInsSince).
+   */
+  readonly signIns: {
+    readonly since: (idHash: Buffer, limit: number, deadline: AbortSignal) => Promise<string[]>;
+    readonly markSeen: (idHash: Buffer, upTo: string, deadline: AbortSignal) => Promise<void>;
+  };
   /** Caches the member's email answer on this browser's session row. */
   readonly setEmailConfirmed: (idHash: Buffer, value: boolean, deadline: AbortSignal) => Promise<void>;
   /** P2.10: a member's invites (sealed codes), the request that issues one, and the audit row for a refusal. */
@@ -217,6 +227,8 @@ async function build(): Promise<Services> {
     withDb: (deadline, fn) => withClient(pool, deadline, fn),
     limits: sessionLimits,
     log,
+    // The bell's few newer sign-ins come with each session read (P2.27; notifications.ts SIGN_INS_WITH_SESSION).
+    newerSignInsRead: COUNT_CAP + 1,
   });
   const limiter: RateLimiter = createRateLimiter(policiesFor(config.TRUSTED_PROXY_MODE), {
     maxKeys: config.RATE_LIMIT_MAX_KEYS,
@@ -291,6 +303,12 @@ async function build(): Promise<Services> {
   const accounts = createAccountRepository(pool, { recordUnderageBlock });
   const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
     withTransaction(pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
+  const signIns = {
+    since: (idHash: Buffer, limit: number, deadline: AbortSignal) =>
+      withClient(pool, deadline, (db) => sessions.signInsSince(db, idHash, limit)),
+    markSeen: (idHash: Buffer, upTo: string, deadline: AbortSignal) =>
+      withTransaction(pool, deadline, (tx) => sessions.markSignInsSeen(tx, idHash, upTo)),
+  };
   // `deadlineAt` is the request's own, on the monotonic clock: pdsCall retries a read only while it fits (P2.07a).
   const email = emailRefresher({
     sessionInfo: (did, deadline, deadlineAt) => pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt }, did),
@@ -374,6 +392,7 @@ async function build(): Promise<Services> {
     versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
     email,
     setEmailConfirmed,
+    signIns,
     invites,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),

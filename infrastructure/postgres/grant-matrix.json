@@ -179,7 +179,8 @@
           "absolute_expires_at": ["SELECT", "INSERT"],
           "email_confirmed": ["SELECT", "UPDATE"],
           "email_checked_at": ["SELECT", "UPDATE"],
-          "issuer_origin": ["SELECT", "INSERT"]
+          "issuer_origin": ["SELECT", "INSERT"],
+          "sign_ins_seen_at": ["SELECT", "UPDATE"]
         },
         "rowPrivileges": ["DELETE"]
       }

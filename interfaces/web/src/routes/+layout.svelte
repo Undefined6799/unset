@@ -7,10 +7,13 @@
 <script lang="ts">
 import "@unset/apps-web/app.css";
 import { Icon, type IconName } from "@unset/apps-web/lib/components/icon";
+import MarkAllRead from "@unset/apps-web/lib/components/notifications/mark-all-read.svelte";
+import NotificationList from "@unset/apps-web/lib/components/notifications/notification-list.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import appleTouchIcon from "@unset/apps-web/lib/icons/unset-apple-touch-icon.png";
 import favicon from "@unset/apps-web/lib/icons/unset-favicon-32.png";
+import { NOTIFICATIONS as N } from "@unset/apps-web/lib/notifications/messages.ts";
 import { PANEL_ANCHOR } from "@unset/apps-web/lib/profile/panel.ts";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import type { Snippet } from "svelte";
@@ -166,8 +169,8 @@ const TABS = [{ label: T.home, href: "/", icon: "home", active: "home" }] as con
 //   to the e2e and axe pages.
 // - The menu panel's Saved, Your communities and Help; the Create panel's New post, Share a link and Ask a question:
 //   each a real flow or page with its route and policy; then make its row a link and add tests for it.
-// - The Messages and Notifications panels: real lists with counts, loading and error states (never a hard-coded "all
-//   caught up"); until then they say the feature is coming, and their "open all" rows stay disabled.
+// - The Messages panel: a real list with counts, loading and error states (never a hard-coded "all caught up"); until
+//   then it says the feature is coming, and its "open all" row stays disabled. Notifications has its list (P2.27).
 // - Community, Explore (tabs below): a page each with its route and policy; move the entry from SOON_TABS to TABS
 //   with its `active` value in ShellData, so aria-current and the underline follow, and add its denial and e2e tests.
 const SOON_MENU = [
@@ -186,8 +189,9 @@ const PANEL_BUTTONS = [
     id: NOTIFICATIONS,
     label: T.notifications,
     icon: "notifications",
-    empty: T.notificationsSoon,
-    all: T.allNotifications,
+    // Drawn by notificationsBody below, not by the coming-soon rows.
+    empty: N.none,
+    all: N.viewAll,
   },
 ] as const;
 const SOON_TABS = [
@@ -201,6 +205,13 @@ const panel =
   "fixed top-16 bottom-auto m-0 w-80 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-lg border bg-popover p-2 text-popover-foreground shadow-md open:flex max-sm:w-auto";
 // The member the page passed (their own page and settings, with a name there) or the gate found (+layout.server.ts).
 const account = $derived(shell.account ?? data.account);
+// The bell's list and count (P2.27), read by +layout.server.ts on every page a member opens; undefined for a visitor.
+const notes = $derived(data.notifications);
+const unread = $derived(notes?.state === "ready" ? notes.unread : 0);
+// The unread count on the bell and on More actions (which opens the same panel on a phone): read in the button's name,
+// drawn as a small badge.
+const badge =
+  "pointer-events-none absolute -top-1.5 -right-1.5 min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.6875rem] leading-4.5 font-semibold text-primary-foreground";
 const letter = $derived(account?.name === undefined ? undefined : accountLetter(account.name));
 // A client navigation keeps the layout, drawer included, so the drawer is closed once the new page is in, as the
 // Hono shell's Navigation did (shared/ui/components/Navigation/Navigation.tsx, hidePopover on navigation).
@@ -368,9 +379,10 @@ const row =
             size="icon-sm"
             popovertarget={button.id}
             popovertargetaction="toggle"
-            class="{control} max-sm:hidden"
+            class="{control} relative max-sm:hidden"
           >
-            <Icon name={button.icon} size={20} label={button.label} />
+            <Icon name={button.icon} size={20} label={button.id === NOTIFICATIONS ? N.bell(unread) : button.label} />
+            {#if button.id === NOTIFICATIONS && unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
           </Button>
         {/each}
         <Button
@@ -378,9 +390,10 @@ const row =
           size="icon-sm"
           popovertarget={ACTIONS}
           popovertargetaction="toggle"
-          class="{control} sm:hidden"
+          class="{control} relative sm:hidden"
         >
-          <Icon name="more" size={20} label={T.moreActions} />
+          <Icon name="more" size={20} label={unread > 0 ? `${T.moreActions}, ${N.bell(unread)}` : T.moreActions} />
+          {#if unread > 0}<span aria-hidden="true" class={badge}>{N.badge(unread)}</span>{/if}
         </Button>
         {#if account !== undefined}
           <Button
@@ -433,6 +446,30 @@ const row =
       </button>
     </li>
   {/snippet}
+  {#snippet notificationsBody()}
+    <!-- P2.27: the newest few, each a form that opens it, Mark all as read, and the page. A visitor is told to sign in
+         (the header's Sign in button is the one link for it). A failed read says so; the empty text comes from a real,
+         empty list. -->
+    {#if notes === undefined}
+      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.visitor}</p>
+    {:else}
+      {#if notes.state === "failed"}
+        <p role="alert" class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.failed}</p>
+      {:else if notes.entries.length === 0}
+        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{N.none}</p>
+      {:else}
+        <NotificationList entries={notes.entries} />
+        <div class="flex justify-end px-1"><MarkAllRead entries={notes.entries} returnTo={page.url.pathname} /></div>
+      {/if}
+      <ul class="flex flex-col gap-1 border-t pt-1">
+        <li>
+          <a href="/notifications" class={row} aria-current={page.url.pathname === "/notifications" ? "page" : undefined}
+            ><Icon name="next" size={20} /><span>{N.viewAll}</span></a
+          >
+        </li>
+      </ul>
+    {/if}
+  {/snippet}
   {#snippet panelTitle(id: string, title: string, focusClose: boolean)}
     <div class="flex items-center justify-between gap-2 py-1 pr-1 pl-3">
       <h2 id="{id}-title" class="font-semibold">{title}</h2>
@@ -471,8 +508,12 @@ const row =
   {#each PANEL_BUTTONS as button (button.id)}
     <section id={button.id} popover="auto" ontoggle={backToActions} aria-labelledby="{button.id}-title" class="{panel} right-3 left-auto max-sm:right-2 max-sm:left-2">
       {@render panelTitle(button.id, button.label, true)}
-      <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
-      <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+      {#if button.id === NOTIFICATIONS}
+        {@render notificationsBody()}
+      {:else}
+        <p class="px-3 pt-1 pb-3 text-sm text-muted-foreground">{button.empty}</p>
+        <ul class="flex flex-col gap-1 border-t pt-1">{@render soonRow({ label: button.all, icon: "next" })}</ul>
+      {/if}
     </section>
   {/each}
   <section id={SEARCH} popover="auto" aria-labelledby="{SEARCH}-title" class="{panel} right-2 left-2 w-auto sm:hidden">
@@ -492,6 +533,9 @@ const row =
         <li>
           <button type="button" popovertarget={button.id} popovertargetaction="show" class="{row} w-full">
             <Icon name={button.icon} size={20} /><span>{button.label}</span>
+            {#if button.id === NOTIFICATIONS && unread > 0}<span class="ml-auto text-xs text-muted-foreground"
+                ><span aria-hidden="true">{N.badge(unread)}</span><span class="sr-only">{N.bell(unread)}</span></span
+              >{/if}
           </button>
         </li>
       {/each}

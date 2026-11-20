@@ -42,6 +42,12 @@ export type Session = {
    * session created before the column or with no storable origin. `read` always sets it.
    */
   readonly issuerOrigin?: string | null;
+  /**
+   * P2.27: when the DID's other sessions that this browser has not been told about began, newest first, at most the
+   * store's `newerSignInsRead` (the bell's count). Read with the session, so the bell costs no statement of its own.
+   * `read` always sets it.
+   */
+  readonly newerSignIns?: readonly string[];
 };
 /** One request as read sees it: `key` (the Request) scopes the memo; `cookieValue` is null when none was sent. */
 export type SessionRequest = {
@@ -76,6 +82,8 @@ export type SessionStore = {
   destroyAllForDid(tx: Db, did: Did, why: EndSessionsReason): Promise<number>;
   countLive(db: Db, did: Did): Promise<number>;
   setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean): Promise<void>;
+  signInsSince(db: Db, idHash: Buffer, limit: number): Promise<string[]>;
+  markSignInsSeen(db: Db, idHash: Buffer, upTo: string): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
 /**
@@ -103,7 +111,22 @@ const storableOrigin = (origin: string | null | undefined): string | null =>
  * so the last browser's count cannot drift from what signs a browser in (P2.08c). The columns are NOT NULL
  * (migration 0011), so `NOT` of it is exactly "expired".
  */
-const WITHIN_LIFETIMES = "now() <= s.absolute_expires_at AND now() <= s.last_seen_at + make_interval(secs => $2)";
+const lifetimes = (row: string): string =>
+  `now() <= ${row}.absolute_expires_at AND now() <= ${row}.last_seen_at + make_interval(secs => $2)`;
+const WITHIN_LIFETIMES = lifetimes("s");
+/** A start time exactly as stored: ISO 8601 in UTC with microseconds (domains/notifications SignInAt). */
+const exactStart = (row: string): string =>
+  `to_char(${row}.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+/**
+ * P2.27 (ADR 0079): the DID's other live sessions `o` that began after the session row `me` and after `me` last opened
+ * its sign-in notifications, newest first. The sign-in notification is this list, not a stored row (plan §6: no
+ * sign-in records). $2 is the idle limit; `limit` is the placeholder for the row cap.
+ */
+const newerSignIns = (me: string, limit: string): string =>
+  `SELECT ${exactStart("o")} FROM app.session o WHERE o.did = ${me}.did AND o.id_hash <> ${me}.id_hash ` +
+  `AND o.created_at > ${me}.created_at ` +
+  `AND (${me}.sign_ins_seen_at IS NULL OR o.created_at > ${me}.sign_ins_seen_at) ` +
+  `AND ${lifetimes("o")} ORDER BY o.created_at DESC LIMIT ${limit}`;
 const NONE: SessionRead = { session: null, clearCookie: false };
 const CLEAR: SessionRead = { session: null, clearCookie: true };
 
@@ -123,6 +146,7 @@ type SessionRow = {
   email_confirmed: boolean | null;
   email_checked_at: Date | null;
   issuer_origin: string | null;
+  newer_sign_ins: string[];
   expired: boolean;
   touch_due: boolean;
   has_token_set: boolean;
@@ -132,8 +156,11 @@ export function createSessionStore(options: {
   readonly withDb: WithSessionDb;
   readonly limits: SessionLimits;
   readonly log: Logger;
+  /** How many of `newerSignIns` `read` returns: the bell's count cap and one more (domains/notifications). */
+  readonly newerSignInsRead?: number;
 }): SessionStore {
   const { withDb, limits, log } = options;
+  const newerSignInsRead = options.newerSignInsRead ?? 11;
   const memo = new WeakMap<object, Promise<SessionRead>>();
 
   /** Rotation first (this browser's previous session dies, whoever it belonged to), then a fresh id. */
@@ -186,6 +213,7 @@ export function createSessionStore(options: {
       emailConfirmed: row.email_confirmed,
       emailCheckedAt: row.email_checked_at,
       issuerOrigin: row.issuer_origin,
+      newerSignIns: row.newer_sign_ins,
     };
     return { session, clearCookie: false };
   }
@@ -203,9 +231,10 @@ export function createSessionStore(options: {
       "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, s.issuer_origin, " +
         `NOT (${WITHIN_LIFETIMES}) AS expired, ` +
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
-        "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +
+        "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set, " +
+        `ARRAY(${newerSignIns("s", "$4")}) AS newer_sign_ins ` +
         "FROM app.session s WHERE s.id_hash = $1",
-      [idHash, limits.idleS, limits.touchIntervalS],
+      [idHash, limits.idleS, limits.touchIntervalS, newerSignInsRead],
     );
     return rows[0];
   }
@@ -255,6 +284,31 @@ export function createSessionStore(options: {
     else await db.query(`${set} WHERE did = $1`, [target.did, value]);
   }
 
+  /**
+   * P2.27 (ADR 0079): `newerSignIns` for the session `idHash` past the read's cap, for the notifications page: at most
+   * `limit`. Each time comes back exactly as stored, so `markSignInsSeen` can name it without rounding.
+   */
+  async function signInsSince(db: Db, idHash: Buffer, limit: number) {
+    const { rows } = await db.query<{ at: string[] }>(
+      `SELECT ARRAY(${newerSignIns("s", "$3")}) AS at FROM app.session s WHERE s.id_hash = $1`,
+      [idHash, limits.idleS, limit],
+    );
+    return rows[0]?.at ?? [];
+  }
+
+  /**
+   * P2.27: the session `idHash` has opened its sign-in notifications up to `upTo` (an exact time `signInsSince` gave).
+   * It only moves forward and never past now(), so a repeated, late or forged post cannot reopen an entry or hide a
+   * sign-in still to come. Only this session's row: another browser keeps its own.
+   */
+  async function markSignInsSeen(db: Db, idHash: Buffer, upTo: string) {
+    await db.query(
+      "UPDATE app.session SET sign_ins_seen_at = " +
+        "GREATEST(COALESCE(sign_ins_seen_at, '-infinity'), LEAST($2::timestamptz, now())) WHERE id_hash = $1",
+      [idHash, upTo],
+    );
+  }
+
   /** Deletes every session past its idle or absolute expiry. Idempotent: concurrent runs are safe, so no lock (DA-4). */
   async function sweep(db: Db) {
     const result = await db.query(
@@ -266,7 +320,17 @@ export function createSessionStore(options: {
     return count;
   }
 
-  return { create, read, destroy, destroyAllForDid, countLive, setEmailConfirmed, sweep };
+  return {
+    create,
+    read,
+    destroy,
+    destroyAllForDid,
+    countLive,
+    setEmailConfirmed,
+    signInsSince,
+    markSignInsSeen,
+    sweep,
+  };
 }
 
 function unavailable(error: unknown): never {
