@@ -35,6 +35,15 @@ export const PROFILE_SETTINGS = {
   locationHint: (n: number) => `Where you are, as you want to say it. Up to ${n} characters.`,
   website: "Website",
   websiteHint: "An http or https address.",
+  layout: "Page layout",
+  layouts: [
+    { value: "sidebar", label: "Side column", hint: "Your picture and details in a column beside your cards." },
+    {
+      value: "compact",
+      label: "Compact header",
+      hint: "Your picture and name above your cards; details open from the picture.",
+    },
+  ],
   cardsNote: "Your README, links and other cards are edited on your page.",
   viewPage: "View your page",
   save: "Save profile",

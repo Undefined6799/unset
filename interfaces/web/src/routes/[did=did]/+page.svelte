@@ -9,6 +9,7 @@ import AddCard from "@unset/apps-web/lib/components/profile/add-card.svelte";
 import CardControls from "@unset/apps-web/lib/components/profile/card-controls.svelte";
 import CardPanel from "@unset/apps-web/lib/components/profile/card-panel.svelte";
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
+import ProfileHeader from "@unset/apps-web/lib/components/profile/profile-header.svelte";
 import ProfileLayout from "@unset/apps-web/lib/components/profile/profile-layout.svelte";
 import ProfileSide from "@unset/apps-web/lib/components/profile/profile-side.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
@@ -18,6 +19,10 @@ import { OWN_PAGE } from "@unset/apps-web/lib/profile/messages.ts";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
 
 let { data, form } = $props();
+// The page's notes on what could not be read: in the side column, or under the compact header (ADR 0072).
+const hasNotes = $derived(
+  data.account.handleUnavailable || data.profileUnavailable || data.cardsIncomplete || data.cardsOverflow,
+);
 const setUp = $derived(data.profile === null && !data.profileUnavailable);
 // The tab names the member: their display name, else their verified handle. An unverified handle reads as
 // `handle.invalid` (the protocol's INVALID_HANDLE, @atproto/syntax 0.7.7
@@ -30,7 +35,14 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
   <title>{title}</title>
 </svelte:head>
 
-<ProfileLayout>
+{#snippet readNotes()}
+  {#if data.account.handleUnavailable}<p>{OWN_PAGE.handleUnavailable}</p>{/if}
+  {#if data.profileUnavailable}<p>{OWN_PAGE.profileUnavailable}</p>{/if}
+  {#if data.cardsIncomplete}<p>{OWN_PAGE.cardsIncomplete}</p>{/if}
+  {#if data.cardsOverflow}<p>{OWN_PAGE.cardsOverflow}</p>{/if}
+{/snippet}
+
+<ProfileLayout layout={data.layout}>
   {#snippet notices()}
     {#if form?.message && data.cardPanel === null}
       <Alert.Root variant="destructive" role="alert">
@@ -40,22 +52,35 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
   {/snippet}
 
   {#snippet side()}
-    <ProfileSide
-      name={data.name}
-      letter={data.letter}
-      handle={data.profile === null ? null : data.account.handle}
-      did={data.account.did}
-      headline={data.profile?.headline}
-      location={data.profile?.location}
-      website={data.profile?.website}
-      shape={data.avatarShape}
-      edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
-    >
-      {#if data.account.handleUnavailable}<p>{OWN_PAGE.handleUnavailable}</p>{/if}
-      {#if data.profileUnavailable}<p>{OWN_PAGE.profileUnavailable}</p>{/if}
-      {#if data.cardsIncomplete}<p>{OWN_PAGE.cardsIncomplete}</p>{/if}
-      {#if data.cardsOverflow}<p>{OWN_PAGE.cardsOverflow}</p>{/if}
-    </ProfileSide>
+    {#if data.layout === "compact"}
+      <ProfileHeader
+        name={data.name}
+        letter={data.letter}
+        handle={data.profile === null ? null : data.account.handle}
+        did={data.account.did}
+        headline={data.profile?.headline}
+        location={data.profile?.location}
+        website={data.profile?.website}
+        contact={data.contact}
+        shape={data.avatarShape}
+        edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
+        notes={hasNotes ? readNotes : undefined}
+      />
+    {:else}
+      <ProfileSide
+        name={data.name}
+        letter={data.letter}
+        handle={data.profile === null ? null : data.account.handle}
+        did={data.account.did}
+        headline={data.profile?.headline}
+        location={data.profile?.location}
+        website={data.profile?.website}
+        shape={data.avatarShape}
+        edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
+      >
+        {@render readNotes()}
+      </ProfileSide>
+    {/if}
   {/snippet}
 
   {#if data.cardPanel !== null}

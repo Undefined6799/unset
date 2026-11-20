@@ -14,7 +14,13 @@ import type { Action } from "svelte/action";
 import { enhance } from "$app/forms";
 import { profileSubmit } from "./submit.ts";
 
-type Values = { displayName: string; headline: string; location: string; website: string };
+type Values = {
+  displayName: string;
+  headline: string;
+  location: string;
+  website: string;
+  layout: "sidebar" | "compact";
+};
 let {
   data,
 }: {

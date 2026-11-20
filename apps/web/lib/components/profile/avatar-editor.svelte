@@ -5,7 +5,9 @@
   showing a picture needs the media proxy (CLAUDE.md, Blobs), so the link and dialog are named for the shape and say
   uploads come later (staging walkthrough 2026-11-18 round two, finding 4); no-underline keeps the letter clean (finding 3). As with the card
   editors, a refused save keeps the dialog open with the reason inside, and with no script the avatar is a link to the
-  page with the choice in place (`?avatar`, drawn by card-panel.svelte with `panel`).
+  page with the choice in place (`?avatar`, drawn by card-panel.svelte with `panel`). In the compact header (ADR 0072)
+  the avatar opens the profile's details instead, so `look="button"` makes the trigger a small "Shape" button of its
+  own beside the name, with the same dialog and no-script link.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
@@ -25,6 +27,7 @@ let {
   class: className = "",
   children,
   panel,
+  look = "avatar",
 }: {
   shape: AvatarShape;
   enhance?: Enhance;
@@ -33,6 +36,8 @@ let {
   children?: Snippet;
   /** Draw the choice in place instead (the page opened with `?avatar`). */
   panel?: CardPanelState;
+  /** The avatar itself is the trigger, or a pen button beside the name (the compact header). */
+  look?: "avatar" | "button";
 } = $props();
 
 let open = $state(false);
@@ -99,6 +104,20 @@ const rounded = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
   </Card.Root>
 {:else}
   <Dialog.Root bind:open>
+    {#if look === "button"}
+      <a
+        href="?avatar#{PANEL_ANCHOR}"
+        aria-haspopup="dialog"
+        data-slot="button"
+        aria-label={AVATAR_EDIT.trigger}
+        class="{buttonVariants({ variant: 'ghost', size: 'sm' })} shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:min-h-11 {className}"
+        onclick={(event) => {
+          if (opensHere(event)) open = true;
+        }}
+      >
+        <Icon name="profile" size={16} />{AVATAR_EDIT.change}
+      </a>
+    {:else}
     <a
       href="?avatar#{PANEL_ANCHOR}"
       aria-haspopup="dialog"
@@ -122,6 +141,7 @@ const rounded = $derived(shape === "round" ? "rounded-full" : "rounded-[12%]");
       </span>
       <span class="sr-only">{AVATAR_EDIT.trigger}</span>
     </a>
+    {/if}
     <Dialog.Content>
       <Dialog.Header>
         <Dialog.Title>{AVATAR_EDIT.title}</Dialog.Title>
