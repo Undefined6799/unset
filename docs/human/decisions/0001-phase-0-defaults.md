@@ -666,3 +666,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0068 accepted (Alex, 2026-11-20 01:23Z, against 1e38138; own record:
   [0068](0068-profile-card-surfaces.md)):** each profile card may store an optional surface, Filled, Outlined or
   Plain, under ADR 0051 Decision 7; a missing field reads as Filled.
+- **Split client and the build-file zone (P1.21g, 2026-11-20; own record:
+  [0069](0069-split-client-and-build-file-zone.md)):** the web client uses SvelteKit's `split` strategy, so a heavy
+  part can load on demand, and the dev app edge counts content-hashed build files, GET or HEAD on the decoded path
+  only, in a new zone `app_files` (120 per 10 seconds per address) instead of `app_burst`; `app_global` still counts
+  them. It supersedes "`app_burst`, with no matcher" in ADR 0031 Decision 1 and "the same ... lack of matcher" in ADR
+  0066 Decision 1; neither is edited. Proposed, awaiting Alex.
