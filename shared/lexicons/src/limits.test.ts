@@ -82,7 +82,7 @@ const FIXTURES: Record<string, Build> = {
   "section.imageAlt": S((n) => card("image", picture({}, { alt: text(n) }))),
   "section.imageCaption": S((n) => card("image", picture({ caption: text(n) }))),
   "section.fitBytes": S((n) => card("image", picture({ fit: text(n) }))),
-  "section.galleryTitle": S((n) => gallery([], { title: text(n) })),
+  "section.galleryTitle": S((n) => gallery([picture()], { title: text(n) })),
   "section.galleryMax": S((n) => gallery(many(n, picture()))),
 };
 const limitEntries = Object.entries(LIMITS).flatMap(([record, fields]) =>
@@ -109,7 +109,9 @@ describe("LIMITS", () => {
     const write = (value: Record<string, unknown>) => validateRecord("sh.unset.section", value, "write").ok;
     expect(write(card("image", picture({ caption: "Dusk", fit: "fill" })))).toBe(true);
     expect(write(gallery([picture(), picture({ fit: "contain" })], { title: "Work" }))).toBe(true);
-    expect(write(collection([{ title: "a", image: picture() }]))).toBe(true);
+    expect(write(collection([{ title: "a", image: picture().image }]))).toBe(true);
+    expect(write(collection([{ title: "a", image: picture() }]))).toBe(false);
+    expect(write(gallery([]))).toBe(false);
     // A JPEG only, alt and proportions always present, and proportions of at least 1.
     expect(write(card("image", picture({}, { image: blob(1000) })))).toBe(false);
     expect(

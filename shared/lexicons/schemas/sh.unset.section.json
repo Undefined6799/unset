@@ -155,8 +155,8 @@
         },
         "image": {
           "type": "ref",
-          "ref": "#image",
-          "description": "A picture shown with the entry."
+          "ref": "sh.unset.defs#image",
+          "description": "A picture shown with the entry, in its own proportions."
         }
       }
     },
@@ -225,7 +225,7 @@
     "image": {
       "type": "object",
       "required": ["image"],
-      "description": "One picture. Also each picture of a gallery and an entry's picture.",
+      "description": "One picture with its caption and fit. Also each picture of a gallery.",
       "properties": {
         "image": {
           "type": "ref",
@@ -262,7 +262,8 @@
             "type": "ref",
             "ref": "#image"
           },
-          "description": "In display order."
+          "description": "In display order. A gallery holds at least one picture; the editor deletes a card left empty.",
+          "minLength": 1
         }
       }
     }

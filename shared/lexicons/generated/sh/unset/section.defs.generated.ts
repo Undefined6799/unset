@@ -227,9 +227,9 @@ type Entry = {
   uri?: l.UriString;
 
   /**
-   * A picture shown with the entry.
+   * A picture shown with the entry, in its own proportions.
    */
-  image?: Image;
+  image?: UnsetDefs.Image;
 };
 
 export type { Entry };
@@ -243,7 +243,7 @@ const entry = /*#__PURE__*/ l.typedObject<Entry>(
     tag: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 40, maxLength: 400 })),
     description: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 300, maxLength: 3000 })),
     uri: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
-    image: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<Image>((() => image) as any)),
+    image: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<UnsetDefs.Image>((() => UnsetDefs.image) as any)),
   }),
 );
 
@@ -336,7 +336,7 @@ const linkButton = /*#__PURE__*/ l.typedObject<LinkButton>(
 
 export { linkButton };
 
-/** One picture. Also each picture of a gallery and an entry's picture. */
+/** One picture with its caption and fit. Also each picture of a gallery. */
 type Image = {
   $type?: "sh.unset.section#image";
   image: UnsetDefs.Image;
@@ -354,7 +354,7 @@ type Image = {
 
 export type { Image };
 
-/** One picture. Also each picture of a gallery and an entry's picture. */
+/** One picture with its caption and fit. Also each picture of a gallery. */
 const image = /*#__PURE__*/ l.typedObject<Image>(
   $nsid,
   "image",
@@ -375,7 +375,7 @@ type Gallery = {
   title?: string;
 
   /**
-   * In display order.
+   * In display order. A gallery holds at least one picture; the editor deletes a card left empty.
    */
   images: Image[];
 };
@@ -388,7 +388,7 @@ const gallery = /*#__PURE__*/ l.typedObject<Gallery>(
   "gallery",
   /*#__PURE__*/ l.object({
     title: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
-    images: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Image>((() => image) as any), { maxLength: 12 }),
+    images: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Image>((() => image) as any), { maxLength: 12, minLength: 1 }),
   }),
 );
 

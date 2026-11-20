@@ -3923,7 +3923,8 @@ Book edit 2026-11-20-shared-images (ADR 0070, Proposed): unchanged in purpose; t
 cards, entry images, gallery) follow it, as ADR 0070 orders them.
 P2.19a built 2026-11-20 ahead of P2.19, since it needs nothing from it: `sh.unset.defs#image` (a JPEG blob up to
 2,000,000 bytes, alt text up to 2,000 graphemes, required aspect ratio), section kinds `#image` (caption up to 300
-graphemes, fit `contain` or `fill`) and `#gallery` (title, at most 12 pictures), and an optional picture on `#entry`.
+graphemes, fit `contain` or `fill`) and `#gallery` (title, 1 to 12 pictures), and an optional `sh.unset.defs#image` on
+`#entry`.
 Readers still hide both kinds until P2.19c draws them.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
