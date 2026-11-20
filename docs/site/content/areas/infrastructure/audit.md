@@ -19,7 +19,7 @@ Closed lists, the one write function, the row hash, the chain walk and the segme
 | `infrastructure/audit/segments.ts` | `chainStart`, `verifySegments`, `SegmentVerdict`. Both functions read `audit.segment` and `audit.chain`. |
 | `infrastructure/audit/error.ts` | `AuditError`. Codes `audit.bad_input` and `audit.bad_timestamp`. |
 
-`appendAudit` is called from `interfaces/http/age-gate-audit.ts`, on the transaction the account repository (`infrastructure/postgres/accountRepository.ts`) hands it. This package opens no pool.
+`appendAudit` is called from `interfaces/web/src/lib/server/age-gate-audit.ts`, on the transaction the account repository (`infrastructure/postgres/accountRepository.ts`) hands it. This package opens no pool.
 
 ## May import
 

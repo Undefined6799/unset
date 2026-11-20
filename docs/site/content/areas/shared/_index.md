@@ -13,9 +13,9 @@ Each package on the tree has `"license": "MIT"` in its `package.json` and a `LIC
 | errors | `shared/errors` | [errors](errors/) |
 | host-pin | `shared/host-pin` | [host-pin](host-pin/) |
 | http | `shared/http` | [http](http/) |
-| islands | `shared/islands` | [islands](islands/) |
 | lexicons | `shared/lexicons` | [lexicons](lexicons/) |
 | log | `shared/log` | [log](log/) |
+| safe-href | `shared/safe-href` | Link checker. No page of its own. |
 | ui | `shared/ui` | [ui](ui/) |
 | ui-build | `shared/ui-build` | [ui-build](ui-build/) |
 
@@ -27,9 +27,7 @@ The packages in the table. `LEAF_SHARED` in `scripts/lint/.dependency-cruiser.cj
 | --- | --- |
 | `shared/http/` | Security review, and trusted base |
 | `shared/config/` | Security review |
-| `shared/islands/` | Security review, and trusted base |
-| `shared/ui/islands/` | Security review |
-| `shared/ui/safe-href.ts` | Security review, and trusted base |
+| `shared/safe-href/` | Security review, and trusted base |
 | `shared/lexicons/` | Security review, and trusted base |
 
 ## May import
@@ -38,7 +36,7 @@ Transcribed from `scripts/lint/.dependency-cruiser.cjs` (`MATRIX` and the `forbi
 
 `shared-leaf`: `shared/` imports nothing under `apps/`, `interfaces/`, `domains/` or `infrastructure/`.
 
-The general `shared` row applies where `LEAF_SHARED` does not. `LEAF_SHARED` names `ui`, `ui-build`, `islands`, `lexicons`, `host-pin` and the path `shared/admin-envelope/`. The five packages on the tree have their own rows, on each package page. `admin-envelope` is a path that file names.
+The general `shared` row applies where `LEAF_SHARED` does not. `LEAF_SHARED` names `ui`, `ui-build`, `lexicons`, `admin-envelope`, `host-pin` and `safe-href`. `admin-envelope` and `safe-href` are paths that file names; the others have a page.
 
 | From | May reach |
 | --- | --- |
@@ -67,7 +65,6 @@ Rules that also narrow an edge the rows would allow:
 | `fake-only-in-composition-root` | A `*.fake.ts` is imported by tests and `interfaces/*/compose.ts`. |
 | `vendor-sdk-one-adapter` | `@atproto/lex*` is imported only under `shared/lexicons/`. |
 | `lexicon-scripts-not-imported` | Nothing outside `shared/lexicons/scripts/` imports that folder. |
-| `island-import-boundary` | A `*.island.tsx` may import `shared/ui/`, `shared/islands/`, `react/jsx-runtime`, and type-only modules. |
 
 ## Entry points
 
@@ -79,8 +76,8 @@ No package here has a `main.ts`. The file another workspace imports is `index.ts
 | `@unset/shared-errors` | [errors](errors/) |
 | `@unset/shared-host-pin` | [host-pin](host-pin/) |
 | `@unset/shared-http` | [http](http/) |
-| `@unset/shared-islands` | [islands](islands/) |
 | `@unset/shared-lexicons` | [lexicons](lexicons/) |
+| `@unset/shared-safe-href` | `shared/safe-href` |
 | `@unset/shared-log` | [log](log/) |
 | `@unset/shared-ui` | [ui](ui/) |
 | `@unset/shared-ui-build` | [ui-build](ui-build/) |

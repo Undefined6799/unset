@@ -48,7 +48,7 @@ Declared in `infrastructure/net-guard/package.json`: `undici` 8.12.2. `request.t
 | Role | Path |
 | --- | --- |
 | Package export `.` | `infrastructure/net-guard/index.ts` |
-| Composition | `createNetGuard` in `interfaces/http/compose.ts` |
+| Composition | `createNetGuard` in `interfaces/web/src/lib/server/compose.ts` |
 
 No `main.ts` and no Compose service for this package. `libraryFetch` is what `infrastructure/pds` passes the OAuth client (`oauth-client.ts` option `fetch`).
 
