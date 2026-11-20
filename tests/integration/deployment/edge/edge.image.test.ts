@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
-import { EDGE } from "./edge-container.ts";
+import { EDGE, TEST_WEB_KEY } from "./edge-container.ts";
 import { type Edge, logsWhen, outputOf, type ProbeStep } from "./edge-handle.ts";
 import { registerEdgeSuite } from "./edge-suite.ts";
 import { timeoutProblems } from "./timeouts.ts";
@@ -418,5 +418,36 @@ describe("edge", () => {
 
   test("edge_global_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.14", "/xrpc/com.atproto.repo.describeRepo?repo=did:plc:abc", "global");
+  });
+
+  // P1.21j (Proposed ADR 0071): web's calls, marked with its key, leave global for web_global; a wrong or bare key is
+  // an outside client's call and stays in global; the PDS never sees the header.
+  const DESCRIBE = "/xrpc/com.atproto.repo.describeRepo?repo=did:plc:abc";
+  const marked = (key: string) => ({ "x-unset-web-key": key });
+
+  test("edge_spoofed_web_key_stays_in_global", { timeout: CONTAINER_MS }, async () => {
+    const wrong = TEST_WEB_KEY.replace(/^./, (c) => (c === "0" ? "1" : "0"));
+    const limit = ZONES.global ?? 0;
+    const [result] = await probe("127.0.0.15", [
+      { kind: "https", path: DESCRIBE, count: limit + 1, headers: marked(`key-${wrong}-key`) },
+    ]);
+    expect(result?.statuses.slice(0, limit).filter((status) => status !== 200)).toEqual([]);
+    expect(result?.statuses[limit]).toBe(429);
+    for (const spoof of [TEST_WEB_KEY, "key--key", "*", `key-${TEST_WEB_KEY}-key-`]) {
+      const [again] = await probe("127.0.0.15", [{ kind: "https", path: DESCRIBE, headers: marked(spoof) }]);
+      expect(again?.statuses, spoof.slice(0, 8)).toEqual([429]);
+    }
+  });
+
+  test("edge_web_key_leaves_global_for_web_global", { timeout: CONTAINER_MS }, async () => {
+    const limit = ZONES.global ?? 0;
+    const from = edge.seen.length;
+    const [result] = await probe("127.0.0.16", [
+      { kind: "https", path: DESCRIBE, count: limit + 1, headers: marked(`key-${TEST_WEB_KEY}-key`) },
+    ]);
+    expect(result?.statuses.filter((status) => status !== 200)).toEqual([]);
+    const seen = edge.seen.slice(from);
+    expect(seen.length).toBe(limit + 1);
+    expect(seen.filter((request) => request.headers["x-unset-web-key"] !== undefined)).toEqual([]);
   });
 });

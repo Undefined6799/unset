@@ -210,6 +210,7 @@ async function build(): Promise<Services> {
     resolveDid,
     allowHttp: config.OAUTH_ALLOW_HTTP,
     ownIssuer: pdsIssuer,
+    webKey: config.PDS_WEB_KEY,
     log,
   });
   const issuerOf = async (did: Did, signal?: AbortSignal): Promise<string | null> => {

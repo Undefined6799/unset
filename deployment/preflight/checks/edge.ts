@@ -163,8 +163,13 @@ function insideSites(dir: string, edgeDir: string): boolean {
   return root !== null && (dir === join(root, "sites") || dir.startsWith(`${join(root, "sites")}/`));
 }
 
-/** The dev leaf's certificate and key (P1.36c; ADR 0032), the only secrets a dev edge reads, both required. */
+/** The dev leaf's certificate and key (P1.36c; ADR 0032), both required. */
 const DEV_EDGE_SECRETS = ["dev_tls_cert", "dev_tls_key"];
+/**
+ * Web's PDS key (P1.21j; Proposed ADR 0071), the one other secret an edge may read. It is not required here: without
+ * it web's calls stay in the tight PDS zones (fail closed), and C9 judges the file of every secret that is mounted.
+ */
+const WEB_KEY_SECRET = "pds_web_key";
 
 /**
  * Why the dev edge is not the shape ADR 0032 Decisions 3 and 4 allow, or null: it publishes no port, since Pangolin
@@ -174,7 +179,7 @@ function devEdgeProblem(compose: Compose): Outcome | null {
   const edge = compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
   if (edge.ports.length > 0) return fail("the edge publishes a port under dev");
-  if (edge.secrets.some((name) => !DEV_EDGE_SECRETS.includes(name))) {
+  if (edge.secrets.some((name) => !DEV_EDGE_SECRETS.includes(name) && name !== WEB_KEY_SECRET)) {
     return fail("the edge reads a secret other than the dev leaf's");
   }
   if (DEV_EDGE_SECRETS.some((name) => !edge.secrets.includes(name))) return fail("the edge does not read the dev leaf");
@@ -237,7 +242,7 @@ function localEdgeZones(inputs: Inputs): Outcome {
   if (runsBuilt(edge, inputs, undefined, EDGE_DOCKERFILE) !== "yes") {
     return fail(`the edge is not built from ${EDGE_DOCKERFILE}`);
   }
-  if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name))) {
+  if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name) && name !== WEB_KEY_SECRET)) {
     return fail("the edge reads a secret other than the dev leaf's");
   }
   const sites = localSiteMounts(edge);
