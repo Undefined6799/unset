@@ -96,17 +96,20 @@ export function createSmtpMailer(options: MailerOptions): Mailer {
     // (dist/cjs/mailer/mail-message.d.ts `signal`; smtp-transport/index.js send()), so a send reported failed
     // stops there and cannot deliver later. Only an abort in the instant after the server has accepted the
     // message can still leave it delivered, as nodemailer's own note on `signal` says.
-    send: (mail, deadline) =>
-      transport
-        .sendMail({
+    send: async (mail, deadline) => {
+      try {
+        const info = await transport.sendMail({
           from: options.from,
           to: mail.to,
           replyTo: mail.replyTo,
           subject: mail.subject,
           text: mail.text,
           signal: deadline,
-        })
-        .then((info): "sent" | "failed" => (info.accepted.length > 0 && info.rejected.length === 0 ? "sent" : "failed"))
-        .catch((): "failed" => "failed"),
+        });
+        return info.accepted.length > 0 && info.rejected.length === 0 ? "sent" : "failed";
+      } catch {
+        return "failed";
+      }
+    },
   };
 }
