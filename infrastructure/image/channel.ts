@@ -17,39 +17,63 @@ export type FrameReader = {
 
 /**
  * Reads frames off a pipe. `maxLength()` is asked for each frame as its header arrives; a longer declared length, or
- * a body that does not deserialize, calls `onBroken` once and the reader takes nothing more.
+ * a body that does not deserialize, calls `onBroken` once and the reader takes nothing more. Each body is allocated
+ * once its header passes and every byte is copied into it once, so a large frame costs its size, not its size times
+ * its chunk count.
  */
 export function createFrameReader(
   maxLength: () => number,
   onValue: (value: unknown) => void,
   onBroken: () => void,
 ): FrameReader {
-  let pending: Buffer = Buffer.alloc(0);
+  const header = Buffer.alloc(4);
+  let headerFilled = 0;
+  let body: Buffer | null = null;
+  let bodyFilled = 0;
   let broken = false;
+
+  const breakOff = () => {
+    broken = true;
+    body = null;
+    onBroken();
+  };
+
+  /** Hands a full body over; false once the reader is broken. */
+  const deliver = (complete: Buffer): boolean => {
+    body = null;
+    headerFilled = 0;
+    let value: unknown;
+    try {
+      value = deserialize(complete);
+    } catch {
+      breakOff();
+      return false;
+    }
+    onValue(value);
+    return !broken;
+  };
+
   return {
     push(chunk) {
-      if (broken) return;
-      pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
-      while (pending.length >= 4) {
-        const length = pending.readUInt32BE(0);
-        if (length > maxLength()) {
-          broken = true;
-          pending = Buffer.alloc(0);
-          onBroken();
-          return;
+      let at = 0;
+      while (!broken && at < chunk.length) {
+        if (body === null) {
+          const taken = chunk.copy(header, headerFilled, at, at + 4 - headerFilled);
+          headerFilled += taken;
+          at += taken;
+          if (headerFilled < 4) return;
+          const length = header.readUInt32BE(0);
+          if (length > maxLength()) {
+            breakOff();
+            return;
+          }
+          body = Buffer.alloc(length);
+          bodyFilled = 0;
         }
-        if (pending.length < 4 + length) return;
-        const body = pending.subarray(4, 4 + length);
-        pending = pending.subarray(4 + length);
-        let value: unknown;
-        try {
-          value = deserialize(body);
-        } catch {
-          broken = true;
-          onBroken();
-          return;
-        }
-        onValue(value);
+        const taken = chunk.copy(body, bodyFilled, at, at + body.length - bodyFilled);
+        bodyFilled += taken;
+        at += taken;
+        if (bodyFilled === body.length && !deliver(body)) return;
       }
     },
   };
