@@ -1,5 +1,5 @@
 // The checks, in the order they run (P1.30: C1 to C12; P1.30s: C13 to C24 but C17 and C18; P1.30t: C17; P1.30u: C18;
-// P1.30x: C25; P1.30y: C26 and C27; P1.34t: C28; P1.36k: C29; P1.36q: C30; P1.37v: C31; P1.38d: C32; P2.18p: C33; P2.10: C34; P1.27l: L1 and L2 under --env local).
+// P1.30x: C25; P1.30y: C26 and C27; P1.34t: C28; P1.36k: C29; P1.36q: C30; P1.37v: C31; P1.38d: C32; P2.18p: C33; P2.10: C34; P2.21a: C35; P1.27l: L1 and L2 under --env local).
 import { c26, c27 } from "./build.ts";
 import { c25 } from "./capabilities.ts";
 import { c18 } from "./edge.ts";
@@ -11,6 +11,7 @@ import { c17 } from "./networks.ts";
 import { c31 } from "./newt.ts";
 import { c6, c7, c8, c11, c12, c28, c30 } from "./pds.ts";
 import { c32, c34 } from "./placeholders.ts";
+import { c35 } from "./review.ts";
 import { c9 } from "./secrets.ts";
 import { c13, c14, c15, c16, c19, c20, c22, c23, c33 } from "./settings.ts";
 import { c1, c10 } from "./stack.ts";
@@ -52,6 +53,7 @@ export const CHECKS: readonly Check[] = [
   c32,
   c33,
   c34,
+  c35,
 ];
 
 /** The guards that run only under `--env local`, after the others (P1.27l). */

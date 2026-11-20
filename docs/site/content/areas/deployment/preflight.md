@@ -51,6 +51,7 @@ Checks, in `CHECKS` order (`deployment/preflight/checks/index.ts`). `LOCAL_CHECK
 | C32 | `checks/placeholders.ts` | Dev and prod: no environment value starts with `[to fill:`. Local skips. |
 | C33 | `checks/settings.ts` | Local and dev: the PDS keeps blobs in the object store's `unset-pds` bucket at `http://objects:8333`, path style, region `us-east-1`, with its key pair set, no disk blobstore key and no `AWS_` variable. Prod skips until P5.01. |
 | C34 | `checks/placeholders.ts` | Every name the Compose files interpolate has a non-empty value in the interpolation env file, so a setting a new step adds stops the deploy here, not the service at boot. |
+| C35 | `checks/review.ts` | Every stack: the `review` service, and any service built from `review.Dockerfile`, joins only `review_web`, which is internal and holds web and review alone; it reads no secret, env file or mount, sets only the settings it reads as literals, and runs read-only with every capability dropped and no new privileges. A stack with no review passes (ADR 0070 point 2.2). |
 | L1 | `checks/local.ts` | Every published port binds `127.0.0.1`. |
 | L2 | `checks/local.ts` | `PDS_HOSTNAME` matches a `.localhost` name. |
 

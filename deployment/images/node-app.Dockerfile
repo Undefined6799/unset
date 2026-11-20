@@ -43,6 +43,7 @@ COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres
 COPY --from=deps /app/infrastructure/seal /app/infrastructure/seal
 COPY --from=deps /app/infrastructure/session /app/infrastructure/session
+COPY --from=deps /app/infrastructure/storage /app/infrastructure/storage
 # The web process: its entry, its package manifest, the built server, and its sources from the build stage, without
 # the test-only routes. server.ts imports its config and every route's policy.ts from src at start (body-cap.ts);
 # SvelteKit's bundle in build/ holds the pages, the components from apps/web and the svelte runtime.

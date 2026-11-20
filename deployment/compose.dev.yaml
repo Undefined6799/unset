@@ -224,6 +224,13 @@ services:
       PDS_WEB_KEY_FILE: /run/secrets/pds_web_key
       PDS_ADMIN_WEB_KID: ${WEB_PDS_ADMIN_KID}
       PDS_DID: ${PDS_DID}
+      # The draft image store (P2.21a; ADR 0070): web writes members' drafts under unset-private/drafts/ as its
+      # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
+      # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
+      OBJECT_STORE_URL: http://objects:8333
+      OBJECT_STORE_BUCKET: unset-private
+      OBJECT_STORE_ACCESS_ID: unset-web
+      OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web
       # Search and AI listing (P1.21b, ADR 0062): off, so this stack is never listed whatever members choose; every
       # page says noindex and robots.txt names no member. A literal, so turning it on is a reviewed change.
       SEARCH_LISTING: "off"
@@ -237,11 +244,11 @@ services:
       SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
-    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key]
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys, web_pds_admin_key, pds_web_key, objects_web]
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app, web_egress]
+    networks: [db, app, web_egress, objects_web]
     mem_limit: 512m
     cpus: 1
     pids_limit: 128
@@ -264,7 +271,7 @@ services:
     volumes:
       - objectsdata:/data
     secrets: [objects_s3]
-    networks: [objects, objects_pds]
+    networks: [objects, objects_pds, objects_web]
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 256
@@ -335,6 +342,9 @@ networks:
   # the store from the edge-only rule for PDS networks on this one network (deployment/preflight/checks/networks.ts).
   objects_pds:
     internal: true
+  # Web's way to the store's S3 port and nothing else (P2.21a): internal, the two of them only.
+  objects_web:
+    internal: true
 
 volumes:
   pgdata:
@@ -378,3 +388,6 @@ secrets:
   # identity; read by objects (uid 1000) only.
   objects_s3:
     file: ../../unset-dev-secrets/objects_s3
+  # Web's secret key for its identity in objects_s3 (P2.21a): 64 hex characters; read by web (uid 65532) only.
+  objects_web:
+    file: ../../unset-dev-secrets/objects_web

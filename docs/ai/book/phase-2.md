@@ -4114,6 +4114,14 @@ Not in this step: data loading, state pages (private, not found, unavailable), O
 Diagram: none.
 
 ### P2.21 — Profile editor
+P2.21a built 2026-11-20 ahead of the editor (ADR 0070 point 2.4): web holds its own identity in the object store,
+`web`, on `unset-private/drafts/*` only (read, write, tag; list the bucket), reached on the internal network
+`objects_web` that only web and `objects` share. Its secret key is the new secret `objects_web`; the access id
+(`OBJECT_STORE_ACCESS_ID`) is the literal `unset-web` in compose. Web requires both and builds the drafts store at boot without calling it
+(runbook `dev-stack-secrets.md` "Web's identity" says how to add both to a running stack).
+The same step runs `review` (ADR 0070 point 2.2) in the stacks built from source, on `review_web` alone (internal,
+web and review only), with no secret, env file or mount; the preflight's C35 refuses it otherwise. Web's `REVIEW_URL`
+and its call to review come with the upload route.
 Tags: (none)            Depends on: P2.16, P2.18, P2.19, P2.20, P1.23, P1.31            Plan: §5.4 "Drafts are private, and publishing is explained"; §5.1 islands and forms; §2 rules 4, 8, 9
 Where: `interfaces/http/routes/settings/{profile.ts, profile-image.ts, sections.ts, preview.ts}`,
   `apps/web/screens/settings/{ProfileForm.tsx, SectionList.tsx, SectionForm.tsx, ImageField.tsx}`,
