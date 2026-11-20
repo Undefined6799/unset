@@ -32,7 +32,7 @@ Resend, a company in the United States, sends the account emails from our sign-i
 
 ## How long we keep it
 
-An unpublished profile draft, its text, sections and draft images, is deleted whole 30 days after your last edit. Unattached draft images expire after 30 days. Draft images are part of your export.
+A picture you upload is kept only as the versions we make of it, never as the file you sent, and without its hidden data such as camera details or location. A picture no save uses is deleted 24 hours after upload. When the last card or entry using a picture is removed, our copies are deleted 7 days later. Your pictures are part of your export.
 
 | What | How long |
 | --- | --- |
