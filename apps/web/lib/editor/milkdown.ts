@@ -74,7 +74,8 @@ export type MountOptions = {
 // an optional list of its own. The schema stays Milkdown's full one, so any stored text opens as it is; instead no
 // edit (toolbar, shortcut or paste) may add a heading or list inside a quote, or a quote, heading or code block inside
 // a list item, which the saved card would flatten. Text already stored that way stays editable.
-// A list item is its first paragraph and then only lists: the parser reads no second paragraph in an item.
+// A list item is its first paragraph and then only lists: the parser reads no second paragraph in an item, and no
+// line break in one, which remark writes as an indented continuation line the parser moves out of the list.
 const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 function flattened(doc: ProseNode): number {
   let count = 0;
@@ -82,6 +83,11 @@ function flattened(doc: ProseNode): number {
     const holder = parent?.type.name;
     if (holder === "blockquote" && node.type.name !== "paragraph") count += 1;
     if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(node.type.name)) count += 1;
+    if (holder === "list_item" && node.type.name === "paragraph") {
+      node.forEach((child) => {
+        if (child.type.name === "hardbreak") count += 1;
+      });
+    }
     return node.isBlock;
   });
   return count;

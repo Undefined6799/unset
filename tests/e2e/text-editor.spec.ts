@@ -205,6 +205,18 @@ test("a_paste_with_two_paragraphs_in_a_list_item_is_refused", async ({ page }) =
   await page.keyboard.press("Escape");
 });
 
+// Codex review of #1827: a line break in a list item is written as a continuation line the page moves out of the
+// list, so it is refused there.
+test("a_line_break_in_a_list_item_is_refused", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["- one"]);
+  await expect(postedText(dialog)).toHaveValue("- one");
+  await editor.press("Shift+Enter");
+  await editor.pressSequentially("two");
+  await expect(postedText(dialog)).toHaveValue("- onetwo");
+  await page.keyboard.press("Escape");
+});
+
 // Codex review of #1827: bold and italic together are written so the page reads both, "***word***" it reads wrongly.
 // The second press also acts on the words the first one did.
 test("bold_and_italic_together_are_written_so_the_page_reads_both", async ({ page }) => {
