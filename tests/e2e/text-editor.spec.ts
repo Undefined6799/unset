@@ -99,6 +99,35 @@ test("text_opened_and_saved_untouched_is_stored_as_it_was", async ({ page }) => 
   await deleteCard(page, "Text card");
 });
 
+// Codex review of #1827: the editor turns its text into markdown once per frame. A save sent in the same moment as an
+// edit, before that frame, still posts the edit.
+test("a_save_sent_in_the_same_moment_as_an_edit_posts_it", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: "plain" });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const card = page.getByRole("group", { name: "Text card" });
+  await card.getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveAttribute("contenteditable", "true");
+  const heading = dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" });
+  await heading.evaluate((button) => {
+    // No DOM lib in this project: the two calls this test makes, in one task so no frame runs between them.
+    type Form = { requestSubmit: () => void };
+    const area = button as unknown as {
+      click: () => void;
+      closest: (selector: string) => { querySelector: (s: string) => { form: Form } } | null;
+    };
+    area.click();
+    area.closest("[role=dialog]")?.querySelector('textarea[name="text"]').form.requestSubmit();
+  });
+  await expect(dialog).toBeHidden();
+  await card.getByRole("link", { name: "Edit" }).click();
+  await expect(postedText(dialog)).toHaveValue("## plain");
+  await page.keyboard.press("Escape");
+  await deleteCard(page, "Text card");
+});
+
 // Impatient member: the editor's file loads when the dialog opens (ADR 0069 split). Text typed into the plain field
 // before it arrives is carried into the editor and still posted.
 test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {

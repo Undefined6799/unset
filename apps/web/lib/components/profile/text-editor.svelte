@@ -73,8 +73,11 @@ onMount(async () => {
     const mounted = await mountMarkdownEditor(host, {
       value: textarea.value,
       labelledBy: labelId,
-      onChange: (markdown) => {
+      // Marked at once, so a save sent before the next frame still reads the editor (formdata below).
+      onEdit: () => {
         changed = true;
+      },
+      onChange: (markdown) => {
         textarea.value = markdown;
       },
     });

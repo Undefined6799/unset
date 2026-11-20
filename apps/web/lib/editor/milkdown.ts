@@ -58,7 +58,9 @@ export type MountOptions = {
   readonly value: string;
   /** The id of the label that names the editor. Its description and state are the caller's to set. */
   readonly labelledBy: string;
-  /** Called with the markdown after every change the member makes. */
+  /** Called at once on every change the member makes, before its markdown is ready. */
+  readonly onEdit: () => void;
+  /** Called with the markdown after every change the member makes, once per frame. */
   readonly onChange: (markdown: string) => void;
 };
 
@@ -72,7 +74,9 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
       new Plugin({
         view: () => ({
           update: (view, previous) => {
-            if (previous.doc.eq(view.state.doc) || frame !== 0) return;
+            if (previous.doc.eq(view.state.doc)) return;
+            options.onEdit();
+            if (frame !== 0) return;
             frame = requestAnimationFrame(() => {
               frame = 0;
               options.onChange(withoutFinalNewline(ctx.get(serializerCtx)(view.state.doc)));
