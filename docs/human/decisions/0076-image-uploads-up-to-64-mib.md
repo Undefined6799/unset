@@ -24,7 +24,7 @@ decoding it, rise.
    - net-guard's request ceiling and the `review` policy from 32 MiB to 66 MiB (`infrastructure/net-guard/src/policies.ts`).
    The object store's 2 MiB and `uploadBlob`'s 2 MiB do not change.
 4. **Memory and processors** (`deployment/limits.dev.json` and the compose files): web from 512 MB to 1 GB, since
-   ADR 0070 point 4's four site-wide uploads now hold up to 260 MiB of bodies; review from 1.5 GB to 2 GB and from 1 to
+   ADR 0070 point 4's four site-wide uploads now hold more (Consequences); review from 1.5 GB to 2 GB and from 1 to
    2 CPUs, one per child. Review keeps 2 children and a queue of 2 (four in flight, point 4), its 20 s job deadline and
    each child's 8 GiB address space.
 5. **The edge** (`deployment/edge/Caddyfile`, `limits.json` `EDGE_READ_BODY_S`): the server's read window, which
@@ -46,11 +46,25 @@ versions, peaked at 284 MiB and took 10.5 s on one core; a 63 MB PNG at 418 MiB 
 
 - Every route on the edge may now take 120 s to send its request, not 30 s. What still bounds each route is its own
   body cap: web's gate refuses any body above the route's `maxBody` or without a length before reading it, so only
-  `/images` may send 65 MiB; the PDS keeps its own caps. A slow sender holds a connection up to 120 s, not 30 s;
-  Caddy's 1 minute idle read timeout still drops one that stalls.
+  `/images` may send 65 MiB; the PDS keeps its own caps. A slow sender holds a connection up to 120 s, not 30 s,
+  and this is an accepted risk. Caddy's keep-alive `idle 2m` does not help here: it applies only between requests.
+  What does apply mid-body is Caddy's separate body-read stall timer, `read_idle_timeout`, which is unset in our
+  config and so defaults to 1 minute; it resets on every read (Caddy v2.11.9 `modules/caddyhttp/server.go:593`,
+  default at `app.go:412` and `:941`). It drops a sender that sends nothing for a minute, but a sender that trickles
+  a byte now and then still holds the connection the full 120 s. Its effect on HTTP/2 and HTTP/3 streams is not yet
+  tested.
 - Pangolin, in front of the staging edge, has its own timeouts, which we have not verified; the staging check with a
   60 MB file tests them.
-- Web's memory at the site-wide cap rises to about 260 MiB of bodies, inside its 1 GB.
+- Web's memory at the site-wide cap: four bodies are 260 MiB as one copy each, but the planned upload path (the form
+  read whole, then its file's bytes, then the request to review) keeps about three copies per upload, so four could
+  reach about 770 MiB of web's 1 GB. P2.21b measures this and either keeps it under the limit with room or lowers the
+  site-wide count.
+
+## Follow-ups
+
+- Measure a 110-megapixel AVIF and a 16-bit PNG decode against review's 2 GB; only 8-bit JPEG and PNG are measured.
+- Measure two jobs on staging's 2 CPUs, and Pangolin's timeouts with a 60 MB upload.
+- A per-address connection cap at the edge before real members, since every route's read window is now 120 s.
 - The upload screen (P2.19b), where it names a size, says 64 MB.
 
 ## Alternatives
