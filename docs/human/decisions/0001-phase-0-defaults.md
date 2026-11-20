@@ -663,3 +663,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
   profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
   Proposed, awaiting Alex.
+- **ADR 0068 accepted (Alex, 2026-11-20 01:23Z, against 1e38138; own record:
+  [0068](0068-profile-card-surfaces.md)):** each profile card may store an optional surface, Filled, Outlined or
+  Plain, under ADR 0051 Decision 7; a missing field reads as Filled.
