@@ -20,10 +20,13 @@ export default defineConfig({
     tailwindcss(),
     sveltekit({
       adapter: adapter(),
-      // One script and one stylesheet for the whole client (kit 3.2.0 types/index.d.ts, output.bundleStrategy, since
-      // 2.13.0). With 'split', a cold app page asked for 27 files, over the edge's app_burst (then 20 per 10 s)
-      // (deployment/edge/snippets/ratelimit.caddy); 'single' makes it 5, as the Hono pages were sized for (P1.20j).
-      output: { bundleStrategy: "single" },
+      // A small core plus one piece per route and per shared module, each content-hashed under /_app/immutable/ (kit
+      // 3.2.0 src/exports/vite/public.d.ts, output.bundleStrategy, the default; P1.21g, ADR 0069). 'single' turns off
+      // rolldown's code splitting (build/index.js: codeSplitting false), which also folds every dynamic import into the
+      // one file, so nothing could ever load on demand. A cold app page now asks for about 30 files at once: the edge
+      // counts them in their own zone, app_files (deployment/edge/snippets/ratelimit.caddy), never in app_burst.
+      // SvelteKit's version check (version.json) turns a click that needs a piece a redeploy removed into a full load.
+      output: { bundleStrategy: "split" },
       csp: {
         mode: "hash",
         directives: {

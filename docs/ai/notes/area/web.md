@@ -10,7 +10,7 @@ importance: normal
 related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-11-18
+checked: 2026-11-20
 ---
 # web
 
@@ -59,5 +59,10 @@ and protected pages' redirects still use /login.
 a menu that opens a Dialog must pass `preventScroll={false}`, or the two locks overlap and the page jumps to the top.
 A buttons row hides the other kind's fields with `group-has-[[value=link]:checked]` on native radios, so it holds
 with no script.
+
+**Split client (P1.21g, ADR 0069).** `output.bundleStrategy` is `split`. Kit then lists no stylesheet in
+`manifest.client`, so `server.ts` reads the refusal page's sheet from the root layout's node 0 after the handler has
+loaded (loading node 0 loads layout code, which reads the process note). The root layout's `beforeNavigate` loads a
+link in full once `updated.current` is true.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].

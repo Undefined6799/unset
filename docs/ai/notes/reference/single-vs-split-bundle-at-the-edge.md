@@ -58,3 +58,11 @@ the card editor would need a dynamic import; that is its own step.
 
 **Seen on the way.** The HTML went out uncompressed (no `Content-Encoding`, 58 to 61 KiB, though the browser offered
 br): neither the app site nor web compresses documents. Not part of this step; worth its own look.
+
+**Followed by P1.21g (ADR 0069).** Main switched to `split` with an `app_files` zone (120 per 10 s) for hashed build
+files only. What that step learned: kit 3.2.0's `single` sets rolldown's `codeSplitting: false`, so it also inlines
+every dynamic import (no lazy piece can exist under it); under `split` `manifest.client.stylesheets` is empty and the
+root layout's sheet is on node 0; Caddy's `path` and `path_regexp` matchers lowercase and clean the path, so a file
+allowance must match `{http.request.uri.path}` (decoded, uncleaned) instead, or `//_app/...` and `/_APP/...` would get
+it while web renders them as pages. Measured at c567d70, gzip 9: single 155 KiB on every app page; split 84 to 95 KiB
+on settings, sign-in and welcome pages, 145 KiB on the owner page (card editor still static).

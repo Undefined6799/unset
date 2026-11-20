@@ -432,6 +432,28 @@ const SITES: Red[] = [
     "{$APP_HOST}: the app_global zone has a matcher",
   ],
   [
+    "build files counted in app_burst too",
+    "dev",
+    (c) => void delete o(zones(c, APP_DEV).app_burst).match,
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a POST counted as a build file",
+    "dev",
+    (c) => void a(o(a(o(zones(c, APP_DEV).app_files).match)[0]).method).push("POST"),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  [
+    "a build file matched on the cleaned path",
+    "dev",
+    (c) =>
+      void Object.assign(o(a(o(zones(c, APP_DEV).app_files).match)[0]), {
+        vars_regexp: undefined,
+        path_regexp: { pattern: "^/_app/immutable/" },
+      }),
+    "{$APP_HOST}: the zones are not the ruled ones",
+  ],
+  [
     "the PDS's zones on the dev app site",
     "dev",
     (c) => void Object.assign(zones(c, APP_DEV), { global: copy(zones(c, P).global as Json) }),
