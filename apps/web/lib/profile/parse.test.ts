@@ -110,6 +110,17 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
   });
 
   // Codex review of #1827: remark writes a literal bracket in link text as "\\[", which is text, not a nested label.
+  // Codex review of #1827: an escaped "]" in a label does not end it, so the link's address is still shielded from the
+  // emphasis around it.
+  test("an escaped closing bracket in an emphasised link keeps both", () => {
+    expect(parseInline("*[a \\] b](https://x.example/a*b) c*")).toEqual([
+      {
+        kind: "em",
+        children: [{ kind: "link", href: "https://x.example/a*b", children: [text("a ] b")] }, text(" c")],
+      },
+    ]);
+  });
+
   test("an escaped bracket in link text keeps the link", () => {
     expect(parseInline("[a \\[b](https://example.com)")).toEqual([
       { kind: "link", href: "https://example.com/", children: [text("a [b")] },
