@@ -312,6 +312,33 @@ test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {
   await page.keyboard.press("Escape");
 });
 
+// Review of #1843: opened in place (?edit=, the page's own panel, not a dialog), the formatting bar sticks under the
+// sticky site header, so it stays usable while a long text scrolls.
+test("the_in_place_toolbar_sticks_below_the_site_header", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const long = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1} of a long text.`).join("\n\n");
+  await addCard(page, { kind: "readme", width: "full", text: `# Long text\n\n${long}` });
+  await page.reload();
+  try {
+    const href = await page
+      .getByRole("group", { name: "Text card" })
+      .getByRole("link", { name: "Edit" })
+      .getAttribute("href");
+    await page.goto(new URL(href ?? "", page.url()).toString());
+    const editor = page.getByRole("textbox", { name: "Text" });
+    await expect(editor).toHaveAttribute("contenteditable", "true");
+    await editor.getByText("Paragraph 30 of a long text.").scrollIntoViewIfNeeded();
+    const header = await page.locator("[data-site-header]").boundingBox();
+    const bar = await page.getByRole("toolbar", { name: "Formatting" }).boundingBox();
+    expect(header !== null && bar !== null && bar.y >= header.y + header.height - 0.5).toBe(true);
+    await openPage(page, OWN_PAGE);
+  } finally {
+    await deleteCard(page, "Text card");
+  }
+});
+
 test.describe("on a phone", () => {
   test.use(phone({ width: 375, height: 800 }));
   test("the_editor_fills_the_screen_with_its_bar_at_the_top", async ({ page }) => {
