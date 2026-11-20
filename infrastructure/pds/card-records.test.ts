@@ -236,13 +236,14 @@ describe("saveCardRecords", () => {
     expect(calls).toHaveLength(1);
   });
 
-  test("normal_use_fits_one_call: a hundred 1 KiB cards, or three 40 KB essays, go in one applyWrites", async () => {
-    // Realistic long edits: every card on a full page (100, the most a page holds) at about 1 KiB of text each (a
-    // long paragraph), or three cards at 40 KB each (about 6,500 words apiece, a long essay).
+  test("normal_use_fits_one_call: every card on a full page at a long length goes in one applyWrites", async () => {
+    // Realistic long edits, each one call: all 100 cards a page holds at about 4 KB of text (a long section, some 650
+    // words), three 40 KB essays (about 6,500 words each), and two Text cards at their 100,000-byte maximum.
     const long = (text: string) => ({ ...card, content: { ...card.content, text } });
     for (const updates of [
-      Array.from({ length: 100 }, (_, n) => ({ key: rkey(n), record: long("p".repeat(1_024)) })),
+      Array.from({ length: 100 }, (_, n) => ({ key: rkey(n), record: long("p".repeat(4_000)) })),
       Array.from({ length: 3 }, (_, n) => ({ key: rkey(n), record: long("e".repeat(40_000)) })),
+      Array.from({ length: 2 }, (_, n) => ({ key: rkey(n), record: long("f".repeat(100_000)) })),
     ]) {
       const { pdsCall, ctx, calls } = pds(() => Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } }));
       expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({ kind: "ok", value: { kind: "saved" } });
@@ -250,69 +251,73 @@ describe("saveCardRecords", () => {
     }
   });
 
-  test("two_full_cards_save_in_two_chained_calls, the second on the commit the first returned", async () => {
-    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
+  // Eleven Text cards at 100,000 bytes, about 1.1 MB: past one call's 1,000,000 bytes, inside the form's 2 MiB.
+  const eleven = () =>
+    Array.from({ length: 11 }, (_, n) => ({
+      key: rkey(n),
+      record: { ...card, content: { ...card.content, text: String(n % 10).repeat(100_000) } },
+    }));
+
+  test("eleven_full_cards_save_in_two_chained_calls, the second on the commit the first returned", async () => {
     const commits = [CID, CID2];
     const { pdsCall, ctx, calls } = pds(() =>
       Response.json({ commit: { cid: commits[calls.length - 1], rev: "3jzfcijpj2z2d" } }),
     );
-    const updates = [
-      { key: "k1", record: long("a".repeat(100_000)) },
-      { key: "k2", record: long("b".repeat(100_000)) },
-    ];
-    expect(await saveCardRecords(pdsCall, ctx, DID, updates, "bafyhead")).toEqual({
+    expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), "bafyhead")).toEqual({
       kind: "ok",
       value: { kind: "saved" },
     });
     const sent = calls.map((call) => call.body as { swapCommit: string; writes: { rkey: string }[] });
-    expect(sent.map((body) => [body.swapCommit, body.writes.map((write) => write.rkey)])).toEqual([
-      ["bafyhead", ["k1"]],
-      [CID, ["k2"]],
+    expect(sent.map((body) => [body.swapCommit, body.writes.length])).toEqual([
+      ["bafyhead", 9],
+      [CID, 2],
     ]);
-    for (const call of calls) expect(JSON.stringify(call.body).length).toBeLessThanOrEqual(APPLY_WRITES_BODY_BYTES);
+    expect(sent.flatMap((body) => body.writes.map((write) => write.rkey))).toEqual(eleven().map((u) => u.key));
+    for (const call of calls) {
+      expect(Buffer.byteLength(JSON.stringify(call.body))).toBeLessThanOrEqual(APPLY_WRITES_BODY_BYTES);
+    }
   });
 
   test("a_foreign_write_between_batches stops the chain and names the cards already saved", async () => {
-    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
     const { pdsCall, ctx, calls } = pds(() =>
       calls.length === 1
         ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
         : Response.json({ error: "InvalidSwap", message: "Commit was at bafy" }, { status: 400 }),
     );
-    const updates = [
-      { key: "k1", record: long("a".repeat(100_000)) },
-      { key: "k2", record: long("b".repeat(100_000)) },
-      { key: "k3", record: long("c".repeat(100_000)) },
-    ];
-    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+    expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), CID2)).toEqual({
       kind: "ok",
-      value: { kind: "partial", saved: ["k1"] },
+      value: {
+        kind: "partial",
+        saved: eleven()
+          .slice(0, 9)
+          .map((u) => u.key),
+      },
     });
     expect(calls).toHaveLength(2);
   });
 
   test("an outage after the first batch is a partial save, not an outage, since the first batch is written", async () => {
-    const long = (text: string) => ({ ...card, content: { ...card.content, text } });
     const { pdsCall, ctx, calls } = pds(() =>
       calls.length === 1
         ? Response.json({ commit: { cid: CID, rev: "3jzfcijpj2z2d" } })
         : new Response("", { status: 502 }),
     );
-    const updates = [
-      { key: "k1", record: long("a".repeat(100_000)) },
-      { key: "k2", record: long("b".repeat(100_000)) },
-    ];
-    expect(await saveCardRecords(pdsCall, ctx, DID, updates, CID2)).toEqual({
+    expect(await saveCardRecords(pdsCall, ctx, DID, eleven(), CID2)).toEqual({
       kind: "ok",
-      value: { kind: "partial", saved: ["k1"] },
+      value: {
+        kind: "partial",
+        saved: eleven()
+          .slice(0, 9)
+          .map((u) => u.key),
+      },
     });
   });
 
-  test("one_card_past_the_limit_is_refused: a full card that is nearly all quotes escapes past 150 KiB", async () => {
-    // The one case that does not fit any call: 100,000 bytes of text (the most a Text card holds) that are almost all
-    // characters JSON escapes, so the card alone is about 200 KB on the wire. Nothing is sent.
+  test("one_card_past_the_limit_is_refused, a record no card form can make, and nothing is sent", async () => {
+    // A Text card's text is at most 100,000 bytes, about 600 KB even if every character were one JSON escapes as
+    // \\u0000, so no card the page writes reaches 1,000,000 bytes alone; a record past it is refused by key.
     const { pdsCall, ctx, calls } = pds(() => Response.json({}));
-    const quotes = { ...card, content: { ...card.content, text: '"'.repeat(100_000) } };
+    const huge = { ...card, content: { ...card.content, text: "h".repeat(APPLY_WRITES_BODY_BYTES) } };
     expect(
       await saveCardRecords(
         pdsCall,
@@ -320,7 +325,7 @@ describe("saveCardRecords", () => {
         DID,
         [
           { key: "k1", record: card },
-          { key: "k2", record: quotes },
+          { key: "k2", record: huge },
         ],
         CID2,
       ),

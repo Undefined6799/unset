@@ -1,7 +1,9 @@
-import type { CardKey, CardVersion } from "@unset/domains-profile";
 import { describe, expect, test } from "vitest";
 import type { CardEdit } from "./card-writes.server.ts";
 import { partialMessage } from "./save-message.server.ts";
+
+type CardKey = CardEdit["key"];
+type CardVersion = CardEdit["version"];
 
 const V = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm" as CardVersion;
 const readme = (key: string, text: string): CardEdit => ({

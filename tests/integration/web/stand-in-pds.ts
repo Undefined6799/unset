@@ -2,7 +2,7 @@
 // inside stand-in-server.ts. It answers what a restored OAuth session asks for (the authorization server metadata, as
 // tests/integration/oauth/refresh.test.ts serves it) and the calls the member's page makes, over one in-memory repo:
 // getRecord, listRecords, putRecord (with swapRecord), createRecord (with swapCommit), deleteRecord, applyWrites
-// (update writes only, with swapCommit, all in one commit, refusing a body past the PDS's 150 KiB) and
+// (update writes only, with swapCommit, all in one commit, refusing a body past the PDS's limits) and
 // com.atproto.sync.getLatestCommit (https://atproto.com/specs/xrpc; lexicons com.atproto.repo.*, sync.*). Every write
 // moves the repo's head, as a real commit does. Each write is reported through `onWrite`.
 import { createHash } from "node:crypto";
@@ -116,10 +116,13 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
         });
       return json(404, { error: "MethodNotImplemented" });
     }
-    // @atproto/pds 0.5.51 parses a JSON body of at most 150 KiB (dist/index.js:155), as the image test checks.
+    // @atproto/pds 0.5.51 parses applyWrites and putRecord bodies up to 1,000,000 bytes (applyWrites.js:50,
+    // putRecord.js:35; the image test checks applyWrites) and other JSON bodies up to 150 KiB (dist/index.js:155).
     const raw = await request.text();
-    if (Buffer.byteLength(raw) > 150 * 1024)
+    const bodyLimit = method === "applyWrites" || method === "putRecord" ? 1_000_000 : 150 * 1024;
+    if (Buffer.byteLength(raw) > bodyLimit) {
       return json(413, { error: "PayloadTooLarge", message: "request entity too large" });
+    }
     const input = JSON.parse(raw) as {
       repo: string;
       collection: string;

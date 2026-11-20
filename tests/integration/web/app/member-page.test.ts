@@ -499,20 +499,6 @@ describe("the one Save (ADR 0074)", () => {
     expect(shown).toContain("Second of two");
   });
 
-  // Past one PDS call's 150 KiB body (two full Text cards of 100,000 bytes each): two calls, the second swapping on
-  // the commit the first made, so both are saved.
-  test("two_full_cards_save_in_two_chained_calls", async () => {
-    let response: Response | undefined;
-    const writes = await writesOf(async () => {
-      response = await saveAll([...text(0, CARD_A, "a".repeat(100_000)), ...text(1, CARD_C, "c".repeat(100_000))]);
-    });
-    expect(response?.status).toBe(303);
-    expect(writes.map((w) => [w.method, w.rkey])).toEqual([
-      ["applyWrites", CARD_A],
-      ["applyWrites", CARD_C],
-    ]);
-  });
-
   test("a_card_changed_since_its_editor_opened_is_named_and_nothing_is_written", async () => {
     const writes = await writesOf(async () => {
       const response = await saveAll([...text(0, CARD_A, "Mine"), ...text(1, CARD_C, "Theirs", STALE)], {
@@ -634,6 +620,38 @@ describe("the card limit", () => {
       expect(full.writes().filter((write) => write.method === "createRecord")).toHaveLength(1);
     } finally {
       await full.stop();
+    }
+  });
+
+  // Past one PDS call's 1,000,000-byte body, which the stand-in refuses as the real PDS does: eleven Text cards at
+  // their 100,000-byte maximum (about 1.1 MB, inside the form's 2 MiB) go in two calls, the second swapping on the
+  // commit the first made, so all eleven are saved (ADR 0074 item 1).
+  test("eleven_full_cards_save_in_two_chained_calls", async () => {
+    const stored = manyCards(11);
+    const keys = Object.keys(stored);
+    const opened = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+    const eleven = await memberServer(undefined, stored);
+    try {
+      const body = new URLSearchParams(
+        keys.flatMap((key, n): [string, string][] => [
+          [`cards.${n}.key`, key],
+          [`cards.${n}.version`, opened],
+          [`cards.${n}.kind`, "readme"],
+          [`cards.${n}.width`, "half"],
+          [`cards.${n}.text`, String(n % 10).repeat(100_000)],
+        ]),
+      ).toString();
+      const saved = await eleven.web.fetch(`/${OWNER}?/saveAll`, {
+        method: "POST",
+        body,
+        headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
+      });
+      expect(saved.status).toBe(303);
+      expect(eleven.writes().map((write) => [write.method, write.rkey])).toEqual(
+        keys.map((key) => ["applyWrites", key]),
+      );
+    } finally {
+      await eleven.stop();
     }
   });
 

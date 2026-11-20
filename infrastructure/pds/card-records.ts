@@ -198,12 +198,13 @@ export type SaveManyOutcome =
   | { readonly kind: "partial"; readonly saved: readonly string[] };
 
 /**
- * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses every procedure's JSON body with
- * `jsonLimit: 150 * 1024` (dist/index.js:155, not configurable) and refuses a larger one; it is also well inside
- * net-guard's 1 MiB request cap for atproto calls (infrastructure/net-guard/src/libraryFetch.ts), so the PDS's limit
- * is the one that binds.
+ * The most bytes of JSON one applyWrites body may hold. @atproto/pds 0.5.51 parses most JSON bodies up to 150 KiB
+ * (dist/index.js:155) but raises applyWrites and putRecord to `jsonLimit: 1_000_000`
+ * (dist/api/com/atproto/repo/applyWrites.js:50), and net-guard caps every atproto request but uploadBlob at 1 MiB
+ * (infrastructure/net-guard/src/libraryFetch.ts); the smaller, the PDS's, binds. Checked on the pinned image by
+ * tests/integration/pds-apply-writes.image.test.ts.
  */
-export const APPLY_WRITES_BODY_BYTES = 150 * 1024;
+export const APPLY_WRITES_BODY_BYTES = 1_000_000;
 /** Room for the swapCommit of a later call, which is another CID of the same length, and rounding. */
 const BODY_SLACK_BYTES = 64;
 
@@ -255,7 +256,7 @@ function batches(did: Did, updates: readonly Update[], swapCommit: string): Batc
  * answering InvalidSwap with nothing written when the head moved. A write has no per-record swap, so the caller
  * checks each card's version against a list read on the same head.
  *
- * Cards that do not fit one call (past about 150 KB of changed text) go in several, each swapping on the commit the
+ * Cards that do not fit one call (past about 1 MB of changed text) go in several, each swapping on the commit the
  * one before it returned (applyWrites.js answers `commit.cid`), so no other write can land between them unnoticed:
  * one that does stops the chain. A refusal or failure of the first call is the caller's, as for one call; of a later
  * call it is `partial`, naming the cards already written (pdsCall has already logged an unexpected error). Not

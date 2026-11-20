@@ -66,7 +66,7 @@ export const ERROR_CODES = {
   "card.overflow": { status: 409, public: true },
   // A new card's repo changed twice while it was being added (createRecord swapCommit refused); nothing was written.
   "card.cards_changed": { status: 409, public: true },
-  // One card in a Save past the PDS's 150 KiB JSON body limit by itself (ADR 0074); nothing was written.
+  // One record in a Save past one applyWrites body (1,000,000 bytes) by itself (ADR 0074); nothing was written.
   "card.save_too_large": { status: 413, public: true },
   // A Save too large for one PDS call, written in several, of which a later one failed; the page names what was saved.
   "card.save_partial": { status: 409, public: true },

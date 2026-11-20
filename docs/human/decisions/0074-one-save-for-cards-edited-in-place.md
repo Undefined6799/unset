@@ -21,7 +21,7 @@ how Bluesky's own app writes several records at once.
    same parser as one card's form (`readCardForm`, `parseCardInput`) before anything is read from the PDS; a card
    named twice, a missing version or a stray field is `card.invalid`. The writes go in one
    `com.atproto.repo.applyWrites` call of `update` writes: all land or none do, whenever the changed cards fit one PDS
-   call (up to about 150 KB of changed text, item 6), which is almost every Save. Past that they go in several calls in
+   call (up to about 1 MB of changed text, item 6), which is almost every Save. Past that they go in several calls in
    page order, each all or none, each swapping on the commit the one before it returned, so any other write in between
    stops the chain. Every card is checked against its editor's version before the first call. When a later call
    fails, the Save is `card.save_partial` with `saved`, the cards written, and a message that names the cards saved
@@ -47,15 +47,16 @@ how Bluesky's own app writes several records at once.
 5. **No script.** Unchanged and complete: each card keeps its own form and `?/save`, with the plain Markdown field
    and the Width and Style choices.
 6. **Limits.** One Save is one request on the `profile` policy (30 a minute per member), however many cards it holds,
-   so it costs less than a request per card. The form's cap stays the card form's 2 MiB (Alex, 2026-11-18). The PDS's
-   own limit is smaller: @atproto/pds 0.5.51 parses a JSON body of at most 150 KiB (`dist/index.js:155`, not
-   configurable), well inside net-guard's 1 MiB for atproto calls. A Text card holds at most 100,000 bytes of text
-   and a page at most 100 cards, so one full card fits a call and two do not; a hundred cards of about 1 KiB each, or
-   three of 40 KB, still fit one. The action measures each applyWrites body as it sends it and splits only when the
-   cards do not fit (item 1). One card too large for any call by itself (a full card of characters JSON escapes, such
-   as quotes) is `card.save_too_large`, named, with nothing written; the same limit already applies to one card's own
-   save (`putRecord`). @atproto/pds 0.5.51 refuses more than 200 writes in one call, and a page holds at most 100
-   cards. Our PDS runs with its own rate limits off (preflight), so applyWrites costs no write points.
+   so it costs less than a request per card. The form's cap stays the card form's 2 MiB (Alex, 2026-11-18). One PDS
+   call is smaller: @atproto/pds 0.5.51 parses an applyWrites body of at most 1,000,000 bytes
+   (`dist/api/com/atproto/repo/applyWrites.js:50`, raised from the server's 150 KiB at `dist/index.js:155`), just
+   inside net-guard's 1 MiB for atproto calls. A Text card holds at most 100,000 bytes of text and a page at most 100
+   cards, so a call holds nine full Text cards, or every card on a full page at 4 KB each, and a Save at the form's
+   cap needs at most three calls. The action measures each applyWrites body as it builds it and splits only when the
+   cards do not fit (item 1). A record too large for any call by itself is `card.save_too_large`, named, with nothing
+   written; no card the page makes reaches it (a full Text card is at most about 600 KB even if JSON escaped every
+   character). @atproto/pds 0.5.51 refuses more than 200 writes in one call, and a page holds at most 100 cards. Our
+   PDS runs with its own rate limits off (preflight), so applyWrites costs no write points.
 
 ## Consequences
 
@@ -83,19 +84,19 @@ were read on, a stale version, a gone card, a cut-short list, a refusal by the d
 a Save written only in part, the one re-read and no third try; `save-message.server.test.ts` names the saved and
 unsaved cards; `card-form.server.test.ts` splits the Save's form and refuses stray names and too many fields;
 `infrastructure/pds/card-records.test.ts` checks the applyWrites body, InvalidSwap, that normal use fits one call
-(`normal_use_fits_one_call`), that two full cards go in two chained calls, that a write between them stops the chain
-and names the saved cards, and that one card past the limit is refused;
-`tests/integration/web/app/member-page.test.ts` saves two cards in one commit and two full cards in two calls through
-the built server (its stand-in PDS refuses a body past 150 KiB) and refuses a stale card, a named field, a card named
-twice, a signed-out and a cross-site Save with nothing written; and `tests/integration/pds-apply-writes.image.test.ts`
-checks on the pinned PDS that two updates land in one commit, a stale head writes nothing, an update of a missing
-record fails the whole call, and a body past 150 KiB is refused. Acceptance is Alex's line on the pull request that
-adds this record.
+(`normal_use_fits_one_call`), that eleven full cards go in two chained calls, that a write between them stops the
+chain and names the saved cards, and that one record past the limit is refused;
+`tests/integration/web/app/member-page.test.ts` saves two cards in one commit and eleven full cards in two calls
+through the built server (its stand-in PDS refuses a body past the real one's limits) and refuses a stale card, a
+named field, a card named twice, a signed-out and a cross-site Save with nothing written; and
+`tests/integration/pds-apply-writes.image.test.ts` checks on the pinned PDS that two updates land in one commit, a
+stale head writes nothing, an update of a missing record fails the whole call, a body of about 900 KB is taken and one
+past 1,000,000 bytes is refused with 413. Acceptance is Alex's line on the pull request that adds this record.
 
 ## Sources
 
 @atproto/api 0.30.3 `com.atproto.repo.applyWrites` (`dist/client/types/com/atproto/repo/applyWrites.d.ts`);
 @atproto/pds 0.5.51 `dist/api/com/atproto/repo/applyWrites.js` (200-write cap, per-pair grant check, InvalidSwap)
-and `dist/index.js:155` (`jsonLimit: 150 * 1024`);
+and its `jsonLimit: 1_000_000` (line 50; the server's own is 150 KiB, `dist/index.js:155`);
 atproto.com/specs/repository (commits) and atproto.com/specs/data-model (CID string form). Checked on the pinned image
 by `tests/integration/pds-apply-writes.image.test.ts`.
