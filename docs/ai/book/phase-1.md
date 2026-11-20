@@ -4757,6 +4757,18 @@ accepted that version yet), the RoPA gains a "Burned names" row, the erasure run
 steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
 No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21f — Let each profile card choose its surface (added step, 2026-11-19)
+
+**Tags:** trusted · **Depends on:** P1.20 · **Plan:** §5.4
+
+Alex approved Filled / Outlined / Plain per card and requested implementation on 2026-11-19. Add optional
+`sh.unset.section.surface` (ADR 0068), checked in domains/profile and carried through the existing form actions.
+Reuse the native editor choice and preserve no-script retries. All four card kinds share the outer treatment;
+Filled keeps the existing appearance, Outlined is transparent with a fine border, and Plain has no outer fill,
+border or shadow. Keep content, inner tiles, spacing and controls. Missing legacy form input preserves a stored
+choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
+Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
+
 ### P1.21i — Say in the terms how leaving works (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** P1.21e · **Plan:** §6

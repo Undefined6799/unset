@@ -56,3 +56,8 @@ describe("card views", () => {
     });
   });
 });
+
+test.each(["filled", "outlined", "plain"] as const)("the page keeps the stored %s surface", (surface) => {
+  const [card] = cardViews([{ key: "k", width: "full", surface, content: { kind: "readme", text: "Hi" } }]);
+  expect(card?.surface).toBe(surface);
+});

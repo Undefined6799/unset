@@ -30,10 +30,17 @@ const MANY = `did:plc:${"u".repeat(24)}`;
 /** An account as the indexer leaves it once our PDS confirmed it, with a profile and one README card unless told. */
 async function indexed(
   did: string,
-  opts: { handle?: string; status?: string; active?: boolean; name?: string; profile?: boolean } = {},
+  opts: {
+    handle?: string;
+    status?: string;
+    active?: boolean;
+    name?: string;
+    profile?: boolean;
+    surface?: "plain";
+  } = {},
 ) {
   const { handle = null, status = "unresolved", active = true, name = "Member", profile = true } = opts;
-  const card = toCardRecord({ kind: "readme", text: `Card of ${name}` }, "full", null, NOW);
+  const card = toCardRecord({ kind: "readme", text: `Card of ${name}` }, "full", null, NOW, opts.surface);
   if (!card.ok) throw new Error(`seed card did not build: ${card.code}`);
   const record = { $type: "sh.unset.profile", displayName: name, headline: "<b>Head</b>", createdAt: NOW };
   await withClient(indexer, null, async (c) => {
@@ -78,7 +85,7 @@ let web: RunningWeb;
 beforeAll(async () => {
   buildOnce(provided.port);
   await indexed(SHOWN, { name: "Shown Member" });
-  await indexed(NAMED, { handle: "alice.unset.org", status: "verified", name: "Alice" });
+  await indexed(NAMED, { handle: "alice.unset.org", status: "verified", name: "Alice", surface: "plain" });
   await indexed(HIDDEN, { active: false, name: "Hidden Member" });
   await indexed(BARE, { profile: false, name: "Bare Member" });
   await indexed(UNVERIFIED, { handle: "mallory.unset.org", status: "invalid", name: "Mallory" });
@@ -118,6 +125,13 @@ describe("public profile", () => {
     expect(html).not.toContain("<b>Head</b>");
     expect(html).not.toContain("<script");
     expect(html).toContain('<meta name="robots" content="noindex"');
+    expect(html).toContain('data-surface="filled"');
+  });
+
+  test("a_stored_card_surface_reaches_the_page", async () => {
+    const html = await (await get("/@alice.unset.org")).text();
+    expect(html).toContain("Card of Alice");
+    expect(html).toContain('data-surface="plain"');
   });
 
   test("canonical_redirects_to_the_verified_handle", async () => {

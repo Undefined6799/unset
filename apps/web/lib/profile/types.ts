@@ -5,6 +5,7 @@
 export type CardLayout = "list" | "carousel" | "grid";
 /** How the avatar is cropped (sh.unset.profile avatarShape). */
 export type AvatarShape = "round" | "roundedSquare";
+export type CardSurface = "filled" | "outlined" | "plain";
 export type CardWidth = "full" | "half";
 export type LinkPreset = "bookCall" | "hire" | "subscribe" | "custom";
 
@@ -100,6 +101,7 @@ export type CardShown =
 export type CardView = {
   readonly key: string;
   readonly width: CardWidth;
+  readonly surface: CardSurface;
   readonly content: CardContent;
   readonly shown: CardShown;
 };

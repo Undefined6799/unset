@@ -29,6 +29,11 @@ type Main = {
    * When the card was first published.
    */
   createdAt: l.DatetimeString;
+
+  /**
+   * Outer card surface. Absent or unknown means filled.
+   */
+  surface?: "filled" | "outlined" | "plain" | l.UnknownString;
 };
 
 export type { Main };
@@ -51,6 +56,9 @@ const main = /*#__PURE__*/ l.record<"tid", Main>(
       /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["full", "half"] }>({ maxLength: 32 }),
     ),
     createdAt: /*#__PURE__*/ l.string({ format: "datetime" }),
+    surface: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["filled", "outlined", "plain"] }>({ maxLength: 32 }),
+    ),
   }),
 );
 
