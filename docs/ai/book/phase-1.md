@@ -4766,7 +4766,8 @@ everywhere. Tests only, no limit changes (changing one is a security loosening a
 app-facing edge zone in `deployment/edge/limits.json` (`deployment/edge/limits.budget.test.ts`, on a model of
 caddy-ratelimit's ring buffer) and every policy in `interfaces/web/src/lib/server/limits.ts` (`limits.budget.test.ts`
 beside it, on the real limiter with a fake clock), a test that a person's real use passes and one that a flood is
-refused. A realistic use a limit refuses is a named `test.fails` with the reason, reported to Alex. Static app files
+refused. The PDS zones web's own calls reach (one address for every member on staging) get a size in members. A
+realistic use a limit refuses is a named `test.fails` with the reason, reported to Alex. Static app files
 get no budget here: P1.21g gives them their own zone. The letter does not belong to the token pipeline below; it was
 the next free id.
 

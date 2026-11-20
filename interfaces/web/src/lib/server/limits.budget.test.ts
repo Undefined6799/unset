@@ -1,4 +1,4 @@
-// Normal use fits inside the web process's own limits (P1.21c; Alex 2026-11-19 13:21Z: the "normal use fits inside the
+// Normal use fits inside the web process's own limits (P1.21h; Alex 2026-11-19 13:21Z: the "normal use fits inside the
 // limit" logic applies everywhere). The real limiter (shared/http createRateLimiter) runs this file's table on a fake
 // clock, called as hooks.server.ts calls it: every request once by address under its route's policy (a POST under the
 // route's writeLimit when it has one), and a signed-in request to a page that needs a session once more by the
