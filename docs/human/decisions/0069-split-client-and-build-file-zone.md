@@ -76,5 +76,5 @@ spelling a client can send gets the allowance where web would route it; `edge.te
 `edge_ratelimit_matches_limits` pins the adapted values to `limits.json`; CI's images job checks the adapted JSON
 against `caddy adapt`. `tests/integration/web/gate.test.ts`
 `a_build_file_is_cached_a_year_and_a_missing_one_is_a_plain_404_before_the_hook`; `tests/e2e/redeploy.spec.ts` (its
-first test fails under `single`, its second about half the runs without the layout's `beforeNavigate`);
+first test fails under `single`, its second 8 of 10 runs without the layout's `beforeNavigate`);
 `tests/e2e/csp.spec.ts` on every page.

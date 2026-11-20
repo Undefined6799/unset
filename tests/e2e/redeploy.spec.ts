@@ -19,8 +19,9 @@ const OWN_PAGE: PageFixture = {
 };
 
 /**
- * From now on the tab is on the far side of a deploy: version.json names another build, and every build file is gone
- * until the browser next loads a document. Returns the documents the tab loads after that.
+ * From now on the tab is on the far side of a deploy: version.json names another build, and every build file is gone,
+ * until the browser next loads a document, which comes from the new build; after that both are served as they are.
+ * Returns the documents the tab loads after the deploy.
  */
 async function redeploy(page: Page): Promise<string[]> {
   const documents: string[] = [];
@@ -30,7 +31,9 @@ async function redeploy(page: Page): Promise<string[]> {
     }
   });
   await page.route("**/_app/version.json", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: '{"version":"a-later-build"}' }),
+    documents.length === 0
+      ? route.fulfill({ status: 200, contentType: "application/json", body: '{"version":"a-later-build"}' })
+      : route.fallback(),
   );
   await page.route("**/_app/immutable/**", (route) =>
     documents.length === 0
@@ -52,20 +55,26 @@ function trouble(page: Page): string[] {
   return seen;
 }
 
-/** Presses a link to `path` the way a click does, without waiting for anything; SvelteKit's router takes it. */
-async function press(page: Page, path: string): Promise<void> {
-  await page.evaluate((href) => {
+/**
+ * Presses a link to each path in turn the way clicks do, in one go and without waiting for anything; SvelteKit's
+ * router takes them. One go, because a press that loads its page in full can unload the document before a later
+ * press from the test arrives, which no member's second click can outrun either.
+ */
+async function press(page: Page, ...paths: string[]): Promise<void> {
+  await page.evaluate((hrefs) => {
     // No DOM lib in this project (observe.ts does the same): the page's document, typed as far as this needs.
     type Link = { href: string; click: () => void; remove: () => void };
     const { document } = globalThis as unknown as {
       document: { createElement: (tag: "a") => Link; body: { append: (node: Link) => void } };
     };
-    const link = document.createElement("a");
-    link.href = href;
-    document.body.append(link);
-    link.click();
-    link.remove();
-  }, path);
+    for (const href of hrefs) {
+      const link = document.createElement("a");
+      link.href = href;
+      document.body.append(link);
+      link.click();
+      link.remove();
+    }
+  }, paths);
 }
 
 test("a_click_in_a_tab_older_than_the_deploy_loads_the_page_in_full", async ({ page }) => {
@@ -90,21 +99,24 @@ test("a_click_in_a_tab_older_than_the_deploy_loads_the_page_in_full", async ({ p
 // The member comes back to the old tab: SvelteKit checks version.json when a tab regains focus, so it knows of the
 // deploy before the first click, and the root layout's beforeNavigate loads each pressed page in full at once
 // (interfaces/web/src/routes/+layout.svelte). Without that hook, kit 3.2.0's load_route sends a superseded
-// navigation's full load after the newer one's when its import fails, so about half the runs ended on the first page
-// pressed (measured while writing this test, P1.21g); with it the last press wins.
+// navigation's full load after the newer one's when its import fails, so 8 of 10 runs ended on the first page pressed
+// (measured on this test, P1.21g); with it the last press wins.
 test("pressing_two_pages_fast_in_an_old_tab_ends_on_the_last_one", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const seen = trouble(page);
   const documents = await redeploy(page);
-  const checked = page.waitForResponse((response) => new URL(response.url()).pathname === "/_app/version.json");
+  // Kit marks the tab updated only once it has read version.json's body, so wait for the whole response, not headers.
+  const checked = page.waitForEvent(
+    "requestfinished",
+    (request) => new URL(request.url()).pathname === "/_app/version.json",
+  );
   // No DOM lib in this project (observe.ts does the same): the window, typed as far as this needs.
   await page.evaluate(() =>
     (globalThis as unknown as { dispatchEvent: (event: Event) => boolean }).dispatchEvent(new Event("focus")),
   );
   await checked;
-  await press(page, "/settings/profile");
-  await press(page, "/settings/account");
+  await press(page, "/settings/profile", "/settings/account");
   await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/account`);
   await page.waitForLoadState("networkidle");
   await expect(page.locator("main h1").first()).toContainText("Account");
