@@ -107,8 +107,11 @@ describe("image store", () => {
   test("image.shared: removing one use keeps an image another record still uses", async () => {
     const did = await member();
     const id = await stored(did);
-    expect(await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null)).toEqual({ width: 2560, height: 1707 });
-    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toEqual({ width: 2560, height: 1707 });
+    const size = { width: 2560, height: 1707 };
+    expect(await store.addUse(did, id, record(did, "3kaaaaaaaaaaa"), null)).toEqual({ ...size, created: true });
+    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toEqual({ ...size, created: true });
+    // Asked again for a record that already has it, the use is not made a second time (and not this call's to undo).
+    expect(await store.addUse(did, id, record(did, "3kbbbbbbbbbbb"), null)).toEqual({ ...size, created: false });
     await store.removeUse(did, id, record(did, "3kaaaaaaaaaaa"), null);
     expect(await store.discard(did, id, null)).toBe(false);
     const [kept] = await sql<{ state: string; unused_since: Date | null }>(
@@ -123,29 +126,37 @@ describe("image store", () => {
     expect(dropped?.unused_since).toBeInstanceOf(Date);
   });
 
-  test("image.keep_only_use: a replaced picture's use goes and its copies are due in a week; the kept one stays", async () => {
+  test("image.drop_use: the picture a record no longer shows loses its use by CID; the record's other one stays", async () => {
     const did = await member();
     const other = await member();
     const [old, fresh, theirs] = [await stored(did), await stored(did), await stored(other)];
+    const [OLD, FRESH] = [
+      "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe",
+      "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
+    ];
     await store.addUse(did, old, record(did), null);
     await store.addUse(did, fresh, record(did), null);
     await store.addUse(other, theirs, record(other), null);
-    await store.keepOnlyUse(did, record(did), fresh, null);
-    const rows = await sql<{ id: string; unused: boolean; uses: number }>(
-      `SELECT id::text, unused_since IS NOT NULL AS unused,
+    await store.notePublished(did, old, OLD, null);
+    await store.notePublished(did, fresh, FRESH, null);
+    // Another member's call names nothing of theirs.
+    await store.notePublished(other, fresh, OLD, null);
+    await store.dropUse(did, record(did), OLD, null);
+    const rows = await sql<{ id: string; unused: boolean; uses: number; cid: string | null }>(
+      `SELECT id::text, unused_since IS NOT NULL AS unused, blob_cid AS cid,
               (SELECT count(*)::int FROM app.image_use u WHERE u.image_id = app.image.id) AS uses
          FROM app.image WHERE id = ANY($1::uuid[])`,
       [[old, fresh, theirs]],
     );
-    expect(Object.fromEntries(rows.map((row) => [row.id, [row.unused, row.uses]]))).toEqual({
-      [old]: [true, 0],
-      [fresh]: [false, 1],
-      [theirs]: [false, 1],
+    expect(Object.fromEntries(rows.map((row) => [row.id, [row.unused, row.uses, row.cid]]))).toEqual({
+      [old]: [true, 0, OLD],
+      [fresh]: [false, 1, FRESH],
+      [theirs]: [false, 1, null],
     });
-    // Another member's call reaches nothing of theirs, and null drops the record's last use.
-    await store.keepOnlyUse(other, record(did), null, null);
+    // Another member's call reaches nothing of theirs, and null (the record is gone) drops its last use.
+    await store.dropUse(other, record(did), null, null);
     expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(1);
-    await store.keepOnlyUse(did, record(did), null, null);
+    await store.dropUse(did, record(did), null, null);
     expect(await sql("SELECT 1 FROM app.image_use WHERE image_id = $1", [fresh])).toHaveLength(0);
   });
 

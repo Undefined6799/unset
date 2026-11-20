@@ -1,7 +1,14 @@
 // Profile (Alex, 2026-10-23): what a member writes on their unset.sh page, checked once at the boundary, and the
 // sh.unset.profile record it becomes. Identity keeps sign-in and handles; this module keeps the page.
 
-export { CARD_EDIT_LIMITS, type CardRecord, parseCardInput, reorderCards, toCardRecord } from "./card-edit.ts";
+export {
+  CARD_EDIT_LIMITS,
+  type CardRecord,
+  parseCardInput,
+  pictureLink,
+  reorderCards,
+  toCardRecord,
+} from "./card-edit.ts";
 export {
   CARDS_MAX,
   type Card,

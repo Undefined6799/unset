@@ -81,7 +81,8 @@ function store(
     release: async () => undefined,
     main: async () => ({ kind: "missing" }) as const,
     upload: async () => ({ kind: "transient", code: "pds_unavailable" }) as const,
-    keepOnly: async () => undefined,
+    published: async () => undefined,
+    drop: async () => undefined,
   };
   return { writes: cardWrites({ ...base, ...over }, () => NOW, pictures), calls };
 }

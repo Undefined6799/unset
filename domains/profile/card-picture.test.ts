@@ -2,7 +2,7 @@
 // sends a draft id or nothing (keep the card's picture); the record carries the PDS blob once web has published it.
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { parseCardInput, toCardRecord } from "./card-edit.ts";
+import { parseCardInput, pictureLink, toCardRecord } from "./card-edit.ts";
 import type { CardContent } from "./cards.ts";
 
 const NOW = "2026-11-20T22:00:00.000Z";
@@ -133,5 +133,27 @@ describe("toCardRecord, picture", () => {
       fit: "contain",
     };
     expect(toCardRecord(draft, "full", null, NOW)).toEqual({ ok: false, code: "card.invalid" });
+  });
+});
+
+describe("pictureLink", () => {
+  // A record as listRecords answers it through @atproto/api is decoded: its blob is a BlobRef whose toJSON gives the
+  // JSON form (@atproto/lexicon 0.7.19 dist/blob-refs.js, toJSON -> ipldToJson). This stand-in answers the same way.
+  class DecodedBlob {
+    toJSON() {
+      return OTHER_BLOB;
+    }
+  }
+  const decoded = stored({ $type: "sh.unset.section#image", image: { image: new DecodedBlob(), alt: "" } });
+
+  test("image.link: the blob a picture card shows is named by its CID, in JSON form or decoded", () => {
+    expect(pictureLink(storedPicture())).toBe(OTHER_BLOB.ref.$link);
+    expect(pictureLink(decoded)).toBe(OTHER_BLOB.ref.$link);
+  });
+
+  test("image.link_none: another kind, no record or a malformed picture shows no blob", () => {
+    expect(pictureLink(stored({ $type: "sh.unset.section#readme", text: "Hi" }))).toBeNull();
+    expect(pictureLink(null)).toBeNull();
+    expect(pictureLink(stored({ $type: "sh.unset.section#image", image: { image: { ref: 7 } } }))).toBeNull();
   });
 });

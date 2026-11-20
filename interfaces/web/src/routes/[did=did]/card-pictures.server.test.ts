@@ -1,7 +1,8 @@
 // P2.19b: a picture card's publish step inside the card writes (ADR 0070 point 5), over stand-ins for the store, the
 // pictures and the PDS: the use is recorded only after the write's own checks and before anything is sent, the main
-// version goes to the PDS once per Save, a write that does not land releases the use, and one that lands drops the
-// record's other pictures. Types are read off the module under test (a test beside a route imports no domain).
+// version goes to the PDS once per Save, a write that surely did not land releases a use it created, and one that
+// landed releases only the picture the record it replaced showed (so saves settle in any order). Types are read off
+// the module under test (a test beside a route imports no domain).
 import { describe, expect, test } from "vitest";
 import { type CardStore, type CardWrites, cardWrites, type PictureStore } from "./card-writes.server.ts";
 
@@ -22,6 +23,8 @@ const BLOB = {
   mimeType: "image/jpeg",
   size: 3,
 } as const;
+const OLD = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bvhwoxxfuknnqdpe";
+const LINK = BLOB.ref.$link;
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff]);
 const ok = <T>(value: T) => ({ kind: "ok" as const, value });
 const down = { kind: "transient", code: "pds_unavailable" } as const;
@@ -42,7 +45,7 @@ const storedPicture = {
   $type: "sh.unset.section",
   content: {
     $type: "sh.unset.section#image",
-    image: { image: { ...BLOB, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } },
+    image: { image: { ...BLOB, ref: { $link: OLD }, size: 9 }, alt: "Old", aspectRatio: { width: 4, height: 3 } },
   },
   createdAt: T1,
 };
@@ -90,7 +93,7 @@ function stack(over: Over = {}) {
   const pictures: PictureStore = {
     use: async (id, key) => {
       log.push(`use ${id} ${key}`);
-      return { width: 2560, height: 1707 };
+      return { width: 2560, height: 1707, created: true };
     },
     release: async (id, key) => {
       log.push(`release ${id} ${key}`);
@@ -103,8 +106,11 @@ function stack(over: Over = {}) {
       log.push("upload");
       return ok(BLOB);
     },
-    keepOnly: async (key, keep) => {
-      log.push(`keepOnly ${key} ${keep ?? "none"}`);
+    published: async (id, link) => {
+      log.push(`published ${id} ${link}`);
+    },
+    drop: async (key, link) => {
+      log.push(`drop ${key} ${link ?? "all"}`);
     },
     ...over.pictures,
   };
@@ -119,7 +125,7 @@ const PUBLISHED = {
 };
 
 describe("a new picture card", () => {
-  test("picture.create: checks, then the use under web's key, the upload, the create, then the record's other uses go", async () => {
+  test("picture.create: checks, then the use under web's key, the upload and its CID, then the create", async () => {
     const { writes, log, written } = stack();
     expect(await writes.create(picture(), "full")).toEqual({ kind: "saved" });
     expect(log).toEqual([
@@ -127,8 +133,8 @@ describe("a new picture card", () => {
       `use ${DRAFT} ${NEW_KEY}`,
       `main ${DRAFT}`,
       "upload",
+      `published ${DRAFT} ${LINK}`,
       `create ${NEW_KEY}`,
-      `keepOnly ${NEW_KEY} ${DRAFT}`,
     ]);
     expect(written).toEqual([{ $type: "sh.unset.section", content: PUBLISHED, createdAt: NOW }]);
   });
@@ -167,6 +173,13 @@ describe("a new picture card", () => {
     expect(written).toEqual([]);
   });
 
+  test("picture.create_unknown: a create the PDS did not answer may have landed, so its use stays", async () => {
+    const { writes, log } = stack({ store: { create: async () => down } });
+    expect(await writes.create(picture(), "full")).toEqual({ kind: "failed", code: "card.pds_unavailable" });
+    expect(log.at(-1)).toBe(`published ${DRAFT} ${LINK}`);
+    expect(log.some((line) => line.startsWith("release"))).toBe(false);
+  });
+
   test("picture.create_changed: a repo that keeps moving uploads once and releases the use at the end", async () => {
     const { writes, log } = stack({ store: { create: async () => ok({ kind: "changed" }) } });
     expect(await writes.create(picture(), "full")).toEqual({ kind: "failed", code: "card.cards_changed" });
@@ -182,10 +195,17 @@ describe("a new picture card", () => {
 });
 
 describe("an edited picture card", () => {
-  test("picture.save_replace: a new picture is published, written, and the old one's use goes", async () => {
+  test("picture.save_replace: a new picture is published, written, and the replaced picture's use goes", async () => {
     const { writes, log, written } = stack();
     expect(await writes.save("p" as CardKey, picture(), "full")).toEqual({ kind: "saved" });
-    expect(log).toEqual([`use ${DRAFT} p`, `main ${DRAFT}`, "upload", "save p", `keepOnly p ${DRAFT}`]);
+    expect(log).toEqual([
+      `use ${DRAFT} p`,
+      `main ${DRAFT}`,
+      "upload",
+      `published ${DRAFT} ${LINK}`,
+      "save p",
+      `drop p ${OLD}`,
+    ]);
     expect(written).toMatchObject([{ content: PUBLISHED }]);
   });
 
@@ -202,10 +222,72 @@ describe("an edited picture card", () => {
     expect(log.at(-1)).toBe(`release ${DRAFT} p`);
   });
 
+  test("picture.save_unknown: a save the PDS did not answer may have landed, so no use is released", async () => {
+    const { writes, log } = stack({ store: { save: async () => down } });
+    expect(await writes.save("p" as CardKey, picture(), "full")).toEqual({
+      kind: "failed",
+      code: "card.pds_unavailable",
+    });
+    expect(log.some((line) => line.startsWith("release") || line.startsWith("drop"))).toBe(false);
+  });
+
+  test("picture.save_same_failed: re-sending the card's own picture keeps its use when the save fails", async () => {
+    const { writes, log } = stack({
+      pictures: { use: async () => ({ width: 2560, height: 1707, created: false }), upload: async () => down },
+    });
+    expect(await writes.save("p" as CardKey, picture(), "full")).toEqual({
+      kind: "failed",
+      code: "card.pds_unavailable",
+    });
+    expect(log.some((line) => line.startsWith("release"))).toBe(false);
+  });
+
+  test("picture.save_two_tabs: two saves replacing one card's picture settle in either order", async () => {
+    // One card, stored as OLD. Tab A writes its picture and stalls before settling; tab B then writes over A's record
+    // and settles; A settles last. Each releases only what its write replaced, so B's picture keeps its use.
+    let stored: unknown = storedPicture;
+    const { promise: stalled, resolve: stall } = Promise.withResolvers<void>();
+    let saves = 0;
+    const dropped: string[] = [];
+    const links = { [DRAFT]: LINK } as Record<string, string>;
+    const second = "5f0c1a9e-2d3b-4c4d-8e5f-6a7b8c9d0e02" as DraftId;
+    links[second] = "bafkreibqx3ukiz5avmi372ivipzcfectju7nbqtpalxw6mrn4xqtp6bbzu";
+    let next = "";
+    const tab = stack({
+      store: {
+        save: async (_key, build) => {
+          const built = build(stored);
+          if (!built.ok) return ok({ kind: "refused", code: built.code });
+          stored = built.record;
+          saves += 1;
+          if (saves === 1) await stalled;
+          return ok({ kind: "saved" });
+        },
+      },
+      pictures: {
+        main: async (id) => {
+          next = links[id] ?? "";
+          return { kind: "ok", bytes: JPEG };
+        },
+        upload: async () => ok({ ...BLOB, ref: { $link: next } }),
+        drop: async (_key, link) => {
+          dropped.push(link ?? "all");
+        },
+      },
+    });
+    const a = tab.writes.save("p" as CardKey, picture(), "full");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await tab.writes.save("p" as CardKey, picture(second), "full")).toEqual({ kind: "saved" });
+    stall();
+    expect(await a).toEqual({ kind: "saved" });
+    expect(dropped).toEqual([links[DRAFT], OLD]);
+    expect(dropped).not.toContain(links[second]);
+  });
+
   test("picture.remove: deleting a card drops every use its record had", async () => {
     const { writes, log } = stack();
     expect(await writes.remove("p" as CardKey)).toEqual({ kind: "saved" });
-    expect(log).toEqual(["remove p", "keepOnly p none"]);
+    expect(log).toEqual(["remove p", "drop p all"]);
   });
 });
 
@@ -225,7 +307,15 @@ describe("a Save with pictures", () => {
     const { writes, log } = stack({ cards });
     const edits = [edit("p", picture(), "cp"), edit("a", { kind: "readme", text: "B" } as CardContent, "ca")];
     expect(await writes.saveAll(edits)).toEqual({ kind: "saved" });
-    expect(log).toEqual(["head", `use ${DRAFT} p`, `main ${DRAFT}`, "upload", "saveMany p,a", `keepOnly p ${DRAFT}`]);
+    expect(log).toEqual([
+      "head",
+      `use ${DRAFT} p`,
+      `main ${DRAFT}`,
+      "upload",
+      `published ${DRAFT} ${LINK}`,
+      "saveMany p,a",
+      `drop p ${OLD}`,
+    ]);
   });
 
   test("picture.save_all_conflict: a card changed elsewhere stops the Save before any use or upload", async () => {
@@ -243,10 +333,10 @@ describe("a Save with pictures", () => {
     });
     expect(await writes.saveAll([edit("p", picture(), "cp")])).toEqual({ kind: "saved" });
     expect(log.filter((line) => line.startsWith("use") || line === "upload")).toEqual([`use ${DRAFT} p`, "upload"]);
-    expect(log.at(-1)).toBe(`keepOnly p ${DRAFT}`);
+    expect(log.at(-1)).toBe(`drop p ${OLD}`);
   });
 
-  test("picture.save_all_partial: a picture card the Save did not write has its use released", async () => {
+  test("picture.save_all_partial: the written card settles; one the PDS may still have written keeps its use", async () => {
     const both = [...cards, { key: "q", value: storedPicture, cid: "cq" }];
     const second = "5f0c1a9e-2d3b-4c4d-8e5f-6a7b8c9d0e02" as DraftId;
     const { writes, log } = stack({
@@ -255,7 +345,8 @@ describe("a Save with pictures", () => {
     });
     const result = await writes.saveAll([edit("p", picture(), "cp"), edit("q", picture(second), "cq")]);
     expect(result).toMatchObject({ kind: "failed", code: "card.save_partial", saved: ["p"] });
-    expect(log.slice(-2)).toEqual([`keepOnly p ${DRAFT}`, `release ${second} q`]);
+    expect(log.at(-1)).toBe(`drop p ${OLD}`);
+    expect(log.some((line) => line.startsWith("release"))).toBe(false);
   });
 
   test("picture.save_all_too_large: nothing written releases every new use", async () => {
@@ -267,6 +358,6 @@ describe("a Save with pictures", () => {
   test("picture.kind_changed: a picture card saved as Text drops its picture's use", async () => {
     const { writes, log } = stack({ cards });
     await writes.saveAll([edit("p", { kind: "readme", text: "Now words" } as CardContent, "cp")]);
-    expect(log.at(-1)).toBe("keepOnly p none");
+    expect(log.at(-1)).toBe(`drop p ${OLD}`);
   });
 });

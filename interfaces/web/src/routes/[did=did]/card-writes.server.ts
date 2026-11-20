@@ -13,6 +13,7 @@ import {
   type CardWidth,
   type DraftImageId,
   type ProfileError,
+  pictureLink,
   reorderCards,
   shownCards,
   toCardRecord,
@@ -59,21 +60,30 @@ export type CardStore = {
 };
 
 /**
- * A picture card's publish step (ADR 0070 point 5), bound to the member, their card records' URIs and the request's
- * deadline in the composition root: a use of one of their own uploads, its main version from our store, and the
- * upload to their PDS. Each use is its own short transaction, never around a network call (DA-4).
+ * A picture card's publish step (ADR 0070 point 5), bound to the member and their card records' URIs in the
+ * composition root: a use of one of their own uploads, its main version from our store, and the upload to their PDS.
+ * Each database call is its own short transaction, never around a network call (DA-4). Taking a use back runs under
+ * its own deadline, so a request that ran out of time still settles.
  */
 export type PictureStore = {
-  /** Records the card's use of the draft, once however often asked; its pixel size, or null when it is not theirs. */
-  readonly use: (id: DraftImageId, key: CardKey) => Promise<{ readonly width: number; readonly height: number } | null>;
-  /** Takes back a use whose write did not land. */
+  /**
+   * Records the card's use of the draft: its pixel size, and whether this call made the use (false when the record
+   * already had it); null when the draft is not theirs.
+   */
+  readonly use: (
+    id: DraftImageId,
+    key: CardKey,
+  ) => Promise<{ readonly width: number; readonly height: number; readonly created: boolean } | null>;
+  /** Takes back a use this request made, whose write surely did not land. */
   readonly release: (id: DraftImageId, key: CardKey) => Promise<void>;
   readonly main: (
     id: DraftImageId,
   ) => Promise<{ readonly kind: "ok"; readonly bytes: Uint8Array } | { readonly kind: "missing" | "unavailable" }>;
   readonly upload: (bytes: Uint8Array) => Promise<PdsResult<UploadedBlob>>;
-  /** The card's record now uses only `keep` (null: no picture); any other picture's use goes. */
-  readonly keepOnly: (key: CardKey, keep: DraftImageId | null) => Promise<void>;
+  /** Notes the CID the member's PDS gave the draft, by which a later write that replaces it finds it. */
+  readonly published: (id: DraftImageId, link: string) => Promise<void>;
+  /** The card's record no longer shows the picture with this CID (null: the record is gone); its use goes. */
+  readonly drop: (key: CardKey, link: string | null) => Promise<void>;
 };
 
 export type CardFailure =
@@ -139,19 +149,42 @@ type PictureContent = Extract<CardContent, { kind: "image" }>;
 /** A picture card whose picture is a new upload, which must be published before the card can be written. */
 const draftOf = (content: CardContent): DraftImageId | null =>
   content.kind === "image" && content.picture.kind === "draft" ? content.picture.id : null;
-/** A stored record of a picture card, so a save of another kind over it drops its picture's use. */
-const isStoredPicture = (value: unknown): boolean =>
-  typeof value === "object" &&
-  value !== null &&
-  (value as { content?: { $type?: unknown } }).content?.$type === "sh.unset.section#image";
-
-/** A use this write recorded and must settle: kept when its card was written, released when not. */
-type Held = { readonly key: CardKey; readonly id: DraftImageId };
+/** A use this request recorded: kept when its card was written, or may have been; released when surely not. */
+type Held = { readonly key: CardKey; readonly id: DraftImageId; readonly created: boolean };
+/**
+ * A card write that landed, with the picture the record it replaced showed and the one it shows now. The write
+ * swapped on that record (DA-4: compare-and-swap at the PDS), so `replaced` is exactly what this write took off the
+ * page, whatever other saves of the card did meanwhile.
+ */
+type Landed = { readonly key: CardKey; readonly replaced: string | null; readonly shown: string | null };
+const landed = (key: CardKey, existing: unknown, written: unknown): Landed => ({
+  key,
+  replaced: pictureLink(existing),
+  shown: pictureLink(written),
+});
+/** A write the PDS did not answer may still have landed. */
+const unanswered = (result: PdsResult<unknown>): boolean => result.kind === "transient";
 
 export function cardWrites(store: CardStore, now: () => string, pictures: PictureStore): CardWrites {
   const pdsFailure = (result: Exclude<PdsResult<unknown>, { kind: "ok" }>): CardWrite => {
     const location = pdsSignInRedirect(result);
     return location === null ? failed("card.pds_unavailable") : { kind: "redirect", location };
+  };
+
+  /**
+   * After the write. A card that landed takes back the use of the picture its replaced record showed, unless it shows
+   * it still; a held use stays with it. A card that surely did not land takes back the uses this request made (one the
+   * record already had is the stored card's). Where the PDS did not answer (`unsure`), the write may have landed, so
+   * nothing is taken back: a use left behind costs storage, while one taken from a shown picture would lose it.
+   */
+  const settle = async (held: readonly Held[], written: readonly Landed[], unsure: boolean): Promise<void> => {
+    for (const card of written) {
+      if (card.replaced !== null && card.replaced !== card.shown) await pictures.drop(card.key, card.replaced);
+    }
+    if (unsure) return;
+    for (const use of held) {
+      if (use.created && !written.some((card) => card.key === use.key)) await pictures.release(use.id, use.key);
+    }
   };
 
   /**
@@ -165,24 +198,26 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
   ): Promise<{ ok: true; content: CardContent; held: Held | null } | { ok: false; failed: CardWrite }> => {
     const id = draftOf(content);
     if (id === null) return { ok: true, content, held: null };
-    const size = await pictures.use(id, key);
-    if (size === null) return { ok: false, failed: failed("card.image_missing", "image") };
+    const use = await pictures.use(id, key);
+    if (use === null) return { ok: false, failed: failed("card.image_missing", "image") };
+    const held: Held = { key, id, created: use.created };
     const main = await pictures.main(id);
     if (main.kind !== "ok") {
-      await pictures.release(id, key);
+      await settle([held], [], false);
       const code = main.kind === "missing" ? "card.image_missing" : "card.image_unavailable";
       return { ok: false, failed: failed(code, "image") };
     }
     const blob = await pictures.upload(main.bytes);
     if (blob.kind !== "ok") {
-      await pictures.release(id, key);
+      await settle([held], [], false);
       return { ok: false, failed: pdsFailure(blob) };
     }
+    await pictures.published(id, blob.value.ref.$link);
     const published: PictureContent = {
       ...(content as PictureContent),
-      picture: { kind: "published", blob: blob.value, width: size.width, height: size.height },
+      picture: { kind: "published", blob: blob.value, width: use.width, height: use.height },
     };
-    return { ok: true, content: published, held: { key, id } };
+    return { ok: true, content: published, held };
   };
 
   /** Each edit with its new picture published, in order; `held` gains each use. The first refusal stops the Save. */
@@ -203,23 +238,6 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
     return { ok: true, edits: out };
   };
 
-  /**
-   * After the write: each held use whose card landed keeps only its new picture, the rest are taken back, and a
-   * picture card written over as another kind (`dropped`) loses its picture's use.
-   */
-  const settle = async (
-    result: CardWrite,
-    held: readonly Held[],
-    written: readonly CardKey[],
-    dropped: readonly CardKey[] = [],
-  ): Promise<CardWrite> => {
-    for (const use of held) {
-      if (written.includes(use.key)) await pictures.keepOnly(use.key, use.id);
-      else await pictures.release(use.id, use.key);
-    }
-    for (const key of dropped) if (written.includes(key)) await pictures.keepOnly(key, null);
-    return result;
-  };
   const outcome = <C extends CardFailure>(result: PdsResult<SaveOutcome<C>>): CardWrite => {
     if (result.kind !== "ok") return pdsFailure(result);
     if (result.value.kind === "conflict") return failed("card.conflict");
@@ -239,43 +257,45 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
       if (early !== null && !early.ok) return failed(early.code, early.field);
       let record = early?.record ?? null;
       let held: Held | null = null;
-      const done = (result: CardWrite, written: boolean) =>
-        settle(result, held === null ? [] : [held], written && held !== null ? [held.key] : []);
+      const done = async (result: CardWrite, unsure = false) => {
+        await settle(held === null ? [] : [held], [], unsure);
+        return result;
+      };
       for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
         const head = await store.head();
-        if (head.kind !== "ok") return done(pdsFailure(head), false);
+        if (head.kind !== "ok") return done(pdsFailure(head));
         const listed = await store.list();
-        if (listed.kind !== "ok") return done(pdsFailure(listed), false);
-        if (listed.value.overflow || listed.value.cards.length >= CARDS_MAX)
-          return done(failed("card.too_many"), false);
-        if (!listed.value.complete) return done(failed("card.list_incomplete"), false);
+        if (listed.kind !== "ok") return done(pdsFailure(listed));
+        if (listed.value.overflow || listed.value.cards.length >= CARDS_MAX) return done(failed("card.too_many"));
+        if (!listed.value.complete) return done(failed("card.list_incomplete"));
         if (record === null) {
           const published = await publish(content, store.newKey());
           if (!published.ok) return published.failed;
           held = published.held;
           const built = toCardRecord(published.content, width, null, now(), surface);
-          if (!built.ok) return done(failed(built.code, built.field), false);
+          if (!built.ok) return done(failed(built.code, built.field));
           record = built.record;
         }
         const created = await store.create(record, head.value, held?.key);
-        if (created.kind !== "ok") return done(pdsFailure(created), false);
-        if (created.value.kind === "created") return done(SAVED, true);
+        if (created.kind !== "ok") return done(pdsFailure(created), unanswered(created));
+        // A new card replaces nothing, and its held use stays with it.
+        if (created.value.kind === "created") return SAVED;
       }
-      return done(failed("card.cards_changed"), false);
+      return done(failed("card.cards_changed"));
     },
     save: async (key, content, width, surface) => {
       const published = await publish(content, key);
       if (!published.ok) return published.failed;
-      let wasPicture = false;
-      const result = outcome(
-        await store.save(key, (existing) => {
-          wasPicture = isStoredPicture(existing);
-          return toCardRecord(published.content, width, existing, now(), surface);
-        }),
-      );
+      let card = null as Landed | null;
+      const saved = await store.save(key, (existing) => {
+        const built = toCardRecord(published.content, width, existing, now(), surface);
+        card = built.ok ? landed(key, existing, built.record) : null;
+        return built;
+      });
+      const result = outcome(saved);
       const held = published.held === null ? [] : [published.held];
-      const dropped = wasPicture && content.kind !== "image" ? [key] : [];
-      return settle(result, held, result.kind === "saved" ? [key] : [], dropped);
+      await settle(held, result.kind === "saved" && card !== null ? [card] : [], unanswered(saved));
+      return result;
     },
     // The versions and the write are tied to one repo state (DA-4: compare-and-swap at the PDS): the head is read
     // first, the list after it, and the write swaps on that head, so a card written elsewhere since either read makes
@@ -288,8 +308,15 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
       // moved head reuses them. Every use is settled at the end by which cards were written.
       let ready: CardEdit[] | null = null;
       const held: Held[] = [];
-      let dropped: CardKey[] = [];
-      const done = (result: CardWrite, written: readonly CardKey[]) => settle(result, held, written, dropped);
+      let cards: Landed[] = [];
+      const done = async (result: CardWrite, written: readonly string[], unsure = false) => {
+        await settle(
+          held,
+          cards.filter((card) => written.includes(card.key)),
+          unsure,
+        );
+        return result;
+      };
       const all = edits.map((edit) => edit.key);
       for (let attempt = 0; attempt < SAVE_ALL_ATTEMPTS; attempt += 1) {
         const head = await store.head();
@@ -303,15 +330,16 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
           if (!published.ok) return done(published.failed, []);
           ready = published.edits;
         }
-        dropped = droppedPictures(ready, listed.value);
         const built = buildEdits(ready, listed.value, now());
         if (!built.ok) return done(built.failed, []);
+        cards = landedEdits(built.updates, listed.value);
         const saved = await store.saveMany(built.updates, head.value);
-        if (saved.kind !== "ok") return done(pdsFailure(saved), []);
+        if (saved.kind !== "ok") return done(pdsFailure(saved), [], unanswered(saved));
         if (saved.value.kind === "saved") return done(SAVED, all);
         if (saved.value.kind === "too_large") return done(tooLarge(edits, saved.value.key), []);
+        // The call that failed may still have landed, so the cards it carried keep their uses.
         if (saved.value.kind === "partial")
-          return done(partly(edits, saved.value.saved), ofEdits(edits, saved.value.saved));
+          return done(partly(edits, saved.value.saved), ofEdits(edits, saved.value.saved), true);
       }
       return done(failed("card.cards_changed"), []);
     },
@@ -319,7 +347,7 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
     remove: async (key) => {
       const removed = await store.remove(key);
       if (removed.kind !== "ok") return pdsFailure(removed);
-      await pictures.keepOnly(key, null);
+      await pictures.drop(key, null);
       return SAVED;
     },
     // The order names the cards the page shows (domains/profile `shownCards`, as the page reads them), so a hidden card never
@@ -350,11 +378,9 @@ export function cardWrites(store: CardStore, now: () => string, pictures: Pictur
   };
 }
 
+type BuiltUpdates = { readonly key: CardKey; readonly record: Readonly<Record<string, unknown>> }[];
 type BuiltEdits =
-  | {
-      readonly ok: true;
-      readonly updates: { readonly key: CardKey; readonly record: Readonly<Record<string, unknown>> }[];
-    }
+  | { readonly ok: true; readonly updates: BuiltUpdates }
   | { readonly ok: false; readonly failed: CardWrite };
 
 /**
@@ -371,12 +397,10 @@ function checkEdits(edits: readonly CardEdit[], list: CardList): CardWrite | nul
   return null;
 }
 
-/** Stored picture cards this Save writes as another kind. */
-function droppedPictures(edits: readonly CardEdit[], list: CardList): CardKey[] {
+/** Each update with the picture of the stored card it swaps on (buildEdits checked each is in the list). */
+function landedEdits(updates: BuiltUpdates, list: CardList): Landed[] {
   const stored = new Map(list.cards.map((card) => [card.key, card.value]));
-  return edits
-    .filter((edit) => edit.content.kind !== "image" && isStoredPicture(stored.get(edit.key)))
-    .map((edit) => edit.key);
+  return updates.map((update) => landed(update.key, stored.get(update.key), update.record));
 }
 
 /**

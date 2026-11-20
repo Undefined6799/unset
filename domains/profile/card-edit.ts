@@ -360,6 +360,20 @@ function pictureToWrite(content: Extract<CardContent, { kind: "image" }>, existi
   return { ok: true, value: { ...image, alt: content.alt } };
 }
 
+/**
+ * The CID of the blob a stored card record shows, or null for another kind or a malformed picture. Read in the
+ * record's JSON form (https://atproto.com/specs/data-model, "Blob Type": `ref` as `{ $link }`), so a record listed
+ * through @atproto/api, whose blob is a decoded BlobRef that serialises to that form, reads the same as a plain one.
+ */
+export function pictureLink(record: unknown): string | null {
+  if (!isObject(record) || !isObject(record.content) || record.content.$type !== `${NSID}#image`) return null;
+  const image = record.content.image;
+  if (!isObject(image) || image.image === undefined) return null;
+  const blob: unknown = JSON.parse(JSON.stringify(image.image));
+  const link = isObject(blob) && isObject(blob.ref) ? blob.ref.$link : undefined;
+  return typeof link === "string" ? link : null;
+}
+
 export type CardRecord = { readonly $type: typeof NSID; readonly createdAt: string } & Obj;
 
 /**

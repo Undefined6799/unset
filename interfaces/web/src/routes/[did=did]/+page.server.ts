@@ -17,7 +17,6 @@ import {
   parseCardVersion,
 } from "@unset/domains-profile";
 import {
-  CARD_COLLECTION,
   createCardRecord,
   deleteCardRecord,
   latestCommit,
@@ -36,8 +35,9 @@ import { services } from "../../lib/server/compose.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
-import { type CardEdit, type CardStore, type CardWrite, cardWrites, type PictureStore } from "./card-writes.server.ts";
+import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
+import { picturesFor } from "./picture-store.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
 import { partialMessage } from "./save-message.server.ts";
 
@@ -152,28 +152,13 @@ function writesFor(did: Did, locals: App.Locals) {
     saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
-  return cardWrites(store, () => new Date().toISOString(), picturesFor(did, locals));
-}
-
-/**
- * The member's own uploads, their own card records and their own PDS (rule SE-2): every call names their DID, and a
- * record URI is built here from a card key, never taken from the form. Where uploads are closed (production until
- * an inspection is mounted, ADR 0070 point 7) no picture is published.
- */
-function picturesFor(did: Did, locals: App.Locals): PictureStore {
   const { images, drafts, pds } = services();
-  const uri = (key: CardKey) => `at://${did}/${CARD_COLLECTION}/${key}`;
-  return {
-    use: async (id, key) => (images.open ? images.store.addUse(did, id, uri(key), locals.deadline) : null),
-    release: (id, key) => images.store.removeUse(did, id, uri(key), locals.deadline),
-    main: async (id) => {
-      const read = await drafts.get(`drafts/${did}/i/${id}/main.jpeg`);
-      if (!read.ok) return { kind: "unavailable" };
-      return read.bytes === null ? { kind: "missing" } : { kind: "ok", bytes: read.bytes };
-    },
-    upload: (bytes) => uploadImageBlob(pds.pdsCall, pdsContext(locals), did, bytes),
-    keepOnly: (key, keep) => images.store.keepOnlyUse(did, uri(key), keep, locals.deadline),
-  };
+  const upload = (bytes: Uint8Array) => uploadImageBlob(pds.pdsCall, ctx, did, bytes);
+  return cardWrites(
+    store,
+    () => new Date().toISOString(),
+    picturesFor(did, { images, drafts, upload }, locals.deadline),
+  );
 }
 
 /** The body as URL-encoded form text within the card cap, or card.form_too_large. */

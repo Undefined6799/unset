@@ -3947,8 +3947,13 @@ P2.19b, picture cards on the server, built 2026-11-20: the card forms take kind 
 keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new picture after its own checks and
 before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
 version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
-retry. A write that does not land releases the use; one that lands keeps only its new picture's use
-(`keepOnlyUse`), and a delete or a change of kind drops it. Pages still hide picture cards until P2.19c.
+retry. After the write (Codex review): a write that surely did not land releases a use the request made (never one
+the record already had); one the PDS did not answer keeps it, since it may have landed. One that landed takes back
+only the use of the picture the record it replaced showed, found by the CID web notes on `app.image.blob_cid`
+(migration 0037) after the upload; the write swapped on that record, so two tabs' saves settle in either order. A
+delete drops every use of the record. Taking a use back runs under its own 5 s deadline (`SETTLE_MS`), not the
+request's. Left: a use whose write went unanswered and did not land, or whose request died mid-save, keeps its image
+from the sweep. Pages still hide picture cards until P2.19c.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
