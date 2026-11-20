@@ -90,6 +90,7 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.widthBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.section.surfaceBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.textBytes` | `100000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.title` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.section.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |

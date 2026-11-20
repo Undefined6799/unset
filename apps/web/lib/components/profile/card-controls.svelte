@@ -227,6 +227,7 @@ $effect(() => {
       kind={card.content.kind}
       content={card.content}
       width={card.width}
+      surface={card.surface}
       cardKey={card.key}
       trigger={{ label: CARD_EDIT.edit, href: `?edit=${card.key}#${PANEL_ANCHOR}` }}
       icon="edit"

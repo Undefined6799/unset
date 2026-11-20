@@ -82,6 +82,10 @@ export const CARD_EDIT = {
   removeTitle: (name: string) => `Delete ${name} card?`,
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   width: "Width",
+  surface: "Surface",
+  filled: "Filled",
+  outlined: "Outlined",
+  plain: "Plain",
   full: "Full width",
   half: "Half width",
   /** A refused save whose answer carried no catalog message. */

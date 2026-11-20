@@ -1,5 +1,5 @@
 ---
-version: 2026-10-17
+version: 2026-11-20
 ---
 
 # Terms of service
@@ -46,6 +46,12 @@ We may suspend an account or remove content. When we do, we say what we did and 
 
 When chat opens, chat rules apply to the unset.sh client only, not to any other client.
 
+<!-- T9 -->
+
+## Leaving
+
+You can ask us to delete your account at any time: we hide it at once and delete it 30 days later, and the [privacy notice](/legal/privacy) says what we keep and what stays public.
+
 <!-- T8 -->
 
 ## Contact
@@ -55,3 +61,4 @@ When chat opens, chat rules apply to the unset.sh client only, not to any other 
 ## Changes
 
 - 2026-10-17: First placeholder. Not reviewed by a lawyer. Not legal advice.
+- 2026-11-20: Added how leaving works: an account is hidden at once and deleted 30 days later.

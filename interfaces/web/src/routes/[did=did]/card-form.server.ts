@@ -8,7 +8,7 @@ import { AppError } from "@unset/shared-errors";
 import { LIMITS } from "@unset/shared-lexicons";
 
 type Shape = {
-  /** Fields beside `kind` and `width`. */
+  /** Fields beside `kind`, `width` and `surface`. */
   readonly fields: readonly string[];
   /** The list the rows go in, with the fields a row holds and how many rows the lexicon allows. */
   readonly list?: { readonly name: string; readonly row: readonly string[]; readonly max: number };
@@ -36,9 +36,9 @@ const SHAPES: Readonly<Record<string, Shape>> = {
   },
 };
 
-/** The most fields any card form holds: kind, width, two more, and the largest list full (a collection's 100x4). */
+/** The most fields any card form holds: kind, width, surface, two more, and the largest list full (a collection's 100x4). */
 export const CARD_FORM_MAX_FIELDS = Math.max(
-  ...Object.values(SHAPES).map((s) => 2 + s.fields.length + (s.list ? s.list.max * s.list.row.length : 0)),
+  ...Object.values(SHAPES).map((s) => 3 + s.fields.length + (s.list ? s.list.max * s.list.row.length : 0)),
 );
 
 const INDEX = /^(0|[1-9][0-9]*)$/;
@@ -92,7 +92,7 @@ export function readCardForm(form: URLSearchParams): {
   const body: Record<string, unknown> = {};
   const byIndex = new Map<number, Record<string, string>>();
   for (const [name, value] of form) {
-    if (name === "kind" || name === "width" || shape.fields.includes(name)) {
+    if (name === "kind" || name === "width" || name === "surface" || shape.fields.includes(name)) {
       body[name] = value;
       continue;
     }
