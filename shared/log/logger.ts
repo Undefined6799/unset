@@ -103,11 +103,12 @@ const EVENTS = [
   "indexer.started",
   "indexer.stopped",
   "indexer.stream_stopped",
-  // ADR 0070, the review process: it started, it stopped, and each job's outcome as `kind` (ok or the refusal code).
-  // Never a member, a size or an error text.
+  // ADR 0070, the review process: it started, it stopped, each job's outcome as `kind` (ok or the refusal code), and
+  // each pool event as `kind` (ready, start_failed, down, up). Never a member, a size or an error text.
   "review.started",
   "review.stopped",
   "review.job",
+  "review.pool",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

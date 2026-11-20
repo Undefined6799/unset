@@ -1,5 +1,6 @@
 // The review process's entry point (ADR 0070 point 2.2): settings first (exit 78 when invalid), then the child pool and its door
-// (compose.ts). Each answer is logged by its outcome only, never with a member, a size or an error text (SE-7).
+// (compose.ts). Each answer is logged by its outcome only, and each pool event by its name, never with a member, a
+// size or an error text (SE-7).
 // SIGTERM stops taking jobs, kills the children and exits once the listener has closed.
 import { createServer } from "node:http"; // guard-allow: egress inbound listener only, sends nothing out
 import { bootOrExit } from "@unset/shared-config";
@@ -15,7 +16,13 @@ process.on("uncaughtException", (error: unknown) => {
   process.exit(1);
 });
 
-const review = compose(config, (outcome) => log.info("review.job", { kind: outcome }));
+// A pool that goes down (its children cannot start: prlimit or sharp missing, too little address space) is an
+// error; the other pool events are info.
+const review = compose(
+  config,
+  (outcome) => log.info("review.job", { kind: outcome }),
+  (event) => (event === "down" ? log.error : log.info)("review.pool", { kind: event }),
+);
 const server = createServer(
   { requestTimeout: config.REVIEW_TIMEOUT_MS * 2, headersTimeout: 10_000, maxHeaderSize: 16_384 },
   review.listener,
