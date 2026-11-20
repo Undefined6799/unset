@@ -1,30 +1,32 @@
-// The one Save from the owner's page (ADR 0074): every changed Text card in one post to `?/saveAll`, each under its
+// The one Save from the owner's page (ADR 0074): every changed card in one post to `?/saveAll`, each under its
 // own index as the action reads it (interfaces/web/src/routes/[did=did]/card-form.server.ts splitCardsForm), with
 // the version its editor opened. The body is measured as it will be sent, application/x-www-form-urlencoded
 // (https://url.spec.whatwg.org/#urlencoded-serializing), against the page's form cap, so a Save the server would
 // refuse for its size is not sent at all.
-import type { CardSurface, CardWidth } from "./types.ts";
+import type { CardContent, CardSurface, CardWidth } from "./types.ts";
 
-export type TextEdit = {
+/** One changed card: its kind's own form fields by the names its parser reads (a Text card's `text`). */
+export type CardEdit = {
   readonly key: string;
   readonly version: string;
-  readonly text: string;
+  readonly kind: CardContent["kind"];
   readonly width: CardWidth;
   readonly surface: CardSurface;
+  readonly fields: Readonly<Record<string, string>>;
 };
 
 export type SaveForm = { readonly kind: "ok"; readonly body: URLSearchParams } | { readonly kind: "too_large" };
 
-export function textSaveForm(edits: readonly TextEdit[], limitBytes: number): SaveForm {
+export function cardSaveForm(edits: readonly CardEdit[], limitBytes: number): SaveForm {
   const body = new URLSearchParams();
   edits.forEach((edit, index) => {
     const field = (name: string, value: string) => body.append(`cards.${index}.${name}`, value);
     field("key", edit.key);
     field("version", edit.version);
-    field("kind", "readme");
+    field("kind", edit.kind);
     field("width", edit.width);
     field("surface", edit.surface);
-    field("text", edit.text);
+    for (const [name, value] of Object.entries(edit.fields)) field(name, value);
   });
   return new TextEncoder().encode(body.toString()).length > limitBytes ? { kind: "too_large" } : { kind: "ok", body };
 }
