@@ -4751,7 +4751,7 @@ tests pin it. The letter does not belong to the token pipeline below; it was the
 **Tags:** trusted · **Depends on:** P1.20 · **Plan:** §5.4
 
 Alex approved Filled / Outlined / Plain per card and requested implementation on 2026-11-19. Add optional
-`sh.unset.section.surface` (ADR 0066), checked in domains/profile and carried through the existing form actions.
+`sh.unset.section.surface` (ADR 0068), checked in domains/profile and carried through the existing form actions.
 Reuse the native editor choice and preserve no-script retries. All four card kinds share the outer treatment;
 Filled keeps the existing appearance, Outlined is transparent with a fine border, and Plain has no outer fill,
 border or shadow. Keep content, inner tiles, spacing and controls. Missing legacy form input preserves a stored

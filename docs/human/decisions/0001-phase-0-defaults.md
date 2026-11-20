@@ -645,4 +645,4 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   cheap checks; the required checks are the file's list; a merge is tested on main's current tip. ADR 0019 and one
   sentence of ADR 0044 are amended.
 
-2026-11-19: ADR [0066](0066-profile-card-surfaces.md) proposes an optional surface on each profile card, implementing Alex's approved Filled / Outlined / Plain direction.
+2026-11-19: ADR [0068](0068-profile-card-surfaces.md) proposes an optional surface on each profile card, implementing Alex's approved Filled / Outlined / Plain direction.

@@ -1,6 +1,6 @@
-# 0066 — Each profile card chooses its outer surface
+# 0068 — Each profile card chooses its outer surface
 
-Status: Proposed. Alex approved the Filled / Outlined / Plain direction and requested implementation on
+Status: Proposed (awaiting Alex). Alex approved the Filled / Outlined / Plain direction and requested implementation on
 2026-11-19. This adds an optional field under ADR 0051 Decision 7; it changes no existing required field.
 
 ## Context
@@ -19,6 +19,8 @@ Removing the outer background lets text and collections sit directly on the prof
    strictly in the domain. Explicit Filled omits the stored field; Outlined and Plain are stored verbatim.
 4. An older editor that omits surface input preserves the stored value. A new card without it is Filled.
    Explicitly choosing a known surface replaces any previous value, including one from a future client.
+   This editor always posts its selected surface, and it shows an unknown stored value as Filled, so saving
+   any change to such a card from this editor stores Filled; the same holds for `width` today.
    Unrelated fields and the original creation time remain preserved by the existing record merge.
 
 ## Consequences
@@ -27,6 +29,10 @@ The [Lexicon specification](https://atproto.com/specs/lexicon), String and Lexic
 permits optional additions and defines knownValues as open suggestions. No enum or schema default is added.
 Pinned `@atproto/lex-schema` 0.2.11, `dist/schema/string.js:25`, checks type and byte limits; generated optional
 string validators retain the open knownValues contract. The published snapshots are unchanged.
+
+A save writes every field the editor shows, so an editor left open in another tab puts back the surface it
+loaded, as it already does for width and content. Refusing a save made from an older copy of the record is
+left for a later step.
 
 This is presentation data in the existing PDS record. No new personal data category, permission, egress or
 storage system is introduced. Repository export and account erasure keep covering it.

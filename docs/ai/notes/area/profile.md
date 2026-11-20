@@ -24,7 +24,7 @@ the page. Product rules only, no I/O: [[http]] calls it and [[pds]] writes the r
   under the lexicon's limits, which are permanent once published (ADR 0051 point 5).
 - `cards.ts`: reading profile cards, one `sh.unset.section` record each (ADR 0051). Lenient: a card that does not
   validate or whose kind is unknown is hidden, and an address that is not plain http(s) is dropped.
-  Optional `surface` (ADR 0066) reads as filled when absent or unknown; the editor offers filled, outlined and plain.
+  Optional `surface` (ADR 0068) reads as filled when absent or unknown; the editor offers filled, outlined and plain.
 - `card-edit.ts`: writing cards. `parseCardInput`, `toCardRecord`, `reorderCards` and `CARD_EDIT_LIMITS` (rows per
   list the editor may write; reads keep the lexicon's limits). A missing surface input preserves the stored choice
   for older editors; explicitly choosing filled clears the stored field.

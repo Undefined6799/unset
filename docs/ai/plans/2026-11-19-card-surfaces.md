@@ -5,7 +5,7 @@ appearance. Outlined has a transparent background, a fine border and no shadow. 
 border or shadow. Card content, spacing, widths and editing controls keep working in every surface.
 
 Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
-No new card kind, dependency, permission or database storage. The public contract is recorded in ADR 0066.
+No new card kind, dependency, permission or database storage. The public contract is recorded in ADR 0068.
 
 ## Task 1: Persist the optional surface
 
