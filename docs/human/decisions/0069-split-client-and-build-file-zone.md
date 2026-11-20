@@ -1,6 +1,8 @@
 # 0069 — The web client is split into hashed pieces, and the edge counts them in their own zone
 
-Status: Proposed (awaiting Alex). Step P1.21g. Alex agreed to the split on 2026-11-20 00:27:59Z ("ok yes I agree, this
+Status: Accepted by Alex, 2026-11-20 03:59Z, against 8f1fa27 (his line "Merge 1817 at 8f1fa27", typed in the project
+chat after that head was reviewed; merged as d636cf2). This status paragraph, the index row and the ADR 0001 acceptance
+line were added afterwards in #1827. Step P1.21g. Alex agreed to the split on 2026-11-20 00:27:59Z ("ok yes I agree, this
 sounds better"), on the coordinator's summary: a small core plus per-area pieces with content-hashed names; the edge
 serves only those files with their own allowance; a tab left open across a deploy reloads cleanly; the CSP stays as
 strict; public profile pages still run no script; the limits on pages and data are unchanged. The edge zone loosens a

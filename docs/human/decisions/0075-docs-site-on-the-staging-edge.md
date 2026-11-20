@@ -1,6 +1,8 @@
 # 0075 — The docs site at docs.unset.sh, served by the staging edge
 
-Status: Proposed (awaiting Alex). Alex asked on 2026-11-20 at 05:06Z: "lets set it up on docs.unset.sh for now, and
+Status: Accepted by Alex, 2026-11-20 05:58Z, against c5e0bfb (his line "Merge 1829 at c5e0bfb", typed in the project
+chat after that head was reviewed; merged as eaea7bf). This status paragraph, the index row and the ADR 0001 acceptance
+line were added afterwards in #1827. Alex asked on 2026-11-20 at 05:06Z: "lets set it up on docs.unset.sh for now, and
 we can configure cd later".
 
 ## Context

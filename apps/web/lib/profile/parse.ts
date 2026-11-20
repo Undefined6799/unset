@@ -2,17 +2,19 @@
 // blocks that a renderer writes as escaped elements (readme.svelte), so member text is always escaped and raw HTML
 // is shown as text, never parsed. Blocks: ATX headings, paragraphs, bullet and ordered lists, block quotes, fenced
 // code and thematic breaks; a list item's own list, indented to the item's text, nests up to MAX_LIST_DEPTH. Inline:
-// code spans, strong, emphasis, links and autolinks. Images are not shown (there is no media proxy), so `![alt](url)`
-// is a link to the image with its alt text. A link is kept only when safeHref accepts it as http or https
-// (shared/ui/safe-href.ts); otherwise its characters stay text. Nothing here throws: any input renders.
+// code spans, strong, emphasis, links and autolinks, backslash escapes and numeric character references. Images are
+// not shown (there is no media proxy), so `![alt](url)` is a link to the image with its alt text. A link is kept
+// only when safeHref accepts it as http or https (shared/ui/safe-href.ts); otherwise its characters stay text.
+// Nothing here throws: any input renders.
 import { type SafeHref, safeHref } from "@unset/shared-safe-href";
 import {
   codeCloser,
   destinationFinder,
   emphasisCloser,
+  isEscapable,
   isWord,
   type Mark,
-  nextIndex,
+  nextUnescaped,
   runLength,
   unescapeDestination,
 } from "./readme-scan.ts";
@@ -136,18 +138,45 @@ function takeEmphasis(text: string, i: number, depth: number, links: boolean, fi
   return { node: { kind: strong ? "strong" : "em", children }, next: end + mark.length };
 }
 
+const REFERENCE = /^&#(?:[xX]([0-9a-fA-F]{1,6})|([0-9]{1,7}));/;
+
+/**
+ * A numeric character reference, `&#123;` or `&#x7b;`, is its character as text (CommonMark 0.31.2, "Entity and numeric
+ * character references"); remark writes the letters beside an italic inside a word this way. Code point 0, a
+ * surrogate or one past U+10FFFF is U+FFFD. Named entities stay text. The renderer escapes the character as any text.
+ */
+function numericReference(text: string, i: number): { char: string; next: number } | null {
+  const match = REFERENCE.exec(text.slice(i, i + 12));
+  if (match === null) return null;
+  const code = match[1] === undefined ? Number(match[2]) : Number.parseInt(match[1], 16);
+  const valid = code !== 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+  return { char: valid ? String.fromCodePoint(code) : "\uFFFD", next: i + match[0].length };
+}
+
 /** Left to right; anything that does not open a construct is text. Nested constructs stop at MAX_DEPTH. */
 export function parseInline(text: string, depth = 0, links = true): Inline[] {
   const out: Inline[] = [];
   const find: Finders = {
-    labelClose: nextIndex(text, "]("),
+    labelClose: nextUnescaped(text, "]("),
     destination: destinationFinder(text),
-    bracket: nextIndex(text, "["),
+    bracket: nextUnescaped(text, "["),
     codeClose: codeCloser(text),
     emphasisClose: emphasisCloser(text),
   };
   let buffer = "";
   for (let i = 0; i < text.length; ) {
+    // A backslash escape (CommonMark 0.31.2, "Backslash escapes") is its character as text, before any construct.
+    if (text[i] === "\\" && isEscapable(text[i + 1])) {
+      buffer += text[i + 1];
+      i += 2;
+      continue;
+    }
+    const reference = text[i] === "&" ? numericReference(text, i) : null;
+    if (reference !== null) {
+      buffer += reference.char;
+      i = reference.next;
+      continue;
+    }
     const taken =
       depth >= MAX_DEPTH
         ? null
