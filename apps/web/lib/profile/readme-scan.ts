@@ -191,6 +191,8 @@ function openLabels(text: string, code: readonly (readonly [number, number])[]):
     for (; walked < at; walked += 1) {
       const inCode = spanEnd(code, walked);
       if (inCode !== -1) walked = inCode - 1;
+      // An escaped bracket is text and neither opens nor closes a label (CommonMark 0.31.2, "Backslash escapes").
+      else if ((text[walked] === "[" || text[walked] === "]") && isEscaped(text, walked)) continue;
       else if (text[walked] === "[") lastOpen = walked;
       else if (text[walked] === "]") lastClose = walked;
     }
