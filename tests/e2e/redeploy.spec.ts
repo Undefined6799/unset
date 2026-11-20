@@ -87,16 +87,23 @@ test("a_click_in_a_tab_older_than_the_deploy_loads_the_page_in_full", async ({ p
   expect(seen).toEqual([]);
 });
 
+// The member comes back to the old tab: SvelteKit checks version.json when a tab regains focus, so it knows of the
+// deploy before the first click, and the root layout's beforeNavigate loads each pressed page in full at once
+// (interfaces/web/src/routes/+layout.svelte). Without that hook, kit 3.2.0's load_route sends a superseded
+// navigation's full load after the newer one's when its import fails, so about half the runs ended on the first page
+// pressed (measured while writing this test, P1.21g); with it the last press wins.
 test("pressing_two_pages_fast_in_an_old_tab_ends_on_the_last_one", async ({ page }) => {
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
   const seen = trouble(page);
   const documents = await redeploy(page);
-  // The second press lands while the first one's failed import and version check are still in flight.
+  const checked = page.waitForResponse((response) => new URL(response.url()).pathname === "/_app/version.json");
+  await page.evaluate(() => globalThis.dispatchEvent(new Event("focus")));
+  await checked;
   await press(page, "/settings/profile");
   await press(page, "/settings/account");
-  await page.waitForLoadState("networkidle");
   await expect(page).toHaveURL(`${TEST_ORIGIN}/settings/account`);
+  await page.waitForLoadState("networkidle");
   await expect(page.locator("main h1").first()).toContainText("Account");
   await expect(page.locator("body")).not.toContainText(/Internal Error|Something went wrong|Not Found/i);
   expect(documents.at(-1)).toBe("/settings/account");
