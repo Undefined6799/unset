@@ -68,6 +68,32 @@ describe("planCommit", () => {
     });
   });
 
+  test("index.gallery_records_each_picture_once", () => {
+    // ADR 0070: the media proxy serves only blobs a record references, so every picture of a gallery is recorded,
+    // and a picture used twice is recorded once.
+    const OTHER = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
+    const picture = (link: string) => ({
+      image: {
+        image: { $type: "blob", ref: { $link: link }, mimeType: "image/jpeg", size: 1000 },
+        alt: "",
+        aspectRatio: { width: 4, height: 3 },
+      },
+    });
+    const content = { $type: "sh.unset.section#gallery", images: [picture(BLOB), picture(OTHER), picture(BLOB)] };
+    expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({
+      kind: "apply",
+      writes: [
+        {
+          kind: "section",
+          blobs: [
+            { cid: BLOB, mime: "image/jpeg", size: 1000 },
+            { cid: OTHER, mime: "image/jpeg", size: 1000 },
+          ],
+        },
+      ],
+    });
+  });
+
   test("index.ignores_other_collections", () => {
     const other: IndexChange = { kind: "delete", collection: "app.bsky.feed.post", rkey: TID };
     expect(planCommit(active, "3jzfcijpj2z2c", [other])).toEqual({

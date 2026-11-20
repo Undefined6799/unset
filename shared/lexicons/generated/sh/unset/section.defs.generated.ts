@@ -4,6 +4,7 @@
  */
 
 import { l } from "@atproto/lex-schema";
+import * as UnsetDefs from "./defs.defs.generated.ts";
 
 const $nsid = "sh.unset.section";
 
@@ -18,7 +19,14 @@ type Main = {
   /**
    * What the card holds. A kind a reader does not know hides the card; it is never an error.
    */
-  content: l.$Typed<Readme> | l.$Typed<Links> | l.$Typed<Collection> | l.$Typed<Buttons> | l.Unknown$TypedObject;
+  content:
+    | l.$Typed<Readme>
+    | l.$Typed<Links>
+    | l.$Typed<Collection>
+    | l.$Typed<Buttons>
+    | l.$Typed<Image>
+    | l.$Typed<Gallery>
+    | l.Unknown$TypedObject;
 
   /**
    * Width on wide screens. Absent or unknown means full.
@@ -49,6 +57,8 @@ const main = /*#__PURE__*/ l.record<"tid", Main>(
         /*#__PURE__*/ l.typedRef<Links>((() => links) as any),
         /*#__PURE__*/ l.typedRef<Collection>((() => collection) as any),
         /*#__PURE__*/ l.typedRef<Buttons>((() => buttons) as any),
+        /*#__PURE__*/ l.typedRef<Image>((() => image) as any),
+        /*#__PURE__*/ l.typedRef<Gallery>((() => gallery) as any),
       ],
       false,
     ),
@@ -215,6 +225,11 @@ type Entry = {
    * An http or https URL. A reader drops any other scheme.
    */
   uri?: l.UriString;
+
+  /**
+   * A picture shown with the entry.
+   */
+  image?: Image;
 };
 
 export type { Entry };
@@ -228,6 +243,7 @@ const entry = /*#__PURE__*/ l.typedObject<Entry>(
     tag: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 40, maxLength: 400 })),
     description: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 300, maxLength: 3000 })),
     uri: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
+    image: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.ref<Image>((() => image) as any)),
   }),
 );
 
@@ -319,3 +335,61 @@ const linkButton = /*#__PURE__*/ l.typedObject<LinkButton>(
 );
 
 export { linkButton };
+
+/** One picture. Also each picture of a gallery and an entry's picture. */
+type Image = {
+  $type?: "sh.unset.section#image";
+  image: UnsetDefs.Image;
+
+  /**
+   * Text shown under the picture.
+   */
+  caption?: string;
+
+  /**
+   * contain shows the whole picture in its own proportions; fill crops it to fill the space. Absent or unknown means contain.
+   */
+  fit?: "contain" | "fill" | l.UnknownString;
+};
+
+export type { Image };
+
+/** One picture. Also each picture of a gallery and an entry's picture. */
+const image = /*#__PURE__*/ l.typedObject<Image>(
+  $nsid,
+  "image",
+  /*#__PURE__*/ l.object({
+    image: /*#__PURE__*/ l.ref<UnsetDefs.Image>((() => UnsetDefs.image) as any),
+    caption: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 300, maxLength: 3000 })),
+    fit: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["contain", "fill"] }>({ maxLength: 32 }),
+    ),
+  }),
+);
+
+export { image };
+
+/** A small set of pictures. */
+type Gallery = {
+  $type?: "sh.unset.section#gallery";
+  title?: string;
+
+  /**
+   * In display order.
+   */
+  images: Image[];
+};
+
+export type { Gallery };
+
+/** A small set of pictures. */
+const gallery = /*#__PURE__*/ l.typedObject<Gallery>(
+  $nsid,
+  "gallery",
+  /*#__PURE__*/ l.object({
+    title: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ maxGraphemes: 100, maxLength: 1000 })),
+    images: /*#__PURE__*/ l.array(/*#__PURE__*/ l.ref<Image>((() => image) as any), { maxLength: 12 }),
+  }),
+);
+
+export { gallery };

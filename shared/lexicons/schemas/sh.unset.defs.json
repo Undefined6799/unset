@@ -1,0 +1,45 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.defs",
+  "description": "Shapes that several sh.unset records share.",
+  "defs": {
+    "image": {
+      "type": "object",
+      "required": ["image", "alt", "aspectRatio"],
+      "description": "A picture in the member's own repository, held as Bluesky's post image holds one (app.bsky.embed.images#image). Each use embeds it and adds its own caption and fit (ADR 0070).",
+      "properties": {
+        "image": {
+          "type": "blob",
+          "accept": ["image/jpeg"],
+          "maxSize": 2000000,
+          "description": "JPEG with no metadata, its longest side at most 2560 px."
+        },
+        "alt": {
+          "type": "string",
+          "maxGraphemes": 2000,
+          "maxLength": 20000,
+          "description": "Text for people who cannot see the picture. May be empty."
+        },
+        "aspectRatio": {
+          "type": "ref",
+          "ref": "#aspectRatio"
+        }
+      }
+    },
+    "aspectRatio": {
+      "type": "object",
+      "required": ["width", "height"],
+      "description": "The picture's width to height, as in app.bsky.embed.defs#aspectRatio, so a reader can hold its space before it loads.",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

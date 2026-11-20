@@ -3,6 +3,7 @@
 // (@atproto/lex-schema 0.2.8, dist/schema/object.js); reading keeps that rule for forward compatibility.
 import { jsonToLex, lexToJson } from "@atproto/lex-json";
 import { app, sh } from "../generated/index.generated.ts";
+import shared from "../schemas/sh.unset.defs.json" with { type: "json" };
 import follow from "../schemas/sh.unset.follow.json" with { type: "json" };
 import profile from "../schemas/sh.unset.profile.json" with { type: "json" };
 import section from "../schemas/sh.unset.section.json" with { type: "json" };
@@ -55,12 +56,15 @@ function toLex(value: Record<string, unknown>): unknown {
   }
 }
 
+/** Defs other schemas refer to by NSID (`sh.unset.defs#image`); a ref to any other lexicon is not followed. */
+const SHARED: Record<string, Defs> = { [shared.id]: shared.defs as Defs };
+
 /**
- * Fields of `value` that the def does not define, following local `#refs` into nested objects and array items. A
- * nested object may name its own def in `$type` (atproto.com/specs/lexicon, "$type"); the root's was checked already.
- * A union member is followed through the local ref its `$type` names; the generated validator has already refused a
- * member a closed union does not list. Properties are looked up as own keys only, so a field named `constructor` is
- * unknown like any other.
+ * Fields of `value` that the def does not define, following `#refs` and refs into sh.unset.defs into nested objects
+ * and array items. A nested object may name its own def in `$type` (atproto.com/specs/lexicon, "$type"); the root's was
+ * checked already. A union member is followed through the local ref its `$type` names; the generated validator has
+ * already refused a member a closed union does not list. Properties are looked up as own keys only, so a field named
+ * `constructor` is unknown like any other.
  */
 function unknownFields(nsid: string, defs: Defs, name: string, value: Record<string, unknown>, path: string): string[] {
   const def = defs[name];
@@ -72,19 +76,29 @@ function unknownFields(nsid: string, defs: Defs, name: string, value: Record<str
     const field = prop.type === "array" ? prop.items : prop;
     const items = prop.type === "array" && Array.isArray(child) ? child : [child];
     return items.flatMap((item, i) => {
-      const ref = isObject(item) && field !== undefined ? localRef(nsid, field, item) : undefined;
+      const ref = isObject(item) && field !== undefined ? followedRef(nsid, defs, field, item) : undefined;
       if (ref === undefined || !isObject(item)) return [];
-      return unknownFields(nsid, defs, ref, item, prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`);
+      const at = prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`;
+      return unknownFields(ref.nsid, ref.defs, ref.name, item, at);
     });
   });
 }
 
-/** The local def an object at `field` follows: its ref, or the union member its `$type` names; undefined for none. */
-function localRef(nsid: string, field: Field, item: Record<string, unknown>): string | undefined {
-  if (field.type === "ref") return field.ref?.startsWith("#") ? field.ref.slice(1) : undefined;
+type Followed = { nsid: string; defs: Defs; name: string };
+
+/** The def an object at `field` follows: its ref, or the union member its `$type` names; undefined for none. */
+function followedRef(nsid: string, defs: Defs, field: Field, item: Record<string, unknown>): Followed | undefined {
+  if (field.type === "ref") return field.ref === undefined ? undefined : refTarget(nsid, defs, field.ref);
   if (field.type !== "union" || typeof item.$type !== "string") return undefined;
   const member = item.$type.startsWith(`${nsid}#`) ? item.$type.slice(nsid.length) : undefined;
-  return member !== undefined && field.refs?.includes(member) ? member.slice(1) : undefined;
+  return member !== undefined && field.refs?.includes(member) ? { nsid, defs, name: member.slice(1) } : undefined;
+}
+
+function refTarget(nsid: string, defs: Defs, ref: string): Followed | undefined {
+  if (ref.startsWith("#")) return { nsid, defs, name: ref.slice(1) };
+  const [other = "", name = "main"] = ref.split("#");
+  const found = Object.hasOwn(SHARED, other) ? SHARED[other] : undefined;
+  return found === undefined ? undefined : { nsid: other, defs: found, name };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
