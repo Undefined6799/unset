@@ -3,7 +3,7 @@
 # Configuration (menu.main, sidebar from the content tree, FlexSearch):
 # https://imfing.github.io/hextra/docs/guide/configuration/
 # theme.toml at v0.13.0 sets min_version = "0.146.0".
-baseURL: https://example.com/
+baseURL: https://docs.unset.sh/
 title: unset
 defaultContentLanguage: en
 
