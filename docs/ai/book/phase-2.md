@@ -3929,6 +3929,9 @@ Readers still hide both kinds until P2.19c draws them.
 P2.19d (ADR 0070 point 8's body and request caps, one pull request on Alex's line): web's `/images` route takes up to
 31 MiB and sets adapter-node's cap; net-guard's `review` policy sends up to 32 MiB, the object store's puts up to 2 MiB,
 and `com.atproto.repo.uploadBlob` alone up to 2 MiB; every other route and request keeps its cap.
+P2.19e (ADR 0076, one pull request on Alex's line): uploads up to 64 MiB, 110 megapixels and 12,000 px a side; `/images`
+65 MiB, net-guard's `review` policy 66 MiB, review's job ceiling 64 MiB and 120 megapixels; web 1 GB, review 2 GB and
+2 CPUs; the edge reads for 120 s and writes for 255 s, headers 10 s. Masters and the object store's 2 MiB are unchanged.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)

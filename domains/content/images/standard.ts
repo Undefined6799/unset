@@ -1,9 +1,12 @@
-// The image standard (ADR 0070 point 3): what a member may upload and the versions we keep of it. One place for the
+// The image standard (ADR 0070 point 3, upload numbers raised by ADR 0076): what a member may upload and the versions we keep of it. One place for the
 // numbers, so the upload route, review's processing and the pages agree.
 import type { ProcessLimits, SquareCrop, VersionSpec } from "./processing.ts";
 
-/** JPEG, PNG, WebP or AVIF, up to 30 MB, 70 megapixels and 12,000 px a side. */
-export const UPLOAD_LIMITS: ProcessLimits = { maxBytes: 30_000_000, maxPixels: 70_000_000, maxEdge: 12_000 };
+/**
+ * JPEG, PNG, WebP or AVIF, up to 64 MiB, 110 megapixels and 12,000 px a side (ADR 0076): a 102-megapixel
+ * medium-format frame at camera JPEG quality fits. The versions we keep stay at ADR 0070's sizes.
+ */
+export const UPLOAD_LIMITS: ProcessLimits = { maxBytes: 64 * 1024 * 1024, maxPixels: 110_000_000, maxEdge: 12_000 };
 
 /** The PDS blob every atproto app sees: Bluesky's post-image ceiling (app.bsky.embed.images, 2,000,000 bytes). */
 const MAIN: VersionSpec = {

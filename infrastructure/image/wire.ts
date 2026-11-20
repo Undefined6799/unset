@@ -21,10 +21,10 @@ export const PROCESS_PATH = "/v1/process";
 export const JOB_HEADER = "x-unset-job";
 export const FRAME_TYPE = "application/vnd.unset.image-versions";
 
-/** What review will ever do for one job, whatever a job asks: the ceilings of ADR 0070 point 3 with headroom. */
+/** What review will ever do for one job, whatever a job asks: the upload ceilings of ADR 0076 with headroom. */
 export const JOB_CEILING = {
-  maxBytes: 32 * 1024 * 1024,
-  maxPixels: 100_000_000,
+  maxBytes: 64 * 1024 * 1024,
+  maxPixels: 120_000_000,
   maxEdge: 16_384,
   versions: 12,
   size: 4096,
