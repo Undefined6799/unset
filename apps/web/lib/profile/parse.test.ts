@@ -109,6 +109,16 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
+  // Codex review of #1827: remark writes a literal bracket in link text as "\\[", which is text, not a nested label.
+  test("an escaped bracket in link text keeps the link", () => {
+    expect(parseInline("[a \\[b](https://example.com)")).toEqual([
+      { kind: "link", href: "https://example.com/", children: [text("a [b")] },
+    ]);
+    expect(parseInline("[a \\](b](https://example.com)")).toEqual([
+      { kind: "link", href: "https://example.com/", children: [text("a ](b")] },
+    ]);
+  });
+
   test("inline code, links and autolinks", () => {
     expect(parseReadme("Run `npm ci` then see [the docs](https://x.example/d) or <https://y.example>.")).toEqual([
       {

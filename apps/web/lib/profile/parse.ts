@@ -14,7 +14,7 @@ import {
   isEscapable,
   isWord,
   type Mark,
-  nextIndex,
+  nextUnescaped,
   runLength,
   unescapeDestination,
 } from "./readme-scan.ts";
@@ -157,9 +157,9 @@ function numericReference(text: string, i: number): { char: string; next: number
 export function parseInline(text: string, depth = 0, links = true): Inline[] {
   const out: Inline[] = [];
   const find: Finders = {
-    labelClose: nextIndex(text, "]("),
+    labelClose: nextUnescaped(text, "]("),
     destination: destinationFinder(text),
-    bracket: nextIndex(text, "["),
+    bracket: nextUnescaped(text, "["),
     codeClose: codeCloser(text),
     emphasisClose: emphasisCloser(text),
   };

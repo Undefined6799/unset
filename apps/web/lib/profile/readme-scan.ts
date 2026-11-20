@@ -103,6 +103,16 @@ export function nextIndex(text: string, needle: string): (from: number) => numbe
   };
 }
 
+/** As nextIndex, but a match whose first character is backslash-escaped is text and is skipped. */
+export function nextUnescaped(text: string, needle: string): (from: number) => number {
+  const next = nextIndex(text, needle);
+  return (from) => {
+    let found = next(from);
+    while (found !== -1 && isEscaped(text, found)) found = next(found + 1);
+    return found;
+  };
+}
+
 export type Mark = "*" | "_" | "**" | "__";
 
 /**
