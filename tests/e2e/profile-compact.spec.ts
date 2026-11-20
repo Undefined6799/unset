@@ -56,7 +56,7 @@ test("the_compact_header_opens_its_details_and_keeps_editing_separate", async ({
     const from = await avatar(page).boundingBox();
     const panel = await details(page).boundingBox();
     expect(from !== null && panel !== null && panel.y >= from.y + from.height).toBe(true);
-    await expect(details(page).getByText("DID")).toBeVisible();
+    await expect(details(page).getByText("DID", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(details(page)).toBeHidden();
     await expect(avatar(page)).toBeFocused();
