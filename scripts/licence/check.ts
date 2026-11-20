@@ -1,6 +1,6 @@
 // Licence compatibility over production dependencies (P0.13; ADR 0012, decision 27). An MIT package (every package
 // under shared/) may depend only on permissive licences, never on an AGPL workspace package; an AGPL-3.0-only package
-// may also depend on AGPL-3.0 code. Anything else, an unknown package licence or a missing licence field is a conflict:
+// may also depend on AGPL-3.0 code and LGPL-3.0-or-later libraries (ADR 0070). Anything else, an unknown package licence or a missing licence field is a conflict:
 // the agent stops and asks Alex with the dependency named (P0.13 step 5). No `npx` tool: `npm ls` reads the installed
 // tree and runs nothing.
 
@@ -29,7 +29,8 @@ export const PERMISSIVE = [
 /** What a package under each of our two licences may depend on. A licence not listed here is itself a conflict. */
 export const ALLOWED: Record<string, readonly string[]> = {
   MIT: PERMISSIVE,
-  "AGPL-3.0-only": [...PERMISSIVE, "AGPL-3.0-only", "AGPL-3.0-or-later"],
+  // LGPL-3.0-or-later: libvips through sharp (ADR 0070 point 9); its relinking and source duties ride with the image.
+  "AGPL-3.0-only": [...PERMISSIVE, "AGPL-3.0-only", "AGPL-3.0-or-later", "LGPL-3.0-or-later"],
 };
 
 /**
