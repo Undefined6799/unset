@@ -18,14 +18,19 @@ export function partialMessage(edits: readonly CardEdit[], saved: readonly CardK
 
 const CARD_NAME_CHARS = 40;
 
-/** How a card reads at a glance: a Text card's first line without its Markdown marks, else its title or heading. */
+/**
+ * How a card reads at a glance: a Text card's first line without its Markdown marks, a picture's caption, else its
+ * title or heading.
+ */
 function cardName(content: CardContent): string {
   const raw =
     content.kind === "readme"
       ? (content.text.split("\n").find((line) => line.trim() !== "") ?? "").replace(/^[\s#>*+-]+/, "")
       : content.kind === "buttons"
         ? content.heading
-        : content.title;
+        : content.kind === "image"
+          ? content.caption
+          : content.title;
   const name = raw.trim();
   if (name === "") return "Untitled card";
   return name.length > CARD_NAME_CHARS ? `${name.slice(0, CARD_NAME_CHARS).trimEnd()}\u2026` : name;
