@@ -35,8 +35,7 @@ run as your own user so the files belong to the checkout's owner (C9 judges the 
 container's `/tmp` as home so Hugo can keep its cache and the theme module there. The site is down for the few
 seconds between the two lines.
 
-The `--user` and `HOME` settings are not yet proved on the staging host; if the first run fails, the error
-names the folder it could not write.
+CI's `docs-site` job runs the same build the same way on every pull request.
 
 ## Check
 
