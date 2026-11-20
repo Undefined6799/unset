@@ -1,6 +1,9 @@
 # 0070 — One shared image foundation: processing apart from web, an empty inspection port
 
-Status: Proposed (awaiting Alex). Steps P2.17 to P2.19c. Alex asked for it on 2026-11-20 01:12:01Z ("Build one
+Status: Accepted by Alex, 2026-11-20 02:50:43Z, against d1e6117 (his line "Merge 1819 at d1e6117", typed in this
+record's thread after the coordinator had reviewed that head and CI was green); #1819 merged at cfd2a6e after two clean
+merges of main. This status paragraph, the index row and the ADR 0001 acceptance line were added afterwards in the
+next P2.17 pull request. Steps P2.17 to P2.19c. Alex asked for it on 2026-11-20 01:12:01Z ("Build one
 reusable image foundation for profile cards, galleries, project screenshots, and future posts/blog content") and set
 its direction at 01:23:11Z: no moderation or fingerprint check for now, a cleanly separated foundation that later
 checks mount onto, decent quality for photographers, every picture converted to a proper format with all metadata

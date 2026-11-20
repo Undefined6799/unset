@@ -674,3 +674,14 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   test accounts). It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
   replace ADR 0029's scan paragraph outside production. AGPL-3.0-only packages may also depend on LGPL-3.0-or-later
   libraries (libvips via sharp), superseding that line of ADR 0012. Proposed, awaiting Alex.
+- **ADR 0070 accepted (Alex, 2026-11-20 02:50:43Z, against d1e6117; own record:
+  [0070](0070-shared-image-foundation.md)):** one shared image foundation. An image is a blob in the member's
+  repository and each use carries its alt text; processing runs in its own no-network process `review`; the
+  inspection port is empty; uploads with nothing mounted are refused outside a closed list of test origins. AGPL
+  packages may use LGPL-3.0-or-later libraries. Superseded step-book text and ADR 0012's licence line as the record
+  says; ADR 0029's scan paragraph is replaced when 0029 is accepted. 0012 and 0029 are not edited.
+- **ADR 0071 accepted (Alex, 2026-11-20, against dbfc459; own record:
+  [0071](0071-limits-for-thousands-of-members.md)):** limits sized for thousands of members; web marks its own PDS
+  calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
+  ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
+  are not edited.
