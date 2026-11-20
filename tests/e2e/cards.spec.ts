@@ -278,7 +278,7 @@ test("the_readme_editor_previews_the_text", async ({ page }) => {
   await expect(dialog.getByRole("heading", { name: "Previewed" })).toBeVisible();
   await expect(dialog.getByRole("textbox", { name: "Text" })).toBeHidden();
   await dialog.getByRole("tab", { name: "Write" }).click();
-  await expect(postedText(dialog)).toHaveValue("# Previewed\n\nSome *text*.");
+  await expect(postedText(dialog)).toHaveValue("# Previewed\n\nSome _text_.");
   await page.keyboard.press("Escape");
 });
 

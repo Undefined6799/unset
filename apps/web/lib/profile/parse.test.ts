@@ -189,6 +189,33 @@ describe("backslash escapes", () => {
     expect(parseInline("*a \\**")).toEqual([{ kind: "em", children: [text("a *")] }]);
   });
 
+  // Codex review of #1827: the editor writes italics with "_", so bold and italic together are "**_word_**".
+  test("bold around italic reads as both", () => {
+    expect(parseInline("**_word_**")).toEqual([
+      { kind: "strong", children: [{ kind: "em", children: [text("word")] }] },
+    ]);
+    expect(parseInline("_**word**_")).toEqual([
+      { kind: "em", children: [{ kind: "strong", children: [text("word")] }] },
+    ]);
+    expect(parseInline("**a _b_**")).toEqual([
+      { kind: "strong", children: [text("a "), { kind: "em", children: [text("b")] }] },
+    ]);
+  });
+
+  // CommonMark 0.31.2 "Entity and numeric character references": remark writes the letters beside an italic inside a
+  // word as numeric references, so "_" there still opens and closes.
+  test("numeric character references are their characters", () => {
+    expect(parseInline("u&#x6E;_&#x62;elie&#x76;_&#x61;ble")).toEqual([
+      text("un"),
+      { kind: "em", children: [text("believ")] },
+      text("able"),
+    ]);
+    expect(parseInline("&#42;not em&#42; &#0; &#xD800; &#x110000; &#12345678;")).toEqual([
+      text("*not em* \uFFFD \uFFFD \uFFFD &#12345678;"),
+    ]);
+    expect(parseInline("`&#x41;`")).toEqual([{ kind: "code", text: "&#x41;" }]);
+  });
+
   test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
     expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
   });

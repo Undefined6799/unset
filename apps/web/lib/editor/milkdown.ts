@@ -2,14 +2,16 @@
 // that imports @milkdown (scripts/lint/.dependency-cruiser.cjs vendor-sdk-one-adapter). Milkdown reads and writes
 // markdown through remark (https://milkdown.dev/docs/guide/using-plugins, remark-stringify 11 options), so the
 // stored value stays the app's markdown and the server's parser (lib/profile/parse.ts) stays the authority. The
-// stringify options below keep its output inside what that parser reads the same way: `-` bullets, `*` emphasis,
-// backtick fences, a `---` rule, and a soft line break where remark would write a backslash break the parser shows
-// as text. Loaded only when a member opens the Text editor (text-editor.svelte imports this file dynamically).
-// Changes are reported once per animation frame, not after @milkdown/plugin-listener's 200 ms debounce, so a save
-// pressed right after typing never posts stale text; the caller also reads `markdown()` as the form is sent.
+// stringify options below keep its output inside what that parser reads the same way: `-` bullets, `_` italic,
+// `**` bold, backtick fences, a `---` rule, and a soft line break where remark would write a backslash break the
+// parser shows as text. Loaded only when a member opens the Text editor (text-editor.svelte imports this file
+// dynamically). Changes are reported once per animation frame, not after @milkdown/plugin-listener's 200 ms
+// debounce, so a save pressed right after typing never posts stale text; the caller also reads `markdown()` as the
+// form is sent.
 import {
   defaultValueCtx,
   Editor,
+  editorViewCtx,
   editorViewOptionsCtx,
   remarkStringifyOptionsCtx,
   rootCtx,
@@ -19,6 +21,8 @@ import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
 import {
   commonmark,
   createCodeBlockCommand,
+  emphasisSchema,
+  strongSchema,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
   toggleStrongCommand,
@@ -123,6 +127,35 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
         rule: "-" as const,
         handlers: { ...prev.handlers, break: () => "\n" },
       }));
+      // Milkdown keeps the marker each mark was typed or stored with (preset-commonmark 7.23.0 emphasisSchema and
+      // strongSchema, attribute `marker`), so "**a *b***" would come back out; the parser reads that run of three
+      // wrongly. Writing italic as "_" and bold as "**" always gives "**a _b_**" and "_**word**_", which it reads.
+      // The runner returns nothing: a truthy return tells the serializer the mark wrote the text itself
+      // (@milkdown/transformer 7.23.0 SerializerState, "every((mark) => !runProseMark(mark, node))").
+      ctx.update(emphasisSchema.key, (prev) => (schemaCtx) => {
+        const schema = prev(schemaCtx);
+        return {
+          ...schema,
+          toMarkdown: {
+            ...schema.toMarkdown,
+            runner: (state, mark) => {
+              state.withMark(mark, "emphasis", undefined, { marker: "_" });
+            },
+          },
+        };
+      });
+      ctx.update(strongSchema.key, (prev) => (schemaCtx) => {
+        const schema = prev(schemaCtx);
+        return {
+          ...schema,
+          toMarkdown: {
+            ...schema.toMarkdown,
+            runner: (state, mark) => {
+              state.withMark(mark, "strong", undefined, { marker: "*" });
+            },
+          },
+        };
+      });
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
         attributes: {
@@ -142,7 +175,9 @@ export async function mountMarkdownEditor(root: HTMLElement, options: MountOptio
   return {
     run: (command) => editor.action(COMMANDS[command]()),
     markdown: () => withoutFinalNewline(editor.action(getMarkdown())),
-    focus: () => root.querySelector<HTMLElement>("[contenteditable]")?.focus(),
+    // The view's own focus puts its selection back (prosemirror-view 1.42.9 EditorView.focus calls selectionToDOM),
+    // so a second toolbar press acts on the words the first one did; a plain DOM focus drops it.
+    focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),
     destroy: async () => {
       await editor.destroy();
     },

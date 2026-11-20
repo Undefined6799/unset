@@ -205,6 +205,39 @@ test("a_paste_with_two_paragraphs_in_a_list_item_is_refused", async ({ page }) =
   await page.keyboard.press("Escape");
 });
 
+// Codex review of #1827: bold and italic together are written so the page reads both, "***word***" it reads wrongly.
+// The second press also acts on the words the first one did.
+test("bold_and_italic_together_are_written_so_the_page_reads_both", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await writeText(editor, ["word"]);
+  await editor.press("Home");
+  await editor.press("Shift+End");
+  const bar = dialog.getByRole("toolbar", { name: "Formatting" });
+  await bar.getByRole("button", { name: "Bold" }).click();
+  await expect(postedText(dialog)).toHaveValue("**word**");
+  await bar.getByRole("button", { name: "Italic" }).click();
+  await expect(postedText(dialog)).toHaveValue("_**word**_");
+  await page.keyboard.press("Escape");
+});
+
+// Codex review of #1827: an italic stored or typed with "*" inside bold is written with "_" once edited.
+test("an_italic_with_stars_inside_bold_is_written_so_the_page_reads_it", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: "**a *b***" });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("group", { name: "Text card" }).getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  const editor = dialog.getByRole("textbox", { name: "Text" });
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  await editor.getByText("a", { exact: true }).click();
+  await editor.press("Home");
+  await editor.pressSequentially("z ");
+  await expect(postedText(dialog)).toHaveValue("**z a _b_**");
+  await page.keyboard.press("Escape");
+  await deleteCard(page, "Text card");
+});
+
 // Codex review of #1827: a new card's field is required and starts empty. A save sent in the same moment as the first
 // edit, before the editor's next frame, must not be stopped by the browser as an empty field.
 test("a_new_text_saved_in_the_same_moment_as_its_first_edit_is_added", async ({ page }) => {

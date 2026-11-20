@@ -30,8 +30,9 @@ Two facts decide the shape, both read in the installed source:
    lexicon caps stay the authority. Public profile pages run no script and are unchanged.
 3. The app's CSP adds `ProseMirrorClipboard` to `trusted-types`. Nothing else in the policy changes: no
    `unsafe-inline`, no `unsafe-eval`, `script-src` and `style-src` stay file-only.
-4. The parser follows CommonMark's backslash escapes (spec 0.31.2 "Backslash escapes"), since remark-stringify writes
-   `\*` for a literal star.
+4. The parser follows CommonMark's backslash escapes and numeric character references (spec 0.31.2 "Backslash
+   escapes", "Entity and numeric character references"), since remark-stringify writes `\*` for a literal star
+   and `&#x62;` for a letter beside an italic inside a word.
 5. The editor is styled only with our theme tokens and stock components; its buttons use our Iconoir set.
 
 ## What the policy name allows, and what still holds
@@ -79,7 +80,9 @@ policy's exact text.
 - Stored text: only text a member edits in the rich editor is rewritten by remark. The changes: `*` and `+` bullets
   become `-`, `1)` becomes `1.`, `~~~` fences become backticks, `***` rules become `---`, underline headings become
   `#` headings, closing `#`s go, extra blank lines collapse to one, a line break made with two spaces becomes a plain
-  new line, and a literal `*`, `_` or `[` gains a backslash. Each renders as before on the page.
+  new line, a literal `*`, `_` or `[` gains a backslash, italic is written `_word_` and bold `**word**`
+  whatever marker they had (so bold and italic together never make the `***` run the page reads wrongly), and a
+  letter beside an italic inside a word becomes a numeric reference. Each renders as before on the page.
 - Dependencies (ADR 0057): MIT throughout, maintained (ten releases in 2026), at least seven days old by
   `.npmrc` `min-release-age=7`, `npm audit` reports nothing new.
 - Images are not offered: shared images are ADR 0070's work, and the editor's paste and upload hooks stay off.
