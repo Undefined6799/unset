@@ -10,12 +10,13 @@ importance: high
 related: ["[[identity]]", "[[pds]]"]
 replaced_by: null
 tags: [area, lexicons]
-checked: 2026-10-29
+checked: 2026-11-20
 ---
 # lexicons
 
 **What it owns.** The public record contract (plan §3): `sh.unset.profile`, `sh.unset.section`,
-`sh.unset.follow` and the permission set `sh.unset.authApp`. Once a schema is published (P1.35) other
+`sh.unset.follow`, the permission set `sh.unset.authApp`, and `sh.unset.defs` (shapes records share: `#image`, the
+picture every use embeds, ADR 0070). Once a schema is published (P1.35) other
 apps rely on it, so a change is close to permanent.
 
 **Files.**
@@ -24,7 +25,8 @@ apps rely on it, so a change is close to permanent.
 - `generated/`: `lex build` output, checked in, with its own tsconfig (the output assumes
   `exactOptionalPropertyTypes` off). Never edit it: run `node shared/lexicons/scripts/build.ts`.
 - `src/validate.ts`: `validateRecord(nsid, value, mode)`. `write` also refuses unknown fields, because
-  lexicon objects accept them; `read` (records from the network) does not.
+  lexicon objects accept them; `read` (records from the network) does not. The unknown-field walk follows local
+  `#refs` and refs into `sh.unset.defs`; a ref to any other lexicon is not followed, so add its defs to `SHARED`.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.

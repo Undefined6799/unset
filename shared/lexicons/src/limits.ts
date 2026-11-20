@@ -34,6 +34,12 @@ export const LIMITS = {
     presetBytes: 32,
     buttonUriBytes: 2000,
     buttonLabel: 40,
+    imageMaxSize: 2_000_000,
+    imageAlt: 2000,
+    imageCaption: 300,
+    fitBytes: 32,
+    galleryTitle: 100,
+    galleryMax: 12,
   },
 } as const;
 

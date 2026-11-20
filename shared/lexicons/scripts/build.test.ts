@@ -33,6 +33,7 @@ describe("schema build checks", () => {
         .sort(),
     ).toEqual([
       "schemas/sh.unset.authApp.json",
+      "schemas/sh.unset.defs.json",
       "schemas/sh.unset.follow.json",
       "schemas/sh.unset.profile.json",
       "schemas/sh.unset.section.json",

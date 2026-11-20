@@ -32,6 +32,12 @@ const linkButton = (extra: Record<string, unknown>) => ({
   ...extra,
 });
 const emailButton = (address: string) => ({ $type: "sh.unset.section#emailButton", address });
+// A use of a picture (ADR 0070): the shared image, then the use's own caption and fit.
+const picture = (extra: Record<string, unknown> = {}, image: Record<string, unknown> = {}) => ({
+  image: { image: { ...blob(1000), mimeType: "image/jpeg" }, alt: "", aspectRatio: { width: 4, height: 3 }, ...image },
+  ...extra,
+});
+const gallery = (images: unknown[], extra: Record<string, unknown> = {}) => card("gallery", { images, ...extra });
 
 // One record per limit: the value exactly at the limit passes and one past it fails, which proves LIMITS equals the
 // schema's constraint. A new LIMITS entry without a row here fails `every_limit_has_a_fixture`.
@@ -72,6 +78,12 @@ const FIXTURES: Record<string, Build> = {
   "section.presetBytes": S((n) => buttons([linkButton({ preset: text(n) })])),
   "section.buttonUriBytes": S((n) => buttons([linkButton({ uri: url(n) })])),
   "section.buttonLabel": S((n) => buttons([linkButton({ label: text(n) })])),
+  "section.imageMaxSize": S((n) => card("image", picture({}, { image: { ...blob(n), mimeType: "image/jpeg" } }))),
+  "section.imageAlt": S((n) => card("image", picture({}, { alt: text(n) }))),
+  "section.imageCaption": S((n) => card("image", picture({ caption: text(n) }))),
+  "section.fitBytes": S((n) => card("image", picture({ fit: text(n) }))),
+  "section.galleryTitle": S((n) => gallery([picture()], { title: text(n) })),
+  "section.galleryMax": S((n) => gallery(many(n, picture()))),
 };
 const limitEntries = Object.entries(LIMITS).flatMap(([record, fields]) =>
   Object.entries(fields).map(([field, limit]) => [`${record}.${field}`, limit] as const),
@@ -91,6 +103,41 @@ describe("LIMITS", () => {
       expect(validateRecord(at.nsid, at.value, "write").ok, `${key} at ${limit}`).toBe(true);
       expect(validateRecord(over.nsid, over.value, "write").ok, `${key} over ${limit}`).toBe(false);
     }
+  });
+
+  test("picture_shapes: ADR 0070's image card, gallery and entry picture", () => {
+    const write = (value: Record<string, unknown>) => validateRecord("sh.unset.section", value, "write").ok;
+    expect(write(card("image", picture({ caption: "Dusk", fit: "fill" })))).toBe(true);
+    expect(write(gallery([picture(), picture({ fit: "contain" })], { title: "Work" }))).toBe(true);
+    expect(write(collection([{ title: "a", image: picture().image }]))).toBe(true);
+    expect(write(collection([{ title: "a", image: picture() }]))).toBe(false);
+    expect(write(gallery([]))).toBe(false);
+    // A JPEG only, alt and proportions always present, and proportions of at least 1.
+    expect(write(card("image", picture({}, { image: blob(1000) })))).toBe(false);
+    expect(
+      write(card("image", { image: { image: picture().image.image, aspectRatio: { width: 1, height: 1 } } })),
+    ).toBe(false);
+    expect(write(card("image", { image: { image: picture().image.image, alt: "" } }))).toBe(false);
+    expect(write(card("image", picture({}, { aspectRatio: { width: 0, height: 1 } })))).toBe(false);
+    expect(write(card("image", {}))).toBe(false);
+  });
+
+  test("picture_unknown_fields: a write refuses a field the shared image does not define", () => {
+    const write = (value: Record<string, unknown>) => validateRecord("sh.unset.section", value, "write");
+    expect(write(card("image", picture({}, { exif: "GPS" })))).toEqual({
+      ok: false,
+      errors: ["$.content.image.exif: unknown field"],
+    });
+    expect(write(card("image", picture({}, { aspectRatio: { width: 4, height: 3, depth: 1 } })))).toEqual({
+      ok: false,
+      errors: ["$.content.image.aspectRatio.depth: unknown field"],
+    });
+    expect(write(gallery([picture({ crop: "x" })]))).toEqual({
+      ok: false,
+      errors: ["$.content.images[0].crop: unknown field"],
+    });
+    const read = validateRecord("sh.unset.section", card("image", picture({}, { exif: "GPS" })), "read");
+    expect(read.ok).toBe(true);
   });
 
   test("an_unknown_card_kind_is_valid_since_the_union_is_open", () => {
