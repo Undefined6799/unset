@@ -55,7 +55,10 @@ async function heights(page: Page): Promise<{ drawn: number; token: number }> {
   });
 }
 
-/** Makes the page taller than the screen, with an anchor at its foot. */
+/**
+ * Makes the page taller than the screen, with an anchor in the middle that can scroll to the top. Added once the page
+ * has settled, so SvelteKit's hydration, where its client runs, cannot drop them.
+ */
 async function lengthen(page: Page): Promise<void> {
   await page.evaluate(() => {
     const doc = (globalThis as unknown as Win).document;
@@ -64,21 +67,29 @@ async function lengthen(page: Page): Promise<void> {
     const target = doc.createElement("p");
     target.id = "sticky-target";
     target.textContent = "Target";
-    doc.querySelector("main")?.append(spacer, target);
+    const after = doc.createElement("div");
+    after.style.height = "3000px";
+    doc.querySelector("main")?.append(spacer, target, after);
   });
 }
 
 async function expectSticky(page: Page): Promise<void> {
+  await page.waitForLoadState("networkidle");
   const { drawn, token } = await heights(page);
   expect(token).toBeGreaterThan(0);
   expect(Math.abs(drawn - token)).toBeLessThanOrEqual(0.5);
   await lengthen(page);
-  // An anchor lands below the header (scroll-padding-top), not hidden under it.
   await page.evaluate(() => {
     (globalThis as unknown as Win).location.hash = "sticky-target";
   });
-  const target = await page.locator("#sticky-target").boundingBox();
-  expect(target !== null && target.y >= token - 0.5).toBe(true);
+  // The anchor lands just below the header (scroll-padding-top), not under it. Polled: where SvelteKit's client runs, its router handles
+  // the hash change and scrolls a moment later.
+  await expect
+    .poll(async () => {
+      const target = await page.locator("#sticky-target").boundingBox();
+      return target !== null && Math.abs(target.y - token) <= 1;
+    })
+    .toBe(true);
   expect((await header(page).boundingBox())?.y).toBe(0);
   // At the very end, with the footer in view, the header is still at the top.
   await page.evaluate(() => {
