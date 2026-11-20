@@ -19,6 +19,7 @@
     { "path": "infrastructure/session" },
     { "path": "infrastructure/storage" },
     { "path": "interfaces/indexer" },
+    { "path": "interfaces/media" },
     { "path": "interfaces/review" },
     { "path": "interfaces/pds-admin" },
     { "path": "interfaces/web" },

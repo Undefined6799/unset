@@ -28,6 +28,14 @@ export class Keyring {
     return this.#keys.get(kid);
   }
 
+  /** True when any key value is held by both keyrings, whatever its kid: two purposes must never share a key. */
+  sharesKeyWith(other: Keyring): boolean {
+    for (const mine of this.#keys.values()) {
+      for (const theirs of other.#keys.values()) if (mine.equals(theirs)) return true;
+    }
+    return false;
+  }
+
   toString(): string {
     return HIDDEN;
   }
@@ -74,8 +82,11 @@ export function parseKeyring(raw: string): Keyring | undefined {
   return parsed.has(active) ? new Keyring(active, parsed) : undefined;
 }
 
-/** The keyring as a config field: read from the file named by `<KEY>_FILE`, like any `secretFile`. */
-const keyringFile = (): Field<Keyring> => ({ kind: "secretFile", parse: parseKeyring });
+/**
+ * A keyring as a config field: read from the file named by `<KEY>_FILE`, like any `secretFile`. The seal keyring is
+ * one; the draft link keys (book P2.19) are another, in the same format and with keys of their own.
+ */
+export const keyringFile = (): Field<Keyring> => ({ kind: "secretFile", parse: parseKeyring });
 
 /** What a process that seals merges into its config schema. */
 export const sealFields = { SEAL_KEYRING: keyringFile() };

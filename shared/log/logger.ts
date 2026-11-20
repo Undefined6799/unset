@@ -112,6 +112,11 @@ const EVENTS = [
   "review.stopped",
   "review.job",
   "review.pool",
+  // Book P2.19, the media process: it started, it stopped, and each answer as `route` (the template) and `status`.
+  // Never the purpose, the object key or the link's query: a link is a bearer capability.
+  "media.started",
+  "media.stopped",
+  "media.request",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
