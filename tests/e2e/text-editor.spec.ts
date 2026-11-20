@@ -44,7 +44,13 @@ async function paste(page: Page, editor: Locator, html: string) {
   const elsewhere = await page.context().newPage();
   await elsewhere.setContent(`<div id="copy" contenteditable="true">${html}</div>`);
   await elsewhere.locator("#copy").focus();
-  await elsewhere.keyboard.press("ControlOrMeta+a");
+  // A range over the whole contents, since select-all inside a quote copies only its paragraphs in Chromium.
+  await elsewhere.evaluate(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById("copy") as HTMLElement);
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(range);
+  });
   await elsewhere.keyboard.press("ControlOrMeta+c");
   await elsewhere.close();
   await page.bringToFront();
@@ -214,6 +220,19 @@ test("a_line_break_in_a_list_item_is_refused", async ({ page }) => {
   await editor.press("Shift+Enter");
   await editor.pressSequentially("two");
   await expect(postedText(dialog)).toHaveValue("- onetwo");
+  await page.keyboard.press("Escape");
+});
+
+// Codex review of #1827: the page shows a quote as one paragraph and a line break as a space, so neither a second
+// paragraph in a quote nor a line break in a paragraph is added.
+test("a_quote_keeps_one_paragraph_and_no_line_break_is_added", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await paste(page, editor, "<p>a</p><blockquote><p>one</p><p>two</p></blockquote><p>b</p>");
+  await editor.pressSequentially("typed");
+  await expect(postedText(dialog)).toHaveValue("typed");
+  await editor.press("Shift+Enter");
+  await editor.pressSequentially("more");
+  await expect(postedText(dialog)).toHaveValue("typedmore");
   await page.keyboard.press("Escape");
 });
 
