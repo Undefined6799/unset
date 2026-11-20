@@ -3372,8 +3372,8 @@ Diagram: none.
 ### P2.16 — Image fingerprint stage (interface, local PDQ, fake check)
 
 Book edit 2026-11-20-shared-images (ADR 0070, Proposed): superseded until moderation is planned. ADR 0070 puts an empty
-inspection port after processing, where this check mounts; production refuses image uploads at intake while no real
-inspection is mounted, and there is no fake to build now.
+inspection port after processing, where this check mounts; image uploads are refused at intake while no real inspection is
+mounted, except on a closed list of test origins, and there is no fake to build now.
 Tags: [SEC] [MOD]            Depends on: P2.16b, P1.02, P1.12, P1.15            Plan: §5.8 "Fingerprints", "Fingerprint check on everything"; Alex decision 2026-10-03 02:58Z (real check deferred to Phase 5)
 Where: `domains/moderation/fingerprint/{fingerprint-check.ts, gate.ts, uploads-enabled.ts, README.md}`;
   `infrastructure/arachnid/fingerprint-check.fake.ts` (the fake, beside the folder where P5.07b adds the real client;

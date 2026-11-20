@@ -666,6 +666,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   `sh.unset.defs#image` carries the blob, alt text and aspect ratio, and each use adds its caption and fit. Five
   stages: intake, processing in its own no-network process `review` with no secrets (JPEG main version up to 2560 px and 2,000,000 bytes, AVIF
   and WebP display versions, every metadata block stripped, the upload never stored), an empty inspection port,
-  storage in the private store, and publish to the PDS at save time. Production, recognised by its PDS hostname or its
-  environment, refuses image uploads at intake while no real inspection is mounted. It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
+  storage in the private store, and publish to the PDS at save time. Uploads with no real inspection mounted are refused at
+  intake on every app origin outside a closed list of test origins (localhost, .test, staging while it holds only
+  test accounts). It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
   replace ADR 0029's scan paragraph outside production. Proposed, awaiting Alex.

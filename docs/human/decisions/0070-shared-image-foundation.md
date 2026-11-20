@@ -51,7 +51,8 @@ Facts this record rests on, read in the pinned sources:
    2. *Processing*, in its own process, `review` (the guideline's `interfaces/review/`, "upload checks, no-network
       compute"), never inside web. Web sends the bytes and gets the versions back; nothing else crosses. `review`
       holds no secret, no database role, no store key and no session; it runs as a non-root user on a read-only file
-      system with one temporary directory, on one internal network shared only with web (no route out), and
+      system with one temporary directory, on one internal network, `review_web`, shared only with web (no route out;
+      the preflight refuses `review` on any other network or with any secret), and
       starts its own killable child processes with an empty environment and no inherited descriptors, each with a
       time limit, an address-space limit and a bounded queue. A codec exploit (the libwebp CVE-2023-4863 class) can
       then reach only the bytes it was sent. Inside the child the bytes are sniffed by magic number, only the four
@@ -68,6 +69,11 @@ Facts this record rests on, read in the pinned sources:
       *blocked* (a confirmed match: kept as evidence under a legal hold that erasure and ADR 0067's 30 days cannot
       remove, never served); and, beside any of them, *freeze the uploader's uploads* (repeated close matches, or a
       confirmed one). An image's states are therefore `uploaded`, `held`, `blocked`, `published` and `released`.
+      `blocked` is a new retention category, so the step that builds it adds its row to the record of processing and
+      its line to the privacy notice. The research of 2026-11-20 (the plan, "Moderation, later") points the first
+      check at a small PDQ client on our side calling Arachnid Shield's hash-only endpoint (`POST /v1/pdq`, OpenAPI
+      v1.1.0: hashes leave, never the picture), not Meta's Hasher-Matcher-Actioner, which needs a list we could hold
+      locally and Shield gives none.
    4. *Storage*: the versions go to our private store under `drafts/<did>/i/<imageId>/` (ADR 0041's key convention and
       web's existing key). That prefix holds an image's copies for its whole life, published display copies included,
       so web keeps one key and media its existing read-only grant. One row per image in `app` (owner, sizes, state,
@@ -102,17 +108,23 @@ Facts this record rests on, read in the pinned sources:
    day 30, so an undo restores them; at erasure the rows and the `drafts/<did>/` prefix go (ADR 0041 Decision 7). A
    self-deletion on the PDS is erased at once by the indexer's `eraseDid`, copies included. Export lists every live
    image. The privacy notice's retention lines change in the step that builds storage, in the same pull request.
-7. **Production refuses image uploads while no real inspection is mounted.** The refusal is at intake, so in
-   production nothing is accepted, processed, stored or previewed before a check exists. Production is recognised by
-   what cannot be mislabelled: the configured PDS is our production PDS (`PDS_HOSTNAME` is `unset.ac`), or `UNSET_ENV`
-   is `prod`; either one is enough. A real inspection is one of the closed list in point 2.3; a test double or a
-   pass-everything implementation is never on it, and production wiring with one refuses to boot. The stack's
-   preflight refuses to start a production stack with no inspection configured. Outside production (dev, local,
-   staging, tests) uploads work with nothing mounted. On staging that means invited testers can publish unchecked
-   images that anyone holding the exact link could load once the media host serves `/b/*`: staging's app is behind
-   the staging login, our PDS is invite-only, and staging data is disposable, and Alex accepts that by accepting this
-   record, or keeps `/b/*` closed on staging until an inspection exists (ADR 0029's Pangolin rules). Before real
-   members, P5.01's store gates (ADR 0041 Decisions 6 and 7) also hold.
+7. **Uploads with no real inspection are allowed only where we say so; everywhere else they are refused.** The
+   rule fails closed: web refuses image uploads at intake while no real inspection is mounted, unless its own
+   `PUBLIC_ORIGIN` is on a closed list of origins that hold only test accounts. Today the list is `localhost` and
+   `*.test` origins (development, tests and the local stack) and `https://staging.unset.sh`. Any other origin, an
+   unknown one included, refuses: nothing is accepted, processed, stored or previewed there before a check exists. As
+   extra refusals, never as permissions, uploads are also refused when `UNSET_ENV` is `prod` or the configured PDS is
+   our production PDS (`PDS_HOSTNAME` is `unset.ac`), so a production stack with a mistaken origin still refuses. A
+   real inspection is one of the closed list in point 2.3; a test double or a pass-everything implementation is never
+   on it, and wiring one with a production origin, environment or PDS refuses to boot. The stack's preflight refuses
+   to start a stack whose origin is off the list with no inspection configured.
+   The staging entry holds only while staging has test accounts alone. Staging is reachable from the internet, runs
+   with `UNSET_ENV` `dev` and our staging PDS, and members of other PDSes (bsky.social) can already sign in to it, so
+   any of them can upload and, once the media host serves `/b/*`, publish unchecked pictures that anyone with the
+   exact link could load. Alex accepts that by accepting this record, or keeps `/b/*` closed on staging until an
+   inspection exists (ADR 0029's Pangolin rules). The step that opens invitations to real members either mounts an
+   inspection or removes `https://staging.unset.sh` from the list, and its tests check that. Before real members,
+   P5.01's store gates (ADR 0041 Decisions 6 and 7) also hold.
 8. **The loosenings this needs**, each its own pull request on Alex's typed line (ADR 0059), with what still holds:
    - Web's adapter body cap from 2 MiB to 31 MiB, for the upload route alone. Mechanism: the cap is the largest
      route's `maxBody`, and the gate refuses any route's body above its own `maxBody` or without a length. Risk:
