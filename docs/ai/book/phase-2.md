@@ -3722,6 +3722,11 @@ Done when (tests): `pds_s3_only_internal_store`, `pds_s3_and_disk_refused`, the 
 Book edit 2026-11-20-shared-images (ADR 0070, Proposed): profile saves write straight to the member's PDS (ADR 0051), so the profile and
 section draft tables below are superseded. What stays is the image store: one row per image, quota, per-member limits,
 the 24-hour and 7-day expiries, erasure and export, as ADR 0070 points 4 and 6 set them.
+Built 2026-11-20 (migration 0035): `app.image`, `app.image_use` and the `app.image_upload` ledger, erased by
+`core.erase_did`; the rules in `domains/content/images/library.ts` (limits, quota, expiry windows, the sweep governor,
+the upload origin list); `infrastructure/postgres/imageStore.ts`. Left to P2.21's upload route, before its first object
+write: deleting `drafts/<did>/` objects at erasure and after the sweep, the export entry, and the privacy notice's
+image lines (they describe uploads, which open there).
 Tags: [SEC]            Depends on: P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
 Where: `domains/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}` (the profile
   module's folder since ADR 0037; book edit 2026-11-15), wiring P2.18s's `infrastructure/storage` adapter, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
