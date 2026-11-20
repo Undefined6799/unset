@@ -10,7 +10,7 @@ const NS_PER_MS = 1_000_000;
 
 export interface Manifest {
   readonly file: string;
-  readonly routes: readonly { readonly path?: string; readonly deadlineMs?: number }[];
+  readonly routes: readonly { readonly path?: string; readonly deadlineMs?: number; readonly bodyWindowMs?: number }[];
 }
 
 type Json = unknown;
@@ -46,12 +46,23 @@ function edgeProblems(config: Json, edgeNs: number, readNs: number): string[] {
   return found;
 }
 
-/** The app's deadlines: every route's and the request default's maximum end before the edge gives up. */
-function deadlineProblems(manifests: readonly Manifest[], maxRequestDeadlineMs: number, edgeMs: number): string[] {
+/**
+ * The app's deadlines: every route's and the request default's maximum end before the edge gives up. The edge's wait
+ * starts once it has sent the whole body on (Go's ResponseHeaderTimeout runs "after fully writing the request
+ * (including its body, if any)", net/http/transport.go), so a route with a body window counts its deadline from the
+ * body's end, and the window itself fits inside the edge's read window, which bounds that body.
+ */
+function deadlineProblems(
+  manifests: readonly Manifest[],
+  maxRequestDeadlineMs: number,
+  edgeMs: number,
+  readMs: number,
+): string[] {
   const found = manifests.length === 0 ? ["no route manifest was read"] : [];
   for (const { file, routes } of manifests) {
     for (const route of routes) {
       if ((route.deadlineMs ?? 0) >= edgeMs) found.push(`${file} ${route.path}: deadlineMs ${route.deadlineMs}`);
+      if ((route.bodyWindowMs ?? 0) > readMs) found.push(`${file} ${route.path}: bodyWindowMs ${route.bodyWindowMs}`);
     }
   }
   if (maxRequestDeadlineMs >= edgeMs) found.push(`REQUEST_DEADLINE_MS max ${maxRequestDeadlineMs}`);
@@ -71,6 +82,6 @@ export function timeoutProblems(
   if (!Number.isFinite(readMs) || readMs <= 0) return ["limits.json has no EDGE_READ_BODY_S"];
   return [
     ...edgeProblems(config, edgeMs * NS_PER_MS, readMs * NS_PER_MS),
-    ...deadlineProblems(manifests, maxRequestDeadlineMs, edgeMs),
+    ...deadlineProblems(manifests, maxRequestDeadlineMs, edgeMs, readMs),
   ];
 }

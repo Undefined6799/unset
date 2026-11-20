@@ -36,8 +36,14 @@ export type RoutePolicy = Readonly<{
   returnTo?: `/${string}`;
   /** Largest POST body accepted, in bytes (Content-Length). Absent means the route takes no body. */
   maxBody?: number;
-  /** This route's own deadline; otherwise REQUEST_DEADLINE_MS. */
+  /** This route's own deadline; otherwise REQUEST_DEADLINE_MS. With `bodyWindowMs`, the time it has once its body is read. */
   deadlineMs?: number;
+  /**
+   * A route whose body may take long to arrive (a picture on a slow link): the gate's deadline is this plus
+   * `deadlineMs`, and the route starts `deadlineMs` again once it has read its body, so a slow upload does not eat the
+   * time its work needs. At most the edge's read window, which bounds the body (limits.json EDGE_READ_BODY_S).
+   */
+  bodyWindowMs?: number;
   /** /health only: no host check and no rate limit, so the container probe always reaches it. */
   probe?: true;
   /** Served only when TEST_ROUTES is on, which only the test profile allows (config.ts). */
