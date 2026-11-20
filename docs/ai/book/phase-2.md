@@ -3184,6 +3184,34 @@ Not in this step: invite management in `admin` (P3.20); signups open/close (P3.1
   runbook, using P2.09's `check-reserved`).
 Diagram: see "Sequence: sign-up with an invite".
 
+### P2.10r — Request an invite
+Tags: [SEC]            Depends on: P2.10            Plan: §5.3 "Login and signup"; ADR 0080
+Asked by Alex 2026-11-20 21:19Z ("a request an invite ... that could send me an email"); the mail names the
+  visitor's address (his card, 21:23Z).
+Where: `interfaces/web/src/routes/request-invite/`, `domains/identity/invite-requests.ts`,
+  `interfaces/web/src/lib/server/invite-requests.ts` (the in-memory window and the mail text), `infrastructure/email/`
+  (the one nodemailer adapter), `limits.ts` policy `inviteRequest`, config `INVITE_REQUESTS` and three mail settings,
+  `shared/config` `optionalSecretFile`; links on `/login` and a bare `/join`.
+Goal: a visitor with no invite leaves one email address and the two sign-up ticks; the owner gets one mail with the
+  address as Reply-To and sends an invite link from their own mailbox. No copy is kept (ADR 0080 point 3).
+Not in this step: the "Sign up" button on ADR 0078's limited-page card (on top of that PR once merged); the compose
+  mounts and secret files that turn it on (with Alex's deploy); the privacy notice and RoPA lines (Alex's text).
+
+Threats:
+- The form mails a third party (spam relay). Answered: mail goes only to `INVITE_REQUEST_TO`; the typed address is
+  only a Reply-To (`invite_request.first_ask`).
+- Header injection through the address. Answered: one strict parse, no CR, LF, quote, comma or angle bracket
+  (`parseRequesterEmail` reds; `invite.request_bad_email`).
+- A flood fills the owner's inbox or the provider's quota. Answered: 3 an hour per address, 20 a day site-wide
+  (`invite_request.address_limit`, budget tests); a trap field (`invite_request.trap`). Accepted: 20 junk requests a
+  day refuse real visitors until the bucket refills.
+- The page tells whether an address asked before. Answered: a repeat answers as a first ask (`invite_request.repeat`).
+- An address leaks into logs or storage. Answered: none is logged (`invite_request.never_logged`); memory holds only a
+  keyed hash for 30 days. Accepted: Resend holds the mail 30 days in the US (ADR 0065).
+- The provider key goes out in clear. Answered: `smtps:` only, TLS 1.2+, the certificate checked (`tests/integration/email/smtp.test.ts`).
+ASVS 5.0: V2.2.1, V2.4.1, V12.3.1 and V12.3.2 gain this step's tests.
+Done when the reds are shown, ADR 0080 is accepted by Alex's line, and check is green.
+
 ### P2.14 — Module identity seam
 Tags: [SEC]            Depends on: P1.16, P2.03            Plan: §4 "Identity" (module identity seam); §5.6 "What the core provides"; §2 rule 19
 Where: `domains/identity/identity-seam/{mint.ts, module-accounts.ts, verify.ts}` (`verify.ts` is the verifier: imports only
