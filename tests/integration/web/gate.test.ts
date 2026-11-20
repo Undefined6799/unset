@@ -186,7 +186,7 @@ describe("csp", () => {
         "style-src https://unset.test/_app/; style-src-attr 'unsafe-hashes' " +
         "'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=' 'sha256-VLgFcXpEe+O6FcWgF9ZsmG0zmp66HOx0AKvg+TMAbTo='; " +
         "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script'; " +
-        "trusted-types svelte-trusted-html sveltekit-trusted-url",
+        "trusted-types svelte-trusted-html sveltekit-trusted-url ProseMirrorClipboard",
     );
     expect(csp).not.toContain("unsafe-inline");
     expect(csp).not.toContain("unsafe-eval");

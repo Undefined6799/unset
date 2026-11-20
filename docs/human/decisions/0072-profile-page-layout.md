@@ -1,6 +1,8 @@
 # 0072 — The profile chooses its page layout
 
-Status: Proposed (awaiting Alex). Alex approved the compact profile direction on 2026-11-20 and asked for it as an
+Status: Accepted by Alex, 2026-11-20 04:23Z, against 6b6abe4 (his line "Merge 1824 at 6b6abe4", typed in the project
+chat after that head was reviewed; merged as 89f2918). This status paragraph, the index row and the ADR 0001 acceptance
+line were added afterwards in #1827. Alex approved the compact profile direction on 2026-11-20 and asked for it as an
 optional layout that existing profiles keep until their owners choose it. This adds an optional field under ADR 0051
 Decision 7; it changes no existing field.
 

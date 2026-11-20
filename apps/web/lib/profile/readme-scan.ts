@@ -8,6 +8,16 @@ export const isWord = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{
  * A link destination with its backslash escapes removed: "\\(" is "(" (CommonMark 0.31.2, "Backslash escapes": any
  * ASCII punctuation), so an escaped parenthesis reaches safeHref as itself, not as a path separator.
  */
+/** ASCII punctuation: what a backslash escapes (CommonMark 0.31.2, "Backslash escapes"). */
+export const isEscapable = (ch: string | undefined) => ch !== undefined && /^[!-/:-@[-`{-~]$/.test(ch);
+
+/** Whether the character at `j` follows an odd run of backslashes, so it is text (CommonMark 0.31.2). */
+export function isEscaped(text: string, j: number): boolean {
+  let run = 0;
+  while (text[j - 1 - run] === "\\") run += 1;
+  return run % 2 === 1;
+}
+
 export const unescapeDestination = (destination: string) => destination.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 
 /** The length of the run of `ch` starting at `i`. */
@@ -93,6 +103,24 @@ export function nextIndex(text: string, needle: string): (from: number) => numbe
   };
 }
 
+/**
+ * As nextIndex, but a match whose first character is backslash-escaped is text and is skipped. Remembered the same
+ * way: a later `from` up to the match found reuses it, so each escaped match is passed over once per text.
+ */
+export function nextUnescaped(text: string, needle: string): (from: number) => number {
+  let searched = Number.POSITIVE_INFINITY;
+  let found = -1;
+  return (from) => {
+    const stale = from < searched || (found !== -1 && found < from);
+    if (stale) {
+      searched = from;
+      found = text.indexOf(needle, from);
+      while (found !== -1 && isEscaped(text, found)) found = text.indexOf(needle, found + 1);
+    }
+    return found;
+  };
+}
+
 export type Mark = "*" | "_" | "**" | "__";
 
 /**
@@ -100,9 +128,11 @@ export type Mark = "*" | "_" | "**" | "__";
  * run, and an underscore mark with no letter or digit after it.
  */
 export function closes(text: string, j: number, mark: Mark): boolean {
-  if (!text.startsWith(mark, j)) return false;
+  if (!text.startsWith(mark, j) || isEscaped(text, j)) return false;
   const ch = mark[0];
-  if (mark.length === 1 && (text[j + 1] === ch || text[j - 1] === ch)) return false;
+  // An escaped mark before it is text, not part of its run (CommonMark 0.31.2, "Backslash escapes").
+  const runBefore = text[j - 1] === ch && !isEscaped(text, j - 1);
+  if (mark.length === 1 && (text[j + 1] === ch || runBefore)) return false;
   return ch !== "_" || !isWord(text[j + mark.length]);
 }
 
@@ -115,6 +145,11 @@ export function codeSpans(text: string): readonly (readonly [number, number])[] 
   const closer = codeCloser(text);
   const code: [number, number][] = [];
   for (let i = text.indexOf("`"); i !== -1; ) {
+    // An escaped backtick is text and opens nothing; the rest of its run may still open a span (CommonMark 0.31.2).
+    if (isEscaped(text, i)) {
+      i = text.indexOf("`", i + 1);
+      continue;
+    }
     const length = runLength(text, i, "`");
     const end = closer(length, i + length);
     if (end !== -1) code.push([i, end + length]);

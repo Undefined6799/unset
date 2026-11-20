@@ -4866,6 +4866,18 @@ missing key stays in the tight zones. `blob_upload` stays with ADR 0070. It loos
 Alex's typed line, and the server needs `pds_web_key` before the deploy. The letter does not belong to the token
 pipeline below; it was the next free id.
 
+### P1.21u — Write the Text card in a Milkdown editor (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21f · **Plan:** §5.1, §6
+
+Alex, 2026-11-20: "look into having milkdown editor for the text editing within our app because it feel pretty
+aweful to write markdown right now". The Text card's Write tab becomes Milkdown 7.23.0 (core, CommonMark preset,
+history) over the plain field the form posts; no script keeps the field as it is, and text saved untouched is stored
+as it was. The dialog is wide on a desktop and fills a phone, with the formatting bar at its top. The parser follows
+CommonMark backslash escapes. The CSP adds the one Trusted Types name `ProseMirrorClipboard` (Proposed ADR 0073), a
+loosening, so it merges on Alex's typed line. The editor becomes its own file once ADR 0069's split lands. Links in
+the bar and the bar's Iconoir icons follow; images wait for ADR 0070.
+
 ### P1.21w — Serve the docs site at docs.unset.sh (added step, 2026-11-20)
 
 **Tags:** [SEC], trusted · **Depends on:** — · **Plan:** §5.2, §6

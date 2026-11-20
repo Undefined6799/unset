@@ -6,7 +6,7 @@
 // The cards added are deleted again, so the member page is as the other specs expect it.
 import { expect, test } from "@playwright/test";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
-import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE } from "./cards.ts";
+import { addCard, chooseFromMenu, deleteCard, menuButton, OWN_PAGE, postedText, writeText } from "./cards.ts";
 import { openPage } from "./observe.ts";
 import { phoneContext } from "./phone.ts";
 
@@ -29,7 +29,8 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
   await pick(/^Text/);
   const readme = dialog.getByRole("textbox", { name: "Text" });
   await expect(readme).toBeFocused();
-  await readme.fill("# Hello");
+  await writeText(readme, ["# Hello"]);
+  await expect(postedText(dialog)).toHaveValue("# Hello");
   let release: () => void = () => undefined;
   const held = new Promise<void>((done) => {
     release = done;
@@ -76,8 +77,9 @@ test("the_card_editor_saves_once_keeps_a_refusal_and_returns_focus", async ({ pa
   // Edit the stored Text card: saved in place, the editor closes and focus goes back to its Edit button.
   const readmeCard = page.getByRole("group", { name: "Text card" });
   await readmeCard.getByRole("link", { name: "Edit" }).click();
-  await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveValue("# Hello");
-  await dialog.getByRole("textbox", { name: "Text" }).fill("# Hello again");
+  await expect(postedText(dialog)).toHaveValue("# Hello");
+  await expect(dialog.getByRole("textbox", { name: "Text" }).getByRole("heading", { name: "Hello" })).toBeVisible();
+  await writeText(dialog.getByRole("textbox", { name: "Text" }), ["# Hello again"]);
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: "Hello again" })).toBeVisible();
@@ -108,8 +110,9 @@ test("a_save_the_gate_refuses_keeps_the_editor_and_what_was_typed", async ({ pag
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /^Text/ }).click();
   const readme = dialog.getByRole("textbox", { name: "Text" });
+  await writeText(readme, ["# Long", "a".repeat(2_000)]);
   const typed = `# Long\n\n${"a".repeat(2_000)}`;
-  await readme.fill(typed);
+  await expect(postedText(dialog)).toHaveValue(typed);
   const code = "http.payload_too_large";
   await page.route(
     (url) => url.search === "?/create",
@@ -126,7 +129,8 @@ test("a_save_the_gate_refuses_keeps_the_editor_and_what_was_typed", async ({ pag
   );
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("too large");
-  expect(await readme.inputValue()).toBe(typed);
+  await expect(postedText(dialog)).toHaveValue(typed);
+  await expect(readme).toContainText("a".repeat(2_000));
   await expect(dialog.getByRole("button", { name: "Add", exact: true })).toBeEnabled();
   await expect(page).toHaveURL(/\/did:plc:/);
 });
@@ -269,12 +273,12 @@ test("the_readme_editor_previews_the_text", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await page.getByRole("link", { name: "Add card" }).click();
   await dialog.getByRole("button", { name: /^Text/ }).click();
-  await dialog.getByRole("textbox", { name: "Text" }).fill("# Previewed\n\nSome *text*.");
+  await writeText(dialog.getByRole("textbox", { name: "Text" }), ["# Previewed", "Some *text*."]);
   await dialog.getByRole("tab", { name: "Preview" }).click();
   await expect(dialog.getByRole("heading", { name: "Previewed" })).toBeVisible();
   await expect(dialog.getByRole("textbox", { name: "Text" })).toBeHidden();
   await dialog.getByRole("tab", { name: "Write" }).click();
-  await expect(dialog.getByRole("textbox", { name: "Text" })).toHaveValue("# Previewed\n\nSome *text*.");
+  await expect(postedText(dialog)).toHaveValue("# Previewed\n\nSome _text_.");
   await page.keyboard.press("Escape");
 });
 
@@ -306,7 +310,7 @@ test("a_readme_refusal_sent_from_preview_shows_on_write", async ({ page }) => {
   await page.getByRole("link", { name: "Add card" }).click();
   await dialog.getByRole("button", { name: /^Text/ }).click();
   const text = dialog.getByRole("textbox", { name: "Text" });
-  await text.fill("   ");
+  await writeText(text, ["   "]);
   await dialog.getByRole("tab", { name: "Preview" }).click();
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await expect(text).toBeVisible();

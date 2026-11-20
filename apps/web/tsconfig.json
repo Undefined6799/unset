@@ -15,5 +15,5 @@
       "path": "../../shared/ui"
     }
   ],
-  "exclude": ["dist", "lib/components", "lib/utils.ts"]
+  "exclude": ["dist", "lib/components", "lib/editor", "lib/utils.ts"]
 }

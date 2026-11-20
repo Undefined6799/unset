@@ -51,6 +51,8 @@ describe("parseReadme, adversarial input", () => {
     "(",
     ")",
     "](",
+    "\\](",
+    "\\[",
     "[a]",
     "[a](",
     "](x)",
@@ -108,6 +110,9 @@ describe("parseReadme, adversarial input", () => {
   test.each([
     ["labels whose destinations escape the next bracket", "[a\\](\\".repeat(16_667)],
     ["escaped labels whose destinations escape the next bracket", "\\[a\\](".repeat(16_667)],
+    // Review of #1827 at b449c4d: each opener looked for the next unescaped "](" past every escaped one.
+    ["label openers before escaped label closers", `${"[".repeat(50_000)}${"\\](".repeat(16_000)}`],
+    ["labels of escaped closers", "[\\](".repeat(25_000)],
   ])("%s read each destination once", (_name, src) => {
     const started = performance.now();
     parseReadme(src);

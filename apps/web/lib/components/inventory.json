@@ -362,6 +362,10 @@
       "readme.svelte": {
         "origin": "ours",
         "purpose": "The Text card's parsed blocks (the #readme kind) as plain escaped elements, on the page's type scale."
+      },
+      "text-editor.svelte": {
+        "origin": "ours",
+        "purpose": "The Text card's field: the stock Label and Textarea the form posts, with the Milkdown editor and a formatting bar of stock Buttons drawn over it once script has loaded it (P1.21u)."
       }
     },
     "settings": {

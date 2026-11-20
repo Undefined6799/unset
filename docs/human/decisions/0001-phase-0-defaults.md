@@ -697,3 +697,14 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
   ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
   are not edited.
+- **ADR 0069 accepted (Alex, 2026-11-20 03:59Z, against 8f1fa27; own record:
+  [0069](0069-split-client-and-build-file-zone.md)):** the web client is split into content-hashed pieces and the dev
+  app edge counts them in their own zone, `app_files`.
+- **ADR 0072 accepted (Alex, 2026-11-20 04:23Z, against 6b6abe4; own record: [0072](0072-profile-page-layout.md)):**
+  the profile may store an optional layout, sidebar or compact; absent means sidebar.
+- **ADR 0075 accepted (Alex, 2026-11-20 05:58Z, against c5e0bfb; own record:
+  [0075](0075-docs-site-on-the-staging-edge.md)):** the docs site at docs.unset.sh is a third site on the staging
+  edge, served as files from the checkout, with no inline script, inline style or eval.
+- **Text card rich editor (P1.21u, 2026-11-20; own record: [0073](0073-text-card-rich-editor.md)):** the Text
+  card's editor is Milkdown over the plain field, loaded when the editor opens; the app CSP adds the one Trusted
+  Types name `ProseMirrorClipboard` for paste. Proposed, awaiting Alex.

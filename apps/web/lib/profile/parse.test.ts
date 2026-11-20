@@ -109,6 +109,16 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
     ]);
   });
 
+  // Codex review of #1827: remark writes a literal bracket in link text as "\\[", which is text, not a nested label.
+  test("an escaped bracket in link text keeps the link", () => {
+    expect(parseInline("[a \\[b](https://example.com)")).toEqual([
+      { kind: "link", href: "https://example.com/", children: [text("a [b")] },
+    ]);
+    expect(parseInline("[a \\](b](https://example.com)")).toEqual([
+      { kind: "link", href: "https://example.com/", children: [text("a ](b")] },
+    ]);
+  });
+
   test("inline code, links and autolinks", () => {
     expect(parseReadme("Run `npm ci` then see [the docs](https://x.example/d) or <https://y.example>.")).toEqual([
       {
@@ -150,5 +160,73 @@ describe("parseReadme, the CommonMark subset (moved from the React card's test, 
 
   test("NUL and other controls are removed before parsing", () => {
     expect(parseReadme("a\u0000b\u0007c")).toEqual([{ kind: "paragraph", children: [{ kind: "text", text: "abc" }] }]);
+  });
+});
+
+// CommonMark 0.31.2, "Backslash escapes" (https://spec.commonmark.org/0.31.2/#backslash-escapes): any ASCII
+// punctuation after a backslash is that character as text, and opens or closes nothing. The rich editor (remark-
+// stringify 11) writes these for a literal `*`, `_` or `[`, so the page must not show the backslash.
+describe("backslash escapes", () => {
+  test("an escaped mark is the mark as text", () => {
+    expect(parseInline("a \\* b \\_ c \\[d]")).toEqual([text("a * b _ c [d]")]);
+  });
+
+  test("an escaped mark opens no emphasis and closes none", () => {
+    expect(parseInline("\\*not em\\*")).toEqual([text("*not em*")]);
+    expect(parseInline("*a \\* b*")).toEqual([{ kind: "em", children: [text("a * b")] }]);
+  });
+
+  test("an escaped backslash is one backslash, and the mark after it still counts", () => {
+    expect(parseInline("\\\\*em*")).toEqual([text("\\"), { kind: "em", children: [text("em")] }]);
+  });
+
+  test("a backslash before anything that is not ASCII punctuation stays", () => {
+    expect(parseInline("C:\\dir \\é")).toEqual([text("C:\\dir \\é")]);
+  });
+
+  test("inside a code span a backslash is text", () => {
+    expect(parseInline("`a\\*b`")).toEqual([{ kind: "code", text: "a\\*b" }]);
+  });
+
+  // Codex review of #1827: an escaped backtick opens no code span, so it cannot hide the mark that closes emphasis.
+  test("an escaped backtick opens no code span", () => {
+    expect(parseInline("*a \\` b* c \\`")).toEqual([{ kind: "em", children: [text("a ` b")] }, text(" c `")]);
+    expect(parseInline("\\``code`")).toEqual([text("`"), { kind: "code", text: "code" }]);
+  });
+
+  // Codex review of #1827: an escaped star before a closing star is text, not part of the closer's run.
+  test("an escaped star before a closing star still lets it close", () => {
+    expect(parseInline("*a \\**")).toEqual([{ kind: "em", children: [text("a *")] }]);
+  });
+
+  // Codex review of #1827: the editor writes italics with "_", so bold and italic together are "**_word_**".
+  test("bold around italic reads as both", () => {
+    expect(parseInline("**_word_**")).toEqual([
+      { kind: "strong", children: [{ kind: "em", children: [text("word")] }] },
+    ]);
+    expect(parseInline("_**word**_")).toEqual([
+      { kind: "em", children: [{ kind: "strong", children: [text("word")] }] },
+    ]);
+    expect(parseInline("**a _b_**")).toEqual([
+      { kind: "strong", children: [text("a "), { kind: "em", children: [text("b")] }] },
+    ]);
+  });
+
+  // CommonMark 0.31.2 "Entity and numeric character references": remark writes the letters beside an italic inside a
+  // word as numeric references, so "_" there still opens and closes.
+  test("numeric character references are their characters", () => {
+    expect(parseInline("u&#x6E;_&#x62;elie&#x76;_&#x61;ble")).toEqual([
+      text("un"),
+      { kind: "em", children: [text("believ")] },
+      text("able"),
+    ]);
+    expect(parseInline("&#42;not em&#42; &#0; &#xD800; &#x110000; &#12345678;")).toEqual([
+      text("*not em* \uFFFD \uFFFD \uFFFD &#12345678;"),
+    ]);
+    expect(parseInline("`&#x41;`")).toEqual([{ kind: "code", text: "&#x41;" }]);
+  });
+
+  test("an escaped hash at the start of a line is a paragraph, not a heading", () => {
+    expect(parseReadme("\\# not a heading")).toEqual([{ kind: "paragraph", children: [text("# not a heading")] }]);
   });
 });

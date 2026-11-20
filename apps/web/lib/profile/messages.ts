@@ -185,3 +185,18 @@ export function cardName(content: CardContent): string {
       return content.heading || ADD_CARD.buttons;
   }
 }
+
+/** The Text card's formatting bar (P1.21u), shown above the rich editor once it has loaded. */
+export const TEXT_EDITOR = {
+  toolbar: "Formatting",
+  strong: "Bold",
+  emphasis: "Italic",
+  code: "Code",
+  heading: "Heading",
+  bullets: "List",
+  numbers: "Numbered list",
+  quote: "Quote",
+  codeBlock: "Code block",
+  undo: "Undo",
+  redo: "Redo",
+} as const;

@@ -7,6 +7,7 @@
   up to the limit (Alex 2026-11-18); with none it offers ten. A buttons row shows only the fields of the kind it
   opens, by CSS on its checked radio, so this holds with no script too. The README editor gets Write and Preview tabs
   with script; the preview is the same parser and renderer the page uses, so what it shows is what the card will show.
+  Its Write tab is the rich editor over the plain field (text-editor.svelte, P1.21u), in a wider dialog.
   With no script (staging walkthrough 2026-11-18, finding 8) the trigger is a link to the page with the editor open
   in place (`?edit=<key>`, read by the page's load), drawn here as a panel: the same form, a Cancel link back, and an
   action that keeps the query, so a refused save shows the page again with the panel, what was typed and the reason.
@@ -33,6 +34,7 @@ import * as Tabs from "../ui/tabs/index.ts";
 import Choice from "./choice.svelte";
 import Field from "./field.svelte";
 import Readme from "./readme.svelte";
+import TextEditor from "./text-editor.svelte";
 
 type Kind = CardContent["kind"];
 let {
@@ -196,6 +198,8 @@ function showTab(value: string) {
 }
 const previewBlocks = $derived(tab === "preview" ? parseReadme(previewText) : []);
 const formId = $props.id();
+/** The Text editor's dialog (P1.21u): wide on a desktop, the whole screen on a phone, by the stock Dialog's own classes. */
+const TEXT_DIALOG = "sm:max-w-3xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:rounded-none max-sm:border-0";
 // The width and layout choices are icons with their words (Alex 2026-11-18 12:24Z; the profile-card mockup).
 const WIDTHS = [
   { value: "full", label: CARD_EDIT.full, icon: "full" },
@@ -288,7 +292,7 @@ const buttonRows = $derived([
         </Tabs.List>
         <!-- An inactive tab's panel stays in the page, hidden (bits-ui 2.20.6 tabs-content.svelte), so the text still posts. -->
         <Tabs.Content value="write">
-          <Field label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
+          <TextEditor label={CARD_EDIT.readme} hint={CARD_EDIT.readmeHint} name="text" error={errorFor("text")} value={typedOr("text", readme?.text ?? "")} rows={12} maxlength={textMax} required />
         </Tabs.Content>
         <Tabs.Content value="preview" class="min-h-40 rounded-sm border px-4 py-3">
           {#if previewBlocks.length === 0}<p class="text-muted-foreground">{CARD_EDIT.previewEmpty}</p>{:else}<Readme blocks={previewBlocks} />{/if}
@@ -386,7 +390,7 @@ const buttonRows = $derived([
         >{#if icon === undefined}{trigger.label}{:else}<Icon name={icon} size={20} label={trigger.label} />{/if}</a
       >
     {/if}
-    <Dialog.Content class="max-h-[90vh] overflow-y-auto" onOpenAutoFocus={focusFirstText} onCloseAutoFocus={focusBack}>
+    <Dialog.Content class="max-h-[90vh] overflow-y-auto {kind === 'readme' ? TEXT_DIALOG : ''}" onOpenAutoFocus={focusFirstText} onCloseAutoFocus={focusBack}>
       <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
       {@render refusal()}
       {@render fields()}
