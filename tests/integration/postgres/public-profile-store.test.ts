@@ -145,7 +145,8 @@ describe("public profile store", () => {
     await own.save(SHOWN, choice, null);
     await own.save(INACTIVE, choice, null);
     await own.save(UNVERIFIED, { ...choice, aiSearch: false }, null);
-    expect(await own.get(SHOWN, null)).toEqual(choice);
+    expect(await own.get(SHOWN, null)).toEqual({ choices: choice, page: { handle: "alice.unset.test" } });
+    expect((await own.get(INACTIVE, null)).page).toBeNull(); // hidden: the index shows no page
     expect((await store().find({ did: SHOWN }, null))?.discoverability).toEqual(choice);
     expect(await store().listed("searchEngines", 10, null)).toEqual([
       { did: SHOWN, handle: "alice.unset.test" },
@@ -161,11 +162,10 @@ describe("public profile store", () => {
     expect(postgres.sql("unset", `SELECT count(*) FROM app.discoverability WHERE did = '${UNVERIFIED}'`).trim()).toBe(
       "0",
     );
+    // No row reads as all off; an account the index shows with no verified handle has a page named by its DID.
     expect(await own.get(UNVERIFIED, null)).toEqual({
-      searchEngines: false,
-      aiSearch: false,
-      title: "",
-      description: "",
+      choices: { searchEngines: false, aiSearch: false, title: "", description: "" },
+      page: { handle: null },
     });
   });
 

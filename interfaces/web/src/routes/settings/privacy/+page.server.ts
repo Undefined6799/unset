@@ -19,10 +19,9 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
-  const [read, discoverability, listed] = await Promise.all([
+  const [read, own] = await Promise.all([
     loadProfileRecord(services().pds.pdsCall, ctx, did),
     services().discoverability.get(did, locals.deadline),
-    services().publicProfiles.find({ did }, locals.deadline),
   ]);
   if (read.kind !== "ok") {
     const location = pdsSignInRedirect(read);
@@ -33,12 +32,12 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   // The address the public page itself uses (routes/@[actor]/+page.server.ts): the handle the indexer verified, else
   // the DID. Not this process's handle cache, which is empty after a restart (Codex on #1842). Before the indexer has
   // the account, the cache's verdict is the best guess.
-  const indexed = listed?.handle == null ? null : parseHandle(listed.handle);
-  const handle = listed === null ? services().handles.verifiedHandle(did) : indexed;
+  const indexed = own.page?.handle == null ? null : parseHandle(own.page.handle);
+  const handle = own.page === null ? services().handles.verifiedHandle(did) : indexed;
   const name = fields.displayName || handle || did;
   return {
     shell: settingsShell(request, "/settings/privacy"),
-    discoverability,
+    discoverability: own.choices,
     limits: DISCOVERABILITY_LIMITS,
     page: {
       url: `${config.PUBLIC_ORIGIN}${canonicalActorPath(handle, did)}`,
