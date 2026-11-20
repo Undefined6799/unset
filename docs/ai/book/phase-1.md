@@ -4757,6 +4757,19 @@ accepted that version yet), the RoPA gains a "Burned names" row, the erasure run
 steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
 No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21h — Normal use fits inside every limit (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** — · **Plan:** §5.2, §6
+
+Alex, 2026-11-19 13:21Z, after the P1.20o white page: the "normal use fits inside the limit" logic applies
+everywhere. Tests only, no limit changes (changing one is a security loosening and needs his typed line). For every
+app-facing edge zone in `deployment/edge/limits.json` (`deployment/edge/limits.budget.test.ts`, on a model of
+caddy-ratelimit's ring buffer) and every policy in `interfaces/web/src/lib/server/limits.ts` (`limits.budget.test.ts`
+beside it, on the real limiter with a fake clock), a test that a person's real use passes and one that a flood is
+refused. A realistic use a limit refuses is a named `test.fails` with the reason, reported to Alex. Static app files
+get no budget here: P1.21g gives them their own zone. The letter does not belong to the token pipeline below; it was
+the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
