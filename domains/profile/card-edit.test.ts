@@ -313,7 +313,6 @@ describe("card surfaces", () => {
     expect(parseCardInput({ kind: "readme", text: "Hi", surface })).toEqual({
       ok: false,
       code: "card.invalid",
-      field: "surface",
     });
   });
 

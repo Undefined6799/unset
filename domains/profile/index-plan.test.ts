@@ -115,6 +115,15 @@ describe("planCommit", () => {
     expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { pronouns: "she/her" } });
   });
 
+  test("index.keeps_a_card_surface_known_or_not", () => {
+    for (const surface of ["plain", "future"]) {
+      const card = section(TID);
+      const change = { ...card, record: { ...card.record, surface } };
+      const plan = planCommit(active, "3jzfcijpj2z2c", [change]);
+      expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { surface } });
+    }
+  });
+
   test("index.delete_passes_through", () => {
     const del: IndexChange = { kind: "delete", collection: "sh.unset.section", rkey: TID };
     expect(planCommit(active, "3jzfcijpj2z2c", [del])).toMatchObject({

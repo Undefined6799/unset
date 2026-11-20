@@ -106,7 +106,7 @@ export function readCardForm(form: URLSearchParams): {
   const used = rowList === undefined ? [] : rows(byIndex, shape);
   if (rowList !== undefined) body[rowList.name] = used.map(([, row]) => row);
   const fieldName = (path: string) => {
-    if (path === "surface" || shape.fields.includes(path)) return path;
+    if (shape.fields.includes(path)) return path;
     const [list, index, field] = path.split(".");
     const at = index === undefined || !INDEX.test(index) ? undefined : used[Number(index)]?.[0];
     if (

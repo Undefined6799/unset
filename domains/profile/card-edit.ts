@@ -190,7 +190,8 @@ export function parseCardInput(
   | { readonly ok: true; readonly content: CardContent; readonly width: CardWidth; readonly surface?: CardSurface }
   | Failed {
   if (input.width !== undefined && !oneOf(WIDTHS, input.width)) return fail("card.invalid");
-  if (input.surface !== undefined && !oneOf(SURFACES, input.surface)) return fail("card.invalid", "surface");
+  // Like width, no field is named: only a crafted request sends a surface the editor does not offer.
+  if (input.surface !== undefined && !oneOf(SURFACES, input.surface)) return fail("card.invalid");
   const reader = typeof input.kind === "string" && Object.hasOwn(READERS, input.kind) ? READERS[input.kind] : undefined;
   if (reader === undefined) return fail("card.kind_unknown");
   const content = reader(input);

@@ -249,7 +249,6 @@ test("surface reaches the domain for every kind and duplicates are refused", () 
   for (const kind of ["readme", "links", "collection", "buttons"]) {
     const form = readCardForm(new URLSearchParams({ kind, surface: "plain" }));
     expect(form.body.surface).toBe("plain");
-    expect(form.fieldName("surface")).toBe("surface");
     expect(
       code([
         ["kind", kind],
