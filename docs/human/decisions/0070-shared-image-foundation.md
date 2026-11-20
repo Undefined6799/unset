@@ -1,13 +1,16 @@
 # 0070 — One shared image foundation: processing apart from web, an empty inspection port
 
-Status: Proposed (awaiting Alex). Steps P2.17 to P2.19c. Alex asked for it on 2026-11-20 01:12:01Z ("Build one
-reusable image foundation for profile cards, galleries, project screenshots, and future posts/blog content") and set
-its direction at 01:23:11Z: no moderation or fingerprint check for now, a cleanly separated foundation that later
-checks mount onto, decent quality for photographers, every picture converted to a proper format with all metadata
-stripped, and moderation in place before production rather than an upload switch. It supersedes step-book text (listed
-under Consequences) and replaces one paragraph of ADR 0029, which is still Proposed. Decision 9 supersedes one line of
-ADR 0012 (the licence record). It contradicts no other accepted record: ADR 0041 (the object store) and ADR 0039
-(sign-in scopes) stand as they are.
+Status: Accepted by Alex, 2026-11-20 02:50Z, against d1e6117 (his line "Merge 1819 at d1e6117", typed in this record's
+thread after the coordinator had reviewed that head and CI was green); #1819 merged at cfd2a6e as b6fdb75 after two
+merges of main, the second resolving a row-order conflict in the decisions index. This status paragraph, the index row
+and the ADR 0001 acceptance line were added afterwards in the next P2.17 pull request. Steps P2.17 to P2.19c. Alex asked
+for it on 2026-11-20 01:12:01Z ("Build one reusable image foundation for profile cards, galleries, project screenshots,
+and future posts/blog content") and set its direction at 01:23:11Z: no moderation or fingerprint check for now, a
+cleanly separated foundation that later checks mount onto, decent quality for photographers, every picture converted to
+a proper format with all metadata stripped, and moderation in place before production rather than an upload switch. It
+supersedes step-book text (listed under Consequences) and replaces one paragraph of ADR 0029, which is still Proposed.
+Decision 9 supersedes one line of ADR 0012 (the licence record). It contradicts no other accepted record: ADR 0041 (the
+object store) and ADR 0039 (sign-in scopes) stand as they are.
 
 ## Context
 The profile needs images: a single-image card, pictures on collection entries such as project screenshots, and a

@@ -33,6 +33,9 @@ const SDK_ADAPTERS = [
   { sdk: "matrix-js-sdk", adapter: "apps/chat/matrix/" },
   { sdk: "@milkdown/[^/]*", adapter: "apps/web/lib/editor/" },
   { sdk: "prosemirror-[^/]*", adapter: "apps/web/lib/editor/" },
+  // ADR 0070 point 2.2: pictures are decoded only in infrastructure/image's sandboxed children, never in web.
+  { sdk: "sharp", adapter: "infrastructure/image/" },
+  { sdk: "@img/[^/]+", adapter: "infrastructure/image/" },
 ];
 
 /** Node built-ins a domain may not import: I/O arrives as a passed-in dependency (README rule 1). */
@@ -499,10 +502,16 @@ module.exports = {
       "no-orphans",
       "A module nothing imports is usually dead code.",
       // SvelteKit's route files and hooks are entry points SvelteKit loads itself (ADR 0054); svelte-check reads
-      // apps/web's svelte.config.js (P1.20c).
+      // apps/web's svelte.config.js (P1.20c). A test's stand-in child process is started by path (ADR 0070).
       {
         orphan: true,
-        pathNot: [TOOLING, "\\.d\\.ts$", "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)", SVELTE_CHECK_CONFIG],
+        pathNot: [
+          TOOLING,
+          "\\.d\\.ts$",
+          "^interfaces/web/src/(routes/|hooks\\.server\\.ts$)",
+          SVELTE_CHECK_CONFIG,
+          "^infrastructure/image/fixtures/[a-z-]+-child\\.ts$",
+        ],
       },
       {},
       "warn",
