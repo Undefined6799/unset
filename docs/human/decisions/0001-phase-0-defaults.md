@@ -663,6 +663,17 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile card surfaces (P1.21f, 2026-11-19; own record: [0068](0068-profile-card-surfaces.md)):** each
   profile card may store an optional surface, Filled, Outlined or Plain, implementing Alex's approved direction.
   Proposed, awaiting Alex.
+- **Shared image foundation (P2.17, 2026-11-20; own record: [0070](0070-shared-image-foundation.md)):** Alex asked on
+  2026-11-20 01:12:01Z for one reusable image foundation and at 01:23:11Z made moderation, the fingerprint check
+  included, a later feature built before production. An image is a blob in the member's repository; a shared
+  `sh.unset.defs#image` carries the blob, alt text and aspect ratio, and each use adds its caption and fit. Five
+  stages: intake, processing in its own no-network process `review` with no secrets (JPEG main version up to 2560 px and 2,000,000 bytes, AVIF
+  and WebP display versions, every metadata block stripped, the upload never stored), an empty inspection port,
+  storage in the private store, and publish to the PDS at save time. Uploads with no real inspection mounted are refused at
+  intake on every app origin outside a closed list of test origins (localhost, .test, staging while it holds only
+  test accounts). It supersedes step-book text of P2.16 to P2.18, P2.21 and P3.09a's scan rule, and would
+  replace ADR 0029's scan paragraph outside production. AGPL-3.0-only packages may also depend on LGPL-3.0-or-later
+  libraries (libvips via sharp), superseding that line of ADR 0012. Proposed, awaiting Alex.
 - **ADR 0068 accepted (Alex, 2026-11-20 01:23Z, against 1e38138; own record:
   [0068](0068-profile-card-surfaces.md)):** each profile card may store an optional surface, Filled, Outlined or
   Plain, under ADR 0051 Decision 7; a missing field reads as Filled.

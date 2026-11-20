@@ -3293,6 +3293,9 @@ Diagram: none.
 
 ### P2.16b — PDQ hasher (one module for images and video frames)
 
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): parked. Alex (2026-11-20 01:23Z) made moderation, the fingerprint check included, a later feature built before
+production; the rebased commit is kept outside the repository and the step resumes when moderation is planned.
+
 Debian slim images (Alex 2026-10-07 01:29Z; book edit 2026-10-07-p127d-node-debian-slim): the hasher builds against
 glibc; the earlier musl build note is dropped.
 
@@ -3367,6 +3370,10 @@ Not in this step: deciding what to send and to whom (P2.16); video frame samplin
 Diagram: none.
 
 ### P2.16 — Image fingerprint stage (interface, local PDQ, fake check)
+
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): superseded until moderation is planned. ADR 0070 puts an empty
+inspection port after processing, where this check mounts; image uploads are refused at intake while no real inspection is
+mounted, except on a closed list of test origins, and there is no fake to build now.
 Tags: [SEC] [MOD]            Depends on: P2.16b, P1.02, P1.12, P1.15            Plan: §5.8 "Fingerprints", "Fingerprint check on everything"; Alex decision 2026-10-03 02:58Z (real check deferred to Phase 5)
 Where: `domains/moderation/fingerprint/{fingerprint-check.ts, gate.ts, uploads-enabled.ts, README.md}`;
   `infrastructure/arachnid/fingerprint-check.fake.ts` (the fake, beside the folder where P5.07b adds the real client;
@@ -3521,6 +3528,12 @@ flowchart LR
 ```
 
 ### P2.17 — Image pipeline
+
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): the stages, formats and versions are ADR 0070's (points 2 and 3): JPEG, PNG,
+WebP and AVIF up to 30 MB and 70 megapixels; a JPEG main version up to 2560 px and 2,000,000 bytes; AVIF and WebP
+display versions at 480, 960 and 1600 px; a square avatar crop. The avatar/cover purposes and the variant table below
+are superseded, sharp lives in `infrastructure/image/` and runs only in the separate no-network process
+`interfaces/review/` (not a child of web), and step 5's gate is ADR 0070's inspection port.
 Tags: [SEC]            Depends on: P2.16, P2.16b            Plan: §2 rule 10; §6.1 image budget; §5.4 drafts
 Where: `domains/content/media/image/{sniff.ts, child.ts, pool.ts, variants.ts, ingest.ts, README.md}`,
   `interfaces/http/image-child.ts` (the child entry point)
@@ -3705,6 +3718,10 @@ Done when (tests): `pds_s3_only_internal_store`, `pds_s3_and_disk_refused`, the 
   then the forced vacuum (ADR 0041 Decision 7), until P5.08a automates takedown.
 
 ### P2.18 — Draft store
+
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): profile saves write straight to the member's PDS (ADR 0051), so the profile and
+section draft tables below are superseded. What stays is the image store: one row per image, quota, per-member limits,
+the 24-hour and 7-day expiries, erasure and export, as ADR 0070 points 4 and 6 set them.
 Tags: [SEC]            Depends on: P2.18k, P2.18s, P1.12, P1.18, P1.24, P2.17            Plan: §5.4 "Drafts are private"; §5.8 "a `drafts` store with a 30-day lifecycle rule", "Caps from day one"; §6 "abandoned drafts: 30 days"; Q7
 Where: `domains/profile/{drafts.ts, draft-media.ts, quota.ts, upload-day-count.ts, tid.ts, README.md}` (the profile
   module's folder since ADR 0037; book edit 2026-11-15), wiring P2.18s's `infrastructure/storage` adapter, migration `0208_app_drafts.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), erasure registry and grant
@@ -3895,6 +3912,10 @@ Not in this step: the editor UI and the upload route (P2.21); serving draft imag
 Diagram: none.
 
 ### P2.19 — Draft media preview (minimal `media` entrypoint)
+
+Book edit 2026-11-20-shared-images (ADR 0070, Proposed): unchanged in purpose; the owner's preview before a save. P2.19a (the
+`sh.unset.defs#image` lexicon and section kinds), P2.19b (upload route and shared editor control) and P2.19c (image
+cards, entry images, gallery) follow it, as ADR 0070 orders them.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
