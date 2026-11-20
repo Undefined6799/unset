@@ -98,7 +98,10 @@ test("pressing_two_pages_fast_in_an_old_tab_ends_on_the_last_one", async ({ page
   const seen = trouble(page);
   const documents = await redeploy(page);
   const checked = page.waitForResponse((response) => new URL(response.url()).pathname === "/_app/version.json");
-  await page.evaluate(() => globalThis.dispatchEvent(new Event("focus")));
+  // No DOM lib in this project (observe.ts does the same): the window, typed as far as this needs.
+  await page.evaluate(() =>
+    (globalThis as unknown as { dispatchEvent: (event: Event) => boolean }).dispatchEvent(new Event("focus")),
+  );
   await checked;
   await press(page, "/settings/profile");
   await press(page, "/settings/account");
