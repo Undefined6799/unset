@@ -683,6 +683,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   only, in a new zone `app_files` (120 per 10 seconds per address) instead of `app_burst`; `app_global` still counts
   them. It supersedes "`app_burst`, with no matcher" in ADR 0031 Decision 1 and "the same ... lack of matcher" in ADR
   0066 Decision 1; neither is edited. Proposed, awaiting Alex.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.
 - **ADR 0070 accepted (Alex, 2026-11-20 02:50Z, against d1e6117; own record:
   [0070](0070-shared-image-foundation.md)):** one shared image foundation. An image is a blob in the member's
   repository and each use carries its alt text; processing runs in its own no-network process `review`; the
@@ -694,6 +697,3 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
   ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
   are not edited.
-- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
-  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
-  awaiting Alex.
