@@ -26,7 +26,9 @@ test("the_toolbar_and_shortcuts_write_markdown_into_the_posted_field", async ({ 
   await editor.press("Home");
   await editor.press("Shift+End");
   await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Bold" }).click();
-  await editor.press("ArrowUp");
+  await expect(postedText(dialog)).toHaveValue("Title\n\n**a word**");
+  // A click puts the caret in the first line, as a member does; an arrow key raced WebKit's restored selection in CI.
+  await editor.getByText("Title", { exact: true }).click();
   await dialog.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Heading" }).click();
   await expect(postedText(dialog)).toHaveValue("## Title\n\n**a word**");
   await writeText(editor, ["- one", "two"]);
