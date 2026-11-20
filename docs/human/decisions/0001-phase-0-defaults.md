@@ -720,3 +720,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **One profile layout (P1.21x, 2026-11-20; own record: [0077](0077-one-profile-layout.md)):** every profile page
   shows the header above the cards; the side column, the layout choice and the unpublished `layout` field are
   removed. Supersedes 0072 when accepted; 0072 is not edited. Proposed, awaiting Alex.
+- **Text cards edited in place, one Save (P1.21v, 2026-11-20; own record:
+  [0074](0074-one-save-for-cards-edited-in-place.md)):** the owner edits Text cards on the page and one Save writes
+  every changed card in one applyWrites call on the repo head, each checked against the version its editor opened;
+  no script keeps per-card saves. Proposed, awaiting Alex.

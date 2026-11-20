@@ -4902,6 +4902,18 @@ sticks to the top as the page scrolls, its height named once as `--site-header-h
 for a bar under it. Tests: e2e for the header and panel, the sticky header on desktop and phone in both shells, and
 a dialog over it. Ownership: apps/web → interfaces/web → domains/profile; shared/lexicons.
 
+### P1.21v — Edit Text cards in place, saved together (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21u · **Plan:** §5.1, §6
+
+Alex, 2026-11-20 19:03Z: "when I'm on my profile, I should be allowed to edit it the way I want to". Plan:
+`/mnt/project-files/plans/milkdown/in-place-editing.md`; Proposed ADR 0074, which merges on Alex's line. Slices, each a
+PR: (1) the one Save, `?/saveAll`, writing every changed card in one applyWrites call on the repo head (chained
+calls only past the PDS's 1 MB body), each card checked against the version its editor opened; (2) the page: Text cards always editable on the owner's page, the
+sticky unsaved-changes bar under the header, Width and Style in the card's menu, Show Markdown, device-only drafts;
+(3) Milkdown's block handle, slash menu and floating bar for a fine pointer. No script keeps per-card saves.
+Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; apps/web (page).
+
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
 **Tags:** trusted · **Depends on:** P1.21b · **Plan:** review plan 2026-11-18 §7.2

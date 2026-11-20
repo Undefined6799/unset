@@ -463,6 +463,80 @@ describe("card writes", () => {
   });
 });
 
+describe("the one Save (ADR 0074)", () => {
+  // The stand-in gives every record this one CID, so it is the version an editor opened; any other is stale.
+  const OPENED = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+  const STALE = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae";
+  const saveAll = (pairs: [string, string][], headers: Record<string, string> = {}) =>
+    action("saveAll", new URLSearchParams(pairs).toString(), headers);
+  const text = (n: number, key: string, words: string, version = OPENED): [string, string][] => [
+    [`cards.${n}.key`, key],
+    [`cards.${n}.version`, version],
+    [`cards.${n}.kind`, "readme"],
+    [`cards.${n}.width`, "half"],
+    [`cards.${n}.text`, words],
+  ];
+  /** Kit's answer to its own client, read back as the action's data (devalue's flat array). */
+  async function refusal(response: Response) {
+    const flat = JSON.parse((JSON.parse(await response.text()) as { data: string }).data) as unknown[];
+    const data = flat[0] as Record<string, number>;
+    return { code: flat[data.code ?? -1], card: flat[data.card ?? -1], field: flat[data.field ?? -1] };
+  }
+
+  test("every_changed_card_is_written_in_one_commit_and_the_page_shows_them", async () => {
+    let response: Response | undefined;
+    const writes = await writesOf(async () => {
+      response = await saveAll([...text(0, CARD_A, "First of two"), ...text(1, CARD_C, "Second of two")]);
+    });
+    expect(response?.status).toBe(303);
+    expect(writes.map((w) => [w.method, w.rkey])).toEqual([
+      ["applyWrites", CARD_A],
+      ["applyWrites", CARD_C],
+    ]);
+    expect(writes[1]?.record).toMatchObject({ width: "half", content: { text: "Second of two" } });
+    const shown = await (await page(`/${OWNER}`, { cookie })).text();
+    expect(shown).toContain("First of two");
+    expect(shown).toContain("Second of two");
+  });
+
+  test("a_card_changed_since_its_editor_opened_is_named_and_nothing_is_written", async () => {
+    const writes = await writesOf(async () => {
+      const response = await saveAll([...text(0, CARD_A, "Mine"), ...text(1, CARD_C, "Theirs", STALE)], {
+        accept: "application/json",
+      });
+      expect(await refusal(response)).toMatchObject({ code: "card.conflict", card: CARD_C });
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("a_refusal_names_the_card_and_its_field_in_the_saves_own_names", async () => {
+    const writes = await writesOf(async () => {
+      const response = await saveAll([...text(0, CARD_A, "Fine"), ...text(1, CARD_C, "x".repeat(100_001))], {
+        accept: "application/json",
+      });
+      expect(await refusal(response)).toEqual({ code: "card.too_long", card: CARD_C, field: "cards.1.text" });
+    });
+    expect(writes).toEqual([]);
+  });
+
+  // One post: the member's own limit (30 a minute) is shared with the file's other writes. The other shapes (no
+  // version, a stray field, a bad key) are the same check, cardEdits in +page.server.ts and card-form.server.test.ts.
+  test("a_card_named_twice_is_refused_before_any_read", async () => {
+    const writes = await writesOf(async () => {
+      expect((await saveAll([...text(0, CARD_A, "a"), ...text(1, CARD_A, "b")])).status).toBe(400);
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("a_signed_out_and_a_cross_site_save_never_write", async () => {
+    const writes = await writesOf(async () => {
+      expect((await saveAll(text(0, CARD_A, "x"), { cookie: "" })).status).toBe(303);
+      expect((await saveAll(text(0, CARD_A, "x"), { origin: "https://evil.example" })).status).toBe(403);
+    });
+    expect(writes).toEqual([]);
+  });
+});
+
 describe("an unavailable PDS", () => {
   let down: Member;
   beforeAll(async () => {
@@ -546,6 +620,38 @@ describe("the card limit", () => {
       expect(full.writes().filter((write) => write.method === "createRecord")).toHaveLength(1);
     } finally {
       await full.stop();
+    }
+  });
+
+  // Past one PDS call's 1,000,000-byte body, which the stand-in refuses as the real PDS does: eleven Text cards at
+  // their 100,000-byte maximum (about 1.1 MB, inside the form's 2 MiB) go in two calls, the second swapping on the
+  // commit the first made, so all eleven are saved (ADR 0074 item 1).
+  test("eleven_full_cards_save_in_two_chained_calls", async () => {
+    const stored = manyCards(11);
+    const keys = Object.keys(stored);
+    const opened = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+    const eleven = await memberServer(undefined, stored);
+    try {
+      const body = new URLSearchParams(
+        keys.flatMap((key, n): [string, string][] => [
+          [`cards.${n}.key`, key],
+          [`cards.${n}.version`, opened],
+          [`cards.${n}.kind`, "readme"],
+          [`cards.${n}.width`, "half"],
+          [`cards.${n}.text`, String(n % 10).repeat(100_000)],
+        ]),
+      ).toString();
+      const saved = await eleven.web.fetch(`/${OWNER}?/saveAll`, {
+        method: "POST",
+        body,
+        headers: { origin: ORIGIN, accept: HTML, "content-type": FORM, "x-forwarded-for": clientAddress(), cookie },
+      });
+      expect(saved.status).toBe(303);
+      expect(eleven.writes().map((write) => [write.method, write.rkey])).toEqual(
+        keys.map((key) => ["applyWrites", key]),
+      );
+    } finally {
+      await eleven.stop();
     }
   });
 
