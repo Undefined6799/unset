@@ -55,7 +55,8 @@ Notifications are private, server-side data, never PDS records.
    guess we could keep a record of the sign in ... the last sign in and that stuff could still be kept"), so this
    amends that rule.
 5. **The privacy notice entry** is sent at sign-in, once per notice version (its dedupe key), when the changed-notice
-   banner would show (P2.12b's rule). Dismissing the banner withdraws it. A member already signed in when a notice is
+   banner would show (P2.12b's rule). Dismissing the banner withdraws it, and opening it records the notice as seen,
+   as dismissing does, so a later sign-in does not send it again. A member already signed in when a notice is
    deployed has the banner, and gets the entry at their next sign-in.
 6. **The contract a module will get.** No module exists, so no module may send yet, and no registry is built (decision
    25; architecture rule 7). When the first one arrives, it sends through the same `notify`, with these limits, which

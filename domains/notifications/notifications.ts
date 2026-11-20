@@ -49,8 +49,8 @@ export type Inbox = {
   readonly list: (limit: number) => Promise<readonly Entry[]>;
   /** Deletes the entry if this browser may see it, and says what it was about. */
   readonly open: (id: NotificationId) => Promise<Entry | null>;
-  /** Deletes every entry this browser may see that was sent no later than `upTo`; one sent after it stays. */
-  readonly openUpTo: (upTo: NotificationId) => Promise<void>;
+  /** Deletes every entry this browser may see sent no later than `upTo`, and says which; one sent after stays. */
+  readonly openUpTo: (upTo: NotificationId) => Promise<readonly Entry[]>;
 };
 
 /** Where a sent notification is stored, bound by the caller to a member (and a transaction, when it needs one). */

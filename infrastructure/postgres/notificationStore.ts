@@ -24,7 +24,8 @@ const OPEN = `DELETE FROM app.notification n WHERE n.id = $3 AND ${VISIBLE}
 
 /** Everything the list showed: `upTo` is its newest entry, so one sent after the list was drawn stays. */
 const OPEN_UP_TO = `DELETE FROM app.notification n WHERE ${VISIBLE}
-   AND n.created_at <= (SELECT u.created_at FROM app.notification u WHERE u.id = $3 AND u.did = $1)`;
+   AND n.created_at <= (SELECT u.created_at FROM app.notification u WHERE u.id = $3 AND u.did = $1)
+   RETURNING n.id, n.reason, n.topic, n.created_at`;
 
 /**
  * A member with no account row yet (their first sign-in, before the terms step) has nothing to be told, so the row is
@@ -65,8 +66,9 @@ export function createNotificationStore() {
       const { rows } = await db.query<Row>(OPEN, [did, idHash, id]);
       return rows[0] === undefined ? null : entryOf(rows[0]);
     },
-    async openUpTo(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<void> {
-      await db.query(OPEN_UP_TO, [did, idHash, upTo]);
+    async openUpTo(db: Db, did: Did, idHash: Buffer, upTo: NotificationId): Promise<Entry[]> {
+      const { rows } = await db.query<Row>(OPEN_UP_TO, [did, idHash, upTo]);
+      return rows.map(entryOf);
     },
     /** A source taking back what it sent, by its dedupe key (the banner's dismiss withdraws the notice's entry). */
     async withdraw(db: Db, did: Did, dedupeKey: string): Promise<void> {

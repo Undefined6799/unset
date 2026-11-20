@@ -22,7 +22,7 @@ function inboxOf(count: number): Inbox & { asked: number[] } {
       return Array.from({ length: Math.min(count, limit) }, (_, i) => entry(count - i));
     },
     open: async () => null,
-    openUpTo: async () => undefined,
+    openUpTo: async () => [],
   };
 }
 

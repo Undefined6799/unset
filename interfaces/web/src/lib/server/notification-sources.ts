@@ -1,7 +1,7 @@
 // What web sends into the notification inbox (P2.27, ADR 0079). Each source is one `notify` call through compose's
 // notifications service, the same way any later source will send; nothing here reaches the inbox's rows directly.
 import { type Did, requireOnboarded } from "@unset/domains-identity";
-import type { Notification } from "@unset/domains-notifications";
+import type { Entry, Notification } from "@unset/domains-notifications";
 import type { Db } from "@unset/infrastructure-postgres";
 import { services } from "./compose.ts";
 
@@ -32,6 +32,18 @@ export async function sendPrivacyNoticeIfChanged(did: Did, deadline: AbortSignal
   if (decision.outcome !== "pass" || !decision.privacyNotice) return;
   const sent = await notifications.send(did, privacyNotice(versions.privacy), deadline);
   if (!sent.ok) throw new Error(sent.error);
+}
+
+/**
+ * What a source does when its entry is opened, if anything: opening the notice's entry is seeing the change, as the
+ * banner's dismiss is, so the notice is not sent again at the next sign-in (Codex review of 2491506). A source with
+ * nothing to do adds nothing here; the routes call `opened` for every entry they delete.
+ */
+export async function opened(did: Did, entries: readonly Entry[], deadline: AbortSignal): Promise<void> {
+  const { accounts, versions } = services();
+  if (entries.some((entry) => entry.reason === "privacy_notice" && entry.topic === versions.privacy)) {
+    await accounts.markPrivacyNoticeSeen(did, versions.privacy, deadline);
+  }
 }
 
 /** Dismissing the banner says the member has seen the change, so its entry goes too. */

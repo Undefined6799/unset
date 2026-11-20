@@ -267,6 +267,30 @@ describe("the bell and the notifications page", () => {
     expect(await html("/notifications", cookie)).not.toContain("We updated our privacy notice");
   });
 
+  test("notifications.privacy_notice: opening it or marking all records the notice as seen, so it is not sent again", async () => {
+    // Codex review of 2491506: the row goes on open, so the seen version is what stops the next sign-in resending it.
+    for (const action of ["open", "readAll"] as const) {
+      const { did, cookie } = await member();
+      await withClient(pool, null, (db) =>
+        db.query("UPDATE app.account SET privacy_version = 'an-older-notice' WHERE did = $1", [did]),
+      );
+      await notice(did, PRIVACY_VERSION);
+      const [id] = listed(await html("/notifications", cookie));
+      await post(
+        `/notifications?/${action}`,
+        action === "open" ? { id: id as string } : { upTo: id as string },
+        cookie,
+      );
+      const { rows } = await withClient(pool, null, (db) =>
+        db.query<{ seen: string | null }>(
+          "SELECT privacy_notice_seen_version AS seen FROM app.account WHERE did = $1",
+          [did],
+        ),
+      );
+      expect(rows[0]?.seen, action).toBe(PRIVACY_VERSION);
+    }
+  });
+
   test("notifications.no_script: the page and the bell are plain forms", async () => {
     const { did, cookie } = await member();
     await signInElsewhere(did);

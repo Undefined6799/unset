@@ -26,7 +26,7 @@ The list, the badge, opening and Mark all as read do not change. Removing a sour
   session's start. Only browsers signed in before it see it, so whoever signed in cannot clear it from the member's
   other browsers.
 - **We updated our privacy notice**: sent once per version at sign-in when the banner would show; dismissing the
-  banner withdraws it.
+  banner withdraws it, and opening it counts as seeing the change.
 
 ## How it behaves
 
