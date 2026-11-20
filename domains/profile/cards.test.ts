@@ -1,7 +1,7 @@
 // Profile cards (ADR 0051): one sh.unset.section record per card, read leniently from any client, written strictly,
 // and shown in the order the profile's cards list sets.
 import { describe, expect, test } from "vitest";
-import { type Card, orderCards, pageCards, parseCardKey, readCard, shownCards } from "./cards.ts";
+import { type Card, orderCards, pageCards, parseCardKey, parseCardVersion, readCard, shownCards } from "./cards.ts";
 
 const T1 = "2026-11-01T00:00:00.000Z";
 const T2 = "2026-11-02T00:00:00.000Z";
@@ -23,6 +23,16 @@ describe("parseCardKey", () => {
   test("accepts record keys and refuses anything else", () => {
     expect(parseCardKey(KEY)).toBe(KEY);
     for (const bad of ["", ".", "..", "a/b", "a b", "x".repeat(513), 7, null]) expect(parseCardKey(bad)).toBeNull();
+  });
+});
+
+describe("parseCardVersion", () => {
+  test("accepts a base32 CIDv1 as a PDS names a record's version and refuses anything else", () => {
+    const cid = "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm";
+    expect(parseCardVersion(cid)).toBe(cid);
+    for (const bad of ["", "b", "Bafyrei", "bafy rei", "bafyrei/x", `b${"a".repeat(200)}`, "QmYwAPJzv5", 7, null]) {
+      expect(parseCardVersion(bad)).toBeNull();
+    }
   });
 });
 
