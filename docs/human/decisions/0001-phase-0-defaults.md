@@ -711,3 +711,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Image uploads up to 64 MiB (P2.19e, 2026-11-20; own record: [0076](0076-image-uploads-up-to-64-mib.md)):**
   uploads rise from 30 MB and 70 megapixels to 64 MiB and 110 megapixels, with web's, net-guard's and review's caps,
   memory and the edge's read window raised to match; the versions we keep do not change. Proposed, awaiting Alex.
+- **One profile layout (P1.21x, 2026-11-20; own record: [0077](0077-one-profile-layout.md)):** every profile page
+  shows the header above the cards; the side column, the layout choice and the unpublished `layout` field are
+  removed. Supersedes 0072 when accepted; 0072 is not edited. Proposed, awaiting Alex.

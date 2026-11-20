@@ -10,7 +10,7 @@
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
 import { canonicalActorPath, type Did, parseActor, parseDid, parseHandle } from "@unset/domains-identity";
-import { CARDS_MAX, pageCards, readAvatarShape, readProfileLayout, readProfileRecord } from "@unset/domains-profile";
+import { CARDS_MAX, pageCards, readAvatarShape, readProfileRecord } from "@unset/domains-profile";
 import { services } from "../../lib/server/compose.ts";
 import { config } from "../../lib/server/runtime.ts";
 import { accountLetter, type ShellData } from "../../lib/shell.ts";
@@ -60,11 +60,10 @@ export const load: ServerLoad = async ({ params, locals, url, setHeaders }) => {
     location: fields.location,
     website: websiteLink(fields.website),
     avatarShape: readAvatarShape(found.record),
-    layout: readProfileLayout(found.record),
     // At most what the owner's own page reads (infrastructure/pds card-records.ts MAX_CARDS): the index may hold up to
     // twice that (MAX_SECTIONS_PER_ACCOUNT), and a visitor never sees more cards than the member does.
     cards,
-    // The compact header's panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
+    // The header's About panel repeats the page's own contact action (ADR 0072); nothing the page does not show.
     contact: contactAction(cards),
   };
 };
