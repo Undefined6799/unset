@@ -257,18 +257,26 @@ async function writesOf(step: () => Promise<unknown>): Promise<PdsWrite[]> {
 }
 
 describe("the member's page", () => {
-  test("a_visitor_is_sent_to_sign_in_and_back", async () => {
-    const response = await page(`/${OWNER}`);
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(`/login?next=%2F${encodeURIComponent(OWNER)}`);
+  test("a_visitor_and_another_member_are_sent_to_the_public_page", async () => {
+    // The link a member copies from their own page works for anyone: whoever is not its owner gets the public page,
+    // which answers 404 alike for an unknown or hidden account, so the redirect says nothing about the DID.
+    for (const [path, headers] of [
+      [`/${OWNER}`, {}],
+      [`/${OTHER}`, { cookie }],
+      ["/did:web:member.example.com", { cookie }],
+    ] as const) {
+      const response = await page(path, headers);
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe(`/@${path.slice(1)}`);
+      expect(response.headers.get("cache-control")).toContain("no-store");
+    }
   });
 
-  test("a_path_that_is_not_a_did_and_another_members_page_are_missing", async () => {
+  test("a_path_that_is_not_a_did_is_missing", async () => {
     expect((await page("/not-a-did", { cookie })).status).toBe(404);
-    expect((await page(`/${OTHER}`, { cookie })).status).toBe(404);
-    // A did:web member is someone else too, and a DID is compared as written: another case is another DID.
-    expect((await page("/did:web:member.example", { cookie })).status).toBe(404);
+    // A DID is compared as written: in capitals it is no DID at all; nor is a did:web on a reserved name.
     expect((await page(`/${OWNER.toUpperCase()}`, { cookie })).status).toBe(404);
+    expect((await page("/did:web:member.example", { cookie })).status).toBe(404);
     expect(
       (
         await member.web.fetch(`/did:web:member.example?/create`, {
