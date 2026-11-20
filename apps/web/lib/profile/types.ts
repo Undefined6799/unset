@@ -121,6 +121,8 @@ export type CardEditLimits = {
   readonly collection: number;
   readonly buttons: number;
   readonly text: number;
+  /** The card form's body cap in bytes (interfaces/web policy.ts): the one Save checks it before sending (ADR 0074). */
+  readonly formBytes: number;
 };
 
 /**
