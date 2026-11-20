@@ -75,6 +75,7 @@ const SERVER_KEYS = [
   "listen",
   "routes",
   "read_timeout",
+  "read_header_timeout",
   "write_timeout",
   "idle_timeout",
   "logs",
@@ -90,8 +91,9 @@ const TRUST_KEYS = ["trusted_proxies", "trusted_proxies_strict", "client_ip_head
 /** The image's health site as Caddy adapts it: plain HTTP on loopback, the one server with no upstream and no zone. */
 const HEALTH_SERVER: Json = {
   listen: ["127.0.0.1:8081"],
-  read_timeout: 30_000_000_000,
-  write_timeout: 135_000_000_000,
+  read_timeout: 120_000_000_000,
+  read_header_timeout: 10_000_000_000,
+  write_timeout: 255_000_000_000,
   idle_timeout: 120_000_000_000,
   routes: [
     {
@@ -110,7 +112,7 @@ const HEALTH_SERVER: Json = {
   ],
   automatic_https: { skip: ["127.0.0.1"] },
 };
-const TIMEOUTS = ["read_timeout", "write_timeout", "idle_timeout"];
+const TIMEOUTS = ["read_timeout", "read_header_timeout", "write_timeout", "idle_timeout"];
 
 /** The client address headers the edge removes before every upstream (ADR 0018). */
 const ADDRESS_HEADERS = ["X-Forwarded-For", "X-Real-IP", "Forwarded"];

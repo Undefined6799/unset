@@ -25,6 +25,9 @@
       "path": "../../infrastructure/audit"
     },
     {
+      "path": "../../infrastructure/image"
+    },
+    {
       "path": "../../infrastructure/net-guard"
     },
     {

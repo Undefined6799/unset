@@ -8,8 +8,8 @@
  * call or one internal origin, and every other request keeps 1 MiB.
  */
 export const DEFAULT_REQUEST_BYTES = 1024 * 1024;
-/** No policy may name more: web's call to review, a 30 MB upload with room to spare. */
-export const REQUEST_BODY_CEILING = 32 * 1024 * 1024;
+/** No policy may name more: web's call to review, a 64 MiB upload with room to spare (ADR 0076). */
+export const REQUEST_BODY_CEILING = 66 * 1024 * 1024;
 
 type Caps = {
   readonly name: string;
@@ -49,7 +49,7 @@ const validCap = (bytes: number): boolean => Number.isInteger(bytes) && bytes > 
 /** The largest body a request under `policy` may send; a hand-built policy past the ceiling throws (a programming error). */
 export function requestCap(policy: Policy): number {
   const bytes = policy.requestBytes ?? DEFAULT_REQUEST_BYTES;
-  if (!validCap(bytes)) throw new RangeError("requestBytes must be an integer in (0, 32 MiB]");
+  if (!validCap(bytes)) throw new RangeError("requestBytes must be an integer in (0, 66 MiB]");
   return bytes;
 }
 
@@ -61,7 +61,7 @@ export function internalPolicy(name: string, origins: readonly string[], request
   const bad = origins.filter((origin) => !isHttpOrigin(origin));
   if (origins.length === 0 || bad.length > 0) throw new TypeError("internal policy origins must be http(s) origins");
   if (requestBytes === undefined) return { name, kind: "internal", origins: [...origins] };
-  if (!validCap(requestBytes)) throw new RangeError("requestBytes must be an integer in (0, 32 MiB]");
+  if (!validCap(requestBytes)) throw new RangeError("requestBytes must be an integer in (0, 66 MiB]");
   return { name, kind: "internal", origins: [...origins], requestBytes };
 }
 
@@ -83,8 +83,8 @@ export const objectStore = (origin: string): Policy => internalPolicy("object-st
 
 /**
  * The review process (ADR 0070 point 2.2): web's one call with a member's upload, by the `REVIEW_URL` web's composition
- * root passes in. Private answers only; a body of up to 32 MiB, review's own job ceiling (infrastructure/image wire.ts
- * JOB_CEILING), for an upload of at most 30,000,000 bytes.
+ * root passes in. Private answers only; a body of up to 66 MiB, above review's own job ceiling (infrastructure/image
+ * wire.ts JOB_CEILING, 64 MiB), for an upload of at most 64 MiB (ADR 0076).
  */
 export const review = (origin: string): Policy => internalPolicy("review", [origin], REQUEST_BODY_CEILING);
 

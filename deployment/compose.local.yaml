@@ -207,6 +207,7 @@ services:
       # own identity, which may read, write, tag and list there and nothing else (runbook "The object store's
       # identities"). The key id is a literal, not a secret; the secret key is the objects_web file.
       OBJECT_STORE_URL: http://objects:8333
+      REVIEW_URL: http://review:8082
       OBJECT_STORE_BUCKET: unset-private
       OBJECT_STORE_ACCESS_ID: unset-web
       OBJECT_STORE_SECRET_FILE: /run/secrets/objects_web
@@ -227,7 +228,7 @@ services:
       migrate:
         condition: service_completed_successfully
     networks: [db, app, web_egress, pds_admin, objects_web, review_web]
-    mem_limit: 512m
+    mem_limit: 1g
     cpus: 1
     pids_limit: 128
     restart: unless-stopped
@@ -277,8 +278,8 @@ services:
       UNSET_COMMIT: "0000000000000000000000000000000000000000"
       LISTEN_PORT: "8082"
     networks: [review_web]
-    mem_limit: 1536m
-    cpus: 1
+    mem_limit: 2g
+    cpus: 2
     pids_limit: 128
     restart: unless-stopped
 

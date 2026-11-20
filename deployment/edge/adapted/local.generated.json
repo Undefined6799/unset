@@ -147,8 +147,9 @@
       "servers": {
         "srv0": {
           "listen": ["127.0.0.1:8081"],
-          "read_timeout": 30000000000,
-          "write_timeout": 135000000000,
+          "read_timeout": 120000000000,
+          "read_header_timeout": 10000000000,
+          "write_timeout": 255000000000,
           "idle_timeout": 120000000000,
           "routes": [
             {
@@ -194,8 +195,9 @@
         },
         "srv1": {
           "listen": [":443"],
-          "read_timeout": 30000000000,
-          "write_timeout": 135000000000,
+          "read_timeout": 120000000000,
+          "read_header_timeout": 10000000000,
+          "write_timeout": 255000000000,
           "idle_timeout": 120000000000,
           "routes": [
             {

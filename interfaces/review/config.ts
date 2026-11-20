@@ -9,6 +9,6 @@ export const schema = defineEntrypointConfig({
   REVIEW_QUEUE: int({ min: 0, max: 16, default: 2 }),
   /** One job's deadline, after which its child is killed and replaced. Web's own deadline is longer. */
   REVIEW_TIMEOUT_MS: int({ min: 1000, max: 25_000, default: 20_000 }),
-  /** Each child's address-space limit; Node needs about 2 GiB of it and a 70-megapixel decode several more. */
+  /** Each child's address-space limit; Node needs about 2 GiB of it and a 110-megapixel decode several more (ADR 0076). */
   REVIEW_ADDRESS_SPACE_MB: int({ min: 2048, max: 16_384, default: 8192 }),
 });

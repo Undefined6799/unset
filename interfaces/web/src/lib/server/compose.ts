@@ -8,6 +8,7 @@
 // P2.10: the member's invites and the signed request to pds-admin that issues one (ADR 0060).
 // P2.21a: the draft picture store, web's own identity in the private object store (ADR 0070).
 import { createPrivateKey, type KeyObject } from "node:crypto";
+import { type ImageProcessor, uploadsOpen } from "@unset/domains-content";
 import {
   type AccountRepository,
   createDidResolver,
@@ -18,7 +19,15 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@unset/domains-identity";
-import { createNetGuard, guardedFetch, libraryFetch, objectStore } from "@unset/infrastructure-net-guard";
+import { createRemoteImageProcessor, PROCESS_PATH } from "@unset/infrastructure-image";
+import {
+  createNetGuard,
+  guardedFetch,
+  libraryFetch,
+  type NetGuard,
+  objectStore,
+  review,
+} from "@unset/infrastructure-net-guard";
 import {
   createIdentityNetwork,
   createInviteIssuer,
@@ -32,6 +41,7 @@ import {
   connectionOf,
   createAccountRepository,
   createDiscoverabilityStore,
+  createImageStore,
   createInviteStore,
   createLockPool,
   createOAuthSessionStore,
@@ -41,6 +51,7 @@ import {
   createRequestLock,
   createSingleUseStore,
   type DiscoverabilityStore,
+  type ImageStore,
   type InviteStore,
   oauthSessionExists,
   type Pool,
@@ -128,7 +139,45 @@ export type Services = {
   readonly discoverability: DiscoverabilityStore;
   /** Members' draft pictures in the private store, as web's own identity (P2.21a; ADR 0070 point 2.4). */
   readonly drafts: ObjectStore;
+  /** Picture uploads (P2.19b; ADR 0070 point 2): open only where uploadsOpen allows, the rows, and review. */
+  readonly images: { readonly open: boolean; readonly store: ImageStore; readonly processor: ImageProcessor };
 };
+
+/** Review's answer: the main version, the display versions and their manifest (pool.ts ANSWER_OVERHEAD). */
+const REVIEW_ANSWER_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Web's side of review (ADR 0070 point 2.2): POSTs through net-guard's `review` policy, one origin, with its own 30 s
+ * timeout (net-guard's longest), above review's 20 s job deadline and its queue's wait.
+ */
+function reviewProcessor(guard: NetGuard): ImageProcessor {
+  const send = guardedFetch(guard, review(config.REVIEW_URL), { timeoutMs: 30_000, maxBytes: REVIEW_ANSWER_BYTES });
+  return createRemoteImageProcessor(async (bytes, headers) => {
+    // fetch's BodyInit (DOM library, svelte-check) takes only an ArrayBuffer-backed view. The upload's bytes come
+    // from File.arrayBuffer(), so this re-views them without a copy; anything else is a programming error.
+    const { buffer } = bytes;
+    if (!(buffer instanceof ArrayBuffer)) throw new TypeError("review body is not backed by an ArrayBuffer");
+    const body = new Uint8Array(buffer, bytes.byteOffset, bytes.byteLength);
+    const answer = await send(new URL(PROCESS_PATH, config.REVIEW_URL), { method: "POST", body, headers });
+    const contentType = answer.headers.get("content-type") ?? "";
+    return { status: answer.status, contentType, body: new Uint8Array(await answer.arrayBuffer()) };
+  });
+}
+
+/**
+ * The rows go first, all or nothing; then each image's objects. A delete that fails is counted and thrown after the
+ * rest, so the sweep logs it; those objects stay until the orphan sweep (P2.19b follow-up) finds them.
+ */
+async function sweepImages(store: ImageStore, drafts: ObjectStore): Promise<void> {
+  const swept = await store.sweep(null);
+  if (swept.kind === "refused") throw new RangeError("image sweep over its governor");
+  let failed = 0;
+  for (const image of swept.images) {
+    const done = await drafts.deletePrefix(`drafts/${image.did}/i/${image.id}/`);
+    if (!done.ok) failed += 1;
+  }
+  if (failed > 0) throw new Error("image sweep could not delete some objects");
+}
 
 /** web's signing key for pds-admin: an Ed25519 private key, or the process does not start (exit 78 path). */
 function webAdminKey(pem: string): KeyObject {
@@ -259,6 +308,20 @@ async function build(): Promise<Services> {
     denied: (did: Did, deadline: AbortSignal) => recordInviteDenied(pool, did, deadline),
   };
 
+  // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
+  const drafts = createObjectStore({
+    origin: config.OBJECT_STORE_URL,
+    bucket: config.OBJECT_STORE_BUCKET,
+    keyId: config.OBJECT_STORE_ACCESS_ID,
+    secret: config.OBJECT_STORE_SECRET.reveal(),
+    fetch: guardedFetch(guard, objectStore(config.OBJECT_STORE_URL)),
+  });
+  const images = {
+    open: uploadsOpen({ origin: config.PUBLIC_ORIGIN, env: config.UNSET_ENV, pdsHostname: config.PDS_HOSTNAME }),
+    store: createImageStore(pool),
+    processor: reviewProcessor(guard),
+  };
+
   // web is the role that may delete expired sessions and sign-ins (migrations 0011, 0013; interfaces/http jobs/sweeps.ts).
   const stopSweeps = startSweeps({
     sweeps: [
@@ -267,6 +330,8 @@ async function build(): Promise<Services> {
       { job: "sweep.single_use", run: () => withClient(pool, null, (db) => nonces.sweep(db)) },
       // P2.10: an invite's code is deleted from our row 7 days after it was made (Alex 2026-11-19).
       { job: "sweep.invite", run: () => invites.store.clearExpired() },
+      // ADR 0070 point 6: pictures no save used after a day, and copies a week after their last use.
+      { job: "sweep.image", run: () => sweepImages(images.store, drafts) },
     ],
     everyMs: EXPIRY_SWEEP_MS,
     log,
@@ -312,14 +377,8 @@ async function build(): Promise<Services> {
     invites,
     publicProfiles: createPublicProfileStore(pool),
     discoverability: createDiscoverabilityStore(pool),
-    // Opens no connection here: the store is first asked when a member uploads, so a store that is down stops only that.
-    drafts: createObjectStore({
-      origin: config.OBJECT_STORE_URL,
-      bucket: config.OBJECT_STORE_BUCKET,
-      keyId: config.OBJECT_STORE_ACCESS_ID,
-      secret: config.OBJECT_STORE_SECRET.reveal(),
-      fetch: guardedFetch(guard, objectStore(config.OBJECT_STORE_URL)),
-    }),
+    drafts,
+    images,
   };
 }
 

@@ -18,8 +18,8 @@ export type JobMessage = {
   readonly versions: readonly VersionSpec[];
 };
 
-/** The parent is trusted, so a job frame is bounded only loosely: a 30 MB upload and its job fit well inside. */
-const JOB_FRAME_MAX = 64 * 1024 * 1024;
+/** The parent is trusted, so a job frame is bounded only loosely: a 64 MiB upload (JOB_CEILING) and its job fit inside. */
+const JOB_FRAME_MAX = 72 * 1024 * 1024;
 const answers = new Socket({ fd: 3, readable: false, writable: true });
 const send = (value: unknown) => answers.write(frame(serialize(value)));
 
