@@ -4878,6 +4878,18 @@ CommonMark backslash escapes. The CSP adds the one Trusted Types name `ProseMirr
 loosening, so it merges on Alex's typed line. The editor becomes its own file once ADR 0069's split lands. Links in
 the bar and the bar's Iconoir icons follow; images wait for ADR 0070.
 
+### P1.21w — Serve the docs site at docs.unset.sh (added step, 2026-11-20)
+
+**Tags:** [SEC], trusted · **Depends on:** — · **Plan:** §5.2, §6
+
+Alex, 2026-11-20 05:06Z: "lets set it up on docs.unset.sh for now, and we can configure cd later". The staging edge
+serves the built Hugo site as a third site, `deployment/edge/dev/docs.caddy`, through Pangolin and Newt like the other
+two: files from the checkout's `docs/site/public` at `/srv/docs`, read-only, with no upstream; the security headers,
+`noindex` and a CSP with no inline script, inline style or eval; one zone, `docs_global`, 6000 per 5 minutes. The
+edge rules and C18 accept exactly that site and that bind. Publishing is the manual build in
+`docs/human/runbooks/docs-site.md`; DNS, the Pangolin resource and the deploy are Alex's. Proposed ADR 0075; it
+merges on Alex's line. Ownership: deployment/edge → deployment/preflight; docs/site.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS

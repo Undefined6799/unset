@@ -1,0 +1,13 @@
+/*
+ * The docs site's CSP allows no inline style (deployment/edge/dev/docs.caddy; ADR 0075), so the one style attribute
+ * Hextra v0.13.0 relies on moves here: layouts/_partials/theme-toggle.html writes it on the theme menu, which
+ * assets/js/core/switcher-menu.js then places with a transform that assumes a fixed position.
+ */
+@layer unset-docs {
+  .hextra-theme-toggle-options {
+    position: fixed;
+    inset: auto auto 0 0;
+    margin: 0;
+    min-width: 100px;
+  }
+}
