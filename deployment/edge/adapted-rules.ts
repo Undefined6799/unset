@@ -814,9 +814,19 @@ const PDS_ZONES: readonly Zone[] = [
     [{ ...obj(WEB_MARK), path: ["/oauth/token", "/xrpc/com.atproto.server.refreshSession"] }],
   ],
 ];
-/** The dev app site's own zones (dev/app.caddy, P1.36b). */
+/**
+ * A content-hashed build file (P1.21g; ADR 0069; snippets/ratelimit.caddy app-build-file): a GET or HEAD whose decoded,
+ * uncleaned path is one SvelteKit 3.2.0 writes under /_app/immutable/. Exported for adapted-denies.test.ts.
+ */
+export const BUILD_FILE_PATH = String.raw`^/_app/immutable/(?:entry|nodes|chunks|assets)/[\w-]+(?:\.[\w-]+)?\.(?:js|css|woff2|png)$`;
+const BUILD_FILE: Json = {
+  method: ["GET", "HEAD"],
+  vars_regexp: { "{http.request.uri.path}": { pattern: BUILD_FILE_PATH } },
+};
+/** The dev app site's own zones (dev/app.caddy, P1.36b): build files in app_files alone, then app_global. */
 const APP_ZONES: readonly Zone[] = [
-  ["app_burst", 60, 10],
+  ["app_burst", 60, 10, [{ not: [BUILD_FILE] }]],
+  ["app_files", 120, 10, [BUILD_FILE]],
   ["app_global", 1200, 300],
   ["app_signin", 10, 300, [{ method: ["POST"], path: ["/login", "/join"] }]],
 ];

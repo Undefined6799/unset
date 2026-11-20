@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-11-19
+checked: 2026-11-20
 ---
 # tests
 
@@ -71,6 +71,11 @@ flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins i
 the member's pages through a local Caddy running staging's `app-ratelimit` (`edge.caddy`) in front of `serve.ts`, the
 built web in socket mode, and writes what reached the edge as JSON. It needs a caddy-ratelimit Caddy binary and
 Docker; nothing in CI runs it. Results: [[single-vs-split-bundle-at-the-edge]].
+
+**Redeploy (P1.21g).** `tests/e2e/redeploy.spec.ts` makes a tab see a deploy without a second build: `page.route`
+answers `/_app/version.json` with another version and 404s every `/_app/immutable/` file until the next document
+load, then the real server serves the full load. Dispatching `focus` on the window makes kit check the version, as a
+member coming back to an old tab does.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

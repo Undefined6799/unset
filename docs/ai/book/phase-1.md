@@ -4769,6 +4769,27 @@ border or shadow. Keep content, inner tiles, spacing and controls. Missing legac
 choice; explicit Filled clears the field. Tests cover defaults, strict input, save/reload and no-script editing.
 Ownership: apps/web → interfaces/web → domains/profile → shared/lexicons and the existing PDS writer.
 
+### P1.21g — Split the client into hashed pieces (added step, 2026-11-20)
+
+**Tags:** [SEC], trusted · **Depends on:** — · **Plan:** §6.1 (app page budget), §5.7 (edge limits)
+
+Alex agreed on 2026-11-20 00:27:59Z to split the signed-in app's client so heavy parts can load on demand; no new
+dependency comes with it. `output.bundleStrategy` goes from `single` to `split`, SvelteKit's own mechanism; `single`
+turns code splitting off, so no dynamic import could ever be lazy. The dev app edge counts the content-hashed build
+files under `/_app/immutable/` in a new zone, `app_files` (120 per 10 s per address), matched on the decoded, uncleaned
+path and GET or HEAD only; everything else stays in `app_burst`, and `app_global` counts all of it. Server.ts reads the
+refusal page's stylesheet from the root layout node, which is where kit lists it under `split`; the app JS budget
+measures each page route's cold set. A tab older than a deploy reloads through SvelteKit's version check
+(`tests/e2e/redeploy.spec.ts`). Proposed ADR 0069 records it; the edge zone loosens a security control, so the PR
+merges on Alex's typed line. Out of scope: making the card editor lazy (its own step), and the documents' missing
+compression that P1.20u noted.
+
+**Threats.** A spelling of a page path that the edge would count as a file (runs of slashes, case, dot segments,
+percent-encoding) would let one address render pages at the file allowance: the matcher reads the request's own
+decoded path, anchored and case-sensitive, and `adapted-build-files.test.ts` checks that every spelling it accepts is
+one web reads under `/_app/`, where nothing reaches a hook. A flood of made-up file names: each is a plain 404 before
+the hook, and `app_global` still caps the 5-minute total. A stale tab after a deploy: a full load, never a broken page.
+
 ### P1.21p — Show the README card as a Text card (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** P1.21f · **Plan:** §5.4
@@ -4834,8 +4855,8 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
-c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), i (leaving in the
-terms), l, m, q.
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), f (card
+surfaces), g (split client), h (limit budget tests), i (leaving in the terms), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
