@@ -18,6 +18,7 @@
     { "path": "infrastructure/session" },
     { "path": "infrastructure/storage" },
     { "path": "interfaces/indexer" },
+    { "path": "interfaces/review" },
     { "path": "interfaces/pds-admin" },
     { "path": "interfaces/web" },
     { "path": "shared/admin-envelope" },
