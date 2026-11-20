@@ -121,21 +121,22 @@ test("your_profile_from_the_home_page_reaches_the_member_page", async ({ page })
   expect(watched.pageErrors).toEqual([]);
 });
 
-test("a_client_side_not_found_offers_no_sign_in_to_a_member", async ({ page }) => {
+test("a_client_side_link_to_another_members_did_reaches_their_public_page", async ({ page }) => {
   expect((await openPage(page, SETTINGS))?.status()).toBe(200);
   await page.waitForLoadState("networkidle");
-  // Another member's page reads as missing (SE-2); the member is still signed in, so the shell offers no Sign in.
-  await page.evaluate(
-    (path) => {
-      const link = (globalThis as unknown as { document: DocumentLike }).document.createElement("a");
-      link.href = path;
-      (globalThis as unknown as { document: DocumentLike }).document.body.append(link);
-      link.click();
-    },
-    `/did:plc:${"z".repeat(24)}`,
-  );
+  // Another member's DID is never their editor (SE-2): the client follows the server's 303 to the public page, which
+  // for an account the index does not show is the one 404, shown with no page error.
+  const watched = watch(page);
+  const other = `did:plc:${"z".repeat(24)}`;
+  await page.evaluate((path) => {
+    const link = (globalThis as unknown as { document: DocumentLike }).document.createElement("a");
+    link.href = path;
+    (globalThis as unknown as { document: DocumentLike }).document.body.append(link);
+    link.click();
+  }, `/${other}`);
+  await expect(page).toHaveURL(`${TEST_ORIGIN}/@${other}`);
   await expect(page.locator("h1")).toContainText("That page does not exist.");
-  await expect(page.locator('a[href^="/login"]')).toHaveCount(0);
+  expect(watched.pageErrors).toEqual([]);
 });
 
 type DocumentLike = {

@@ -196,13 +196,16 @@ describe("the shell around the member page", () => {
     expect(await response.text()).not.toContain('action="/prefs/theme"');
   });
 
-  test("another_members_page_is_missing_and_offers_a_member_no_sign_in", async () => {
+  test("another_members_page_sends_a_member_to_its_public_page_which_is_missing", async () => {
     const cookie = await signedIn(OWNER);
-    const response = await get(`/did:plc:${"z".repeat(24)}`, cookie);
-    expect(response.status).toBe(404);
-    const html = await response.text();
-    expect(html).toContain("That page does not exist.");
-    expect(html).not.toContain('href="/login');
+    const other = `did:plc:${"z".repeat(24)}`;
+    const response = await get(`/${other}`, cookie);
+    // Never the other member's editor: their public page, which for an account the index does not show is the 404.
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`/@${other}`);
+    const missing = await get(`/@${other}`, cookie);
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toContain("That page does not exist.");
   });
 
   test("a_visitor_on_a_missing_page_is_offered_sign_in", async () => {
