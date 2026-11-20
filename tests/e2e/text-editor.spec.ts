@@ -99,6 +99,28 @@ test("text_opened_and_saved_untouched_is_stored_as_it_was", async ({ page }) => 
   await deleteCard(page, "Text card");
 });
 
+// Impatient member: the editor's file loads when the dialog opens (ADR 0069 split). Text typed into the plain field
+// before it arrives is carried into the editor and still posted.
+test("text_typed_before_the_editor_loads_is_kept", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await page.waitForLoadState("networkidle");
+  const { promise: held, resolve: release } = Promise.withResolvers<void>();
+  await page.route("**/_app/immutable/chunks/*.js", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByRole("link", { name: "Add card" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /^Text/ }).click();
+  await postedText(dialog).fill("typed early");
+  release();
+  const editor = dialog.getByRole("textbox", { name: "Text" });
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  await expect(editor).toHaveText("typed early");
+  await expect(postedText(dialog)).toHaveValue("typed early");
+  await page.keyboard.press("Escape");
+});
+
 test.describe("on a phone", () => {
   test.use(phone({ width: 375, height: 800 }));
   test("the_editor_fills_the_screen_with_its_bar_at_the_top", async ({ page }) => {

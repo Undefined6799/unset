@@ -47,6 +47,8 @@ export const postedText = (dialog: Locator) => dialog.locator('textarea[name="te
  * it; markdown shortcuts ("# ", "*a*") turn into formatting as they are typed.
  */
 export async function writeText(editor: Locator, blocks: readonly string[]) {
+  // The editor's own file loads when the dialog opens (ADR 0069 split), so wait for it before typing.
+  await expect(editor).toHaveAttribute("contenteditable", "true");
   await editor.click();
   await editor.press("ControlOrMeta+a");
   await editor.press("Backspace");
