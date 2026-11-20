@@ -20,6 +20,8 @@ const DOCKERFILE = "images/node-app.Dockerfile";
 const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
 /** The indexer process's image (P3.05s PR 3; ADR 0052). */
 const INDEXER_DOCKERFILE = "images/indexer.Dockerfile";
+/** The review process's image (ADR 0070 point 2.2). */
+const REVIEW_DOCKERFILE = "images/review.Dockerfile";
 /** Our gosu-free Postgres image (P1.29d). */
 const POSTGRES_DOCKERFILE = "images/postgres.Dockerfile";
 
@@ -2336,6 +2338,40 @@ describe("indexer image", () => {
     expect(indexer).toContain("USER 65532:65532");
     expect(indexer.filter((line) => /^(?:EXPOSE|CMD) /.test(line))).toEqual(["EXPOSE 8081"]);
     expect(indexer.some((line) => line.startsWith("HEALTHCHECK ") && line.includes("/health"))).toBe(true);
+  });
+});
+
+// The review image (ADR 0070 point 2.2): as the indexer, plus the libvips licence texts and source pointer the LGPL
+// asks to travel with the binaries. review.image.test.ts checks the built image has util-linux's prlimit.
+describe("review image", () => {
+  const review = runtimeStage(read(REVIEW_DOCKERFILE));
+
+  test("review_image_copies_only_its_paths_and_the_lgpl_notices", () => {
+    expect(fromImages(read(REVIEW_DOCKERFILE))).toEqual([pinnedNode, pinnedNode]);
+    expect(review.filter((line) => /^(?:COPY|ADD) /.test(line))).toEqual([
+      "COPY --from=deps /app/package.json /app/package.json",
+      "COPY --from=deps /app/node_modules /app/node_modules",
+      "COPY --from=deps /app/shared /app/shared",
+      "COPY --from=deps /app/domains/content /app/domains/content",
+      "COPY --from=deps /app/infrastructure/image /app/infrastructure/image",
+      "COPY --from=deps /app/interfaces/review /app/interfaces/review",
+      "COPY --from=deps /app/deployment/images/review-notices /app/deployment/images/review-notices",
+    ]);
+    for (const file of ["LGPL-3.0.txt", "GPL-3.0.txt", "SOURCE.md", "sharp-libvips-THIRD-PARTY-NOTICES.md"]) {
+      expect(existsSync(join(DEPLOYMENT, "images/review-notices", file)), file).toBe(true);
+    }
+    expect(review).toContain('ENTRYPOINT ["node", "interfaces/review/main.ts"]');
+    expect(review).toContain("USER 65532:65532");
+    expect(review.filter((line) => /^(?:EXPOSE|CMD) /.test(line))).toEqual(["EXPOSE 8082"]);
+  });
+
+  test("review_notices_name_the_pinned_libvips", () => {
+    const lock = JSON.parse(read("../package-lock.json")) as { packages: Record<string, { version?: string }> };
+    const libvips = lock.packages["node_modules/@img/sharp-libvips-linux-x64"]?.version;
+    const source = read("images/review-notices/SOURCE.md");
+    expect(libvips).toBeDefined();
+    expect(source).toContain(`sharp-libvips-linux-x64-${libvips}.tgz`);
+    expect(source).toContain(`lovell/sharp-libvips/tree/v${libvips}`);
   });
 });
 
