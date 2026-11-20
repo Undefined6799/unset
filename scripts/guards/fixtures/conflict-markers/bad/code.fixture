@@ -1,0 +1,7 @@
+// fixture: interfaces/web/src/a.ts findings=2
+export const a = 1;
+<<<<<<<
+export const b = 2;
+=======
+export const b = 3;
+>>>>>>> feature

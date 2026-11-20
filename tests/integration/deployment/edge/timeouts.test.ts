@@ -29,6 +29,17 @@ describe("edge deadline order", () => {
     expect(timeoutProblems(config(proxy(130 * S)), limits, late, 60_000)).toEqual(["f.json /slow: deadlineMs 130000"]);
   });
 
+  // A picture upload (routes/images/policy.ts): its body may take the read window, and its deadline runs after it.
+  test("body_window_beyond_the_read_window_fails", () => {
+    const upload = (bodyWindowMs: number) => [
+      { file: "f.json", routes: [{ path: "/images", bodyWindowMs, deadlineMs: 100_000 }] },
+    ];
+    expect(timeoutProblems(config(proxy(130 * S)), limits, upload(120_000), 60_000)).toEqual([]);
+    expect(timeoutProblems(config(proxy(130 * S)), limits, upload(121_000), 60_000)).toEqual([
+      "f.json /images: bodyWindowMs 121000",
+    ]);
+  });
+
   test("site_without_the_snippet_fails", () => {
     expect(timeoutProblems(config(proxy(130 * S), proxy()), limits, manifests, 60_000)).toEqual([
       "a reverse_proxy has response_header_timeout unset",

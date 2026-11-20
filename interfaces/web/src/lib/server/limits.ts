@@ -55,6 +55,15 @@ export const policiesFor = (mode: "header" | "socket"): PolicyTable =>
 /**
  * Picture uploads held in memory at once (ADR 0070 point 4): one per member, four for the whole process. Measured
  * 2026-11-20 (routes/images/upload.server.ts): four 64 MiB uploads parsed at once peak at about 510 MiB, inside web's
- * 1 GB; a fifth is refused as busy and the editor says to try again.
+ * 1 GB; a fifth is refused as busy and the editor says to try again. More do not fit: eight bodies arriving over
+ * 2 to 10 s and held while review works peak at about 910 MiB above the process's base (Node 26.12, undici's
+ * formData, 64 KiB chunks, 2026-11-20). A slow sender holds its place for at most the edge's 120 s read window.
  */
 export const IMAGE_UPLOADS_IN_FLIGHT = 4;
+
+/**
+ * Pictures web sends review at once: review's REVIEW_CHILDREN default (interfaces/review/config.ts), so none waits in
+ * review's queue on its 20 s job clock while web's 30 s timeout runs. The others wait in web, on their own deadline.
+ * tests/integration/web/review-lanes.test.ts holds the two numbers together.
+ */
+export const REVIEW_LANES = 2;

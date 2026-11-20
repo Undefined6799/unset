@@ -7,8 +7,8 @@ import { openPage } from "./observe.ts";
 import { INDEXED, PAGES, type PageFixture } from "./pages.ts";
 
 const SETTINGS: PageFixture = {
-  path: "/settings/profile",
-  route: "/settings/profile",
+  path: "/settings/privacy",
+  route: "/settings/privacy",
   group: "app",
   expectJs: true,
   member: "account",

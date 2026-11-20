@@ -3,6 +3,9 @@
 // gate and a declared length within the route's cap. Here, in order: uploads open on this stack, one upload per
 // member and a few site-wide in memory, the hourly, daily and quota limits before the body is read, then the body,
 // review's versions, the row, and the objects. A failure after the row deletes what this upload wrote.
+// Once the body is read the rest gets its own time (policy.ts `deadlineMs`), so a slow upload does not leave review
+// too little; and review is sent only as many pictures as it decodes at once, so none waits in its queue past web's
+// 30 s timeout.
 //
 // Memory (measured 2026-11-20, Node 26.12, undici's multipart parser): a 64 MiB file read through
 // `request.formData()` then `file.arrayBuffer()` peaks at about four copies for one upload and about 510 MiB for four
@@ -16,16 +19,14 @@ import {
   UPLOAD_LIMITS,
 } from "@unset/domains-content";
 
-/** The member's image rows, bound to their DID and this request's deadline (infrastructure/postgres imageStore). */
+/** The member's image rows, bound to their DID; each call ends at the deadline it is given (imageStore). */
 export type ImageRows = {
-  readonly admit: () => Promise<ImageAdmission>;
-  readonly store: (image: {
-    kind: "image";
-    width: number;
-    height: number;
-    bytes: number;
-  }) => Promise<{ ok: true; id: string } | { ok: false; code: "image.quota" }>;
-  readonly discard: (id: string) => Promise<boolean>;
+  readonly admit: (deadline: AbortSignal) => Promise<ImageAdmission>;
+  readonly store: (
+    image: { kind: "image"; width: number; height: number; bytes: number },
+    deadline: AbortSignal,
+  ) => Promise<{ ok: true; id: string } | { ok: false; code: "image.quota" }>;
+  readonly discard: (id: string, deadline: AbortSignal) => Promise<boolean>;
 };
 
 /** The private store under the member's own prefix, `drafts/<did>/i/` (ADR 0070 point 2.4). */
@@ -70,6 +71,44 @@ export function createUploadSlots(siteWide: number) {
 
 export type UploadSlots = ReturnType<typeof createUploadSlots>;
 
+/**
+ * Review's lanes: at most `lanes` pictures sent at once, the rest waiting here in order. Review decodes REVIEW_CHILDREN
+ * at once and makes the rest wait on its own 20 s job clock, so a picture queued there could outlast web's 30 s
+ * timeout; waiting here, it waits on this request's own deadline instead. `enter` resolves false if that ends first.
+ */
+export function createReviewLanes(lanes: number) {
+  let busy = 0;
+  const waiting: (() => void)[] = [];
+  return {
+    async enter(deadline: AbortSignal): Promise<boolean> {
+      if (deadline.aborted) return false;
+      if (busy < lanes) {
+        busy += 1;
+        return true;
+      }
+      return new Promise((resolve) => {
+        const turn = () => {
+          deadline.removeEventListener("abort", giveUp);
+          resolve(true); // `leave` passed its lane on, so busy is unchanged
+        };
+        const giveUp = () => {
+          waiting.splice(waiting.indexOf(turn), 1);
+          resolve(false);
+        };
+        waiting.push(turn);
+        deadline.addEventListener("abort", giveUp, { once: true });
+      });
+    },
+    leave(): void {
+      const next = waiting.shift();
+      if (next === undefined) busy -= 1;
+      else next();
+    },
+  };
+}
+
+export type ReviewLanes = ReturnType<typeof createReviewLanes>;
+
 const CONTENT_TYPES: Readonly<Record<ImageVersion["format"], string>> = {
   jpeg: "image/jpeg",
   webp: "image/webp",
@@ -80,35 +119,74 @@ export type UploadDeps = {
   readonly open: boolean;
   readonly member: string;
   readonly slots: UploadSlots;
+  readonly lanes: ReviewLanes;
   readonly rows: ImageRows;
   readonly processor: ImageProcessor;
   readonly objects: DraftObjects;
+  /** The request's own deadline, which covers the body's window and the work after it. */
+  readonly deadline: AbortSignal;
+  /** The time review and the store get once the body is read (policy.ts `deadlineMs`). */
+  readonly afterBodyMs: number;
 };
+
+const TIMEOUT: UploadResult = { ok: false, code: "image.timeout" };
 
 /** The whole intake; `readFile` reads the body only once every check before it has passed. */
 export async function uploadImage(deps: UploadDeps, readFile: () => Promise<Uint8Array | null>): Promise<UploadResult> {
   if (!deps.open) return { ok: false, code: "image.closed" };
   const slot = deps.slots.take(deps.member);
   if (slot !== "ok") return { ok: false, code: slot };
+  // The slot is held until the work after the body settles, not only until the member is answered: a review call
+  // past the deadline still holds the body (up to web's 30 s timeout), and the slots are what bound that memory.
+  let work: Promise<UploadResult> | undefined;
   try {
-    const admission = await deps.rows.admit();
+    const admission = await deps.rows.admit(deps.deadline);
     if (!admission.ok) return { ok: false, code: admission.code };
     const bytes = await readFile();
     if (bytes === null) return { ok: false, code: "image.missing" };
-    const processed = await deps.processor.process(bytes, UPLOAD_LIMITS, imageVersions());
-    if (processed.kind === "refused") return { ok: false, code: processed.code };
-    return await keep(deps, processed.versions);
+    const deadline = AbortSignal.any([deps.deadline, AbortSignal.timeout(deps.afterBodyMs)]);
+    work = afterBody(deps, bytes, deadline);
+    return await answerBy(deadline, work);
   } finally {
-    deps.slots.release(deps.member);
+    const release = () => deps.slots.release(deps.member);
+    if (work === undefined) release();
+    else work.then(release, release);
   }
 }
 
+/**
+ * The work's answer, or a timeout once the deadline ends, so the member hears before the edge stops waiting. Work
+ * still running stops at its next call, which takes the same deadline; a row it stored meanwhile is the sweep's. Its
+ * slot stays taken until it settles (uploadImage).
+ */
+function answerBy(deadline: AbortSignal, work: Promise<UploadResult>): Promise<UploadResult> {
+  if (deadline.aborted) return Promise.resolve(TIMEOUT);
+  const ended = new Promise<UploadResult>((resolve) =>
+    deadline.addEventListener("abort", () => resolve(TIMEOUT), { once: true }),
+  );
+  return Promise.race([work, ended]);
+}
+
+/** Review, in its turn, then the row and objects. */
+async function afterBody(deps: UploadDeps, bytes: Uint8Array, deadline: AbortSignal): Promise<UploadResult> {
+  if (!(await deps.lanes.enter(deadline))) return TIMEOUT;
+  let processed: Awaited<ReturnType<ImageProcessor["process"]>>;
+  try {
+    processed = await deps.processor.process(bytes, UPLOAD_LIMITS, imageVersions());
+  } finally {
+    deps.lanes.leave();
+  }
+  if (processed.kind === "refused") return { ok: false, code: processed.code };
+  if (deadline.aborted) return TIMEOUT;
+  return await keep(deps, processed.versions, deadline);
+}
+
 /** The row first, so the quota decides before anything is written; then every version, or none of them. */
-async function keep(deps: UploadDeps, versions: readonly ImageVersion[]): Promise<UploadResult> {
+async function keep(deps: UploadDeps, versions: readonly ImageVersion[], deadline: AbortSignal): Promise<UploadResult> {
   const main = versions.find((version) => version.name === "main");
   if (main === undefined) return { ok: false, code: "image.cannot_use" };
   const bytes = versions.reduce((sum, version) => sum + version.bytes.length, 0);
-  const row = await deps.rows.store({ kind: "image", width: main.width, height: main.height, bytes });
+  const row = await deps.rows.store({ kind: "image", width: main.width, height: main.height, bytes }, deadline);
   if (!row.ok) return row;
   for (const version of versions) {
     const path = `${row.id}/${version.name}.${version.format}`;
@@ -116,7 +194,7 @@ async function keep(deps: UploadDeps, versions: readonly ImageVersion[]): Promis
     if (!put.ok) {
       // The row goes only once its objects have: otherwise the sweep finds it after a day and deletes both.
       const cleared = await deps.objects.deletePrefix(`${row.id}/`);
-      if (cleared.ok) await deps.rows.discard(row.id);
+      if (cleared.ok) await deps.rows.discard(row.id, deadline);
       return { ok: false, code: "image.busy" };
     }
   }

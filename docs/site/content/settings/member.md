@@ -11,5 +11,6 @@ What members can set for themselves. Notes are from `docs/site/data/settings.yam
 | --- | --- |
 | `/prefs/theme` | Light, dark or device theme, kept in a cookie. |
 | `/settings/account` | The checked handle and DID, a link to the sign-in server, and signing out here or everywhere. |
-| `/settings/profile` | Display name, headline, location, website and avatar, and the Search and AI choices (ADR 0062). |
-| `/settings/search-and-ai` | Saves the Search and AI choices from the Profile page; whether search engines and AI search may show the public page, with an optional title and description. |
+| `/settings/privacy` | The Search and AI choices (ADR 0062), the search title, description and a search result preview under Advanced. |
+| `/settings/profile` | Display name, headline, location, website and avatar. |
+| `/settings/search-and-ai` | Saves the Search and AI choices from the Privacy page; whether search engines and AI search may show the public page, with an optional title and description. |

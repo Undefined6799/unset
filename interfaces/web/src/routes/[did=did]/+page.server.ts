@@ -1,9 +1,9 @@
-// The member's own page at /<DID> (P2.13, ADR 0051; P1.20g, P1.20i; the avatar's shape, P1.20k). Owner-only until public profiles arrive with the
-// indexer (ADR 0052): a path that is no DID, or another member's DID, reads as missing (SE-2), and a visitor is sent to
-// sign in. The profile and cards come from the member's own PDS. The card writes are this page's form actions: each
-// writes only to the session's own repo (the DID is the session's, never the form's), and a card key is parsed before
-// it reaches the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again
-// with its code and status.
+// The member's own page at /<DID> (P2.13, ADR 0051; P1.20g, P1.20i; the avatar's shape, P1.20k). Owner-only: a path
+// that is no DID reads as missing (SE-2), and anyone but the owner is sent to the public page at /@<DID> (P3.12s).
+// The profile and cards come from the member's own PDS. The card writes are this page's form actions: each writes only
+// to the session's own repo (the DID is the session's, never the form's), and a card key is parsed before it reaches
+// the PDS. A write that succeeds sends the browser back to the page (303); a refusal shows the page again with its
+// code and status.
 import { type Actions, error, fail, redirect, type ServerLoad } from "@sveltejs/kit";
 import type { CardPanelRequest, CardView } from "@unset/apps-web/lib/profile/types.ts";
 import { cardViews, contactAction, websiteLink } from "@unset/apps-web/lib/profile/view.ts";
@@ -34,16 +34,19 @@ const ORDER_FIELD = "order";
 /** The avatar form's one field. */
 const SHAPE_FIELD = "avatarShape";
 
-/** The page's DID when it is the signed-in member's own; otherwise the request stops here. */
+/**
+ * The page's DID when it is the signed-in member's own; otherwise the request stops here. Anyone else who opens it,
+ * signed out or another member, is sent to the DID's public page (P3.12s), so the link a member copies from here works
+ * for everyone. That page answers an unknown, hidden or erased DID with the same 404, so the redirect, made for every
+ * DID alike, says nothing about the account (SE-2). A write never redirects: it stops unsigned or as missing.
+ */
 function ownDid(raw: string | undefined, did: string | undefined, method: "GET" | "POST"): Did {
   const page = parseDid(raw ?? "");
   if (page === null) error(404, "http.not_found");
-  if (did === undefined) {
-    if (method === "POST") error(401, "auth.required"); // the gate sends it to sign in first; kept so no write runs unsigned
-    redirect(303, `/login?${new URLSearchParams({ next: `/${page}` })}`);
-  }
-  if (page !== did) error(404, "http.not_found");
-  return page;
+  if (page === did) return page;
+  if (method === "GET") redirect(303, `/@${page}`);
+  if (did === undefined) error(401, "auth.required"); // the gate sends it to sign in first; kept so no write runs unsigned
+  error(404, "http.not_found");
 }
 
 /** The PDS context of one request: its deadline, and the monotonic time the reads must fit before. */

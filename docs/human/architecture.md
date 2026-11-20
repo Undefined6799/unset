@@ -80,6 +80,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
 | ADG §1 | No two tracked paths differ only in letter case | checked: `scripts/guards/case-collision.ts`, `case_pair_file_fails`, `case_pair_dir_fails` |
+| P2.19b | No tracked text file, docs included, holds a merge conflict marker | checked: `scripts/guards/conflict-markers.ts`, `conflict_in_docs_and_code_fails`, `lookalike_lines_pass` |
 | ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
 | ADG §1, P1.28p | No file outside the tooling set imports one inside it. The set is the Vitest test files, `tests/`, the SE-6 check paths under `scripts/` (not `scripts/ui`), the root `vitest.config.ts`, `fixtures/` and `__fixtures__/` folders, `*.fixture.*`, `*.vector.json` and `*.image.test.*`. It is defined once in `scripts/lint/tooling.ts`, and P1.28m's test-file check reads the same definition (architecture amendments 11 and 11a, 2026-10-08) | checked: `no-product-imports-tooling-set`, `product_never_imports_the_tooling_set` |
 | ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |

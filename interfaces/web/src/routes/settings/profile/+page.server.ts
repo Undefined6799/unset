@@ -4,17 +4,10 @@
 // request's (SE-2). Every stored field is checked on the way in (domains/profile readProfileRecord): one another client
 // wrote badly reads as empty. A dead grant sends the member to sign in; any other failed read shows no form.
 import { error, redirect, type ServerLoad } from "@sveltejs/kit";
-import {
-  APP_LIMITS,
-  DISCOVERABILITY_LIMITS,
-  EMPTY_PROFILE,
-  type ProfileFields,
-  readProfileRecord,
-} from "@unset/domains-profile";
+import { APP_LIMITS, EMPTY_PROFILE, type ProfileFields, readProfileRecord } from "@unset/domains-profile";
 import { loadProfileRecord } from "@unset/infrastructure-pds";
 import { services } from "../../../lib/server/compose.ts";
 import { pdsSignInRedirect } from "../../../lib/server/pds-failure.ts";
-import { config } from "../../../lib/server/runtime.ts";
 import { settingsShell } from "../shell.server.ts";
 
 export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => {
@@ -22,10 +15,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
   const did = locals.did;
   if (did === undefined) error(500, { message: "internal.error" }); // the gate let no session through
   const ctx = { memo: new Map(), deadline: locals.deadline, deadlineAt: locals.deadlineAt };
-  const [read, discoverability] = await Promise.all([
-    loadProfileRecord(services().pds.pdsCall, ctx, did),
-    services().discoverability.get(did, locals.deadline),
-  ]);
+  const read = await loadProfileRecord(services().pds.pdsCall, ctx, did);
   let profile: ProfileFields | null = null;
   if (read.kind === "ok") {
     const stored = read.value?.value;
@@ -39,12 +29,7 @@ export const load: ServerLoad = async ({ locals, request, setHeaders, url }) => 
     profile,
     limits: APP_LIMITS,
     pagePath: `/${did}`,
-    // The Search and AI section (ADR 0062), kept in our database, so it shows even when the PDS did not answer.
-    discoverability,
-    discoverabilityLimits: DISCOVERABILITY_LIMITS,
     // The profile save's 303 back here (routes/profile/save.server.ts): with no script, the page says it saved.
     saved: url.searchParams.has("saved"),
-    // Listing switched off on the whole site (P1.21b): the section says so, and the choices still save.
-    searchListingOff: config.SEARCH_LISTING !== "on",
   };
 };
