@@ -11,6 +11,7 @@ import {
   int,
   list,
   loadConfig,
+  optionalSecretFile,
   secret,
   secretFile,
   str,
@@ -103,6 +104,18 @@ describe("loadConfig", () => {
     const schema = defineConfig({ S: secretFile({ minBytes: 32 }) });
     const config = loadConfig(schema, { S_FILE: tempFile("s", `${"a".repeat(32)}\n`) }, quiet);
     expect(config.S.reveal()).toBe("a".repeat(32));
+  });
+
+  test("optional_secret_file_unset_loads_undefined_and_set_is_checked", () => {
+    const schema = defineConfig({ S: optionalSecretFile({ minBytes: 32 }) });
+    expect(loadConfig(schema, {}, quiet).S).toBeUndefined();
+    expect(loadConfig(schema, { S_FILE: tempFile("o", "a".repeat(32)) }, quiet).S?.reveal()).toBe("a".repeat(32));
+    expect(problems(() => loadConfig(schema, { S_FILE: tempFile("p", "short") }, quiet))).toEqual([
+      { key: "S", reason: "invalid" },
+    ]);
+    expect(problems(() => loadConfig(schema, { S: "a".repeat(32) }, quiet))).toEqual([
+      { key: "S", reason: "forbidden_in_env" },
+    ]);
   });
 
   test("secret_file_unreadable", () => {
