@@ -1,7 +1,7 @@
 // The fetch shape for libraries that take a custom fetch (P1.18a): @atproto/oauth-client-node, identity resolvers.
 // Built on the guarded request, so policy, pinning, the no-redirect rule and the decompression cap all apply; undici's
 // own fetch would follow redirects and decompress by itself.
-import { atproto, type Policy } from "./policies.ts";
+import { atproto, atprotoBlobUpload, type Policy } from "./policies.ts";
 import { type GuardedRequest, type GuardedResponse, type NetGuard, NULL_BODY_STATUSES } from "./request.ts";
 
 export type FetchDefaults = { timeoutMs?: number; maxBytes?: number; accept?: readonly string[] };
@@ -19,7 +19,7 @@ function toResponse(result: GuardedResponse): Response {
 
 /**
  * A WHATWG fetch through `guard`. The caller's `redirect` option is ignored: a redirect is always refused. The method,
- * headers (a `host` header included) and the 1 MiB body cap are checked by the guard, so each refusal is reported.
+ * headers (a `host` header included) and the policy's body cap are checked by the guard, so each refusal is reported.
  */
 export function guardedFetch(guard: NetGuard, policy: Policy, defaults: FetchDefaults = {}): typeof fetch {
   return async (input, init) => {
@@ -39,6 +39,21 @@ export function guardedFetch(guard: NetGuard, policy: Policy, defaults: FetchDef
   };
 }
 
-/** The one fetch handed to atproto libraries (P2.04); our own PDS is reached through the guard's internal hosts. */
-export const libraryFetch = (guard: NetGuard): typeof fetch =>
-  guardedFetch(guard, atproto, { timeoutMs: 10_000, maxBytes: 1024 * 1024 });
+/** The one call that sends a member's picture to their PDS (https://atproto.com/specs/xrpc; ADR 0070 point 8). */
+const BLOB_UPLOAD_PATH = "/xrpc/com.atproto.repo.uploadBlob";
+
+/**
+ * The one fetch handed to atproto libraries (P2.04); our own PDS is reached through the guard's internal hosts. A POST
+ * to uploadBlob goes under atprotoBlobUpload, whose body may reach 2 MiB; every other request keeps atproto's 1 MiB.
+ */
+export function libraryFetch(guard: NetGuard): typeof fetch {
+  const defaults = { timeoutMs: 10_000, maxBytes: 1024 * 1024 };
+  const plain = guardedFetch(guard, atproto, defaults);
+  const upload = guardedFetch(guard, atprotoBlobUpload, defaults);
+  return (input, init) => {
+    const req = new Request(input, init);
+    return req.method === "POST" && URL.canParse(req.url) && new URL(req.url).pathname === BLOB_UPLOAD_PATH
+      ? upload(req)
+      : plain(req);
+  };
+}

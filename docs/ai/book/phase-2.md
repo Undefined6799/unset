@@ -3926,6 +3926,9 @@ P2.19a built 2026-11-20 ahead of P2.19, since it needs nothing from it: `sh.unse
 graphemes, fit `contain` or `fill`) and `#gallery` (title, 1 to 12 pictures), and an optional `sh.unset.defs#image` on
 `#entry`.
 Readers still hide both kinds until P2.19c draws them.
+P2.19d (ADR 0070 point 8's body and request caps, one pull request on Alex's line): web's `/images` route takes up to
+31 MiB and sets adapter-node's cap; net-guard's `review` policy sends up to 32 MiB, the object store's puts up to 2 MiB,
+and `com.atproto.repo.uploadBlob` alone up to 2 MiB; every other route and request keeps its cap.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)

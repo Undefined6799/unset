@@ -205,7 +205,7 @@ describe("guardedRequest", () => {
     // P2.18k: the object store by the one origin the composition root passes in (OBJECT_STORE_URL), nothing wider.
     handler = (_req, res) => res.end("ok");
     const policy = objectStore("http://objects:8333");
-    expect(policy).toEqual({ name: "object-store", kind: "internal", origins: ["http://objects:8333"] });
+    expect(policy).toMatchObject({ name: "object-store", kind: "internal", origins: ["http://objects:8333"] });
     const ok = guardFor({ objects: ["172.20.0.9"] }, servers.http.port);
     expect((await ok.guard.request(policy, { url: "http://objects:8333/unset-private/drafts/x" })).status).toBe(200);
     const other = guardFor({ objects: ["172.20.0.9"], db: ["172.20.0.9"] }, servers.http.port);
