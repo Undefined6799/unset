@@ -44,7 +44,7 @@ export const PROFILE_SETTINGS = {
       hint: "Your picture and name above your cards; details open from the picture.",
     },
   ],
-  cardsNote: "Your README, links and other cards are edited on your page.",
+  cardsNote: "Your text, links and other cards are edited on your page.",
   viewPage: "View your page",
   save: "Save profile",
   saving: "Saving…",

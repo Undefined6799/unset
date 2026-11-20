@@ -345,7 +345,7 @@
       },
       "profile-cards.svelte": {
         "origin": "ours",
-        "purpose": "The profile's cards in a two-column grid on the stock Card: README, links, collection, buttons."
+        "purpose": "The profile's cards in a two-column grid on the stock Card: Text, links, collection, buttons."
       },
       "profile-layout.svelte": {
         "origin": "ours",
@@ -361,7 +361,7 @@
       },
       "readme.svelte": {
         "origin": "ours",
-        "purpose": "The README card's parsed blocks as plain escaped elements, with the README text styles."
+        "purpose": "The Text card's parsed blocks (the #readme kind) as plain escaped elements, on the page's type scale."
       }
     },
     "settings": {

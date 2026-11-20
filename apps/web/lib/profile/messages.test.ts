@@ -5,7 +5,7 @@ import { CARD_EDIT, cardName } from "./messages.ts";
 
 describe("cardName", () => {
   test.each([
-    ["a README", { kind: "readme", text: "# Hi" }, "README"],
+    ["a Text card", { kind: "readme", text: "# Hi" }, "Text"],
     ["links with a title", { kind: "links", title: "Elsewhere", layout: "list", items: [] }, "Elsewhere"],
     ["links with none", { kind: "links", title: "", layout: "list", items: [] }, "Links"],
     ["a collection with none", { kind: "collection", title: "", layout: "grid", items: [] }, "Collection"],

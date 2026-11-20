@@ -28,7 +28,6 @@ const setUp = $derived(data.profile === null && !data.profileUnavailable);
 // `handle.invalid` (the protocol's INVALID_HANDLE, @atproto/syntax 0.7.7
 // dist/handle.js), which is no name (walkthrough 2026-11-18, finding 6).
 const title = $derived(data.account.verified || data.name !== data.account.handle ? data.name : OWN_PAGE.title);
-const readmeHandle = $derived(data.account.verified ? data.account.handle : null);
 </script>
 
 <svelte:head>
@@ -95,9 +94,9 @@ const readmeHandle = $derived(data.account.verified ? data.account.handle : null
     />
   {/if}
   {#if data.profile === null}
-    <ProfileCards cards={data.cards} handle={readmeHandle} />
+    <ProfileCards cards={data.cards} />
   {:else}
-    <ProfileCards cards={data.cards} handle={readmeHandle}>
+    <ProfileCards cards={data.cards}>
       {#snippet controls(index: number)}
         <CardControls cards={data.cards} {index} limits={data.cardEditLimits} {enhance} />
       {/snippet}

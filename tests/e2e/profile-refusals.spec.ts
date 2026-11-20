@@ -89,8 +89,8 @@ test.describe("no script", () => {
     expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
     const panel = page.locator("#card-editor");
     await page.getByRole("link", { name: "Add card" }).click();
-    await panel.getByRole("link", { name: /^README/ }).click();
-    await expect(panel.getByRole("textbox", { name: "README" })).toHaveAttribute("maxlength", "100000");
+    await panel.getByRole("link", { name: /^Text/ }).click();
+    await expect(panel.getByRole("textbox", { name: "Text" })).toHaveAttribute("maxlength", "100000");
   });
 });
 
