@@ -686,3 +686,14 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
   store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
   awaiting Alex.
+- **ADR 0070 accepted (Alex, 2026-11-20 02:50Z, against d1e6117; own record:
+  [0070](0070-shared-image-foundation.md)):** one shared image foundation. An image is a blob in the member's
+  repository and each use carries its alt text; processing runs in its own no-network process `review`; the
+  inspection port is empty; uploads with nothing mounted are refused outside a closed list of test origins. AGPL
+  packages may use LGPL-3.0-or-later libraries. Superseded step-book text and ADR 0012's licence line as the record
+  says; ADR 0029's scan paragraph is replaced when 0029 is accepted. 0012 and 0029 are not edited.
+- **ADR 0071 accepted (Alex, 2026-11-20 02:51Z, against dbfc459; own record:
+  [0071](0071-limits-for-thousands-of-members.md)):** limits sized for thousands of members; web marks its own PDS
+  calls with a key so the edge counts them in their own zones; `app_signin` counts only the login and join posts.
+  ADR 0042's two ceiling values and ADR 0031 Decision 1's `app_signin` matcher and value are superseded. 0031 and 0042
+  are not edited.
