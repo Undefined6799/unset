@@ -61,6 +61,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
     "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
   "card.pds_unavailable": "Your sign-in server is not answering, so your card was not saved. Try again.",
+  "card.image_missing": "This picture is no longer available. Upload it again, then save.",
+  "card.image_unavailable": "Your picture could not be saved just now. Nothing was changed. Try again.",
   "welcome.date_invalid": "That date is not a real calendar date.",
   "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
   "welcome.country_required": "Tick the box about where you live.",

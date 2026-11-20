@@ -3943,6 +3943,12 @@ P2.19b, review follow-ups, built 2026-11-20 (#1844): the upload's deadline resta
 `bodyWindowMs` 120 s, then 100 s for review and the store); web sends review at most `REVIEW_LANES` (2) pictures at
 once; a timed-out upload keeps its slot until its review call ends. Four uploads per process stays (eight measured at
 about 910 MiB above web's base).
+P2.19b, picture cards on the server, built 2026-11-20: the card forms take kind `image` (`image` a draft id or empty to
+keep the picture, `alt`, `caption`, `fit`), and every card write publishes a new picture after its own checks and
+before the write: the use first (`addUse`, under a key web picks with `newCardKey` for a new card), then the main
+version from `drafts/<did>/i/<id>/main.jpeg`, then `com.atproto.repo.uploadBlob`; a Save publishes once across its one
+retry. A write that does not land releases the use; one that lands keeps only its new picture's use
+(`keepOnlyUse`), and a delete or a change of kind drops it. Pages still hide picture cards until P2.19c.
 Tags: [SEC]            Depends on: P2.18, P1.08            Plan: §5.2 "Media proxy" (draft previews paragraph); §2 rule 9; plan-issue 5
 Where: `interfaces/media/{main.ts, verify.ts}`, `domains/content/media/signed-url.ts`, compose service `media` (dev), edge route for
   the media domain (P1.28 config change, listed in the PR)
