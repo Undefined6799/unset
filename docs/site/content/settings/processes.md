@@ -64,6 +64,10 @@ Every environment setting, by process. "not set" means the default applies.
 | `PDS_ADMIN_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_ADMIN_WEB_KID` | str | text (pattern in source) | required | from env file: `WEB_PDS_ADMIN_KID` | from env file: `WEB_PDS_ADMIN_KID` | `interfaces/web/src/lib/server/config.ts` |
 | `PDS_DID` | str | text (pattern in source) | required | from env file: `PDS_DID` | from env file: `PDS_DID` | `interfaces/web/src/lib/server/config.ts` |
+| `OBJECT_STORE_URL` | origin | http: or https: | required | `http://objects:8333` | `http://objects:8333` | `interfaces/web/src/lib/server/config.ts` |
+| `OBJECT_STORE_BUCKET` | str | text (pattern in source) | required | `unset-private` | `unset-private` | `interfaces/web/src/lib/server/config.ts` |
+| `OBJECT_STORE_ACCESS_ID` | str | text (pattern in source) | required | `unset-web` | `unset-web` | `interfaces/web/src/lib/server/config.ts` |
+| `OBJECT_STORE_SECRET` | secretFile | at least 32 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `SEARCH_LISTING` | oneOf | on, off | `off` | `off` | `off` | `interfaces/web/src/lib/server/config.ts` |
 | `PRIVACY_OFFICER_TITLE` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_TITLE]` | `Privacy Officer` | `interfaces/web/src/lib/server/legal.ts` |
 | `PRIVACY_OFFICER_CONTACT` | str | text (pattern in source) | required | `[to fill: PRIVACY_OFFICER_CONTACT]` | `contact@staging.unset.sh` | `interfaces/web/src/lib/server/legal.ts` |
@@ -224,3 +228,12 @@ None.
 | Key | local | staging |
 | --- | --- | --- |
 | `POSTGRES_PASSWORD_FILE` | file `/run/secrets/pg_superuser_password` | file `/run/secrets/pg_superuser_password` |
+
+### review
+
+| Key | local | staging |
+| --- | --- | --- |
+| `LISTEN_PORT` | `8082` | `8082` |
+| `UNSET_COMMIT` | `0000000000000000000000000000000000000000` | `0000000000000000000000000000000000000000` |
+| `UNSET_ENV` | `dev` | `dev` |
+| `UNSET_SERVICE` | `review` | `review` |

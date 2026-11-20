@@ -93,6 +93,18 @@ const inviteConfig = {
 };
 
 /**
+ * Members' pictures in the private object store (ADR 0041 Decision 3, ADR 0070 point 2.4): the store's internal origin,
+ * the bucket, and web's identity in it, whose actions reach `drafts/*` and list the bucket, nothing else (runbook "The
+ * object store's identities"). The key id is a fixed name, not a secret; the secret is a mounted file.
+ */
+const objectStoreConfig = {
+  OBJECT_STORE_URL: origin({ protocols: ["http:", "https:"] }),
+  OBJECT_STORE_BUCKET: str({ pattern: /[a-z0-9][a-z0-9.-]{2,62}/ }),
+  OBJECT_STORE_ACCESS_ID: str({ pattern: /[A-Za-z0-9._-]{1,128}/ }),
+  OBJECT_STORE_SECRET: secretFile({ minBytes: 32 }),
+};
+
+/**
  * Search and AI listing for the whole site (P1.21b, within ADR 0062). Off, the default, so a stack that leaves it unset
  * is never listed: every response says noindex, robots.txt refuses AI crawlers and names no member, and the sitemap
  * lists nothing, whatever members chose; their choices are kept. On, each member's own choices decide, as ADR 0062 describes.
@@ -126,6 +138,7 @@ export const schema = defineEntrypointConfig({
   ...pdsConfig,
   ...onboardingConfig,
   ...inviteConfig,
+  ...objectStoreConfig,
   ...searchConfig,
   ...legalConfig,
   ...testRoutesConfig,

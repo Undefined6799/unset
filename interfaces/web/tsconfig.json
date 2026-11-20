@@ -40,6 +40,9 @@
       "path": "../../infrastructure/session"
     },
     {
+      "path": "../../infrastructure/storage"
+    },
+    {
       "path": "../../shared/config"
     },
     {

@@ -31,23 +31,45 @@ export const HEALTH_WAIT_MS = 180_000;
 const POLL_MS = 3_000;
 const PROBE_MS = 15_000;
 /** The services `up` starts; pds-token-reader is a tools profile and never starts. */
-export const SERVICES = ["postgres", "migrate", "pds", "edge", "web", "objects", "pds-admin", "indexer"] as const;
+export const SERVICES = [
+  "postgres",
+  "migrate",
+  "pds",
+  "edge",
+  "web",
+  "objects",
+  "pds-admin",
+  "indexer",
+  "review",
+] as const;
 const ONE_SHOT = "migrate";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const PARENT = dirname(ROOT);
+/** Web's key id in objects_s3, the literal compose gives web as OBJECT_STORE_ACCESS_ID (P2.21a). */
+export const WEB_STORE_KEY_ID = "unset-web";
 /**
- * The object store's identities (runbook "The object store's identities"): the PDS's alone, with the three actions
- * docs/human/runbooks/pds-blobstore-move.md writes and tests/integration/storage/pds-key.test.ts proves (P2.18p), and
- * never an Admin one.
+ * The object store's identities (runbook "The object store's identities"), never an Admin one: the PDS's, with the
+ * three actions docs/human/runbooks/pds-blobstore-move.md writes and tests/integration/storage/pds-key.test.ts proves
+ * (P2.18p), and web's, on members' drafts only, as tests/integration/storage/object-store.test.ts proves (P2.21a).
  */
-export const objectsIdentities = (keyId: string, secret: string): string =>
+export const objectsIdentities = (pds: { keyId: string; secret: string }, webSecret: string): string =>
   JSON.stringify({
     identities: [
       {
         name: "pds",
-        credentials: [{ accessKey: keyId, secretKey: secret }],
+        credentials: [{ accessKey: pds.keyId, secretKey: pds.secret }],
         actions: ["Read:unset-pds", "Write:unset-pds", "List:unset-pds"],
+      },
+      {
+        name: "web",
+        credentials: [{ accessKey: WEB_STORE_KEY_ID, secretKey: webSecret }],
+        actions: [
+          "Read:unset-private/drafts/*",
+          "Write:unset-private/drafts/*",
+          "Tagging:unset-private/drafts/*",
+          "List:unset-private",
+        ],
       },
     ],
   });
@@ -192,7 +214,9 @@ function folders(): void {
   secret(65532, "pg_indexer_password", v.indexer);
   secret(65532, "web_seal_keyring", v.keyring);
   secret(65532, "web_oauth_client_keys", v.oauthKeys);
-  secret(1000, "objects_s3", objectsIdentities(v.pdsStoreKeyId, v.pdsStoreSecret));
+  const webStoreSecret = randomBytes(32).toString("hex");
+  secret(1000, "objects_s3", objectsIdentities({ keyId: v.pdsStoreKeyId, secret: v.pdsStoreSecret }, webStoreSecret));
+  secret(65532, "objects_web", webStoreSecret);
   // pds-admin's copy of the PDS admin password is pds.env's, so its boot probe passes (runbook "pds-admin's files").
   secret(65532, "pds_admin_password", v.adminPassword);
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);
