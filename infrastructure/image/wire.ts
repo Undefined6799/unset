@@ -142,13 +142,16 @@ export function decodeFrame(frame: Uint8Array, job: Job): Extract<ProcessResult,
   const versions: ImageVersion[] = [];
   let offset = 4 + length;
   for (const meta of manifest.versions) {
-    if (!isRecord(meta)) return null;
-    const key = `${String(meta.name)}.${String(meta.format)}`;
+    if (!isRecord(meta) || typeof meta.name !== "string" || typeof meta.format !== "string") return null;
+    const key = `${meta.name}.${meta.format}`;
     const spec = specs.get(key);
     if (spec === undefined || seen.has(key)) return null;
     seen.add(key);
     if (!within(meta.length, 1, spec.maxBytes) || offset + meta.length > buffer.length) return null;
-    if (!within(meta.width, 1, JOB_CEILING.size) || !within(meta.height, 1, JOB_CEILING.size)) return null;
+    // The pool's rule: a version is no larger than it asked for, and `width` bounds only the width, so a width-only
+    // version of a tall picture may be as tall as the source's own edge limit.
+    const tallest = spec.fit === "width" ? job.limits.maxEdge : spec.size;
+    if (!within(meta.width, 1, spec.size) || !within(meta.height, 1, tallest)) return null;
     const bytes = new Uint8Array(buffer.subarray(offset, offset + meta.length));
     offset += meta.length;
     const sha256 = createHash("sha256").update(bytes).digest("hex");

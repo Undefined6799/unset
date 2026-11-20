@@ -85,6 +85,19 @@ describe("frame", () => {
     expect(decodeFrame(ok([version("main", "a".repeat(1001))]), job)).toBeNull();
   });
 
+  test("holds each version to the size it asked for; a width-only one may be as tall as the source", () => {
+    const tallJob: Job = {
+      limits: { ...job.limits, maxEdge: 12_000 },
+      versions: [{ ...spec("main", true), fit: "width", size: 100 }],
+    };
+    const sized = (width: number, height: number) => ({ ...version("main", "x"), width, height });
+    expect(decodeFrame(ok([sized(100, 6000)]), tallJob)).not.toBeNull();
+    expect(decodeFrame(ok([sized(101, 6000)]), tallJob)).toBeNull();
+    expect(decodeFrame(ok([sized(100, 12_001)]), tallJob)).toBeNull();
+    // An inside fit is held to its size on both sides.
+    expect(decodeFrame(ok([sized(100, 101)]), job)).toBeNull();
+  });
+
   test("an unknown refusal says nothing", () => {
     expect(parseRefusal('{"code":"image.animated"}')).toBe("image.animated");
     expect(parseRefusal('{"code":"stack trace here"}')).toBe("image.cannot_use");
