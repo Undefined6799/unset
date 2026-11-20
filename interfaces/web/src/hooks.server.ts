@@ -232,7 +232,7 @@ export const handle: Handle = async (input) => {
   }
   if (refused !== undefined && wantsPage(event.request, event.isDataRequest)) {
     const styled = group === "app" || group === "public";
-    response = refusalPage(refused, response.status, response.headers, styled ? stylesheet : undefined);
+    response = refusalPage(refused, response.status, response.headers, styled ? stylesheet() : undefined);
     // A styled refusal page runs no script and loads only the build's styles and our fonts: the public policy. The app
     // group's fallback (default-src 'none') would block its stylesheet.
     if (styled) return withGroupHeaders(response, group, event.isDataRequest, audience, "public");

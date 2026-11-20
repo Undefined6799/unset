@@ -182,12 +182,13 @@
 # app_global, with no matcher, keeps every app route in a zone and holds one client's average under 4 a second.
 # Values as limits.json appRateLimitZones (edge_app_zones_match_limits).
 # app_global's size (ADR 0031 Decision 1, "measured page load plus headroom"), recounted in Chromium on the SvelteKit
-# build at P1.20j: a page with a cold cache is 5 requests to the app name on an app page (the HTML, the one script and
-# one stylesheet of output.bundleStrategy "single", interfaces/web/vite.config.ts, and the 2 fonts) and 4 on a public
-# page (no script). The build's files are hashed and cached a year, the fonts a day, and every page shares them, so a
-# warm page is 1. A first visit from / through sign-in, the three welcome steps and /me is 6 pages, 4 POSTs and the
-# callback: 29 requests warm as counted at P1.36b, 33 with no cache at all. 1200 is about 36 such uncached visits per
-# address per 5 minutes: room for a few testers behind one address. app_burst was 20 per 10s until P1.20r (Alex
+# build at P1.20j: a page with a cold cache was 5 requests to the app name on an app page (the HTML, the one script and
+# one stylesheet of output.bundleStrategy "single", and the 2 fonts) and 4 on a public page (no script). The build's
+# files are hashed and cached a year, the fonts a day, so a warm page is 1. A first visit from / through sign-in, the
+# three welcome steps and /me is 6 pages, 4 POSTs and the callback: 29 requests warm as counted at P1.36b, 33 with no
+# cache at all. Under "split" (P1.21g) the one script becomes the 34 pieces those pages import, so the uncached visit
+# is about 66: 1200 is about 18 of them per address per 5 minutes, still room for a few testers behind one address,
+# and a warm page is still 1. app_burst was 20 per 10s until P1.20r (Alex
 # 2026-11-19 13:17:24Z, "increase it from 20 to 60"): a member pressing Settings and Profile about twice a second met
 # it, and a warm client navigation costs one request (its __data.json). At 60 per 10s it lets a member click four
 # times a second for ten seconds after a cold page and still refuses a flood; it allows 1800 per 5 minutes, so
@@ -198,6 +199,21 @@
 # P1.21j (Proposed ADR 0071) it counts only those two, 10 per 5 minutes: the callback can only follow a login the zone
 # already counted, and POST /verify-email needs a signed-in session, so counting them made one first sign-in three
 # events and two people behind one address went over. Both still count in app_burst and app_global.
+# app_files (P1.21g; ADR 0069): the split client (output.bundleStrategy "split") loads a cold app page as about 30
+# content-hashed build files under /_app/immutable/, in a second, so they count in app_files instead of app_burst;
+# documents, data, fonts, version.json and every POST stay in app_burst as before, and app_global still counts
+# everything, files too. A request is a build file only when it is a GET or HEAD and its decoded path, before Caddy
+# cleans it, is one of the names SvelteKit 3.2.0 writes (entry/, nodes/, chunks/, assets/; one hash of [A-Za-z0-9_-],
+# a known extension): {http.request.uri.path} is the request's own decoded path (Caddy v2.11.9 replacer.go:186), so
+# no run of slashes, dot segment, letter case or other spelling that web would read as another route can match.
+# adapter-node serves the files from a table built at boot, with a year's immutable caching, and SvelteKit answers a
+# missing one under /_app/ with a plain 404 before any hook runs (kit 3.2.0 src/runtime/server/respond.js:367), so
+# nothing this zone counts reaches a hook, a session or the database. 120 per 10 s is four cold pages of 30 at once.
+(app-build-file) {
+	method GET HEAD
+	vars_regexp {http.request.uri.path} ^/_app/immutable/(?:entry|nodes|chunks|assets)/[\w-]+(?:\.[\w-]+)?\.(?:js|css|woff2|png)$
+}
+
 (app-ratelimit) {
 	rate_limit {
 		zone app_signin {
@@ -211,9 +227,23 @@
 			window 5m
 		}
 		zone app_burst {
+			match {
+				not {
+					import app-build-file
+				}
+			}
 			key {client_ip}
 			ipv6_prefix 64
 			events 60
+			window 10s
+		}
+		zone app_files {
+			match {
+				import app-build-file
+			}
+			key {client_ip}
+			ipv6_prefix 64
+			events 120
 			window 10s
 		}
 		zone app_global {
