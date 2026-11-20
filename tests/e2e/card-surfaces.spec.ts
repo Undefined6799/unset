@@ -3,10 +3,10 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { addCard, deleteCard, OWN_PAGE } from "./cards.ts";
 import { openPage } from "./observe.ts";
 
-// The README card cycles through every surface in the editor; each other kind is added with one surface and checked
+// The Text card cycles through every surface in the editor; each other kind is added with one surface and checked
 // once, so the test spends 11 of the member's profile writes (4 adds, 3 saves, 4 deletes).
 const CARDS = [
-  { name: "README card", surface: "plain", fields: { kind: "readme", text: "# Surface check" } },
+  { name: "Text card", surface: "plain", fields: { kind: "readme", text: "# Surface check" } },
   {
     name: "Surface links card",
     surface: "outlined",
@@ -56,7 +56,7 @@ test("all_card_kinds_save_reload_and_restore_their_surface", async ({ page }) =>
     const outerOf = (name: string) =>
       page.locator('[data-slot="card"]').filter({ has: page.getByRole("group", { name, exact: true }) });
     for (const card of CARDS) await appearance(page, outerOf(card.name), card.surface);
-    const controls = page.getByRole("group", { name: "README card", exact: true });
+    const controls = page.getByRole("group", { name: "Text card", exact: true });
     for (const [value, label] of [
       ["outlined", "Outlined"],
       ["filled", "Filled"],
@@ -69,7 +69,7 @@ test("all_card_kinds_save_reload_and_restore_their_surface", async ({ page }) =>
       await expect(dialog).toBeHidden();
       await page.reload();
       await page.waitForLoadState("networkidle");
-      await appearance(page, outerOf("README card"), value);
+      await appearance(page, outerOf("Text card"), value);
       await controls.getByRole("link", { name: "Edit", exact: true }).click();
       await expect(dialog.getByRole("radio", { name: label, exact: true })).toBeChecked();
       await page.keyboard.press("Escape");

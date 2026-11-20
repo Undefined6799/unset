@@ -20,11 +20,11 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
   expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
   const panel = page.locator("#card-editor");
 
-  // Add a README: Add card, then README, then the editor's own Add.
+  // Add a Text card: Add card, then Text, then the editor's own Add.
   await page.getByRole("link", { name: "Add card" }).click();
   await expect(panel.getByRole("heading", { name: "Add a card" })).toBeVisible();
-  await panel.getByRole("link", { name: /^README/ }).click();
-  await panel.getByRole("textbox", { name: "README" }).fill("# Without script");
+  await panel.getByRole("link", { name: /^Text/ }).click();
+  await panel.getByRole("textbox", { name: "Text" }).fill("# Without script");
   await panel.getByRole("button", { name: "Add" }).click();
   await expect(page.getByRole("heading", { name: "Without script" })).toBeVisible();
   await expect(panel).toHaveCount(0);
@@ -55,11 +55,11 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
     "rgba(0, 0, 0, 0)",
   );
 
-  // Edit the README in place.
-  const readme = page.getByRole("group", { name: "README card" });
+  // Edit the Text card in place.
+  const readme = page.getByRole("group", { name: "Text card" });
   await readme.getByRole("link", { name: "Edit" }).click();
-  await expect(panel.getByRole("textbox", { name: "README" })).toHaveValue("# Without script");
-  await panel.getByRole("textbox", { name: "README" }).fill("# Still without script");
+  await expect(panel.getByRole("textbox", { name: "Text" })).toHaveValue("# Without script");
+  await panel.getByRole("textbox", { name: "Text" }).fill("# Still without script");
   await panel.getByRole("radio", { name: "Plain", exact: true }).check();
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("heading", { name: "Still without script" })).toBeVisible();
@@ -67,12 +67,12 @@ test("cards_are_added_edited_moved_and_deleted_without_javascript", async ({ pag
   await expect(panel.getByRole("radio", { name: "Plain", exact: true })).toBeChecked();
   await panel.getByRole("link", { name: "Cancel" }).click();
 
-  // Move the README below the links: with no script the moves are plain buttons, not the three-dot menu.
+  // Move the Text card below the links: with no script the moves are plain buttons, not the three-dot menu.
   await expect(readme.getByRole("button", { name: /^More for/ })).toHaveCount(0);
   const order = page.locator("[data-card-controls] legend");
-  await expect(order).toHaveText(["README card", "Offline card"]);
+  await expect(order).toHaveText(["Text card", "Offline card"]);
   await readme.getByRole("button", { name: "Move down" }).click();
-  await expect(order).toHaveText(["Offline card", "README card"]);
+  await expect(order).toHaveText(["Offline card", "Text card"]);
   await expect(readme.getByRole("button", { name: "Move up" })).toBeVisible();
   await expect(offline.getByRole("button", { name: "Move down" })).toBeVisible();
 

@@ -4790,6 +4790,18 @@ decoded path, anchored and case-sensitive, and `adapted-build-files.test.ts` che
 one web reads under `/_app/`, where nothing reaches a hook. A flood of made-up file names: each is a plain 404 before
 the hook, and `app_global` still caps the 5-minute total. A stale tab after a deploy: a full load, never a broken page.
 
+### P1.21p — Show the README card as a Text card (added step, 2026-11-20)
+
+**Tags:** — · **Depends on:** P1.21f · **Plan:** §5.4
+
+Alex's approved profile direction (2026-11-20). The member-facing name of the `#readme` card becomes "Text" in the
+picker, editor, controls and help; the stored kind and records are unchanged (ADR 0051 Decision 4: names are
+presentation). The "handle / README.md" bar is removed with no automatic heading in its place, so the member's own
+`#` is the card's h2. Filled and Outlined Text cards keep a responsive inset; Plain aligns with the grid. A link
+row or linked collection entry is one link with a resting cue (link colour and the external mark), no underline at rest
+and the label's underline on hover; prose links stay underlined. Tests: renamed labels, heading levels, the bar gone,
+a link row as one target. Ownership: apps/web only (with the two routes dropping the bar's handle prop).
+
 ### P1.21h — Normal use fits inside every limit (added step, 2026-11-20)
 
 **Tags:** — · **Depends on:** — · **Plan:** §5.2, §6
