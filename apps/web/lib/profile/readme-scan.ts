@@ -103,12 +103,20 @@ export function nextIndex(text: string, needle: string): (from: number) => numbe
   };
 }
 
-/** As nextIndex, but a match whose first character is backslash-escaped is text and is skipped. */
+/**
+ * As nextIndex, but a match whose first character is backslash-escaped is text and is skipped. Remembered the same
+ * way: a later `from` up to the match found reuses it, so each escaped match is passed over once per text.
+ */
 export function nextUnescaped(text: string, needle: string): (from: number) => number {
-  const next = nextIndex(text, needle);
+  let searched = Number.POSITIVE_INFINITY;
+  let found = -1;
   return (from) => {
-    let found = next(from);
-    while (found !== -1 && isEscaped(text, found)) found = next(found + 1);
+    const stale = from < searched || (found !== -1 && found < from);
+    if (stale) {
+      searched = from;
+      found = text.indexOf(needle, from);
+      while (found !== -1 && isEscaped(text, found)) found = text.indexOf(needle, found + 1);
+    }
     return found;
   };
 }
