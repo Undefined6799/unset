@@ -26,13 +26,14 @@ From the repository root on the staging host, after `git pull`:
 
 ```sh
 git clean -fdX docs/site/public
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.io/gohugoio/hugo:v0.168.0@sha256:1fb8fe7f417abd5802d86747d297728aa48078d763159e7dff6559fe3f8bb8e7 build --gc --minify --panicOnWarning
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e HUGO_CACHEDIR=/tmp/hugo_cache --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.io/gohugoio/hugo:v0.168.0@sha256:1fb8fe7f417abd5802d86747d297728aa48078d763159e7dff6559fe3f8bb8e7 build --gc --minify --panicOnWarning
 ```
 
 The first line empties the build folder of everything git ignores, so a page removed from the docs does not linger;
 it keeps `.gitkeep`, which the edge's bind needs (C18). The second is the pinned build from `docs/site/README.md`,
-run as your own user so the files belong to the checkout's owner (C9 judges the bind's owner and modes), with the
-container's `/tmp` as home so Hugo can keep its cache and the theme module there. The site is down for the few
+run as your own user so the files belong to the checkout's owner (C9 judges the bind's owner and modes), with home and
+Hugo's cache (`HUGO_CACHEDIR`, which the image sets to a folder only its own user may write) in the container's
+`/tmp`, where Hugo downloads the theme module. The site is down for the few
 seconds between the two lines.
 
 CI's `docs-site` job runs the same build the same way on every pull request.
