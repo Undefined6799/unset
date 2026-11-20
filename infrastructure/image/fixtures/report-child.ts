@@ -15,6 +15,7 @@ process.on("message", (job: { id: number }) => {
   const inherited = links.filter((link) => link.includes("pool-fd-marker")).length;
   process.send?.({
     id: job.id,
-    result: { kind: "ok", width: Object.keys(process.env).length, height: inherited, versions: [] },
+    // Plus one each, since the parent accepts only sizes of at least 1.
+    result: { kind: "ok", width: Object.keys(process.env).length + 1, height: inherited + 1, versions: [] },
   });
 });

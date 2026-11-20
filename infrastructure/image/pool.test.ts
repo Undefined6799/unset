@@ -7,7 +7,7 @@ import { deflateSync } from "node:zlib";
 import type { ProcessResult, VersionSpec } from "@unset/domains-content";
 import sharp from "sharp";
 import { afterAll, describe, expect, test } from "vitest";
-import { createImagePool } from "./pool.ts";
+import { createImagePool, type PoolEvent } from "./pool.ts";
 
 const LIMITS = { maxBytes: 31_000_000, maxPixels: 70_000_000, maxEdge: 12_000 };
 const MAIN: VersionSpec = {
@@ -33,6 +33,15 @@ const SMALL: VersionSpec = {
 const AVIF: VersionSpec = { ...SMALL, name: "w480a", format: "avif" };
 const pool = createImagePool({ children: 2, queueMax: 8, timeoutMs: 20_000, addressSpaceMb: 8192 });
 afterAll(() => pool.close());
+
+/** Resolves when the pool reports `event`, so tests wait on what happened rather than on a fixed time. */
+const eventOf = (event: PoolEvent) => {
+  let seen: () => void = () => undefined;
+  const happened = new Promise<void>((resolve) => {
+    seen = resolve;
+  });
+  return { onEvent: (e: PoolEvent) => e === event && seen(), happened };
+};
 
 const solid = (width: number, height: number, background = "#3366aa") =>
   sharp({ create: { width, height, channels: 3, background } });
@@ -234,8 +243,8 @@ describe("the pool", () => {
     process.env.POOL_TEST_SECRET = "must-not-reach-the-child";
     try {
       const result = ok(await probe.process(new Uint8Array(await anyJpeg()), LIMITS, []));
-      expect(result.source.width).toBe(0); // environment variables
-      expect(result.source.height).toBe(0); // descriptors on the parent's open marker file
+      expect(result.source.width - 1).toBe(0); // environment variables
+      expect(result.source.height - 1).toBe(0); // descriptors on the parent's open marker file
     } finally {
       closeSync(fd);
       delete process.env.POOL_TEST_SECRET;
@@ -288,17 +297,19 @@ describe("the pool", () => {
   });
 
   test("pool.queue_full: with one child and a queue of 8, the tenth job at once is busy", async () => {
+    const ready = eventOf("ready");
     const hanging = createImagePool({
       children: 1,
       queueMax: 8,
       timeoutMs: 400,
       addressSpaceMb: 4096,
       childPath: fixture("hang-child.ts"),
+      onEvent: ready.onEvent,
     });
     try {
       const input = new Uint8Array(await anyJpeg());
-      // Only a ready child takes a job; let the one child say it is ready first, so one job runs and eight wait.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Only a ready child takes a job; once the one child is ready, one job runs and eight wait.
+      await ready.happened;
       const results = await Promise.all(Array.from({ length: 10 }, () => hanging.process(input, LIMITS, [])));
       expect(results.filter((r) => r.kind === "refused" && r.code === "image.busy")).toHaveLength(1);
     } finally {
@@ -307,23 +318,26 @@ describe("the pool", () => {
   }, 20_000);
 
   test("pool.memory_limit: children that cannot start back off, the pool goes down and answers busy", async () => {
+    const down = eventOf("down");
     const events: string[] = [];
     const starved = createImagePool({
       children: 1,
       queueMax: 1,
       timeoutMs: 5000,
       addressSpaceMb: 256,
-      onEvent: (event) => events.push(event),
+      onEvent: (event) => {
+        events.push(event);
+        down.onEvent(event);
+      },
     });
     try {
       expect(await starved.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN])).toEqual({
         kind: "refused",
         code: "image.busy",
       });
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      // Backoff of 250, 500, 1000 ms: a tight loop would have forked hundreds of times by now.
-      expect(events.filter((e) => e === "start_failed").length).toBeLessThanOrEqual(4);
-      expect(events).toContain("down");
+      // Backoff of 250 then 500 ms before the third failure: a tight loop would fork hundreds of times meanwhile.
+      await down.happened;
+      expect(events).toEqual(["start_failed", "start_failed", "start_failed", "down"]);
       expect(await starved.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN])).toEqual({
         kind: "refused",
         code: "image.busy",
@@ -333,10 +347,52 @@ describe("the pool", () => {
     }
   }, 20_000);
 
+  test("pool.start_timeout: a child that never says it is ready is killed, counted and the pool goes down", async () => {
+    const down = eventOf("down");
+    const events: string[] = [];
+    const stuck = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 5000,
+      startTimeoutMs: 200,
+      addressSpaceMb: 4096,
+      childPath: fixture("never-ready-child.ts"),
+      onEvent: (event) => {
+        events.push(event);
+        down.onEvent(event);
+      },
+    });
+    try {
+      const queued = stuck.process(new Uint8Array(await anyJpeg()), LIMITS, [MAIN]);
+      await down.happened;
+      expect(events).toEqual(["start_failed", "start_failed", "start_failed", "down"]);
+      expect(await queued).toEqual({ kind: "refused", code: "image.busy" });
+    } finally {
+      stuck.close();
+    }
+  }, 20_000);
+
+  test("pool.checks_answers: a child's versions are checked, not trusted", async () => {
+    const lying = createImagePool({
+      children: 1,
+      queueMax: 1,
+      timeoutMs: 5000,
+      addressSpaceMb: 4096,
+      childPath: fixture("lying-child.ts"),
+    });
+    try {
+      const input = new Uint8Array(await anyJpeg());
+      expect(await lying.process(input, LIMITS, [MAIN])).toEqual({ kind: "refused", code: "image.cannot_use" });
+    } finally {
+      lying.close();
+    }
+  });
+
   test("pool.recovers: a pool that went down comes back up once a child starts", async () => {
     // The fixture child counts its starts here (it runs with an empty environment, so its tmpdir is /tmp).
     const counter = `/tmp/pool-exit-twice-${process.pid}`;
     rmSync(counter, { force: true });
+    const up = eventOf("up");
     const events: string[] = [];
     const flaky = createImagePool({
       children: 1,
@@ -344,12 +400,14 @@ describe("the pool", () => {
       timeoutMs: 5000,
       addressSpaceMb: 4096,
       childPath: fixture("exit-twice-child.ts"),
-      onEvent: (event) => events.push(event),
+      onEvent: (event) => {
+        events.push(event);
+        up.onEvent(event);
+      },
     });
     try {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      expect(events.slice(0, 3)).toEqual(["start_failed", "start_failed", "start_failed"]);
-      expect(events).toContain("up");
+      await up.happened;
+      expect(events).toEqual(["start_failed", "start_failed", "start_failed", "down", "ready", "up"]);
     } finally {
       flaky.close();
       rmSync(counter, { force: true });

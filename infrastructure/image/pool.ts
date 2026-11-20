@@ -4,13 +4,22 @@
 // libuv threadpool (review r1-part2 F7).
 //
 // A child says it is ready once sharp has loaded and its loaders are locked down, and only a ready child gets a job.
-// A child that dies before it is ready, or while idle, counts as a failed start: the slot waits 250 ms, then twice
+// A child that dies before it is ready or while idle, or is not ready within the start timeout (a hang while sharp
+// or libvips loads), counts as a failed start: the slot waits 250 ms, then twice
 // as long each time up to 30 s, so a pool whose children cannot start (prlimit or sharp missing, an address space too
 // small) never forks in a tight loop. After three failed starts in a row in every slot the pool is down: it answers
 // busy at once and empties its queue, and comes back up when a child is ready again. A crash or a timeout during a
 // job replaces the child at once, since the job, not the child, is the likely cause.
 import { type ChildProcess, fork } from "node:child_process";
-import type { ImageProcessor, ProcessLimits, ProcessResult, VersionSpec } from "@unset/domains-content";
+import { createHash } from "node:crypto";
+import type {
+  ImageProcessor,
+  ImageRefusal,
+  ImageVersion,
+  ProcessLimits,
+  ProcessResult,
+  VersionSpec,
+} from "@unset/domains-content";
 import type { JobMessage } from "./child.ts";
 import type { JobResult } from "./encode.ts";
 import { sniffImage } from "./sniff.ts";
@@ -24,11 +33,13 @@ export type PoolOptions = {
   readonly addressSpaceMb: number;
   /** Test seam: the child's entry file. */
   readonly childPath?: string;
-  /** For the caller's log: a child failed to start, the pool went down, or came back up. Carries nothing else. */
+  /** How long a new child may take to say it is ready before it is killed as a failed start (default 10 s). */
+  readonly startTimeoutMs?: number;
+  /** For the caller's log: a child was ready, failed to start, the pool went down or came back up. Nothing else. */
   readonly onEvent?: (event: PoolEvent) => void;
 };
 
-export type PoolEvent = "start_failed" | "down" | "up";
+export type PoolEvent = "ready" | "start_failed" | "down" | "up";
 
 type Job = Omit<JobMessage, "id"> & { readonly done: (result: ProcessResult) => void };
 type Slot = {
@@ -36,6 +47,8 @@ type Slot = {
   ready: boolean;
   failures: number;
   restart: NodeJS.Timeout | null;
+  /** Runs from fork until the child says it is ready. */
+  starting: NodeJS.Timeout | null;
   busy: { id: number; job: Job; timer: NodeJS.Timeout } | null;
 };
 type ChildMessage = { readonly ready: true } | { readonly id: number; readonly result: JobResult };
@@ -67,6 +80,7 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     ready: false,
     failures: 0,
     restart: null,
+    starting: null,
     busy: null,
   }));
 
@@ -76,11 +90,15 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
     const child = spawnChild();
     slot.child = child;
     slot.ready = false;
+    slot.starting = setTimeout(() => failedStart(slot), options.startTimeoutMs ?? 10_000);
+    slot.starting.unref();
     child.on("message", (message: ChildMessage) => {
       if (slot.child !== child) return;
       if ("ready" in message) {
+        clearStarting(slot);
         slot.ready = true;
         slot.failures = 0;
+        options.onEvent?.("ready");
         updateDown();
         dispatch();
       } else if (slot.busy?.id === message.id) {
@@ -93,19 +111,31 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
         finish(slot, { kind: "refused", code: "image.cannot_use" }, true);
         return;
       }
-      stop(slot);
-      slot.failures += 1;
-      options.onEvent?.("start_failed");
-      updateDown();
-      const delay = Math.min(FIRST_BACKOFF_MS * 2 ** (slot.failures - 1), MAX_BACKOFF_MS);
-      slot.restart = setTimeout(() => start(slot), delay);
-      slot.restart.unref();
+      failedStart(slot);
     };
     child.on("exit", died);
     child.on("error", died);
   }
 
+  /** A child that died before it was ready or while idle, or never said it was ready: back off, then start again. */
+  function failedStart(slot: Slot): void {
+    stop(slot);
+    slot.failures += 1;
+    options.onEvent?.("start_failed");
+    updateDown();
+    if (closed) return;
+    const delay = Math.min(FIRST_BACKOFF_MS * 2 ** (slot.failures - 1), MAX_BACKOFF_MS);
+    slot.restart = setTimeout(() => start(slot), delay);
+    slot.restart.unref();
+  }
+
+  function clearStarting(slot: Slot): void {
+    if (slot.starting !== null) clearTimeout(slot.starting);
+    slot.starting = null;
+  }
+
   function stop(slot: Slot): void {
+    clearStarting(slot);
     const child = slot.child;
     slot.child = null;
     slot.ready = false;
@@ -177,11 +207,44 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
 const refused = (code: Extract<ProcessResult, { kind: "refused" }>["code"]): Promise<ProcessResult> =>
   Promise.resolve({ kind: "refused", code });
 
+/**
+ * What a child answered, checked as untrusted: an exploited decoder controls its own answer, so the parent recomputes
+ * every SHA-256 and accepts only the versions it asked for, each once, within its byte limit and with sane sizes, and
+ * only the refusal codes it knows. Anything else reads as `image.cannot_use`.
+ */
 function toProcessResult(result: JobResult, job: Job): ProcessResult {
-  if (result.kind === "refused") return result;
-  return {
-    kind: "ok",
-    source: { format: job.format, width: result.width, height: result.height },
-    versions: result.versions,
-  };
+  const cannot: ProcessResult = { kind: "refused", code: "image.cannot_use" };
+  if (result.kind === "refused") return REFUSALS.has(result.code) ? { kind: "refused", code: result.code } : cannot;
+  if (result.kind !== "ok" || !size(result.width, job.limits.maxEdge) || !size(result.height, job.limits.maxEdge)) {
+    return cannot;
+  }
+  const specs = new Map(job.versions.map((v) => [`${v.name}.${v.format}`, v]));
+  const versions: ImageVersion[] = [];
+  for (const v of result.versions) {
+    const key = `${v.name}.${v.format}`;
+    const spec = specs.get(key);
+    if (spec === undefined || !(v.bytes instanceof Uint8Array) || v.bytes.length === 0) return cannot;
+    if (v.bytes.length > spec.maxBytes || !size(v.width, MAX_VERSION_EDGE) || !size(v.height, MAX_VERSION_EDGE)) {
+      return cannot;
+    }
+    specs.delete(key);
+    const sha256 = createHash("sha256").update(v.bytes).digest("hex");
+    versions.push({ name: spec.name, format: spec.format, width: v.width, height: v.height, bytes: v.bytes, sha256 });
+  }
+  if ([...specs.values()].some((spec) => spec.required)) return cannot;
+  return { kind: "ok", source: { format: job.format, width: result.width, height: result.height }, versions };
 }
+
+const REFUSALS: ReadonlySet<ImageRefusal> = new Set<ImageRefusal>([
+  "image.too_large",
+  "image.unsupported",
+  "image.too_many_pixels",
+  "image.animated",
+  "image.cannot_use",
+  "image.busy",
+  "image.timeout",
+]);
+/** No version is ever larger than this a side: the largest spec is the 2560 px main version. */
+const MAX_VERSION_EDGE = 4096;
+const size = (value: unknown, max: number): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max;
