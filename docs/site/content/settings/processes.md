@@ -55,6 +55,7 @@ Every environment setting, by process. "not set" means the default applies.
 | `OAUTH_ACTIVE_KID` | str | text (pattern in source) | required | from env file: `WEB_OAUTH_ACTIVE_KID` | from env file: `WEB_OAUTH_ACTIVE_KID` | `infrastructure/pds/oauth/oauth-client.ts` |
 | `OAUTH_ALLOW_HTTP` | bool | true or false | `false` | not set | not set | `infrastructure/pds/oauth/oauth-client.ts` |
 | `PDS_HOSTNAME` | str | text (pattern in source) | required | from env file: `PDS_HOSTNAME` | from env file: `PDS_HOSTNAME` | `interfaces/web/src/lib/server/config.ts` |
+| `PDS_WEB_KEY` | secretFile | at least 64 bytes | required | secret file | secret file | `interfaces/web/src/lib/server/config.ts` |
 | `HANDLE_SUFFIX` | str | text (pattern in source) | required | from env file: `PDS_SERVICE_HANDLE_DOMAINS` | from env file: `PDS_SERVICE_HANDLE_DOMAINS` | `interfaces/web/src/lib/server/config.ts` |
 | `EMAIL_RECHECK_S` | int | 60 to 900 | `900` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `MIN_AGE` | int | 16 to 120 | `16` | not set | not set | `interfaces/web/src/lib/server/config.ts` |

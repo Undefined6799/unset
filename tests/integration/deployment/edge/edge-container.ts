@@ -3,7 +3,10 @@
 // stub upstream on the Docker bridge that records what reached it. Hardening as for Postgres (tests/support/
 // postgres.ts): --rm-like removal even on failure, the ports published on 127.0.0.1 only, a read-only root, no
 // --privileged or host network, and the mounts read-only.
+import { randomBytes } from "node:crypto";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http"; // guard-allow: egress local edge test only
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { docker, failAfterCleanup } from "../../../support/docker.ts";
 import { buildTestImage, removeTestImage } from "../../../support/image-build.ts";
@@ -27,6 +30,16 @@ export function buildEdgeImage(): string {
  * counts the calls, so a new one fails there instead of outrunning the budget (N3, P1.34g; RE-1).
  */
 export const TEARDOWN_DOCKER_CALLS = 3;
+
+/** This run's stand-in for pds_web_key (P1.21j): made per run, never a real key; the edge reads it as its secret. */
+export const TEST_WEB_KEY = randomBytes(32).toString("hex");
+
+/** Writes the stand-in key where the edge's user can read it, and returns the file's path. */
+function webKeyFile(): string {
+  const file = join(mkdtempSync(join(tmpdir(), "unset-edge-key-")), "pds_web_key");
+  writeFileSync(file, `${TEST_WEB_KEY}\n`, { mode: 0o644 });
+  return file;
+}
 
 /**
  * Stops the edge, then removes the image tag the suite built, even when the stop failed; when both fail, one
@@ -175,6 +188,7 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
         `PDS_UPSTREAM=${gateway}:${stub.port}`,
         ...ro(join(import.meta.dirname, "fixtures", "tls.caddy"), "/etc/caddy/snippets/tls.caddy"),
         ...ro(join(EDGE, "sites", "pds.caddy"), "/etc/caddy/sites/enabled/pds.caddy"),
+        ...ro(webKeyFile(), "/run/secrets/pds_web_key"),
         image,
       ],
       { timeoutMs: callMs },

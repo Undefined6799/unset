@@ -277,6 +277,7 @@ async function startOn(
       HANDLE_SUFFIX: `.${PDS_HOST}`,
       PDS_ADMIN_URL: "http://pds-admin.test:8080",
       PDS_ADMIN_WEB_KEY_FILE: secret("web_pds_admin_key", adminKey),
+      PDS_WEB_KEY_FILE: secret("pds_web_key", randomBytes(32).toString("hex")),
       PDS_ADMIN_WEB_KID: "web-test",
       PDS_DID: `did:web:${PDS_HOST}`,
       TEST_ROUTES: "true",

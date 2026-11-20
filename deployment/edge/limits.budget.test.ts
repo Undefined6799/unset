@@ -93,26 +93,20 @@ describe("app_global", () => {
 });
 
 describe("app_signin", () => {
-  const signInFirstTime = (at: number) => [at, at + 3_000, at + 20_000]; // POST /login, the callback, POST /verify-email
-  const signIn = (at: number) => [at, at + 3_000];
-
-  test("a_first_sign_in_with_its_email_check_passes", () => {
-    expect(refusedIn("app_signin", signInFirstTime(0))).toBe(0);
+  // Since P1.21j (Proposed ADR 0071) the zone counts POST /login and POST /join only: one per sign-in or sign-up. The
+  // callback and POST /verify-email still count in app_burst and app_global.
+  test("a_first_sign_in_and_a_sign_up_pass", () => {
+    expect(refusedIn("app_signin", [0, 60_000])).toBe(0);
   });
 
-  test("a_sign_up_passes", () => {
-    expect(refusedIn("app_signin", [0, 30_000, 60_000])).toBe(0); // POST /join, the callback, POST /verify-email
+  test("signing_out_and_back_in_three_times_within_five_minutes_passes", () => {
+    expect(refusedIn("app_signin", paced(4, 60_000))).toBe(0);
   });
 
-  test("signing_out_and_back_in_once_within_five_minutes_passes", () => {
-    expect(refusedIn("app_signin", [...signInFirstTime(0), ...signIn(60_000)])).toBe(0);
-  });
-
-  // Expected to fail, reported for Alex's call: two people behind one address (a household, or a phone carrier's shared
-  // address) each signing in for the first time within five minutes make six counted requests, one past the zone. The
-  // fix on the table is his line "Count only the login post in the edge sign-in limit." (not typed as of 2026-11-19).
-  test.fails("two_people_behind_one_address_signing_in_for_the_first_time_pass", () => {
-    expect(refusedIn("app_signin", together(signInFirstTime(0), signInFirstTime(45_000)))).toBe(0);
+  test("five_people_behind_one_address_each_signing_in_twice_within_five_minutes_pass", () => {
+    // A household or a phone carrier's shared address; before P1.21j two first sign-ins went over.
+    const person = (offset: number) => [offset, offset + 120_000];
+    expect(refusedIn("app_signin", together(...[0, 10_000, 20_000, 30_000, 40_000].map(person)))).toBe(0);
   });
 
   test("a_flood_one_past_the_zone_is_refused", () => expectFloodRefused("app_signin"));
@@ -137,10 +131,11 @@ describe("pds sign-in pages", () => {
   test.each(["oauth_signin", "signup", "reset"])("a_flood_one_past_%s_is_refused", (name) => expectFloodRefused(name));
 });
 
-// Web's own calls to our PDS, which every member shares. On staging web reaches the PDS by its public name through
-// Pangolin, Newt and this edge (compose.dev.yaml's net-guard comment; ADR 0031 Decision 3), and the dev listener keys
-// zones by Newt's X-Forwarded-For (the Caddyfile), so every member's calls count under web's one address. Each test
-// states the zone's size in members, for Alex's call on these zones before production.
+// Web's own calls to our PDS. On staging web reaches the PDS by its public name through Pangolin, Newt and this edge
+// (compose.dev.yaml's net-guard comment; ADR 0031 Decision 3), so every member's calls arrive from web's one address.
+// Since P1.21j (Proposed ADR 0071) web marks them with its key, and the edge counts a marked call in web_global and
+// web_oauth_token instead of global and oauth_token (ratelimit.caddy); an unmarked or wrongly marked call stays in the
+// tight zones, as an outside client's does.
 //
 // What web sends per action (infrastructure/pds): a member's own profile page is getRecord for the profile and two
 // listRecords pages for the cards, since the PDS returns a cursor whenever a page holds a record (atproto main,
@@ -149,43 +144,26 @@ describe("pds sign-in pages", () => {
 // (com.atproto.sync.getLatestCommit) before createRecord. A sign-in is the pushed request, the token exchange and
 // getSession; a signed-in member's access token lasts 60 minutes (@atproto/oauth-provider oauth-constants.ts
 // TOKEN_MAX_AGE, main), so web refreshes it about once an hour. A DPoP nonce retry would add a call and is not counted.
-// Not here: web uploads no blob yet (blob_upload), never calls createSession (session), and the indexer and pds-admin
-// reach the PDS inside the stack, not through this edge (sync's firehose and blob_read zones).
+// Not here: web uploads no blob yet (blob_upload, ADR 0070), never calls createSession (session), and the indexer and
+// pds-admin reach the PDS inside the stack, not through this edge (sync's firehose and blob_read zones).
+//
+// The marked zones are sized from web's own ceilings (interfaces/web/src/lib/server/limits.ts): pages at 500 a second
+// with up to 3 PDS calls each is 1500 calls a second, web_global's 90000 a minute; sign-ins at 10 a second are 5 token
+// exchanges a second, and web_oauth_token's 3000 in 5 minutes is 10 a second. A web that is broken or taken over still
+// meets these.
 describe("web's own calls to our pds", () => {
   const view = (at: number) => [at, at, at + 100];
   const save = (at: number) => [at, at + 100, ...view(at + 300)];
-  const add = (at: number) => [at, at + 100, at + 100, at + 200, ...view(at + 300)];
   const minutes = (count: number, everyMs: number, action: (at: number) => number[], from: number) =>
     Array.from({ length: Math.round((count * 60_000) / everyMs) }, (_, k) => action(from + k * everyMs)).flat();
   /** `count` members, their starts spread evenly over `spreadMs`, merged in order. */
   const members = (count: number, spreadMs: number, member: (from: number) => number[]) =>
     together(...Array.from({ length: count }, (_, n) => member((n * spreadMs) / count)));
-  const viewing = (from: number) => minutes(10, 60_000, view, from); // their own profile once a minute
-  const editing = (from: number) => [...view(from), ...minutes(10, 15_000, save, from + 5_000)]; // a save every 15 s
+  const editing = (from: number) => [...view(from), ...minutes(3, 15_000, save, from + 5_000)]; // a save every 15 s
 
-  test("a_hundred_members_each_viewing_their_profile_once_a_minute_pass", () => {
-    expect(refusedIn("global", members(100, 60_000, viewing))).toBe(0);
-  });
-
-  test("twenty_five_members_each_saving_a_card_every_fifteen_seconds_pass", () => {
-    expect(refusedIn("global", members(25, 15_000, editing))).toBe(0);
-  });
-
-  // Expected to fail, reported for Alex's call: about 29 members editing at once fill `global` (3000 in 5 minutes),
-  // and the next PDS call any member makes is refused, so pages fail for everyone until the window moves on.
-  test.fails("a_hundred_members_each_saving_a_card_every_fifteen_seconds_pass", () => {
-    expect(refusedIn("global", members(100, 15_000, editing))).toBe(0);
-  });
-
-  test("a_hundred_members_each_adding_ten_cards_in_five_minutes_pass_the_repo_head_reads", () => {
-    const adding = (from: number) => paced(10, 30_000, from);
-    expect(refusedIn("sync", members(100, 30_000, adding))).toBe(0);
-    expect(
-      refusedIn(
-        "global",
-        members(20, 30_000, (from) => minutes(5, 30_000, add, from)),
-      ),
-    ).toBe(0);
+  test("four_thousand_members_each_saving_a_card_every_fifteen_seconds_pass", () => {
+    // Before P1.21j about 29 fitted, in global (3000 in 5 minutes).
+    expect(refusedIn("web_global", members(4000, 15_000, editing))).toBe(0);
   });
 
   /** Token exchanges in five minutes: `signIns` members signing in, and `active` signed-in members refreshing hourly. */
@@ -195,20 +173,12 @@ describe("web's own calls to our pds", () => {
       paced(active, 3_600_000 / active).filter((at) => at < 300_000),
     );
 
-  test("sixty_sign_ins_in_five_minutes_while_seven_hundred_members_stay_active_pass", () => {
-    expect(refusedIn("oauth_token", tokenUse(60, 700))).toBe(0);
+  test("a_thousand_sign_ins_in_five_minutes_while_twenty_thousand_members_stay_active_pass", () => {
+    // Before P1.21j a hundred sign-ins left room for about 240 other active members, in oauth_token (120 in 5 minutes).
+    expect(refusedIn("web_oauth_token", tokenUse(1000, 20_000))).toBe(0);
   });
 
-  // Expected to fail, reported for Alex's call: the token zone is shared by sign-ins and hourly refreshes, so a hundred
-  // sign-ins in five minutes leave room for only about 240 other active members (100 + 1000 / 12 > 120 here).
-  test.fails("a_hundred_sign_ins_in_five_minutes_while_a_thousand_members_stay_active_pass", () => {
-    expect(refusedIn("oauth_token", tokenUse(100, 1000))).toBe(0);
-  });
-
-  // Not a failure, a size: web's own sign-in ceiling lets about 700 sign-ins through in five minutes (120 at once, then
-  // 2 a second), but the PDS token exchange takes 120 in five minutes from web's one address, so the 121st member is
-  // refused after typing their password.
-  test("the_hundred_and_twenty_first_token_exchange_in_five_minutes_is_refused", () => {
-    expect(refusedIn("oauth_token", paced(121, 2_000))).toBe(1);
-  });
+  test.each(["global", "oauth_token", "web_global", "web_oauth_token"])("a_flood_one_past_%s_is_refused", (name) =>
+    expectFloodRefused(name),
+  );
 });

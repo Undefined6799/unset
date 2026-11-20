@@ -4792,6 +4792,20 @@ rule 2), and the terms should say so too. The terms gain one "Leaving" sentence 
 which already says it, and a new version, 2026-11-20 (`TERMS_VERSION`); members accept it again on their next visit.
 Alex accepted the re-acceptance because the service is not live yet (01:09Z). No other change.
 
+### P1.21j — Limits sized for thousands of members (added step, 2026-11-20)
+
+**Tags:** trusted · **Depends on:** P1.21h · **Plan:** §5.2, §6
+
+Alex, 2026-11-20, on upload limits: "make a very generous limit … I don't want to discover that these are issues once
+the users are scaling up". P1.21h's four findings, fixed so that none is the first thing to break as members arrive,
+while each limit still stops a flood (Proposed ADR 0071). `app_signin` counts only `POST /login` and `POST /join`, 10
+per 5 minutes. Web's site-wide ceilings become 30000 at once and 500 a second for pages, and 600 and 10 for sign-ins.
+Web marks every call to our PDS with the `pds_web_key` secret, and the edge counts marked calls in `web_global` and
+`web_oauth_token`, sized from web's own ceilings, instead of the per-address `global` and `oauth_token`. A wrong or
+missing key stays in the tight zones. `blob_upload` stays with ADR 0070. It loosens security controls, so it merges on
+Alex's typed line, and the server needs `pds_web_key` before the deploy. The letter does not belong to the token
+pipeline below; it was the next free id.
+
 ### P1.21 — Token pipeline
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS

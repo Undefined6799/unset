@@ -3,9 +3,10 @@
 // each outcome is pinned to the error the library really throws, not to a shape written here. The successful runs
 // start from the issuer (the PDS chooser), so no DID document here claims a handle: reading that claim belongs to
 // the identity files (scripts/guards/also-known-as.ts); identity-resolvers.test.ts covers the claimed-handle path.
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { createDidResolver, type HttpOutcome, type IdentityNetwork, type TxtOutcome } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
+import { Secret } from "@unset/shared-config";
 import { scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
@@ -67,6 +68,9 @@ type World = {
   /** An authorization server our PDS's resource metadata names in place of itself. */
   foreignServer?: string;
 };
+
+/** A test key of the shape web requires, made at run time (.github/.gitleaks.toml); never a real one. */
+const WEB_KEY = randomBytes(32).toString("hex");
 
 const TOKENS = { access_token: "at", refresh_token: "rt", token_type: "DPoP", sub: DID, expires_in: 3600 };
 
@@ -136,6 +140,8 @@ async function setup(world: World = {}) {
   };
   /** Every host the client sent a request to, so a refusal can show it asked no outside server. */
   const hosts: string[] = [];
+  /** Web's key header on each request, in order (P1.21j). */
+  const webKeys: (string | null)[] = [];
   const states = new Map<string, SavedState>();
   const sessions = new Map<string, SavedSession>();
   const logged: { event: LogEvent; fields: LogFields }[] = [];
@@ -160,12 +166,14 @@ async function setup(world: World = {}) {
     fetch: async (input, init) => {
       const request = new Request(input, init);
       hosts.push(new URL(request.url).host);
+      webKeys.push(request.headers.get("x-unset-web-key"));
       return server(new URL(request.url), request);
     },
     network,
     resolveDid: createDidResolver({ network, plcUrl: new URL("https://plc.directory"), cacheTtlS: 60, cacheMax: 10 }),
     allowHttp: false,
     ownIssuer: world.ownIssuer ?? PDS,
+    webKey: new Secret(WEB_KEY),
     log,
   });
   const run = (input: string, prompt?: "login" | "none") =>
@@ -183,10 +191,18 @@ async function setup(world: World = {}) {
   };
   const complete = (query: URLSearchParams, ownIssuer = world.ownIssuer ?? PDS) =>
     completeAuthorization(client, query, log, ownIssuer);
-  return { run, started, complete, pars, posts, tokenBodies, states, sessions, logged, hosts };
+  return { run, started, complete, pars, posts, tokenBodies, states, sessions, logged, hosts, webKeys };
 }
 
 describe("authorize", () => {
+  test("every_request_to_our_pds_carries_web_s_key_between_its_fixed_ends", async () => {
+    // P1.21j (Proposed ADR 0071): the edge gives web's calls their own zones only on this exact value.
+    const { started, complete, webKeys } = await setup();
+    await complete(await started());
+    expect(webKeys.length).toBeGreaterThan(2);
+    expect(new Set(webKeys)).toEqual(new Set([`key-${WEB_KEY}-key`]));
+  });
+
   test("authorize_returns_the_server_url", async () => {
     const { run, pars, states } = await setup();
     const result = await run(PDS, "login");

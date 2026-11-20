@@ -198,6 +198,8 @@ function folders(): void {
   secret(65532, "pds_admin_keys", v.pdsAdminKeys);
   secret(65532, "pds_admin_log_key", v.pdsAdminLogKey);
   secret(65532, "web_pds_admin_key", v.webPdsAdminKey);
+  // Web's mark on its PDS calls (P1.21j); the edge and web both read it, as 65532.
+  secret(65532, "pds_web_key", randomBytes(32).toString("hex"));
   writeFileSync(at("unset-dev-ca/root.key"), v.rootKey, { mode: 0o400 });
   writeFileSync(at("unset-dev-ca/leaf.key"), v.leafKey);
   const ca = (name: string): string => at(`unset-dev-ca/${name}`);

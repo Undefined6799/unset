@@ -15,6 +15,7 @@ import {
   netGuardFields,
   oneOf,
   origin,
+  Secret,
   secretFile,
   str,
   url,
@@ -22,6 +23,8 @@ import {
 } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
 import { legalConfig } from "./legal.ts";
+
+const WEB_KEY = /^[0-9a-f]{64}$/;
 
 /** Browser session timeouts (plan section 5.3), as interfaces/http/config.ts defines them. */
 const sessionConfig = {
@@ -57,6 +60,12 @@ const identityConfig = {
  */
 const pdsConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
+  // Web's mark on its own calls to our PDS (P1.21j; Proposed ADR 0071): exactly the 64 lower-case hex characters the
+  // edge's pds_web_key holds, so a key the edge could never match stops boot instead of failing quietly.
+  PDS_WEB_KEY: withRule(
+    secretFile({ minBytes: 64 }),
+    (config) => config.PDS_WEB_KEY instanceof Secret && WEB_KEY.test(config.PDS_WEB_KEY.reveal()),
+  ),
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
 };
 
