@@ -347,6 +347,14 @@
         "origin": "ours",
         "purpose": "The profile's cards in a two-column grid on the stock Card: Text, links, collection, buttons."
       },
+      "limited-profile.svelte": {
+        "origin": "ours",
+        "purpose": "The limited page (ADR 0078): the side column with only avatar, name, handle and DID and one sentence, for someone the member's page visibility leaves out; a sign-in button when signing in would show the page."
+      },
+      "page-audience.svelte": {
+        "origin": "ours",
+        "purpose": "The notice above a member page that is not public (ADR 0078): who else sees it."
+      },
       "profile-layout.svelte": {
         "origin": "ours",
         "purpose": "The member page's frame: notices on top, then the side column and the cards, two columns on wide screens; or the compact header above one card area (ADR 0072)."
@@ -384,6 +392,10 @@
       "search-ai-form.svelte": {
         "origin": "ours",
         "purpose": "Settings › Privacy's Search and AI form: two switches, search title and description under a native Advanced disclosure, their honest limits and the search result preview, posted to /settings/search-and-ai (ADR 0062); says when listing is off on the whole site (P1.21b)."
+      },
+      "page-visibility-form.svelte": {
+        "origin": "ours",
+        "purpose": "Settings › Privacy's who sees your page (ADR 0078): Public, Signed-in members only or Only me as native radios posted to /profile, the disclaimer always shown, and each choice's help in a native popover; works with no script."
       },
       "search-preview.svelte": {
         "origin": "ours",

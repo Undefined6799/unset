@@ -4,6 +4,7 @@
 // lexicon counts them (Intl.Segmenter, https://atproto.com/specs/lexicon#string-formats "maxGraphemes").
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import type { CardKey } from "./cards.ts";
+import { type ProfileVisibility, parseProfileVisibility } from "./visibility.ts";
 import { isWebAddress, withScheme } from "./web-address.ts";
 
 export const PROFILE_FIELDS = ["displayName", "headline", "location", "website"] as const;
@@ -22,10 +23,13 @@ export type ProfileError = "profile.invalid" | "profile.too_long" | "profile.url
 /** How the profile page is laid out (ADR 0072; the lexicon's layout known values). */
 export type ProfileLayout = "sidebar" | "compact";
 const PROFILE_LAYOUTS: readonly ProfileLayout[] = ["sidebar", "compact"];
-/** A field a save may blame: the text fields and the layout choice. */
-export type ProfileInputField = ProfileField | "layout";
-/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile). */
-export type ProfileEdit = Partial<ProfileFields> & { readonly layout?: ProfileLayout };
+/** A field a save may blame: the text fields, the layout choice and who sees the page (ADR 0078). */
+export type ProfileInputField = ProfileField | "layout" | "visibility";
+/** The fields one save sends; a field left out keeps what the record holds (Settings › Profile, Settings › Privacy). */
+export type ProfileEdit = Partial<ProfileFields> & {
+  readonly layout?: ProfileLayout;
+  readonly visibility?: ProfileVisibility;
+};
 export type ParsedProfile =
   | { readonly ok: true; readonly fields: ProfileEdit }
   | { readonly ok: false; readonly field: ProfileInputField; readonly code: ProfileError };
@@ -82,10 +86,18 @@ export function parseProfileFields(input: Readonly<Record<string, unknown>>): Pa
     if (!checked.ok) return { ok: false, field, code: checked.code };
     fields[field] = checked.value;
   }
-  if (input.layout === undefined) return { ok: true, fields };
-  const layout = parseProfileLayout(input.layout);
-  if (layout === null) return { ok: false, field: "layout", code: "profile.invalid" };
-  return { ok: true, fields: { ...fields, layout } };
+  const edit: { -readonly [K in keyof ProfileEdit]: ProfileEdit[K] } = fields;
+  if (input.layout !== undefined) {
+    const layout = parseProfileLayout(input.layout);
+    if (layout === null) return { ok: false, field: "layout", code: "profile.invalid" };
+    edit.layout = layout;
+  }
+  if (input.visibility !== undefined) {
+    const visibility = parseProfileVisibility(input.visibility);
+    if (visibility === null) return { ok: false, field: "visibility", code: "profile.invalid" };
+    edit.visibility = visibility;
+  }
+  return { ok: true, fields: edit };
 }
 
 /** A save's layout, or null when it is not one we know (DM-1): a save writes only known values. */
@@ -125,7 +137,8 @@ function storedObject(existing: unknown): Readonly<Record<string, unknown>> {
 
 /**
  * The record to write over `existing` (the stored value, or null for a first profile). The fields sent are replaced, an
- * emptied one removed (a layout of sidebar too, ADR 0072); every other field (one not sent, avatar, listed, cards,
+ * emptied one removed (a layout of sidebar too, ADR 0072, and a
+ * visibility of public, ADR 0078); every other field (one not sent, avatar, listed, cards,
  * ...) is kept as it was, createdAt too.
  * A stored field the lexicon does not define (another client's, or a newer release's) is kept too: unexpected fields
  * are ignored and kept, never a reason to refuse (atproto.com/specs/lexicon, "Authority and Control"; ADR 0038).
@@ -142,6 +155,7 @@ export function toProfileRecord(
   const sent: readonly string[] = [
     ...PROFILE_FIELDS.filter((field) => fields[field] !== undefined),
     ...(fields.layout === undefined ? [] : ["layout"]),
+    ...(fields.visibility === undefined ? [] : ["visibility"]),
   ];
   const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => !sent.includes(key) && key !== "$type"));
   const set: Record<string, string> = {};
@@ -151,6 +165,8 @@ export function toProfileRecord(
   }
   // Sidebar is what an absent field means, so choosing it clears the field (as Filled does for a card, ADR 0068).
   if (fields.layout === "compact") set.layout = "compact";
+  // Public is what an absent field means, so choosing it clears the field (ADR 0078).
+  if (fields.visibility !== undefined && fields.visibility !== "public") set.visibility = fields.visibility;
   const merged: Record<string, unknown> = { ...kept, ...set };
   if (typeof merged.displayName !== "string" || merged.displayName === "") {
     return { ok: false, code: "profile.name_required" };

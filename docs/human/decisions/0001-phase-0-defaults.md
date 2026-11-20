@@ -714,3 +714,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0076 accepted (Alex, 2026-11-20 18:53Z, against 7a1de42; own record:
   [0076](0076-image-uploads-up-to-64-mib.md)):** image uploads up to 64 MiB and 110 megapixels, with web's, net-guard's
   and review's caps, memory and the edge's read window raised to match.
+- **Who sees the profile page (P1.22a, 2026-11-20; own record: [0078](0078-who-sees-the-profile-page.md)):** an optional
+  `visibility` on `sh.unset.profile` (public, signedIn, ownerOnly; absent public, unknown ownerOnly); anyone the choice
+  leaves out gets a limited page with the name and handle; a page that is not public is never listed. Partly
+  supersedes ADR 0004 and decision 35 D7 for the profile page. Proposed, awaiting Alex.

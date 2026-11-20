@@ -1,7 +1,9 @@
 // P1.21y: Settings › Privacy, the Search and AI form (ADR 0062) and its search result preview. With no script the
 // "Advanced" disclosure still opens and a save comes back saying so, with the preview showing what was saved; where
 // the client runs the preview follows the fields as the member types. A double press of Save lands once, on the saved
-// page. Each test puts the member's choices back to all off, as the other specs expect them.
+// page. Each test puts the member's choices back to all off, as the other specs expect them. Who sees the page (ADR
+// 0078, P1.22a) leads the page: each choice's help opens with no script, and a page that is not public leaves the Search
+// and AI form out; each test that changes it puts it back to Public.
 import { expect, type Page, test } from "@playwright/test";
 import { openPage } from "./observe.ts";
 import type { PageFixture } from "./pages.ts";
@@ -54,6 +56,43 @@ test.describe("javascript off", () => {
       await expect(page.locator("[data-preview-unlisted]")).toHaveCount(0);
     } finally {
       await resetChoices(page);
+    }
+  });
+});
+
+const visibility = (page: Page) => page.locator("#page-visibility");
+
+test.describe("page visibility, javascript off", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("help_opens_and_closes_by_keyboard_with_no_script", async ({ page }) => {
+    expect((await openPage(page, PRIVACY))?.status()).toBe(200);
+    const help = page.locator('[data-visibility-help="ownerOnly"]');
+    await expect(help).toBeHidden();
+    await visibility(page).getByRole("button", { name: 'What "Only me" means' }).focus();
+    await page.keyboard.press("Enter");
+    await expect(help).toBeVisible();
+    await expect(help).toContainText("other apps do not know this setting");
+    await page.keyboard.press("Escape");
+    await expect(help).toBeHidden();
+  });
+
+  test("only_me_leaves_search_and_ai_out_until_public_again", async ({ page }) => {
+    expect((await openPage(page, PRIVACY))?.status()).toBe(200);
+    const form = visibility(page);
+    await expect(form.getByRole("radio", { name: "Public" })).toBeChecked();
+    try {
+      await form.getByRole("radio", { name: "Only me" }).check();
+      await form.getByRole("button", { name: "Save who sees your page" }).click();
+      await expect(page).toHaveURL(/\/settings\/privacy\?visibility-saved#page-visibility$/);
+      await expect(form).toContainText("Saved.");
+      await expect(form.getByRole("radio", { name: "Only me" })).toBeChecked();
+      await expect(section(page)).toHaveCount(0);
+      await expect(page.locator("[data-search-off]")).toBeVisible();
+    } finally {
+      await visibility(page).getByRole("radio", { name: "Public" }).check();
+      await visibility(page).getByRole("button", { name: "Save who sees your page" }).click();
+      await expect(section(page)).toBeVisible();
     }
   });
 });

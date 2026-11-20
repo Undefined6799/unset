@@ -385,12 +385,59 @@ describe("GET /settings/privacy on the stand-in PDS", () => {
     }
   });
 
+  // ADR 0078 (P1.22a): who sees the page leads the Privacy page and is saved in the profile record alone; while the
+  // page is not public the Search and AI form is left out, and its choices are kept.
+  test("who_sees_the_page_is_saved_in_the_record_and_hides_search_and_ai_until_public", async () => {
+    await save(up, "displayName=Mara+Lind&headline=Night+trains.&location=&website=");
+    const radios = (document: Node | undefined) =>
+      elements(elements(document, "form", { action: "/profile" })[0], "input", { name: "visibility" }).map((input) => [
+        attr(input, "value"),
+        attr(input, "checked") !== undefined,
+      ]);
+    expect(radios(parse(await (await privacyPage(up)).text()))).toEqual([
+      ["public", true],
+      ["signedIn", false],
+      ["ownerOnly", false],
+    ]);
+    const before = up.writes().length;
+    const saved = await save(up, "visibility=signedIn&next=%2Fsettings%2Fprivacy");
+    expect(saved.status).toBe(303);
+    expect(saved.headers.get("location")).toBe("/settings/privacy?visibility-saved#page-visibility");
+    const [written] = up.writes().slice(before);
+    expect(written).toMatchObject({
+      record: { displayName: "Mara Lind", headline: "Night trains.", visibility: "signedIn" },
+    });
+    const html = await (await privacyPage(up, "?visibility-saved")).text();
+    expect(html).toContain("Saved. Your page now follows this choice.");
+    const document = parse(html);
+    expect(radios(document)).toEqual([
+      ["public", false],
+      ["signedIn", true],
+      ["ownerOnly", false],
+    ]);
+    expect(elements(document, "form", { action: "/settings/search-and-ai" })).toEqual([]);
+    expect(elements(document, "p", { "data-search-off": "" })).toHaveLength(1);
+    // Each choice's question mark opens its help with no script.
+    const helps = elements(document, "section", { popover: "auto" }).map((help) => attr(help, "data-visibility-help"));
+    expect(helps.filter((choice) => choice !== undefined)).toEqual(["public", "signedIn", "ownerOnly"]);
+    expect(textContent(document)).toContain("does not hide your profile");
+    // Public again: the field leaves the record and the Search and AI form comes back.
+    await save(up, "visibility=public&next=%2Fsettings%2Fprivacy");
+    expect(up.writes().at(-1)?.record).not.toHaveProperty("visibility");
+    expect(
+      elements(parse(await (await privacyPage(up)).text()), "form", { action: "/settings/search-and-ai" }),
+    ).toHaveLength(1);
+  });
+
   test("a_pds_that_cannot_be_read_still_shows_the_choices_named_by_did", async () => {
     const response = await privacyPage(unread);
     expect(response.status).toBe(200);
     expect(response.headers.get("set-cookie") ?? "").not.toContain("__Host-sid=;");
     const document = parse(await response.text());
     expect(elements(document, "form", { action: "/settings/search-and-ai" })).toHaveLength(1);
+    // Who sees the page is in the record, so it is not offered as if it were known (ADR 0078).
+    expect(elements(document, "form", { action: "/profile" })).toEqual([]);
+    expect(textContent(document)).toContain("We could not read your profile");
     expect(preview(document).title).toBe(OWNER);
     expect(preview(document).description).toBeNull();
   });

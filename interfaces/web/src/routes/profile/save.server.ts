@@ -38,8 +38,20 @@ const SETTINGS_PROFILE = "/settings/profile";
  */
 export const SETTINGS_PROFILE_SAVED = "/settings/profile?saved";
 
-/** The form fields a save reads: the text fields and the page layout (ADR 0072). */
-const FORM_FIELDS = [...PROFILE_FIELDS, "layout"] as const;
+/** The form's `next` when it came from Settings › Privacy's page visibility choice (ADR 0078). */
+const SETTINGS_PRIVACY = "/settings/privacy";
+/** Where a save from Settings › Privacy returns, saying which form saved. */
+export const SETTINGS_PRIVACY_SAVED = "/settings/privacy?visibility-saved#page-visibility";
+
+/** Where a save returns: the settings page it came from, told it saved, or else the member's own page. */
+function savedLocation(next: ReturnType<FormData["get"]>, did: Did): string {
+  if (next === SETTINGS_PROFILE) return SETTINGS_PROFILE_SAVED;
+  if (next === SETTINGS_PRIVACY) return SETTINGS_PRIVACY_SAVED;
+  return `/${did}`;
+}
+
+/** The form fields a save reads: the text fields, the page layout (ADR 0072) and who sees the page (ADR 0078). */
+const FORM_FIELDS = [...PROFILE_FIELDS, "layout", "visibility"] as const;
 
 /**
  * Each field's one value; a field left out is not sent, so it keeps what the record holds. A repeated field is
@@ -64,8 +76,7 @@ export async function saveProfileForm(form: FormData, did: Did, save: SaveProfil
   const parsed = parseProfileFields(input);
   if (!parsed.ok) return { code: parsed.code, field: parsed.field };
   const saved = await save(did, parsed.fields);
-  if (saved.kind === "saved")
-    return { location: form.get("next") === SETTINGS_PROFILE ? SETTINGS_PROFILE_SAVED : `/${did}` };
+  if (saved.kind === "saved") return { location: savedLocation(form.get("next"), did) };
   if (saved.kind === "redirect") return { location: saved.location };
   if (saved.kind === "conflict") return { code: "profile.conflict" };
   if (saved.kind === "refused") return { code: saved.code };

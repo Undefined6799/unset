@@ -50,6 +50,11 @@ type Main = {
   layout?: "sidebar" | "compact" | l.UnknownString;
 
   /**
+   * Who unset.sh shows the page to: public (everyone), signedIn (people signed in to unset.sh), ownerOnly (only the account itself; others see that the account exists and nothing more). Absent means public; an unknown value is read as ownerOnly. A request to apps, not access control: the record stays readable by anyone on the network.
+   */
+  visibility?: "public" | "signedIn" | "ownerOnly" | l.UnknownString;
+
+  /**
    * True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL.
    */
   listed?: boolean;
@@ -84,6 +89,9 @@ const main = /*#__PURE__*/ l.record<"literal:self", Main>(
     website: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.string({ format: "uri", maxLength: 2000 })),
     layout: /*#__PURE__*/ l.optional(
       /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["sidebar", "compact"] }>({ maxLength: 32 }),
+    ),
+    visibility: /*#__PURE__*/ l.optional(
+      /*#__PURE__*/ l.string<{ maxLength: 32; knownValues: ["public", "signedIn", "ownerOnly"] }>({ maxLength: 32 }),
     ),
     listed: /*#__PURE__*/ l.optional(/*#__PURE__*/ l.boolean()),
     cards: /*#__PURE__*/ l.optional(

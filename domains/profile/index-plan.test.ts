@@ -148,6 +148,14 @@ describe("planCommit", () => {
     }
   });
 
+  // ADR 0078: the page and the sitemap read who sees the page from the indexed record, so the index keeps it as sent.
+  test("index.keeps_a_profile_visibility_known_or_not", () => {
+    for (const visibility of ["ownerOnly", "friends"]) {
+      const plan = planCommit(active, "3jzfcijpj2z2c", [profile({ visibility })]);
+      expect(plan.kind === "apply" && plan.writes[0]).toMatchObject({ record: { visibility } });
+    }
+  });
+
   test("index.keeps_a_card_surface_known_or_not", () => {
     for (const surface of ["plain", "future"]) {
       const card = section(TID);

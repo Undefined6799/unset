@@ -64,6 +64,61 @@ export const PROFILE_SETTINGS = {
 
 /** Settings › Privacy › Search and AI (ADR 0062; review plan 2026-11-18 §7.2): each switch says what it does and what
  * it cannot do. */
+/**
+ * Settings › Privacy › who sees the page (ADR 0078). The choice's words live here alone, so a label is one edit; the
+ * record's values (public, signedIn, ownerOnly) never change with them. Never "private" for a choice: the profile
+ * stays public on the network, which `disclaimer` says beside the choice.
+ */
+export const PAGE_VISIBILITY = {
+  title: "Who sees your page",
+  lead: "Your page on unset.sh, with your profile and cards.",
+  options: {
+    public: {
+      label: "Public",
+      hint: "Anyone can see your page. Below, you choose whether search engines and AI search may list it.",
+    },
+    signedIn: {
+      label: "Signed-in members only",
+      hint: "People who are not signed in see only your name and handle, with a note to sign in. Search engines and AI search never list it.",
+    },
+    ownerOnly: {
+      label: "Only me",
+      hint: "Other people, signed in or not, see only your name and handle and that you keep your page private. Search engines and AI search never list it.",
+    },
+  },
+  /** The question mark beside each choice opens its whole story (Alex, 2026-11-20 19:55Z). */
+  help: {
+    open: (choice: string) => `What "${choice}" means`,
+    close: "Close",
+    public: [
+      "Anyone can open your page at its address, signed in or not, and a shared link shows your name and headline.",
+      "Search engines and AI search list it only if you turn them on below.",
+    ],
+    signedIn: [
+      "On unset.sh, people who are not signed in see only your name, handle and avatar, with a note to sign in. Signed-in members see your whole page.",
+      "Search engines and AI search never list it, and a shared link shows nothing about it. If your page was listed before, search engines usually drop it within days to a few weeks. Copies already made by others can remain.",
+    ],
+    ownerOnly: [
+      "On unset.sh, only you see your whole page. Everyone else, signed in or not, sees your name, handle and avatar and a note that you keep your page private, so people who meet you elsewhere on unset.sh know it is you.",
+      "Search engines and AI search never list it, and a shared link shows nothing about it. If your page was listed before, search engines usually drop it within days to a few weeks. Copies already made by others can remain.",
+    ],
+    /** Said for both choices that are not public. */
+    network: [
+      "This is a request to apps, not a lock. Your profile and cards are records in your atproto account: anyone can read them from your sign-in server and the network's relays, and other apps do not know this setting, so they may show them.",
+      "Your handle and DID are public on the network whatever you choose.",
+    ],
+  },
+  disclaimer:
+    "This asks apps not to show your page; it does not hide your profile. What you publish stays public on the atproto network: any app or person can still read it from your sign-in server.",
+  save: "Save who sees your page",
+  saved: "Saved. Your page now follows this choice.",
+  noProfile: "You have no page yet. Publish your profile first, then choose who sees it.",
+  unreadable:
+    "We could not read your profile from your sign-in server, so this choice is not shown. Try again in a moment.",
+  searchOff:
+    "Search engines and AI search are off while your page is not public. Your Search and AI choices are kept for when it is.",
+} as const;
+
 export const SEARCH_AI_SETTINGS = {
   title: "Search and AI",
   lead: "Who may find your public page. Both are off until you turn them on.",
