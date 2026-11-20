@@ -155,6 +155,24 @@ describe("image store", () => {
       expect(await exists(id)).toBe(true);
     });
 
+    test("image.sweep_during_use: a sweep while a save's use is still open leaves the image", async () => {
+      const did = await member();
+      const id = await aged(did, "uploaded", "2 days");
+      const client = await web.connect();
+      try {
+        // The use's own statements, held open inside their transaction while the sweep runs.
+        await client.query("BEGIN");
+        await client.query("UPDATE app.image SET state = 'published', unused_since = NULL WHERE id = $1", [id]);
+        expect(await store.sweep(null)).toEqual({ kind: "deleted", images: [] });
+        await client.query("INSERT INTO app.image_use (image_id, record_uri) VALUES ($1, $2)", [id, record(did)]);
+        await client.query("COMMIT");
+      } finally {
+        client.release();
+      }
+      expect(await exists(id)).toBe(true);
+      expect(await store.sweep(null)).toEqual({ kind: "deleted", images: [] });
+    });
+
     test("image.governor: a run that would delete 501 of 1,000 images deletes nothing", async () => {
       const did = await member();
       await sql(
