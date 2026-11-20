@@ -683,6 +683,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   only, in a new zone `app_files` (120 per 10 seconds per address) instead of `app_burst`; `app_global` still counts
   them. It supersedes "`app_burst`, with no matcher" in ADR 0031 Decision 1 and "the same ... lack of matcher" in ADR
   0066 Decision 1; neither is edited. Proposed, awaiting Alex.
+- **Profile page layout (P1.21n, 2026-11-20; own record: [0072](0072-profile-page-layout.md)):** the profile may
+  store an optional layout, sidebar or compact; absent means sidebar, so existing pages keep their look. Proposed,
+  awaiting Alex.
 - **Text card rich editor (P1.21u, 2026-11-20; own record: [0073](0073-text-card-rich-editor.md)):** the Text
   card's editor is Milkdown over the plain field, loaded when the editor opens; the app CSP adds the one Trusted
   Types name `ProseMirrorClipboard` for paste. Proposed, awaiting Alex.

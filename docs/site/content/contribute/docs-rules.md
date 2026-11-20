@@ -77,12 +77,12 @@ docker run --rm --entrypoint hugo -v "$PWD:/project" -w /project/docs/site ghcr.
 
 ## Endpoint pages
 
-[`scripts/docs/endpoints.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.ts) reads `interfaces/<process>/routes.manifest.json`, the `policies` export of `interfaces/<process>/limits.ts` when that file exists, and `docs/site/data/endpoints/<process>.yaml`.
+[`scripts/docs/endpoints.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.ts) reads the web route tree under `interfaces/web/src/routes`: each route folder's `policy.ts` export and the methods its `+page`, `+page.server` and `+server` files declare. It parses the handlers without running them. It also reads the `policies` export of `interfaces/web/src/lib/server/limits.ts` and, when it exists, the prose in `docs/site/data/endpoints/web.yaml`. A route folder with no `policy.ts` is a problem, not a skipped row.
 
 | Path | Writer |
 | --- | --- |
-| `docs/site/content/endpoints/*.md` | The command below. Hand-editing a page fails `endpoint_pages_match_manifests` |
-| `docs/site/data/endpoints/<process>.yaml` | Hand-written. Keys are `"METHOD path"`. The generator reads the prose and leaves the file as written. Every manifest route needs a key. A key for a route that is not in the manifest does not belong on this site |
+| `docs/site/content/endpoints/*.md` | The command below. Hand-editing a page fails `endpoint_pages_match_every_route_policy` |
+| `docs/site/data/endpoints/web.yaml` | Optional and hand-written; not on `main` today. Keys are `"METHOD path"`. The generator reads the prose and leaves the file as written. A missing file or key renders as `not recorded`; a key with no route fails as an orphan |
 
 ```sh
 node scripts/docs/endpoints.ts --write
@@ -92,7 +92,7 @@ node scripts/docs/endpoints.ts --write
 
 | Run | Failure when the pages are stale |
 | --- | --- |
-| `npm test` | [`scripts/docs/endpoints.test.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.test.ts) `endpoint_pages_match_manifests`. It expects `checkEndpoints` to return no problems |
+| `npm test` | [`scripts/docs/endpoints.test.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/docs/endpoints.test.ts) `endpoint_pages_match_every_route_policy`. It expects one row per `policy.ts` and `checkEndpoints` to return no problems |
 | `npm run check` | The same test. Root `package.json` `check` runs `npm test` |
 | CI job `code` | [`.github/workflows/ci.yml`](https://github.com/Undefined6799/unset/blob/main/.github/workflows/ci.yml) runs `npm test -- --units`. [`scripts/test/run.ts`](https://github.com/Undefined6799/unset/blob/main/scripts/test/run.ts) includes this file. Job `check` needs `code` |
 | CI job `docs-site` | Hugo build only. It does not run this test |
