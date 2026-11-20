@@ -222,7 +222,9 @@ export function createImagePool(options: PoolOptions): ImageProcessor & { close(
       const format = sniffImage(bytes);
       if (format === null) return refused("image.unsupported");
       if (format === "animated") return refused("image.animated");
-      if (closed || down || waiting.length >= options.queueMax) return refused("image.busy");
+      // The queue holds only jobs no idle child could take, so a free child admits a job even with no queue.
+      const idle = slots.some((slot) => slot.ready && slot.busy === null && slot.child !== null);
+      if (closed || down || (!idle && waiting.length >= options.queueMax)) return refused("image.busy");
       return new Promise((done) => {
         waiting.push({ bytes, format, limits, versions, done });
         dispatch();

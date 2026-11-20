@@ -317,6 +317,29 @@ describe("the pool", () => {
     }
   }, 20_000);
 
+  test("pool.queue_zero: with no queue, an idle child still takes a job and only the next one is busy", async () => {
+    const ready = eventOf("ready");
+    const hanging = createImagePool({
+      children: 1,
+      queueMax: 0,
+      timeoutMs: 400,
+      addressSpaceMb: 4096,
+      childPath: fixture("hang-child.ts"),
+      onEvent: ready.onEvent,
+    });
+    try {
+      const input = new Uint8Array(await anyJpeg());
+      await ready.happened;
+      const results = await Promise.all([hanging.process(input, LIMITS, []), hanging.process(input, LIMITS, [])]);
+      expect(results).toEqual([
+        { kind: "refused", code: "image.timeout" },
+        { kind: "refused", code: "image.busy" },
+      ]);
+    } finally {
+      hanging.close();
+    }
+  }, 20_000);
+
   test("pool.memory_limit: children that cannot start back off, the pool goes down and answers busy", async () => {
     const down = eventOf("down");
     const events: string[] = [];
