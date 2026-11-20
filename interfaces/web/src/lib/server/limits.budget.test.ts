@@ -16,7 +16,11 @@ type Request = { at: number; policy: PolicyName; address: string; did?: string }
 /** How many of `requests` (in time order) the web process refuses in `mode`. */
 function refused(mode: "header" | "socket", requests: readonly Request[]): number {
   let clock = 0;
-  const limiter = createRateLimiter(policiesFor(mode), { maxKeys: 100_000, onError: () => undefined, now: () => clock });
+  const limiter = createRateLimiter(policiesFor(mode), {
+    maxKeys: 100_000,
+    onError: () => undefined,
+    now: () => clock,
+  });
   const clientIp = createClientIpResolver(
     {
       TRUSTED_PROXY_MODE: "socket",
