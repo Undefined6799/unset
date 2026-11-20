@@ -4746,6 +4746,17 @@ signs a browser in. The fallback delete calls the token store's `del`, which tak
 transaction and lock, the same outcome for the last browser and for one of several; the existing sign-out integration
 tests pin it. The letter does not belong to the token pipeline below; it was the next free id.
 
+### P1.21e — Record the account lifecycle and burned names (added step, 2026-11-19)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Docs only. Alex decided on 2026-11-19 (22:40Z) how deactivation, deletion, takedown and moving away treat a member's
+DID, DNS record, PDS account and name, after research into how atproto means them to work. Proposed ADR 0067 records
+it; the privacy notice's 2026-11-19 version gains the permanent PLC history and the burned names (no member has
+accepted that version yet), the RoPA gains a "Burned names" row, the erasure runbook gains the manual DNS and name
+steps, P5.08b and P5.08c follow the 30 days and the tombstone-on-request rule, and P3.08n books the burned-name list.
+No code or behaviour changes. The letter does not belong to the token pipeline below; it was the next free id.
+
 ### P1.21f — Let each profile card choose its surface (added step, 2026-11-19)
 
 **Tags:** trusted · **Depends on:** P1.20 · **Plan:** §5.4
@@ -4774,7 +4785,7 @@ Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-
 - **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
   `font-metrics.json`. See its section below.
 P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: a (settings pages), b (search listing switch),
-c (dead and duplicated code), d (sign-out live count), l, m, q.
+c (dead and duplicated code), d (sign-out live count), e (account lifecycle and burned names), l, m, q.
 
 As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
 check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
