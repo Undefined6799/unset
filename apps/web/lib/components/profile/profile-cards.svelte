@@ -6,7 +6,8 @@
   four tiles by the card's own width (a container query), and when more are left a part of the next one shows and
   the count says to scroll; the scrolling area and its buttons are carousel.svelte. Everything shown was built by
   apps/web/lib/profile/view.ts. On the owner's page `controls` puts each card's own at the top right of the card, and
-  `add` closes the grid, full width (the Add card button). No cards and no `add` renders nothing.
+  `add` closes the grid, full width (the Add card button), and `text`, when given, draws a Text card's words in place
+  of its rendered blocks (card-text.svelte, the editor in place, ADR 0074). No cards and no `add` renders nothing.
 -->
 <script lang="ts">
 import type { Snippet } from "svelte";
@@ -22,10 +23,12 @@ let {
   cards,
   controls,
   add,
+  text,
 }: {
   cards: readonly CardView[];
   controls?: Snippet<[number]>;
   add?: Snippet;
+  text?: Snippet<[number]>;
 } = $props();
 
 /** A list longer than this scrolls inside its card. */
@@ -128,7 +131,9 @@ const count = "font-mono text-xs text-muted-foreground";
         <!-- No bar and no automatic heading (P1.21p): the member's own text leads, its headings are the card's. -->
         <Card.Root class="group/card {card} {span} {outer(shown)} {TEXT_INSET[shown.surface]}" data-surface={shown.surface}>
           <div class="flex items-start gap-3">
-            <div class="min-w-0 flex-1"><Readme blocks={shown.shown.blocks} /></div>
+            <div class="min-w-0 flex-1">
+              {#if text === undefined}<Readme blocks={shown.shown.blocks} />{:else}{@render text(index)}{/if}
+            </div>
             {@render controls?.(index)}
           </div>
         </Card.Root>

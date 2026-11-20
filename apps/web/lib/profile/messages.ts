@@ -91,6 +91,8 @@ export const CARD_EDIT = {
   removeBody: "It leaves your page and your sign-in server. This cannot be undone.",
   width: "Width",
   surface: "Surface",
+  /** The card menu's name for Surface (Alex 2026-11-20: "Style"). */
+  style: "Style",
   filled: "Filled",
   outlined: "Outlined",
   plain: "Plain",
@@ -203,4 +205,9 @@ export const TEXT_EDITOR = {
   codeBlock: "Code block",
   undo: "Undo",
   redo: "Redo",
+} as const;
+
+/** A Text card edited where it stands on the owner's page (ADR 0074 item 4). */
+export const TEXT_IN_PLACE = {
+  label: (name: string) => `Text of the ${name} card`,
 } as const;
