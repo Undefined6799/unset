@@ -27,6 +27,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/preset-commonmark";
+import { isHistoryTransaction } from "@milkdown/prose/history";
 import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Plugin } from "@milkdown/prose/state";
 import { $prose, callCommand, getMarkdown } from "@milkdown/utils";
@@ -69,21 +70,24 @@ export type MountOptions = {
 // an optional list of its own. The schema stays Milkdown's full one, so any stored text opens as it is; instead no
 // edit (toolbar, shortcut or paste) may add a heading or list inside a quote, or a quote, heading or code block inside
 // a list item, which the saved card would flatten. Text already stored that way stays editable.
-const ITEM_CHILDREN = new Set(["paragraph", "bullet_list", "ordered_list"]);
+// A list item is its first paragraph and then only lists: the parser reads no second paragraph in an item.
+const ITEM_LISTS = new Set(["bullet_list", "ordered_list"]);
 function flattened(doc: ProseNode): number {
   let count = 0;
-  doc.descendants((node, _pos, parent) => {
+  doc.descendants((node, _pos, parent, index) => {
     const holder = parent?.type.name;
     if (holder === "blockquote" && node.type.name !== "paragraph") count += 1;
-    if (holder === "list_item" && !ITEM_CHILDREN.has(node.type.name)) count += 1;
+    if (holder === "list_item" && index > 0 && !ITEM_LISTS.has(node.type.name)) count += 1;
     return node.isBlock;
   });
   return count;
 }
+// Undo and redo only go back to what the member had, so they pass.
 const pageShapes = $prose(
   () =>
     new Plugin({
-      filterTransaction: (tr, state) => !tr.docChanged || flattened(tr.doc) <= flattened(state.doc),
+      filterTransaction: (tr, state) =>
+        !tr.docChanged || isHistoryTransaction(tr) || flattened(tr.doc) <= flattened(state.doc),
     }),
 );
 

@@ -176,6 +176,35 @@ test("stored_text_the_page_shows_flat_opens_whole_and_is_kept", async ({ page })
   await deleteCard(page, "Text card");
 });
 
+// Codex review of #1827: Undo goes back to what the member had, even to a shape the editor would not let them add.
+test("undo_brings_back_deleted_text_the_page_shows_flat", async ({ page }) => {
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: "> - one\n> - two" });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  const card = page.getByRole("group", { name: "Text card" });
+  await card.getByRole("link", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog");
+  const editor = dialog.getByRole("textbox", { name: "Text" });
+  await writeText(editor, ["gone"]);
+  await expect(postedText(dialog)).toHaveValue("gone");
+  const bar = dialog.getByRole("toolbar", { name: "Formatting" });
+  await bar.getByRole("button", { name: "Undo" }).click();
+  await bar.getByRole("button", { name: "Undo" }).click();
+  await expect(postedText(dialog)).toHaveValue("> - one\n> - two");
+  await page.keyboard.press("Escape");
+  await deleteCard(page, "Text card");
+});
+
+// Codex review of #1827: the page reads one paragraph per list item, so a paste that puts two in one item is refused.
+test("a_paste_with_two_paragraphs_in_a_list_item_is_refused", async ({ page }) => {
+  const { dialog, editor } = await openNewText(page);
+  await paste(page, editor, "<ul><li><p>one</p><p>two</p></li></ul>");
+  await editor.pressSequentially("typed");
+  await expect(postedText(dialog)).toHaveValue("typed");
+  await page.keyboard.press("Escape");
+});
+
 // Codex review of #1827: a new card's field is required and starts empty. A save sent in the same moment as the first
 // edit, before the editor's next frame, must not be stopped by the browser as an empty field.
 test("a_new_text_saved_in_the_same_moment_as_its_first_edit_is_added", async ({ page }) => {
