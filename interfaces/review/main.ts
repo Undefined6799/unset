@@ -23,8 +23,11 @@ const review = compose(
   (outcome) => log.info("review.job", { kind: outcome }),
   (event) => (event === "down" ? log.error : log.info)("review.pool", { kind: event }),
 );
+// Node refuses a headers timeout longer than the request timeout (ERR_OUT_OF_RANGE, node:_http_server), which a
+// short REVIEW_TIMEOUT_MS would otherwise give.
+const requestTimeout = config.REVIEW_TIMEOUT_MS * 2;
 const server = createServer(
-  { requestTimeout: config.REVIEW_TIMEOUT_MS * 2, headersTimeout: 10_000, maxHeaderSize: 16_384 },
+  { requestTimeout, headersTimeout: Math.min(10_000, requestTimeout), maxHeaderSize: 16_384 },
   review.listener,
 );
 server.listen(config.LISTEN_PORT, () => log.info("review.started", {}));
