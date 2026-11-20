@@ -1,0 +1,8 @@
+// fixture: docs/human/x.md findings=0
+Heading
+=======
+
+A quoted marker: `<<<<<<< HEAD` sits mid-line.
+  >>>>>>> indented
+<<<<<<<x no space
+<<<<<< six
