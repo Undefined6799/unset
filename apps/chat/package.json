@@ -1,0 +1,26 @@
+{
+  "name": "@unset/apps-chat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "vite build",
+    "check:svelte": "svelte-check --tsconfig ./tsconfig.svelte.json --fail-on-warnings"
+  },
+  "dependencies": {
+    "@unset/shared-ui": "*",
+    "cn": "0.3.3",
+    "matrix-js-sdk": "43.0.0",
+    "svelte": "5.57.3",
+    "tailwind-variants": "3.3.1",
+    "tailwindcss": "4.3.5"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@tailwindcss/vite": "4.3.5",
+    "svelte-check": "4.7.8",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  }
+}

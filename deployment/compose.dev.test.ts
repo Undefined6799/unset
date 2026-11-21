@@ -946,6 +946,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     web_seal_keyring: 65532,
     web_oauth_client_keys: 65532,
     web_pds_admin_key: 65532,
+    web_chat_admin_key: 65532,
     pds_web_key: 65532,
     dev_tls_cert: 65532,
     dev_tls_key: 65532,
@@ -1110,7 +1111,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "3 files, 15 mounted secrets" },
+      { pass: true, reason: "3 files, 16 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

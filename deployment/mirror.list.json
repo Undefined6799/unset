@@ -33,5 +33,15 @@
     "source": "docker.io/chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0",
     "mirror": "ghcr.io/undefined6799/mirror/seaweedfs",
     "stage": "runtime"
+  },
+  {
+    "source": "docker.io/library/python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+    "mirror": "ghcr.io/undefined6799/mirror/python",
+    "stage": "runtime"
+  },
+  {
+    "source": "ghcr.io/element-hq/matrix-authentication-service:1.26.0@sha256:e089f1048a1d4a9a492ed17b9fe759100f1bd619407b001f5927928d88b780c4",
+    "mirror": "ghcr.io/undefined6799/mirror/matrix-authentication-service",
+    "stage": "runtime"
   }
 ]

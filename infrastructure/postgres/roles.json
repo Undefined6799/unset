@@ -120,6 +120,21 @@
     "passwordFrom": null
   },
   {
+    "name": "chat_auth",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 10,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "2s"
+    },
+    "createdBy": "P6.03",
+    "grantsBy": ["P6.03", "P6.08", "P6.12"],
+    "passwordFrom": null
+  },
+  {
     "name": "auditor",
     "class": "job",
     "login": true,

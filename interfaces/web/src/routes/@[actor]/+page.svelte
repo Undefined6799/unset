@@ -34,6 +34,7 @@ let { data } = $props();
       website={data.website}
       contact={data.contact}
       shape={data.avatarShape}
+      message={data.message}
     />
   {/snippet}
 

@@ -12,6 +12,11 @@ export {
   createAccountStore,
   MAX_CONFIRM_DAYS,
 } from "./accountStore.ts";
+export { createBrowserListStore } from "./browserListStore.ts";
+export { type ChatAccountStore, type ChatAccountStoreOptions, createChatAccountStore } from "./chatAccountStore.ts";
+export { createChatContactStore } from "./chatContactStore.ts";
+export { type ChatErasureStore, createChatErasureStore } from "./chatErasureStore.ts";
+export { type ChatLockStore, createChatLockStore } from "./chatLockStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export { createDiscoverabilityStore, type DiscoverabilityStore } from "./discoverabilityStore.ts";
@@ -84,6 +89,7 @@ export {
   type PublicProfile,
   type PublicProfileStore,
 } from "./publicProfileStore.ts";
+export { createPushKeyStore } from "./pushKeyStore.ts";
 export { checkExit, type KidCounts, kidCounts, rewrapAll } from "./rewrapAll.ts";
 export {
   type PasswordSyncOptions,
@@ -100,6 +106,7 @@ export {
   type SealedRow,
   sealedColumns,
 } from "./sealedColumns.ts";
+export { createSetupClaimStore } from "./setupClaimStore.ts";
 export {
   createSingleUseStore,
   type Db,

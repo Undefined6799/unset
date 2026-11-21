@@ -107,13 +107,17 @@ describe("egress", () => {
   });
 
   test("egress_file_exemption_exact", () => {
-    // guard.pds_admin_single_file (P2.09): pds-admin's one egress file, and no other file in that folder.
-    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.ts"]);
+    // guard.pds_admin_single_file (P2.09): pds-admin's one egress file, and no other file in that folder; chat-admin's
+    // likewise (ADR 0081 Compliance).
+    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.ts", "interfaces/chat-admin/outbound.ts"]);
     const line = 'import http from "node:http";';
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.ts": line }))).toEqual([]);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/other.ts": line }))).toHaveLength(1);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.mjs": line }))).toHaveLength(1);
     expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/issue.ts": "await fetch(url);" }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/outbound.ts": line }))).toEqual([]);
+    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/commands.ts": line }))).toHaveLength(1);
+    expect(egress.scanAll(tempRepo({ "interfaces/chat-admin/mas.ts": line }))).toHaveLength(1);
   });
 });
 
@@ -190,6 +194,12 @@ describe("css-layers", () => {
       "--y is not a token or declared in this file",
     ]);
     expect(cssLayers.layerFor("apps/web/other.css")).toBeUndefined();
+    // The chat page's entry (ADR 0088) is a Tailwind entry too, held to the same theme variables.
+    expect(cssLayers.layerFor("apps/chat/app.css")).toBe("tailwind-entry");
+    const chat = cssLayers
+      .scanCss("apps/chat/app.css", "@theme inline {\n  --x: var(--y);\n}\n", ctx)
+      .map((f) => f.text);
+    expect(chat).toEqual(["--y is not a token or declared in this file"]);
   });
 });
 

@@ -93,12 +93,23 @@ const EVENTS = [
   // P1.20k, the root layout: an error page could not read the member's account to decide whether to offer the app's
   // menus, so it offers none. `kind` is the class name. No DID.
   "shell.account_read_failed",
+  "shell.chat_count_failed",
   // P2.10, invites: a stored code whose seal did not open (listed as unavailable; no field), and a code pds-admin
   // issued that could not be stored (`kind` the error class), which the member's quota absorbs. No DID or code.
   "invite.unseal_failed",
   "invite.store_failed",
   // P2.27, notifications: the bell's or the page's read failed, so it says so and the page renders. `kind` is the class
   // name. No DID and no count.
+  // Build step 5, chat accounts: queued creations that stopped for good this run (`count`; a name MAS holds for someone
+  // else, a request chat-admin refused, or too many attempts), for an operator. No DID or chat user.
+  "chat.account_failed",
+  // Build step 11, erased members' chat accounts (ADR 0084 decision 3): deactivations still failing after about a day
+  // this run (`count`), for an operator; they keep retrying. No DID or chat user.
+  "chat.erasure_stuck",
+  // Build step 11, idle plain chats (ADR 0091): how many rooms one sweep deleted (`count`), and a sweep with rooms it
+  // could not finish (`count`) or that did not run (`reason` "unavailable"). Never a room, user or token.
+  "chat.rooms_swept",
+  "chat.rooms_sweep_failed",
   "notifications.read_failed",
   "notifications.send_failed",
   // P3.05s PR 3, the indexer process: it started (`kind` "enabled" or "disabled"), it stopped (`kind` "finished",
@@ -118,6 +129,11 @@ const EVENTS = [
   "media.started",
   "media.stopped",
   "media.request",
+  // Build step 6, the unset.cc door (interfaces/chat-auth): it started, it stopped, and each answer as `route` (the
+  // template), `method`, `status` and a fixed `reason` word. Never a query, cookie, ticket, token, DID or lock key.
+  "door.started",
+  "door.stopped",
+  "door.request",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

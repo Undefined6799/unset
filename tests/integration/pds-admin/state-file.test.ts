@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { expect, test } from "vitest";
 import { tempDir } from "./harness.ts";
 
-const STATE_FILE = pathToFileURL(join(import.meta.dirname, "../../../interfaces/pds-admin/state-file.ts")).href;
+const STATE_FILE = pathToFileURL(join(import.meta.dirname, "../../../shared/admin-envelope/state-file.ts")).href;
 const CLI = join(import.meta.dirname, "../../../interfaces/pds-admin/cli.ts");
 
 test("state.short_write: under a 1 KiB file-size limit, a line that does not fit throws instead of passing as durable", () => {

@@ -14,6 +14,7 @@ export const WAIVER_FILES = [
   ".github/trivyignore.pds.yaml",
   ".github/trivyignore.seaweedfs.yaml",
   ".github/trivyignore.newt.yaml",
+  ".github/trivyignore.python.yaml",
   ".github/trivyignore.app.yaml",
   ".github/npm-audit-ignore.yaml",
 ] as const;

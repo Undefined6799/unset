@@ -34,6 +34,7 @@ import { createSessionStore } from "@unset/infrastructure-session";
 import { createLogger } from "@unset/shared-log";
 import { buildOnce, PDS_HOST, type Postgres, type RunningWeb, startWeb } from "../../integration/web/built-server.ts";
 import { readyMember } from "../../integration/web/members.ts";
+import { chatAccountsOf } from "../../support/chat-accounts.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 import {
   ACCOUNT,
@@ -284,6 +285,7 @@ async function seedMembers(pg: Postgres, keyring: string): Promise<Record<Member
     recordUnderageBlock: async () => {
       throw new Error("the seed never blocks");
     },
+    chatAccounts: chatAccountsOf(pool),
   });
   const issuer = `https://${PDS_HOST}`;
   const cookies = {} as Record<MemberName, string>;

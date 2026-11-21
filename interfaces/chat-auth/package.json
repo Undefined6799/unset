@@ -1,0 +1,18 @@
+{
+  "name": "@unset/interfaces-chat-auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "@unset/domains-identity": "*",
+    "@unset/domains-messaging": "*",
+    "@unset/infrastructure-matrix": "*",
+    "@unset/infrastructure-net-guard": "*",
+    "@unset/infrastructure-postgres": "*",
+    "@unset/infrastructure-seal": "*",
+    "@unset/shared-config": "*",
+    "@unset/shared-http": "*",
+    "@unset/shared-log": "*"
+  }
+}

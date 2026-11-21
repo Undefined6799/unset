@@ -220,7 +220,7 @@ function importProblems(root: string, ws: Workspace, byName: Map<string, string>
 
 /**
  * The zero-dependency workspaces may not import their test runner (dependency-cruiser's admin-services-zero-deps and
- * allowlist-zero-deps cover test files too), so their tests live in one named folder outside them. Exactly these two,
+ * allowlist-zero-deps cover test files too), so their tests live in one named folder outside them. Exactly these,
  * and only that folder; a test there counts for a workspace when it imports that workspace (coordinator ruling
  * 2026-11-18 13:25Z under ADR 0059, P2.09).
  */
@@ -228,6 +228,10 @@ const TESTS_ELSEWHERE: Readonly<Record<string, { folder: string; imports: RegExp
   "interfaces/pds-admin": {
     folder: "tests/integration/pds-admin",
     imports: /from\s+["'](?:\.\.\/)+interfaces\/pds-admin\/[^"']+["']/,
+  },
+  "interfaces/chat-admin": {
+    folder: "tests/integration/chat-admin",
+    imports: /from\s+["'](?:\.\.\/)+interfaces\/chat-admin\/[^"']+["']/,
   },
   "shared/admin-envelope": {
     folder: "tests/integration/pds-admin",
@@ -401,9 +405,10 @@ export function untypecheckedFiles(root: string): string[] {
  */
 export const SVELTE_CHECK_CONFIGS: readonly string[] = [
   "apps/web/tsconfig.svelte.json",
+  "apps/chat/tsconfig.svelte.json",
   "interfaces/web/tsconfig.svelte.json",
 ];
-const SVELTE_FOLDERS = ["apps/web", "interfaces/web"];
+const SVELTE_FOLDERS = ["apps/web", "apps/chat", "interfaces/web"];
 
 /** A tsconfig include pattern as a regex over repo-relative paths: `**\/` is any folders, `*` any name part. */
 function includePattern(dir: string, pattern: string): RegExp {

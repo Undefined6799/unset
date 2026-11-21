@@ -73,6 +73,7 @@ keeps every other host account out:
 | `pds_admin_keys` | `65532:65532` | pds-admin | the public key web signs invite requests with, and its one verb |
 | `pds_admin_log_key` | `65532:65532` | pds-admin | the 32-byte key its request log keeps DIDs and codes under |
 | `web_pds_admin_key` | `65532:65532` | web, every stack | the private key web signs invite requests with |
+| `web_chat_admin_key` | `65532:65532` | web, every stack | the Ed25519 private key (PKCS#8 PEM) web signs chat-admin requests and chat sign-in tickets with, kid `web-chat` (build step 5); its own key, never the pds-admin one |
 | `pds_web_key` | `65532:65532` | edge and web, every stack | 64 hex characters web marks its own PDS calls with; the edge gives them their own zones (P1.21j, ADR 0071) |
 | `objects_web` | `65532:65532` | web, every stack | 64 hex characters: the secret key of web's identity `unset-web` in `objects_s3`; web will not start without it (P2.21a) |
 
@@ -211,6 +212,19 @@ node -e 'const c = require("node:crypto"), fs = require("node:fs");
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secrets/web_pds_admin_key
 sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-keys unset-dev-secrets/pds_admin_keys
 rm unset-dev-secrets/.new-key unset-dev-secrets/.new-keys
+```
+
+**web's chat-admin key** (build step 5), `web_chat_admin_key`: made the same way with a fresh pair, kid `web-chat`
+(the compose files name it literally). Web mounts it under every stack, so the file must exist before web starts;
+the public half joins chat-admin's key file, as `iss` `web`, when chat-admin runs in the stack:
+
+```sh
+umask 077
+node -e 'const c = require("node:crypto"), fs = require("node:fs");
+  fs.writeFileSync("unset-dev-secrets/.new-key",
+    c.generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });'
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-secrets/.new-key unset-dev-secrets/web_chat_admin_key
+rm unset-dev-secrets/.new-key
 ```
 
 **Web's PDS key** (P1.21j, ADR 0071). The edge and web both read `pds_web_key`; one value, made once:
