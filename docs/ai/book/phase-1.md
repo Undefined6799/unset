@@ -16786,6 +16786,18 @@ ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from o
 
 ---
 
+### P1.38v — Name only files on the tree in the lint rules
+Tags: —            Depends on: —
+`scripts/lint/` and the docs that describe its rules; issues #1775 and #1781 (docs checker, 2026-11-19).
+
+**What:** `app-build-config-imports` still allowed `scripts/ui/css-scope.ts`, and `WEB_SERVER_FILES` still listed
+`interfaces/web/check.ts`; neither file is on the tree (css-scope left with the React screens in a25d62a, #1684).
+Both names come out, which only tightens the rules. `depcruise-paths.test.ts` fails on any exact file a rule names
+that is not on the tree, so the next removal breaks CI instead of leaving a dead allowance. A path named ahead of
+its folder (today only `RENDER_ENTRIES.admin`) is listed there with its reason.
+
+---
+
 ### P1.38 — Phase 1 exit
 
 **Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
