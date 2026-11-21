@@ -1,6 +1,10 @@
+---
+status: Proposed
+date: "2026-11-21"
+step: P2.00
+---
 # 0087 — Membership rules move from `domains/identity` to a new `domains/accounts`
 
-Status: Proposed (awaiting Alex). Book step P2.00 (phase 2's refine step, which records feature ownership paths).
 Alex agreed with the split on 2026-11-21 at 02:46Z ("I think I agree with the split"), after the folder-structure
 review of `origin/main` at 4abcada found `domains/identity` holding two concerns that change for different reasons.
 This record is the ADR that review said the split needs (CLAUDE.md D8: a new domain boundary).
