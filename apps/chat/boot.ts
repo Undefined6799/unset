@@ -1,0 +1,41 @@
+// The page's start (ADR 0088 decisions 2 to 4). A page that is not the hop's return has no session, since nothing is
+// ever stored, so it starts the hop. The return page redeems the ticket in this same page, puts the path the hop
+// started from back in the address bar without loading anything, and opens the chat on the session it now holds in
+// memory. Renewal is the hop again (a fresh mint for the same device; the door hands back the same lock key): a minute
+// before the token ends, or when the server stops taking it, unless that happens within a minute of signing in, which
+// would only loop.
+import type { ChatState } from "./core/chat.ts";
+import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
+import { openChat } from "./matrix/client.ts";
+
+const REDEEM_DEADLINE_MS = 10_000;
+const TOO_SOON_MS = 60_000;
+/** setTimeout's largest delay (HTML timers, a signed 32-bit count of milliseconds). */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+const here = () => `${window.location.pathname}${window.location.search}`;
+const hop = () => window.location.assign(hopPath(here()));
+
+export async function boot(onState: (state: ChatState) => void): Promise<void> {
+  if (window.location.pathname !== RETURN_PATH) {
+    window.location.replace(hopPath(here()));
+    return;
+  }
+  const ticket = takeTicket(window);
+  if (ticket === null) return onState({ kind: "error", code: "chat.no_ticket" });
+  const outcome = await redeem(window.fetch.bind(window), ticket, AbortSignal.timeout(REDEEM_DEADLINE_MS));
+  if (outcome.kind === "refused") return onState({ kind: "error", code: outcome.code });
+  window.history.replaceState(null, "", outcome.returnTo);
+  const signedInAt = Date.now();
+  const { session } = outcome;
+  window.setTimeout(hop, Math.min(MAX_TIMER_MS, renewDelayMs(session.expiresAtMs, signedInAt)));
+  await openChat(session, {
+    baseUrl: window.location.origin,
+    onState,
+    onSignedOut: () => {
+      if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });
+      onState({ kind: "signed_out" });
+      hop();
+    },
+  });
+}

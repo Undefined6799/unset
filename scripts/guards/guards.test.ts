@@ -193,6 +193,12 @@ describe("css-layers", () => {
       "--y is not a token or declared in this file",
     ]);
     expect(cssLayers.layerFor("apps/web/other.css")).toBeUndefined();
+    // The chat page's entry (ADR 0088) is a Tailwind entry too, held to the same theme variables.
+    expect(cssLayers.layerFor("apps/chat/app.css")).toBe("tailwind-entry");
+    const chat = cssLayers
+      .scanCss("apps/chat/app.css", "@theme inline {\n  --x: var(--y);\n}\n", ctx)
+      .map((f) => f.text);
+    expect(chat).toEqual(["--y is not a token or declared in this file"]);
   });
 });
 
