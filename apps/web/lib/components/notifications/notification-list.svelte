@@ -1,8 +1,7 @@
 <!--
-  The notifications as rows (P2.27, ADR 0079), for the bell's panel and the notifications page alike. Each row is drawn
-  from its reason's row in REASON_SCREENS and nothing else, so a new reason needs no change here. Every row is a plain
-  form button that posts its id to /notifications?/open: the server deletes it and sends the browser to the reason's
-  page. Viewing changes nothing; only the post does, so it works with no script and a reload is always safe.
+  The bell's notifications as rows (P2.27, ADR 0079 and 0081). Each row is drawn from its reason's row in REASON_SCREENS
+  and nothing else, so a new reason needs no change here. Every row is a plain link to its detail on the notifications
+  page; following it changes nothing, so it works with no script and a reload is always safe.
 -->
 <script lang="ts">
 import { onMount } from "svelte";
@@ -31,18 +30,15 @@ const row =
 <ul class="m-0 flex list-none flex-col gap-1 p-0">
   {#each shown as { entry, screen } (entry.id)}
     <li>
-      <form method="POST" action="/notifications?/open">
-        <input type="hidden" name="id" value={entry.id} />
-        <button type="submit" class={row}>
-          <Icon name={screen.icon as IconName} size={20} class="mt-0.5 shrink-0" />
-          <span class="flex min-w-0 flex-col">
-            <span class="font-medium">{screen.title}</span>
-            <span class="text-muted-foreground text-sm"
-              ><time datetime={entry.sentAt}>{timeText(entry.sentAt, local)}</time>. {screen.hint}</span
-            >
-          </span>
-        </button>
-      </form>
+      <a href="/notifications?n={entry.id}" class={row}>
+        <Icon name={screen.icon as IconName} size={20} class="mt-0.5 shrink-0" />
+        <span class="flex min-w-0 flex-col">
+          <span class="font-medium">{screen.title}</span>
+          <span class="text-muted-foreground text-sm"
+            ><time datetime={entry.sentAt}>{timeText(entry.sentAt, local)}</time>. {screen.hint}</span
+          >
+        </span>
+      </a>
     </li>
   {/each}
 </ul>
