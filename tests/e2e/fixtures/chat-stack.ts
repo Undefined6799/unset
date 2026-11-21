@@ -47,7 +47,12 @@ export function buildChatPage(outDir: string): void {
   });
 }
 
-export type ChatDatabase = { readonly port: number; readonly password: string };
+export type ChatDatabase = {
+  readonly port: number;
+  readonly password: string;
+  /** Makes `did` a member with a ready chat account `user` and a public page (what door.chat_contact shows). */
+  readonly addContact: (did: string, user: string) => void;
+};
 
 /** Postgres with the real migrations, `chat_auth` given a password for this run. stopChatDatabase removes it. */
 export async function startChatDatabase(): Promise<ChatDatabase> {
@@ -59,7 +64,17 @@ export async function startChatDatabase(): Promise<ChatDatabase> {
   await migrateAsMigrator(postgres, migratorPassword);
   const password = randomPassword();
   postgres.sql("unset", `ALTER ROLE chat_auth PASSWORD '${password}'`);
-  return { port: postgres.port, password };
+  // Written as the superuser: the rows' own roles and the view are tests/integration/postgres/chat-contact-store.test.ts's.
+  const addContact = (did: string, user: string) =>
+    postgres.sql(
+      "unset",
+      `INSERT INTO app.account (did, first_seen_at, onboarding) VALUES ('${did}', now(), 'done');
+       INSERT INTO app.chat_account (did, chat_user, state) VALUES ('${did}', '${user}', 'ready');
+       INSERT INTO idx.account (did, pds_active, updated_at) VALUES ('${did}', true, now());
+       INSERT INTO idx.profile (did, uri, cid, rev, record, display_name, discoverable, indexed_at)
+         VALUES ('${did}', 'at://${did}/sh.unset.profile/self', 'cid', '3l', '{}', 'N', false, now());`,
+    );
+  return { port: postgres.port, password, addContact };
 }
 
 export const stopChatDatabase = stopAllPostgres;

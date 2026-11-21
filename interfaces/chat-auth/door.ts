@@ -5,6 +5,7 @@
 // cached for good (ADR 0088 decision 1); each is one log line of route template, method,
 // status and a fixed reason word, never a path, query, cookie, ticket, DID or address (SE-7).
 import { randomBytes } from "node:crypto";
+import { parseDid } from "@unset/domains-identity";
 import {
   type ClientIp,
   type CsrfReason,
@@ -19,6 +20,9 @@ import { ASSETS, type ChatPage, pageCsp } from "./page.ts";
 
 /** The hop's landing path, where web sends the ticket (interfaces/web chat-sign-in.ts DOOR_RETURN_PATH). */
 const RETURN_PATH = "/sign-in/return";
+/** A profile's Message link, `/dm/<did>` (ADR 0082 decision 6): the page, which asks for the chat ID once signed in. */
+const DM_PREFIX = "/dm/";
+const DM_ROUTE = "/dm/*";
 
 export type DoorLog = { route: string; method: string; status: number; reason?: string };
 
@@ -103,6 +107,10 @@ const pageFile: GetRoute = (url, deps) => {
   };
 };
 
+/** The page at a Message link, for a path that names a DID; any other path under it is 404. */
+const dmPage: GetRoute = (url, deps) =>
+  parseDid(url.pathname.slice(DM_PREFIX.length)) === null ? refuse(404, "not_found") : pageDocument(url, deps);
+
 type GetRoute = (url: URL, deps: DoorDeps) => DoorAnswer;
 const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/health": { limit: "default", handle: () => ({ response: json(200, { ok: true }) }) },
@@ -110,11 +118,13 @@ const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/": { limit: "default", handle: pageDocument },
   [RETURN_PATH]: { limit: "default", handle: pageDocument },
   [ASSETS]: { limit: "default", handle: pageFile },
+  [DM_ROUTE]: { limit: "default", handle: dmPage },
 };
 
-/** The route a path falls under: its own, the built files' one, or "/*" for everything else. */
+/** The route a path falls under: its own, the built files' or the Message link's, or "/*" for everything else. */
 function routeOf(path: string, posts: DoorDeps["posts"]): string {
   if (path in GETS || path in posts) return path;
+  if (path.startsWith(DM_PREFIX)) return DM_ROUTE;
   return path.startsWith(ASSETS) && path.length > ASSETS.length ? ASSETS : "/*";
 }
 

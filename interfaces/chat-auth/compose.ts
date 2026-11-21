@@ -11,6 +11,7 @@ import {
   checkConnectionBudget,
   connectionOf,
   createBrowserListStore,
+  createChatContactStore,
   createPool,
   createPushKeyStore,
   createSetupClaimStore,
@@ -24,7 +25,7 @@ import { createCountDoor, NOTIFY_PATH } from "./count.ts";
 import { createDoor, type DoorLog } from "./door.ts";
 import { createListener } from "./listener.ts";
 import type { ChatPage } from "./page.ts";
-import { pushKeyRoute, redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
+import { chatIdRoute, pushKeyRoute, redeemRoute, setupClaimRoute, setupReleaseRoute, signOutRoute } from "./routes.ts";
 
 /** The largest body the door reads: a redeem's ticket, about 600 bytes of JSON, with room to spare. */
 const BODY_CAP = 4096;
@@ -93,6 +94,11 @@ export async function compose(config: DoorConfig, logs: Logs, page: ChatPage) {
       "/setup/claim": setupClaimRoute(setup),
       "/setup/release": setupReleaseRoute(setup),
       "/push/key": pushKeyRoute({ list: ports.list, keys, notifyUrl }),
+      "/chat-id": chatIdRoute({
+        list: ports.list,
+        contacts: createChatContactStore(pool),
+        serverName: config.CHAT_SERVER_NAME,
+      }),
     },
   });
   const count = createCountDoor({ keys, log: logs.request, deadlineMs: config.REQUEST_DEADLINE_MS });

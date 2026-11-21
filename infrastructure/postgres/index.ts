@@ -14,6 +14,7 @@ export {
 } from "./accountStore.ts";
 export { createBrowserListStore } from "./browserListStore.ts";
 export { type ChatAccountStore, type ChatAccountStoreOptions, createChatAccountStore } from "./chatAccountStore.ts";
+export { createChatContactStore } from "./chatContactStore.ts";
 export { connectionOf, lockPoolFields, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export { createDiscoverabilityStore, type DiscoverabilityStore } from "./discoverabilityStore.ts";
