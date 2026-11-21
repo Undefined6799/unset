@@ -3970,7 +3970,7 @@ P2.19, second half, split in three to stay reviewable (2026-11-20): (1) #1849, w
 action is `Read:unset-private/drafts/*` (secret `objects_media`); (3) the edge site for the media domain, which needs
 the domain's DNS and Pangolin resource from Alex.
 P2.19 part (3) built 2026-11-20 (ADR 0029's dev edge media site, P1.38c): `deployment/edge/dev/media.caddy` for
-`staging.unset.site`, ruled in `adapted-rules.ts` (`DEV_MEDIA`, upstream `media:8083`), with its own zone
+`staging.usercontent.unset.site`, ruled in `adapted-rules.ts` (`DEV_MEDIA`, upstream `media:8083`), with its own zone
 `media_global` (6000 per 5 minutes per client address, `limits.json`), noindex, no blob deny; the edge reaches media
 on `media_edge`, which only the source stack has (`SOURCE_ONLY_NETWORKS` and `DEV_ONLY_NETWORKS`); the dev leaf gains
 the name. Alex's steps, in order and with exact values: `docs/human/runbooks/media-site.md`.

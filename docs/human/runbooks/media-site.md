@@ -1,9 +1,10 @@
-# Media site (staging.unset.site)
+# Media site (staging.usercontent.unset.site)
 
-The staging edge serves the media process at `https://staging.unset.site` (ADR 0029; book P2.19). Until the real
-safety scan is live (P5.07b) it serves only `/o/*`: five-minute signed links to a tester's own draft pictures, which
-the editor shows as previews. Everything else on that host is dropped at Pangolin. The media process runs only on the
-stack built from source (`compose.dev.source.yaml`); the image stack's edge has the site but answers 502 there.
+The staging edge serves the media process at `https://staging.usercontent.unset.site` (ADR 0029; book P2.19).
+Until the real safety scan is live (P5.07b) it serves only `/o/*`: five-minute signed links to a tester's own draft
+pictures, which the editor shows as previews. Everything else on that host is dropped at Pangolin. The media process
+runs only on the stack built from source (`compose.dev.source.yaml`); the image stack's edge has the site but
+answers 502 there.
 
 **Who:** Alex, at the deSEC and Pangolin dashboards and on the staging host. Do the steps in this order: the
 Pangolin log setting must be off, and its stored rows purged, before the resource exists, or Pangolin keeps every
@@ -24,22 +25,24 @@ preview link with its signature (ADR 0029, `server/routers/badger/logRequestAudi
    `config/traefik/traefik_config.yml`, drop the request path from it (`accessLog.fields.names.RequestPath: drop`,
    Traefik's `accessLog.fields` setting; not yet checked against the host's Traefik version) and restart Traefik. If
    the access log is off, nothing to do.
-6. **DNS on deSEC** (desktop: deSEC, Domains, `unset.site`, add records). Give `staging.unset.site` the same set
-   `staging.unset.sh` has:
+6. **DNS on deSEC** (desktop: deSEC, Domains, `unset.site`, add records under the subname `staging.usercontent`).
+   Give `staging.usercontent.unset.site` the same set `staging.unset.sh` has:
    - `A` and `AAAA`: the same values as `staging.unset.sh` (the Pangolin host).
    - Four `CAA` records:
      `0 issue "letsencrypt.org; validationmethods=dns-01"`,
      `0 issue "letsencrypt.org; validationmethods=http-01"`,
      `0 issuewild ";"`,
      `0 iodef "mailto:security@unset.sh"`.
-   - If `staging.unset.sh` has an `_acme-challenge` CNAME, add the matching one for `_acme-challenge.staging`.
+   - If `staging.unset.sh` has an `_acme-challenge` CNAME, add the matching one for
+     `_acme-challenge.staging.usercontent`.
 
-   The apex `unset.site` stays parked.
+   The apex `unset.site` and `usercontent.unset.site` (production, later) stay parked. Nothing that signs anyone in
+   ever goes on an `unset.site` name (ADR 0029).
 7. **Pangolin resource** (desktop: Pangolin, the staging organization, Resources, Add Resource):
-   - Name and domain `staging.unset.site`, on the staging site.
+   - Name and domain `staging.usercontent.unset.site`, on the staging site.
    - One target: `https`, `10.250.37.3`, port `443`, certificate check off for the target, **TLS Server Name**
-     `staging.unset.site` (as for the docs resource, `docs-site.md`). Pangolin sends no SNI to an IP target without
-     it, and the edge refuses a handshake without one (ADR 0032 Decision 5).
+     `staging.usercontent.unset.site` (as for the docs resource, `docs-site.md`). Pangolin sends no SNI to an IP
+     target without it, and the edge refuses a handshake without one (ADR 0032 Decision 5).
    - Authentication: every method off (no platform login, no password, no PIN, no email list). A browser never
      sends Pangolin's `SameSite=Lax` cookie with an image on another site, so a login would block every preview.
    - Rules: turn rules on and add exactly two, never an Accept rule:
@@ -49,19 +52,20 @@ preview link with its signature (ADR 0029, `server/routers/badger/logRequestAudi
    `objects_media` with media's read-only identity, as `dev-stack-secrets.md` gives them ("The web server's two
    files" and "Media's identity (P2.19)").
 9. **Staging host: the media origin.** In `unset-dev-env/dev-public.env`, set
-   `WEB_MEDIA_ORIGIN=https://staging.unset.site`.
-10. **Staging host: remake the dev leaf** with `staging.unset.site` as its fourth name, as `dev-stack-secrets.md`
-    ("The dev edge's self-signed leaf") now gives it. Caddy asks a public CA for any site name the leaf does not
-    cover (Caddy v2.11.9 `modules/caddyhttp/autohttps.go:200-207`), which the staging edge must never do.
+   `WEB_MEDIA_ORIGIN=https://staging.usercontent.unset.site`.
+10. **Staging host: remake the dev leaf** with `staging.usercontent.unset.site` as its fourth name, as
+    `dev-stack-secrets.md` ("The dev edge's self-signed leaf") now gives it. Caddy asks a public CA for any site
+    name the leaf does not cover (Caddy v2.11.9 `modules/caddyhttp/autohttps.go:200-207`), which the staging edge
+    must never do.
 11. **Deploy from source** from a checkout with the merged media pull requests, then run the after-deploy check in
     `dev-stack-secrets.md` and the checks below.
 
 ## Check
 
 ```sh
-curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.unset.site/o/x
-curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.unset.site/b/x
-curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.unset.site/
+curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.usercontent.unset.site/o/x
+curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.usercontent.unset.site/b/x
+curl -sS --max-time 10 -o /dev/null -w '%{http_code}\n' https://staging.usercontent.unset.site/
 ```
 
 The first reaches media and prints its refusal of an unsigned link (`404`, with media's sandbox policy on it). The

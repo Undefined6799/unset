@@ -153,7 +153,7 @@ const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev")
   .replace(
     "      ACME_EMAIL: edge@example.test\n",
     "      ACME_EMAIL: edge@example.test\n      APP_HOST: staging.unset.sh\n      APP_UPSTREAM: web:8080\n" +
-      "      DOCS_HOST: docs.unset.sh\n      MEDIA_HOST: staging.unset.site\n      MEDIA_UPSTREAM: media:8083\n",
+      "      DOCS_HOST: docs.unset.sh\n      MEDIA_HOST: staging.usercontent.unset.site\n      MEDIA_UPSTREAM: media:8083\n",
   )
   .replace(
     "    file: ../../unset-dev-secrets/db_password\n",

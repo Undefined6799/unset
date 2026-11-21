@@ -1,5 +1,5 @@
-# The media site on the dev stack (book P2.19; ADR 0029, ADR 0070 point 5): staging.unset.site, the media process's
-# draft previews, through Pangolin and Newt like the other dev sites (ADR 0030 Decision 2, ADR 0032 Decision 5), so it
+# The media site on the dev stack (book P2.19; ADR 0029, ADR 0070 point 5): staging.usercontent.unset.site, the
+# media process's draft previews, through Pangolin and Newt like the other dev sites (ADR 0030 Decision 2, ADR 0032 Decision 5), so it
 # binds the newt_edge address only, serves the dev leaf, and is never indexed. Its name and upstream are ruled values
 # (adapted-rules.ts DEV_MEDIA). The media process sets its own sandbox CSP and nosniff on every answer and refuses
 # every method but GET and HEAD; the edge adds the security headers and drops the client's address before media, as on

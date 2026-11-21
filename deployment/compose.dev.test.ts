@@ -815,7 +815,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       APP_HOST: "${APP_HOST}",
       APP_UPSTREAM: "web:8080",
       DOCS_HOST: "docs.unset.sh",
-      MEDIA_HOST: "staging.unset.site",
+      MEDIA_HOST: "staging.usercontent.unset.site",
       MEDIA_UPSTREAM: "media:8083",
     });
   });

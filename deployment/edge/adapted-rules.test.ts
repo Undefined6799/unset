@@ -1304,7 +1304,7 @@ const MEDIA_REDS: readonly Red[] = [
   [
     "the media host on a local edge",
     "local",
-    (c) => void Object.assign(siteRoute(c, APP_LOCAL), { match: [{ host: ["staging.unset.site"] }] }),
+    (c) => void Object.assign(siteRoute(c, APP_LOCAL), { match: [{ host: ["staging.usercontent.unset.site"] }] }),
     "the public server holds a site other than the env's own",
   ],
 ];

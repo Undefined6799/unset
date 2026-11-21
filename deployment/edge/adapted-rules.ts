@@ -42,7 +42,7 @@ export const DEV_APP = { APP_HOST: "staging.unset.sh", APP_UPSTREAM: "web:8080" 
 /** The dev stack's docs site, exactly (P1.21w; ADR 0075): files from DOCS_ROOT, no upstream. */
 export const DEV_DOCS = { DOCS_HOST: "docs.unset.sh" } as const;
 /** The dev stack's media site, exactly (book P2.19; ADR 0029): the staging media host and the media process. */
-export const DEV_MEDIA = { MEDIA_HOST: "staging.unset.site", MEDIA_UPSTREAM: "media:8083" } as const;
+export const DEV_MEDIA = { MEDIA_HOST: "staging.usercontent.unset.site", MEDIA_UPSTREAM: "media:8083" } as const;
 /** Where the dev edge reads the built docs (compose.dev.yaml's one folder bind). */
 export const DOCS_ROOT = "/srv/docs";
 /** Newt's address on newt_edge, the dev edge's one trusted proxy (P1.36j; compose.dev.yaml, P1.37v). */

@@ -328,7 +328,7 @@ the four staging names as SANs, no CA flag, 825 days. The key never leaves the h
 
 ```sh
 umask 077
-printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.unset.site\n' \
+printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.usercontent.unset.site\n' \
   > unset-dev-secrets/.leaf.ext
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-secrets/.leaf.key
 openssl req -new -key unset-dev-secrets/.leaf.key -subj "/CN=staging.unset.sh" \
@@ -388,14 +388,14 @@ Pangolin fails the check instead of hanging the deploy.
 ```sh
 edge=10.250.37.3 failed=0 tmp=$(mktemp -d)
 fail() { echo "FAIL $*"; failed=1; }
-for name in staging.unset.sh staging.unset.ac docs.unset.sh staging.unset.site; do
+for name in staging.unset.sh staging.unset.ac docs.unset.sh staging.usercontent.unset.site; do
   timeout 10 openssl s_client -connect "$edge:443" -servername "$name" </dev/null 2>/dev/null | openssl x509 >"$tmp/$name.pem" 2>/dev/null \
     || { fail "$name: no certificate over TLS"; continue; }
   leaf="$tmp/$name.pem"
   openssl verify -check_ss_sig -CAfile "$leaf" "$leaf" >/dev/null 2>&1 || fail "$name: not a validly self-signed leaf"
   openssl x509 -in "$leaf" -noout -ext basicConstraints | grep -q 'CA:FALSE' || fail "$name: not marked CA:FALSE"
   openssl x509 -in "$leaf" -noout -text | grep -q 'ASN1 OID: prime256v1' || fail "$name: key is not P-256"
-  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.unset.site" ] \
+  [ "$(openssl x509 -in "$leaf" -noout -ext subjectAltName | tail -n +2 | tr -d ' ')" = "DNS:staging.unset.sh,DNS:staging.unset.ac,DNS:docs.unset.sh,DNS:staging.usercontent.unset.site" ] \
     || fail "$name: names are not exactly the four staging names"
   start=$(date -d "$(openssl x509 -in "$leaf" -noout -startdate | cut -d= -f2)" +%s)
   end=$(date -d "$(openssl x509 -in "$leaf" -noout -enddate | cut -d= -f2)" +%s)
@@ -404,7 +404,7 @@ for name in staging.unset.sh staging.unset.ac docs.unset.sh staging.unset.site; 
   [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url} %{size_download}' --resolve "$name:80:$edge" "http://$name/")" \
     = "308 https://$name/ 0" ] || fail "$name: :80 is not only an empty 308 to https"
 done
-for other in staging.unset.ac docs.unset.sh staging.unset.site; do
+for other in staging.unset.ac docs.unset.sh staging.usercontent.unset.site; do
   cmp -s "$tmp/staging.unset.sh.pem" "$tmp/$other.pem" || fail "$other: not served the same leaf as staging.unset.sh"
 done
 [ "$(curl -sS --max-time 10 -k -o /dev/null -w '%{http_code}' --resolve "staging.unset.ac:443:$edge" https://staging.unset.ac/xrpc/_health)" = 200 ] \
