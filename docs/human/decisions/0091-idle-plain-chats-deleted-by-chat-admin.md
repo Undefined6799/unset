@@ -110,3 +110,7 @@ What the pinned sources say (Synapse 1.165.0 sdist, MAS 1.26.0 docs; read 2026-1
   room list or any non-empty field is refused; only `web`'s key may ask.
 - `interfaces/chat-admin` config tests for `SYNAPSE_ADMIN_URL`; the egress guard's exemption names `outbound.ts`.
 - `web`'s client test for the command, and a live run against Synapse and MAS (recorded in the PR).
+
+## Follow-up
+
+2026-11-21: MAS pinned at 1.29.0 (Alex, 2026-11-21, 'use the latest version'), re-checked: `personal_sessions/add.rs` and `revoke.rs`, `oauth2_sessions/finish.rs` and the admin `spec.json` are identical to 1.26.0, so minting, revoking and finishing a session hold as written; the live checks recorded above ran on 1.26.0. Read from the v1.26.0 and v1.29.0 source trees on 2026-11-21; no live run of 1.29.0 was possible here (the image pull and the release binary download were both refused), so the 1.29.0 behaviour is unverified until the image test runs it.

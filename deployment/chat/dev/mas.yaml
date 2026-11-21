@@ -1,7 +1,7 @@
-# MAS 1.26.0 for the staging chat server (P6.02; ADR 0086; build plan step 1). Every key and value here is read by
+# MAS 1.29.0 for the staging chat server (P6.02; ADR 0086; build plan step 1). Every key and value here is read by
 # preflight C36 (deployment/preflight/checks/chat.ts), which refuses a wrong value and any key it does not list, so
 # no login page, upstream provider, email or experimental switch rides in. Secrets are paths under /run/secrets.
-# Reference: github.com/element-hq/matrix-authentication-service/blob/v1.26.0/docs/reference/configuration.md and
+# Reference: github.com/element-hq/matrix-authentication-service/blob/v1.29.0/docs/reference/configuration.md and
 # docs/config.schema.json (read 2026-11-21).
 http:
   # MAS has no public address: nobody logs in through it. Its base is the name Synapse reaches it by.

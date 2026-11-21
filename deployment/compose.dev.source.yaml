@@ -489,10 +489,10 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
-  # MAS 1.26.0 as shipped (ADR 0086 Decision 1), distroless, as its nonroot 65532. It runs the server with no
+  # MAS 1.29.0 as shipped (ADR 0086 Decision 1), distroless, as its nonroot 65532. It runs the server with no
   # subcommand and reads only MAS_CONFIG (C36). No route from the edge: Synapse and chat-admin are its only callers.
   mas:
-    image: ghcr.io/undefined6799/mirror/matrix-authentication-service@sha256:e089f1048a1d4a9a492ed17b9fe759100f1bd619407b001f5927928d88b780c4
+    image: ghcr.io/undefined6799/mirror/matrix-authentication-service@sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]

@@ -2,7 +2,7 @@
 // synapse or mas reads exactly one config file, mounted read-only, with no setting beside it in its environment. Our
 // Synapse image starts `synapse.app.homeserver -c /config/homeserver.yaml` (deployment/images/synapse.Dockerfile), so
 // the synapse service sets no variable at all; MAS merges every MAS_* variable into its config and splits MAS_CONFIG
-// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0), so mas sets MAS_CONFIG alone. The
+// on ":" into several files (crates/cli/src/commands/mod.rs:90-109 at v1.26.0, unchanged at v1.29.0), so mas sets MAS_CONFIG alone. The
 // file's top-level keys are exactly the reviewed ones, so no other module, provider or inline secret rides in, and
 // every security setting is its reviewed value. A stack with neither service passes. A reason names a setting from
 // the lists below, never a value (P1.30m).
@@ -72,7 +72,7 @@ function synapseSettings(serverName: string): Doc {
 const SYNAPSE_SECRET_PATHS = ["signing_key_path", "macaroon_secret_key_path", "form_secret_path"];
 const SYNAPSE_OTHER = ["database", "media_store_path", ...SYNAPSE_SECRET_PATHS];
 
-/** MAS 1.26.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
+/** MAS 1.29.0's settings that must be exactly these (build plan step 1, MAS table; ADR 0086 for the binds). */
 function masSettings(serverName: string): Doc {
   return {
     http: {

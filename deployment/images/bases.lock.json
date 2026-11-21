@@ -77,8 +77,8 @@
   },
   "mas": {
     "ref": "ghcr.io/element-hq/matrix-authentication-service",
-    "tag": "1.26.0",
-    "digest": "sha256:e089f1048a1d4a9a492ed17b9fe759100f1bd619407b001f5927928d88b780c4",
+    "tag": "1.29.0",
+    "digest": "sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af",
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false

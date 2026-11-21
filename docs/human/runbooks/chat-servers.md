@@ -30,7 +30,7 @@ mode `0400`, each owned by the one uid that reads it. A value two services need 
 | `pg_chat_auth_password` | `65532:65532` | migrate, chat-auth | the `chat_auth` role's password; migrate sets it in every stack (`roles.json`) |
 
 Synapse runs as `991` (our image's `USER`, `deployment/images/synapse.Dockerfile`, upstream's default uid) and MAS as
-`65532` (its distroless `nonroot` base, `Dockerfile:199` at v1.26.0).
+`65532` (its distroless `nonroot` base, `Dockerfile:200` at v1.29.0).
 
 ## Make the files
 
@@ -58,7 +58,7 @@ chmod 0400 pg_synapse_password pg_mas_password synapse_* mas_*
 ```
 
 `generate_signing_key` ships in the Synapse image's venv (`pyproject.toml:234` at v1.165.0) and writes one `ed25519` key.
-MAS needs at least one RSA key (`docs/reference/configuration.md`, "Signing Keys", at v1.26.0).
+MAS needs at least one RSA key (`docs/reference/configuration.md`, "Signing Keys", at v1.29.0).
 
 The door's and chat-admin's files, in the same folder (`web_chat_admin_key` is made in `dev-stack-secrets.md`; its
 public half goes into `chat_admin_keys` here):

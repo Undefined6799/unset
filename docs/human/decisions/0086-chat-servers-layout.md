@@ -95,3 +95,7 @@ installs and how it starts) and `synapse.image.test.ts` (the built image runs `d
 against Postgres with the server rule, and stops when the rule is misconfigured); the image rules in `images.test.ts`
 and `package-manager.image.test.ts`. The Compose wiring and an image test that runs MAS with these listeners land with
 the servers' Compose services, once the mirror holds both images.
+
+## Follow-up
+
+2026-11-21: MAS pinned at 1.29.0 (Alex, 2026-11-21, 'use the latest version'), re-checked: `crates/cli/src/commands/mod.rs` (`MAS_*` merge, `MAS_CONFIG`, default subcommand) and `crates/handlers` listener resources are unchanged; `docs/config.schema.json` only reorders keys and adds `rate_limiting.username_availability`, which `deployment/chat/dev/mas.yaml` does not set; the image still runs as `nonroot` (`Dockerfile:200`, was 199). Index digest `sha256:9247315c9e86096aaaa393c7b4b685dc506010e09ff4b89331ef2ed4854167af`, matching the registry; 1.29.0 is the latest stable release (1.30.0-rc.0 is a release candidate). Synapse 1.165.0 is still the latest stable on PyPI. Read from the v1.26.0 and v1.29.0 source trees on 2026-11-21; no live run of 1.29.0 was possible here (the image pull and the release binary download were both refused), so the 1.29.0 behaviour is unverified until the image test runs it.
