@@ -81,6 +81,8 @@ async function send(page: Page, text: string): Promise<void> {
   await page.locator("#message").fill(text);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(messages(page)).toContainText(text);
+  // The composer empties once the send has gone; text typed before then would be cleared with it.
+  await expect(page.locator("#message")).toHaveValue("", { timeout: 60_000 });
 }
 
 /**
@@ -136,33 +138,81 @@ async function talking(browser: Browser) {
   await expect(answer.locator("[data-reply-to]")).toContainText("You hello from alice", { timeout: 60_000 });
   await send(b.page, "hello from bob");
   await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
-  // Alice deletes a message of hers after confirming; both see "Message deleted" in its place (ADR 0092 decision 2).
-  await send(a.page, "oops from alice");
-  await expect(messages(b.page)).toContainText("oops from alice", { timeout: 60_000 });
-  const oops = message(a.page, "oops from alice");
-  const oopsId = await oops.getAttribute("data-message");
+  await deleting(a, b);
+  for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
+  return { alice, bob, a, b, aliceKey };
+}
+
+type Member = { readonly page: Page };
+
+/**
+ * Alice deletes her own messages (ADR 0092 decision 2; Alex, 2026-11-21 20:42Z): one after confirming, two selected
+ * together after confirming with "Don't ask me again", and then one at once, with no confirm. Bob sees "Message
+ * deleted" in each one's place, with the time it was sent; Bob's messages get no Delete and no checkbox on her page.
+ */
+async function deleting(a: Member, b: Member) {
+  for (const text of ["oops from alice", "one to go", "two to go", "three to go"]) await send(a.page, text);
+  await expect(messages(b.page)).toContainText("three to go", { timeout: 60_000 });
+  const idOf = async (text: string) => (await message(a.page, text).getAttribute("data-message")) ?? "";
+  const ids = await Promise.all(["oops from alice", "one to go", "two to go", "three to go"].map(idOf));
+  const order = (page: Page) => page.locator("li[data-message]").evaluateAll((li) => li.map((e) => e.dataset.message));
+  const ordersBefore = [await order(a.page), await order(b.page)];
+  const sentAt = await Promise.all(
+    ids.map((id) => a.page.locator(`[data-message="${id}"] time`).getAttribute("datetime")),
+  );
   // Only the sender has Delete; the toolbar is in the page but hidden until hover, hence includeHidden.
   const deleteOn = (page: Page) =>
     message(page, "oops from alice").getByRole("button", { name: "Delete", exact: true, includeHidden: true });
   await expect(deleteOn(a.page)).toHaveCount(1);
   await expect(deleteOn(b.page)).toHaveCount(0);
-  const order = (page: Page) => page.locator("li[data-message]").evaluateAll((li) => li.map((e) => e.dataset.message));
-  const sentAt = await oops.locator("time").getAttribute("datetime");
-  const ordersBefore = [await order(a.page), await order(b.page)];
+  const confirm = a.page.locator("[data-confirm-delete]");
+  // One, after the confirm.
+  const oops = message(a.page, "oops from alice");
   await oops.hover();
   await oops.getByRole("button", { name: "Delete", exact: true }).click();
-  await oops.locator("[data-confirm-delete]").getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toContainText("Delete this message? It is deleted for both of you.");
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  // Two, selected from the same menu: only her own messages get a checkbox.
+  const one = message(a.page, "one to go");
+  await one.hover();
+  await one.getByRole("button", { name: "Select", exact: true }).click();
+  await expect(one.getByRole("checkbox", { name: "Select message" })).toBeChecked();
+  await expect(message(a.page, "hello from bob").getByRole("checkbox")).toHaveCount(0);
+  await message(a.page, "two to go").getByRole("checkbox", { name: "Select message" }).click();
+  await a.page.locator("[data-selecting]").getByRole("button", { name: "Delete 2" }).click();
+  await expect(confirm).toContainText("Delete 2 messages? They are deleted for both of you.");
+  await confirm.getByRole("checkbox", { name: "Don't ask me again" }).click();
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(a.page.locator("[data-selecting]")).toHaveCount(0);
+  // And then one at once: "Don't ask me again" holds in this browser.
+  const three = message(a.page, "three to go");
+  await three.hover();
+  await three.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
   for (const p of [a, b])
-    await expect(p.page.locator(`[data-message="${oopsId}"] [data-deleted]`)).toHaveText("Message deleted", {
-      timeout: 60_000,
-    });
-  await expect(messages(b.page)).not.toContainText("oops from alice");
-  // In its place, with the time it was sent (ADR 0092 decision 2).
+    for (const id of ids)
+      await expect(p.page.locator(`[data-message="${id}"] [data-deleted]`)).toHaveText("Message deleted", {
+        timeout: 60_000,
+      });
+  for (const text of ["oops from alice", "one to go", "two to go", "three to go"])
+    await expect(messages(b.page)).not.toContainText(text);
+  // Each in its place, with the time it was sent.
   expect([await order(a.page), await order(b.page)]).toEqual(ordersBefore);
   for (const p of [a, b])
-    await expect(p.page.locator(`[data-message="${oopsId}"] time`)).toHaveAttribute("datetime", sentAt ?? "");
-  for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
-  return { alice, bob, a, b, aliceKey };
+    for (const [i, id] of ids.entries())
+      await expect(p.page.locator(`[data-message="${id}"] time`)).toHaveAttribute("datetime", sentAt[i] ?? "");
+}
+
+/**
+ * A fresh sync brings only the newest events; earlier messages come with "Show older messages", pressed until `text`
+ * shows.
+ */
+async function scrolledBackTo(page: Page, text: string) {
+  const older = page.getByRole("button", { name: "Show older messages" });
+  await expect(async () => {
+    if (await older.isVisible()) await older.click();
+    await expect(messages(page)).toContainText(text, { timeout: 2_000 });
+  }).toPass({ timeout: 90_000 });
 }
 
 /** A Synapse admin read, for the checks only. */
@@ -186,9 +236,9 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   const chunk = (await admin(`/_synapse/admin/v1/rooms/${encodeURIComponent(rooms[0] ?? "")}/messages?dir=b&limit=50`))
     .chunk as { type: string; content: unknown }[];
   const sent = chunk.filter((e) => e.type === "m.room.encrypted" || e.type === "m.room.message");
-  expect(sent.map((e) => e.type)).toEqual(Array(5).fill("m.room.encrypted"));
-  // The deleted one keeps no ciphertext on the server (spec v1.18 #redactions).
-  expect(sent.filter((e) => Object.keys(e.content as object).length === 0)).toHaveLength(1);
+  expect(sent.map((e) => e.type)).toEqual(Array(8).fill("m.room.encrypted"));
+  // The four deleted keep no ciphertext on the server (spec v1.18 #redactions).
+  expect(sent.filter((e) => Object.keys(e.content as object).length === 0)).toHaveLength(4);
   // The reply's pointer is the one thing beside its ciphertext (ADR 0092 decision 3).
   const relations = sent.map((e) => (e.content as Record<string, unknown>)["m.relates_to"]).filter(Boolean);
   expect(relations).toEqual([{ "m.in_reply_to": { event_id: expect.stringMatching(/^\$/) } }]);
@@ -205,6 +255,7 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   await a2.page.getByRole("button", { name: "Unlock" }).click();
   await expect.poll(() => state(a2.page), { timeout: 60_000 }).toBe("ready");
   await a2.page.locator("[data-conversation]").first().click();
+  await scrolledBackTo(a2.page, "hello from alice");
   await expect(messages(a2.page)).toContainText("hello from bob", { timeout: 90_000 });
   await expect(messages(a2.page)).toContainText("hello from alice", { timeout: 90_000 });
   // Keys from the backup give a grey shield, which Element shows as a plain padlock: no warning either.
@@ -215,11 +266,7 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   // "Don't ask me again" lives only in this browser's localStorage, under the account's key (conversation-service.ts).
   const choices = () =>
     a.page.evaluate(() => Object.keys(globalThis.localStorage).filter((key) => key.startsWith("unset-chat:")));
-  await a.page.evaluate(
-    (key) => globalThis.localStorage.setItem(key, "true"),
-    `unset-chat:${alice.userId}:skip-delete-confirm`,
-  );
-  expect(await choices()).toHaveLength(1);
+  expect(await choices()).toEqual([`unset-chat:${alice.userId}:skip-delete-confirm`]);
   await a.page.getByRole("button", { name: "Log out" }).click();
   await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("logged_out");
   const names = await a.page.evaluate(async () => {
@@ -259,7 +306,7 @@ test("chat_e2e.suspend_and_back: a lock stops Alice's open page; an unlock bring
   const [first, last] = [a.redeems[0], a.redeems.at(-1)];
   expect([last?.deviceId, last?.storageKey, last?.newDevice]).toEqual([first?.deviceId, first?.storageKey, false]);
   await a.page.locator("[data-conversation]").first().click();
-  await expect(messages(a.page)).toContainText("hello from bob", { timeout: 60_000 });
+  await scrolledBackTo(a.page, "hello from bob");
 });
 
 test("chat_e2e.delete: deactivating ends Alice's chat; Bob keeps the conversation; what the server keeps", async ({

@@ -9,6 +9,9 @@
   not accepted it is pending and still sends, for them to read once they do. A conversation that is not encrypted is
   never sent in from this page (ADR 0085 decision 4). `unsent` is a first message that did not go: it stays in the
   field with the failure shown.
+  Deleting (ADR 0092 decision 2; Alex, 2026-11-21 20:42Z): Delete on one message, or Select and then "Delete N" on
+  several of one's own, asks once to confirm, with "Don't ask me again", which this browser keeps
+  (conversation-service.ts); once it is set Delete acts at once. Any not deleted are reported; the rest still go.
   Message text is the sender's own: Svelte escapes it, and nothing here renders markup.
 -->
 <script lang="ts">
@@ -21,11 +24,14 @@ import {
   type ConversationView,
   canSend,
   type Message,
+  selectable,
 } from "./core/conversations.ts";
 import { Icon } from "./lib/components/icon/index.js";
 import * as Alert from "./lib/components/ui/alert/index.js";
 import { Button } from "./lib/components/ui/button/index.js";
+import { Checkbox } from "./lib/components/ui/checkbox/index.js";
 import { Input } from "./lib/components/ui/input/index.js";
+import { Label } from "./lib/components/ui/label/index.js";
 
 let {
   conversations,
@@ -81,10 +87,40 @@ async function send(event: SubmitEvent) {
   }
 }
 
-/** Deletes one's own message after its confirm; a reply being written to it is dropped (ADR 0092 decision 2). */
-async function remove(message: Message) {
-  if (replyingTo?.id === message.id) replyingTo = null;
-  failed = (await conversations.remove(id, [message.id])).length > 0;
+/** In selection mode, the ids selected; null outside it. Only messages Delete is offered on can be in it. */
+let selected = $state<readonly string[] | null>(null);
+const canSelect = $derived(view === null ? [] : selectable(view.messages, view.composer));
+/** The messages waiting on the confirm, or null when none is shown. */
+let confirming = $state<readonly string[] | null>(null);
+let dontAsk = $state(false);
+/** How many of the last deletion were not deleted. */
+let notDeleted = $state(0);
+
+$effect(() => {
+  // A message that can no longer be deleted (deleted meanwhile, or the conversation ended) leaves the selection.
+  if (selected !== null && selected.some((m) => !canSelect.includes(m)))
+    selected = selected.filter((m) => canSelect.includes(m));
+});
+
+function choose(messageId: string, on: boolean) {
+  if (selected === null) return;
+  selected = on ? [...new Set([...selected, messageId])] : selected.filter((m) => m !== messageId);
+}
+
+function askToDelete(messageIds: readonly string[]) {
+  if (messageIds.length === 0) return;
+  if (conversations.confirmsDelete()) {
+    dontAsk = false;
+    confirming = messageIds;
+  } else void remove(messageIds);
+}
+
+async function remove(messageIds: readonly string[]) {
+  if (dontAsk) conversations.stopConfirmingDelete();
+  confirming = null;
+  selected = null;
+  if (replyingTo !== null && messageIds.includes(replyingTo.id)) replyingTo = null;
+  notDeleted = (await conversations.remove(id, messageIds)).length;
 }
 
 async function accept() {
@@ -121,12 +157,54 @@ async function accept() {
           otherName={view.conversation.with.name}
           onReact={(key) => conversations.react(id, message.id, key)}
           onReply={() => startReply(message)}
-          onDelete={() => remove(message)}
+          onDelete={() => askToDelete([message.id])}
+          onSelect={() => (selected = [message.id])}
+          selection={selected === null
+            ? null
+            : { selected: selected.includes(message.id), onChange: (on) => choose(message.id, on) }}
         />
       {/each}
     </ol>
     {#if view.composer === "request"}
       <Button onclick={accept}>Accept</Button>
+    {/if}
+    {#if selected !== null && confirming === null}
+      <div class="flex items-center gap-2" role="group" aria-label="Selected messages" data-selecting>
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={selected.length === 0}
+          onclick={() => askToDelete(selected ?? [])}
+        >
+          <Icon name="delete" size={16} />Delete {selected.length}
+        </Button>
+        <Button variant="ghost" size="sm" onclick={() => (selected = null)}>Cancel</Button>
+      </div>
+    {/if}
+    {#if confirming !== null}
+      <div class="flex flex-col gap-2" role="group" aria-label="Delete messages" data-confirm-delete>
+        <p class="text-sm">
+          {confirming.length === 1
+            ? "Delete this message? It is deleted for both of you."
+            : `Delete ${confirming.length} messages? They are deleted for both of you.`}
+        </p>
+        <div class="flex items-center gap-2">
+          <Checkbox id="dont-ask" bind:checked={dontAsk} />
+          <Label for="dont-ask">Don't ask me again</Label>
+        </div>
+        <div class="flex gap-2">
+          <Button variant="destructive" size="sm" onclick={() => remove(confirming ?? [])}>Delete</Button>
+          <Button variant="ghost" size="sm" onclick={() => (confirming = null)}>Cancel</Button>
+        </div>
+      </div>
+    {/if}
+    {#if notDeleted > 0}
+      <Alert.Root>
+        <Alert.Description>
+          {notDeleted === 1 ? "1 message was not deleted." : `${notDeleted} messages were not deleted.`} Try again in a
+          moment.
+        </Alert.Description>
+      </Alert.Root>
     {/if}
     {#if failed}
       <Alert.Root>
