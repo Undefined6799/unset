@@ -42,7 +42,7 @@ let {
   };
 } = $props();
 
-/** Each item's icon, as Crepe draws one for each: Iconoir, and Lucide's numbered headings (ADR 0092). */
+/** Each item's icon, as Crepe draws one for each: Iconoir, and Lucide's numbered headings (ADR 0097). */
 const BLOCK_ICONS: Record<BlockItem, IconName> = {
   text: "text",
   heading1: "h1",

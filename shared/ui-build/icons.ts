@@ -135,7 +135,7 @@ export function parseSvg(name: string, svg: string): IconElement[] {
 /**
  * The icons from a second set, Lucide 1.72.0 (ISC, icons/LICENSE-lucide.txt), each copied byte for byte from
  * https://raw.githubusercontent.com/lucide-icons/lucide/1.72.0/icons/<lucideName>.svg to icons/lucide/<name>.svg.txt.
- * ADR 0087: `grip-vertical`, the six-dot drag handle Crepe 7.23.0 draws. ADR 0092: `heading-1` to `heading-6`, the
+ * ADR 0087: `grip-vertical`, the six-dot drag handle Crepe 7.23.0 draws. ADR 0097: `heading-1` to `heading-6`, the
  * block menu's numbered headings Crepe draws. Iconoir 7.12.1 has neither. No other file may sit in icons/lucide/ and
  * no Lucide package is installed.
  */

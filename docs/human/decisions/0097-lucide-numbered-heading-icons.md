@@ -8,7 +8,7 @@ amends:
   - adr: "0055"
     part: point 4, icons stay Iconoir, for the six numbered heading icons only
 ---
-# 0092 — Six Lucide icons draw the block menu's numbered headings
+# 0097 — Six Lucide icons draw the block menu's numbered headings
 
 Amends point 4 of [0055](0055-shadcn-svelte-and-one-theme-file.md) ("Icons stay Iconoir") and point 5 of
 [0087](0087-one-lucide-grip-for-the-drag-handle.md) ("Any further non-Iconoir icon needs its own ADR") for six named
