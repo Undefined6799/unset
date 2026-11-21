@@ -52,7 +52,9 @@ describe("object store fetch", () => {
     const fetch = objectStoreFetch(guard(), ORIGIN);
     const put = async (bytes: number) => {
       try {
-        return (await fetch(`${ORIGIN}/k`, { method: "PUT", body: new Uint8Array(bytes) })).status;
+        // The store is plain http inside the stack (objectStore admits only its one private origin).
+        const request = new Request(new URL("/k", ORIGIN), { method: "PUT", body: new Uint8Array(bytes) });
+        return (await fetch(request)).status;
       } catch (error) {
         const cause = error instanceof NetGuardError ? error : (error as { cause?: unknown }).cause;
         return cause instanceof NetGuardError ? cause.code : String(error);
