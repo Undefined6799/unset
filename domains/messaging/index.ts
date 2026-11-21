@@ -55,6 +55,7 @@ export {
 } from "./door.ts";
 export {
   chatCount,
+  chatSetUp,
   type IssueOutcome,
   issuePushKey,
   MAX_COUNT,

@@ -8,6 +8,7 @@ import type { BrowserEntry, BrowserKey, BrowserList, DeviceId, LockKey } from ".
 import type { ChatUser } from "./chat-account.ts";
 import {
   chatCount,
+  chatSetUp,
   issuePushKey,
   type PushKey,
   type PushKeyHash,
@@ -43,6 +44,7 @@ function ports(known: readonly PushKey[] = []) {
       return held.has(hex(hash));
     },
     latest: async (did) => (did === ENTRY.did ? 3 : null),
+    registered: async (did) => did === ENTRY.did,
   };
   return { list, keys, random: (n: number) => Buffer.alloc(n, 7), calls };
 }
@@ -97,5 +99,13 @@ describe("chatCount", () => {
     const p = ports();
     expect(await chatCount(p, ENTRY.did, deadline)).toBe(3);
     expect(await chatCount(p, `did:plc:${"b".repeat(24)}` as Did, deadline)).toBeNull();
+  });
+});
+
+describe("chatSetUp", () => {
+  test("door.set_up_by_member: a member a browser of whose took a key is set up; anyone else is not", async () => {
+    const p = ports();
+    expect(await chatSetUp(p, ENTRY.did, deadline)).toBe(true);
+    expect(await chatSetUp(p, `did:plc:${"b".repeat(24)}` as Did, deadline)).toBe(false);
   });
 });

@@ -16,8 +16,17 @@ export const WELCOME = {
   privacyLink: "Privacy notice",
   accept: "I accept the terms and the privacy notice",
   country: "I do not live in the EU, the UK or Australia",
-  chatTitle: "Chat comes later",
-  chatLead: "Chat is not open yet. You can continue and use unset.sh without it.",
+  chatTitle: "Set up your messages",
+  chatLead:
+    "Messages on unset are end-to-end encrypted: only you and the people you write to can read them. Setting up " +
+    "takes a minute on unset.cc, our messages site. You get a recovery key to save: it is the only way to read your " +
+    "messages in a new browser. Then you come back here to finish.",
+  chatSetUp: "Set up messages",
+  chatWaitTitle: "Your messages are getting ready",
+  chatWaitLead: "This takes a moment for a new account. Try again in a minute.",
+  chatTryAgain: "Try again",
+  chatDoneTitle: "Your messages are set up",
+  chatDoneLead: "Your recovery key is saved. Continue to finish signing up.",
   blockedTitle: "We can't offer you an account right now",
   blockedLead: "If you think this is a mistake, you can ask for a review.",
   appeal: "Ask for a review",

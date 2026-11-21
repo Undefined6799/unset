@@ -34,6 +34,8 @@ export type PushKeys = {
   record(hash: PushKeyHash, unread: number | null, deadline: AbortSignal): Promise<boolean>;
   /** The member's most recently counted number over all their browsers, or null when none was counted. */
   latest(did: Did, deadline: AbortSignal): Promise<number | null>;
+  /** Whether any browser of the member holds a key: one was ready, so its recovery key was saved (ADR 0083 d2). */
+  registered(did: Did, deadline: AbortSignal): Promise<boolean>;
 };
 
 export type IssueOutcome = { readonly kind: "issued"; readonly key: PushKey } | { readonly kind: "no_session" };
@@ -67,3 +69,11 @@ export async function recordCount(ports: { readonly keys: PushKeys }, { keys, un
 
 export const chatCount = (ports: { readonly keys: PushKeys }, did: Did, deadline: AbortSignal) =>
   ports.keys.latest(did, deadline);
+
+/**
+ * Whether the member has set up chat, for web's onboarding chat step (ADR 0083 decision 2): the chat page asks for a
+ * pushkey only once its browser is ready, which is after the recovery key was saved and the vault and backup written
+ * (apps/chat/matrix/client.ts), and registers the count's pusher with it (ADR 0082 decision 1).
+ */
+export const chatSetUp = (ports: { readonly keys: PushKeys }, did: Did, deadline: AbortSignal) =>
+  ports.keys.registered(did, deadline);
