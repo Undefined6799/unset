@@ -9,7 +9,10 @@
 //   (apps/web/src/components/structures/RoomView.tsx:1707-1716).
 // - watch: re-read on the client's re-emitted room and event changes, as TimelinePanel listens on the client
 //   (TimelinePanel.tsx:299-314), and mark the newest message from the other person read with sendReadReceipt,
-//   allowing a retry after a failure (TimelinePanel.tsx:1060-1140).
+//   allowing a retry after a failure (TimelinePanel.tsx:1060-1140). The receipt is m.read.private, which the other
+//   person never sees (spec v1.18 #private-read-receipts): the type Element sends with its "send read receipts"
+//   setting off (TimelinePanel.tsx:963-983, 1125-1130), passed as sendReadReceipt's own receiptType argument, whose
+//   default is the public m.read (src/client.ts:3911-3924).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), only once the composer is on, checked again just before sending:
 //   the SDK encrypts only where its crypto has the room's encryption (client.ts:3022-3060).
@@ -24,6 +27,7 @@ import {
   type MatrixClient,
   MatrixEventEvent,
   Preset,
+  ReceiptType,
   type Room,
   RoomEvent,
   RoomMemberEvent,
@@ -116,7 +120,7 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
     if (last === undefined || id === undefined || readSent.get(room.roomId) === id) return;
     if (room.hasUserReadEvent(me, id)) return;
     readSent.set(room.roomId, id);
-    client.sendReadReceipt(last).catch(() => readSent.delete(room.roomId));
+    client.sendReadReceipt(last, ReceiptType.ReadPrivate).catch(() => readSent.delete(room.roomId));
   };
 
   const recordDirect = (roomId: string, other: string) =>
