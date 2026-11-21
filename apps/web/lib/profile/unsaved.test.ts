@@ -12,6 +12,9 @@ const text = (key: string, words: string, version: string | null = `v-${key}`): 
   ...(version === null ? {} : { version }),
 });
 const page = [text("a", "Hi"), text("b", "There"), text("c", "Again")];
+/** The versions a Save's answer names: here, those the refresh read, as when no other tab wrote in between. */
+const wrote = (cards: readonly CardView[]) =>
+  new Map(cards.flatMap((card) => (card.version === undefined ? [] : [[card.key, card.version] as const])));
 const whole = (cards: readonly CardView[]) => ({
   cards,
   profileUnavailable: false,
@@ -86,8 +89,10 @@ describe("unsaved cards", () => {
     let edits = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
     edits = edit(edits, page, "b", { fields: { text: "World" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2")];
-    expect([...afterSave(edits, editsToSave(edits, page).slice(0, 1), stored, page).keys()]).toEqual(["b"]);
-    expect(afterSave(edits, editsToSave(edits, page), stored, page).size).toBe(0);
+    expect([...afterSave(edits, editsToSave(edits, page).slice(0, 1), wrote(stored), stored, page).keys()]).toEqual([
+      "b",
+    ]);
+    expect(afterSave(edits, editsToSave(edits, page), wrote(stored), stored, page).size).toBe(0);
   });
 
   // Review of f6c6a2f: words typed while a Save is on its way must not be lost when its answer comes.
@@ -97,7 +102,7 @@ describe("unsaved cards", () => {
     });
     const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
     const stored = [text("a", "Hello", "v-a2"), text("b", "World", "v-b2"), text("c", "Again")];
-    const left = afterSave(typed, editsToSave(sent, page), stored, page);
+    const left = afterSave(typed, editsToSave(sent, page), wrote(stored), stored, page);
     expect([...left.keys()]).toEqual(["a"]);
     expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hello there" } });
   });
@@ -107,7 +112,7 @@ describe("unsaved cards", () => {
       fields: { text: "World" },
     });
     const stored = [text("a", "Hello", "v-a2"), text("b", "There"), text("c", "Again")];
-    const left = afterSave(sent, editsToSave(sent, page).slice(0, 1), stored, page);
+    const left = afterSave(sent, editsToSave(sent, page).slice(0, 1), wrote(stored), stored, page);
     expect([...left]).toEqual([["b", sent.get("b")]]);
   });
 
@@ -116,14 +121,30 @@ describe("unsaved cards", () => {
     const retyped = edit(edit(sent, page, "a", { fields: { text: "Hello!" } }), page, "a", {
       fields: { text: "Hello" },
     });
-    expect(afterSave(retyped, editsToSave(sent, page), [text("a", "Hello", "v-a2")], page).size).toBe(0);
+    expect(
+      afterSave(
+        retyped,
+        editsToSave(sent, page),
+        wrote([text("a", "Hello", "v-a2")]),
+        [text("a", "Hello", "v-a2")],
+        page,
+      ).size,
+    ).toBe(0);
   });
 
   // Codex on 1bdb437: the server trims the words and turns CRLF into LF before storing them (domains/profile
   // card-edit.ts field()), so what is stored can differ from what was sent while nothing new was typed.
   test("after_a_save_a_card_the_server_tidied_is_saved", () => {
     const sent = edit(NO_EDITS, page, "a", { fields: { text: "  Hello\r\nthere  " } });
-    expect(afterSave(sent, editsToSave(sent, page), [text("a", "Hello\nthere", "v-a2")], page).size).toBe(0);
+    expect(
+      afterSave(
+        sent,
+        editsToSave(sent, page),
+        wrote([text("a", "Hello\nthere", "v-a2")]),
+        [text("a", "Hello\nthere", "v-a2")],
+        page,
+      ).size,
+    ).toBe(0);
   });
 
   // Codex on b7db900: words put back to what was stored while the Save was on its way are now a change from what it
@@ -133,7 +154,13 @@ describe("unsaved cards", () => {
     const toSend = editsToSave(sent, page);
     const putBack = edit(sent, page, "a", { fields: { text: "Hi" } });
     expect(putBack.size).toBe(0);
-    const left = afterSave(putBack, toSend, [text("a", "Changed", "v-a2")], page);
+    const left = afterSave(
+      putBack,
+      toSend,
+      wrote([text("a", "Changed", "v-a2")]),
+      [text("a", "Changed", "v-a2")],
+      page,
+    );
     expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hi" } });
   });
 
@@ -141,9 +168,9 @@ describe("unsaved cards", () => {
   test("after_a_save_a_written_card_the_refresh_did_not_read_keeps_newer_words", () => {
     const sent = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
     const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
-    const left = afterSave(typed, editsToSave(sent, page), [], page);
+    const left = afterSave(typed, editsToSave(sent, page), wrote([]), [], page);
     expect(left.get("a")).toMatchObject({ version: "v-a", fields: { text: "Hello there" } });
-    expect(afterSave(sent, editsToSave(sent, page), [], page).size).toBe(0);
+    expect(afterSave(sent, editsToSave(sent, page), wrote([]), [], page).size).toBe(0);
   });
 
   // Codex on e6d4d1d: a Width or Style change written while an earlier draft is offered moves that draft to the
@@ -156,10 +183,10 @@ describe("unsaved cards", () => {
     ]);
     const withB = edit(layout, page, "b", { width: "half" });
     const stored = [text("a", "Hi", "v-a2"), text("b", "There", "v-b2")];
-    const moved = offeredAfterSave(offered, editsToSave(withB, page), stored);
+    const moved = offeredAfterSave(offered, editsToSave(withB, page), wrote(stored));
     expect(moved.get("a")).toEqual({ version: "v-a2", text: "Draft words" });
     expect(moved.get("b")).toEqual({ version: "v-b-old", text: "Older" });
-    expect(offeredAfterSave(offered, [], stored)).toBe(offered);
+    expect(offeredAfterSave(offered, [], wrote(stored))).toBe(offered);
   });
 
   // Codex on ca2c7b1: an edit that began on another version than the Save sent (a draft brought back while the Save
@@ -169,8 +196,38 @@ describe("unsaved cards", () => {
     const layout = editsToSave(sent, page)[0];
     if (layout === undefined) throw new Error("the Width change is unsaved");
     const restored = new Map(sent).set("a", { ...layout, version: "v-a-old", fields: { text: "Draft" } });
-    const left = afterSave(restored, editsToSave(sent, page), [text("a", "Hi", "v-a2")], page);
+    const left = afterSave(
+      restored,
+      editsToSave(sent, page),
+      wrote([text("a", "Hi", "v-a2")]),
+      [text("a", "Hi", "v-a2")],
+      page,
+    );
     expect(left.get("a")).toMatchObject({ version: "v-a-old", fields: { text: "Draft" } });
+  });
+
+  // Codex on c6cddd7: another tab wrote the card after this Save landed and before the refresh read it. Words typed
+  // during this Save stay on the version this Save wrote, so the next Save is refused as a conflict instead of
+  // writing over the other tab's words; an answer that names no version keeps them on their own.
+  test("after_a_save_words_typed_during_it_settle_on_the_version_it_wrote_not_on_one_read_later", () => {
+    const sent = edit(NO_EDITS, page, "a", { fields: { text: "Hello" } });
+    const typed = edit(sent, page, "a", { fields: { text: "Hello there" } });
+    const elsewhere = [text("a", "Other tab", "v-a3")];
+    const left = afterSave(typed, editsToSave(sent, page), new Map([["a", "v-a2"]]), elsewhere, page);
+    expect(left.get("a")).toMatchObject({ version: "v-a2", fields: { text: "Hello there" } });
+    const unnamed = afterSave(typed, editsToSave(sent, page), new Map(), elsewhere, page);
+    expect(unnamed.get("a")).toMatchObject({ version: "v-a", fields: { text: "Hello there" } });
+    // Words that match what the other tab wrote are still a change from what this Save wrote.
+    const same = edit(sent, page, "a", { fields: { text: "Other tab" } });
+    const kept = afterSave(same, editsToSave(sent, page), new Map([["a", "v-a2"]]), elsewhere, page);
+    expect(kept.get("a")).toMatchObject({ version: "v-a2" });
+    const offered = new Map([["a", { version: "v-a", text: "Draft" }]]);
+    const layout = editsToSave(edit(NO_EDITS, page, "a", { width: "half" }), page);
+    expect(offeredAfterSave(offered, layout, new Map([["a", "v-a2"]])).get("a")).toEqual({
+      version: "v-a2",
+      text: "Draft",
+    });
+    expect(offeredAfterSave(offered, layout, new Map())).toBe(offered);
   });
 
   // Codex on 1bdb437: a card deleted from its menu leaves nothing unsaved behind.

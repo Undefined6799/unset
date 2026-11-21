@@ -35,7 +35,7 @@ import { services } from "../../lib/server/compose.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
 import type { ShellData } from "../../lib/shell.ts";
 import { readCardForm, splitCardsForm } from "./card-form.server.ts";
-import { type CardEdit, type CardStore, type CardWrite, cardWrites } from "./card-writes.server.ts";
+import { type CardEdit, type CardStore, type CardWrite, type CardWritten, cardWrites } from "./card-writes.server.ts";
 import { loadOwnProfile } from "./own-profile.server.ts";
 import { picturesFor } from "./picture-store.server.ts";
 import { CARD_FORM_LIMIT_BYTES } from "./policy.ts";
@@ -247,29 +247,33 @@ function refused(
     readonly values?: Record<string, string> | undefined;
     readonly card?: string | undefined;
     readonly saved?: readonly string[] | undefined;
+    readonly versions?: readonly CardWritten[] | undefined;
     readonly message?: string | undefined;
   } = {},
 ) {
-  const { field, values, card, saved, message } = shown;
+  const { field, values, card, saved, versions, message } = shown;
   return fail(new AppError(code).status, {
     code,
     message: message ?? ERROR_MESSAGES[code],
     ...(field === undefined ? {} : { field }),
     ...(card === undefined ? {} : { card }),
     ...(saved === undefined ? {} : { saved }),
+    ...(versions === undefined ? {} : { versions }),
     ...(values === undefined ? {} : { values }),
   });
 }
 
 /**
  * One card write for the signed-in owner: the DID from the session, the body read once, then the write. Saved goes
- * back to the page; a refusal shows the page with its code; a dead grant goes to sign in.
+ * back to the page, or with `answered` (the one Save, which only the page's script posts) is answered with each
+ * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in.
  */
 async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
   run: (form: URLSearchParams, did: Did) => CardWrite | Promise<CardWrite>,
   echo = false,
   explain: (written: Extract<CardWrite, { kind: "failed" }>) => string | undefined = () => undefined,
+  answered = false,
 ) {
   const did = ownDid(params.did, locals.did, "POST");
   let written: CardWrite;
@@ -284,9 +288,10 @@ async function write(
   }
   if (written.kind === "redirect") redirect(303, written.location);
   if (written.kind === "failed") {
-    const { code, field, card, saved } = written;
-    return refused(code, { field, values: typed, card, saved, message: explain(written) });
+    const { code, field, card, saved, versions } = written;
+    return refused(code, { field, values: typed, card, saved, versions, message: explain(written) });
   }
+  if (answered) return { versions: written.versions ?? [] };
   redirect(303, `/${did}`);
 }
 
@@ -326,6 +331,7 @@ export const actions: Actions = {
       },
       false,
       (written) => (written.saved === undefined ? undefined : partialMessage(edits, written.saved)),
+      true,
     );
   },
   remove: (event) =>
