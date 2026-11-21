@@ -248,6 +248,22 @@ request sent twice.
 **Reserved handles.** This lists, for each reserved label, whether it is already taken on our PDS:
 `docker compose ... exec -e HANDLE_DOMAIN=staging.unset.name pds-admin node interfaces/pds-admin/cli.ts check-reserved`.
 
+## Invite requests' two files (P2.10r; ADR 0080)
+
+Web's invite-request page is off until `INVITE_REQUESTS=on`. On, web refuses to boot unless two secret files and one
+setting are valid. Both files are owner-only (0600), like the others in this folder; nobody prints them.
+
+- `web_invite_request_smtp`: one line, `smtps://resend:<key>@smtp.resend.com:465`. Make a Resend API key for web alone,
+  with sending access only and limited to the sending domain, not the PDS's key (Resend dashboard, API Keys, Create).
+  An `smtp://...:587` URL works too, and then STARTTLS is required before the login.
+- `web_invite_request_to`: one line, the owner's address that receives each request.
+- `INVITE_REQUEST_FROM` (plain env, not a secret): a sender on the verified Resend domain, for example the PDS's
+  `noreply@` address.
+
+Web reads them as `INVITE_REQUEST_SMTP_URL_FILE` and `INVITE_REQUEST_TO_FILE`; the compose mounts are added with the
+deploy that turns the page on. Turning it off is `INVITE_REQUESTS=off` (or leaving it unset) and a restart; the files
+may stay. Rotating the key is a new file and a restart.
+
 ## The PDS's env file (P1.29a, P1.36g, P1.36q)
 
 The PDS reads its settings only from its environment (`@atproto/pds` 0.5.49, `dist/config/env.js`), so its secrets

@@ -17,6 +17,7 @@ import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { ErrorCode } from "@unset/shared-errors";
 import type { SafePath } from "@unset/shared-http";
 import { services } from "./compose.ts";
+import { sendPrivacyNoticeIfChanged, sendSignIn } from "./notification-sources.ts";
 import { config } from "./runtime.ts";
 import { putSessionCookie, sessionCookieValue } from "./session.ts";
 import { authorizationTarget } from "./sign-in.ts";
@@ -144,18 +145,25 @@ async function finish(event: CallbackEvent, completed: CallbackResult): Promise<
   const origin = issuerOrigin(completed.issuer);
   let created: { cookieValue: string; idHash: Buffer };
   try {
-    created = await withTransaction(pool, deadline, (tx) =>
-      sessions.create(
+    // The sign-in's notification is sent in the same transaction, so its time is the session's own (P2.27).
+    created = await withTransaction(pool, deadline, async (tx) => {
+      const session = await sessions.create(
         tx,
         completed.did,
         replacing === null ? { issuerOrigin: origin } : { replacingCookie: replacing, issuerOrigin: origin },
-      ),
-    );
+      );
+      await sendSignIn(tx, completed.did);
+      return session;
+    });
   } catch (error) {
     log.warn("oauth.callback_failed", { kind: className(error) });
     deny("login.failed");
   }
   log.info("auth.login_succeeded");
+  // Best effort: the banner tells the member as well, so a failure here never costs them the sign-in.
+  await sendPrivacyNoticeIfChanged(completed.did, deadline).catch((error: unknown) => {
+    log.warn("notifications.send_failed", { kind: className(error) });
+  });
   await emailAnswerAtSignIn(event, completed.did, created.idHash);
   // A sign-in ends the signed-out state, so the previous account's carried issuer goes with it.
   dropCookie(cookies, "signedOut");

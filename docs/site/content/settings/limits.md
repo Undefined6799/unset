@@ -49,18 +49,32 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | header | `invite` | ip | 60 | 300 a minute |
 | header | `invite` | global | 30000 | 30000 a minute |
 | header | `invite` | did | 10 | 10 an hour |
+| header | `inviteRequest` | ip | 3 | 3 an hour |
+| header | `inviteRequest` | global | 30000 | 30000 a minute |
+| header | `inviteRequest` | global | 20 | 0.83 an hour |
+| header | `notifications` | ip | 60 | 300 a minute |
+| header | `notifications` | global | 30000 | 30000 a minute |
+| header | `notifications` | did | 120 | 120 a minute |
 | socket | `default` | global | 30000 | 30000 a minute |
 | socket | `profile` | global | 30000 | 30000 a minute |
 | socket | `profile` | did | 30 | 30 a minute |
 | socket | `login` | global | 600 | 600 a minute |
 | socket | `invite` | global | 30000 | 30000 a minute |
 | socket | `invite` | did | 10 | 10 an hour |
+| socket | `inviteRequest` | global | 30000 | 30000 a minute |
+| socket | `inviteRequest` | global | 20 | 0.83 an hour |
+| socket | `notifications` | global | 30000 | 30000 a minute |
+| socket | `notifications` | did | 120 | 120 a minute |
 
 ## Invite quotas (pds-admin)
 
 | Process | Key | Kind | Allowed | Default | local | staging | Defined in |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `web` | `INVITE_COUNTRY_RULE` | oneOf | on, off | `on` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUESTS` | oneOf | on, off | `off` | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_SMTP_URL` | secretFile | at least 16 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_TO` | secretFile | at least 6 bytes | optional | not set | not set | `interfaces/web/src/lib/server/config.ts` |
+| `web` | `INVITE_REQUEST_FROM` | str | text (pattern in source) | (empty) | not set | not set | `interfaces/web/src/lib/server/config.ts` |
 | `pds-admin` | `INVITE_WINDOW_HOURS` | int | 1 to 720 | `24` | not set | not set | `interfaces/pds-admin/config.ts` |
 | `pds-admin` | `INVITE_MAX_PER_WINDOW` | int | 1 to 1000 | `5` | not set | not set | `interfaces/pds-admin/config.ts` |
 | `pds-admin` | `INVITE_MAX_PER_DAY_GLOBAL` | int | 1 to 100000 | `100` | not set | not set | `interfaces/pds-admin/config.ts` |
@@ -91,7 +105,7 @@ Configurable per stack in the compose files.
 | `LIMITS.profile.headline` | `200` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarMaxSize` | `2000000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.avatarShapeBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
-| `LIMITS.profile.layoutBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
+| `LIMITS.profile.visibilityBytes` | `32` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.location` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.websiteBytes` | `2000` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |
 | `LIMITS.profile.cardsMax` | `100` | lexicon: permanent once published | `shared/lexicons/src/limits.ts` |

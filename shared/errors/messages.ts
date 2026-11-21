@@ -55,6 +55,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "card.overflow": "You have more cards than your page can show. Delete one to bring a hidden card back.",
   "card.cards_changed":
     "Your cards changed somewhere else while you were adding this one. Nothing was saved. Save again to add it.",
+  "card.save_too_large": "This card is too large to save. Nothing was saved. Shorten its text, then save again.",
+  "card.save_partial": "Some of your cards were saved and the rest were not. Save again to save the rest.",
   "card.list_incomplete":
     "Some of your cards could not be read just now, so nothing was changed. Try again in a moment.",
   "card.conflict": "This card changed somewhere else since you opened it. Reload to see it, then save again.",
@@ -69,4 +71,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "invite.closed": "Invites are closed for now.",
   "invite.denied": "Invites are only for accounts on our own server.",
   "invite.unavailable": "Invites are unavailable right now. Try again soon.",
+  "invite.request_bad_email": "That does not look like an email address. Check it and try again.",
+  "invite.request_age_required": "Tick the box to say you are old enough to join.",
+  "invite.request_country_required": "Tick the box about where you live.",
 };

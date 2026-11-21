@@ -21,6 +21,13 @@ export {
 export type { FetchRequest, FetchTarget, HttpOutcome, IdentityNetwork, TxtOutcome } from "./contract.ts";
 export type { ResolvedDid } from "./did-doc.ts";
 export {
+  type InviteRequestOutcome,
+  type InviteRequestPorts,
+  parseRequesterEmail,
+  type RequesterEmail,
+  requestInvite,
+} from "./invite-requests.ts";
+export {
   type InviteClaim,
   type InviteId,
   type InviteIssue,

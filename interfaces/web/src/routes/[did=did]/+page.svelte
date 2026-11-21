@@ -1,6 +1,6 @@
 <!--
-  The member's own page (P2.13, ADR 0051; from apps/web/src/screens/Me.tsx, P1.20g, P1.20i; laid out as the
-  profile-card mockup, Alex 2026-11-17): the side column with the account at a glance, then the cards with their controls and an editor for each new kind. Everything shown was built by +page.server.ts; card forms post to this page's actions. Sign out and
+  The member's own page (P2.13, ADR 0051; from apps/web/src/screens/Me.tsx, P1.20g, P1.20i): the profile header with
+  the account at a glance (ADR 0077), then the cards with their controls and an editor for each new kind. Everything shown was built by +page.server.ts; card forms post to this page's actions. Sign out and
   the link to the sign-in server live in the account menu and Settings › Account, not here (Alex 2026-11-18). With no script an editor opens in place at the top of the cards
   (CardPanel, from the page's query).
 -->
@@ -11,7 +11,6 @@ import CardPanel from "@unset/apps-web/lib/components/profile/card-panel.svelte"
 import ProfileCards from "@unset/apps-web/lib/components/profile/profile-cards.svelte";
 import ProfileHeader from "@unset/apps-web/lib/components/profile/profile-header.svelte";
 import ProfileLayout from "@unset/apps-web/lib/components/profile/profile-layout.svelte";
-import ProfileSide from "@unset/apps-web/lib/components/profile/profile-side.svelte";
 import * as Alert from "@unset/apps-web/lib/components/ui/alert";
 import { Button } from "@unset/apps-web/lib/components/ui/button";
 import * as Card from "@unset/apps-web/lib/components/ui/card";
@@ -19,7 +18,7 @@ import { OWN_PAGE } from "@unset/apps-web/lib/profile/messages.ts";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
 
 let { data, form } = $props();
-// The page's notes on what could not be read: in the side column, or under the compact header (ADR 0072).
+// The page's notes on what could not be read, under the profile header.
 const hasNotes = $derived(
   data.account.handleUnavailable || data.profileUnavailable || data.cardsIncomplete || data.cardsOverflow,
 );
@@ -41,7 +40,7 @@ const title = $derived(data.account.verified || data.name !== data.account.handl
   {#if data.cardsOverflow}<p>{OWN_PAGE.cardsOverflow}</p>{/if}
 {/snippet}
 
-<ProfileLayout layout={data.layout}>
+<ProfileLayout>
   {#snippet notices()}
     {#if form?.message && data.cardPanel === null}
       <Alert.Root variant="destructive" role="alert">
@@ -50,36 +49,20 @@ const title = $derived(data.account.verified || data.name !== data.account.handl
     {/if}
   {/snippet}
 
-  {#snippet side()}
-    {#if data.layout === "compact"}
-      <ProfileHeader
-        name={data.name}
-        letter={data.letter}
-        handle={data.profile === null ? null : data.account.handle}
-        did={data.account.did}
-        headline={data.profile?.headline}
-        location={data.profile?.location}
-        website={data.profile?.website}
-        contact={data.contact}
-        shape={data.avatarShape}
-        edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
-        notes={hasNotes ? readNotes : undefined}
-      />
-    {:else}
-      <ProfileSide
-        name={data.name}
-        letter={data.letter}
-        handle={data.profile === null ? null : data.account.handle}
-        did={data.account.did}
-        headline={data.profile?.headline}
-        location={data.profile?.location}
-        website={data.profile?.website}
-        shape={data.avatarShape}
-        edit={data.profile === null ? undefined : { href: "/settings/profile", enhance }}
-      >
-        {@render readNotes()}
-      </ProfileSide>
-    {/if}
+  {#snippet header()}
+    <ProfileHeader
+      name={data.name}
+      letter={data.letter}
+      handle={data.profile === null ? null : data.account.handle}
+      did={data.account.did}
+      headline={data.profile?.headline}
+      location={data.profile?.location}
+      website={data.profile?.website}
+      contact={data.contact}
+      shape={data.avatarShape}
+      edit={data.profile === null ? undefined : { href: "/settings/profile", publicHref: `/@${data.account.did}`, enhance }}
+      notes={hasNotes ? readNotes : undefined}
+    />
   {/snippet}
 
   {#if data.cardPanel !== null}

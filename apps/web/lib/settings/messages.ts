@@ -36,15 +36,6 @@ export const PROFILE_SETTINGS = {
   locationHint: (n: number) => `Where you are, as you want to say it. Up to ${n} characters.`,
   website: "Website",
   websiteHint: "An http or https address.",
-  layout: "Page layout",
-  layouts: [
-    { value: "sidebar", label: "Side column", hint: "Your picture and details in a column beside your cards." },
-    {
-      value: "compact",
-      label: "Compact header",
-      hint: "Your picture and name above your cards; details open from the picture.",
-    },
-  ],
   cardsNote: "Your text, links and other cards are edited on your page.",
   viewPage: "View your page",
   save: "Save profile",
@@ -64,6 +55,42 @@ export const PROFILE_SETTINGS = {
 
 /** Settings › Privacy › Search and AI (ADR 0062; review plan 2026-11-18 §7.2): each switch says what it does and what
  * it cannot do. */
+/**
+ * Settings › Privacy › who sees the page (ADR 0078). The choice's words live here alone, so a label is one edit; the
+ * record's values (public, signedIn, ownerOnly) never change with them. Never "private" for a choice: the profile
+ * stays public on the network, which `disclaimer` says beside the choice.
+ */
+export const PAGE_VISIBILITY = {
+  title: "Who sees your page",
+  lead: "Your page on unset.sh, with your profile and cards.",
+  options: {
+    public: {
+      label: "Public",
+      hint: "Anyone can see your page, and you choose below whether search engines and AI search may list it.",
+    },
+    signedIn: {
+      label: "Signed-in members only",
+      hint: "People who are not signed in see only your name and handle, with a note to sign in. Search engines and AI search never list it.",
+    },
+    ownerOnly: {
+      label: "Only me",
+      hint: "Other people, signed in or not, see only your name and handle and that you keep your page private. Search engines and AI search never list it.",
+    },
+  },
+  /** The question mark beside each choice opens its hint (Alex, 2026-11-20 20:26Z: nothing longer for now). */
+  help: {
+    open: (choice: string) => `What "${choice}" means`,
+    close: "Close",
+  },
+  disclaimer:
+    "This asks apps not to show your page; it does not hide your profile. What you publish stays public on the atproto network: any app or person can still read it from your sign-in server.",
+  save: "Save privacy",
+  saved: "Privacy saved.",
+  noProfile: "You have no page yet. Publish your profile first, then choose who sees it.",
+  unreadable:
+    "We could not read your profile from your sign-in server, so this choice is not shown. Try again in a moment.",
+} as const;
+
 export const SEARCH_AI_SETTINGS = {
   title: "Search and AI",
   lead: "Who may find your public page. Both are off until you turn them on.",
@@ -89,6 +116,4 @@ export const SEARCH_AI_SETTINGS = {
     "An example drawn by unset.sh from what you set here, not taken from a search engine. Search engines choose what to show and may shorten or rewrite it. Your profile picture appears here once pictures arrive on unset.sh.",
   previewUnlisted:
     'With "Search engines may list my page" off, saving asks search engines not to list your page. One that already lists it can take days to drop it.',
-  save: "Save search and AI",
-  saved: "Search and AI saved.",
 } as const;

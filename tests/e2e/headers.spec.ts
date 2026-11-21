@@ -1,18 +1,21 @@
 import { expect, test } from "@playwright/test";
-import { ALL_PAGES, cellName, JOIN_CODE, originOf, PAGES, requestHeaders, themeCells } from "./pages.ts";
+import { ALL_PAGES, cellName, INDEXED, JOIN_CODE, originOf, PAGES, requestHeaders, themeCells } from "./pages.ts";
 
 // shared/http/headers.ts sets HSTS everywhere, including dev (interfaces/web/server.ts applies SECURITY_HEADERS).
 // The book text said "absent in dev"; the server does not, and this harness does not change it.
 const HSTS = "max-age=63072000; includeSubDomains";
 
 // Home and the legal pages read a member's session (policy session "optional", P1.20k), so even a visitor's copy
-// varies on Cookie; other public pages read none.
+// varies on Cookie; so does a member's public page, which reads one to know who is looking (ADR 0078). Other public
+// pages read none.
 const OPTIONAL_SESSION = new Set([
   "/",
+  `/@${INDEXED.did}`,
   "/legal/terms",
   "/legal/privacy",
   "/legal/domains",
   `/join?invite=${JOIN_CODE}`,
+  "/request-invite",
 ]);
 // P2.10: /join's URL holds an invite code, so it sends no Referer at all (routes/join/+page.server.ts).
 const referrerPolicy = (route: string): string => (route === "/join" ? "no-referrer" : "same-origin");

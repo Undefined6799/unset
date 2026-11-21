@@ -47,11 +47,11 @@
             "maxLength": 2000,
             "description": "The member's website: an http or https URL. A reader drops any other scheme."
           },
-          "layout": {
+          "visibility": {
             "type": "string",
             "maxLength": 32,
-            "knownValues": ["sidebar", "compact"],
-            "description": "How the profile page is laid out: sidebar (a side column beside the cards) or compact (a short header above them). Absent or unknown means sidebar."
+            "knownValues": ["public", "signedIn", "ownerOnly"],
+            "description": "Who unset.sh shows the page to: public (everyone), signedIn (people signed in to unset.sh), ownerOnly (only the account itself; others see that the account exists and nothing more). Absent means public; an unknown value is read as ownerOnly. A request to apps, not access control: the record stays readable by anyone on the network."
           },
           "listed": {
             "type": "boolean",

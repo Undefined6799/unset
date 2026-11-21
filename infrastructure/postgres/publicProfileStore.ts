@@ -61,12 +61,15 @@ const SELECT = `
     LEFT JOIN app.discoverability d USING (did)`;
 const BY_DID = `${SELECT} WHERE p.did = $1 LIMIT 2`;
 const BY_HANDLE = `${SELECT} WHERE p.handle = $1 LIMIT 2`;
+// A page shown to fewer than everyone is never listed, whatever the switches say (ADR 0078): only a record with no
+// visibility, or "public", counts, as domains/profile readProfileVisibility reads it (anything else fails closed).
+const PUBLIC_PAGE = `(NOT p.record ? 'visibility' OR p.record->'visibility' = '"public"'::jsonb)`;
 // The column is chosen from two fixed names, never from input.
 const LISTED = {
   searchEngines: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
-                   WHERE d.search_engines ORDER BY p.did LIMIT $1`,
+                   WHERE d.search_engines AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
   aiSearch: `SELECT p.did, p.handle FROM idx.public_profile p JOIN app.discoverability d USING (did)
-              WHERE d.ai_search ORDER BY p.did LIMIT $1`,
+              WHERE d.ai_search AND ${PUBLIC_PAGE} ORDER BY p.did LIMIT $1`,
 } as const;
 
 export function createPublicProfileStore(pool: Pool): PublicProfileStore {
