@@ -15,11 +15,11 @@ import {
   parseCardInput,
   parseCardKey,
   parseCardVersion,
+  parseNewCardKey,
   parseRepoDid,
+  TEXT_EDIT_BYTES,
 } from "@unset/domains-profile";
 import {
-  createCardRecord,
-  deleteCardRecord,
   latestCommit,
   listCardRecords,
   loadProfileRecord,
@@ -28,9 +28,9 @@ import {
   saveCardRecords,
   saveProfileRecord,
   uploadImageBlob,
+  writeCardAndList,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
-import { LIMITS } from "@unset/shared-lexicons";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
@@ -127,7 +127,9 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.card.textBytes, formBytes: CARD_FORM_LIMIT_BYTES },
+    cardEditLimits: { ...CARD_EDIT_LIMITS, text: TEXT_EDIT_BYTES, formBytes: CARD_FORM_LIMIT_BYTES },
+    // Drawn fresh on each load, so each add form names its own card (newKeyField).
+    newCardKey: newCardKey(),
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",
@@ -147,10 +149,10 @@ function writesFor(did: Did, locals: App.Locals) {
   const store: CardStore = {
     list: () => listCardRecords(pdsCall, ctx, did),
     head: () => latestCommit(pdsCall, ctx, did),
+    profile: () => loadProfileRecord(pdsCall, ctx, did),
     newKey: () => newCardKey() as CardKey,
-    create: (record, swapCommit, key) => createCardRecord(pdsCall, ctx, did, record, swapCommit, key),
+    write: (change, swapCommit) => writeCardAndList(pdsCall, ctx, did, change, swapCommit),
     save: (key, build) => saveCardRecord(pdsCall, ctx, did, key, build),
-    remove: (key) => deleteCardRecord(pdsCall, ctx, did, key),
     saveMany: (updates, swapCommit) => saveCardRecords(pdsCall, ctx, did, updates, swapCommit),
     saveProfile: (build) => saveProfileRecord(pdsCall, ctx, did, build),
   };
@@ -182,6 +184,16 @@ function keyField(form: URLSearchParams): CardKey {
   if (key === null) throw new AppError("http.not_found");
   form.delete("key");
   return key;
+}
+
+/**
+ * The key the add form was given when the page was drawn (load's `newCardKey`), so the same form sent twice adds one
+ * card. One that is missing or not a TID (a page drawn before this field) just means a fresh key, as before.
+ */
+function newKeyField(form: URLSearchParams): CardKey | undefined {
+  const keys = form.getAll("newKey");
+  form.delete("newKey");
+  return (keys.length === 1 ? parseNewCardKey(keys[0]) : null) ?? undefined;
 }
 
 /**
@@ -272,7 +284,10 @@ function refused(
 /**
  * One card write for the signed-in owner: the DID from the session, the body read once, then the write. Saved goes
  * back to the page, or with `answered` (the one Save, which only the page's script posts) is answered with each
- * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in.
+ * written card's new version; a refusal shows the page with its code; a dead grant goes to sign in. With `echo` a
+ * refusal carries what was typed, but only to a page drawn again with no script: the page's script (kit's
+ * `use:enhance`, which sends x-sveltekit-action, kit 3.2.0 src/runtime/app/forms/client.js) keeps the words in its
+ * open editor, so its answer stays small however long the card (staging change test 2026-11-21, finding 5).
  */
 async function write(
   { params, locals, request }: { params: Partial<Record<string, string>>; locals: App.Locals; request: Request },
@@ -286,7 +301,7 @@ async function write(
   let typed: Record<string, string> | undefined;
   try {
     const form = await formText(request);
-    if (echo) typed = Object.fromEntries(form);
+    if (echo && !request.headers.has("x-sveltekit-action")) typed = Object.fromEntries(form);
     written = await run(form, did);
   } catch (cause) {
     if (!(cause instanceof AppError) || !isShown(cause.code)) throw cause;
@@ -306,8 +321,11 @@ export const actions: Actions = {
     write(
       event,
       (form, did) => {
+        const key = newKeyField(form);
         const input = cardInput(form);
-        return input.ok ? writesFor(did, event.locals).create(input.content, input.width, input.surface) : input.failed;
+        return input.ok
+          ? writesFor(did, event.locals).create(input.content, input.width, input.surface, key)
+          : input.failed;
       },
       true,
     ),

@@ -29,6 +29,7 @@ import {
   wrapInBlockTypeCommand,
 } from "@milkdown/preset-commonmark";
 import { findParent, posToDOMRect } from "@milkdown/prose";
+import { exitCode } from "@milkdown/prose/commands";
 import { keymap } from "@milkdown/prose/keymap";
 import type { NodeType } from "@milkdown/prose/model";
 import { type Command, type EditorState, Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
@@ -218,7 +219,21 @@ function moveBlock(dir: -1 | 1): Command {
     return true;
   };
 }
-const moveKeys = $prose(() => keymap({ "Mod-Shift-ArrowUp": moveBlock(-1), "Mod-Shift-ArrowDown": moveBlock(1) }));
+/**
+ * Arrow down at the end of a code block with nothing below it starts a line below, so the way out is the key a member
+ * tries first (Crepe's code block, a CodeMirror view, does the same). Mod-Enter also leaves one anywhere: exitCode in
+ * prosemirror-commands 1.7 baseKeymap, which Milkdown's core keymap holds.
+ */
+const leaveLastCode: Command = (state, dispatch) => {
+  const { $head, empty } = state.selection;
+  if (!empty || $head.depth !== 1 || !$head.parent.type.spec.code) return false;
+  if ($head.parentOffset < $head.parent.content.size || $head.index(0) < state.doc.childCount - 1) return false;
+  return exitCode(state, dispatch);
+};
+
+const moveKeys = $prose(() =>
+  keymap({ "Mod-Shift-ArrowUp": moveBlock(-1), "Mod-Shift-ArrowDown": moveBlock(1), ArrowDown: leaveLastCode }),
+);
 
 /** Adds the handle, the block menu and the bar to `editor`, drawn in the elements `options` names. */
 export function withMenus(editor: Editor, options: MenusOptions): Menus {
@@ -259,6 +274,16 @@ export function withMenus(editor: Editor, options: MenusOptions): Menus {
   // A key the open menu takes: up and down move through it, Enter runs the item, Escape closes it (Crepe's keys).
   function menuKey(view: EditorView, event: KeyboardEvent): boolean {
     if (items.length === 0) return false;
+    // The menu is filtered after plugin-slash's 20 ms debounce, so a key pressed straight after typing reads the line as
+    // it is now: "/code" then Enter at once picks Code, never the first item of the list still shown.
+    const typed = view.state.selection.$from.parent.textContent;
+    const now = typed.startsWith("/") ? typed.slice(1) : typed;
+    if (now !== filter) {
+      filter = now;
+      index = 0;
+      items = matching();
+      if (items.length === 0) return false;
+    }
     if (event.key === "Escape") close();
     else if (event.key === "ArrowDown") index = Math.min(index + 1, items.length - 1);
     else if (event.key === "ArrowUp") index = Math.max(index - 1, 0);
@@ -548,7 +573,7 @@ function barView(
         shown.editable &&
         selection instanceof TextSelection &&
         !selection.empty &&
-        doc.textBetween(selection.from, selection.to).length > 0
+        doc.textBetween(selection.from, selection.to).trim().length > 0
       );
     },
   });

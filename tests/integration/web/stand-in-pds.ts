@@ -2,7 +2,7 @@
 // inside stand-in-server.ts. It answers what a restored OAuth session asks for (the authorization server metadata, as
 // tests/integration/oauth/refresh.test.ts serves it) and the calls the member's page makes, over one in-memory repo:
 // getRecord, listRecords, putRecord (with swapRecord), createRecord (with swapCommit), deleteRecord, applyWrites
-// (update writes only, with swapCommit, all in one commit, refusing a body past the PDS's limits) and
+// (create, update and delete writes, with swapCommit, all in one commit, refusing a body past the PDS's limits) and
 // com.atproto.sync.getLatestCommit (https://atproto.com/specs/xrpc; lexicons com.atproto.repo.*, sync.*). Every write
 // moves the repo's head, as a real commit does. Each write is reported through `onWrite`.
 import { createHash } from "node:crypto";
@@ -149,28 +149,39 @@ export function standInPds(fixture: PdsFixture, onWrite: (write: PdsWrite) => vo
       record?: unknown;
       swapRecord?: string | null;
       swapCommit?: string;
-      writes?: { $type?: string; collection: string; rkey: string; value: unknown }[];
+      writes?: { $type?: string; collection: string; rkey: string; value?: unknown }[];
     };
     if (input.repo !== fixture.did) return wrongRepo();
     if (input.swapCommit !== undefined && input.swapCommit !== head())
       return json(400, { error: "InvalidSwap", message: `Commit was at ${head()}` });
     if (method === "applyWrites") {
       const writes = input.writes ?? [];
-      // An update of a record that is not there fails the whole call, as pds-apply-writes.image.test.ts shows the real
-      // PDS does.
-      if (
-        writes.some((w) => w.$type !== "com.atproto.repo.applyWrites#update" || !collection(w.collection).has(w.rkey))
-      )
-        return json(400, { error: "InvalidRequest", message: "only updates of existing records here" });
-      for (const w of writes) collection(w.collection).set(w.rkey, w.value);
+      // An update or delete of a record that is not there, or a create of one that is, fails the whole call, as
+      // pds-apply-writes.image.test.ts shows the real PDS does (@atproto/pds 0.5.51 actor-store/repo/transactor.js).
+      const kind = (w: { $type?: string }) => w.$type?.replace("com.atproto.repo.applyWrites#", "");
+      const fits = (w: { $type?: string; collection: string; rkey: string }) =>
+        kind(w) === "create" ? !collection(w.collection).has(w.rkey) : collection(w.collection).has(w.rkey);
+      if (writes.some((w) => !["create", "update", "delete"].includes(kind(w) ?? "") || !fits(w)))
+        return json(400, { error: "InvalidRequest", message: "a write that does not fit the repo" });
+      for (const w of writes) {
+        if (kind(w) === "delete") collection(w.collection).delete(w.rkey);
+        else collection(w.collection).set(w.rkey, w.value);
+      }
       commits += 1;
-      for (const w of writes) onWrite({ method, collection: w.collection, rkey: w.rkey, record: w.value });
-      // Each update's result names its record and its new CID (@atproto/api 0.30.3 applyWrites UpdateResult).
-      const results = writes.map((w) => ({
-        $type: "com.atproto.repo.applyWrites#updateResult",
-        uri: uri(w.collection, w.rkey),
-        cid: wrote(w.collection, w.rkey),
-      }));
+      for (const w of writes) {
+        const reported = kind(w) === "create" ? "createRecord" : kind(w) === "delete" ? "deleteRecord" : method;
+        onWrite({ method: reported, collection: w.collection, rkey: w.rkey, record: w.value });
+      }
+      // Each write's result names its record and its new CID (@atproto/api 0.30.3 applyWrites Create/UpdateResult).
+      const results = writes.map((w) =>
+        kind(w) === "delete"
+          ? { $type: "com.atproto.repo.applyWrites#deleteResult" }
+          : {
+              $type: `com.atproto.repo.applyWrites#${kind(w)}Result`,
+              uri: uri(w.collection, w.rkey),
+              cid: wrote(w.collection, w.rkey),
+            },
+      );
       return json(200, { commit: { cid: head(), rev: "3jzfcijpj2z2b" }, results });
     }
     const records = collection(input.collection);

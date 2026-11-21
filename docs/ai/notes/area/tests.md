@@ -124,5 +124,8 @@ end where they began has no unsaved changes: delete it without Discard (`discard
 **Rules worth knowing.** No module mocks; only unmanaged dependencies get doubles (TE-1). Vitest fails if a
 discovered test did not run. Re-checked at P1.01a: integration tests import postgres and audit by package name;
 the Docker start path is unchanged.
+E2e tests run without the DOM lib: read `getComputedStyle` or `scrollBy` through a typed `globalThis` cast, as
+`text-menus.spec.ts` does. To prove a drag in Playwright, press, check nothing moved, then move in steps
+(`mouse.move(x, y, { steps: 10 })`) onto the target: a block that shifts on press makes the drop miss (P1.21v slice 6).
 
 **Links.** [[postgres]].

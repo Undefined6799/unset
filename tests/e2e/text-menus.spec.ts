@@ -272,3 +272,138 @@ test("a_block_moves_up_and_down_by_keys_with_the_caret_kept_in_it", async ({ pag
   await discardAndRemove(page, word);
   expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
 });
+
+// Staging, 2026-11-21: pressing the grip gave its paragraph a class, so the page's margin for a bare paragraph (main
+// :where(p):not([class])) went and the words jumped up 24 px under the pointer; dropped on the lower half of the last
+// block, the pointer was then below the editor and nothing moved. The tester's gesture: the first block, pressed and
+// moved in steps onto the middle of the last one. A line shows where it will land (prosemirror-dropcursor, as Crepe).
+test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing_jumps", async ({ page }) => {
+  const watched = watch(page);
+  const word = `drops${Date.now()}`;
+  const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
+  const lines = editor.locator("p");
+  await lines.first().hover();
+  const grip = card.locator("[data-block-handle]").getByRole("img", { name: "Drag to move this block" });
+  await expect(grip).toBeVisible();
+  const before = await lines.first().boundingBox();
+  const start = await grip.boundingBox();
+  const end = await lines.last().boundingBox();
+  if (before === null || start === null || end === null) throw new Error("nothing to drag");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  expect((await lines.first().boundingBox())?.y).toBe(before.y);
+  const point = { x: end.x + end.width / 2, y: end.y + end.height / 2 };
+  if (page.context().browser()?.browserType().name() !== "webkit") {
+    await page.mouse.move(point.x, point.y, { steps: 10 });
+    await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
+    await page.mouse.up();
+  } else {
+    // Playwright's WebKit starts no HTML drag from a mouse press (see drag() above): the browser's own drag events,
+    // sent in two steps so the line can be seen between the drag over the last block and the drop.
+    const sent = (types: readonly string[]) =>
+      grip.evaluate(
+        (source, { at, types: names }) => {
+          type Target = { dispatchEvent: (event: unknown) => boolean };
+          const g = globalThis as unknown as {
+            DataTransfer: new () => unknown;
+            DragEvent: new (type: string, init: Record<string, unknown>) => unknown;
+            document: { elementFromPoint: (x: number, y: number) => Target | null };
+            dragData?: unknown;
+          };
+          g.dragData ??= new g.DataTransfer();
+          const init = { bubbles: true, cancelable: true, dataTransfer: g.dragData, clientX: at.x, clientY: at.y };
+          const handle = (source as unknown as { closest: (s: string) => Target }).closest("[data-block-handle]");
+          for (const name of names) {
+            const target =
+              name === "dragstart" || name === "dragend" ? handle : g.document.elementFromPoint(at.x, at.y);
+            target?.dispatchEvent(new g.DragEvent(name, init));
+          }
+        },
+        { at: point, types },
+      );
+    await sent(["dragstart", "dragover"]);
+    await expect(page.locator(".prosemirror-dropcursor-block")).toBeVisible();
+    await sent(["drop", "dragend"]);
+    await page.mouse.up();
+  }
+  await expect(lines).toHaveText(["second line", "third line", `${word} one`]);
+  await expect(page.locator(".prosemirror-dropcursor-block")).toHaveCount(0);
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+// Staging, 2026-11-21: the floating bar showed for a selected space, the block menu's chosen row looked like the rest
+// (the theme's accent is the popover's colour), and a 3 px ring hugged the words while editing: now a light outline
+// 8 px out, kept because every field shows where the keys go. An arrow down at the end of a last code block leaves it.
+test("the_bar_skips_a_space_the_menu_marks_its_row_no_ring_and_an_arrow_leaves_a_code_block", async ({ page }) => {
+  const watched = watch(page);
+  const word = `marks${Date.now()}`;
+  const { editor } = await cardWithCaret(page, word, `${word} alpha beta`);
+  await expect(editor).toHaveCSS("box-shadow", /^(none|(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+)$/);
+  await expect(editor).toHaveCSS("outline-offset", "8px");
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Shift+ArrowLeft");
+  const floating = page.getByRole("toolbar", { name: "Format the selected words" });
+  await page.waitForTimeout(100);
+  await expect(floating).toBeHidden();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  const chosen = menu.locator("[aria-selected=true]");
+  type Styles = { getComputedStyle: (element: unknown) => { backgroundColor: string } };
+  const background = (locator: typeof chosen) =>
+    locator.evaluate((el) => (globalThis as unknown as Styles).getComputedStyle(el).backgroundColor);
+  expect(await background(chosen)).not.toBe(await background(menu.locator("[aria-selected=false]").first()));
+  // Enter straight after the typing, as an impatient member presses it, before the menu has filtered.
+  await page.keyboard.type("code");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("x = 1");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.type("after");
+  await expect(editor.locator(":scope > *").last()).toHaveText("after");
+  await expect(editor.locator("pre")).toHaveText("x = 1");
+  await discardAndRemove(page, word);
+  expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  // Staging, 2026-11-21: on a line near the bottom of the screen the block menu opened below it, off the screen: it
+  // was placed before its items were drawn, so it measured empty and did not flip above the line.
+  test("the_block_menu_opened_near_the_bottom_stays_on_the_screen", async ({ page }) => {
+    const watched = watch(page);
+    const word = `phone${Date.now()}`;
+    const filler = Array.from({ length: 12 }, (_, n) => `line ${n}`).join("\n\n");
+    const { editor } = await cardWithCaret(page, word, `${word} start\n\n${filler}\n\nlast`);
+    const last = editor.locator("p").last();
+    await last.scrollIntoViewIfNeeded();
+    const box = await last.boundingBox();
+    if (box === null) throw new Error("no line");
+    // The last line 60 px above the bottom of the screen, as a member typing at the end of a long card sees it.
+    type Scroller = { scrollBy: (x: number, y: number) => void };
+    await page.evaluate((y) => (globalThis as unknown as Scroller).scrollBy(0, y), box.y + box.height - (844 - 60));
+    await last.click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    const line = await editor.locator("p").last().boundingBox();
+    await page.keyboard.type("/");
+    // The first change brings the unsaved bar, which takes its room above the cards: the line typed on stays where it
+    // was (WebKit has no scroll anchoring, and there it jumped down by the bar's height, off the screen).
+    expect((await editor.locator("p").last().boundingBox())?.y).toBe(line?.y);
+    const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+    await expect(menu).toBeVisible();
+    // plugin-slash 7.23.0 shows the menu at once and moves it when floating-ui's computePosition settles (a promise), so
+    // the box is read once it has; WebKit on CI drew it a frame before it moved.
+    await expect
+      .poll(async () => {
+        const placed = await menu.boundingBox();
+        return placed !== null && placed.y >= 0 && placed.y + placed.height <= 844;
+      })
+      .toBe(true);
+    await page.keyboard.press("Escape");
+    await discardAndRemove(page, word);
+    expect(await pageNoise(page, watched)).toEqual({ consoleErrors: [], csp: [] });
+  });
+});

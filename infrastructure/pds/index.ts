@@ -7,17 +7,18 @@ export {
   APPLY_WRITES_BODY_BYTES,
   CARD_COLLECTION,
   CARD_LIST_BYTES,
+  type CardChange,
   type CardList,
-  type CreateOutcome,
-  createCardRecord,
-  deleteCardRecord,
+  type ListedOutcome,
   latestCommit,
   listCardRecords,
   newCardKey,
+  type ProfileChange,
   type SaveManyOutcome,
   type StoredCard,
   saveCardRecord,
   saveCardRecords,
+  writeCardAndList,
 } from "./card-records.ts";
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
 export {

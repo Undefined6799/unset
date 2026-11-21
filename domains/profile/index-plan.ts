@@ -5,7 +5,7 @@
 // Records are untrusted member content even after the signature check: each one is validated against its lexicon
 // (shared/lexicons, read mode, so a field a newer client adds is kept) and capped in size before it is stored.
 import { LIMITS, NSID, validateRecord } from "@unset/shared-lexicons";
-import { parseCardKey } from "./cards.ts";
+import { parseNewCardKey } from "./cards.ts";
 
 /** The collections the index reads; every other op in a commit is ignored. */
 export const INDEXED_COLLECTIONS = [NSID.profile, NSID.card] as const;
@@ -28,7 +28,10 @@ export const MAX_RECORD_BYTES = 1_000_000;
  * list already stopped at (book P3.12v; the number is Alex's to set).
  */
 export const MAX_PAGE_BYTES = 4 * 1024 * 1024;
-/** Sections kept per account: the profile lists at most LIMITS.profile.cardsMax, and unlisted ones show after. */
+/**
+ * Sections kept per account: the profile lists at most LIMITS.profile.cardsMax. Unlisted ones are kept too (they do
+ * not show, ADR 0086 point 3), so a later list that names them needs no new read of the repo.
+ */
 export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
 
 /** One proven change from a commit, with the record in its JSON form (blob refs as `{ $type: "blob", ref: { $link } }`). */
@@ -135,11 +138,8 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
 
 /** The lexicon's record key type: `literal:self` for the profile, `tid` for a section (atproto.com/specs/record-key). */
 function keyFits(collection: IndexedCollection, rkey: string): boolean {
-  return collection === NSID.profile ? rkey === "self" : TID.test(rkey) && parseCardKey(rkey) !== null;
+  return collection === NSID.profile ? rkey === "self" : parseNewCardKey(rkey) !== null;
 }
-
-/** atproto.com/specs/tid: 13 characters of base32-sortable, the first in 2-7 or a-j. */
-const TID = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 
 /**
  * Whether the index keeps `record`: within MAX_RECORD_BYTES and storable. The save checks the record it writes with

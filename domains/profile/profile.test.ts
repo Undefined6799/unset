@@ -3,7 +3,7 @@
 import { LIMITS, validateRecord } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
 import type { CardKey, RepoDid } from "./cards.ts";
-import { MAX_RECORD_BYTES } from "./index-plan.ts";
+import { MAX_RECORD_BYTES, recordBytes } from "./index-plan.ts";
 import {
   APP_LIMITS,
   EMPTY_PROFILE,
@@ -13,7 +13,9 @@ import {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
+  withCardListed,
   withCardOrder,
+  withCardUnlisted,
 } from "./profile.ts";
 
 const good = {
@@ -225,8 +227,18 @@ describe("withCardOrder", () => {
   });
 
   test("an empty order is written as no order", () => {
-    const built = withCardOrder(OWNER, [], { ...stored, cards: [{ uri: `at://${OWNER}/sh.unset.card/a` }] }, T);
+    const built = withCardOrder(OWNER, [], { ...stored, cards: [] }, T);
     expect(built.ok && "cards" in built.record).toBe(false);
+  });
+
+  test("an entry the order does not name stays, after the ordered cards, as it was stored", () => {
+    // ADR 0086 point 3: only listed cards show, so dropping the entry of a card this version hides (a newer block,
+    // another client's) would take it off the page for every reader (ADR 0038: kept, never a reason to refuse).
+    const uri = (key: string) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` });
+    const other = { uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/sh.unset.card/x" };
+    const list = [uri("a"), uri("hidden"), other, uri("b"), uri("a")];
+    const built = withCardOrder(OWNER, ["b", "a"] as CardKey[], { ...stored, cards: list }, T);
+    expect(built).toEqual({ ok: true, record: { ...stored, cards: [uri("b"), uri("a"), uri("hidden"), other] } });
   });
 
   test("there is no order without a profile", () => {
@@ -265,5 +277,60 @@ describe("avatar shape", () => {
 
   test("there is no shape without a profile to hold it", () => {
     expect(withAvatarShape("round", null, T)).toEqual({ ok: false, code: "profile.name_required" });
+  });
+});
+
+describe("withCardListed and withCardUnlisted (ADR 0086: a card shows only when the profile lists it)", () => {
+  const OWNER = "did:plc:ewvi7nxzyoun6zhxrhs64oiz" as RepoDid;
+  const T = "2026-10-23T03:00:00.000Z";
+  const uri = (key: string) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` });
+  const other = { uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/sh.unset.card/x", note: "another client's" };
+  const stored = { $type: "sh.unset.profile", createdAt: T, ...goodStored, future: 1, cards: [other, uri("a")] };
+
+  test("a new card goes at the end, and every entry already stored is kept as it is", () => {
+    const built = withCardListed(OWNER, "b" as CardKey, stored, "2027-01-01T00:00:00.000Z");
+    expect(built).toEqual({ ok: true, record: { ...stored, cards: [other, uri("a"), uri("b")] } });
+  });
+
+  test("a card already listed is not listed twice", () => {
+    expect(withCardListed(OWNER, "a" as CardKey, stored, T)).toEqual({ ok: true, record: stored });
+  });
+
+  test("a profile with no list starts one", () => {
+    const { cards: _none, ...bare } = stored;
+    expect(withCardListed(OWNER, "a" as CardKey, bare, T)).toEqual({
+      ok: true,
+      record: { ...bare, cards: [uri("a")] },
+    });
+  });
+
+  test("there is no list without a profile, and none past the lexicon's count", () => {
+    expect(withCardListed(OWNER, "a" as CardKey, null, T)).toEqual({ ok: false, code: "profile.name_required" });
+    const full = { ...stored, cards: Array.from({ length: LIMITS.profile.cardsMax }, (_, i) => uri(`k${i}`)) };
+    expect(withCardListed(OWNER, "new" as CardKey, full, T)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+
+  test("an entry that would take the profile past what the index keeps is refused", () => {
+    // Within an entry's bytes of the index's ceiling, the stored profile still fits; with one more entry it would not,
+    // and the public page would lose it (index-plan.ts fitsIndex).
+    const room = MAX_RECORD_BYTES - recordBytes({ ...stored, note: "" }) - 20;
+    const near = { ...stored, note: "x".repeat(room) };
+    expect(withCardListed(OWNER, "a" as CardKey, near, T)).toEqual({ ok: true, record: near });
+    expect(withCardListed(OWNER, "b" as CardKey, near, T)).toEqual({ ok: false, code: "profile.too_long" });
+  });
+
+  test("a removed card leaves the list, every other entry stays", () => {
+    const built = withCardUnlisted(OWNER, "a" as CardKey, { ...stored, cards: [uri("a"), other, uri("a")] }, T);
+    expect(built).toEqual({ ok: true, record: { ...stored, cards: [other] } });
+  });
+
+  test("the last card removed takes the list away", () => {
+    const built = withCardUnlisted(OWNER, "a" as CardKey, { ...stored, cards: [uri("a")] }, T);
+    expect(built.ok && built.record !== null && "cards" in built.record).toBe(false);
+  });
+
+  test("nothing to write when the card is not listed or there is no profile", () => {
+    expect(withCardUnlisted(OWNER, "b" as CardKey, stored, T)).toEqual({ ok: true, record: null });
+    expect(withCardUnlisted(OWNER, "b" as CardKey, null, T)).toEqual({ ok: true, record: null });
   });
 });
