@@ -84,7 +84,7 @@ async function send(event: SubmitEvent) {
 /** Deletes one's own message after its confirm; a reply being written to it is dropped (ADR 0092 decision 2). */
 async function remove(message: Message) {
   if (replyingTo?.id === message.id) replyingTo = null;
-  failed = !(await conversations.remove(id, message.id));
+  failed = (await conversations.remove(id, [message.id])).length > 0;
 }
 
 async function accept() {

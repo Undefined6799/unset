@@ -132,6 +132,11 @@ export type ConversationView = {
 };
 
 /** What the screens can do with conversations; every call reports its outcome, nothing is thrown. */
+/** The messages selection mode gives a checkbox: those Delete is offered on (actionsOf). */
+export function selectable(messages: readonly Message[], composer: Composer): string[] {
+  return messages.filter((m) => actionsOf(m, composer).includes("delete")).map((m) => m.id);
+}
+
 export type Conversations = {
   /** Calls `onList` now and on every change, until the returned stop is called. */
   readonly watchList: (onList: (list: readonly Conversation[]) => void) => () => void;
@@ -148,8 +153,15 @@ export type Conversations = {
   readonly older: (id: ConversationId) => Promise<void>;
   /** Sends only while the composer sends, as a reply to the message `replyTo` when given; false when not sent. */
   readonly send: (id: ConversationId, text: string, replyTo?: string) => Promise<boolean>;
-  /** Deletes this member's own message for both people; false when it was not deleted. */
-  readonly remove: (id: ConversationId, messageId: string) => Promise<boolean>;
+  /**
+   * Deletes each of this member's own messages for both people, one after another, and gives back the ids of those
+   * not deleted; one that fails does not stop the rest.
+   */
+  readonly remove: (id: ConversationId, messageIds: readonly string[]) => Promise<readonly string[]>;
+  /** Whether Delete asks to confirm first; false once this member chose "Don't ask me again" in this browser. */
+  readonly confirmsDelete: () => boolean;
+  /** Remembers "Don't ask me again" in this browser only. */
+  readonly stopConfirmingDelete: () => void;
   /** Puts `key` on the message, or takes this member's own `key` back off it; false when nothing changed. */
   readonly react: (id: ConversationId, messageId: string, key: QuickReaction) => Promise<boolean>;
 };

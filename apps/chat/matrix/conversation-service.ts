@@ -27,7 +27,15 @@
 //   message's reactions are the timeline set's relations, as Element reads them (TimelinePanel.tsx:1810-1815).
 // - remove: redactEvent with no reason, as Element's Remove does after its confirm when no reason is typed
 //   (apps/web/src/components/views/dialogs/ConfirmRedactDialog.tsx:63-72), only of this member's own message while
-//   they are still in an encrypted conversation (core/conversations.ts actionsOf; ADR 0092 decision 2).
+//   they are still in an encrypted conversation (core/conversations.ts actionsOf; ADR 0092 decision 2). Several go
+//   one redactEvent each, as Element's bulk redact sends them (BulkRedactDialog.tsx:87-96). Element sends them all at
+//   once and only logs a failure; here they go one after another, so the message rate limit Synapse 1.165.0 applies
+//   to a redaction too (synapse/handlers/message.py:1078-1084) does not refuse the tail of a long selection, and the
+//   ones refused come back so the page can say so. The SDK applies a redaction
+//   only once the server has it (chronological ordering; src/models/room.ts:2828-2843), so a refused one stays shown.
+// - confirmsDelete, stopConfirmingDelete: "Don't ask me again" lives in this browser's localStorage on the chat
+//   origin, under the account's own `unset-chat:` key, never on the server; Log out removes it (forgetLocalChoices,
+//   matrix/client.ts), as Element's clearStorage clears localStorage at log out (Lifecycle.ts:1208-1222).
 // - older: client.scrollback (src/client.ts:4574-4650); no older messages once oldState.paginationToken is null.
 // - send: sendTextMessage (client.ts:3272-3294), or for a reply sendMessage with replyContent (matrix/conversations.ts;
 //   Element's makeReplyMixIn), only while the composer sends, checked again just before sending:
@@ -105,7 +113,23 @@ const CHANGES = [
   CryptoEvent.UserTrustStatusChanged,
 ] as const;
 
-export function createConversations(client: MatrixClient, crypto: CryptoApi, me: string): Conversations {
+/** The Storage calls the service makes; the page passes window.localStorage. */
+export type LocalChoices = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+/** This account's "Don't ask me again" for Delete, in this browser only. */
+const skipDeleteConfirmKey = (me: string) => `unset-chat:${me}:skip-delete-confirm`;
+
+/** Log out's part for this browser's own choices: every one this account made here goes. */
+export function forgetLocalChoices(storage: LocalChoices, me: string): void {
+  storage.removeItem(skipDeleteConfirmKey(me));
+}
+
+export function createConversations(
+  client: MatrixClient,
+  crypto: CryptoApi,
+  me: string,
+  storage: LocalChoices = globalThis.localStorage,
+): Conversations {
   const direct = () => directRooms(client.getAccountData(EventType.Direct)?.getContent());
   const changes = changeFeed(client);
   const readSent = new Map<string, string>();
@@ -297,11 +321,16 @@ export function createConversations(client: MatrixClient, crypto: CryptoApi, me:
       const other = room === null ? undefined : otherPerson(room, direct());
       return room !== null && other !== undefined && (await sendIn(room, other, text, replyTo));
     },
-    async remove(id, messageId) {
+    async remove(id, messageIds) {
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());
-      return room !== null && other !== undefined && (await deleteOwn(room, other, messageId));
+      const failed: string[] = [];
+      for (const messageId of messageIds)
+        if (room === null || other === undefined || !(await deleteOwn(room, other, messageId))) failed.push(messageId);
+      return failed;
     },
+    confirmsDelete: () => storage.getItem(skipDeleteConfirmKey(me)) !== "true",
+    stopConfirmingDelete: () => storage.setItem(skipDeleteConfirmKey(me), "true"),
     async react(id, messageId, key) {
       const room = client.getRoom(id);
       const other = room === null ? undefined : otherPerson(room, direct());

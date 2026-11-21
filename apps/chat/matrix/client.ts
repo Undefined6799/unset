@@ -14,7 +14,7 @@ import { ClientEvent, createClient, HttpApiEvent, type MatrixClient, SyncState }
 import type { ChatSession, ChatState, UnlockOutcome } from "../core/chat.ts";
 import type { PushTarget } from "../core/push.ts";
 import type { ClaimOutcome } from "../core/setup-claim.ts";
-import { createConversations } from "./conversation-service.ts";
+import { createConversations, forgetLocalChoices } from "./conversation-service.ts";
 import { BACKUP_WAIT_MS, backupSettled } from "./log-out.ts";
 import { registerPusher } from "./pusher.ts";
 import {
@@ -148,6 +148,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     chat.stop();
     if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
     await client.clearStores({ cryptoDatabasePrefix });
+    forgetLocalChoices(globalThis.localStorage, session.userId);
     options.onState({ kind: "logged_out" });
   };
   const leave = () => void logOut();

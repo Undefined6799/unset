@@ -12,6 +12,7 @@ import {
   nameOf,
   parseChatId,
   QUICK_REACTIONS,
+  selectable,
   startTarget,
 } from "./conversations.ts";
 
@@ -157,5 +158,17 @@ describe("actionsOf", () => {
     for (const composer of ["request", "gone", "not_encrypted"] as const)
       expect(actionsOf(text(true), composer), composer).not.toContain("delete");
     expect(actionsOf({ ...base, mine: true, kind: "deleted" }, "on")).toEqual([]);
+  });
+
+  test("chat.select_own_only: selection takes the messages Delete is offered on, and nothing once one has left", () => {
+    const shown: Message[] = [
+      { ...text(true), id: "$mine" },
+      { ...text(false), id: "$theirs" },
+      { ...base, id: "$gone", mine: true, kind: "deleted" },
+      { ...base, id: "$unreadable", mine: true, kind: "unreadable" },
+    ];
+    expect(selectable(shown, "on")).toEqual(["$mine", "$unreadable"]);
+    expect(selectable(shown, "they_left")).toEqual(["$mine", "$unreadable"]);
+    expect(selectable(shown, "gone")).toEqual([]);
   });
 });

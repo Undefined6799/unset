@@ -146,6 +146,9 @@ async function talking(browser: Browser) {
     message(page, "oops from alice").getByRole("button", { name: "Delete", exact: true, includeHidden: true });
   await expect(deleteOn(a.page)).toHaveCount(1);
   await expect(deleteOn(b.page)).toHaveCount(0);
+  const order = (page: Page) => page.locator("li[data-message]").evaluateAll((li) => li.map((e) => e.dataset.message));
+  const sentAt = await oops.locator("time").getAttribute("datetime");
+  const ordersBefore = [await order(a.page), await order(b.page)];
   await oops.hover();
   await oops.getByRole("button", { name: "Delete", exact: true }).click();
   await oops.locator("[data-confirm-delete]").getByRole("button", { name: "Delete", exact: true }).click();
@@ -154,6 +157,10 @@ async function talking(browser: Browser) {
       timeout: 60_000,
     });
   await expect(messages(b.page)).not.toContainText("oops from alice");
+  // In its place, with the time it was sent (ADR 0092 decision 2).
+  expect([await order(a.page), await order(b.page)]).toEqual(ordersBefore);
+  for (const p of [a, b])
+    await expect(p.page.locator(`[data-message="${oopsId}"] time`)).toHaveAttribute("datetime", sentAt ?? "");
   for (const p of [a, b]) await expect(unconfirmed(p.page)).toHaveCount(0, { timeout: 30_000 });
   return { alice, bob, a, b, aliceKey };
 }
@@ -205,6 +212,14 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   // Log out on the first browser: its device ends at the homeserver, nothing of the account is left in that browser,
   // and the other browser is untouched.
   const device = a.redeems[0]?.deviceId ?? "";
+  // "Don't ask me again" lives only in this browser's localStorage, under the account's key (conversation-service.ts).
+  const choices = () =>
+    a.page.evaluate(() => Object.keys(globalThis.localStorage).filter((key) => key.startsWith("unset-chat:")));
+  await a.page.evaluate(
+    (key) => globalThis.localStorage.setItem(key, "true"),
+    `unset-chat:${alice.userId}:skip-delete-confirm`,
+  );
+  expect(await choices()).toHaveLength(1);
   await a.page.getByRole("button", { name: "Log out" }).click();
   await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("logged_out");
   const names = await a.page.evaluate(async () => {
@@ -212,6 +227,7 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
     return (await indexedDB.databases()).map((d) => d.name ?? "");
   });
   expect(names.filter((n) => n.startsWith("unset-chat:"))).toEqual([]);
+  expect(await choices()).toEqual([]);
   const devices = (await admin(`/_synapse/admin/v2/users/${encodeURIComponent(alice.userId)}/devices`)).devices as {
     device_id: string;
   }[];

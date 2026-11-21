@@ -204,4 +204,23 @@ describe("deleted messages", () => {
     expect(shown[0]).not.toHaveProperty("text");
     expect(shown[1]?.replyTo).toMatchObject({ kind: "deleted" });
   });
+
+  test("chat.deleted_keeps_place: a deleted message keeps its place in the timeline and the time it was sent", () => {
+    const r = room("!p:unset.cc", [member(ME, "join"), member(THEM, "join")]);
+    const say = (body: string, at: number) =>
+      event({
+        type: "m.room.message",
+        room_id: "!p:unset.cc",
+        origin_server_ts: at,
+        content: { msgtype: "m.text", body },
+      });
+    const [before, gone, after] = [say("one", 1000), say("two", 2000), say("three", 3000)];
+    const redaction = event({ type: "m.room.redaction", room_id: "!p:unset.cc", redacts: gone.getId(), content: {} });
+    gone.makeRedacted(redaction, r);
+    expect(toMessages([before, gone, after], ME).map((m) => [m.kind, m.at])).toEqual([
+      ["text", 1000],
+      ["deleted", 2000],
+      ["text", 3000],
+    ]);
+  });
 });
