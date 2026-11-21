@@ -20,7 +20,11 @@
   "dependencies": {
     "@internationalized/date": "3.12.4",
     "@milkdown/core": "7.23.0",
+    "@milkdown/plugin-block": "7.23.0",
+    "@milkdown/plugin-clipboard": "7.23.0",
     "@milkdown/plugin-history": "7.23.0",
+    "@milkdown/plugin-slash": "7.23.0",
+    "@milkdown/plugin-tooltip": "7.23.0",
     "@milkdown/preset-commonmark": "7.23.0",
     "@milkdown/prose": "7.23.0",
     "@milkdown/utils": "7.23.0",

@@ -18,6 +18,25 @@
 <script module lang="ts">
 /** The card a move button was pressed on, and which, until the new order arrives. */
 let pendingMove: { key: string; to: "up" | "down" } | null = null;
+/** How long a moving card stays dimmed when no new order comes (a refused or lost move). */
+const MOVE_SHOWN_MS = 10_000;
+
+/**
+ * While a move is on its way the card is dimmed and busy, so a press is seen at once (staging test 2026-11-21: a move
+ * took about 2 s with no sign). The new order, or MOVE_SHOWN_MS, ends it.
+ */
+function markMoving(group: HTMLElement | undefined, on: boolean) {
+  const shown = group?.closest<HTMLElement>("[data-surface]");
+  if (shown == null) return;
+  if (on) {
+    shown.dataset.moving = "";
+    shown.setAttribute("aria-busy", "true");
+    setTimeout(() => markMoving(group, false), MOVE_SHOWN_MS);
+  } else {
+    delete shown.dataset.moving;
+    shown.removeAttribute("aria-busy");
+  }
+}
 
 /** After a delete: the first control of the card now at `at`, or of the last card, or Add card when none is left. */
 function focusAfterRemove(at: number) {
@@ -187,10 +206,14 @@ $effect(() => {
 // does (Codex review of f14b5ab); the page's own alert would sit behind the modal. The message is the action's
 // catalog text (`fail(status, { code, message })`), or ours when the answer carried none or never came.
 let removeRefused: string | undefined = $state();
+/** The delete is on its way: its button says so and waits (staging test 2026-11-21: no sign for about 2 s). */
+let removingNow = $state(false);
 const removeCard: SubmitHandler = () => {
   const at = index;
   removeRefused = undefined;
+  removingNow = true;
   return async ({ result, update }) => {
+    removingNow = false;
     if (result.type === "failure") {
       const message = result.data?.message;
       removeRefused = typeof message === "string" ? message : CARD_EDIT.removeRefused;
@@ -211,6 +234,7 @@ $effect(() => {
   const pending = pendingMove;
   if (pending === null || moved?.key !== pending.key || group === undefined) return;
   pendingMove = null;
+  markMoving(group, false);
   const target =
     group.querySelector<HTMLElement>("[data-card-menu]") ??
     group.querySelector<HTMLElement>(`[data-move="${pending.to}"]`) ??
@@ -227,7 +251,10 @@ $effect(() => {
     action="?/reorder"
     hidden={hydrated}
     use:enhance
-    onsubmit={() => (pendingMove = { key: card?.key ?? "", to: direction })}
+    onsubmit={() => {
+      pendingMove = { key: card?.key ?? "", to: direction };
+      markMoving(group, true);
+    }}
   >
     {#each swapped(index, to) as key (key)}<input type="hidden" name="order" value={key} />{/each}
     {#if !hydrated}
@@ -342,7 +369,9 @@ $effect(() => {
           <Dialog.Close class={buttonVariants({ variant: "outline" })}>{CARD_EDIT.cancel}</Dialog.Close>
           <form method="POST" action="?/remove" use:enhance={removeCard}>
             <input type="hidden" name="key" value={card.key} />
-            <Button type="submit" variant="destructive">{CARD_EDIT.remove}</Button>
+            <Button type="submit" variant="destructive" disabled={removingNow} aria-busy={removingNow}
+              >{removingNow ? CARD_EDIT.removing : CARD_EDIT.remove}</Button
+            >
           </form>
         </Dialog.Footer>
       </Dialog.Content>

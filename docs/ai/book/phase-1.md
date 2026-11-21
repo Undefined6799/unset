@@ -4917,7 +4917,56 @@ Ownership: interfaces/web (action) → domains/profile → infrastructure/pds; a
 Follow-up booked (review of #1857, 2026-11-21): after a Save, the page settles unsaved edits and offered drafts on the
 version the refresh reads, not the one applyWrites answered. If the member's other device writes the card in that gap,
 a later Save from this page could overwrite those words without a conflict. Return each written card's new CID in the
-`?/saveAll` answer and settle on it.
+`?/saveAll` answer and settle on it. Done in the P1.21v follow-up PR: the answer names each written card's CID
+(`versions`), and unsaved edits and offered drafts settle on that CID only.
+
+Slice 3 (2026-11-21; Alex: "Ok you do your 400 lines of code", "But it better work the same"): on Milkdown 7.23.0's
+own @milkdown/plugin-block, plugin-slash and plugin-tooltip, with Crepe 7.23.0's behaviour as the model and our own
+markup (editor/menus.ts, text-menus.svelte): "/" opens the block menu (a listbox the editor names by
+aria-activedescendant, arrows, Enter, Escape, a press), selected words show a floating bar (bold, italic, inline
+code), and a pointer that can hover shows the side handle, whose "+" adds a line with the menu open and whose grip
+drags the block. Differences from the playground are listed in the PR.
+
+Slice 4 (2026-11-21, the two gaps of slice 3 a member notices first): the floating bar's Link opens a link editor
+over the selected words (Enter sets it, Escape or a press elsewhere closes it; on linked words Link takes it off),
+and a pointer resting on a link shows its address with Copy, Edit and Remove, as Crepe 7.23.0's link-tooltip does
+(its code is Vue, in @milkdown/components, so ours is drawn in text-menus.svelte and placed by plugin-tooltip). Only
+an address safeHref takes as http or https is set, since the page shows no other link. An empty line with the caret
+says "Type / to choose a block", Crepe's placeholder feature (Milkdown ships no placeholder plugin). Mod+Shift+Up
+and Down move the block with the caret (its list item, or the top-level block) past its neighbour: the grip's move
+by keys, which neither plugin-block nor Crepe has.
+
+Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
+raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
+the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a
+click before the editor mounts on idle is lost; both are fixed in slice 3.
+
+### P1.21r — Fix the in-place editor's first press and the way back (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21v · **Plan:** staging test of #1857, 2026-11-21
+
+Found on staging in Brave and WebKit after #1857 deployed. The owner's public page (/@handle) now shows the owner a
+plain link back to the page they edit (/did); it runs no script, and the owner's copy is private and never stored, so
+no visitor's copy carries the link. The editor's script loads as soon as the page is up, and a press on a Text card
+before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
+before the page's own script runs stays the browser's. Only the card pressed last keeps those keys, a press or focus
+anywhere else lets go of them, and the first key it cannot replay (Backspace, Enter, an arrow) ends them (Codex on
+#1909). A press on the card around the words puts the caret at the
+nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
+member was typing. Tabbing into the words shows the same focus ring as every other field.
+
+### P1.21s — Make Markdown in a Text card behave as typed (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** P1.21r · **Plan:** staging test of #1857, 2026-11-21 (Alex: "its the markdown")
+
+Pasted Markdown becomes formatting, as on the Milkdown playground, through the official @milkdown/plugin-clipboard
+7.23.0. An empty line no longer saves as a visible "<br />": the editor drops Milkdown's empty-line placeholder from
+what it stores, and the page's parser drops one it still finds. Enter in a quote starts the quote's next paragraph and
+Shift+Enter breaks the line; the page draws both. After a Save from the Show Markdown field, typing goes on there
+(Codex on #1902). No editor machinery of our own is added while Crepe (Milkdown's ready-made editor) is weighed
+against ADR 0073 (Alex, 2026-11-21: "do not reinvent the wheel"). Pasted HTML is read by prosemirror-view in a
+detached document, so nothing in it loads; a pasted style is refused by the CSP and reported (known noise, left until Crepe is decided). A pasted image
+shows as its alt text, as the page shows it, until the media proxy. Headings keep their level through a paste.
 
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
@@ -5225,6 +5274,21 @@ fallbacks the font swap shifts layout, which the CLS budget would catch late.
   blocks fetching the font. On Android the mono face therefore has no metric-matched fallback until the webfont loads,
   so mono text alone may shift slightly on the swap. `tokens_android_fallback_faces` checks the faces that exist.
 - **P1.26 adds the missing metrics** (below). The build never invents metrics for a face.
+
+---
+
+### P1.22c — Say "Privacy saved" once the public page follows
+Tags: —            Depends on: P1.22a
+`interfaces/web/src/lib/server/index-catch-up.ts`, `routes/settings/search-and-ai`, `routes/settings/privacy`;
+staging break test 2026-11-21, second pass.
+
+**What:** a visitor could still load a page for about 2 s after "Privacy saved" (Only me), and un-hiding took about 3 s:
+the save writes the choice to the member's PDS, but the public page reads the index, which the indexer updates from
+the PDS stream a moment later (ADR 0052). The save now reads the index every 250 ms, for at most 5 s and inside the
+request's deadline, until it has the new choice; then it says "Privacy saved." If the wait runs out it still answers,
+and says the public page is catching up. Reads only, outside any transaction. A visitor's own cached copy may still
+live up to the page's max-age of 60 s (book P3.12, unchanged). Closing the gap fully would need the choice in an
+app-owned table that the public page also reads (rule DA-1), a data-model change left for Alex.
 
 ---
 
@@ -16784,6 +16848,21 @@ tolerance for CSAM and the vault note `research/atproto-blob-serving-security` f
 property-test red (TE-6) over case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of
 ADR 0030's probe groups. P1.33p's probe item 4 and V3 expect these denies from outside.
 
+### P1.38w — Fix three local test failures at their cause (added step, 2026-11-21)
+
+**Tags:** — · **Depends on:** — · **Plan:** §6
+
+Three failures earlier threads saw locally, each reproduced first and fixed at its cause, never re-run (Alex: flaky
+tests are fixed). `generate_builds_outside_the_repo` watched the shared system temp folder, so another build there
+at the same time failed it; the build now gets a temp folder of its own. `pds-key.test.ts` got a SeaweedFS 500, not
+from a cold bucket: the image sizes its volume count from the free space on /data and each bucket claims 7, so below
+about 21 GB free on Docker's disk the third bucket had none; the test store runs on a 40 GB tmpfs. Test containers
+outlived a run stopped by Ctrl-C or a kill, since vitest then runs no teardown; the helpers remove what they started
+when their process exits, and the integration setup removes containers whose owner has ended. Ownership: tests/support,
+tests/integration/setup, shared/lexicons/scripts.
+
+---
+
 ### P1.38x — Mark a multi-line ADR status superseded
 Tags: [SEC] trusted            Depends on: —
 Trusted base (`scripts/docs/docs.ts` and its test, a `# checks:` path, so the PR carries `security-review`). It adds
@@ -16798,6 +16877,17 @@ on the new line, an unrelabelled old paragraph and any body edit stay refused, e
 the reviewer found on main: a status starting "Superseded" counted as not accepted, so later PRs could edit a
 superseded ADR freely. A superseded ADR, in either form, now never changes again: no edit, no second mark, no
 deletion. Marking 0072 itself is a later docs PR.
+
+### P1.38y — Generate the ADR index from each ADR
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+Trusted base (`scripts/docs/`, a `# checks:` path, so the PR carries `security-review`). It carries ADR 0083 and the
+CLAUDE.md D8 sentence, so it needs Alex's typed line naming the reviewed head (ADR 0059).
+
+**What:** each ADR file becomes the only thing an ADR pull request edits (ADR 0083). New ADRs carry front matter in
+one checked format; the index is generated by `npm run adr:index` and by the docs site's Hugo build, and no
+longer committed; the older ADRs' rows are frozen in `decisions/legacy-index.yaml`; supersession is derived from the later ADR; the ADR 0001 log closes with
+one last entry, after which the check refuses any change to it. Tests show each refused key and value, the derived
+supersession, a fixed accepted ADR, the frozen rows and the closed log.
 
 ---
 

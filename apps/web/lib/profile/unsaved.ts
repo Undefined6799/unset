@@ -3,7 +3,7 @@
 // one Save writes them. A card put back to what is stored is no longer unsaved, so the bar counts only real changes.
 // Kept as plain values (a new map per change) so the page's state and its tests read alike.
 import type { Draft } from "./drafts.ts";
-import type { CardEdit } from "./save-all.ts";
+import type { CardEdit, WrittenVersions } from "./save-all.ts";
 import type { CardView } from "./types.ts";
 
 export type Unsaved = Omit<CardEdit, "key">;
@@ -83,34 +83,38 @@ const sameEdit = (a: Unsaved, b: Pick<Unsaved, "fields" | "width" | "surface">) 
   sameFields(a.fields, b.fields) && a.width === b.width && a.surface === b.surface;
 
 /**
- * What is left unsaved once a Save wrote the cards `written` (as they were sent), read against the cards as now
- * `stored` and as they were `before` it. The page stays editable while a Save is on its way:
+ * What is left unsaved once a Save wrote the cards `written` (as they were sent), with the `versions` its answer named,
+ * read against the cards as now `stored` and as they were `before` it. The page stays editable while a Save is on its
+ * way:
  * - a card that still holds what was sent is saved, even where the server tidied the words (trimmed, CRLF to LF);
- * - one that holds newer words stays unsaved, on the version just written so the next Save sends it without a
- *   conflict, unless those words are what is now stored;
+ * - one that holds newer words stays unsaved, on the version this Save wrote (never one read later, which another tab
+ *   may have written: the next Save is then a conflict, not a write over its words), unless the refresh read that
+ *   same version and those words are what it holds;
  * - one put back to what was stored before has no edit left, yet differs from what was just written, so its earlier
  *   state comes back as an edit on the new version;
- * - one the refresh could not read (a failed or partial read) confirms nothing: newer words stay on their version;
+ * - one whose new version the answer did not name keeps its own, so the next Save cannot write over anything;
  * - an edit that began on another version than was sent (a draft brought back meanwhile) keeps its own.
  * A card the Save did not write keeps its edit as it was.
  */
 export function afterSave(
   edits: UnsavedCards,
   written: readonly CardEdit[],
+  versions: WrittenVersions,
   stored: readonly CardView[],
   before: readonly CardView[],
 ): UnsavedCards {
   const next = new Map(edits);
   for (const sent of written) {
-    const card = stored.find((c) => c.key === sent.key);
+    const version = versions.get(sent.key);
+    const card = stored.find((c) => c.key === sent.key && c.version === version);
     const fields = card === undefined ? null : storedFields(card);
     const unsaved = edits.get(sent.key) ?? putBack(before, sent);
     next.delete(sent.key);
     if (unsaved === undefined || sameEdit(unsaved, sent)) continue;
     // An edit that began on another version than was sent (a draft brought back meanwhile) keeps it.
-    if (card?.version === undefined || fields === null || unsaved.version !== sent.version) next.set(sent.key, unsaved);
-    else if (!sameEdit(unsaved, { fields, width: card.width, surface: card.surface }))
-      next.set(sent.key, { ...unsaved, version: card.version });
+    if (version === undefined || unsaved.version !== sent.version) next.set(sent.key, unsaved);
+    else if (card === undefined || fields === null || !sameEdit(unsaved, { ...card, fields }))
+      next.set(sent.key, { ...unsaved, version });
   }
   return next;
 }
@@ -125,19 +129,19 @@ function putBack(before: readonly CardView[], sent: CardEdit): Unsaved | undefin
 
 /**
  * The drafts offered from an earlier visit once a Save wrote `written`: a card written from the version its draft began
- * on (only its Width or Style changed, as typing retires the offer) moves the draft to the version now `stored`, so
+ * on (only its Width or Style changed, as typing retires the offer) moves the draft to the version that Save wrote, so
  * bringing it back and saving is no conflict. A draft that began on another version keeps it, so Save names the change
  * made elsewhere. The same map when none moved.
  */
 export function offeredAfterSave(
   offered: ReadonlyMap<string, Draft>,
   written: readonly CardEdit[],
-  stored: readonly CardView[],
+  versions: WrittenVersions,
 ): ReadonlyMap<string, Draft> {
   let next: Map<string, Draft> | undefined;
   for (const sent of written) {
     const draft = offered.get(sent.key);
-    const version = stored.find((c) => c.key === sent.key)?.version;
+    const version = versions.get(sent.key);
     if (draft === undefined || draft.version !== sent.version || version === undefined) continue;
     next ??= new Map(offered);
     next.set(sent.key, { ...draft, version });

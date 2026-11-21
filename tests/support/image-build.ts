@@ -6,13 +6,9 @@
 // only removes the tag"). Only image tests import this module (P1.28r).
 import { randomBytes } from "node:crypto";
 import { basename, join, relative } from "node:path";
-import { type Call, docker } from "./docker.ts";
+import { type Call, docker, OWNER_LABEL } from "./docker.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..");
-
-// The label the test containers carry (tests/support/postgres.ts, the edge helper), on every test image too, so a tag a
-// killed run leaked can be found with `docker images --filter label=sh.unset.test-owner` (P1.11i).
-const OWNER_LABEL = "sh.unset.test-owner";
 
 /** Builds `dockerfile` in `context` under a fresh `unset-test-<hex>` tag, labelled with this process; returns it. */
 export function buildTestImage(dockerfile: string, context: string, call: Call): string {

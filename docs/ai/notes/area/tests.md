@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]", "[[single-vs-split-bundle-at-the-edge]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-11-20
+checked: 2026-11-21
 ---
 # tests
 
@@ -76,6 +76,12 @@ Docker; nothing in CI runs it. Results: [[single-vs-split-bundle-at-the-edge]].
 answers `/_app/version.json` with another version and 404s every `/_app/immutable/` file until the next document
 load, then the real server serves the full load. Dispatching `focus` on the window makes kit check the version, as a
 member coming back to an old tab does.
+
+**Editor menus (P1.21v slices 3 and 4).** `tests/e2e/text-menus.spec.ts` drives the in-place editor's side
+handle, "/" menu, floating bar, link editor and empty-line hint. Playwright's WebKit fires no `dragstart` from a
+mouse press, so its `drag()` sends the browser's own drag events there. Select words with `selectText()`, not a
+double click at a paragraph's centre (it hits empty space, and Firefox selects differently). A card whose edits
+end where they began has no unsaved changes: delete it without Discard (`discardAndRemove(..., { changed: false })`).
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

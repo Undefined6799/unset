@@ -29,6 +29,9 @@ bearer-credential store. It moved here from the [[postgres]] package in P2.03c.
   has a stored OAuth token set (P2.04s).
 - `create`, `destroy`, `destroyAllForDid` and `setEmailConfirmed` run on the client the caller passes, inside its
   transaction; reads take their own connection through `withDb`, outside any transaction the handler holds.
+- The session read brings the bell with it: the newest entries through `app.inbox`, each with `seen`, whether this
+  browser's own mark (`notifications_seen_at`, migration 0039, ADR 0085) covers it. The mark is per session on
+  purpose: one browser never clears another's badge.
 - It never imports the driver or [[postgres]]: the composition root in [[web]] passes postgres's `withClient` over
   the web pool as `withDb`.
 

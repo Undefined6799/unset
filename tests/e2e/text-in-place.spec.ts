@@ -338,3 +338,247 @@ test("words_typed_in_the_frame_of_the_save_are_saved", async ({ page }) => {
   await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two three`);
   await removeCard(page, word);
 });
+
+/** Holds the editor's own script (the chunk that carries ProseMirror) for `ms`, or fails it, as a slow or broken load. */
+async function holdEditorScript(page: Page, how: { readonly ms: number } | "fail") {
+  await page.route("**/_app/immutable/**/*.js", async (route) => {
+    const answer = await route.fetch();
+    const body = await answer.text();
+    if (!body.includes("ProseMirror-")) return route.fulfill({ response: answer, body });
+    if (how === "fail") return route.abort();
+    await new Promise((done) => setTimeout(done, how.ms));
+    return route.fulfill({ response: answer, body });
+  });
+}
+
+test("a_click_and_words_typed_before_the_editor_opens_are_kept", async ({ page }) => {
+  const word = `early${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await holdEditorScript(page, { ms: 1500 });
+  // Not openOwnPage: its wait for a quiet network would wait out the held script.
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  // A press before the page's own script runs is the browser's alone; from the moment it runs, the card listens.
+  await expect(page.locator("[data-text-in-place][data-listening]")).not.toHaveCount(0);
+  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await card.getByText(`${word} start`).click();
+  await page.keyboard.type("Q");
+  const { editor } = await editorHolding(page, word);
+  await expect(editor).toBeFocused();
+  await expect(editor).toContainText("Q");
+  await page.keyboard.type("R");
+  await expect(editor).toContainText("QR");
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+/**
+ * The Text card specs share one member, whose profile bucket refills one write every two seconds (limits.ts `profile`,
+ * 30 a minute). As cards-stale.spec.ts does, a test that adds cards waits for its writes to come back, so the spec
+ * after this one (text-markdown.spec.ts) is not refused.
+ */
+async function giveBackWrites(page: Page, used: number) {
+  await page.waitForTimeout(used * 2_000 + 1_000);
+}
+
+/** The own page opened while the editor's script is held, with every Text card listening and none drawn yet. */
+async function openHeld(page: Page) {
+  await holdEditorScript(page, { ms: 1500 });
+  // Not openOwnPage: its wait for a quiet network would wait out the held script.
+  expect((await openPage(page, OWN_PAGE))?.status()).toBe(200);
+  await expect(page.locator("[data-text-in-place]:not([data-listening])")).toHaveCount(0);
+  await expect(page.locator("[data-text-in-place] [contenteditable]")).toHaveCount(0);
+}
+
+// Codex on 46550e5: only the card pressed last takes the keys typed before the editors open, and a card lets go of
+// them once the member presses anywhere else.
+test("keys_typed_before_the_editor_opens_go_only_to_the_card_pressed_last", async ({ page }) => {
+  const first = `firstcard${Date.now()}`;
+  const second = `secondcard${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${first} start` });
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${second} start` });
+  await openHeld(page);
+  await page.getByText(`${first} start`).click();
+  await page.getByText(`${second} start`).click();
+  await page.keyboard.type("XY");
+  const one = await editorHolding(page, first);
+  const two = await editorHolding(page, second);
+  await expect(two.editor).toContainText("XY");
+  await expect(one.editor).toHaveText(`${first} start`);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  // A press outside every card lets go too.
+  await openHeld(page);
+  await page.getByText(`${first} start`).click();
+  await page.locator("main").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.type("Z");
+  await expect((await editorHolding(page, first)).editor).toHaveText(`${first} start`);
+  await expect(page.getByText("unsaved changes")).toHaveCount(0);
+  await page.unroute("**/_app/immutable/**/*.js");
+  await removeCard(page, first);
+  await removeCard(page, second);
+  await giveBackWrites(page, 4);
+});
+
+// Codex on 46550e5: a key the card cannot replay (Backspace, Enter, an arrow) ends the keys it keeps, so the words
+// that reach the editor are only ever ones the member typed in that order: "ab", Backspace, "c" never becomes "abc".
+test("a_key_typed_before_the_editor_opens_that_cannot_be_replayed_ends_the_kept_keys", async ({ page }) => {
+  const word = `replay${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openHeld(page);
+  await page.getByText(`${word} start`).click();
+  await page.keyboard.type("ab");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("c");
+  const { editor } = await editorHolding(page, word);
+  await expect(editor).toContainText("ab");
+  await expect(editor).not.toContainText("c");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await page.unroute("**/_app/immutable/**/*.js");
+  await removeCard(page, word);
+  await giveBackWrites(page, 2);
+});
+
+test("a_click_on_the_card_around_the_words_puts_the_caret_in_them", async ({ page }) => {
+  const word = `around${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { card, editor } = await editorHolding(page, word);
+  const box = await card.boundingBox();
+  if (box === null) throw new Error("the card has no box");
+  await page.mouse.click(box.x + 6, box.y + box.height - 6);
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("Z");
+  await expect(editor).toHaveText(`${word} startZ`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+test("an_editor_that_cannot_load_says_so", async ({ page }) => {
+  const word = `broken${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await holdEditorScript(page, "fail");
+  await openOwnPage(page);
+  const card = page.locator('[data-slot="card"]', { hasText: word });
+  await expect(card.getByRole("alert")).toHaveText("The editor could not load. Reload the page to edit here.");
+  await expect(card).toContainText(`${word} start`);
+  await page.unroute("**/_app/immutable/**/*.js");
+  await openOwnPage(page);
+  await removeCard(page, word);
+});
+
+test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
+  const word = `onward${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await expect(editor).toBeFocused();
+  await page.keyboard.type(" two");
+  await expect(editor).toHaveText(`${word} start one two`);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  await removeCard(page, word);
+});
+
+// Codex on b9d96b6: the Markdown field (Show Markdown) is a way back too, so a Save from it returns there and not to
+// the editor the member typed in before.
+test("after_a_save_from_the_markdown_field_typing_goes_on_there", async ({ page }) => {
+  const word = `plainback${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { card, editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await page.keyboard.type(" one");
+  await card.getByRole("button", { name: /^More for / }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  const field = page.locator('textarea[aria-label^="Text of the"]');
+  await field.click();
+  await field.press("End");
+  await page.keyboard.type(" two");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page)).not.toContainText("unsaved changes");
+  await expect(field).toBeFocused();
+  await page.keyboard.type(" three");
+  await expect(field).toHaveValue(`${word} start one two three`);
+  await bar(page).getByRole("button", { name: "Discard" }).click();
+  // A field's value is no text the card's filter finds, so the card is found by its field to show its words again.
+  await page
+    .locator('[data-slot="card"]', { has: field })
+    .getByRole("button", { name: /^More for / })
+    .click();
+  await page.getByRole("menuitemcheckbox", { name: "Show Markdown" }).click();
+  await page.keyboard.press("Escape");
+  await removeCard(page, word);
+  await giveBackWrites(page, 3);
+});
+
+test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) => {
+  const word = `ring${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.focus();
+  // The spec's types have no DOM, so the browser's own function is named by its shape.
+  type Styles = { getComputedStyle: (element: unknown) => { boxShadow: string } };
+  const ring = await editor.evaluate((el) => (globalThis as unknown as Styles).getComputedStyle(el).boxShadow);
+  expect(ring).not.toBe("none");
+  await removeCard(page, word);
+});
+
+// Codex on c6cddd7: words typed during a Save stay unsaved on the version that Save wrote, never on one another tab
+// wrote after it. So when the other tab saves the card while this Save's answer is on its way, this tab's next Save
+// is refused as a conflict instead of writing over the other tab's words.
+test("a_save_after_another_tab_wrote_the_card_meanwhile_is_a_conflict", async ({ page, context }) => {
+  const word = `tabs${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} one` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.click();
+  await editor.press("End");
+  await editor.pressSequentially(" two");
+  const other = await context.newPage();
+  await page.route(/\?\/saveAll$/, async (route) => {
+    const answer = await route.fetch();
+    // The other tab writes the card after this Save landed and before this tab reads the cards again.
+    await openOwnPage(other);
+    const there = await editorHolding(other, word);
+    await there.editor.click();
+    await there.editor.press("End");
+    await there.editor.pressSequentially(" elsewhere");
+    await bar(other).getByRole("button", { name: "Save" }).click();
+    await expect(bar(other)).not.toContainText("unsaved changes");
+    await route.fulfill({ response: answer });
+  });
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("button", { name: "Saving…" })).toBeDisabled();
+  await editor.pressSequentially(" three");
+  await expect(bar(page).getByRole("status")).toHaveText("Saved.");
+  await page.unroute(/\?\/saveAll$/);
+  await expect(bar(page)).toContainText("1 card has unsaved changes.");
+  await bar(page).getByRole("button", { name: "Save" }).click();
+  await expect(bar(page).getByRole("alert")).toHaveText(
+    "This card changed somewhere else since you opened it. Reload to see it, then save again.",
+  );
+  await openOwnPage(page);
+  await expect(page.locator('[data-slot="card"]', { hasText: word })).toContainText(`${word} one two elsewhere`);
+  await page.getByRole("button", { name: "Throw them away" }).click();
+  await other.close();
+  await removeCard(page, word);
+});

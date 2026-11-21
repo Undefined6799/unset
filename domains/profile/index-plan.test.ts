@@ -1,6 +1,8 @@
 // The index's rules for one commit (index-plan.ts, book P3.05s). Pure: the store's tests cover the transaction.
+
+import { LIMITS } from "@unset/shared-lexicons";
 import { describe, expect, test } from "vitest";
-import { type IndexChange, MAX_RECORD_BYTES, planCommit } from "./index-plan.ts";
+import { fitsPage, type IndexChange, MAX_PAGE_BYTES, MAX_RECORD_BYTES, planCommit, recordBytes } from "./index-plan.ts";
 
 const T = "2026-11-18T00:00:00.000Z";
 const TID = "3jzfcijpj2z2a";
@@ -24,6 +26,79 @@ const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.uns
     record: { $type: "sh.unset.section", content, createdAt: T },
   }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
+
+// Staging break test 2026-11-21: a 95 KB Text card saved but never showed publicly, as the index then kept records of
+// at most 64 KiB. The index now keeps every record Alex's limits let a member save (book P3.12v).
+describe("the largest cards a member may save are indexed", () => {
+  // As tests/integration/web/app/member-page.test.ts builds the largest collection: one grapheme of nine bytes.
+  const heavy = (graphemes: number) => "a\u0301\u0301\u0301\u0301".repeat(graphemes);
+  const entry = {
+    title: heavy(120),
+    tag: heavy(40),
+    description: heavy(300),
+    uri: `https://a.example/${"x".repeat(1982)}`,
+  };
+  const largest = {
+    "a Text card of 100,000 bytes, each one a character JSON escapes": {
+      $type: "sh.unset.section#readme",
+      text: '"'.repeat(100_000),
+    },
+    "a collection of 100 entries at every field's limit": {
+      $type: "sh.unset.section#collection",
+      title: heavy(100),
+      items: Array.from({ length: 100 }, () => ({ $type: "sh.unset.section#entry", ...entry })),
+    },
+  };
+  test.each(Object.entries(largest))("index.keeps_%s", (_name, content) => {
+    expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+});
+
+// Review of #1911: all of a member's cards together are held to MAX_PAGE_BYTES (4 MiB, Alex's number to set), by the
+// save and the index alike. At the editor's per-field limits that is about 41 Text cards of 100,000 characters, or
+// about 54 collections of 30 full entries; a hundred cards fit while they average under about 41 KB. A hundred full
+// cards never fit: the page budget gives before the per-card limits do.
+describe("a member's cards together fit one page", () => {
+  const card = (text: string) => ({
+    $type: "sh.unset.section",
+    content: { $type: "sh.unset.section#readme", text },
+    width: "full",
+    surface: "filled",
+    createdAt: "2026-11-21T05:00:00.000Z",
+  });
+  const full = card("a".repeat(LIMITS.section.textBytes));
+  const many = (n: number, record: unknown) => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, value: record }));
+
+  test("page.a_hundred_everyday_cards_fit", () => {
+    // A long paragraph each: 2,000 characters.
+    expect(fitsPage(many(LIMITS.profile.cardsMax - 1, card("a".repeat(2_000))), [{ key: null, record: full }])).toBe(
+      true,
+    );
+  });
+
+  test("page.forty_one_full_text_cards_fit_and_a_forty_second_does_not", () => {
+    expect(fitsPage(many(40, full), [{ key: null, record: full }])).toBe(true);
+    expect(fitsPage(many(41, full), [{ key: null, record: full }])).toBe(false);
+  });
+
+  test("page.a_card_being_replaced_counts_once", () => {
+    const stored = many(41, full);
+    expect(fitsPage(stored, [{ key: "k0", record: full }])).toBe(true);
+    expect(fitsPage(stored, [{ key: "k0", record: card("a".repeat(MAX_PAGE_BYTES)) }])).toBe(false);
+  });
+
+  test("page.a_value_json_cannot_encode_never_fits", () => {
+    expect(recordBytes(10n)).toBe(Number.POSITIVE_INFINITY);
+    expect(fitsPage([], [{ key: null, record: { n: 10n } }])).toBe(false);
+  });
+
+  test("index.a_section_write_carries_its_size", () => {
+    const plan = planCommit(active, "3jzfcijpj2z2c", [section()]);
+    const write = plan.kind === "apply" ? plan.writes[0] : undefined;
+    expect(write?.kind === "section" ? write.bytes : 0).toBe(recordBytes(write?.kind === "section" ? write.record : 0));
+    expect(write?.kind === "section" && write.bytes > 0).toBe(true);
+  });
+});
 
 describe("planCommit", () => {
   test("index.null_watermark_first_commit_applies", () => {

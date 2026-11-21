@@ -23,7 +23,12 @@ import * as Card from "@unset/apps-web/lib/components/ui/card";
 import { Textarea } from "@unset/apps-web/lib/components/ui/textarea";
 import { clearDraft, type Draft, readDraft, writeDraft } from "@unset/apps-web/lib/profile/drafts.ts";
 import { cardName, OWN_PAGE, TEXT_IN_PLACE, UNSAVED_BAR } from "@unset/apps-web/lib/profile/messages.ts";
-import { type CardEdit, cardSaveForm, readSaveAnswer } from "@unset/apps-web/lib/profile/save-all.ts";
+import {
+  type CardEdit,
+  cardSaveForm,
+  readSaveAnswer,
+  type WrittenVersions,
+} from "@unset/apps-web/lib/profile/save-all.ts";
 import type { CardView } from "@unset/apps-web/lib/profile/types.ts";
 import {
   afterSave,
@@ -35,7 +40,7 @@ import {
   onPage,
   type UnsavedCards,
 } from "@unset/apps-web/lib/profile/unsaved.ts";
-import { onMount, untrack } from "svelte";
+import { onMount, tick, untrack } from "svelte";
 import { deserialize } from "$app/forms";
 import { goto, refreshAll } from "$app/navigation";
 import { enhanceInPlace as enhance } from "../../lib/enhance-in-place.ts";
@@ -138,6 +143,8 @@ function discard() {
 // Each mounted Text editor's way to hand over words still waiting for their frame (card-text.svelte).
 const flushes = new Set<() => void>();
 
+const NO_VERSIONS: WrittenVersions = new Map();
+
 async function save() {
   // A press in the same frame as the last keystroke: those words reach `edits` first.
   for (const flush of flushes) flush();
@@ -175,13 +182,35 @@ async function save() {
   const keys = answer.kind === "saved" ? sent : answer.kind === "refused" ? (answer.saved ?? []) : [];
   const written = toSend.filter((card) => keys.includes(card.key));
   const before = edits;
-  edits = afterSave(edits, written, data.cards, previous);
+  // Settled on the versions this Save wrote, as its answer names them: never on ones the refresh read, which another
+  // tab may have written since, so a later Save is a conflict rather than a write over its words.
+  const versions =
+    answer.kind === "saved" || answer.kind === "refused" ? (answer.versions ?? NO_VERSIONS) : NO_VERSIONS;
+  edits = afterSave(edits, written, versions, data.cards, previous);
   keepDrafts(keys, before);
-  moveOffered(written);
+  moveOffered(written, versions);
   if (answer.kind === "saved") said = { text: UNSAVED_BAR.saved, refused: false };
   else if (answer.kind === "refused") said = { text: answer.message, refused: true };
   else said = { text: UNSAVED_BAR.failed, refused: true };
   saving = false;
+  await returnToWords();
+}
+
+/** The way back into the Text card the member last typed in: its editor (card-text.svelte `onfocus`) or its Markdown field. */
+let lastWords: (() => void) | undefined;
+/**
+ * After a Save the caret goes back where the member was typing, unless they have moved on: a press on Save leaves
+ * focus on the bar, or on nothing once the bar goes, and the next keys would otherwise go nowhere.
+ */
+/** A card's Markdown field as the page draws it now: a Save redraws the cards, so a field found before may be gone. */
+const markdownField = (key: string) =>
+  document.querySelector<HTMLTextAreaElement>(`textarea[data-card-markdown="${CSS.escape(key)}"]`);
+
+async function returnToWords() {
+  await tick();
+  const active = document.activeElement;
+  const onBar = active === null || active === document.body || active.closest("[data-unsaved-bar]") !== null;
+  if (onBar) lastWords?.();
 }
 
 /** Each written card's draft goes, or moves to the new version when the card holds newer words. */
@@ -201,8 +230,8 @@ function keepDrafts(written: readonly string[], before: UnsavedCards) {
 }
 
 /** An offered draft whose card's Width or Style was just written moves to the new version, here and on the device. */
-function moveOffered(written: readonly CardEdit[]) {
-  const moved = offeredAfterSave(offered, written, data.cards);
+function moveOffered(written: readonly CardEdit[], versions: WrittenVersions) {
+  const moved = offeredAfterSave(offered, written, versions);
   if (moved === offered) return;
   const store = storage();
   for (const [key, draft] of moved)
@@ -306,7 +335,7 @@ function dropDrafts() {
       limits={data.cardEditLimits}
       shape={data.avatarShape}
       here={`/${data.account.did}`}
-      refusal={form}
+      refusal={form?.code === undefined ? null : form}
       {enhance}
     />
   {/if}
@@ -338,6 +367,8 @@ function dropDrafts() {
               rows={12}
               maxlength={data.cardEditLimits.text}
               oninput={(event) => change(card.key, { fields: { text: event.currentTarget.value } })}
+              data-card-markdown={card.key}
+              onfocus={() => (lastWords = () => markdownField(card.key)?.focus())}
             />
           {:else}
             <!-- Remounted on Discard, drafts brought back, or new stored words under it (remounts). -->
@@ -348,6 +379,7 @@ function dropDrafts() {
                 value={textOf(card)}
                 onedit={(markdown) => change(card.key, { fields: { text: markdown } })}
                 {flushes}
+                onfocus={(focus) => (lastWords = focus)}
               />
             {/key}
           {/if}
