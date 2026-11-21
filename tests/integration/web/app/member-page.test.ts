@@ -433,7 +433,7 @@ describe("card writes", () => {
   });
 
   test("the_largest_readme_fits", async () => {
-    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(10_000) }).toString();
+    const largest = new URLSearchParams({ kind: "readme", width: "full", text: "é".repeat(5_000) }).toString();
     const fits = await writesOf(async () => expect((await action("create", largest)).status).toBe(303));
     expect(fits.filter((write) => write.method === "createRecord")).toHaveLength(1);
   });

@@ -16,6 +16,7 @@ import {
   parseCardKey,
   parseCardVersion,
   parseRepoDid,
+  TEXT_EDIT_BYTES,
 } from "@unset/domains-profile";
 import {
   latestCommit,
@@ -29,7 +30,6 @@ import {
   writeCardAndList,
 } from "@unset/infrastructure-pds";
 import { AppError, ERROR_MESSAGES } from "@unset/shared-errors";
-import { LIMITS } from "@unset/shared-lexicons";
 import { accountView } from "../../lib/server/account.ts";
 import { services } from "../../lib/server/compose.ts";
 import { themeFromCookies, themeReturnTo } from "../../lib/server/theme.ts";
@@ -126,7 +126,7 @@ export const load: ServerLoad = async ({ params, locals, request, url }) => {
     cards,
     contact: contactAction(cards),
     cardPanel: cardPanel(url.searchParams, cards, profile !== null),
-    cardEditLimits: { ...CARD_EDIT_LIMITS, text: LIMITS.card.textBytes, formBytes: CARD_FORM_LIMIT_BYTES },
+    cardEditLimits: { ...CARD_EDIT_LIMITS, text: TEXT_EDIT_BYTES, formBytes: CARD_FORM_LIMIT_BYTES },
     cardsIncomplete: own.kind === "ok" && !own.cardsComplete && !own.cardsOverflow,
     cardsOverflow: own.kind === "ok" && own.cardsOverflow,
     profileUnavailable: own.kind !== "ok",

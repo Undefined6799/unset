@@ -29,6 +29,7 @@ const CONSTANTS = [
   },
   { file: "domains/profile/profile.ts", names: ["APP_LIMITS"], note: "profile editor" },
   { file: "domains/profile/card-edit.ts", names: ["CARD_EDIT_LIMITS"], note: "card editor rows per list" },
+  { file: "domains/profile/card-edit.ts", names: ["TEXT_EDIT_BYTES"], note: "card editor Markdown bytes" },
   { file: "domains/profile/discoverability.ts", names: ["DISCOVERABILITY_LIMITS"], note: "Search and AI text" },
   {
     file: "domains/profile/crawlers.ts",

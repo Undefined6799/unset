@@ -7,6 +7,7 @@ export {
   parseCardInput,
   pictureLink,
   reorderCards,
+  TEXT_EDIT_BYTES,
   toCardRecord,
 } from "./card-edit.ts";
 export {
