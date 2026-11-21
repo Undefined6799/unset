@@ -422,3 +422,17 @@ test("after_a_save_typing_goes_on_where_it_was", async ({ page }) => {
   await bar(page).getByRole("button", { name: "Discard" }).click();
   await removeCard(page, word);
 });
+
+test("the_words_show_a_focus_ring_as_every_other_field_does", async ({ page }) => {
+  const word = `ring${Date.now()}`;
+  await openOwnPage(page);
+  await addCard(page, { kind: "readme", width: "full", surface: "filled", text: `${word} start` });
+  await openOwnPage(page);
+  const { editor } = await editorHolding(page, word);
+  await editor.focus();
+  // The spec's types have no DOM, so the browser's own function is named by its shape.
+  type Styles = { getComputedStyle: (element: unknown) => { boxShadow: string } };
+  const ring = await editor.evaluate((el) => (globalThis as unknown as Styles).getComputedStyle(el).boxShadow);
+  expect(ring).not.toBe("none");
+  await removeCard(page, word);
+});

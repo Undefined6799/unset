@@ -4929,7 +4929,7 @@ no visitor's copy carries the link. The editor's script loads as soon as the pag
 before the editor is drawn opens it at once, with the caret where the press was and the keys typed meanwhile. A press
 before the page's own script runs stays the browser's. A press on the card around the words puts the caret at the
 nearest words. An editor that cannot load says so on the card. After a Save, the caret goes back to the words the
-member was typing.
+member was typing. Tabbing into the words shows the same focus ring as every other field.
 
 ### P1.21y — Settings › Privacy with a search result preview (added step, 2026-11-20)
 
