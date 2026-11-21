@@ -756,8 +756,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   again means `unlock`, deleted means `deactivate` with erase, as queued, retried jobs from where `eraseDid` runs; no
   reactivate command. A freeze or takedown now locks instead of ending sessions. The rule is Alex's of 2026-11-21;
   the calls are accepted by Alex 2026-11-21 ("yes").
-- **Synapse refuses unencrypted messages (P6.00, 2026-11-21; own record:
-  [0085](0085-synapse-refuses-unencrypted-messages.md)):** `encryption_enabled_by_default_for_room_type: all` and one
-  stdlib-only module whose `check_event_for_spam` refuses `m.room.message`. The rest of the planned Python module
-  (invite throttle, server-side "no text before accept", media refusal) waits; until then "no text before accept"
-  is a rule in our client only. Accepted by Alex 2026-11-21 ("yes").
+- **Chat rooms encrypted or plain with auto-delete (P6.00, P6.10a, 2026-11-21; own record:
+  [0085](0085-chat-rooms-encrypted-or-plain-with-auto-delete.md)):** rooms are encrypted by default; a plain room is
+  explicit at creation and carries a 30-day retention policy no one can change; search indexing is off; one
+  stdlib-only module enforces both kinds. Our page sends encrypted only for now. Accepted by Alex 2026-11-21 on decision
+  cards ("Allow plain, auto-delete"; "Server allows it, no client UI yet"), revising his 00:55Z acceptance of a
+  refuse-all rule before merge.

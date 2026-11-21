@@ -88,4 +88,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0082](0082-chat-count-through-a-pusher-to-the-door.md) | The chat count reaches unset.sh through a Synapse pusher to the door's internal port; unset.sh carries no chat code; supersedes PLAN §5.6's "no chat badge" (P6.00) | Accepted by Alex 2026-11-21 |
 | [0083](0083-chat-keys-stay-in-the-browser.md) | Chat keys stay in the browser: a generated recovery key saved at signup, expiry locks, Log out wipes (P6.00) | Accepted by Alex 2026-11-20/21 in the chat planning thread |
 | [0084](0084-chat-account-follows-the-unset-account.md) | The chat account follows the Unset account: suspended means MAS lock, deleted means deactivate with erase; no reactivate (P6.00) | Accepted by Alex 2026-11-21 |
-| [0085](0085-synapse-refuses-unencrypted-messages.md) | Synapse refuses unencrypted messages through one small module, and every new room is encrypted (P6.00) | Accepted by Alex 2026-11-21 |
+| [0085](0085-chat-rooms-encrypted-or-plain-with-auto-delete.md) | Chat rooms are encrypted by default; a plain room is explicit and its messages are deleted after 30 days (P6.00, P6.10a) | Accepted by Alex 2026-11-21 |
