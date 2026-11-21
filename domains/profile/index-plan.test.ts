@@ -25,6 +25,14 @@ const section = (rkey = TID, content: Record<string, unknown> = { $type: "sh.uns
     cid: CID,
     record: { $type: "sh.unset.card", content, createdAt: T },
   }) satisfies IndexChange;
+const page = (rkey: string, extra: Record<string, unknown> = {}) =>
+  ({
+    kind: "put",
+    collection: "sh.unset.page",
+    rkey,
+    cid: CID,
+    record: { $type: "sh.unset.page", createdAt: T, ...extra },
+  }) satisfies IndexChange;
 const active = { lastRev: "3jzfcijpj2z2b", active: true };
 
 // Staging break test 2026-11-21: a 95 KB Text card saved but never showed publicly, as the index then kept records of
@@ -56,15 +64,41 @@ describe("the largest cards a member may save are indexed", () => {
     expect(planCommit(active, "3jzfcijpj2z2c", [section(TID, content)])).toMatchObject({ kind: "apply", skipped: 0 });
   });
 
-  test("index.keeps_the_largest_profile_card_list", () => {
+  test("index.keeps_the_largest_page_card_list", () => {
     // ADR 0086: the list holds full at:// addresses, the lexicon's 100 of them with a 512-character record key each
-    // (atproto.com/specs/record-key), about 56 KB.
-    const cards = Array.from({ length: LIMITS.profile.cardsMax }, (_, n) => ({
+    // (atproto.com/specs/record-key), about 56 KB. ADR 0091 moved it to the page.
+    const cards = Array.from({ length: LIMITS.page.cardsMax }, (_, n) => ({
       uri: `at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/${String(n).padStart(512, "a")}`,
     }));
-    const change = profile({ cards });
-    expect(recordBytes(change.kind === "put" ? change.record : null)).toBeGreaterThan(50_000);
+    const change = page("self", { cards });
+    expect(recordBytes(change.record)).toBeGreaterThan(50_000);
     expect(planCommit(active, "3jzfcijpj2z2c", [change])).toMatchObject({ kind: "apply", skipped: 0 });
+  });
+});
+
+describe("pages (ADR 0091)", () => {
+  test("index.keeps_the_main_page", () => {
+    expect(planCommit(active, "3jzfcijpj2z2c", [page("self", { cards: [] })])).toEqual({
+      kind: "apply",
+      rev: "3jzfcijpj2z2c",
+      writes: [{ kind: "page", cid: CID, record: { $type: "sh.unset.page", cards: [], createdAt: T } }],
+      skipped: 0,
+    });
+  });
+
+  test("index.ignores_other_pages: a page under another key is neither kept nor counted as refused", () => {
+    const deleted = { kind: "delete", collection: "sh.unset.page", rkey: TID } as const;
+    expect(planCommit(active, "3jzfcijpj2z2c", [page(TID), deleted])).toEqual({
+      kind: "apply",
+      rev: "3jzfcijpj2z2c",
+      writes: [],
+      skipped: 0,
+    });
+  });
+
+  test("index.drops_the_main_page", () => {
+    const deleted = { kind: "delete", collection: "sh.unset.page", rkey: "self" } as const;
+    expect(planCommit(active, "3jzfcijpj2z2c", [deleted])).toMatchObject({ writes: [deleted], skipped: 0 });
   });
 });
 
@@ -97,9 +131,7 @@ describe("a member's cards together fit one page", () => {
 
   test("page.a_hundred_everyday_cards_fit", () => {
     // A long paragraph each: 2,000 characters.
-    expect(fitsPage(many(LIMITS.profile.cardsMax - 1, card("a".repeat(2_000))), [{ key: null, record: full }])).toBe(
-      true,
-    );
+    expect(fitsPage(many(LIMITS.page.cardsMax - 1, card("a".repeat(2_000))), [{ key: null, record: full }])).toBe(true);
   });
 
   test("page.the_most_cards_the_app_keeps_at_the_text_limit_fit", () => {

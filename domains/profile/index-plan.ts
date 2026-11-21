@@ -8,7 +8,9 @@ import { LIMITS, NSID, validateRecord } from "@unset/shared-lexicons";
 import { parseNewCardKey } from "./cards.ts";
 
 /** The collections the index reads; every other op in a commit is ignored. */
-export const INDEXED_COLLECTIONS = [NSID.profile, NSID.card] as const;
+export const INDEXED_COLLECTIONS = [NSID.profile, NSID.page, NSID.card] as const;
+/** The one page the index keeps: the main page (ADR 0091). Another page is ignored until a decision says where it shows. */
+export const MAIN_PAGE_RKEY = "self";
 export type IndexedCollection = (typeof INDEXED_COLLECTIONS)[number];
 
 /**
@@ -29,10 +31,10 @@ export const MAX_RECORD_BYTES = 1_000_000;
  */
 export const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 /**
- * Sections kept per account: the profile lists at most LIMITS.profile.cardsMax. Unlisted ones are kept too (they do
+ * Sections kept per account: the main page lists at most LIMITS.page.cardsMax. Unlisted ones are kept too (they do
  * not show, ADR 0086 point 3), so a later list that names them needs no new read of the repo.
  */
-export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.profile.cardsMax;
+export const MAX_SECTIONS_PER_ACCOUNT = 2 * LIMITS.page.cardsMax;
 
 /** One proven change from a commit, with the record in its JSON form (blob refs as `{ $type: "blob", ref: { $link } }`). */
 export type IndexChange =
@@ -60,6 +62,7 @@ export type IndexWrite =
       readonly avatarCid: string | null;
       readonly blobs: readonly BlobRef[];
     }
+  | { readonly kind: "page"; readonly cid: string; readonly record: Readonly<Record<string, unknown>> }
   | {
       readonly kind: "section";
       readonly rkey: string;
@@ -88,7 +91,7 @@ export function planCommit(account: IndexAccount, rev: string | null, changes: r
   const writes: IndexWrite[] = [];
   let skipped = 0;
   for (const change of changes) {
-    if (!isIndexed(change.collection)) continue;
+    if (!isIndexed(change.collection) || otherPage(change.collection, change.rkey)) continue;
     const write = change.kind === "delete" ? deleteOf(change.collection, change.rkey) : putOf(change);
     if (write !== null) {
       writes.push(write);
@@ -110,6 +113,11 @@ function isIndexed(collection: string): collection is IndexedCollection {
   return (INDEXED_COLLECTIONS as readonly string[]).includes(collection);
 }
 
+/** A page other than the main one: valid, but not shown anywhere yet, so neither kept nor counted as refused. */
+function otherPage(collection: IndexedCollection, rkey: string): boolean {
+  return collection === NSID.page && rkey !== MAIN_PAGE_RKEY;
+}
+
 function deleteOf(collection: IndexedCollection, rkey: string): IndexWrite | null {
   return keyFits(collection, rkey) ? { kind: "delete", collection, rkey } : null;
 }
@@ -125,6 +133,7 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
   if (collection === NSID.card) {
     return { kind: "section", rkey: change.rkey, cid: change.cid, record, blobs, bytes: recordBytes(record) };
   }
+  if (collection === NSID.page) return { kind: "page", cid: change.cid, record };
   return {
     kind: "profile",
     cid: change.cid,
@@ -136,8 +145,12 @@ function putOf(change: Extract<IndexChange, { kind: "put" }>): IndexWrite | null
   };
 }
 
-/** The lexicon's record key type: `literal:self` for the profile, `tid` for a section (atproto.com/specs/record-key). */
+/**
+ * The record key the index keeps (atproto.com/specs/record-key): `literal:self` for the profile, the main page's
+ * `self` for a page (the lexicon's `any`), `tid` for a section.
+ */
 function keyFits(collection: IndexedCollection, rkey: string): boolean {
+  if (collection === NSID.page) return rkey === MAIN_PAGE_RKEY;
   return collection === NSID.profile ? rkey === "self" : parseNewCardKey(rkey) !== null;
 }
 

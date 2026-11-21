@@ -82,7 +82,7 @@ function readme(text: string) {
   return built.record;
 }
 
-/** The profile's card list naming `keys`, at most the lexicon's 100. */
+/** The main page's card list naming `keys`, at most the lexicon's 100. */
 const listOf = (keys: readonly string[]) =>
   keys.slice(0, 100).map((key) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` }));
 
@@ -114,14 +114,12 @@ function fixture(
       origin: PDS,
       did: OWNER,
       records: {
-        // The profile lists the stored cards, up to the lexicon's 100, so they show (ADR 0086 point 3).
         "sh.unset.profile": {
-          self: {
-            $type: "sh.unset.profile",
-            displayName: "Member One",
-            createdAt: NOW,
-            cards: listOf(Object.keys(cards)),
-          },
+          self: { $type: "sh.unset.profile", displayName: "Member One", createdAt: NOW },
+        },
+        // The main page lists the stored cards, up to the lexicon's 100, so they show (ADR 0086 point 3, ADR 0091).
+        "sh.unset.page": {
+          self: { $type: "sh.unset.page", createdAt: NOW, cards: listOf(Object.keys(cards)) },
         },
         "sh.unset.card": cards,
       },
@@ -324,14 +322,14 @@ describe("card writes", () => {
     });
     expect(response?.status).toBe(303);
     expect(response?.headers.get("location")).toBe(`/${OWNER}`);
-    // The card and the profile listing it land in one commit (ADR 0086 point 3).
+    // The card and the main page listing it land in one commit (ADR 0086 point 3, ADR 0091).
     expect(writes).toHaveLength(2);
     expect(writes[0]).toMatchObject({
       method: "createRecord",
       collection: "sh.unset.card",
       record: { $type: "sh.unset.card", width: "half" },
     });
-    expect(writes[1]).toMatchObject({ method: "applyWrites", collection: "sh.unset.profile", rkey: "self" });
+    expect(writes[1]).toMatchObject({ method: "applyWrites", collection: "sh.unset.page", rkey: "self" });
     const cards = (writes[1]?.record as { cards?: { uri: string }[] } | undefined)?.cards;
     expect(cards?.at(-1)).toEqual({ uri: `at://${OWNER}/sh.unset.card/${writes[0]?.rkey}` });
     expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Hello");
@@ -362,12 +360,12 @@ describe("card writes", () => {
     expect(await (await page(`/${OWNER}`, { cookie })).text()).toContain("Edited");
   });
 
-  test("a_reorder_writes_the_order_into_the_profile_record", async () => {
+  test("a_reorder_writes_the_order_into_the_main_page", async () => {
     const shown = member.writes().filter((w) => w.method === "createRecord");
     const order = [CARD_C, CARD_B, CARD_A, ...shown.map((w) => w.rkey)];
     const writes = await writesOf(() => action("reorder", order.map((key) => `order=${key}`).join("&")));
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ method: "applyWrites", collection: "sh.unset.profile", rkey: "self" });
+    expect(writes[0]).toMatchObject({ method: "applyWrites", collection: "sh.unset.page", rkey: "self" });
     expect(writes[0]?.record).toMatchObject({
       cards: order.map((key) => ({ uri: `at://${OWNER}/sh.unset.card/${key}` })),
     });
@@ -445,7 +443,7 @@ describe("card writes", () => {
     const writes = await writesOf(() => action("remove", `key=${CARD_B}`));
     expect(writes).toMatchObject([
       { method: "deleteRecord", collection: "sh.unset.card", rkey: CARD_B },
-      { method: "applyWrites", collection: "sh.unset.profile", rkey: "self" },
+      { method: "applyWrites", collection: "sh.unset.page", rkey: "self" },
     ]);
     const cards = (writes[1]?.record as { cards?: { uri: string }[] } | undefined)?.cards ?? [];
     expect(cards.map((card) => card.uri)).not.toContain(`at://${OWNER}/sh.unset.card/${CARD_B}`);

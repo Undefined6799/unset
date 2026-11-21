@@ -13,7 +13,7 @@ export {
   latestCommit,
   listCardRecords,
   newCardKey,
-  type ProfileChange,
+  type PageChange,
   type SaveManyOutcome,
   type StoredCard,
   saveCardRecord,
@@ -43,6 +43,7 @@ export {
   type CompletedSignIn,
   completeAuthorization,
 } from "./oauth/sign-in.ts";
+export { loadPageRecord, MAIN_PAGE_RKEY, PAGE_COLLECTION } from "./page-record.ts";
 export {
   createPdsCall,
   PDS_CALL_TIMEOUT_MS,

@@ -105,8 +105,6 @@ async function indexed(
     displayName: name,
     headline: "<b>Head</b>",
     createdAt: NOW,
-    // The profile lists its card, so it shows (ADR 0086 point 3).
-    cards: [{ uri: `at://${did}/sh.unset.card/3jzfcijpj2z2a` }],
     ...(opts.visibility === undefined ? {} : { visibility: opts.visibility }),
   };
   await withClient(indexer, null, async (c) => {
@@ -123,6 +121,16 @@ async function indexed(
          VALUES ($1, $2, 'cid-p', '3l', $3, $4, false, now())`,
         [did, `at://${did}/sh.unset.profile/self`, record, name],
       );
+    // The main page lists the card, so it shows (ADR 0086 point 3, ADR 0091).
+    const page = {
+      $type: "sh.unset.page",
+      cards: [{ uri: `at://${did}/sh.unset.card/3jzfcijpj2z2a` }],
+      createdAt: NOW,
+    };
+    await c.query(
+      `INSERT INTO idx.page (did, uri, cid, rev, record, indexed_at) VALUES ($1, $2, 'cid-g', '3l', $3, now())`,
+      [did, `at://${did}/sh.unset.page/self`, page],
+    );
     await c.query(
       `INSERT INTO idx.section (uri, did, rkey, cid, rev, record, position, indexed_at)
        VALUES ($1, $2, '3jzfcijpj2z2a', 'cid-s', '3l', $3, 0, now())`,
@@ -133,7 +141,7 @@ async function indexed(
 
 /**
  * `count` more README cards for `did`, keys after the first card's, each saying "Extra card", listed after it by the
- * profile as the indexer stores a list (each card's position is its place in the list).
+ * main page as the indexer stores a list (each card's position is its place in the list).
  */
 async function moreCards(did: string, count: number) {
   const card = toCardRecord({ kind: "readme", text: "Extra card" }, "full", null, NOW);
@@ -149,7 +157,7 @@ async function moreCards(did: string, count: number) {
     }
     const extra = rkeys.map((rkey) => ({ uri: `at://${did}/sh.unset.card/${rkey}` }));
     await c.query(
-      `UPDATE idx.profile SET record = jsonb_set(record, '{cards}', (record -> 'cards') || $2::jsonb) WHERE did = $1`,
+      `UPDATE idx.page SET record = jsonb_set(record, '{cards}', (record -> 'cards') || $2::jsonb) WHERE did = $1`,
       [did, JSON.stringify(extra)],
     );
   });

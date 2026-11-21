@@ -68,12 +68,14 @@ export {
   type IndexPlan,
   type IndexWrite,
   inSizeOrder,
+  MAIN_PAGE_RKEY,
   MAX_PAGE_BYTES,
   MAX_RECORD_BYTES,
   MAX_SECTIONS_PER_ACCOUNT,
   planCommit,
   recordBytes,
 } from "./index-plan.ts";
+export { type PageError, type PageRecord, withCardListed, withCardOrder, withCardUnlisted } from "./page.ts";
 export {
   APP_LIMITS,
   type AvatarShape,
@@ -91,9 +93,6 @@ export {
   readProfileRecord,
   toProfileRecord,
   withAvatarShape,
-  withCardListed,
-  withCardOrder,
-  withCardUnlisted,
 } from "./profile.ts";
 export {
   type PageShown,
