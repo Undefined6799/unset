@@ -11,7 +11,7 @@ import {
   decodeRecoveryKey,
   type GeneratedSecretStorageKey,
 } from "matrix-js-sdk/lib/crypto-api/index.js";
-import type { MatrixClient } from "matrix-js-sdk/lib/matrix.js";
+import { type MatrixClient, MatrixError, Method } from "matrix-js-sdk/lib/matrix.js";
 import type { SecretStorageKeyDescriptionAesV1 } from "matrix-js-sdk/lib/secret-storage.js";
 import type { UnlockOutcome } from "../core/chat.ts";
 
@@ -21,7 +21,7 @@ export type KeyFacts = {
   readonly hasIdentity: boolean;
   /** This browser holds all three private signing keys (getCrossSigningStatus().privateKeysCachedLocally). */
   readonly holdsKeys: boolean;
-  /** The vault holds the signing keys and the backup key under its default key, and a backup exists. */
+  /** The vault holds the signing keys and the backup key under its default key, and a backup exists, per the server. */
   readonly vaultComplete: boolean;
   readonly crossSigningReady: boolean;
   readonly deviceCrossSigned: boolean;
@@ -40,24 +40,68 @@ export function phaseOf(facts: KeyFacts): "setup" | "locked" | "ready" {
 
 export async function readFacts(client: MatrixClient, crypto: CryptoApi, userId: string): Promise<KeyFacts> {
   const deviceId = client.getDeviceId() ?? "";
-  const [hasIdentity, status, vault, backup, megolm, ready, device] = await Promise.all([
+  const [hasIdentity, status, vault, backup, ready, device] = await Promise.all([
+    // Always a fresh /keys/query for ourselves (src/rust-crypto/rust-crypto.ts:516-526).
     crypto.userHasCrossSigningKeys(userId, true),
     crypto.getCrossSigningStatus(),
-    crypto.getSecretStorageStatus(),
+    vaultOnServer(client, userId),
     crypto.getKeyBackupInfo(),
-    client.secretStorage.isStored("m.megolm_backup.v1"),
     crypto.isCrossSigningReady(),
     crypto.getDeviceVerificationStatus(userId, deviceId),
   ]);
   const local = status.privateKeysCachedLocally;
-  const keyId = vault.defaultKeyId;
   return {
     hasIdentity,
     holdsKeys: local.masterKey && local.selfSigningKey && local.userSigningKey,
-    vaultComplete: vault.ready && backup !== null && keyId !== null && megolm !== null && keyId in megolm,
+    vaultComplete: vault && backup !== null,
     crossSigningReady: ready,
     deviceCrossSigned: device?.crossSigningVerified === true,
   };
+}
+
+/** The vault's parts: the three signing keys and the backup key, each stored under the default key. */
+const VAULT_SECRETS = [
+  "m.cross_signing.master",
+  "m.cross_signing.self_signing",
+  "m.cross_signing.user_signing",
+  "m.megolm_backup.v1",
+] as const;
+
+/**
+ * Whether the vault on the server is complete, read from the server itself. The SDK's own reads
+ * (getSecretStorageStatus, secretStorage.isStored, rust-crypto.ts:885-919, secret-storage.ts:590-593) answer from the
+ * sync store once the first sync is done (client.ts:2362-2373), and that first sync may be Synapse's cached copy from
+ * before the vault was written: it keeps a device's initial /sync for sync_response_cache_duration, 2 minutes by
+ * default (synapse v1.165.0 config/cache.py:211-212, rest/client/sync.py:210). A browser reloaded in that window then
+ * looked half set up and was asked to make a new key over its saved one (live run of 2026-11-21). These are the same
+ * GETs the SDK makes before its first sync (client.ts:2374-2385; spec v1.18 #get_matrixclientv3useruseridaccount_datatype),
+ * and the same test as getSecretStorageStatus: each secret is encrypted under the default key.
+ */
+async function vaultOnServer(client: MatrixClient, userId: string): Promise<boolean> {
+  const [defaultKey, ...secrets] = await Promise.all(
+    ["m.secret_storage.default_key", ...VAULT_SECRETS].map((type) => accountData(client, userId, type)),
+  );
+  const keyId = defaultKey?.key;
+  if (typeof keyId !== "string" || keyId === "") return false;
+  return secrets.every((secret) => {
+    const encrypted = secret?.encrypted;
+    return typeof encrypted === "object" && encrypted !== null && keyId in encrypted;
+  });
+}
+
+/** One account-data event's content from the server, or null when it has none (404 M_NOT_FOUND); else it throws. */
+async function accountData(
+  client: MatrixClient,
+  userId: string,
+  type: string,
+): Promise<Record<string, unknown> | null> {
+  const path = `/user/${encodeURIComponent(userId)}/account_data/${encodeURIComponent(type)}`;
+  try {
+    return await client.http.authedRequest<Record<string, unknown>>(Method.Get, path);
+  } catch (e) {
+    if (e instanceof MatrixError && e.errcode === "M_NOT_FOUND") return null;
+    throw e;
+  }
 }
 
 /**
