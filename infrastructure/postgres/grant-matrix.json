@@ -510,7 +510,7 @@
           "browser_hash": ["SELECT", "INSERT"],
           "did": ["SELECT", "INSERT"],
           "chat_user": ["SELECT", "INSERT"],
-          "web_session": ["INSERT", "UPDATE"],
+          "web_session": ["SELECT", "INSERT", "UPDATE"],
           "device_id": ["SELECT", "INSERT"],
           "lock_key": ["SELECT", "INSERT"],
           "last_used_at": ["UPDATE"]
@@ -561,6 +561,9 @@
       "web": ["EXECUTE"]
     },
     "app.claim_chat_session_end": {
+      "web": ["EXECUTE"]
+    },
+    "app.hold_chat_session_end": {
       "web": ["EXECUTE"]
     },
     "app.finish_chat_session_end": {

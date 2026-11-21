@@ -52,13 +52,15 @@ const FIRST_SYNC_MS = 30_000;
  */
 export const storePrefix = (userId: string): string => `unset-chat:${userId}`;
 
+/** How a Log out ended: done, the door unreachable (the store stays, locked), or chat taken over by another tab. */
+export type LogOutOutcome = "logged_out" | "door_unavailable" | "taken_over";
 export type Chat = {
   readonly stop: () => void;
   /**
-   * Log out of this browser (logOut below): the backup catches up, the door ends the device, the stores go. Callable on
-   * its own, by whatever ends chat for the member, not only from a screen.
+   * Log out of this browser (logOutOf below): the backup catches up, the door ends the device, the stores go. There is
+   * no Log out on the page; unset.sh's Log out runs it (core/sign-out.ts signOutHere, through openToLogOut).
    */
-  readonly logOut: () => Promise<void>;
+  readonly logOut: () => Promise<LogOutOutcome>;
 };
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
@@ -105,13 +107,18 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   // Once stopped, a start still under way reports nothing more, so a later step cannot paint over the outcome.
   let stopped = false;
   let restoreAgain: ReturnType<typeof setTimeout> | undefined;
+  // While a setup, an unlock or a Log out runs its own steps, the trust events it causes do not repaint the page.
+  let busy = false;
   const chat: Chat = {
     stop: () => {
       stopped = true;
       clearTimeout(restoreAgain);
       client.stopClient();
     },
-    logOut: () => logOut(),
+    logOut: () => {
+      busy = true;
+      return logOutOf({ client, backup, prefix: cryptoDatabasePrefix, stop: chat.stop, ...options });
+    },
   };
   options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
   const tell = (state: ChatState) => stopped || options.onState(state);
@@ -145,8 +152,6 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   if (!(await firstSync(client, FIRST_SYNC_MS))) return fail("chat.sync_timeout");
   const keys: Keys = { client, crypto, holder };
   const conversations = createConversations(client, crypto, session.userId);
-  // While a setup or an unlock runs its own steps, the trust events it causes do not repaint the page.
-  let busy = false;
   // The count's pusher, registered once per sign-in when the page is first ready, and waited for before the page says
   // ready, so signup's chat step (book P6.17) never sends the tab back before it is registered (ADR 0082
   // Consequences: the count starts once a member has opened chat). A failure leaves chat as it is: the count on
@@ -159,26 +164,6 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     })();
     return pusher;
   };
-  /**
-   * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
-   * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
-   * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
-   * deleted: the store stays locked by a key only the door holds, and the page says so.
-   */
-  const logOut = async () => {
-    busy = true;
-    tell({ kind: "logging_out" });
-    await backup.settled(BACKUP_WAIT_MS);
-    chat.stop();
-    // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
-    if (options.takenOver.aborted) return;
-    if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
-    // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
-    if (options.takenOver.aborted) return;
-    await client.clearStores({ cryptoDatabasePrefix });
-    options.onState({ kind: "logged_out" });
-  };
-  const leave = () => void logOut();
   const report = async () => {
     if (busy) return;
     // A read that fails never leads to setup, which could replace a vault that exists (fail closed).
@@ -187,11 +172,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     const phase = phaseOf(facts);
     if (phase === "setup") return setUp(facts.hasIdentity);
     if (phase === "ready") await registerOnce();
-    tell(
-      phase === "ready"
-        ? { kind: "ready", conversations, me: session.userId, logOut: leave }
-        : { kind: "locked", unlock: tryKey, logOut: leave },
-    );
+    tell(phase === "ready" ? { kind: "ready", conversations, me: session.userId } : { kind: "locked", unlock: tryKey });
   };
   const tryKey = async (typed: string): Promise<UnlockOutcome> => {
     busy = true;
@@ -229,6 +210,62 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   client.on(CryptoEvent.KeysChanged, () => void report());
   client.on(CryptoEvent.DevicesUpdated, (users) => users.includes(session.userId) && void report());
   await report();
+  return chat;
+}
+
+type LogOutParts = Pick<ChatOptions, "takenOver" | "signOut"> & {
+  readonly client: MatrixClient;
+  readonly backup: BackupWatch;
+  readonly prefix: string;
+  readonly stop: () => void;
+};
+
+/**
+ * Log out (ADR 0083 decision 5), in Element's order of stop then clear (element-web v1.12.35
+ * apps/web/src/Lifecycle.ts onLoggedOut, clearStorage): the backup catches up, the client stops, the door ends the
+ * device and deletes its lock key, and only then are this account's stores deleted. If the door cannot, nothing is
+ * deleted: the store stays locked by a key only the door holds.
+ */
+async function logOutOf({ client, backup, prefix, stop, takenOver, signOut }: LogOutParts): Promise<LogOutOutcome> {
+  await backup.settled(BACKUP_WAIT_MS);
+  stop();
+  // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
+  if (takenOver.aborted) return "taken_over";
+  if (!(await signOut())) return "door_unavailable";
+  // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
+  if (takenOver.aborted) return "taken_over";
+  await client.clearStores({ cryptoDatabasePrefix: prefix });
+  return "logged_out";
+}
+
+/**
+ * The client unset.sh's Log out needs on /sign-out/return (core/sign-out.ts signOutHere): this browser's store opened
+ * on the session the door minted for its own device, and the key backup checked, so `logOut` waits for whatever the
+ * last tab had not uploaded. Nothing else runs: no sync, no setup, no screen. The backup's enable is awaited, as
+ * RustCrypto starts the check at init without it (src/rust-crypto/rust-crypto.ts:229-230) and the watch counts as
+ * pending only once KeyBackupStatus true is out (src/rust-crypto/backup.ts:398-409). A store that will not open is
+ * still logged out: the door ends the device and the stores are deleted.
+ */
+export async function openToLogOut(
+  session: ChatSession,
+  options: Pick<ChatOptions, "baseUrl" | "takenOver" | "signOut">,
+): Promise<Chat> {
+  const client = chatClient(session, options.baseUrl, {});
+  const backup = followBackup(client);
+  const prefix = storePrefix(session.userId);
+  const stop = () => client.stopClient();
+  const chat: Chat = { stop, logOut: () => logOutOf({ client, backup, prefix, stop, ...options }) };
+  options.takenOver.addEventListener("abort", stop, { once: true });
+  if (options.takenOver.aborted) return chat;
+  const opened = await client
+    .initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix: prefix })
+    .then(() => true)
+    .catch(() => false); // IndexedDB refused, WASM blocked, or a store this key cannot open
+  if (opened)
+    await client
+      .getCrypto()
+      ?.checkKeyBackupAndEnable()
+      .catch(() => null);
   return chat;
 }
 

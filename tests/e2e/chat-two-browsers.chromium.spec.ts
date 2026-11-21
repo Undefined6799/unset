@@ -1,6 +1,6 @@
 // The whole minimal chat in real browsers (build step 11), against real Synapse and MAS (fixtures/chat-servers.ts): two
 // members set up their keys, start a conversation, accept it and exchange end-to-end encrypted messages; a second
-// browser unlocks with the recovery key and reads the history; Log out leaves nothing behind; suspension locks an open
+// browser unlocks with the recovery key and reads the history; unset.sh's Log out leaves nothing behind; suspension locks an open
 // page and lifting it brings the same browser back with no unlock (ADR 0084 decisions 1 and 2); deletion ends the
 // account and the other member keeps the conversation (decision 3). It also records the build plan's step-11
 // unverified items as annotations: how fast a lock stops an open page and what the homeserver keeps of an erased
@@ -57,7 +57,7 @@ async function browserFor(browser: Browser, handle: string) {
   page.on("response", async (res) => {
     if (res.url().endsWith("/sign-in/redeem") && res.status() === 200) redeems.push((await res.json()) as Redeemed);
   });
-  return { page, redeems, problems };
+  return { context, page, redeems, problems };
 }
 
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
@@ -143,11 +143,14 @@ test("chat_e2e.talk_unlock_log_out: two members talk encrypted; a new browser re
   await a2.page.locator("[data-conversation]").first().click();
   await expect(messages(a2.page)).toContainText("hello from bob", { timeout: 90_000 });
   await expect(messages(a2.page)).toContainText("hello from alice", { timeout: 90_000 });
-  // Log out on the first browser: its device ends at the homeserver, nothing of the account is left in that browser,
+  // Log out of unset.sh on the first browser, from another of its tabs (Alex 2026-11-21: there is no Log out on the chat
+  // page): the open chat tab stops, the device ends at the homeserver, nothing of the account is left in that browser,
   // and the other browser is untouched.
   const device = a.redeems[0]?.deviceId ?? "";
-  await a.page.getByRole("button", { name: "Log out" }).click();
-  await expect.poll(() => state(a.page), { timeout: 60_000 }).toBe("logged_out");
+  const out = await a.context.newPage();
+  await out.goto("https://unset.sh/logout");
+  await out.waitForURL("https://unset.sh/signed-out", { timeout: 90_000 });
+  expect(await state(a.page)).toBe("open_elsewhere");
   const names = await a.page.evaluate(async () => {
     const { indexedDB } = globalThis as unknown as { indexedDB: { databases(): Promise<{ name?: string }[]> } };
     return (await indexedDB.databases()).map((d) => d.name ?? "");

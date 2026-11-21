@@ -182,6 +182,41 @@ describe("chat session end store", () => {
     expect(browserRows(m.did)).toBe(1);
   });
 
+  test("chat.session_end_hold_this_browser: after sign out everywhere, the browser that pressed it gets the grace", async () => {
+    const m = member(2);
+    const mine = entry(m.did, m.user);
+    const theirs = entry(m.did, m.user);
+    await list.add(browser(), mine, m.refs[0] as never, deadline());
+    await list.add(browser(), theirs, m.refs[1] as never, deadline());
+    const later = createChatSessionEndStore(web, { leaseS: 60, logoutAfterS: 3600 });
+    const held = await withTransaction(web, null, async (tx) => {
+      await later.queueForDid(tx, m.did);
+      return later.holdForSession(tx, m.ids[0] as Buffer);
+    });
+    expect(held).toBe(1);
+    const due = (await queue.claim(100)).map((j) => j.device);
+    expect(due).toContain(theirs.device);
+    expect(due).not.toContain(mine.device);
+    // Still queued by DID: a renewal does not save it once it is due.
+    expect(queued()).toContain(`${m.user} ${mine.device}`);
+    postgres.sql("unset", `UPDATE app.chat_session_end SET due_at = now() WHERE device_id = '${mine.device}'`);
+    expect(await list.renew(mine, m.refs[1] as never, deadline())).toBe(false);
+    expect((await queue.claim(100)).map((j) => j.device)).toContain(mine.device);
+  });
+
+  test("chat.session_end_hold_bounds: a hold only delays rows already queued, by the store's own grace", async () => {
+    const m = member(1);
+    const mine = entry(m.did, m.user);
+    await list.add(browser(), mine, m.refs[0] as never, deadline());
+    const later = createChatSessionEndStore(web, { leaseS: 60, logoutAfterS: 3600 });
+    // Nothing queued: nothing held, nothing added.
+    expect(await withTransaction(web, null, (tx) => later.holdForSession(tx, m.ids[0] as Buffer))).toBe(0);
+    expect(queued()).not.toContain(`${m.user} ${mine.device}`);
+    const run = (sql: string) => withClient(web, null, (db) => db.query(sql));
+    await expect(run(`SELECT app.hold_chat_session_end('${m.refs[0]}', 3601)`)).rejects.toThrow(/end_chat_bad_input/);
+    await expect(run("SELECT app.hold_chat_session_end('short', 60)")).rejects.toThrow(/end_chat_bad_input/);
+  });
+
   test("chat.session_end_finish_drops_key: finishing deletes the door's entry and its lock key", async () => {
     const m = member(1);
     const mine = entry(m.did, m.user);

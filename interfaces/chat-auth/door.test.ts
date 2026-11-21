@@ -117,7 +117,7 @@ describe("the chat page", () => {
     `font-src ${ORIGIN}/assets/; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; ` +
     "form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types svelte-trusted-html";
 
-  test.each([["/"], ["/sign-in/return"], ["/welcome"]])(
+  test.each([["/"], ["/sign-in/return"], ["/welcome"], ["/sign-out/return"]])(
     "door.page_document: %s is the page, with its CSP, no referrer and no-store",
     async (path) => {
       const res = await door().get(path);
@@ -142,6 +142,17 @@ describe("the chat page", () => {
       expect(res.headers.getSetCookie()).toEqual([]);
     }
     expect(lines.at(-1)).toEqual({ route: "/welcome/done", method: "GET", status: 303 });
+  });
+
+  test("door.sign_out_done: the page's way back to unset.sh's bounce page sets nothing and sends no referrer", async () => {
+    const { get, lines } = door();
+    const res = await get("/sign-out/done");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`${WEB}/logout/done`);
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.getSetCookie()).toEqual([]);
+    expect(lines).toEqual([{ route: "/sign-out/done", method: "GET", status: 303 }]);
   });
 
   test("door.page_files: a built file is served with its type, cached for good, under the door's default CSP", async () => {

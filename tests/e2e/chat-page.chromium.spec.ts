@@ -88,26 +88,6 @@ async function open(browser: Browser, colorScheme: "light" | "dark" = "light") {
 
 const state = (page: Page) => page.locator("main").getAttribute("data-state");
 
-/** Records every state the page passes through from now on; the returned call reads them. */
-async function statesOf(page: Page): Promise<() => Promise<string[]>> {
-  await page.evaluate(() => {
-    type Main = { getAttribute(name: string): string | null };
-    const view = globalThis as unknown as {
-      document: { querySelector(s: string): Main | null };
-      MutationObserver: new (cb: () => void) => { observe(target: Main, options: object): void };
-      seenStates: string[];
-    };
-    const main = view.document.querySelector("main");
-    view.seenStates = [];
-    if (main === null) return;
-    new view.MutationObserver(() => view.seenStates.push(main.getAttribute("data-state") ?? "")).observe(main, {
-      attributes: true,
-      attributeFilter: ["data-state"],
-    });
-  });
-  return () => page.evaluate(() => (globalThis as unknown as { seenStates: string[] }).seenStates);
-}
-
 /** Everything this origin keeps in the browser, as text: web storage, readable cookies, and every IndexedDB value. */
 const kept = (page: Page) =>
   page.evaluate(async () => {
@@ -365,31 +345,80 @@ test("chat_page.one_tab: a second tab waits without signing in; Use here moves c
 /** The IndexedDB databases this origin holds for chat accounts (the SDK's two per account, client.ts storePrefix). */
 const chatStores = async (page: Page) => (await kept(page)).names.filter((n) => n.startsWith("unset-chat:"));
 
-test("chat_page.log_out: Log out waits for the backup, ends the device at the door and leaves no store behind", async ({
+test("chat_page.unset_log_out: unset.sh's Log out stops the open tab, ends the device and leaves no store", async ({
   browser,
 }) => {
   test.setTimeout(90_000);
-  const { page, redeems, problems } = await open(browser);
+  const { context, page, redeems, problems } = await open(browser);
   await page.goto("https://unset.cc/");
   await saveKey(page);
   expect(await chatStores(page)).toHaveLength(2);
-  const signOuts: string[] = [];
-  page.on("request", (r) => r.url().endsWith("/sign-out") && signOuts.push(r.postData() ?? ""));
-  const seen = await statesOf(page);
-  await page.getByRole("button", { name: "Log out" }).click();
-  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("logged_out");
-  expect(await seen()).toContain("logging_out");
-  expect(signOuts).toEqual([JSON.stringify({ deviceId: redeems[0]?.deviceId })]);
-  // ADR 0083 decision 5 and build plan unverified item 3: clearStores with the account's prefix removes both of the
-  // Rust crypto store's databases.
+  // Log out from another tab of the same browser, as from an unset.sh page there; chat stays open in the first.
+  const other = await context.newPage();
+  const doorCalls: string[] = [];
+  other.on("request", (r) => r.method() === "POST" && doorCalls.push(`${new URL(r.url()).pathname} ${r.postData()}`));
+  other.on("pageerror", (e) => problems.push(e.message));
+  await other.goto("https://unset.sh/logout");
+  await other.waitForURL("https://unset.sh/signed-out", { timeout: 60_000 });
+  // The door sends the tab to web's bounce, whose own navigation is same-site, so the Strict issuer cookie arrives and
+  // the page links the member's own sign-in server (RFC 6265bis-22 section 5.2, 5.2.1).
+  await expect(other.locator("#account")).toHaveText("your sign-in server (pds.example)");
+  // The open tab lost the lock and stopped; the store went with the device.
+  expect(await state(page)).toBe("open_elsewhere");
+  expect(doorCalls.map((c) => c.split(" ")[0])).toEqual(["/sign-out/redeem", "/sign-out"]);
+  expect(doorCalls[1]).toBe(`/sign-out ${JSON.stringify({ deviceId: redeems[0]?.deviceId })}`);
   expect(await chatStores(page)).toEqual([]);
   // The next sign-in is a new device with a new lock key; the account is set up, so this browser is locked.
-  await page.getByRole("link", { name: "Open messages" }).click();
-  await expect.poll(() => state(page), { timeout: 30_000 }).toBe("locked");
-  expect(redeems.map((r) => r.newDevice)).toEqual([true, true]);
-  expect(redeems[1]?.deviceId).not.toBe(redeems[0]?.deviceId);
-  expect(redeems[1]?.storageKey).not.toBe(redeems[0]?.storageKey);
+  const next = other.waitForResponse((r) => r.url().endsWith("/sign-in/redeem"));
+  await other.goto("https://unset.cc/");
+  const fresh = (await (await next).json()) as Omit<Redeemed, "ticket">;
+  await expect.poll(() => state(other), { timeout: 30_000 }).toBe("locked");
+  expect(fresh.newDevice).toBe(true);
+  expect(fresh.deviceId).not.toBe(redeems[0]?.deviceId);
+  expect(fresh.storageKey).not.toBe(redeems[0]?.storageKey);
   expect(problems).toEqual([]);
+});
+
+test("chat_page.strict_needs_the_bounce: a navigation started on unset.cc carries no Strict unset.sh cookie", async ({
+  browser,
+}) => {
+  // The control for chat_page.unset_log_out: the cookie is in the jar, but a page on unset.cc going straight to
+  // /signed-out is cross-site (its client's site for cookies is unset.cc), so the Strict cookie stays home.
+  const { context, page } = await open(browser);
+  const value = Buffer.from("https://pds.example").toString("base64url");
+  await context.addCookies([
+    {
+      name: "__Host-signed_out_issuer",
+      value,
+      url: "https://unset.sh/",
+      secure: true,
+      httpOnly: true,
+      sameSite: "Strict",
+    },
+  ]);
+  await page.goto("https://unset.sh/signed-out");
+  await expect(page.locator("#account")).toHaveText("your sign-in server (pds.example)");
+  await page.goto("https://unset.cc/health");
+  await page.evaluate(() =>
+    (globalThis as unknown as { location: { assign(u: string): void } }).location.assign("https://unset.sh/signed-out"),
+  );
+  await page.waitForURL("https://unset.sh/signed-out");
+  await expect(page.locator("#account")).toHaveText("Your account on our server");
+});
+
+test("chat_page.forged_sign_out: a sign-out link without a good ticket stops nothing and deletes nothing", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { context, page } = await open(browser);
+  await page.goto("https://unset.cc/");
+  await saveKey(page);
+  const other = await context.newPage();
+  await other.goto("https://unset.cc/sign-out/return#ticket=not-a-ticket");
+  await other.waitForURL("https://unset.sh/signed-out", { timeout: 30_000 });
+  await other.waitForTimeout(1_000);
+  expect(await state(page)).toBe("ready");
+  expect(await chatStores(page)).toHaveLength(2);
 });
 
 test("chat_page.ended_device_wiped: a store left by a device ended elsewhere is wiped, and the new device opens", async ({

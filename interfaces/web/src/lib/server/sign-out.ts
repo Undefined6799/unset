@@ -4,12 +4,14 @@
 // password again. Other browsers keep their sessions and the shared token set; the last browser revokes the grant
 // (review F13). Sign out everywhere revokes the grant and ends every session of the DID. The signed-out page links the
 // issuer recorded at sign-in, carried in a short-lived cookie because the last browser's revoke deletes the record.
-// Chat follows: the devices a signed-out session signed in on unset.cc are queued to end (ADR 0083 decision 5).
+// Chat follows: the devices a signed-out session signed in on unset.cc are queued to end (ADR 0083 decision 5), and a
+// browser that holds one goes through unset.cc's sign-out page, which wipes chat there (chat-sign-out.ts).
 // No DID in any log line.
 import { type Cookies, error, redirect } from "@sveltejs/kit";
 import type { Did } from "@unset/domains-identity";
 import { withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { Session } from "@unset/infrastructure-session";
+import { chatSignOutTicket } from "./chat-sign-out.ts";
 import { services } from "./compose.ts";
 import { withRevokeTimeout } from "./revoke-timeout.ts";
 import { dropSessionCookie } from "./session.ts";
@@ -61,27 +63,32 @@ async function endGrantIfLast(did: Did, deadline: AbortSignal): Promise<void> {
   }
 }
 
-/** Ends every session of the DID, trying again after a failure; the last failure is logged and is a retryable 503. */
-async function endEverySession(session: Session, deadline: AbortSignal): Promise<void> {
+/**
+ * Ends every session of the DID, trying again after a failure; the last failure is logged and is a retryable 503.
+ * Whether this browser holds a chat device, which then waits the Log out grace for the chat page.
+ */
+async function endEverySession(session: Session, deadline: AbortSignal): Promise<boolean> {
   const { pool, sessions, chat, log } = services();
   let last: unknown;
   for (let attempt = 1; attempt <= END_ALL_ATTEMPTS && !deadline.aborted; attempt++) {
     if (attempt > 1) await pause(END_ALL_PAUSE_MS);
     try {
       // P2.08j: the definer (migration 0014) ends every session of the DID and deletes its token set; every chat
-      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0044).
-      await withTransaction(pool, deadline, async (tx) => {
+      // device the member signed in is queued to end with it (ADR 0083 decision 5, migration 0044), at once except
+      // those this session signed in, which this browser holds and its chat page logs out (migration 0046).
+      return await withTransaction(pool, deadline, async (tx) => {
         await chat.endFor.queueForDid(tx, session.did);
+        const held = await chat.endFor.holdForSession(tx, session.idHash);
         await sessions.destroyAllForDid(tx, session.did, "user_signout_all");
+        return held > 0;
       });
-      return;
     } catch (cause: unknown) {
       last = cause;
     }
   }
   // The grant is gone and session rows may remain: an operator must be able to see that it happened. No DID.
   log.warn("auth.logout_everywhere_incomplete", { kind: className(last) });
-  failed();
+  return failed();
 }
 
 /**
@@ -100,8 +107,12 @@ async function recordedIssuer(session: Session): Promise<string | null> {
   }
 }
 
-/** The 303 to the signed-out page, carrying `issuer` (an origin) for its account link, or clearing a stale one. */
-function finish(cookies: Cookies, issuer: string | null): never {
+/**
+ * The 303 to the signed-out page, carrying `issuer` (an origin) for its account link, or clearing a stale one. With a
+ * chat ticket the tab goes by GET /logout/chat and unset.cc first: Chromium applies form-action 'self' to a form's
+ * redirects (as at /login/continue), so the door is reached from a page of ours.
+ */
+function finish(cookies: Cookies, issuer: string | null, chatTicket: string | null = null): never {
   dropSessionCookie(cookies);
   // A sign-in started before this one ends here too: its authorization was made without prompt=login.
   dropCookie(cookies, "nonce");
@@ -109,7 +120,9 @@ function finish(cookies: Cookies, issuer: string | null): never {
   putCookie(cookies, "signedOut", "1");
   if (issuer === null) dropCookie(cookies, "issuer");
   else putCookie(cookies, "issuer", encodeIssuer(issuer));
-  redirect(303, "/signed-out");
+  if (chatTicket === null) redirect(303, "/signed-out");
+  putCookie(cookies, "chatSignOut", chatTicket);
+  redirect(303, "/logout/chat");
 }
 
 /** POST /logout: this browser's session; the grant too when it was the last browser. */
@@ -119,15 +132,15 @@ export async function signOut(session: Session | undefined, cookies: Cookies, de
   const { pool, sessions, chat, log } = services();
   // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it. The chat
   // devices this session signed in are queued to end in the same commit (ADR 0083 decision 5, migration 0044).
-  const remaining = await withTransaction(pool, deadline, async (tx) => {
-    await chat.endFor.queueForSession(tx, session.idHash);
+  const { remaining, chatHere } = await withTransaction(pool, deadline, async (tx) => {
+    const queued = await chat.endFor.queueForSession(tx, session.idHash);
     await sessions.destroy(tx, session.idHash);
-    return sessions.countLive(tx, session.did);
+    return { remaining: await sessions.countLive(tx, session.did), chatHere: queued > 0 };
   }).catch(failed);
   log.info("auth.logout_this_browser");
   // Last browser: revoke outside the transaction. The count saw this delete.
   if (remaining === 0) await endGrantIfLast(session.did, deadline);
-  finish(cookies, issuer);
+  finish(cookies, issuer, chatHere ? await chatSignOutTicket(session, deadline) : null);
 }
 
 /**
@@ -144,10 +157,11 @@ export async function signOutEverywhere(
   const issuer = await recordedIssuer(session);
   const { oauth, log } = services();
   let entered = false;
+  let chatHere = false;
   const work = async (): Promise<void> => {
     entered = true;
     await revokeOrDrop(session.did, deadline);
-    await endEverySession(session, deadline);
+    chatHere = await endEverySession(session, deadline);
   };
   try {
     await oauth.lockDid(session.did, work);
@@ -157,5 +171,6 @@ export async function signOutEverywhere(
     await work();
   }
   log.info("auth.logout_everywhere");
-  finish(cookies, issuer);
+  // As at Log out, this browser's chat page wipes chat here; the other browsers keep the queued end only.
+  finish(cookies, issuer, chatHere ? await chatSignOutTicket(session, deadline) : null);
 }

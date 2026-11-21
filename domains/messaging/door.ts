@@ -137,6 +137,46 @@ async function keep(
   return added === "added" ? { kind: "kept", entry } : { kind: "refused", code: "chat.busy" };
 }
 
+export type SignOutRedeemOutcome =
+  | {
+      readonly kind: "minted";
+      readonly entry: BrowserEntry;
+      readonly token: AccessToken;
+      readonly expiresAtS: number;
+    }
+  | { readonly kind: "no_session" }
+  | { readonly kind: "refused"; readonly code: Exclude<RedeemRefusal, "chat.no_state" | "chat.state_mismatch"> };
+
+/**
+ * unset.sh's Log out reaching this browser (ADR 0083 decision 5): web ended the session, queued its devices to end, and
+ * signed a ticket for the ended session, which carries no one-time value this browser holds. The ticket is spent only
+ * on the entry this browser already holds for its member, and only if that session is the one that last signed the
+ * entry in, so a Log out in one browser cannot log out another browser of the same member: a session on that device,
+ * so the page can wait for the key backup and then Log out. It never makes a device and never renews the entry, so web's queued end stays due and fires
+ * if the page never finishes. chat-admin checks web's signature and burns the jti, as at sign-in.
+ */
+export async function redeemForSignOut(
+  ports: DoorPorts,
+  { ticket, browser, deadline }: Omit<Request, "state">,
+): Promise<SignOutRedeemOutcome> {
+  if (ticket.exp < ports.nowS()) return { kind: "refused", code: "chat.ticket_expired" };
+  const entry = await ports.list.find(browser, ticket.did, deadline);
+  if (entry === null) return { kind: "no_session" };
+  if (entry.user !== ticket.user) return { kind: "refused", code: "chat.ticket_refused" };
+  if (!(await ports.list.signedInFrom(entry, ticket.sid, deadline)))
+    return { kind: "refused", code: "chat.ticket_refused" };
+  const minted = await ports.mint(ticket.envelope, entry.device, deadline);
+  if (minted.kind === "device_ended") await ports.list.remove(entry, deadline);
+  if (minted.kind === "refused") return { kind: "refused", code: "chat.ticket_refused" };
+  if (minted.kind !== "minted") return { kind: "refused", code: `chat.${minted.kind}` };
+  // chat-admin mints on the device it was given; any other answer is a fault, and that device is ended at once.
+  if (minted.device !== entry.device) {
+    await ports.end(ticket.user, minted.device, deadline);
+    return { kind: "refused", code: "chat.unavailable" };
+  }
+  return { kind: "minted", entry, token: minted.token, expiresAtS: ports.nowS() + minted.expiresInS };
+}
+
 export type SignOutOutcome =
   | { readonly kind: "signed_out"; readonly browserEmpty: boolean }
   | { readonly kind: "unavailable" };
