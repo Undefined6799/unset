@@ -384,8 +384,27 @@ describe("card writes", () => {
       const data = flat[0] as Record<string, number>;
       const at = (name: string) => flat[data[name] ?? -1];
       expect([at("code"), at("field")]).toEqual(["card.url_invalid", "items.2.uri"]);
-      // What was typed comes back too, for the editor drawn in place with no script.
-      expect(flat).toContain("not a url");
+    });
+    expect(writes).toEqual([]);
+  });
+
+  // The page's script keeps what was typed in its open editor (card-editor.svelte saveCard), so its refusal is the
+  // code, message and field alone; only the page drawn again with no script shows the typed words (staging change
+  // test 2026-11-21, finding 5: a 140 KB card came back whole). Kit's client sends both headers (kit 3.2.0
+  // src/runtime/app/forms/client.js).
+  test("a_refused_card_echoes_what_was_typed_only_to_the_page_with_no_script", async () => {
+    const typed = "é".repeat(70_000);
+    const form = new URLSearchParams({ kind: "readme", width: "full", text: typed }).toString();
+    const writes = await writesOf(async () => {
+      const script = await action("create", form, { accept: "application/json", "x-sveltekit-action": "true" });
+      expect(script.status).toBe(400);
+      const answer = await script.text();
+      expect(answer).toContain("card.too_long");
+      expect(answer).not.toContain("éééé");
+      expect(Buffer.byteLength(answer)).toBeLessThan(2_048);
+      const page = await action("create", form);
+      expect(page.status).toBe(400);
+      expect(await page.text()).toContain(typed);
     });
     expect(writes).toEqual([]);
   });
