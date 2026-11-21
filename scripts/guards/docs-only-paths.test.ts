@@ -65,6 +65,14 @@ describe("docs-only allowlist", () => {
     for (const path of denied) expect(pathAllowed(path), path).toBe(false);
   });
 
+  test("notes_index_is_allowed_by_its_exact_path", () => {
+    expect(pathAllowed("docs/ai/INDEX.md")).toBe(true);
+    for (const path of ["docs/ai/index.md", "docs/ai/INDEX.MD", "docs/ai/INDEX.md.bak", "docs/ai/x/INDEX.md"]) {
+      expect(pathAllowed(path), path).toBe(false);
+    }
+    expect(docsOnlyRejection([{ path: "docs/ai/INDEX.md", previous: "docs/ai/PLAN.md" }])).toBe("docs/ai/PLAN.md");
+  });
+
   test("empty_list_fails", () => {
     expect(docsOnlyRejection([])).toBe("empty file list");
   });
