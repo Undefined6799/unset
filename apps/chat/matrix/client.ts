@@ -56,6 +56,8 @@ export type Chat = { readonly stop: () => void };
 export type ChatOptions = {
   /** The page's own origin: the edge sends /_matrix/client/* to the homeserver (ADR 0081 decision 6). */
   readonly baseUrl: string;
+  /** Aborted when another tab takes chat over (core/tab-lock.ts): the client stops, and this store is left alone. */
+  readonly takenOver: AbortSignal;
   readonly onState: (state: ChatState) => void;
   /** The server stopped taking the token (HttpApiEvent.SessionLoggedOut, src/http-api/fetch.ts:183-196). */
   readonly onSignedOut: () => void;
@@ -103,6 +105,7 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
       client.stopClient();
     },
   };
+  options.takenOver.addEventListener("abort", () => chat.stop(), { once: true });
   const tell = (state: ChatState) => stopped || options.onState(state);
   const backup = followBackup(client);
   client.on(HttpApiEvent.SessionLoggedOut, () => {
@@ -117,12 +120,16 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
   const cryptoDatabasePrefix = storePrefix(session.userId);
   // A device new to this browser cannot open a store left by an ended one (its lock key is gone): that store is wiped,
   // as Log out would have (ADR 0083 decision 5). clearStores names the same two databases (src/client.ts:1614-1669).
+  // Another tab may have taken chat over while this one started: the store is then that tab's alone.
+  if (options.takenOver.aborted) return chat;
   if (session.newDevice) await client.clearStores({ cryptoDatabasePrefix });
+  if (options.takenOver.aborted) return chat;
   try {
     await client.initRustCrypto({ storageKey: session.storageKey, cryptoDatabasePrefix });
   } catch {
     return fail("chat.keys_unavailable"); // IndexedDB refused, WASM blocked, or a store this key cannot open
   }
+  if (options.takenOver.aborted) return chat;
   const crypto = client.getCrypto();
   if (crypto === undefined) return fail("chat.keys_unavailable");
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode());
@@ -152,7 +159,11 @@ export async function openChat(session: ChatSession, options: ChatOptions): Prom
     tell({ kind: "logging_out" });
     await backup.settled(BACKUP_WAIT_MS);
     chat.stop();
+    // Chat moved to another tab meanwhile: this browser's device stays, for that tab.
+    if (options.takenOver.aborted) return;
     if (!(await options.signOut())) return options.onState({ kind: "error", code: "chat.sign_out_unavailable" });
+    // A tab that took chat over meanwhile owns the store now; its new device wipes it (ADR 0083 decision 5).
+    if (options.takenOver.aborted) return;
     await client.clearStores({ cryptoDatabasePrefix });
     options.onState({ kind: "logged_out" });
   };
