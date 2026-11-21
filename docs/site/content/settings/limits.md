@@ -49,12 +49,17 @@ Fixed in code: `interfaces/web/src/lib/server/limits.ts`. A route names its poli
 | header | `invite` | ip | 60 | 300 a minute |
 | header | `invite` | global | 30000 | 30000 a minute |
 | header | `invite` | did | 10 | 10 an hour |
+| header | `notifications` | ip | 60 | 300 a minute |
+| header | `notifications` | global | 30000 | 30000 a minute |
+| header | `notifications` | did | 120 | 120 a minute |
 | socket | `default` | global | 30000 | 30000 a minute |
 | socket | `profile` | global | 30000 | 30000 a minute |
 | socket | `profile` | did | 30 | 30 a minute |
 | socket | `login` | global | 600 | 600 a minute |
 | socket | `invite` | global | 30000 | 30000 a minute |
 | socket | `invite` | did | 10 | 10 an hour |
+| socket | `notifications` | global | 30000 | 30000 a minute |
+| socket | `notifications` | did | 120 | 120 a minute |
 
 ## Invite quotas (pds-admin)
 

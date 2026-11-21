@@ -7,6 +7,7 @@
     { "path": "deployment" },
     { "path": "domains/content" },
     { "path": "domains/identity" },
+    { "path": "domains/notifications" },
     { "path": "domains/profile" },
     { "path": "infrastructure/audit" },
     { "path": "infrastructure/firehose" },

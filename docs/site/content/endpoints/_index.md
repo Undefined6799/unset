@@ -33,4 +33,5 @@ Every entry of `interfaces/web/src/lib/server/limits.ts`'s `policies` export is 
 | `default` | ip: capacity 60, refillPerSec 5; global: capacity 30000, refillPerSec 500 |
 | `invite` | ip: capacity 60, refillPerSec 5; global: capacity 30000, refillPerSec 500; did: capacity 10, refillPerSec 0.002777777777777778 |
 | `login` | ip: capacity 10, refillPerSec 0.16666666666666666 |
+| `notifications` | ip: capacity 60, refillPerSec 5; global: capacity 30000, refillPerSec 500; did: capacity 120, refillPerSec 2 |
 | `profile` | ip: capacity 60, refillPerSec 5; global: capacity 30000, refillPerSec 500; did: capacity 30, refillPerSec 0.5 |

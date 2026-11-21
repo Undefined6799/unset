@@ -10,6 +10,7 @@
 // folder; applied migrations are locked by their checksums (infrastructure/postgres/migrate.ts), so it stays.
 import { createHash, randomBytes } from "node:crypto";
 import type { Did } from "@unset/domains-identity";
+import { BELL_READ, type Entry, type NotificationId, type Reason } from "@unset/domains-notifications";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
 
@@ -42,6 +43,12 @@ export type Session = {
    * session created before the column or with no storable origin. `read` always sets it.
    */
   readonly issuerOrigin?: string | null;
+  /**
+   * The bell's newest BELL_READ notifications this browser may see, newest first (P2.27, ADR 0079), read with the
+   * session so a page spends no statement of its own on the bell. `read` always sets it; a session built without it
+   * has none.
+   */
+  readonly inbox?: readonly Entry[];
 };
 /** One request as read sees it: `key` (the Request) scopes the memo; `cookieValue` is null when none was sent. */
 export type SessionRequest = {
@@ -126,7 +133,17 @@ type SessionRow = {
   expired: boolean;
   touch_due: boolean;
   has_token_set: boolean;
+  inbox: InboxRow[];
 };
+/** One of app.inbox's rows as the lookup's json_agg writes it; `sent_ms` is milliseconds since the epoch. */
+type InboxRow = { id: string; reason: string; topic: string | null; sent_ms: number };
+
+const entryOf = (row: InboxRow): Entry => ({
+  id: row.id as NotificationId,
+  reason: row.reason as Reason, // app.notification's CHECK holds the same closed list as REASONS
+  topic: row.topic,
+  sentAt: new Date(row.sent_ms),
+});
 
 export function createSessionStore(options: {
   readonly withDb: WithSessionDb;
@@ -186,6 +203,7 @@ export function createSessionStore(options: {
       emailConfirmed: row.email_confirmed,
       emailCheckedAt: row.email_checked_at,
       issuerOrigin: row.issuer_origin,
+      inbox: row.inbox.map(entryOf),
     };
     return { session, clearCookie: false };
   }
@@ -197,15 +215,21 @@ export function createSessionStore(options: {
    * P2.03t (migration 0024, ADR 0049): the database now deletes those rows with the set (a foreign key with ON DELETE
    * CASCADE), so no row here can lack one. The check stays: it costs one index probe and holds if the constraint is
    * ever dropped.
+   * The bell's entries come along through app.inbox (migration 0036), the one place the rule for what a browser may
+   * see is written: one index probe on the member's newest rows, so a page needs no statement of its own for the bell.
    */
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(
       "SELECT s.did, s.created_at, s.email_confirmed, s.email_checked_at, s.issuer_origin, " +
         `NOT (${WITHIN_LIFETIMES}) AS expired, ` +
         "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
-        "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +
+        "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set, " +
+        "(SELECT coalesce(json_agg(json_build_object('id', i.id, 'reason', i.reason, 'topic', i.topic, " +
+        "'sent_ms', floor(extract(epoch FROM i.created_at) * 1000)) ORDER BY i.created_at DESC, i.id), '[]') " +
+        "FROM (SELECT i.id, i.reason, i.topic, i.created_at FROM app.inbox i WHERE i.viewer = s.id_hash " +
+        "AND i.did = s.did ORDER BY i.created_at DESC, i.id LIMIT $4) i) AS inbox " +
         "FROM app.session s WHERE s.id_hash = $1",
-      [idHash, limits.idleS, limits.touchIntervalS],
+      [idHash, limits.idleS, limits.touchIntervalS, BELL_READ],
     );
     return rows[0];
   }
