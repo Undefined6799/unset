@@ -1,8 +1,8 @@
 // The door's composition root (build step 6; rule AB-2): the one place its parts are built. Its limits are its own:
-// a sign-in hop per client every few seconds, and a looser bucket for the chat page, its files, health, Log out, the
-// setup claim and the pushkey; the count port has none, since only Synapse and web reach it. Before it answers anything
-// the pool must fit the role's connection limit across replicas, and the door's key must be Ed25519, or it does not
-// start.
+// a sign-in bucket spent once per page load (by redeem), and a looser bucket for the hop's start, the chat page, its
+// files, health, Log out, the setup claim and the pushkey; the count port has none, since only Synapse and web reach
+// it. Before it answers anything the pool must fit the role's connection limit across replicas, and the door's key
+// must be Ed25519, or it does not start.
 import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
 import type { DoorPorts, LockKey } from "@unset/domains-messaging";
 import { createDoorChatAdminClient } from "@unset/infrastructure-matrix";
@@ -32,10 +32,16 @@ const BODY_CAP = 4096;
 /** The largest notification the count port reads: one device's is about 400 bytes; sixteen fit. */
 const COUNT_BODY_CAP = 16_384;
 
+/**
+ * The sign-in bucket is spent once per page load, by redeem, the call that reaches chat-admin's session.mint. Many
+ * members can share one address (an office, a campus, carrier NAT), so it allows a burst of 30 loads and 30 a minute
+ * after that: a few dozen members each opening chat now and then. One account is bounded by chat-admin's own 30 mints
+ * an hour (interfaces/chat-admin/quota.ts), whatever address it comes from.
+ */
 const POLICIES = definePolicies({
   default: [{ capacity: 60, refillPerSec: 1, scope: "ip" }],
   "sign-in": [
-    { capacity: 10, refillPerSec: 0.2, scope: "ip" },
+    { capacity: 30, refillPerSec: 0.5, scope: "ip" },
     { capacity: 500, refillPerSec: 50, scope: "global" },
   ],
 });

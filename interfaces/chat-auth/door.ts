@@ -114,7 +114,9 @@ const dmPage: GetRoute = (url, deps) =>
 type GetRoute = (url: URL, deps: DoorDeps) => DoorAnswer;
 const GETS: Readonly<Record<string, { limit: string; handle: GetRoute }>> = {
   "/health": { limit: "default", handle: () => ({ response: json(200, { ok: true }) }) },
-  "/sign-in": { limit: "sign-in", handle: startSignIn },
+  // The hop's start only sets cookies and redirects; the sign-in bucket is spent once per page load, at redeem, which
+  // is what calls chat-admin (routes.ts redeemRoute).
+  "/sign-in": { limit: "default", handle: startSignIn },
   "/": { limit: "default", handle: pageDocument },
   [RETURN_PATH]: { limit: "default", handle: pageDocument },
   [ASSETS]: { limit: "default", handle: pageFile },
