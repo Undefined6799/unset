@@ -52,9 +52,11 @@ Read and tested 2026-11-21 against Synapse v1.165.0 (P6.10a, PR #1864):
 
 ## Consequences
 - Plain messages are readable in the database, and in backups for the backup's own retention, until purged.
-- **Open:** an idle plain room's last message stays stored (hidden) until the room is deleted. A scheduled job that
-  deletes plain rooms whose newest message is over 30 days old, through Synapse's admin room-delete API, closes it;
-  pending Alex's choice.
+- **Idle plain rooms are deleted.** Alex chose "Yes, delete idle plain chats" on a decision card (2026-11-21 01:59Z;
+  the option read "A scheduled job deletes a plain chat once its newest message is over 30 days old, so nothing stays
+  stored. The chat disappears for both people."). Synapse never purges a room's newest event, so a scheduled job
+  deletes, through Synapse's admin room-delete API, each plain room whose newest message is over 30 days old. Which
+  process holds the Synapse admin credential for it is settled in build step 11.
 - Member events (an invite `reason`) reach no module callback; they are not covered.
 - Narrows, for now, PLAN §5.6's "the server enforces no message text before a request is accepted" to our client.
 - Every Synapse update reruns the module's tests before the pin moves.
