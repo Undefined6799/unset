@@ -45,11 +45,14 @@ const rows: Row[] = $derived(
     : [],
 );
 
-// The row shown in the detail: the one picked here, else the one the address names, else the newest.
-let picked: string | null = $state(null);
+// The row shown in the detail: the one picked here, else the one the address names, else the newest. A pick holds only
+// while the address still names what it named then: SvelteKit keeps this component across a navigation, so a bell row
+// (`?n=` another entry) must win over an earlier pick (https://svelte.dev/docs/kit/state-management).
+let picked = $state<{ id: string; under: string | null } | null>(null);
 const named = $derived(rows.some((row) => row.entry.id === chosen) ? chosen : null);
+const pickedId = $derived(picked !== null && picked.under === chosen ? picked.id : null);
 const current = $derived(
-  rows.find((row) => row.entry.id === picked) ?? rows.find((row) => row.entry.id === named) ?? rows[0],
+  rows.find((row) => row.entry.id === pickedId) ?? rows.find((row) => row.entry.id === named) ?? rows[0],
 );
 // A phone shows the detail as its own screen only when the address names an entry.
 const detailScreen = $derived(named !== null);
@@ -120,7 +123,7 @@ function choose(event: MouseEvent, id: string) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
   if (!matchMedia("(min-width: 48rem)").matches) return;
   event.preventDefault();
-  picked = id;
+  picked = { id, under: chosen };
 }
 
 function tick(id: string, on: boolean) {
@@ -186,7 +189,7 @@ function liftClick(event: MouseEvent) {
     return;
   }
   dropLift();
-  if (matchMedia("(min-width: 48rem)").matches) picked = id;
+  if (matchMedia("(min-width: 48rem)").matches) picked = { id, under: chosen };
   else location.assign(`${HOME}?n=${id}`);
 }
 

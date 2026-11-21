@@ -84,6 +84,20 @@ test.describe("wide screen", () => {
     await expect(rows(page)).toHaveCount(INBOX_SIZE);
   });
 
+  test("a_bell_row_shows_its_entry_even_after_a_row_was_picked_here", async ({ page }) => {
+    await open(page);
+    await rows(page).nth(2).locator("a").click();
+    const newest = (await rows(page).first().locator("[data-title]").textContent()) ?? "";
+    const third = (await rows(page).nth(2).locator("[data-title]").textContent()) ?? "";
+    await expect(page.locator("#notification-detail-title")).toHaveText(third);
+    // The bell's newest row: a link to ?n=<its id>, which the page keeps on screen (SvelteKit keeps its state).
+    await page.getByRole("button", { name: /^Notifications, (?:\d+|9\+) waiting$/ }).click();
+    const id = await rows(page).first().locator("input[name=id]").getAttribute("value");
+    await page.locator(`[popover] a[href="/notifications?n=${id}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`n=${id}$`));
+    await expect(page.locator("#notification-detail-title")).toHaveText(newest);
+  });
+
   test("dismiss_selected_waits_for_a_tick", async ({ page }) => {
     await open(page);
     const button = page.getByRole("button", { name: "Dismiss selected" });
