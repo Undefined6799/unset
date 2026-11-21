@@ -44,10 +44,17 @@ const cardRef = { uri: "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/sh.unset.card/3jzf
 
 // One record per limit: the value exactly at the limit passes and one past it fails, which proves LIMITS equals the
 // schema's constraint. A new LIMITS entry without a row here fails `every_limit_has_a_fixture`.
-type Build = (n: number) => { nsid: "sh.unset.profile" | "sh.unset.card"; value: Record<string, unknown> };
+type Build = (n: number) => {
+  nsid: "sh.unset.profile" | "sh.unset.page" | "sh.unset.card";
+  value: Record<string, unknown>;
+};
 const P =
   (field: (n: number) => Record<string, unknown>): Build =>
   (n) => ({ nsid: "sh.unset.profile", value: { ...profile, ...field(n) } });
+const PAGE = { $type: "sh.unset.page", createdAt: profile.createdAt };
+const G =
+  (field: (n: number) => Record<string, unknown>): Build =>
+  (n) => ({ nsid: "sh.unset.page", value: { ...PAGE, ...field(n) } });
 const C =
   (value: (n: number) => Record<string, unknown>): Build =>
   (n) => ({ nsid: "sh.unset.card", value: value(n) });
@@ -59,7 +66,7 @@ const FIXTURES: Record<string, Build> = {
   "profile.visibilityBytes": P((n) => ({ visibility: text(n) })),
   "profile.location": P((n) => ({ location: text(n) })),
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
-  "profile.cardsMax": P((n) => ({ cards: many(n, cardRef) })),
+  "page.cardsMax": G((n) => ({ cards: many(n, cardRef) })),
   "card.widthBytes": C((n) => ({ ...links([]), width: text(n) })),
   "card.surfaceBytes": C((n) => ({ ...links([]), surface: text(n) })),
   "card.textBytes": C((n) => card("text", { text: text(n) })),
@@ -145,11 +152,17 @@ describe("LIMITS", () => {
     expect(validateRecord("sh.unset.card", value, "read").ok).toBe(true);
   });
 
-  test("the_profile_lists_cards_by_address", () => {
-    const write = (cards: unknown) => validateRecord("sh.unset.profile", { ...profile, cards }, "write").ok;
+  test("the_page_lists_cards_by_address", () => {
+    const write = (cards: unknown) => validateRecord("sh.unset.page", { ...PAGE, cards }, "write").ok;
     expect(write([cardRef])).toBe(true);
     expect(write(["3jzfcijpj2z2a"])).toBe(false);
     expect(write([{ uri: "not an address" }])).toBe(false);
+  });
+
+  test("the_profile_no_longer_holds_cards", () => {
+    // ADR 0091: the card list moved to sh.unset.page; on the profile it is an unknown field, refused on write.
+    expect(validateRecord("sh.unset.profile", { ...profile, cards: [cardRef] }, "write").ok).toBe(false);
+    expect(validateRecord("sh.unset.profile", { ...profile, cards: [cardRef] }, "read").ok).toBe(true);
   });
 
   test("retired_profile_fields_are_gone_from_the_schema", () => {

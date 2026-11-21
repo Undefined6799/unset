@@ -10,6 +10,8 @@ export const LIMITS = {
     visibilityBytes: 32,
     location: 100,
     websiteBytes: 2000,
+  },
+  page: {
     cardsMax: 100,
   },
   card: {
