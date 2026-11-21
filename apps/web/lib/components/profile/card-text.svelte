@@ -51,6 +51,7 @@ let failed = $state(false);
 let menus: MenusState = $state({ items: [], index: 0, bar: false, on: new Set(), link: null });
 let handle: HTMLElement | undefined = $state();
 let add: HTMLElement | undefined = $state();
+let grip: HTMLElement | undefined = $state();
 let menu: HTMLElement | undefined = $state();
 let bar: HTMLElement | undefined = $state();
 let linkEdit: HTMLElement | undefined = $state();
@@ -101,7 +102,8 @@ function whenIdle(run: () => void): () => void {
 async function mount() {
   try {
     const { mountMarkdownEditor } = await import("../../editor/milkdown.ts");
-    if (closed || host === undefined || handle === undefined || add === undefined || menu === undefined) return;
+    if (closed || host === undefined || handle === undefined || add === undefined || grip === undefined || menu === undefined)
+      return;
     if (bar === undefined || linkEdit === undefined || linkPreview === undefined) return;
     const mounted = await mountMarkdownEditor(host, {
       value,
@@ -113,6 +115,7 @@ async function mount() {
       menus: {
         handle,
         add,
+        grip,
         menu,
         bar,
         linkEdit,
@@ -236,6 +239,7 @@ onDestroy(() => {
   {optionId}
   bind:handle
   bind:add
+  bind:grip
   bind:menu
   bind:bar
   bind:linkEdit

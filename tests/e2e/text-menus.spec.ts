@@ -226,6 +226,64 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const handle = card.locator("[data-block-handle]");
   await expect(handle).toBeHidden();
+
+  // Alex 2026-11-21 18:48Z: the dots "fully in the margin ... on the side", and a pointer along the card's side shows
+  // the handle of the block level with it, though the pointer never enters the card.
+  const box = await card.boundingBox();
+  const lines = await editor.locator("p").evaluateAll((all) =>
+    all.map((p) => {
+      const r = p.getBoundingClientRect();
+      return r.top + r.height / 2;
+    }),
+  );
+  if (box === null || lines.length !== 3) throw new Error("no card");
+  const handleMiddle = async () => {
+    const at = await handle.boundingBox();
+    return at === null ? Number.POSITIVE_INFINITY : at.y + at.height / 2;
+  };
+  await page.mouse.move(box.x - 20, lines[2] as number);
+  await expect(handle).toBeVisible();
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[2] as number))).toBeLessThan(8);
+  const placed = await handle.boundingBox();
+  expect((placed?.x ?? 0) + (placed?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(box.x);
+  await page.mouse.move(box.x - 20, lines[0] as number, { steps: 4 });
+  await expect.poll(async () => Math.abs((await handleMiddle()) - (lines[0] as number))).toBeLessThan(8);
+
+  // Pressed, not dragged, the dots open the block menu to change their block, keeping its words.
+  await editor.locator("p").nth(1).hover();
+  const grip = handle.getByRole("button", { name: "Drag to move, or press to change this block" });
+  await grip.click();
+  const menu = page.getByRole("listbox", { name: "Blocks" }).filter({ visible: true });
+  await expect(menu).toBeVisible();
+  // What a block can become; a divider or a table is added, never turned into, so they are not offered here.
+  await expect(menu.getByRole("option")).toHaveText([
+    "Text",
+    "Heading 1",
+    "Heading 2",
+    "Heading 3",
+    "Heading 4",
+    "Heading 5",
+    "Heading 6",
+    "Quote",
+    "Bullet list",
+    "Ordered list",
+    "Task list",
+    "Code",
+  ]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  // Only that block changed (a level 2 heading is an h3 under the card's h2).
+  await expect(editor.locator("h3")).toHaveText("second line");
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "third line"]);
+  await editor.locator("h3").hover();
+  await grip.click();
+  await expect(menu).toBeVisible();
+  await menu.getByRole("option", { name: "Text" }).click();
+  await expect(editor.locator("p")).toHaveText([`${word} one`, "second line", "third line"]);
+  await expect(editor).toBeFocused();
+
   const first = editor.locator("p").first();
   await first.hover();
   await expect(handle).toBeVisible();
@@ -239,7 +297,6 @@ test("the_side_handle_adds_a_line_with_the_block_menu_and_drags_a_block", async 
 
   // The grip drags its block: the third line goes above the first.
   await editor.locator("p").nth(3).hover();
-  const grip = handle.getByRole("img", { name: "Drag to move this block" });
   await expect(grip).toBeVisible();
   // Crepe's handle is six dots; ours draws Lucide's grip-vertical (ADR 0087), one path per dot.
   await expect(grip.locator("svg path")).toHaveCount(6);
@@ -422,7 +479,9 @@ test("a_block_dragged_down_onto_the_last_one_lands_with_a_line_shown_and_nothing
   const { card, editor } = await cardWithCaret(page, word, `${word} one\n\nsecond line\n\nthird line`);
   const lines = editor.locator("p");
   await lines.first().hover();
-  const grip = card.locator("[data-block-handle]").getByRole("img", { name: "Drag to move this block" });
+  const grip = card
+    .locator("[data-block-handle]")
+    .getByRole("button", { name: "Drag to move, or press to change this block" });
   await expect(grip).toBeVisible();
   const before = await lines.first().boundingBox();
   const start = await grip.boundingBox();
