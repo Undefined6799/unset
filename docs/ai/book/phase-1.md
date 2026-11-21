@@ -4936,6 +4936,9 @@ says "Type / to choose a block", Crepe's placeholder feature (Milkdown ships no 
 and Down move the block with the caret (its list item, or the top-level block) past its neighbour: the grip's move
 by keys, which neither plugin-block nor Crepe has.
 
+Slice 5 (2026-11-21, Alex: "Perfect yes get the lucide"): the grip is Crepe's six dots, Lucide 1.72.0's
+grip-vertical copied and pinned under ADR 0087, drawn at Iconoir's 1.5 stroke in place of the `menu` placeholder.
+
 Follow-up booked (staging, 2026-11-21): the in-place editor draws a Text card's markdown image as an `img` with the
 raw remote URL. CSP blocks it (img-src), so nothing loads, but it logs a CSP error and the editor should show what
 the page shows instead (the media proxy, or a placeholder). The editor's load or mount error is also swallowed, and a

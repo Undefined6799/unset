@@ -49,6 +49,7 @@ function plant(root: string, kind: "bad" | "good", name: string): { path: string
 
 const texts = (root: string): string[] => scanAll(root).map((f) => `${f.file}: ${f.text}`);
 const ICON = "shared/ui/icons/svg/next.svg.txt";
+const GRIP = "shared/ui/icons/lucide/grip.svg.txt";
 
 describe("ui-inventory", () => {
   test("ui_inventory_base_is_clean", () => {
@@ -129,6 +130,24 @@ describe("ui-inventory", () => {
       `${ICON}: sha256 differs from icons.json`,
       `${ICON}: script, style, foreignObject, on* or href`,
     ]);
+  });
+
+  // ADR 0087: the one Lucide file is held like the Iconoir ones, under its own pin in icons.json.
+  test("lucide_grip_is_pinned_named_and_safe", () => {
+    const root = base();
+    write(root, GRIP, readFileSync(join(root, GRIP), "utf8").replace("</svg>", '<use href="#a"></use></svg>'));
+    write(root, "shared/ui/icons/lucide/dots.svg.txt", readFileSync(join(root, ICON)));
+    editJson(root, "shared/ui/icons/icons.json", (icons) => {
+      (icons.lucide as { version: string }).version = "1.73.0";
+    });
+    expect(texts(root)).toEqual([
+      "shared/ui/icons/icons.json: lucide version 1.73.0 is not ADR 0087's 1.72.0",
+      "shared/ui/icons/lucide/dots.svg.txt: not on the sheet's Icon list in icons.json",
+      `${GRIP}: sha256 differs from icons.json`,
+      `${GRIP}: script, style, foreignObject, on* or href`,
+    ]);
+    rmSync(join(root, GRIP));
+    expect(texts(root)).toContain(`shared/ui/icons/icons.json: grip: ${GRIP} missing`);
   });
 
   test("icon_missing_and_version_pin", () => {
