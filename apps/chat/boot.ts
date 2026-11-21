@@ -5,6 +5,7 @@
 // before the token ends, or when the server stops taking it, unless that happens within a minute of signing in, which
 // would only loop.
 import type { ChatState } from "./core/chat.ts";
+import { askPushKey } from "./core/push.ts";
 import { claimSetup, releaseSetup } from "./core/setup-claim.ts";
 import { hopPath, RETURN_PATH, redeem, renewDelayMs, takeTicket } from "./core/sign-in.ts";
 import { openChat } from "./matrix/client.ts";
@@ -38,6 +39,7 @@ export async function boot(onState: (state: ChatState) => void): Promise<void> {
       claim: () => claimSetup(door, session.deviceId, deadline()),
       release: async () => void (await releaseSetup(door, session.deviceId, deadline())),
     },
+    pushKey: () => askPushKey(door, session.deviceId, deadline()),
     onState,
     onSignedOut: () => {
       if (Date.now() - signedInAt < TOO_SOON_MS) return onState({ kind: "error", code: "chat.session_refused" });
